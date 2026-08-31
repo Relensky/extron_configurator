@@ -39,6 +39,7 @@ import 'project_swap.dart';
 import 'project_todo_view.dart';
 import 'project_timeline_view.dart';
 import 'project_workbook.dart';
+import 'vendor_rfq_view.dart';
 import 'workbook_export.dart' show exportProjectWorkbook;
 
 /// ============================================================================
@@ -4633,90 +4634,10 @@ class _VendorPicker extends StatelessWidget {
 //  part this vendor is quoting onto it - which is the LINK BACK from a PO
 //  number to the equipment it bought, and the thing nobody could produce
 //  before.
-
-/// The colour a stage is drawn in — read against the card's own fill, never
-/// straight out of the scheme. See contrast.dart.
-Color _rfqInk(ThemeData theme, VendorRfqStage stage) => switch (stage) {
-  VendorRfqStage.none => theme.colorScheme.onSurfaceVariant,
-  VendorRfqStage.sent => theme.colorScheme.onSurfaceVariant,
-  // The two that are an ANSWER rather than a wait.
-  VendorRfqStage.quoted => foregroundOn(
-    theme.colorScheme,
-    theme.cardColor,
-  ),
-  VendorRfqStage.ordered => foregroundOn(theme.colorScheme, theme.cardColor),
-};
-
-IconData _rfqIcon(VendorRfqStage stage) => switch (stage) {
-  VendorRfqStage.none => Icons.outbox_outlined,
-  VendorRfqStage.sent => Icons.hourglass_empty,
-  VendorRfqStage.quoted => Icons.request_quote_outlined,
-  VendorRfqStage.ordered => Icons.check_circle_outline,
-};
-
-/// The one-line state, for the collapsed card. A list of six vendors has to be
-/// readable as a list of six states without opening any of them.
-class VendorRfqChip extends StatelessWidget {
-  final ProjectVendor vendor;
-
-  const VendorRfqChip({super.key, required this.vendor});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final stage = vendor.rfqStage;
-    // A vendor nobody has sent anything to is the ordinary state of a job that
-    // has not gone out yet, and a row of grey "Not sent" chips down a fresh
-    // list is noise about nothing.
-    if (stage == VendorRfqStage.none) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: Tooltip(
-        message: vendorRfqSentence(vendor),
-        child: Chip(
-          key: ValueKey('vendor_rfq_chip_${vendor.id}'),
-          visualDensity: VisualDensity.compact,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          avatar: Icon(
-            _rfqIcon(stage),
-            size: 16,
-            color: _rfqInk(theme, stage),
-          ),
-          label: Text(
-            stage == VendorRfqStage.ordered && vendor.poNumber.trim().isNotEmpty
-                ? vendor.poNumber.trim()
-                : stage.label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: _rfqInk(theme, stage),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The whole story of one vendor's quote as a sentence — what the chip's
-/// tooltip says, and what a report would print.
-String vendorRfqSentence(ProjectVendor vendor) {
-  final parts = <String>[];
-  if (vendor.rfqSentOn != null) {
-    parts.add('RFQ sent ${formatScheduleDate(vendor.rfqSentOn!)}');
-  }
-  if (vendor.quotedOn != null) {
-    parts.add('quoted ${formatScheduleDate(vendor.quotedOn!)}');
-  }
-  if (vendor.quoteRef.trim().isNotEmpty) {
-    parts.add('quote ${vendor.quoteRef.trim()}');
-  }
-  if (vendor.orderedOn != null) {
-    parts.add('ordered ${formatScheduleDate(vendor.orderedOn!)}');
-  }
-  if (vendor.poNumber.trim().isNotEmpty) {
-    parts.add('on ${vendor.poNumber.trim()}');
-  }
-  return parts.isEmpty ? 'No quote request out yet.' : parts.join(' · ');
-}
+//
+//  The colours, the icon, the one-line sentence, the chip and the way a quote
+//  document is opened live in vendor_rfq_view.dart, because the TIMELINE says
+//  the same things about the same vendors and two copies would drift apart.
 
 /// The RFQ block on an OPEN vendor card: where the quote has got to, and the
 /// one or two things that can happen to it next.
@@ -4753,12 +4674,12 @@ class VendorRfqStrip extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(_rfqIcon(stage), size: 18, color: _rfqInk(theme, stage)),
+              Icon(rfqIcon(stage), size: 18, color: rfqInk(theme, stage)),
               const SizedBox(width: 6),
               Text(
                 stage.label,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: _rfqInk(theme, stage),
+                  color: rfqInk(theme, stage),
                 ),
               ),
               const SizedBox(width: 10),
@@ -4820,6 +4741,32 @@ class VendorRfqStrip extends StatelessWidget {
                   label: const Text('Ordered...'),
                   onPressed: () => _markOrdered(context, provider),
                 ),
+                // THE PAPER ITSELF, one press from the row it belongs to. It
+                // is attached in the dialog behind "Edit the quote"; this is
+                // the way back to it.
+                if (vendor.quoteFilePath.trim().isNotEmpty)
+                  OutlinedButton.icon(
+                    key: ValueKey('vendor_quote_open_${vendor.id}'),
+                    icon: Icon(
+                      quoteDrawableHere(vendor.quoteFilePath)
+                          ? Icons.picture_as_pdf
+                          : Icons.description_outlined,
+                      size: 18,
+                    ),
+                    label: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 240),
+                      child: Text(
+                        path.basename(vendor.quoteFilePath.trim()),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    onPressed: () => openVendorQuoteFile(
+                      context,
+                      provider,
+                      stored: vendor.quoteFilePath,
+                      vendorName: vendor.name,
+                    ),
+                  ),
                 TextButton(
                   key: ValueKey('vendor_rfq_edit_quote_${vendor.id}'),
                   onPressed: () => _markQuoted(context, provider),
@@ -4930,12 +4877,21 @@ class VendorRfqStrip extends StatelessWidget {
   }
 }
 
-/// What came back from a vendor: when, for how much, under what reference.
+/// What came back from a vendor: when, for how much, under what reference —
+/// and the quote itself.
 ///
-/// THREE FIELDS AND NO MORE. The quote itself is a PDF in an email and this app
-/// is not going to hold it; what it holds is the three things somebody needs to
-/// compare six quotes against each other and against the job's own figure
-/// without opening any of them.
+/// THREE FIELDS ARE WHAT YOU READ; THE PAPER IS WHAT YOU ARGUE FROM. The three
+/// are the ones somebody needs to compare six quotes against each other and
+/// against the job's own figure without opening any of them. The PDF settles
+/// everything they cannot: what was actually quoted, at what lead time, with
+/// which accessories.
+///
+/// ATTACHED HERE, IN ONE STEP. This dialog opens at the one moment somebody has
+/// the quote in front of them - they are reading the figure off it as they type
+/// it. Attaching it anywhere else is a second trip back to a file they have
+/// already closed, which is a trip that does not get made; the PO learned the
+/// same lesson (see [_VendorOrderedDialog]). Nothing is copied - the project
+/// stores where the file IS. See [ProjectVendor.quoteFilePath].
 class _QuoteReturnedDialog extends StatefulWidget {
   final ProjectVendor vendor;
   final String currency;
@@ -4965,11 +4921,23 @@ class _QuoteReturnedDialogState extends State<_QuoteReturnedDialog> {
   );
   late DateTime? _on = widget.vendor.quotedOn ?? today();
 
+  /// The quote document. Whatever is already on the vendor is STORED (relative
+  /// to the project where it could be); a fresh pick is absolute. Both go back
+  /// through [AppStateProvider.setVendorQuote] unchanged - it knows which is
+  /// which and stores accordingly.
+  late String _filePath = widget.vendor.quoteFilePath;
+
   @override
   void dispose() {
     _amount.dispose();
     _reference.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    final chosen = await pickVendorQuoteFile(widget.vendor.name);
+    if (chosen.isEmpty || !mounted) return;
+    setState(() => _filePath = chosen);
   }
 
   void _save() {
@@ -4978,6 +4946,7 @@ class _QuoteReturnedDialogState extends State<_QuoteReturnedDialog> {
       quotedOn: _on,
       amount: double.tryParse(_amount.text.trim()) ?? 0,
       reference: _reference.text,
+      filePath: _filePath,
     );
     Navigator.of(context).pop();
   }
@@ -5052,10 +5021,53 @@ class _QuoteReturnedDialogState extends State<_QuoteReturnedDialog> {
               onSubmitted: (_) => _save(),
             ),
             const SizedBox(height: 12),
+            // THE PAPER, at the one moment somebody has it in front of them -
+            // the same place the order's own document is attached. Anywhere
+            // else is a second trip that does not get made.
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('vendor_quote_attach'),
+                    icon: const Icon(Icons.attach_file, size: 18),
+                    label: Text(
+                      _filePath.trim().isEmpty
+                          ? 'Attach the quote (optional)'
+                          : path.basename(_filePath.trim()),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onPressed: _pickFile,
+                  ),
+                ),
+                if (_filePath.trim().isNotEmpty) ...[
+                  IconButton(
+                    key: const ValueKey('vendor_quote_open'),
+                    tooltip: 'Open it',
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                    onPressed: () => openVendorQuoteFile(
+                      context,
+                      context.read<AppStateProvider>(),
+                      stored: _filePath,
+                      vendorName: widget.vendor.name,
+                    ),
+                  ),
+                  IconButton(
+                    key: const ValueKey('vendor_quote_detach'),
+                    // The FILE is left where it is. This is a pointer at it,
+                    // and deleting somebody's paperwork off their disk is not
+                    // something a project file gets to do.
+                    tooltip: 'Take the link off. The file itself is left alone.',
+                    icon: const Icon(Icons.link_off, size: 18),
+                    onPressed: () => setState(() => _filePath = ''),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
             Text(
               'Recording a quote changes no price on the job. The estimate '
               'stays what the parts say; this is what the vendor wants for '
-              'them.',
+              'them. The quote is linked where it sits - nothing is copied.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -5401,10 +5413,11 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
   final theme = Theme.of(context);
   final vendors = estimate.project.vendors;
   final conflicts = estimate.project.vendorConflicts;
-  // THE CATEGORIES ON THIS JOB, not the catalog's. A rule is only ever worth
-  // writing about a category the job actually has a part in - see
-  // [_CategoryPickerDialog].
+  // THE MAKERS AND CATEGORIES ON THIS JOB, not the catalog's. A rule is only
+  // ever worth writing about something the job actually has a part in - see
+  // [_RulePickerDialog].
   final projectCategories = projectCategoryChoices(estimate);
+  final projectManufacturers = projectManufacturerChoices(estimate);
   // Against the card's own error fill. The theme's title colour is chosen for
   // a surface, and onErrorContainer is only the scheme's PREFERENCE — it fails
   // WCAG on 45 of this app's 180 theme/accent combinations.
@@ -5511,6 +5524,7 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
             vendor: vendors[index],
             package: estimate.packageFor(vendors[index].id),
             projectCategories: projectCategories,
+            projectManufacturers: projectManufacturers,
             estimate: estimate,
             currency: estimate.currency,
             isFirst: index == 0,
@@ -5541,6 +5555,10 @@ class _VendorCard extends StatefulWidget {
   /// claims - what the category picker offers.
   final List<({String name, int count})> projectCategories;
 
+  /// Every manufacturer the job buys from, with how many parts each one makes
+  /// - what the manufacturer picker offers.
+  final List<({String name, int count})> projectManufacturers;
+
   /// The whole priced job. The RFQ strip needs it: a quote is only readable
   /// against what the job thought the package was worth, and marking an order
   /// has to know which parts go on the PO.
@@ -5556,6 +5574,7 @@ class _VendorCard extends StatefulWidget {
     required this.vendor,
     required this.package,
     required this.projectCategories,
+    required this.projectManufacturers,
     required this.estimate,
     required this.currency,
     required this.isFirst,
@@ -5789,9 +5808,19 @@ class _VendorCardState extends State<_VendorCard> {
             _RuleEditor(
               label: 'Manufacturers',
               hint: 'Extron',
-              helper: 'Every part by these makers goes to this vendor.',
+              helper: 'Every part by these makers goes to this vendor. '
+                  'Matched exactly - checked before the category rules.',
               values: vendor.manufacturers,
               suggestions: facets.manufacturers,
+              // TICKED, NOT TYPED, the same way the categories are. A maker
+              // rule is matched EXACTLY, so 'Extron Electronics' against a
+              // catalog that says 'Extron' claims nothing and says nothing
+              // about it. See [_RulePickerDialog].
+              choices: widget.projectManufacturers,
+              chooseLabel: 'Pick from the job',
+              pickNoun: 'manufacturer',
+              pickOffNote: 'no part on this job is by them',
+              pickKeyPrefix: 'vendor_manufacturer',
               onChanged: (v) => provider.updateProjectVendor(
                 vendor.copyWith(manufacturers: v),
               ),
@@ -5805,11 +5834,14 @@ class _VendorCardState extends State<_VendorCard> {
                   '"Camera - PTZ". Checked after the manufacturer rules.',
               values: vendor.categories,
               suggestions: facets.categories,
-              // TICKED, NOT TYPED. See [_CategoryPickerDialog]: on a real job
+              // TICKED, NOT TYPED. See [_RulePickerDialog]: on a real job
               // this is a dozen boxes off a list, and typing a dozen exact
               // strings is a dozen chances to write one that matches nothing.
               choices: widget.projectCategories,
               chooseLabel: 'Pick from the job',
+              pickNoun: 'category',
+              pickOffNote: 'no part on this job is in it',
+              pickKeyPrefix: 'vendor_category',
               onChanged: (v) =>
                   provider.updateProjectVendor(vendor.copyWith(categories: v)),
             ),
@@ -5830,6 +5862,53 @@ class _VendorCardState extends State<_VendorCard> {
   }
 }
 
+/// Every maker or category the job's own parts carry, with how many parts each
+/// holds, most-used first.
+///
+/// [field] pulls the string off a line - its manufacturer or its category.
+/// Both lists are built the same way and for the same reason; see
+/// [projectManufacturerChoices] for why it is the JOB's and not the catalog's.
+List<({String name, int count})> _projectFacetChoices(
+  ProjectEstimate estimate,
+  String Function(MasterPartLine) field,
+) {
+  final counts = <String, int>{};
+  final spelling = <String, String>{};
+  for (final line in estimate.master) {
+    final name = field(line).trim();
+    if (name.isEmpty) continue;
+    final key = name.toLowerCase();
+    counts[key] = (counts[key] ?? 0) + 1;
+    spelling.putIfAbsent(key, () => name);
+  }
+  return [
+    for (final entry in counts.entries)
+      (name: spelling[entry.key]!, count: entry.value),
+  ]..sort((a, b) {
+    final byCount = b.count.compareTo(a.count);
+    return byCount != 0
+        ? byCount
+        : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  });
+}
+
+/// Every manufacturer the job actually buys from, with how many parts each
+/// one makes, most-used first — what the manufacturer tick-list offers.
+///
+/// THE JOB'S MAKERS AND NOT THE CATALOG'S, for the same reason the categories
+/// are. The catalog knows a hundred manufacturers; this job buys from seven,
+/// and a rule naming one of the other ninety-three claims nothing and says
+/// nothing. The count is what makes it readable as a decision - "Extron (24)"
+/// against "Middle Atlantic (1)" is the difference between the order this
+/// vendor is really quoting and a bracket somebody added by accident.
+///
+/// A manufacturer rule is matched EXACTLY, which is what makes ticking so much
+/// better than typing here: 'Extron Electronics' against a catalog that says
+/// 'Extron' claims nothing, and nothing on screen would say so.
+List<({String name, int count})> projectManufacturerChoices(
+  ProjectEstimate estimate,
+) => _projectFacetChoices(estimate, (line) => line.manufacturer);
+
 /// Every category the job's own parts fall into, with how many parts each
 /// holds, most-used first.
 ///
@@ -5841,67 +5920,62 @@ class _VendorCardState extends State<_VendorCard> {
 /// really quoting and a line somebody added by accident.
 List<({String name, int count})> projectCategoryChoices(
   ProjectEstimate estimate,
-) {
-  final counts = <String, int>{};
-  final spelling = <String, String>{};
-  for (final line in estimate.master) {
-    final name = line.category.trim();
-    if (name.isEmpty) continue;
-    final key = name.toLowerCase();
-    counts[key] = (counts[key] ?? 0) + 1;
-    spelling.putIfAbsent(key, () => name);
-  }
-  final list = [
-    for (final entry in counts.entries)
-      (name: spelling[entry.key]!, count: entry.value),
-  ]..sort((a, b) {
-      final byCount = b.count.compareTo(a.count);
-      return byCount != 0
-          ? byCount
-          : a.name.toLowerCase().compareTo(b.name.toLowerCase());
-    });
-  return list;
-}
+) => _projectFacetChoices(estimate, (line) => line.category);
 
-/// The tick-list a vendor's category rules are set from.
+/// The tick-list a vendor's rules — manufacturers OR categories — are set from.
 ///
 /// ============================================================================
 ///  SIX BOXES, NOT SIX EXACT STRINGS
 /// ============================================================================
-///  A category rule is matched exactly (or by prefix - see
-///  [ProjectVendor.quotesCategory]), which makes typing one the worst possible
-///  way to write it: "Cameras" against a catalog that says "Camera" is a rule
-///  that claims nothing, and there is nothing anywhere on the screen to say so.
-///  The autocomplete underneath helped and only after you had typed enough of
-///  the word for it to appear.
+///  A rule is matched exactly (a category also by prefix - see
+///  [ProjectVendor.quotesCategory] and [ProjectVendor.quotesManufacturer]),
+///  which makes typing one the worst possible way to write it: "Cameras"
+///  against a catalog that says "Camera", or "Extron Electronics" against a
+///  catalog that says "Extron", is a rule that claims nothing, and there is
+///  nothing anywhere on the screen to say so. The autocomplete underneath
+///  helped and only after you had typed enough of the word for it to appear.
 ///
 ///  What people actually do on a live job is read down the list of what is
 ///  being bought and say "that lot is Extron's, that lot is the AV reseller's".
-///  That is a tick-list, so this is one: every category the job has, how many
-///  parts are in it, and a box.
+///  That is a tick-list, so this is one: every maker or category the job has,
+///  how many parts each claims, and a box.
 ///
-///  THE TYPED ROUTE SURVIVES. A rule for a category no part on the job has yet
+///  THE TYPED ROUTE SURVIVES. A rule for something no part on the job has yet
 ///  is a real thing to want - the job is not finished, and a vendor is often
 ///  set up before the rooms are drawn - so anything the vendor already claims
-///  that the job has no parts in is carried at the bottom of the list, ticked,
+///  that the job has no parts for is carried at the bottom of the list, ticked,
 ///  under a heading that says what it is. Unticking one is how it goes; the box
 ///  on the card is how another is added.
-class _CategoryPickerDialog extends StatefulWidget {
+class _RulePickerDialog extends StatefulWidget {
   final String title;
   final List<({String name, int count})> choices;
   final List<String> selected;
 
-  const _CategoryPickerDialog({
+  /// What one line of the list IS, in a sentence - 'category', 'manufacturer'.
+  final String noun;
+
+  /// What a row of the already-written block says about itself: 'no part on
+  /// this job is in it' reads for a category and not for a maker.
+  final String offNote;
+
+  /// The stem every key on this dialog is built from, so the two pickers are
+  /// separately addressable.
+  final String keyPrefix;
+
+  const _RulePickerDialog({
     required this.title,
     required this.choices,
     required this.selected,
+    required this.noun,
+    required this.offNote,
+    required this.keyPrefix,
   });
 
   @override
-  State<_CategoryPickerDialog> createState() => _CategoryPickerDialogState();
+  State<_RulePickerDialog> createState() => _RulePickerDialogState();
 }
 
-class _CategoryPickerDialogState extends State<_CategoryPickerDialog> {
+class _RulePickerDialogState extends State<_RulePickerDialog> {
   /// Lower-cased, because a rule is matched case-insensitively and a set that
   /// held both spellings would tick one box and write two rules.
   late final Set<String> _checked = {
@@ -5947,7 +6021,7 @@ class _CategoryPickerDialogState extends State<_CategoryPickerDialog> {
     final chosen = _result.length;
 
     return AlertDialog(
-      key: const ValueKey('vendor_category_picker'),
+      key: ValueKey('${widget.keyPrefix}_picker'),
       title: Text('${widget.title} this vendor quotes'),
       content: SizedBox(
         width: 460,
@@ -5957,12 +6031,12 @@ class _CategoryPickerDialogState extends State<_CategoryPickerDialog> {
           children: [
             Text(
               widget.choices.isEmpty
-                  ? 'This job has no parts with a category on them yet. Draw a '
-                        'room, or type a rule on the card behind this.'
-                  : 'Every category on this job, and how many parts are in it. '
-                        'A part goes to the FIRST vendor whose rules claim it, '
-                        'so two vendors ticking the same box is decided by the '
-                        'order of the list behind this.',
+                  ? 'This job has no parts with a ${widget.noun} on them yet. '
+                        'Draw a room, or type a rule on the card behind this.'
+                  : 'Every ${widget.noun} on this job, and how many parts each '
+                        'one claims. A part goes to the FIRST vendor whose '
+                        'rules claim it, so two vendors ticking the same box '
+                        'is decided by the order of the list behind this.',
               style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
             const SizedBox(height: 8),
@@ -5972,7 +6046,7 @@ class _CategoryPickerDialogState extends State<_CategoryPickerDialog> {
                 children: [
                   for (final c in widget.choices)
                     CheckboxListTile(
-                      key: ValueKey('vendor_category_${c.name}'),
+                      key: ValueKey('${widget.keyPrefix}_${c.name}'),
                       dense: true,
                       controlAffinity: ListTileControlAffinity.leading,
                       value: _isChecked(c.name),
@@ -5990,7 +6064,7 @@ class _CategoryPickerDialogState extends State<_CategoryPickerDialog> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
-                        'ALREADY WRITTEN, WITH NOTHING ON THE JOB IN IT',
+                        'ALREADY WRITTEN, WITH NOTHING ON THE JOB IT CLAIMS',
                         style: theme.textTheme.labelSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: muted,
@@ -5999,14 +6073,14 @@ class _CategoryPickerDialogState extends State<_CategoryPickerDialog> {
                     ),
                     for (final v in _offList)
                       CheckboxListTile(
-                        key: ValueKey('vendor_category_off_$v'),
+                        key: ValueKey('${widget.keyPrefix}_off_$v'),
                         dense: true,
                         controlAffinity: ListTileControlAffinity.leading,
                         value: _isChecked(v),
                         onChanged: (on) => _toggle(v, on ?? false),
                         title: Text(v),
                         subtitle: Text(
-                          'no part on this job is in it',
+                          widget.offNote,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: muted,
                           ),
@@ -6025,7 +6099,7 @@ class _CategoryPickerDialogState extends State<_CategoryPickerDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          key: const ValueKey('vendor_category_picker_save'),
+          key: ValueKey('${widget.keyPrefix}_picker_save'),
           onPressed: () => Navigator.of(context).pop(_result),
           child: Text(
             chosen == 0 ? 'Claim nothing' : 'Claim $chosen',
@@ -6057,6 +6131,16 @@ class _RuleEditor extends StatefulWidget {
   /// What that button reads.
   final String chooseLabel;
 
+  /// What one line of the tick-list IS - 'category', 'manufacturer'. Only read
+  /// when [choices] is non-empty; see [_RulePickerDialog].
+  final String pickNoun;
+
+  /// What the tick-list says about a rule the job has no parts for.
+  final String pickOffNote;
+
+  /// The stem the tick-list's keys are built from.
+  final String pickKeyPrefix;
+
   final ValueChanged<List<String>> onChanged;
 
   const _RuleEditor({
@@ -6068,6 +6152,9 @@ class _RuleEditor extends StatefulWidget {
     required this.onChanged,
     this.choices = const [],
     this.chooseLabel = 'Pick',
+    this.pickNoun = 'rule',
+    this.pickOffNote = 'no part on this job matches it',
+    this.pickKeyPrefix = 'vendor_rule',
   });
 
   @override
@@ -6140,10 +6227,13 @@ class _RuleEditorState extends State<_RuleEditor> {
   Future<void> _pick() async {
     final chosen = await showDialog<List<String>>(
       context: context,
-      builder: (_) => _CategoryPickerDialog(
+      builder: (_) => _RulePickerDialog(
         title: widget.label,
         choices: widget.choices,
         selected: widget.values,
+        noun: widget.pickNoun,
+        offNote: widget.pickOffNote,
+        keyPrefix: widget.pickKeyPrefix,
       ),
     );
     if (chosen == null) return;
@@ -6174,9 +6264,9 @@ class _RuleEditorState extends State<_RuleEditor> {
           ),
         ),
         // THE LIST, IN ONE PLACE, WITH TICKS. The type-in box below is still
-        // here and still takes anything - a rule for a category no part on
-        // this job has yet is a legitimate thing to write - but it is no
-        // longer the only way in. See [_CategoryPickerDialog].
+        // here and still takes anything - a rule for a maker or a category no
+        // part on this job has yet is a legitimate thing to write - but it is
+        // no longer the only way in. See [_RulePickerDialog].
         if (widget.choices.isNotEmpty)
           Align(
             alignment: Alignment.centerLeft,

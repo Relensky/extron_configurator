@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
@@ -19,6 +20,7 @@ import 'project_history_view.dart' show ItemHistory;
 import 'project_reminders.dart';
 import 'project_schedule.dart';
 import 'stepped_date_picker.dart';
+import 'vendor_rfq_view.dart';
 
 /// ============================================================================
 ///  THE DELIVERY TIMELINE
@@ -505,8 +507,9 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
       child: _ReminderBar(estimate: estimate, schedule: schedule),
     ),
     // WHAT HAS ALREADY GONE, before the dates that have not. See
-    // [_PlacedOrders]: the rest of this pane is a list of deadlines, and a
-    // purchase order that was raised last week is not a deadline.
+    // [_QuoteRequests] and [_PlacedOrders]: the rest of this pane is a list of
+    // deadlines, and an RFQ that went out last week is not a deadline.
+    SliverToBoxAdapter(child: _QuoteRequests(estimate: estimate)),
     SliverToBoxAdapter(child: _PlacedOrders(estimate: estimate)),
     // The phases, each with its own delivery date, laid out one after the
     // other — the reading this exists for: whether the infrastructure order
@@ -567,6 +570,258 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
       ),
     const SliverToBoxAdapter(child: SizedBox(height: 24)),
   ];
+}
+
+// ---------------------------------------------------------------------------
+//  WHAT IS OUT WITH THE VENDORS
+// ---------------------------------------------------------------------------
+//  A quote request is a DATE somebody is waiting on, which makes it the same
+//  kind of thing as everything else on this pane and it was on none of it. The
+//  Vendors pane knows perfectly well that the Extron RFQ went out on the 4th
+//  and has never been answered; the timeline - the screen somebody opens to
+//  ask "what is late" - did not, so the answer to "are we waiting on anybody"
+//  was a second pane and a memory of which vendors there are.
+//
+//  So every vendor whose RFQ has gone ANYWHERE is here: sent and unanswered,
+//  quoted and undecided, or ordered. It is the VENDOR's story. The block under
+//  it is the PURCHASE ORDER's, which is a different question with a different
+//  answer - a PO raised outside any vendor is there and not here, and a vendor
+//  whose PO was renumbered is here and not there.
+
+/// One vendor's RFQ, with what the job thinks the package is worth.
+typedef _QuoteRequest = ({
+  ProjectVendor vendor,
+  Color tint,
+  VendorPackage? package,
+
+  /// The date the row is READ BY: the latest thing that happened to it. What
+  /// the sort runs on.
+  DateTime? on,
+});
+
+/// Every vendor with an RFQ out, the one that needs looking at first at the
+/// top.
+///
+/// SENT BEFORE QUOTED BEFORE ORDERED, and inside each, OLDEST FIRST. The order
+/// is the question being asked: an RFQ sent three weeks ago and never answered
+/// is the thing to chase, and a quote that came back a month ago and has not
+/// turned into an order is the thing going stale. Newest-first - which is the
+/// right sort for the order log below, where the question is "what just
+/// happened" - would bury both.
+List<_QuoteRequest> _quoteRequests(
+  BuildingProject project,
+  ProjectEstimate estimate,
+) {
+  final rows = <_QuoteRequest>[];
+  for (final vendor in project.vendors) {
+    if (vendor.rfqStage == VendorRfqStage.none) continue;
+    rows.add((
+      vendor: vendor,
+      tint: projectVendorColor(vendor),
+      package: estimate.packageFor(vendor.id),
+      on: vendor.orderedOn ?? vendor.quotedOn ?? vendor.rfqSentOn,
+    ));
+  }
+  rows.sort((a, b) {
+    final byStage = a.vendor.rfqStage.index.compareTo(b.vendor.rfqStage.index);
+    if (byStage != 0) return byStage;
+    final ad = a.on;
+    final bd = b.on;
+    // A stage with no date on it has not really happened yet as far as the
+    // paperwork goes, so it sorts last rather than reading as the oldest.
+    if (ad == null && bd == null) {
+      return a.vendor.name.toLowerCase().compareTo(b.vendor.name.toLowerCase());
+    }
+    if (ad == null) return 1;
+    if (bd == null) return -1;
+    final byDate = ad.compareTo(bd);
+    return byDate != 0
+        ? byDate
+        : a.vendor.name.toLowerCase().compareTo(b.vendor.name.toLowerCase());
+  });
+  return rows;
+}
+
+/// The block of quote requests that are out with somebody.
+class _QuoteRequests extends StatelessWidget {
+  final ProjectEstimate estimate;
+
+  const _QuoteRequests({required this.estimate});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.watch<AppStateProvider>();
+    final rows = _quoteRequests(provider.project, estimate);
+    // Nothing has gone out yet, which is the ordinary state of a job being
+    // priced. A heading over an empty box would be one more thing to read.
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    final waiting = [
+      for (final r in rows)
+        if (r.vendor.rfqStage == VendorRfqStage.sent) r,
+    ].length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 0, 4),
+            child: Text(
+              waiting == 0
+                  ? 'QUOTE REQUESTS (${rows.length})'
+                  : 'QUOTE REQUESTS (${rows.length}) - $waiting UNANSWERED',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          for (final row in rows)
+            _QuoteRequestCard(row: row, estimate: estimate),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuoteRequestCard extends StatelessWidget {
+  final _QuoteRequest row;
+  final ProjectEstimate estimate;
+
+  const _QuoteRequestCard({required this.row, required this.estimate});
+
+  /// How long this has been sitting, said the way somebody says it out loud.
+  static String _waited(DateTime since, DateTime asOf) {
+    final days = asOf.difference(since).inDays;
+    if (days <= 0) return 'today';
+    if (days == 1) return '1 day';
+    if (days < 21) return '$days days';
+    return '${(days / 7).floor()} weeks';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.read<AppStateProvider>();
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final vendor = row.vendor;
+    final stage = vendor.rfqStage;
+    final package = row.package;
+    final quote = vendor.quoteFilePath.trim();
+
+    // THE WAIT, on the two stages where waiting is the question being asked.
+    // An order that went in four months ago is not "119 days out" - it is
+    // delivered or it is late, and the blocks below answer that.
+    final since = switch (stage) {
+      VendorRfqStage.sent => vendor.rfqSentOn,
+      VendorRfqStage.quoted => vendor.quotedOn,
+      _ => null,
+    };
+    final waited = since == null
+        ? ''
+        : stage == VendorRfqStage.sent
+        ? 'out ${_waited(since, today())} with no answer'
+        : 'in ${_waited(since, today())}, not ordered';
+
+    return Card(
+      key: ValueKey('timeline_rfq_${vendor.id}'),
+      margin: const EdgeInsets.only(bottom: 8),
+      // The card wears the vendor's colour, the same one its parts carry on
+      // the master list and its order carries below - so the three lists are
+      // visibly the same four vendors rather than three to cross-reference by
+      // name.
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: row.tint.withValues(alpha: 0.85), width: 1.4),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(rfqIcon(stage), size: 18, color: muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        vendor.name.trim().isEmpty
+                            ? '(unnamed vendor)'
+                            : vendor.name.trim(),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      // The whole story as one sentence, said exactly the way
+                      // the vendor card says it - see [vendorRfqSentence].
+                      Text(
+                        vendorRfqSentence(vendor),
+                        style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                VendorRfqChip(vendor: vendor),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              [
+                if (waited.isNotEmpty) waited,
+                if (package != null)
+                  '${package.lines.length} part'
+                      '${package.lines.length == 1 ? '' : 's'} - '
+                      '${formatMoney(package.total, estimate.currency)} at the '
+                      'job\'s own prices'
+                else
+                  'nothing on the job is tagged to this vendor',
+              ].join('  ·  '),
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+            // THE PAPER, one press from the row it belongs to. Attached on the
+            // Vendors pane at the moment the quote came back; read here, which
+            // is where somebody is asking what it said.
+            if (quote.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  key: ValueKey('timeline_rfq_quote_${vendor.id}'),
+                  icon: Icon(
+                    quoteDrawableHere(quote)
+                        ? Icons.picture_as_pdf
+                        : Icons.description_outlined,
+                    size: 18,
+                  ),
+                  label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 260),
+                    child: Text(
+                      path.basename(quote),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  onPressed: () => openVendorQuoteFile(
+                    context,
+                    provider,
+                    stored: quote,
+                    vendorName: vendor.name,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

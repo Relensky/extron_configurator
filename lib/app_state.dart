@@ -14082,24 +14082,46 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
-  /// Records the quote coming back: when, for how much, and under what
-  /// reference. A null [quotedOn] takes the whole quote off the row.
+  /// Records the quote coming back: when, for how much, under what reference,
+  /// and — when somebody had the paper in front of them — where the quote
+  /// itself is. A null [quotedOn] takes the whole quote off the row, document
+  /// and all: the pointer belonged to a quote that no longer exists.
+  ///
+  /// [filePath] is ABSOLUTE, as it comes off a file picker; it is stored
+  /// relative to the project where it can be, the way every other document on
+  /// a job is. Pass the vendor's existing [ProjectVendor.quoteFilePath]
+  /// unchanged and it survives — it is already stored, so it is left alone.
   void setVendorQuote(
     String vendorId, {
     DateTime? quotedOn,
     double amount = 0,
     String reference = '',
+    String filePath = '',
   }) {
     final vendor = project.vendorById(vendorId);
     if (vendor == null) return;
+    final wasAttached = vendor.quoteFilePath.trim();
+    final picked = filePath.trim();
+    // Already-stored paths come back through here untouched; only a fresh
+    // absolute pick is relativised, because storePath on a relative path
+    // would resolve it against the wrong folder.
+    final stored = picked.isEmpty || picked == wasAttached
+        ? picked
+        : BuildingProject.storePath(picked, currentProjectPath);
     project.replaceVendor(
       vendor.copyWith(
         quotedOn: quotedOn,
         clearQuotedOn: quotedOn == null,
         quoteAmount: quotedOn == null ? 0 : amount,
         quoteRef: quotedOn == null ? '' : reference.trim(),
+        quoteFilePath: quotedOn == null ? '' : stored,
       ),
     );
+    final paper = quotedOn == null || stored == wasAttached
+        ? ''
+        : stored.isEmpty
+              ? ', quote document unlinked'
+              : ', quote document attached';
     _logProjectEdit(
       itemKey: projectVendorItemKey(vendorId),
       itemName: _vendorLogName(vendor),
@@ -14108,7 +14130,8 @@ class AppStateProvider extends ChangeNotifier {
           ? 'quote taken off the row'
           : 'quote returned ${formatIsoDate(quotedOn)}'
                 '${amount > 0 ? ' for ${trimNumber(amount)}' : ''}'
-                '${reference.trim().isEmpty ? '' : ' (${reference.trim()})'}',
+                '${reference.trim().isEmpty ? '' : ' (${reference.trim()})'}'
+                '$paper',
     );
     _projectChanged(repricing: false);
   }

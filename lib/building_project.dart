@@ -1308,6 +1308,21 @@ class ProjectVendor {
   /// phone, and the only thing that finds it again in their system.
   final String quoteRef;
 
+  /// The quote ITSELF - the PDF that came back in the email.
+  ///
+  /// A pointer at where it is, stored the way every other document on a job is
+  /// (see [BuildingProject.storePath]): relative when it sits under the job's
+  /// folder, absolute otherwise. The app never copies it, so moving the file
+  /// moves what this opens.
+  ///
+  /// THE THREE FIELDS WERE NOT ENOUGH. A date, a figure and a reference answer
+  /// "who is cheapest"; the argument a quote gets pulled up to settle - what
+  /// was actually in it, at what lead time, with which accessories - is settled
+  /// by the paper, and until this existed the paper lived in the inbox of
+  /// whoever asked for it. Same bargain [ProjectPo.filePath] makes for the
+  /// order.
+  final String quoteFilePath;
+
   /// The day the order went in.
   final DateTime? orderedOn;
 
@@ -1328,6 +1343,7 @@ class ProjectVendor {
     this.quotedOn,
     this.quoteAmount = 0,
     this.quoteRef = '',
+    this.quoteFilePath = '',
     this.orderedOn,
     this.poNumber = '',
   });
@@ -1361,6 +1377,7 @@ class ProjectVendor {
     bool clearQuotedOn = false,
     double? quoteAmount,
     String? quoteRef,
+    String? quoteFilePath,
     DateTime? orderedOn,
     bool clearOrderedOn = false,
     String? poNumber,
@@ -1379,6 +1396,7 @@ class ProjectVendor {
     quotedOn: clearQuotedOn ? null : (quotedOn ?? this.quotedOn),
     quoteAmount: quoteAmount ?? this.quoteAmount,
     quoteRef: quoteRef ?? this.quoteRef,
+    quoteFilePath: quoteFilePath ?? this.quoteFilePath,
     orderedOn: clearOrderedOn ? null : (orderedOn ?? this.orderedOn),
     poNumber: poNumber ?? this.poNumber,
   );
@@ -1429,6 +1447,7 @@ class ProjectVendor {
     if (quotedOn != null) 'quotedOn': formatIsoDate(quotedOn!),
     if (quoteAmount > 0) 'quoteAmount': quoteAmount,
     if (quoteRef.trim().isNotEmpty) 'quoteRef': quoteRef.trim(),
+    if (quoteFilePath.trim().isNotEmpty) 'quoteFilePath': quoteFilePath.trim(),
     if (orderedOn != null) 'orderedOn': formatIsoDate(orderedOn!),
     if (poNumber.trim().isNotEmpty) 'poNumber': poNumber.trim(),
   };
@@ -1453,6 +1472,7 @@ class ProjectVendor {
       quotedOn: parseIsoDate(json['quotedOn']),
       quoteAmount: (json['quoteAmount'] as num?)?.toDouble() ?? 0,
       quoteRef: json['quoteRef']?.toString() ?? '',
+      quoteFilePath: json['quoteFilePath']?.toString() ?? '',
       orderedOn: parseIsoDate(json['orderedOn']),
       poNumber: json['poNumber']?.toString() ?? '',
     );

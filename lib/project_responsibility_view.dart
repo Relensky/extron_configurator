@@ -549,13 +549,25 @@ Future<void> showPartyColorDialog(BuildContext context, String party) async {
 /// with intrinsic ones, because that is the only way two independent columns
 /// stay on the same line as each other. Every height here is shared by both.
 /// The five sizes the two halves of the matrix are both laid out on.
+/// How many lines a scope heading may run to before it ellipsises. Three was
+/// the old fixed row's worth; the row is measured now, so this is only the
+/// backstop that keeps one pathological name from owning the sheet.
+const int kScopeHeadLines = 5;
+
 typedef _Metrics = ({
+  /// The scope names' row. GROWN TO FIT THEM - see
+  /// [_MatrixGridState._scopeHeadHeight].
   double headRow,
 
   /// The cutsheet's OWN row under every scope name - see [_MatrixGrid].
   double cutsheetRow,
 
   double partyRow,
+
+  /// The strip that closes the header block and carries the word ROOM over
+  /// the column it names - see [_MatrixGrid].
+  double roomLabelRow,
+
   double bodyRow,
   double roomColumn,
   double itemColumn,
@@ -631,10 +643,12 @@ class _MatrixGridState extends State<_MatrixGrid> {
     BuildContext context, {
     required double zoom,
     required double roomColumn,
+    required double headRow,
   }) => (
-    headRow: gridMetric(context, 60) * zoom,
+    headRow: headRow,
     cutsheetRow: gridMetric(context, 26) * zoom,
     partyRow: gridMetric(context, 24) * zoom,
+    roomLabelRow: gridMetric(context, 22) * zoom,
     bodyRow: gridMetric(context, 28) * zoom,
     roomColumn: roomColumn * zoom,
     itemColumn: naturalItemColumn(context) * zoom,
@@ -644,6 +658,58 @@ class _MatrixGridState extends State<_MatrixGrid> {
   /// against.
   static double naturalItemColumn(BuildContext context) =>
       gridMetric(context, 116);
+
+  /// HOW TALL THE SCOPE NAMES ACTUALLY NEED TO BE.
+  ///
+  /// The row was a flat 60 pixels with the names clipped to three lines, which
+  /// on the names this document really carries - 'Conduit and back boxes for
+  /// floor-mounted connectivity' - is a heading that ends in an ellipsis. A
+  /// column head that cannot be read is a column that has to be hovered to
+  /// find out what it is, thirty times, on the one sheet whose whole job is to
+  /// be read across.
+  ///
+  /// So the row is MEASURED: every scope name laid out at the width it will
+  /// actually be drawn in, and the row set to the tallest of them. It grows
+  /// with the type and the zoom because the measurement is taken at both, and
+  /// it is floored at the old height so a sheet of short names looks exactly
+  /// as it did.
+  ///
+  /// CAPPED, because one pathological name must not push the quantities off
+  /// the bottom of the window. Past the cap that one head ellipsises again -
+  /// and its tooltip, which carries the whole line, is still there.
+  static double _scopeHeadHeight(
+    BuildContext context, {
+    required List<ResponsibilityItem> items,
+    required TextStyle? style,
+    required double columnWidth,
+    required double zoom,
+  }) {
+    final floor = gridMetric(context, 60) * zoom;
+    final ceiling = gridMetric(context, 132) * zoom;
+    // What is left of the column once the rules, the padding and the drag grip
+    // have had theirs. Measured narrow rather than wide: a head one line
+    // taller than it needed is tidy, and one line shorter is an ellipsis.
+    final text = columnWidth - 8 - gridMetric(context, 16) * zoom;
+    if (text <= 0) return floor;
+
+    final scaler = MediaQuery.textScalerOf(context);
+    var tallest = 0.0;
+    for (final item in items) {
+      final name = item.scope.trim();
+      if (name.isEmpty) continue;
+      final painter = TextPainter(
+        text: TextSpan(text: name, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: kScopeHeadLines,
+      )..layout(maxWidth: text);
+      if (painter.height > tallest) tallest = painter.height;
+      painter.dispose();
+    }
+    // Breathing room under the last line, so a two-line name does not sit on
+    // the rule below it.
+    return (tallest + 10 * zoom).clamp(floor, ceiling);
+  }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -680,11 +746,25 @@ class _MatrixGridState extends State<_MatrixGrid> {
           )
         : _zoom;
 
-    final m = _metrics(context, zoom: zoom, roomColumn: naturalRoom);
-
     // The type goes with the boxes. A cell at half size with the same figure
     // in it is a cell with an ellipsis where the quantity was.
     final zoomed = zoomedTextTheme(theme, zoom);
+
+    final m = _metrics(
+      context,
+      zoom: zoom,
+      roomColumn: naturalRoom,
+      // MEASURED, not guessed - see [_scopeHeadHeight]. Taken at the zoomed
+      // style and the zoomed column width, because both are what the name is
+      // actually drawn at.
+      headRow: _scopeHeadHeight(
+        context,
+        items: items,
+        style: zoomed.labelMedium?.copyWith(fontWeight: FontWeight.bold),
+        columnWidth: naturalItemColumn(context) * zoom,
+        zoom: zoom,
+      ),
+    );
 
     // Rooms, and then the totals line under them.
     final bodyRows = columns.length + 1;
@@ -747,7 +827,10 @@ class _MatrixGridState extends State<_MatrixGrid> {
           PinnedGrid(
             frozenWidth: m.roomColumn,
             headerHeight:
-                m.headRow + (anyCutsheet ? m.cutsheetRow : 0) + m.partyRow * 2,
+                m.headRow +
+                (anyCutsheet ? m.cutsheetRow : 0) +
+                m.partyRow * 2 +
+                m.roomLabelRow,
             bodyWidth: m.itemColumn * items.length,
             bodyHeight: m.bodyRow * bodyRows,
             corner: _frozenHead(theme, zoomed, m, anyCutsheet),
@@ -778,8 +861,26 @@ class _MatrixGridState extends State<_MatrixGrid> {
     );
   }
 
-  /// The corner: what the frozen column is, and what the two rows under every
-  /// scope name are.
+  /// The corner: what the rows of the header block are, and — on the strip
+  /// that closes it — what the column underneath is.
+  ///
+  /// ============================================================================
+  ///  THE WORD 'ROOM' GOES WHERE THE ROOMS ARE
+  /// ============================================================================
+  ///  It used to sit at the TOP of the corner, four rows and eighty pixels
+  ///  above the first room name, with 'Cutsheet', 'Furnished by' and
+  ///  'Installed by' stacked between it and the thing it names. So the one
+  ///  label on the sheet that says what the frozen column IS was the label
+  ///  furthest from it, and the three row-labels underneath — which name the
+  ///  rows running off to the RIGHT — read as though they were describing the
+  ///  rooms.
+  ///
+  ///  It is at the bottom now, on a strip of its own directly over the first
+  ///  room, and that strip is what SEPARATES the agreement from the
+  ///  quantities: the header block above it is who does what, everything below
+  ///  it is how many, and the two are the different halves of this document.
+  ///  Heavy rules top and bottom, because a boundary somebody has to look for
+  ///  is a boundary that is not doing anything.
   Widget _frozenHead(
     ThemeData theme,
     TextTheme zoomed,
@@ -790,13 +891,16 @@ class _MatrixGridState extends State<_MatrixGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // WHAT THE ROW OF NAMES TO THE RIGHT IS. The corner is above the room
+        // column and beside the scope names, and it is the scope names that
+        // needed saying: 'ROOM' has moved to the strip at the bottom.
         _cell(
           height: m.headRow,
           align: Alignment.bottomLeft,
           line: line,
           fill: _headFill(theme),
           strongRight: true,
-          child: Text('ROOM', style: _headStyle(theme, zoomed)),
+          child: Text('SCOPE OF WORK', style: _headStyle(theme, zoomed)),
         ),
         if (anyCutsheet)
           _cell(
@@ -806,18 +910,31 @@ class _MatrixGridState extends State<_MatrixGrid> {
             strongRight: true,
             child: Text('Cutsheet', style: _metaStyle(theme, zoomed)),
           ),
+        // The header block is ONE block, so it is washed as one - these two
+        // used to be the only rows in it with no fill behind them, which read
+        // as a gap in the middle of the heading rather than as part of it.
         _cell(
           height: m.partyRow,
           line: line,
+          fill: _headFill(theme),
           strongRight: true,
           child: Text('Furnished by', style: _metaStyle(theme, zoomed)),
         ),
         _cell(
           height: m.partyRow,
           line: line,
+          fill: _headFill(theme),
           strongRight: true,
           strongBottom: true,
           child: Text('Installed by', style: _metaStyle(theme, zoomed)),
+        ),
+        _cell(
+          height: m.roomLabelRow,
+          line: line,
+          fill: _sepFill(theme),
+          strongRight: true,
+          strongBottom: true,
+          child: Text('ROOM', style: _headStyle(theme, zoomed)),
         ),
       ],
     );
@@ -1021,9 +1138,12 @@ class _MatrixGridState extends State<_MatrixGrid> {
               children: [
                 _ColumnGrip(item: item, width: m.itemColumn),
                 Expanded(
+                  // The ROW is sized to the longest of these - see
+                  // [_scopeHeadHeight] - so the limit here is a backstop and
+                  // not the thing deciding what gets read.
                   child: Text(
                     item.scope,
-                    maxLines: 3,
+                    maxLines: kScopeHeadLines,
                     overflow: TextOverflow.ellipsis,
                     style: zoomed.labelMedium?.copyWith(
                       fontWeight: FontWeight.bold,
@@ -1053,6 +1173,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
         _cell(
           height: m.partyRow,
           line: line,
+          fill: _headFill(theme),
           child: _PartyCell(
             party: item.furnishedBy,
             missing: item.furnishedBy.trim().isEmpty,
@@ -1061,11 +1182,23 @@ class _MatrixGridState extends State<_MatrixGrid> {
         _cell(
           height: m.partyRow,
           line: line,
+          fill: _headFill(theme),
           strongBottom: true,
           child: _PartyCell(
             party: item.installedBy,
             missing: item.installedBy.trim().isEmpty,
           ),
+        ),
+        // THE STRIP THAT ENDS THE AGREEMENT AND STARTS THE COUNT. Empty over
+        // the scope columns on purpose: it carries the word ROOM in the corner
+        // to its left, and across the sheet its job is to be a band the eye
+        // stops at. See [_frozenHead].
+        _cell(
+          height: m.roomLabelRow,
+          line: line,
+          fill: _sepFill(theme),
+          strongBottom: true,
+          child: const SizedBox.shrink(),
         ),
       ],
     );
@@ -1208,6 +1341,16 @@ class _MatrixGridState extends State<_MatrixGrid> {
   /// Behind the scope headings, the other one.
   static Color _headFill(ThemeData theme) =>
       theme.colorScheme.onSurface.withValues(alpha: 0.04);
+
+  /// Behind the strip that closes the header block.
+  ///
+  /// DARKER THAN THE HEADING IT ENDS, and heavier-ruled on both sides. This is
+  /// the one boundary on the sheet that is worth drawing: above it the
+  /// document is an agreement about who does what, below it the same columns
+  /// are quantities per room, and a reader who loses that line reads a count
+  /// as a commitment.
+  static Color _sepFill(ThemeData theme) =>
+      theme.colorScheme.onSurface.withValues(alpha: 0.13);
 }
 /// The handle a column is dragged by.
 ///
