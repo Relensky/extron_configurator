@@ -13607,6 +13607,27 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
+  /// Gives one party its colour, or takes it back to the derived one.
+  ///
+  /// Logged like any other change to the matrix. A colour is not decoration on
+  /// this document: it is how the sheet is read, it survives into the picture
+  /// and the spreadsheet that get issued, and "who changed the contractor from
+  /// orange to blue between the two issues" is a question somebody asks.
+  void setResponsibilityPartyColor(String party, int? color) {
+    final named = party.trim();
+    if (named.isEmpty) return;
+    project.setPartyColor(named, color);
+    _logProjectEdit(
+      itemKey: 'responsibility:party:${responsibilityPartyKey(named)}',
+      itemName: named,
+      field: 'Responsibility matrix',
+      summary: color == null
+          ? 'colour back to automatic'
+          : 'colour set by hand',
+    );
+    _projectChanged(repricing: false);
+  }
+
   /// Sets how many of [itemId] one room needs, or takes the room off that line
   /// when [qty] is not positive.
   void setResponsibilityQty(String itemId, String roomId, double qty) {

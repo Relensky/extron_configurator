@@ -1640,6 +1640,9 @@ Uint8List buildProjectWorkbookBytes({
     roomNames: estimate.project.responsibilityRoomColumns(
       names: estimate.roomCodeNames,
     ),
+    // The same colour per party the pane and the picture use, so one workbook
+    // does not disagree with the copy that was issued from beside it.
+    partyColors: estimate.project.partyColors,
   );
   if (matrix.isNotEmpty) {
     sheets.add(buildStackedReportSheet(

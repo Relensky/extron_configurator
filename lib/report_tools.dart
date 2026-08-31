@@ -87,6 +87,41 @@ String renderTextReport(
   return buffer.toString();
 }
 
+/// Longer than this and a value is PROSE rather than a field.
+///
+/// The same figure as [kXlsxMaxColumnWidth], and deliberately so: it is the
+/// widest column the writer will draw, so a value that does not fit inside it
+/// is by definition one no column can hold.
+const int kProseColumnChars = kXlsxMaxColumnWidth;
+
+/// Which of a section's columns hold sentences rather than fields.
+///
+/// Never column 0. That one names the row - the scope item, the run, the part
+/// - and a table whose rows have lost their names is not a table. Numbers are
+/// never prose either: a figure is a figure however many digits it has, and
+/// lifting one out of its column would take it out of the column somebody
+/// totals.
+Set<int> proseColumnsOf(ReportSection section) {
+  final out = <int>{};
+  final width = section.rows.fold(
+    section.header.length,
+    (m, r) => math.max(m, r.length),
+  );
+  for (int c = 1; c < width; c++) {
+    var longest = 0;
+    for (final row in section.rows) {
+      if (c >= row.length) continue;
+      final cell = row[c];
+      if (cell == null || cell is num || cell is XlsxMoney) continue;
+      for (final line in cell.toString().split('\n')) {
+        if (line.length > longest) longest = line.length;
+      }
+    }
+    if (longest > kProseColumnChars) out.add(c);
+  }
+  return out;
+}
+
 /// ONE sheet with the sections stacked like the text report, and [image]
 /// (usually the diagram) dropped in underneath.
 ///
@@ -99,6 +134,17 @@ String renderTextReport(
 /// VALUE cell excluded from auto-sizing, so a long room or building name
 /// overflows right into the empty cells instead of stretching a column that
 /// a wide table below also uses.
+///
+/// A SENTENCE IS NOT A COLUMN. Wherever a column holds prose — what the work
+/// is, a note, a description that runs to a line and a half — it is lifted out
+/// of the grid and written under its row, merged across the sheet and labelled
+/// with the heading it came from. The reason is what it does to everything
+/// ELSE on the row: a column sized to a hundred-character sentence is a column
+/// the two-character quantities beside it are stranded at the left-hand edge
+/// of, and the reader is left scrolling sideways past one paragraph to reach
+/// the figures the sheet is opened for. Lifted out, the grid is as narrow as
+/// its shortest honest width and the sentence is still there, on its own line,
+/// where a sentence is legible. See [proseColumnsOf].
 XlsxSheet buildStackedReportSheet({
   required String sheetName,
   required String title,
@@ -118,7 +164,16 @@ XlsxSheet buildStackedReportSheet({
   final rows = <List<dynamic>>[];
   final rowStyles = <int, int>{};
   final overflowRows = <int>{};
+  // The title band and the stamp under it, both written across the sheet: a
+  // caption is not a value in column A, and left as one it set that column's
+  // width for every short cell below it.
+  final merges = <String>['A1:E1', 'A2:E2'];
   final int reportWidth = sections.fold(1, (w, s) => math.max(w, widthOf(s)));
+
+  /// The columns a lifted sentence is written across. At least two, or the
+  /// "merge" would be one cell — which is a sentence back in column A, sizing
+  /// it for every short value underneath.
+  final int proseSpan = math.max(reportWidth, 2);
 
   // Row 1 carries the room and nothing else, merged across A:E so the title
   // band reads as one cell instead of a value stuck in column A. Row 2 says
@@ -130,15 +185,57 @@ XlsxSheet buildStackedReportSheet({
   for (final s in sections) {
     final bool twoColumn = s.header.length == 2;
     final int width = twoColumn ? 2 : widthOf(s);
+    // A key/value block is already narrow and already handled: its value
+    // overflows right into the empty cells beside it.
+    final prose = twoColumn ? const <int>{} : proseColumnsOf(s);
+    final kept = [
+      for (int c = 0; c < width; c++)
+        if (!prose.contains(c)) c,
+    ];
+    // The band over the section runs the width of everything under it, the
+    // lifted sentences included — and every row in the section is padded to
+    // it, so the banding does not narrow at the grid and widen again at each
+    // lifted line.
+    final int band = prose.isEmpty ? width : math.max(kept.length, proseSpan);
+
     rows.add([]);
     rowStyles[rows.length] = XlsxRowStyle.title;
-    rows.add(pad([s.title], width));
+    // The section's name written across its band, the way the sheet's own
+    // title is. Left in column A it is a caption Excel clips at that column's
+    // edge, and 'Roles and Responsi' is not the name of anything.
+    if (band >= 2) {
+      merges.add(
+        'A${rows.length + 1}:${xlsxColumnLetter(band - 1)}${rows.length + 1}',
+      );
+    }
+    rows.add(pad([s.title], band));
     rowStyles[rows.length] = XlsxRowStyle.header;
-    rows.add(pad(s.header, width));
+    rows.add(pad(
+        [for (final c in kept) c < s.header.length ? s.header[c] : ''], band));
     for (int i = 0; i < s.rows.length; i++) {
+      final row = s.rows[i];
+      final int style = i.isOdd ? XlsxRowStyle.zebra : XlsxRowStyle.normal;
       if (i.isOdd) rowStyles[rows.length] = XlsxRowStyle.zebra;
       if (twoColumn) overflowRows.add(rows.length);
-      rows.add(pad(s.rows[i], width));
+      rows.add(
+          pad([for (final c in kept) c < row.length ? row[c] : ''], band));
+
+      // The sentences, each on its own line under the row it belongs to and
+      // labelled with the heading it came from — without the label a merged
+      // line of prose under a table is a line of prose from nowhere.
+      for (final c in prose) {
+        final text = (c < row.length ? row[c] : '')?.toString() ?? '';
+        if (text.trim().isEmpty) continue;
+        final head = c < s.header.length ? s.header[c].trim() : '';
+        // The continuation row takes its parent's banding, so the pair reads
+        // as one row rather than as a row and a stray line under it.
+        if (style != XlsxRowStyle.normal) rowStyles[rows.length] = style;
+        merges.add(
+          'A${rows.length + 1}:'
+          '${xlsxColumnLetter(proseSpan - 1)}${rows.length + 1}',
+        );
+        rows.add(pad([head.isEmpty ? text : '$head:  $text'], proseSpan));
+      }
     }
   }
 
@@ -147,7 +244,7 @@ XlsxSheet buildStackedReportSheet({
     rows: rows,
     rowStyles: rowStyles,
     overflowRows: overflowRows,
-    merges: const ['A1:E1'],
+    merges: merges,
     image: imageBuilder?.call(rows.length + 1),
   );
 }

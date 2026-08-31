@@ -11,6 +11,7 @@ import 'contrast.dart';
 import 'cost_estimate.dart' show trimNumber;
 import 'equipment_lifecycle.dart'
     show RoomLifecycle, buildProjectLifecycle, formatLifecycleMoney;
+import 'pinned_grid.dart' show gridMetric;
 import 'project_estimate.dart';
 import 'project_history_view.dart' show ItemHistory;
 import 'project_reminders.dart';
@@ -89,6 +90,15 @@ List<Widget> _lifecycleSlivers(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
+      ),
+    ),
+    // The dates a refresh plan does have - its phases and its delivery date -
+    // on the same rail the priced jobs get. It draws nothing until there are
+    // two of them, so a plan nobody has dated is unchanged.
+    SliverToBoxAdapter(
+      child: ProjectDateGraph(
+        schedule: schedule,
+        project: provider.project,
       ),
     ),
     // THE PHASES, which are the thing a refresh is actually planned in and the
@@ -477,6 +487,15 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
   }
 
   return [
+    // THE WHOLE JOB AS ONE LINE, before the counts and the cards it is made
+    // of. See [ProjectDateGraph]: the dates below are a list, and a list is
+    // the one shape that cannot show how far apart two dates are.
+    SliverToBoxAdapter(
+      child: ProjectDateGraph(
+        schedule: schedule,
+        project: provider.project,
+      ),
+    ),
     SliverToBoxAdapter(
       child: _TimelineSummary(schedule: schedule, provider: provider),
     ),
@@ -1473,6 +1492,533 @@ class _TrackCard extends StatelessWidget {
           ],
         ),
       );
+}
+
+
+// ---------------------------------------------------------------------------
+//  THE DATES, ON ONE LINE
+// ---------------------------------------------------------------------------
+//  Everything else on this tab is a LIST: the order days down the page, a card
+//  each, a phase strip across the top. That is the right shape for working
+//  FROM - a card is a trip to the purchasing office - and the wrong shape for
+//  the question that gets asked first, which is when this job actually
+//  happens. Nine cards do not say whether the first order is next week or in
+//  March, nor whether the infrastructure phase lands before the walls close,
+//  because a list has no distance in it: two dates a fortnight apart and two a
+//  year apart are one row apart either way.
+//
+//  So the same dates are drawn once, in order, on one rail: today, the first
+//  order, every order date as a dot, each phase's on-site day, and the day the
+//  job is due. NOTHING HERE IS A NEW FACT - every date on it is one of the
+//  cards below - which is exactly the point. It is the same schedule seen from
+//  far enough away to have a shape.
+
+/// One date the graph points at, and the words that go beside it.
+typedef _DateMark = ({DateTime date, String label, Color color});
+
+/// A callout's size before the reader's text size is applied, the lanes they
+/// stack in, and the gap that counts as clear.
+///
+/// Constants because the painter and the callouts have to agree to the pixel:
+/// a stem drawn to a lane no card is in is a line pointing at nothing.
+const double _kMarkWidth = 128;
+const double _kMarkHeight = 44;
+const int _kMarkLanes = 3;
+const double _kMarkGap = 6;
+
+/// How much rail one month label needs to itself before the months thin out.
+const double _kMonthLabelWidth = 56;
+
+/// The whole schedule as one line, above the cards it is made of.
+///
+/// Hidden rather than empty when there is nothing to draw. A rail with one
+/// date on it is not a graph - it is a date with a line through it - so the
+/// graph appears once there are two, which is also the first moment the
+/// distance between them means anything.
+class ProjectDateGraph extends StatelessWidget {
+  final ProjectSchedule schedule;
+  final BuildingProject project;
+
+  const ProjectDateGraph({
+    super.key,
+    required this.schedule,
+    required this.project,
+  });
+
+  /// The dates worth a label. Order days are on the rail as dots - there can
+  /// be thirty of them and a name on each is a graph nobody can read - so what
+  /// gets named is the handful somebody actually diarises.
+  List<_DateMark> _marks(BuildContext context) {
+    final theme = Theme.of(context);
+    final out = <_DateMark>[
+      (
+        date: schedule.asOf,
+        label: 'Today',
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    ];
+
+    // The day the job starts, as opposed to the day it is due. Coloured by
+    // what that order actually is: a first order already behind is the whole
+    // reading, and a rail that drew it in the same ink as the rest would bury
+    // it.
+    final firstOrder = schedule.firstOrderDate;
+    if (firstOrder != null) {
+      out.add((
+        date: firstOrder,
+        label: 'First order',
+        color: orderStatusColor(
+          context,
+          schedule.lateCount > 0
+              ? OrderStatus.late
+              : schedule.dueSoonCount > 0
+                  ? OrderStatus.dueSoon
+                  : OrderStatus.onTrack,
+        ),
+      ));
+    }
+
+    // THE PHASES, each on its own day. The reading this graph exists for: the
+    // infrastructure going in months before the tech, and whether the two
+    // actually line up with when the walls close.
+    for (final track in project.tracks) {
+      final deadline = track.deadline;
+      if (deadline != null) {
+        out.add((
+          date: deadline,
+          label: '${track.name} on site',
+          color: theme.colorScheme.tertiary,
+        ));
+      }
+      final done = track.completion;
+      if (done != null) {
+        out.add((
+          date: done,
+          label: '${track.name} finished',
+          color: theme.colorScheme.primary,
+        ));
+      }
+    }
+
+    final deadline = schedule.deadline;
+    if (deadline != null) {
+      out.add((
+        date: deadline,
+        label: 'Delivery deadline',
+        color: schedule.lateCount > 0
+            ? errorTextOn(theme.colorScheme, theme.cardColor)
+            : theme.colorScheme.primary,
+      ));
+    }
+
+    // The same date under the same name twice is one card, not two on top of
+    // each other.
+    final seen = <String>{};
+    return [
+      for (final mark in out)
+        if (seen.add('${formatIsoDate(mark.date)}|${mark.label}')) mark,
+    ]..sort((a, b) => a.date.compareTo(b.date));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final marks = _marks(context);
+    final days = schedule.orderDays;
+
+    var first = schedule.asOf;
+    var last = schedule.asOf;
+    for (final date in [
+      for (final m in marks) m.date,
+      for (final d in days) d.date,
+    ]) {
+      if (date.isBefore(first)) first = date;
+      if (date.isAfter(last)) last = date;
+    }
+    final span = daysBetween(first, last);
+    if (span <= 0 || marks.length < 2) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Card(
+        key: const ValueKey('timeline_date_graph'),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'THE DATES',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${formatScheduleDate(first)}  to  '
+                      '${formatScheduleDate(last)}'
+                      '${days.isEmpty ? '' : '  ·  ${days.length} order '
+                          'date${days.length == 1 ? '' : 's'}'}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              LayoutBuilder(
+                builder: (context, box) => _plot(
+                  context,
+                  width: box.maxWidth,
+                  marks: marks,
+                  first: first,
+                  span: span,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The rail and everything on it, at the height this particular job needs.
+  ///
+  /// SIZED FROM WHAT IT HOLDS rather than from the worst case. A job with a
+  /// deadline and one order date needs one lane of cards; reserving three on
+  /// every job would put two empty lanes of white above the commonest rail
+  /// there is, at the top of a tab whose first screen is the point.
+  Widget _plot(
+    BuildContext context, {
+    required double width,
+    required List<_DateMark> marks,
+    required DateTime first,
+    required int span,
+  }) {
+    final theme = Theme.of(context);
+    final markWidth = gridMetric(context, _kMarkWidth);
+    final markHeight = gridMetric(context, _kMarkHeight);
+    final lane = markHeight + _kMarkGap;
+
+    // The rail stops short of both edges, so a dot on the last day is a dot on
+    // the rail rather than half a dot over the border.
+    const pad = 10.0;
+    final plot = (width - pad * 2).clamp(1.0, double.infinity);
+    double xOf(DateTime date) =>
+        pad + (daysBetween(first, date) / span).clamp(0.0, 1.0) * plot;
+
+    // WHICH LANE EACH CALLOUT SITS IN, worked out left to right: a card takes
+    // the first lane whose last card has already finished, so two dates a week
+    // apart stack instead of printing over each other. Lane 0 ends up nearest
+    // the rail, which is where the commonest case - a rail that needs one lane
+    // - should be.
+    final used = List<double>.filled(_kMarkLanes, -1e9);
+    final placed = <({_DateMark mark, double left, int lane})>[];
+    for (final mark in marks) {
+      final left = (xOf(mark.date) - markWidth / 2)
+          .clamp(0.0, (width - markWidth).clamp(0.0, width));
+      // Every lane still occupied: the card goes in whichever clears soonest,
+      // which is the least bad overlap on offer.
+      var slot = 0;
+      var fallback = 0;
+      var clear = false;
+      for (var i = 0; i < _kMarkLanes; i++) {
+        if (used[i] < left - _kMarkGap) {
+          slot = i;
+          clear = true;
+          break;
+        }
+        if (used[i] < used[fallback]) fallback = i;
+      }
+      if (!clear) slot = fallback;
+      used[slot] = left + markWidth;
+      placed.add((mark: mark, left: left, lane: slot));
+    }
+
+    final lanes = placed.fold<int>(1, (m, p) => p.lane + 1 > m ? p.lane + 1 : m);
+    // Lane 0 nearest the rail, counting up from it.
+    double topOf(int slot) => (lanes - 1 - slot) * lane;
+    final railY = lanes * lane + 2;
+    final ticks = _monthTicks(first, span, plot, xOf);
+
+    return SizedBox(
+      height: railY + gridMetric(context, 26),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _DateGraphPainter(
+                railY: railY,
+                startX: pad,
+                endX: pad + plot,
+                todayX: xOf(schedule.asOf),
+                axis: theme.colorScheme.outlineVariant,
+                gone:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
+                today: theme.colorScheme.onSurfaceVariant,
+                ground: theme.cardColor,
+                dots: [
+                  for (final day in schedule.orderDays)
+                    (
+                      x: xOf(day.date),
+                      color: orderStatusColor(
+                        context,
+                        day.parts
+                            .map((p) => p.status)
+                            .reduce((a, b) => a.index < b.index ? a : b),
+                      ),
+                    ),
+                ],
+                stems: [
+                  for (final p in placed)
+                    (
+                      x: xOf(p.mark.date),
+                      top: topOf(p.lane) + markHeight,
+                      color: p.mark.color,
+                    ),
+                ],
+                ticks: [for (final t in ticks) t.x],
+              ),
+            ),
+          ),
+          // The months under the rail. What turns a row of dots into a
+          // distance: without them the gap between two dates is a gap, and
+          // with them it is three months.
+          for (final tick in ticks)
+            Positioned(
+              top: railY + 6,
+              left: tick.x - _kMonthLabelWidth / 2,
+              width: _kMonthLabelWidth,
+              child: Text(
+                tick.label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          for (final p in placed)
+            Positioned(
+              top: topOf(p.lane),
+              left: p.left,
+              width: markWidth,
+              height: markHeight,
+              child: _DateCallout(
+                markKey: ValueKey('timeline_date_mark_${p.mark.label}'),
+                label: p.mark.label,
+                date: p.mark.date,
+                color: p.mark.color,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// A tick on the first of every nth month, thinned until each label has
+  /// [_kMonthLabelWidth] of rail to itself. Months printed over each other are
+  /// worse than no months at all.
+  List<({double x, String label})> _monthTicks(
+    DateTime first,
+    int span,
+    double plot,
+    double Function(DateTime) xOf,
+  ) {
+    final last = addDays(first, span);
+    final months =
+        (last.year - first.year) * 12 + (last.month - first.month) + 1;
+    final room = (plot / _kMonthLabelWidth).floor().clamp(1, 24);
+    final step = (months / room).ceil().clamp(1, 120);
+
+    final out = <({double x, String label})>[];
+    // The first of the month the rail starts in is behind the rail; the tick
+    // goes on the next one.
+    var when = DateTime(first.year, first.month);
+    if (when.isBefore(first)) when = DateTime(first.year, first.month + 1);
+    while (!when.isAfter(last)) {
+      out.add((
+        x: xOf(when),
+        // The year only where it changes: 'Jan 2026' on every tick is four
+        // characters repeated the width of the page.
+        label: out.isEmpty || when.month == 1
+            ? '${formatScheduleMonth(when)} ${when.year}'
+            : formatScheduleMonth(when),
+      ));
+      when = DateTime(when.year, when.month + step);
+    }
+    return out;
+  }
+}
+
+/// One named date, as it sits over the rail.
+class _DateCallout extends StatelessWidget {
+  final Key markKey;
+  final String label;
+  final DateTime date;
+  final Color color;
+
+  const _DateCallout({
+    required this.markKey,
+    required this.label,
+    required this.date,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: '$label  ·  ${formatScheduleDate(date)}',
+      child: Container(
+        key: markKey,
+        padding: const EdgeInsets.fromLTRB(6, 3, 6, 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(4),
+          // The colour is a second way to read the rail, never the only one -
+          // this tab gets printed and photographed. The words say it too.
+          border: Border(left: BorderSide(color: color, width: 2.5)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+            Text(
+              formatScheduleDate(date),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The rail, the days already gone, the order dates on it, and the stems up to
+/// the cards.
+class _DateGraphPainter extends CustomPainter {
+  final double railY;
+  final double startX, endX, todayX;
+  final Color axis, gone, today, ground;
+
+  /// One per order date, in the colour the worst part on that day reads in.
+  final List<({double x, Color color})> dots;
+
+  /// Up from the rail to the bottom of each callout.
+  final List<({double x, double top, Color color})> stems;
+
+  /// Where the month labels are, so the rail can carry a tick under each.
+  final List<double> ticks;
+
+  const _DateGraphPainter({
+    required this.railY,
+    required this.startX,
+    required this.endX,
+    required this.todayX,
+    required this.axis,
+    required this.gone,
+    required this.today,
+    required this.ground,
+    required this.dots,
+    required this.stems,
+    required this.ticks,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawLine(
+      Offset(startX, railY),
+      Offset(endX, railY),
+      Paint()
+        ..color = axis
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round,
+    );
+
+    // TIME ALREADY SPENT, drawn heavier than the rest of the rail. A schedule
+    // is read from where the reader is standing, and the part behind them is
+    // the part no decision can be taken about any more.
+    if (todayX > startX) {
+      canvas.drawLine(
+        Offset(startX, railY),
+        Offset(todayX, railY),
+        Paint()
+          ..color = gone
+          ..strokeWidth = 4
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    for (final x in ticks) {
+      canvas.drawLine(
+        Offset(x, railY - 3),
+        Offset(x, railY + 3),
+        Paint()
+          ..color = axis
+          ..strokeWidth = 1,
+      );
+    }
+
+    for (final stem in stems) {
+      canvas.drawLine(
+        Offset(stem.x, railY),
+        Offset(stem.x, stem.top),
+        Paint()
+          ..color = stem.color.withValues(alpha: 0.6)
+          ..strokeWidth = 1.5,
+      );
+    }
+
+    // THE ORDER DATES. Each is punched out of the rail first, so eleven dates
+    // in one fortnight read as eleven dates rather than as one thick smear.
+    for (final dot in dots) {
+      canvas.drawCircle(Offset(dot.x, railY), 5, Paint()..color = ground);
+      canvas.drawCircle(Offset(dot.x, railY), 3.5, Paint()..color = dot.color);
+    }
+
+    // Where today is: a full-height rule rather than a dot, because every
+    // other mark on the rail is read against it.
+    canvas.drawLine(
+      Offset(todayX, 0),
+      Offset(todayX, railY),
+      Paint()
+        ..color = today.withValues(alpha: 0.35)
+        ..strokeWidth = 1,
+    );
+    canvas.drawCircle(Offset(todayX, railY), 4, Paint()..color = today);
+  }
+
+  @override
+  bool shouldRepaint(_DateGraphPainter old) =>
+      old.railY != railY ||
+      old.todayX != todayX ||
+      old.startX != startX ||
+      old.endX != endX ||
+      old.dots.length != dots.length ||
+      old.stems.length != stems.length ||
+      old.ticks.length != ticks.length;
 }
 
 /// The three counts the timeline exists to surface, above the dates.

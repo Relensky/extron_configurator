@@ -1045,6 +1045,27 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // THE DATES BEFORE THE CARDS. The pane below is a list, and a list cannot
+  // say whether the first order is next week or in March - see
+  // [ProjectDateGraph]. This guards the wiring: the graph is drawn on the pane
+  // rather than only being a widget that could be.
+  testWidgets('the timeline opens with its dates on one rail', (tester) async {
+    final p = withProject();
+    p.project.deliveryDeadline = DateTime(2026, 6, 1);
+    p.addProjectTrack('Infrastructure', deadline: DateTime(2026, 5, 1));
+    await openTimeline(tester, p);
+
+    expect(find.byKey(const ValueKey('timeline_date_graph')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('timeline_date_mark_Delivery deadline')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('timeline_date_mark_Infrastructure on site')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a phase is dragged into place by its handle', (tester) async {
     final p = withProject();
     p.project.deliveryDeadline = DateTime(2026, 6, 1);

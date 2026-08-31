@@ -1904,6 +1904,24 @@ class BuildingProject {
   /// to agree with each other.
   final List<ResponsibilityItem> responsibility;
 
+  /// Party (normalised - see [responsibilityPartyKey]) -> the colour it reads
+  /// in, as an ARGB int, for the parties somebody has chosen one for.
+  ///
+  /// WHY A PARTY'S COLOUR IS THE JOB'S TO SET. The matrix is read by whose
+  /// name is on the line, and every name already derives a stable colour from
+  /// itself, which is enough to make a sheet legible before anybody sets
+  /// anything up. It is not enough to make it match: this document goes out
+  /// beside a contractor's own drawings, gets printed, and is argued from at a
+  /// pre-installation meeting where the general contractor has been blue on
+  /// every sheet for a year. A hue nobody can change is a hue that disagrees
+  /// with the rest of the submittal.
+  ///
+  /// Keyed by the NORMALISED name so 'CTS Chico' and 'cts  chico' are one
+  /// party rather than two entries fighting over one column, and an int rather
+  /// than a Color to keep this file free of Flutter - the same bargain the
+  /// vendor colours and the cable colours make.
+  final Map<String, int> partyColors;
+
   /// Core component key (see [masterPartKey]) -> vendor id, for the parts
   /// somebody has pinned by hand. Beats the manufacturer rules; an entry whose
   /// vendor has since been deleted resolves to untagged rather than to a
@@ -2048,6 +2066,7 @@ class BuildingProject {
     List<ManualRoom>? manualRooms,
     List<ProjectVendor>? vendors,
     List<ResponsibilityItem>? responsibility,
+    Map<String, int>? partyColors,
     Map<String, String>? partVendors,
     this.deliveryDeadline,
     Map<String, int>? partLeadTimes,
@@ -2076,6 +2095,7 @@ class BuildingProject {
        manualRooms = manualRooms ?? [],
        vendors = vendors ?? [],
        responsibility = responsibility ?? [],
+       partyColors = partyColors ?? {},
        partVendors = partVendors ?? {},
        partLeadTimes = partLeadTimes ?? {},
        partNeedBy = partNeedBy ?? {},
@@ -2523,6 +2543,26 @@ class BuildingProject {
   //  See responsibility_matrix.dart. The list is edited the way the vendors
   //  and the phases are — add, replace, remove — so the pane stays a form and
   //  the rules about ids stay here with the ids.
+
+  /// The colour [party] has been GIVEN, or null when it still reads in the one
+  /// its name derives.
+  int? partyColor(String party) => partyColors[responsibilityPartyKey(party)];
+
+  /// Gives [party] a colour, or takes it back to the derived one when [color]
+  /// is null.
+  ///
+  /// A party nobody named has no colour to set: the blank cell is the thing
+  /// this document exists to catch, and letting somebody paint it a settled
+  /// colour would hide exactly the line that has to be chased.
+  void setPartyColor(String party, int? color) {
+    final key = responsibilityPartyKey(party);
+    if (key.isEmpty) return;
+    if (color == null) {
+      partyColors.remove(key);
+    } else {
+      partyColors[key] = color;
+    }
+  }
 
   ResponsibilityItem? responsibilityById(String id) {
     for (final item in responsibility) {
@@ -3355,6 +3395,7 @@ class BuildingProject {
     'vendors': [for (final v in vendors) v.toJson()],
     if (responsibility.isNotEmpty)
       'responsibility': [for (final r in responsibility) r.toJson()],
+    if (partyColors.isNotEmpty) 'partyColors': partyColors,
     if (partVendors.isNotEmpty) 'partVendors': partVendors,
     if (deliveryDeadline != null)
       'deliveryDeadline': formatIsoDate(deliveryDeadline!),
@@ -3421,6 +3462,19 @@ class BuildingProject {
         if (r is Map && r['scope']?.toString().trim().isNotEmpty == true)
           ResponsibilityItem.fromJson(Map<String, dynamic>.from(r)),
     ];
+
+    // A colour that is not a number is dropped rather than defaulted: a
+    // hand-edited file with a colour NAME typed into it should leave the party
+    // on the hue its name derives, which is legible, rather than on black.
+    final partyColors = <String, int>{};
+    final rawParty = json['partyColors'];
+    if (rawParty is Map) {
+      rawParty.forEach((k, v) {
+        final key = responsibilityPartyKey(k.toString());
+        final argb = v is num ? v.toInt() : int.tryParse(v.toString().trim());
+        if (key.isNotEmpty && argb != null) partyColors[key] = argb;
+      });
+    }
 
     final pins = <String, String>{};
     final rawPins = json['partVendors'];
@@ -3571,6 +3625,7 @@ class BuildingProject {
       manualRooms: manualRooms,
       vendors: vendors,
       responsibility: responsibility,
+      partyColors: partyColors,
       partVendors: pins,
       deliveryDeadline: parseIsoDate(json['deliveryDeadline']),
       partLeadTimes: leadTimes,
@@ -3696,6 +3751,7 @@ class BuildingProject {
     manualRooms: List<ManualRoom>.from(manualRooms),
     vendors: List<ProjectVendor>.from(vendors),
     responsibility: List<ResponsibilityItem>.from(responsibility),
+    partyColors: Map<String, int>.from(partyColors),
     partVendors: Map<String, String>.from(partVendors),
     deliveryDeadline: deliveryDeadline,
     partLeadTimes: Map<String, int>.from(partLeadTimes),

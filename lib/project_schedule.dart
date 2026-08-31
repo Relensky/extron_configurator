@@ -433,6 +433,12 @@ PartScheduleLine schedulePart({
 String formatScheduleDate(DateTime when) =>
     '${when.day} ${_months[when.month - 1]} ${when.year}';
 
+/// The month a date falls in, spelled as [formatScheduleDate] spells it.
+///
+/// Public so an axis of months and the dates written beside it cannot end up
+/// spelled two different ways on the same graph.
+String formatScheduleMonth(DateTime when) => _months[when.month - 1];
+
 const List<String> _months = [
   'Jan',
   'Feb',

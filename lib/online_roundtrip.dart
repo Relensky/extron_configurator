@@ -85,6 +85,18 @@ List<List<dynamic>> _preamble(String title, String rules, int width) {
   return [pad([title]), pad([rules]), pad([''])];
 }
 
+/// The two preamble lines written ACROSS the sheet rather than down column A.
+///
+/// They are captions - a title and a paragraph of instructions - and left as
+/// values in the first column they set its width for the whole sheet. That
+/// column holds row ids six characters long, so the first thing anybody saw on
+/// opening the file was a column of short ids in a field wide enough for a
+/// paragraph, with the columns they actually type in pushed off to the right.
+List<String> _preambleMerges(int width) => [
+  'A1:${xlsxColumnLetter(width - 1)}1',
+  'A2:${xlsxColumnLetter(width - 1)}2',
+];
+
 /// The delivery log as an editable sheet.
 ///
 /// [roomNames] maps room id to the name the Room column shows and is matched
@@ -144,6 +156,7 @@ XlsxSheet buildEditableDeliveriesSheet(
     rows: rows,
     rowStyles: const {0: XlsxRowStyle.title, 3: XlsxRowStyle.header},
     columnWidths: const {1: 34, 6: 30, 9: 34},
+    merges: _preambleMerges(header.length),
   );
 }
 
@@ -192,6 +205,7 @@ XlsxSheet buildEditablePosSheet(BuildingProject project) {
     rows: rows,
     rowStyles: const {0: XlsxRowStyle.title, 3: XlsxRowStyle.header},
     columnWidths: const {2: 24, 6: 34},
+    merges: _preambleMerges(header.length),
   );
 }
 

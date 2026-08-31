@@ -1,6 +1,6 @@
 import 'package:path/path.dart' as path;
 
-import 'name_colors.dart' show nameSheetTint;
+import 'name_colors.dart' show nameSheetTint, normalisedName;
 import 'report_tools.dart';
 import 'xlsx_writer.dart' show XlsxTint;
 
@@ -58,6 +58,15 @@ const List<String> kResponsibilityParties = [
   'N/A',
   'TBD',
 ];
+
+/// A party reduced to what it MEANS, which is what a colour is filed under.
+///
+/// One place rather than a call to [normalisedName] at every site, because the
+/// key a colour is STORED under and the key it is LOOKED UP by have to be the
+/// same function forever - a project file outlives any one screen, and a
+/// second answer to "what is this party called" is a colour that goes missing
+/// the next time the job is opened.
+String responsibilityPartyKey(String party) => normalisedName(party);
 
 /// One line of the matrix: a piece of scope, whose it is, and how much of it
 /// each room needs.
@@ -325,9 +334,15 @@ const List<({String scope, String furnishedBy, String installedBy, String work})
 /// [missingLabel] is what an unnamed party reads as. The grid's columns are
 /// narrow and take the short form the screen uses; the table underneath has
 /// room for the one that says it is not finished yet.
+/// [color] is the colour the JOB has given this party, as an ARGB int, or null
+/// to leave it on the one its name derives. The spreadsheet has to be told:
+/// its whole claim is that a party is the same colour here as on the screen it
+/// was agreed on, and a sheet that quietly re-derived the hue would be a
+/// second opinion about it.
 XlsxTint responsibilityPartyCell(
   String party, {
   String missingLabel = 'NOBODY',
+  int? color,
 }) {
   if (party.trim().isEmpty) {
     // NOT the neutral grey the other unsettled answers get. 'N/A' on the
@@ -340,7 +355,7 @@ XlsxTint responsibilityPartyCell(
       inkHex: kResponsibilityMissingInk,
     );
   }
-  final tint = nameSheetTint(party);
+  final tint = nameSheetTint(party, assigned: color);
   return XlsxTint(text: party.trim(), fillHex: tint.fill, inkHex: tint.ink);
 }
 
@@ -369,18 +384,31 @@ String formatResponsibilityQty(double qty) {
 /// glance and has to stay narrow enough to, and the prose — what the work is,
 /// where the product is, what is still open — is what gets read one line at a
 /// time. A single table carrying both is a table where neither is legible.
+/// [partyColors] is the job's own colour per party, keyed by
+/// [responsibilityPartyKey] - see [BuildingProject.partyColors]. Empty leaves
+/// every party on the colour its name derives, which is what a job nobody has
+/// set a colour on looks like.
 List<ReportSection> responsibilityMatrixSections(
   List<ResponsibilityItem> items, {
   required List<({String id, String name})> roomNames,
+  Map<String, int> partyColors = const {},
 }) {
   if (items.isEmpty) return const [];
+
+  int? colorOf(String party) => partyColors[responsibilityPartyKey(party)];
 
   final grid = <List<dynamic>>[
     for (final item in items)
       [
         item.scope,
-        responsibilityPartyCell(item.furnishedBy),
-        responsibilityPartyCell(item.installedBy),
+        responsibilityPartyCell(
+          item.furnishedBy,
+          color: colorOf(item.furnishedBy),
+        ),
+        responsibilityPartyCell(
+          item.installedBy,
+          color: colorOf(item.installedBy),
+        ),
         item.neededBy,
         for (final room in roomNames)
           formatResponsibilityQty(item.qtyByRoom[room.id] ?? 0),
@@ -460,10 +488,16 @@ List<ReportSection> responsibilityMatrixSections(
         for (final item in open)
           [
             item.scope,
-            responsibilityPartyCell(item.furnishedBy,
-                missingLabel: 'NOT AGREED'),
-            responsibilityPartyCell(item.installedBy,
-                missingLabel: 'NOT AGREED'),
+            responsibilityPartyCell(
+              item.furnishedBy,
+              missingLabel: 'NOT AGREED',
+              color: colorOf(item.furnishedBy),
+            ),
+            responsibilityPartyCell(
+              item.installedBy,
+              missingLabel: 'NOT AGREED',
+              color: colorOf(item.installedBy),
+            ),
           ],
       ],
     ));

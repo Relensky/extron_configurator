@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
+import 'color_wheel_picker.dart';
 import 'contrast.dart';
 import 'name_colors.dart';
 import 'pdf_viewer_dialog.dart';
@@ -353,12 +354,20 @@ class _Toolbar extends StatelessWidget {
               ),
             ),
           // The key to the colours on the grid below, built from the parties
-          // actually named on this job.
+          // actually named on this job - and the place they are SET. A colour
+          // is chosen by pressing the colour, which is the only control on
+          // this pane whose meaning is already on screen.
           if (items.isNotEmpty)
             NameTintKey(
               key: const ValueKey('responsibility_party_key'),
               title: 'PARTIES',
               names: partiesOn(items),
+              keyPrefix: 'responsibility_party',
+              colorOf: (name) {
+                final assigned = project.partyColor(name);
+                return assigned == null ? null : Color(assigned);
+              },
+              onTap: (name) => showPartyColorDialog(context, name),
             ),
         ],
       ),
@@ -383,6 +392,145 @@ List<String> partiesOn(List<ResponsibilityItem> items) {
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+//  THE COLOUR A PARTY READS IN
+// ---------------------------------------------------------------------------
+//  Every party already derives a stable colour from its own name, which is
+//  what makes a matrix legible the moment it is started and before anybody has
+//  set anything up. What a derived colour cannot do is AGREE with anything
+//  outside this app - and this is the one document here that is issued into
+//  somebody else's stack of paper. The general contractor has been blue on
+//  every drawing in the submittal for a year; the campus colour-codes its
+//  trades; the last matrix that went out was coloured by hand in Excel. A hue
+//  nobody can change is a hue that argues with all three.
+//
+//  So the colour is assignable, exactly the way a vendor's is (see
+//  [showVendorColorDialog]) - the same twelve swatches, the same way back to
+//  automatic - and it carries into the picture and the spreadsheet, because
+//  those are the copies anybody outside this room will ever see.
+
+/// The palette a party's colour is chosen from.
+///
+/// The same twelve the derived colours come out of, so a chosen colour and a
+/// derived one belong to one set rather than looking like two systems on one
+/// sheet. Any other colour is one press further on, through the wheel.
+const List<Color> kResponsibilityPalette = kNameTintWheel;
+
+/// Picks the colour [party] reads in, everywhere it appears.
+Future<void> showPartyColorDialog(BuildContext context, String party) async {
+  final named = party.trim();
+  if (named.isEmpty) return;
+  final provider = context.read<AppStateProvider>();
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) {
+        // Re-read the project every rebuild: the swatch that reads as chosen
+        // has to be the one the job actually holds.
+        final assigned = provider.project.partyColor(named);
+        final shown = resolveTint(assigned: assigned, name: named);
+
+        return AlertDialog(
+          key: const ValueKey('responsibility_party_color_dialog'),
+          title: Text('Colour for $named'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Every line $named furnishes or installs is marked in this '
+                  'colour - on the grid, in the picture that goes in the '
+                  'submittal, and in the spreadsheet the contractor prices.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final c in kResponsibilityPalette)
+                      ColorSwatchButton(
+                        key: ValueKey(
+                          'party_color_${responsibilityPartyKey(named)}_'
+                          '${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}',
+                        ),
+                        color: c,
+                        selected: shown.toARGB32() == c.toARGB32(),
+                        onTap: () => setLocal(
+                          () => provider.setResponsibilityPartyColor(
+                            named,
+                            c.toARGB32(),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // A Wrap rather than a Row: two labelled buttons are wider
+                // than the dialog at anything above the default text size, and
+                // an Automatic button half off the edge is the way back to the
+                // derived colour that cannot be pressed.
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('party_color_custom'),
+                      icon: const Icon(Icons.colorize, size: 16),
+                      label: const Text('Any other colour'),
+                      onPressed: () async {
+                        final picked = await showColorWheelDialog(
+                          ctx,
+                          initial: shown,
+                          title: 'Colour for $named',
+                        );
+                        if (picked == null) return;
+                        setLocal(
+                          () => provider.setResponsibilityPartyColor(
+                            named,
+                            picked.toARGB32(),
+                          ),
+                        );
+                      },
+                    ),
+                    // Back to the colour the name gives it. Disabled while
+                    // nothing has been assigned, so the button also says
+                    // whether this party's colour was chosen or derived.
+                    TextButton.icon(
+                      key: const ValueKey('party_color_auto'),
+                      icon: const Icon(Icons.auto_awesome, size: 16),
+                      label: const Text('Automatic'),
+                      onPressed: assigned == null
+                          ? null
+                          : () => setLocal(
+                              () => provider.setResponsibilityPartyColor(
+                                named,
+                                null,
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              key: const ValueKey('party_color_done'),
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -921,9 +1069,20 @@ class _PartyCell extends StatelessWidget {
         ),
       );
     }
+    // The colour the JOB gave this party, where somebody gave it one. Read off
+    // the project here rather than passed down, because every cell on a sheet
+    // of thirty lines has to change the moment the colour does, and threading
+    // one map through four call sites is four chances for one of them to go on
+    // showing yesterday's colour.
+    final assigned = context.watch<AppStateProvider>().project.partyColor(
+      party,
+    );
     return Align(
       alignment: Alignment.centerLeft,
-      child: NameTintChip(name: party),
+      child: NameTintChip(
+        name: party,
+        color: assigned == null ? null : Color(assigned),
+      ),
     );
   }
 }
@@ -1555,6 +1714,11 @@ Future<void> _exportSpreadsheet(
   final sections = responsibilityMatrixSections(
     project.responsibility,
     roomNames: columns,
+    // The colours travel with the document. This copy is the one the
+    // contractor prices from, and a party that is blue on the screen it was
+    // agreed on and orange in the file that was sent is two parties as far as
+    // the reader is concerned.
+    partyColors: project.partyColors,
   );
   if (sections.isEmpty) return;
 
@@ -1833,6 +1997,13 @@ class _MatrixTable extends StatelessWidget {
     /// A party's cell: its colour behind its name, on the white the document
     /// is printed on. Greyscaled with the rest of the table when the colours
     /// are switched off, which is why the name is still written in it.
+    // The colour this job gave the party, or the one its name derives when
+    // nobody has given it one - see [showPartyColorDialog]. The picture is the
+    // copy that goes in the submittal, so it has to be the colour that was
+    // agreed rather than the colour a name happens to hash to.
+    Color partyTint(String party) =>
+        resolveTint(assigned: project.partyColor(party), name: party);
+
     Widget partyCell(String party) {
       final named = party.trim();
       if (named.isEmpty) {
@@ -1845,15 +2016,16 @@ class _MatrixTable extends StatelessWidget {
           ),
         );
       }
+      final tint = partyTint(named);
       return Container(
-        color: nameFill(named, alpha: 0.20),
+        color: tintFill(tint, alpha: 0.20),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
         child: Text(
           named,
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: nameTextColor(named, Colors.white),
+            color: tintText(tint, Colors.white),
           ),
         ),
       );
@@ -1888,7 +2060,17 @@ class _MatrixTable extends StatelessWidget {
             runSpacing: 6,
             children: [
               for (final party in partiesOn(items))
-                NameTintChip(name: party, background: Colors.white),
+                NameTintChip(
+                  name: party,
+                  background: Colors.white,
+                  // Only what was CHOSEN is passed: a party nobody named a
+                  // colour for still has to be able to read as unsettled, and
+                  // a resolved colour handed in here would settle it.
+                  color: () {
+                    final assigned = project.partyColor(party);
+                    return assigned == null ? null : Color(assigned);
+                  }(),
+                ),
             ],
           ),
           const SizedBox(height: 10),

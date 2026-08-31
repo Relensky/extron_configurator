@@ -25,7 +25,13 @@ import 'package:archive/archive.dart';
 ///  produce those cells simply by joining a list with '\n'.
 ///
 ///  Column widths are computed automatically from the longest LINE in each
-///  column unless an explicit width is given.
+///  column unless an explicit width is given, and a column is made as wide as
+///  what is in it: a workbook that arrives with its columns cut off is one the
+///  reader has to widen before they can read it. A value too long even for
+///  [kXlsxMaxColumnWidth] is written WRAPPED, with its row grown to fit, so
+///  nothing is ever clipped and one sentence cannot drag a column across the
+///  page. Cells inside a merge that spans columns do not size anything - they
+///  are as wide as the block they are written across.
 ///
 ///  One PNG image per sheet can be anchored to a cell ([XlsxImage]) — used to
 ///  drop the schematic diagram into the report.
@@ -35,6 +41,48 @@ import 'package:archive/archive.dart';
 ///  argued with by dragging a figure, and a chart that does not move when the
 ///  figure does is a chart that gets ignored.
 /// ============================================================================
+
+/// 'A' for 0, 'B' for 1, 'AA' for 26 — a column's letter in A1 notation.
+///
+/// Public because the callers that MERGE cells have to name the ranges they
+/// merge across, and a second copy of this loop in each of them is a second
+/// chance to be off by one about where a band ends.
+String xlsxColumnLetter(int index) {
+  var s = '';
+  var n = index;
+  while (n >= 0) {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = n ~/ 26 - 1;
+  }
+  return s;
+}
+
+/// The narrowest a computed column is allowed to be.
+///
+/// A column sized to a two-character heading is a column whose heading is the
+/// only thing that fits in it, and every figure that lands there later comes
+/// out as ###.
+const int kXlsxMinColumnWidth = 9;
+
+/// The widest a computed column is allowed to be.
+///
+/// GENEROUS ON PURPOSE. The complaint this answers is a workbook that arrives
+/// with its columns cut off - a part description clipped mid-word, a room name
+/// showing its first three letters - which puts the reader on the column
+/// borders dragging them out before they can read anything. Eighty characters
+/// holds every ordinary value this app writes: a part description, a model
+/// number, a room name, a vendor, a date.
+///
+/// What it does NOT hold is prose, and that is the point of having a ceiling
+/// at all. A sentence sized into its own column drags one column across the
+/// page and leaves every short cell in it stranded at the left-hand edge, so
+/// past this width a value is WRAPPED and its row grows to fit instead - and
+/// the report layer lifts the worst of them out of the grid altogether, onto a
+/// row of their own. See [buildStackedReportSheet].
+const int kXlsxMaxColumnWidth = 80;
+
+/// Excel's own column width, for a column this writer never sized.
+const double kXlsxDefaultColumnWidth = 8.43;
 
 /// Style ids usable in [XlsxSheet.rowStyles] (indexes into cellXfs).
 class XlsxRowStyle {
@@ -402,14 +450,6 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
   /// the row style ids) keep their meaning.
   int wrapStyle(int rowStyle) => firstWrapStyle + rowStyle;
 
-  /// True when [value] is text that should be written wrapped.
-  bool wraps(dynamic value) =>
-      value != null &&
-      value is! num &&
-      value is! XlsxMoney &&
-      value is! XlsxTint &&
-      value.toString().contains('\n');
-
   // --- the party and vendor colours ---
   // One font and one fill per distinct pair in the book, so a name that
   // appears on nine rows and two sheets costs one style rather than eleven.
@@ -498,15 +538,7 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       '</styleSheet>'));
 
   // --- worksheets (+ optional drawing parts) ---
-  String colLetter(int index) {
-    var s = '';
-    var n = index;
-    while (n >= 0) {
-      s = String.fromCharCode(65 + (n % 26)) + s;
-      n = n ~/ 26 - 1;
-    }
-    return s;
-  }
+  String colLetter(int index) => xlsxColumnLetter(index);
 
   /// Parses "A1:E1" into 0-based (firstCol, firstRow, lastCol, lastRow).
   /// Null for anything malformed, which the caller drops rather than writing
@@ -709,25 +741,52 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       }
     }
 
+    // Cells a MULTI-COLUMN merge covers, anchor included. A value in one of
+    // those is as wide as the whole block it is written across, so sizing its
+    // column to it is wrong by definition — it is how one full-width sentence
+    // set the width of column A for every short cell under it.
+    final Set<String> spanning = {};
+    final Map<String, (int, int)> anchors = {};
+    for (final range in merges) {
+      final (firstCol, firstRow, lastCol, lastRow) = parseRange(range)!;
+      if (lastCol == firstCol) continue;
+      anchors['${colLetter(firstCol)}${firstRow + 1}'] = (firstCol, lastCol);
+      for (int row = firstRow; row <= lastRow; row++) {
+        for (int col = firstCol; col <= lastCol; col++) {
+          spanning.add('${colLetter(col)}${row + 1}');
+        }
+      }
+    }
+
     // Column widths: explicit overrides win; otherwise size to the longest
-    // value in the column (with padding), clamped to a sane range. Section
-    // title rows (style 2) span conceptually and are ignored for sizing.
+    // value in the column (with padding). Section title rows (style 2) span
+    // conceptually and are ignored for sizing, as is anything inside a merge.
     //
-    // The longest LINE, not the longest value: a wrapped cell listing four
-    // pull boxes is as wide as its widest one, and sizing it to the whole
-    // string would make the column four times wider than anything in it.
+    // THE COLUMN IS AS WIDE AS WHAT IS IN IT. A width the reader has to drag
+    // out before they can read the cell is a spreadsheet that arrived wrong,
+    // and '###' in a costed column is worse than wrong — so the clamp is
+    // generous enough to hold anything short of prose, and prose itself is
+    // WRAPPED rather than allowed to drag one column across the page. See
+    // [kXlsxMaxColumnWidth].
+    //
+    // The longest LINE, not the longest value: a cell listing four pull boxes
+    // is as wide as its widest one, and sizing it to the whole string would
+    // make the column four times wider than anything in it.
     final Map<int, double> widths = Map.of(sheet.columnWidths);
     final Map<int, int> maxLen = {};
-    // Row index -> how many lines its tallest wrapped cell needs.
-    final Map<int, int> rowLines = {};
+    // Cells excluded from sizing on purpose, which must not be wrapped either:
+    // the whole point of them is that they spill into the empty cells to their
+    // right, and a wrapped cell spills nowhere.
+    final Set<String> spills = {};
     for (int r = 0; r < sheet.rows.length; r++) {
       final cells = sheet.rows[r];
       final bool overflow = sheet.overflowRows.contains(r);
       for (int c = 0; c < cells.length; c++) {
         final cell = cells[c];
-        final lines = cell?.toString().split('\n') ?? const <String>[];
-        if (lines.length > (rowLines[r] ?? 1)) rowLines[r] = lines.length;
+        if (cell == null) continue;
+        final ref = '${colLetter(c)}${r + 1}';
         if (sheet.rowStyles[r] == XlsxRowStyle.title) continue;
+        if (spanning.contains(ref)) continue;
         // The excluded cell of an overflow row is only excused when it is
         // TEXT: text spills into the empty cells to its right, but a number
         // too wide for its column comes out as ###, so figures always size.
@@ -735,17 +794,72 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
             c == cells.length - 1 &&
             cell is! num &&
             cell is! XlsxMoney) {
+          spills.add(ref);
           continue;
         }
-        for (final line in lines) {
+        for (final line in cell.toString().split('\n')) {
           if (line.length > (maxLen[c] ?? 0)) maxLen[c] = line.length;
         }
       }
     }
     maxLen.forEach((c, len) {
-      widths.putIfAbsent(c, () => (len + 3).clamp(9, 55).toDouble());
+      widths.putIfAbsent(
+        c,
+        () => (len + 3)
+            .clamp(kXlsxMinColumnWidth, kXlsxMaxColumnWidth)
+            .toDouble(),
+      );
     });
 
+    /// How wide the cell at (r, c) actually prints: its own column, or the
+    /// whole block when it anchors a merge across several.
+    double roomFor(int r, int c) {
+      final span = anchors['${colLetter(c)}${r + 1}'];
+      if (span == null) return widths[c] ?? kXlsxDefaultColumnWidth;
+      var total = 0.0;
+      for (int i = span.$1; i <= span.$2; i++) {
+        total += widths[i] ?? kXlsxDefaultColumnWidth;
+      }
+      return total;
+    }
+
+    /// How many lines [text] needs at [room] characters across.
+    ///
+    /// A character count rather than a measurement: this writer has no font
+    /// metrics, and a row a line too tall is a row with a blank line in it
+    /// while a row a line too short hides the end of a sentence.
+    int linesIn(String text, double room) {
+      final across = room.floor().clamp(1, 400);
+      var total = 0;
+      for (final line in text.split('\n')) {
+        total += line.isEmpty ? 1 : (line.length / across).ceil();
+      }
+      return total;
+    }
+
+    // Row index -> how many lines its tallest cell needs, now that every
+    // column's width is settled.
+    final Map<int, int> rowLines = {};
+    // Cells to write WRAPPED: they say more than their column can show.
+    final Set<String> wrapped = {};
+    for (int r = 0; r < sheet.rows.length; r++) {
+      final cells = sheet.rows[r];
+      // A title row is a CAPTION over the band under it, not a value in a
+      // column: it spills right across its own empty cells, and wrapping it
+      // would break a section heading over two lines inside its band.
+      if (sheet.rowStyles[r] == XlsxRowStyle.title) continue;
+      for (int c = 0; c < cells.length; c++) {
+        final cell = cells[c];
+        if (cell == null || cell is num || cell is XlsxMoney) continue;
+        final ref = '${colLetter(c)}${r + 1}';
+        if (swallowed.contains(ref) || spills.contains(ref)) continue;
+        final text = cell.toString();
+        final room = roomFor(r, c);
+        final lines = linesIn(text, room);
+        if (lines > 1 && cell is! XlsxTint) wrapped.add(ref);
+        if (lines > (rowLines[r] ?? 1)) rowLines[r] = lines;
+      }
+    }
     if (widths.isNotEmpty) {
       body.write('<cols>');
       final indexes = widths.keys.toList()..sort();
@@ -791,7 +905,7 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
           body.write('<c r="$ref"$styleAttr><v>$value</v></c>');
         } else {
           final String cellStyle =
-              wraps(value) ? ' s="${wrapStyle(style)}"' : styleAttr;
+              wrapped.contains(ref) ? ' s="${wrapStyle(style)}"' : styleAttr;
           body.write(
               '<c r="$ref"$cellStyle t="inlineStr"><is><t xml:space="preserve">${esc(value.toString())}</t></is></c>');
         }

@@ -150,8 +150,16 @@ Color nameFill(String name, {double alpha = 0.16}) =>
 ///
 /// The wash is the same weight the screen uses ([nameFill]), composited onto
 /// white here because an Excel fill has no alpha to composite with.
-({String fill, String ink}) nameSheetTint(String name) {
-  final tint = tintForName(name);
+/// [assigned] is the colour somebody CHOSE for this name, when they have -
+/// see [resolveTint]. Passed through here rather than resolved by the caller
+/// so the spreadsheet, the screen and the picture all reach the same answer
+/// from the same two facts.
+({String fill, String ink}) nameSheetTint(String name, {int? assigned}) =>
+    sheetTintOf(resolveTint(assigned: assigned, name: name));
+
+/// A colour that has ALREADY been resolved, printed for paper: a pale wash and
+/// an ink dark enough to read on it, both as 'RRGGBB'.
+({String fill, String ink}) sheetTintOf(Color tint) {
   final fill = Color.lerp(Colors.white, tint, 0.16) ?? Colors.white;
   return (
     fill: _hex(fill),
@@ -258,7 +266,27 @@ class NameTintKey extends StatelessWidget {
   final Iterable<String> names;
   final String? title;
 
-  const NameTintKey({super.key, required this.names, this.title});
+  /// The colour a name has been GIVEN, where somebody has given it one. Null
+  /// (or a null answer) leaves the name on the colour it derives - see
+  /// [resolveTint].
+  final Color? Function(String name)? colorOf;
+
+  /// What clicking a name does. Null leaves the key a legend: a chip that
+  /// looks pressable and is not is worse than one that plainly is not.
+  final void Function(String name)? onTap;
+
+  /// Prefixed to each chip's key, so a test - and the reader running one
+  /// finger down the strip - can point at one name rather than at the strip.
+  final String keyPrefix;
+
+  const NameTintKey({
+    super.key,
+    required this.names,
+    this.title,
+    this.colorOf,
+    this.onTap,
+    this.keyPrefix = 'name_tint',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -285,7 +313,23 @@ class NameTintKey extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-        for (final name in shown) NameTintChip(name: name),
+        for (final name in shown)
+          if (onTap == null)
+            NameTintChip(name: name, color: colorOf?.call(name))
+          else
+            // The whole chip is the target, not an icon beside it: the chip IS
+            // the colour, and the thing somebody wants to press to change a
+            // colour is the colour they can see.
+            Tooltip(
+              message: 'Choose the colour $name reads in, here and on '
+                  'everything issued from here',
+              child: InkWell(
+                key: ValueKey('${keyPrefix}_${normalisedName(name)}'),
+                borderRadius: BorderRadius.circular(4),
+                onTap: () => onTap!(name),
+                child: NameTintChip(name: name, color: colorOf?.call(name)),
+              ),
+            ),
       ],
     );
   }
