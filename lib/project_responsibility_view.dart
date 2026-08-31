@@ -561,40 +561,130 @@ typedef _Metrics = ({
   double itemColumn,
 });
 
-class _MatrixGrid extends StatelessWidget {
+class _MatrixGrid extends StatefulWidget {
   final BuildingProject project;
   final List<({String id, String name})> columns;
 
   const _MatrixGrid({required this.project, required this.columns});
+
+  @override
+  State<_MatrixGrid> createState() => _MatrixGridState();
+}
+
+/// ============================================================================
+///  READING ACROSS A SHEET THIRTY COLUMNS WIDE
+/// ============================================================================
+///  Two things were missing from this grid, and both are about the same
+///  failure: reading a quantity off the wrong line.
+///
+///    THE ROW UNDER THE POINTER IS LIT. A room name on the frozen left edge
+///    and a number twenty-eight columns to the right of it are two hand-widths
+///    apart on a laptop, with nine identical rows between them. The band on
+///    alternate rows helps and is not enough - it says "this is an odd row",
+///    not "this is YOUR row". Hovering anything on a line now washes the whole
+///    line, frozen half included, in the accent colour: the eye tracks a
+///    moving highlight across a page in a way it cannot track a fixed stripe.
+///
+///    THE SHEET ZOOMS. It is the same document as the replacement plan - wider
+///    than any window, read both for a figure and for its shape - and it gets
+///    the same control: steps out to see the whole agreement, steps in to read
+///    a quantity, and one press that fits it to the window. See
+///    [GridZoomControls]. Fitted by default, because the first question this
+///    sheet is opened with is "how much of it has nobody claimed", and that is
+///    a question about the whole sheet.
+class _MatrixGridState extends State<_MatrixGrid> {
+  /// The room row under the pointer, or null. A [ValueNotifier] rather than
+  /// [State.setState]: this grid builds every one of its cells eagerly (a
+  /// forty-room job with thirty scope items is twelve hundred of them), and
+  /// rebuilding all of it each time the pointer crosses a row boundary is a
+  /// sheet that stutters as it is read. Only the rows listen.
+  final ValueNotifier<int?> _hover = ValueNotifier<int?>(null);
+
+  /// How big the sheet is being read at. See [GridZoomControls].
+  double _zoom = kGridZoomNormal;
+
+  /// Whether the size is taken from the WINDOW rather than from the steps.
+  /// On by default and re-measured on every layout, so it keeps fitting when
+  /// the window is resized or the side pane is folded away.
+  bool _fit = true;
+
+  @override
+  void dispose() {
+    _hover.dispose();
+    super.dispose();
+  }
 
   /// EVERY MEASUREMENT ON THE SHEET IS THE READER'S MEASUREMENT.
   ///
   /// These were fixed pixels, which on a display at 150% left a 20-pixel party
   /// row with a chip in it that no longer fitted and a 104-pixel column whose
   /// scope name had been ellipsised down to two words. The base numbers are
-  /// unchanged; what is new is that they grow with the type. See [gridMetric].
+  /// unchanged; what is new is that they grow with the type ([gridMetric]) and
+  /// then with the reader's own zoom on top of it - the display scale is what
+  /// the machine says this person needs, and the zoom is what THIS sheet needs
+  /// this minute.
   ///
   /// The frozen half and the scrolling half are two independent Columns laid
   /// out on the SAME heights, so every one of these is read once and passed to
   /// both - a metric computed twice is two halves that drift apart.
-  static _Metrics _metrics(BuildContext context) => (
-    headRow: gridMetric(context, 60),
-    cutsheetRow: gridMetric(context, 26),
-    partyRow: gridMetric(context, 24),
-    bodyRow: gridMetric(context, 28),
-    roomColumn: gridMetric(context, 176),
-    itemColumn: gridMetric(context, 116),
+  static _Metrics _metrics(
+    BuildContext context, {
+    required double zoom,
+    required double roomColumn,
+  }) => (
+    headRow: gridMetric(context, 60) * zoom,
+    cutsheetRow: gridMetric(context, 26) * zoom,
+    partyRow: gridMetric(context, 24) * zoom,
+    bodyRow: gridMetric(context, 28) * zoom,
+    roomColumn: roomColumn * zoom,
+    itemColumn: naturalItemColumn(context) * zoom,
   );
 
+  /// The width one scope column takes before any zoom - what a fit is measured
+  /// against.
+  static double naturalItemColumn(BuildContext context) =>
+      gridMetric(context, 116);
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) => _sheet(context, box.maxWidth),
+  );
+
+  Widget _sheet(BuildContext context, double available) {
     final theme = Theme.of(context);
-    final items = project.responsibility;
+    final columns = widget.columns;
+    final items = widget.project.responsibility;
     if (items.isEmpty || columns.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    final m = _metrics(context);
+    // WIDE ENOUGH FOR THE NAMES IT ACTUALLY CARRIES - see
+    // [PinnedGrid.frozenWidthFor]. The column was a flat 176 pixels chosen for
+    // 'BSS 103', and a job whose rooms are called 'Lecture Hall (north)' got a
+    // frozen column of ellipses, which names nothing.
+    final naturalRoom = PinnedGrid.frozenWidthFor(
+      context,
+      [for (final room in columns) room.name],
+      theme.textTheme.bodyMedium,
+      min: gridMetric(context, 150),
+      max: gridMetric(context, 320),
+    );
+
+    // FITTING SCALES THE SHEET, IT DOES NOT DROP COLUMNS. Every scope item is
+    // on the sheet at every size; what changes is how much of it is on screen
+    // at once.
+    final zoom = _fit
+        ? gridFitZoom(
+            natural: naturalRoom + naturalItemColumn(context) * items.length,
+            available: available - 32,
+          )
+        : _zoom;
+
+    final m = _metrics(context, zoom: zoom, roomColumn: naturalRoom);
+
+    // The type goes with the boxes. A cell at half size with the same figure
+    // in it is a cell with an ellipsis where the quantity was.
+    final zoomed = zoomedTextTheme(theme, zoom);
 
     // Rooms, and then the totals line under them.
     final bodyRows = columns.length + 1;
@@ -613,43 +703,89 @@ class _MatrixGrid extends StatelessWidget {
     // columns had and others did not would be two halves that no longer line
     // up. A job with no cutsheets anywhere keeps the row off and the sheet
     // stays as short as it was.
-    final anyCutsheet =
-        items.any((i) => i.productLink.trim().isNotEmpty);
+    final anyCutsheet = items.any((i) => i.productLink.trim().isNotEmpty);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      // ITS OWN FRAME, SCROLLING BOTH WAYS. A job with thirty scope items and
-      // forty rooms is wider and taller than any window it is read in, and
-      // laid out at full size inside the tab's scroll view it pushed the item
-      // list under it off the bottom and gave no bar to say the columns
-      // carried on past the right edge. What is pinned is what says a cell's
-      // meaning: the room down the side, the scope and the two parties across
-      // the top.
-      child: PinnedGrid(
-        frozenWidth: m.roomColumn,
-        headerHeight:
-            m.headRow + (anyCutsheet ? m.cutsheetRow : 0) + m.partyRow * 2,
-        bodyWidth: m.itemColumn * items.length,
-        bodyHeight: m.bodyRow * bodyRows,
-        corner: _frozenHead(theme, m, anyCutsheet),
-        header: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final item in items) _itemHead(context, item, m, anyCutsheet),
-          ],
-        ),
-        frozen: _frozenBody(theme, m),
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [for (final item in items) _itemBody(context, item, m)],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Hover a line to light it right across the sheet.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              GridZoomControls(
+                keyPrefix: 'matrix',
+                zoom: zoom,
+                fitted: _fit,
+                onChanged: (z) => setState(() {
+                  _zoom = z;
+                  _fit = false;
+                }),
+                onFit: () => setState(() {
+                  // Leaving the fit keeps the size it fitted to, so the sheet
+                  // does not jump back to 100% under the reader.
+                  if (_fit) _zoom = zoom;
+                  _fit = !_fit;
+                }),
+              ),
+            ],
+          ),
+          // ITS OWN FRAME, SCROLLING BOTH WAYS. A job with thirty scope items
+          // and forty rooms is wider and taller than any window it is read in,
+          // and laid out at full size inside the tab's scroll view it pushed
+          // the item list under it off the bottom and gave no bar to say the
+          // columns carried on past the right edge. What is pinned is what
+          // says a cell's meaning: the room down the side, the scope and the
+          // two parties across the top.
+          PinnedGrid(
+            frozenWidth: m.roomColumn,
+            headerHeight:
+                m.headRow + (anyCutsheet ? m.cutsheetRow : 0) + m.partyRow * 2,
+            bodyWidth: m.itemColumn * items.length,
+            bodyHeight: m.bodyRow * bodyRows,
+            corner: _frozenHead(theme, zoomed, m, anyCutsheet),
+            header: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final item in items)
+                  _itemHead(context, zoomed, item, m, anyCutsheet),
+              ],
+            ),
+            frozen: _frozenBody(theme, zoomed, m),
+            // ROW-MAJOR, and that is not a detail. Laid out as a column per
+            // scope item, a "row" was not a widget at all and there was
+            // nothing for a pointer to enter; one Row per room gives the
+            // highlight something to live on, and costs one listener a line
+            // instead of one a cell.
+            body: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (i, room) in columns.indexed)
+                  _bodyRow(context, zoomed, m, i, room),
+                _totalsRow(theme, zoomed, m),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
   /// The corner: what the frozen column is, and what the two rows under every
   /// scope name are.
-  Widget _frozenHead(ThemeData theme, _Metrics m, bool anyCutsheet) {
+  Widget _frozenHead(
+    ThemeData theme,
+    TextTheme zoomed,
+    _Metrics m,
+    bool anyCutsheet,
+  ) {
     final line = _line(theme);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -658,60 +794,189 @@ class _MatrixGrid extends StatelessWidget {
           height: m.headRow,
           align: Alignment.bottomLeft,
           line: line,
+          fill: _headFill(theme),
           strongRight: true,
-          child: Text('ROOM', style: _headStyle(theme)),
+          child: Text('ROOM', style: _headStyle(theme, zoomed)),
         ),
         if (anyCutsheet)
           _cell(
             height: m.cutsheetRow,
             line: line,
+            fill: _headFill(theme),
             strongRight: true,
-            child: Text('Cutsheet', style: _metaStyle(theme)),
+            child: Text('Cutsheet', style: _metaStyle(theme, zoomed)),
           ),
         _cell(
           height: m.partyRow,
           line: line,
           strongRight: true,
-          child: Text('Furnished by', style: _metaStyle(theme)),
+          child: Text('Furnished by', style: _metaStyle(theme, zoomed)),
         ),
         _cell(
           height: m.partyRow,
           line: line,
           strongRight: true,
           strongBottom: true,
-          child: Text('Installed by', style: _metaStyle(theme)),
+          child: Text('Installed by', style: _metaStyle(theme, zoomed)),
         ),
       ],
     );
   }
 
   /// The half that stays put: what each row IS.
-  Widget _frozenBody(ThemeData theme, _Metrics m) {
+  Widget _frozenBody(ThemeData theme, TextTheme zoomed, _Metrics m) {
     final line = _line(theme);
+    final columns = widget.columns;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final (i, room) in columns.indexed)
-          _cell(
-            height: m.bodyRow,
-            line: line,
-            fill: _band(theme, i),
-            strongRight: true,
-            strongBottom: i == columns.length - 1,
-            child: Text(
-              room.name,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium,
+          _hoverRow(
+            index: i,
+            builder: (lit) => _cell(
+              height: m.bodyRow,
+              line: line,
+              fill: _rowFill(theme, i, lit),
+              strongRight: true,
+              strongBottom: i == columns.length - 1,
+              child: Text(
+                room.name,
+                overflow: TextOverflow.ellipsis,
+                style: zoomed.bodyMedium?.copyWith(
+                  fontWeight: lit ? FontWeight.w600 : null,
+                ),
+              ),
             ),
           ),
         _cell(
           height: m.bodyRow,
           line: line,
+          fill: _totalsFill(theme),
           strongRight: true,
-          child: Text('Totals', style: _headStyle(theme)),
+          child: Text('Totals', style: _headStyle(theme, zoomed)),
         ),
       ],
     );
+  }
+
+  /// One room's line across every scope column, lit as a whole when the
+  /// pointer is anywhere on it.
+  Widget _bodyRow(
+    BuildContext context,
+    TextTheme zoomed,
+    _Metrics m,
+    int index,
+    ({String id, String name}) room,
+  ) {
+    final theme = Theme.of(context);
+    final line = _line(theme);
+    final items = widget.project.responsibility;
+    final last = index == widget.columns.length - 1;
+
+    return _hoverRow(
+      index: index,
+      builder: (lit) {
+        final fill = _rowFill(theme, index, lit);
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final item in items)
+              SizedBox(
+                width: m.itemColumn,
+                child: InkWell(
+                  key: ValueKey('matrix_cell_${item.id}_${room.id}'),
+                  onTap: () => _editQty(context, item, room),
+                  child: _cell(
+                    height: m.bodyRow,
+                    align: Alignment.center,
+                    line: line,
+                    // The band and the highlight both run across the whole
+                    // row, frozen half included, which is what makes a
+                    // quantity readable against the room name thirty columns
+                    // to its left.
+                    fill: fill,
+                    strongBottom: last,
+                    child: Text(
+                      formatResponsibilityQty(item.qtyByRoom[room.id] ?? 0),
+                      style: zoomed.bodyMedium?.copyWith(
+                        fontWeight: lit ? FontWeight.w600 : null,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// The line under the rooms: what each scope item comes to across the job.
+  Widget _totalsRow(ThemeData theme, TextTheme zoomed, _Metrics m) {
+    final line = _line(theme);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final item in widget.project.responsibility)
+          SizedBox(
+            width: m.itemColumn,
+            child: _cell(
+              height: m.bodyRow,
+              align: Alignment.center,
+              line: line,
+              fill: _totalsFill(theme),
+              child: Text(
+                formatResponsibilityQty(item.total),
+                style: zoomed.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Wraps one line of the sheet so that entering it anywhere lights it
+  /// everywhere.
+  ///
+  /// The notifier is shared by both halves, which is the whole point: the
+  /// pointer is over the scrolling half and the room name it belongs to is in
+  /// the frozen one.
+  Widget _hoverRow({
+    required int index,
+    required Widget Function(bool lit) builder,
+  }) => MouseRegion(
+    opaque: false,
+    onEnter: (_) => _hover.value = index,
+    // Only when it is still this row's. The two halves both report the same
+    // line, so leaving one of them while still inside the other must not put
+    // the highlight out.
+    onExit: (_) {
+      if (_hover.value == index) _hover.value = null;
+    },
+    child: ValueListenableBuilder<int?>(
+      valueListenable: _hover,
+      builder: (context, hovered, _) => builder(hovered == index),
+    ),
+  );
+
+  /// Sets one cell. A dialog rather than an inline field: thirty columns of
+  /// live text fields is thirty focus nodes and thirty controllers on a grid
+  /// most of whose cells are empty.
+  Future<void> _editQty(
+    BuildContext context,
+    ResponsibilityItem item,
+    ({String id, String name}) room,
+  ) async {
+    final provider = context.read<AppStateProvider>();
+    final typed = await showDialog<double>(
+      context: context,
+      builder: (_) => _QtyDialog(
+        title: '${item.scope} in ${room.name}',
+        initial: item.qtyByRoom[room.id] ?? 0,
+      ),
+    );
+    if (typed == null) return;
+    provider.setResponsibilityQty(item.id, room.id, typed);
   }
 
   /// One scope item's heading: its name, whose job it is, and the way to its
@@ -724,13 +989,16 @@ class _MatrixGrid extends StatelessWidget {
   /// Dragging it is one gesture that lands where it was let go.
   Widget _itemHead(
     BuildContext context,
+    TextTheme zoomed,
     ResponsibilityItem item,
     _Metrics m,
     bool anyCutsheet,
   ) {
     final theme = Theme.of(context);
     final line = _line(theme);
-    final index = project.responsibility.indexWhere((i) => i.id == item.id);
+    final index = widget.project.responsibility.indexWhere(
+      (i) => i.id == item.id,
+    );
 
     final head = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -741,11 +1009,13 @@ class _MatrixGrid extends StatelessWidget {
         // somebody wants to LOOK at rather than edit.
         InkWell(
           key: ValueKey('matrix_head_${item.id}'),
-          onTap: () => showResponsibilityEditor(context, item.id, columns),
+          onTap: () =>
+              showResponsibilityEditor(context, item.id, widget.columns),
           child: _cell(
             height: m.headRow,
             align: Alignment.bottomLeft,
             line: line,
+            fill: _headFill(theme),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -755,7 +1025,7 @@ class _MatrixGrid extends StatelessWidget {
                     item.scope,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
+                    style: zoomed.labelMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -773,20 +1043,21 @@ class _MatrixGrid extends StatelessWidget {
             height: m.cutsheetRow,
             align: Alignment.center,
             line: line,
+            fill: _headFill(theme),
             child: item.productLink.trim().isEmpty
                 ? const SizedBox.shrink()
                 : CutsheetLink(item: item, compact: true),
           ),
-          // WHOSE JOB IT IS, IN ITS OWN COLOUR. Two rows under every scope
-          // name, and the pair of them is what the sheet is read for.
-          _cell(
-            height: m.partyRow,
-            line: line,
-            child: _PartyCell(
-              party: item.furnishedBy,
-              missing: item.furnishedBy.trim().isEmpty,
-            ),
+        // WHOSE JOB IT IS, IN ITS OWN COLOUR. Two rows under every scope
+        // name, and the pair of them is what the sheet is read for.
+        _cell(
+          height: m.partyRow,
+          line: line,
+          child: _PartyCell(
+            party: item.furnishedBy,
+            missing: item.furnishedBy.trim().isEmpty,
           ),
+        ),
         _cell(
           height: m.partyRow,
           line: line,
@@ -846,79 +1117,14 @@ class _MatrixGrid extends StatelessWidget {
     );
   }
 
-  /// One scope item's quantities, room by room, and its total.
-  Widget _itemBody(BuildContext context, ResponsibilityItem item, _Metrics m) {
-    final theme = Theme.of(context);
-    final line = _line(theme);
-
-    return SizedBox(
-      width: m.itemColumn,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final (i, room) in columns.indexed)
-            InkWell(
-              key: ValueKey('matrix_cell_${item.id}_${room.id}'),
-              onTap: () => _editQty(context, item, room),
-              child: _cell(
-                height: m.bodyRow,
-                align: Alignment.center,
-                line: line,
-                // The band runs across the whole row, frozen half included,
-                // which is what makes a quantity readable against the room
-                // name thirty columns to its left.
-                fill: _band(theme, i),
-                strongBottom: i == columns.length - 1,
-                child: Text(
-                  formatResponsibilityQty(item.qtyByRoom[room.id] ?? 0),
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ),
-            ),
-          _cell(
-            height: m.bodyRow,
-            align: Alignment.center,
-            line: line,
-            child: Text(
-              formatResponsibilityQty(item.total),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Sets one cell. A dialog rather than an inline field: thirty columns of
-  /// live text fields is thirty focus nodes and thirty controllers on a grid
-  /// most of whose cells are empty.
-  Future<void> _editQty(
-    BuildContext context,
-    ResponsibilityItem item,
-    ({String id, String name}) room,
-  ) async {
-    final provider = context.read<AppStateProvider>();
-    final typed = await showDialog<double>(
-      context: context,
-      builder: (_) => _QtyDialog(
-        title: '${item.scope} in ${room.name}',
-        initial: item.qtyByRoom[room.id] ?? 0,
-      ),
-    );
-    if (typed == null) return;
-    provider.setResponsibilityQty(item.id, room.id, typed);
-  }
-
-  static TextStyle? _headStyle(ThemeData theme) =>
-      theme.textTheme.labelMedium?.copyWith(
+  static TextStyle? _headStyle(ThemeData theme, TextTheme zoomed) =>
+      zoomed.labelMedium?.copyWith(
         fontWeight: FontWeight.bold,
         color: theme.colorScheme.onSurfaceVariant,
       );
 
-  static TextStyle _metaStyle(ThemeData theme) =>
-      theme.textTheme.labelMedium?.copyWith(
+  static TextStyle _metaStyle(ThemeData theme, TextTheme zoomed) =>
+      zoomed.labelMedium?.copyWith(
         color: theme.colorScheme.onSurfaceVariant,
       ) ??
       const TextStyle(fontSize: 11);
@@ -929,8 +1135,13 @@ class _MatrixGrid extends StatelessWidget {
   /// turned off: thirty columns of numbers whose row you lose halfway across,
   /// which on this document means reading a quantity against the wrong room.
   /// So every cell draws its own bottom and right rule, alternate room rows
-  /// are banded, and the two blocks that are not room rows — the parties at the
-  /// top and the totals at the bottom — are separated by a heavier line.
+  /// are banded, and the two blocks that are not room rows - the parties at the
+  /// top and the totals at the bottom - are separated by a heavier line.
+  ///
+  /// THE RULES ARE DRAWN TO BE SEEN. They were hairlines - 0.6 of a pixel of
+  /// outlineVariant, which on a light theme at 100% is a grid you have to go
+  /// looking for. A sheet whose lines have to be looked for is a sheet read
+  /// without them.
   ///
   /// THE BORDERS GO ON EVERY CELL, both halves included. The frozen column and
   /// the scrolling columns are two independent Columns laid out on the same
@@ -955,11 +1166,11 @@ class _MatrixGrid extends StatelessWidget {
             border: Border(
               bottom: BorderSide(
                 color: line,
-                width: strongBottom ? 1.4 : 0.6,
+                width: strongBottom ? 1.6 : 0.9,
               ),
               right: BorderSide(
                 color: line,
-                width: strongRight ? 1.4 : 0.6,
+                width: strongRight ? 1.6 : 0.9,
               ),
             ),
           ),
@@ -973,14 +1184,31 @@ class _MatrixGrid extends StatelessWidget {
   /// grid of it on a dark theme measured as a grid that is not there.
   static Color _line(ThemeData theme) => theme.colorScheme.outlineVariant;
 
-  /// The band behind every other room row. Faint enough to be a guide and
-  /// never a highlight — the colours that mean something on this sheet are the
-  /// parties'.
-  static Color? _band(ThemeData theme, int index) => index.isOdd
-      ? theme.colorScheme.onSurface.withValues(alpha: 0.04)
-      : null;
-}
+  /// What one room row is washed in: the highlight when the pointer is on it,
+  /// otherwise the band on alternate rows.
+  ///
+  /// THE HIGHLIGHT IS THE ACCENT AND THE BAND IS NOT. A band has to stay a
+  /// guide - the colours that mean something on this sheet are the parties' -
+  /// so it is grey and faint. The highlight is a different KIND of mark: it is
+  /// where the reader is, it lasts only as long as the pointer is there, and
+  /// it has to be findable across two feet of grid, so it is tinted and
+  /// several times stronger.
+  static Color? _rowFill(ThemeData theme, int index, bool lit) {
+    if (lit) return theme.colorScheme.primary.withValues(alpha: 0.16);
+    return index.isOdd
+        ? theme.colorScheme.onSurface.withValues(alpha: 0.055)
+        : null;
+  }
 
+  /// Behind the totals line - one of the two blocks that is not a room row.
+  /// Faint, and enough to say the grid has ends.
+  static Color _totalsFill(ThemeData theme) =>
+      theme.colorScheme.onSurface.withValues(alpha: 0.07);
+
+  /// Behind the scope headings, the other one.
+  static Color _headFill(ThemeData theme) =>
+      theme.colorScheme.onSurface.withValues(alpha: 0.04);
+}
 /// The handle a column is dragged by.
 ///
 /// ITS OWN TARGET, not the whole heading. The sheet is panned sideways by

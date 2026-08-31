@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'building_project.dart' show ProjectVendor;
 import 'contrast.dart';
 
 /// ============================================================================
@@ -334,3 +335,19 @@ class NameTintKey extends StatelessWidget {
     );
   }
 }
+
+/// THE COLOUR A VENDOR'S PARTS ARE MARKED IN.
+///
+/// A vendor is an ORDER: everything tagged to it goes to one company on one
+/// purchase order. "Which of these two hundred parts am I buying from whom" is
+/// the question the master list is opened for, and until now the answer was a
+/// name in a narrow column that had to be read a row at a time. A colour
+/// answers it down the whole page at once.
+///
+/// Assigned first ([ProjectVendor.color]), derived from the name otherwise, so
+/// the list is legible on a job where nobody has set a colour. An untagged
+/// part has no vendor and takes the unsettled grey — it is not an order yet,
+/// and giving it a colour of its own would make it look like one.
+Color projectVendorColor(ProjectVendor? vendor) => vendor == null
+    ? kNameTintUnsettled
+    : resolveTint(assigned: vendor.color, name: vendor.name);

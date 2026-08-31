@@ -8,7 +8,9 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'contrast.dart';
-import 'cost_estimate.dart' show trimNumber;
+import 'cost_estimate.dart' show formatMoney, trimNumber;
+import 'name_colors.dart' show projectVendorColor;
+import 'project_deliveries_view.dart' show PoFileButtons, showPoPartsDialog;
 import 'equipment_lifecycle.dart'
     show RoomLifecycle, buildProjectLifecycle, formatLifecycleMoney;
 import 'pinned_grid.dart' show gridMetric;
@@ -502,6 +504,10 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
     SliverToBoxAdapter(
       child: _ReminderBar(estimate: estimate, schedule: schedule),
     ),
+    // WHAT HAS ALREADY GONE, before the dates that have not. See
+    // [_PlacedOrders]: the rest of this pane is a list of deadlines, and a
+    // purchase order that was raised last week is not a deadline.
+    SliverToBoxAdapter(child: _PlacedOrders(estimate: estimate)),
     // The phases, each with its own delivery date, laid out one after the
     // other — the reading this exists for: whether the infrastructure order
     // going in months before the tech order actually lines up.
@@ -561,6 +567,224 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
       ),
     const SliverToBoxAdapter(child: SizedBox(height: 24)),
   ];
+}
+
+// ---------------------------------------------------------------------------
+//  WHAT HAS ALREADY BEEN BOUGHT
+// ---------------------------------------------------------------------------
+//  Everything else on this pane is a date in the FUTURE: order by the 4th, or
+//  the job is late. That is the right shape for planning and it says nothing
+//  at all about the half of the job that has already gone out, which on a live
+//  project is most of the anxiety - "did the Extron order actually go, and what
+//  was on it".
+//
+//  So the orders that HAVE been placed get a block of their own at the top,
+//  before the ones that have not. One row per purchase order: the number, who
+//  it went to, when, what it was raised for, how many parts are on it - and the
+//  two ways in that were missing entirely, which are the equipment it bought
+//  and the order itself as a document.
+//
+//  IT IS BUILT FROM THE PURCHASE ORDERS, not from the vendor rows. A PO raised
+//  from the Deliveries pane, one marked from a vendor card, and one typed onto
+//  a single part all end up as the same row - see [ProjectPo] on why the LINK
+//  is the number rather than a row id.
+
+/// The purchase orders on the job, newest first, with what each one holds.
+///
+/// A record rather than a class: it is a row on a summary, it is rebuilt every
+/// time the pane is drawn, and nothing stores it.
+typedef _PlacedOrder = ({
+  ProjectPo po,
+
+  /// Who it went to, resolved: the vendor on the job's list, or whatever was
+  /// typed on the PO.
+  String vendorName,
+
+  /// The vendor's colour, so the row is marked the same way its parts are on
+  /// the master list. Null when the PO went somewhere that is not one of the
+  /// job's vendors.
+  Color? tint,
+
+  /// Part keys bought on it, and how many of those are marked arrived.
+  int parts,
+  int received,
+});
+
+List<_PlacedOrder> _placedOrders(BuildingProject project) {
+  final rows = <_PlacedOrder>[];
+  for (final po in project.purchaseOrders) {
+    final parts = project.partsOnPo(po.number);
+    final vendor = po.vendorId.isEmpty ? null : project.vendorById(po.vendorId);
+    rows.add((
+      po: po,
+      vendorName: vendor?.name.trim() ?? po.vendor.trim(),
+      tint: vendor == null ? null : projectVendorColor(vendor),
+      parts: parts.length,
+      received: [
+        for (final key in parts)
+          if (project.orderForPart(key)?.isReceived == true) key,
+      ].length,
+    ));
+  }
+  // Newest first: an order log is read from the top, and what went out this
+  // week is what somebody is asking about. A PO with no date on it has not
+  // been raised yet as far as the paperwork goes, so it sorts last rather
+  // than first.
+  rows.sort((a, b) {
+    final ad = a.po.issuedOn;
+    final bd = b.po.issuedOn;
+    if (ad == null && bd == null) return b.po.id.compareTo(a.po.id);
+    if (ad == null) return 1;
+    if (bd == null) return -1;
+    final byDate = bd.compareTo(ad);
+    return byDate != 0 ? byDate : b.po.id.compareTo(a.po.id);
+  });
+  return rows;
+}
+
+/// The block of orders that have already gone.
+class _PlacedOrders extends StatelessWidget {
+  final ProjectEstimate estimate;
+
+  const _PlacedOrders({required this.estimate});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.watch<AppStateProvider>();
+    final rows = _placedOrders(provider.project);
+    // Nothing has been ordered yet, which is the ordinary state of a job being
+    // planned. A heading over an empty box would be one more thing to read.
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 0, 4),
+            child: Text(
+              'ORDERED (${rows.length})',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          for (final row in rows)
+            _PlacedOrderCard(row: row, estimate: estimate),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlacedOrderCard extends StatelessWidget {
+  final _PlacedOrder row;
+  final ProjectEstimate estimate;
+
+  const _PlacedOrderCard({required this.row, required this.estimate});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.read<AppStateProvider>();
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final po = row.po;
+    final tint = row.tint;
+
+    return Card(
+      key: ValueKey('timeline_order_${po.id}'),
+      margin: const EdgeInsets.only(bottom: 8),
+      // The card wears the vendor's colour, the same one its parts carry on
+      // the master list - so this block and that list are visibly the same
+      // four orders rather than two lists to cross-reference by name.
+      shape: tint == null
+          ? null
+          : RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: tint.withValues(alpha: 0.85), width: 1.4),
+            ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.receipt_long, size: 18, color: muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        po.number.trim().isEmpty ? 'PO' : po.number.trim(),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        [
+                          if (row.vendorName.isNotEmpty) row.vendorName,
+                          if (po.issuedOn != null)
+                            'ordered ${formatScheduleDate(po.issuedOn!)}',
+                          if (po.expectedOn != null)
+                            'promised ${formatScheduleDate(po.expectedOn!)}',
+                          if (po.amount > 0)
+                            formatMoney(po.amount, estimate.currency),
+                        ].join('  ·  '),
+                        style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              row.parts == 0
+                  ? 'Nothing on the job points at this PO yet. Open it to tick '
+                        'the equipment it bought.'
+                  : '${row.parts} part${row.parts == 1 ? '' : 's'} bought on it '
+                        '- ${row.received} marked arrived.',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                // THE LINK BACK TO THE EQUIPMENT. The whole reason this block
+                // is on the timeline rather than only on the Deliveries pane:
+                // a PO number that cannot be followed to what it bought is a
+                // number, not a record.
+                OutlinedButton.icon(
+                  key: ValueKey('timeline_order_parts_${po.id}'),
+                  icon: const Icon(Icons.playlist_add_check, size: 18),
+                  label: Text(
+                    row.parts == 0
+                        ? 'Put equipment on this PO'
+                        : 'Equipment on this PO (${row.parts})',
+                  ),
+                  onPressed: () => showPoPartsDialog(
+                    context,
+                    provider: provider,
+                    estimate: estimate,
+                    po: po,
+                  ),
+                ),
+                PoFileButtons(po: po, provider: provider),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Getting the order dates out of this app and into the calendar that will

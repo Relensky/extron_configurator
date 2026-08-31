@@ -541,6 +541,22 @@ class ProjectPo {
   /// NOT that it was free.
   final double amount;
 
+  /// The order itself, as a document - the PDF finance sent back, the
+  /// vendor's acknowledgement, whatever the signed thing actually is.
+  ///
+  /// WHY THE PAPER MATTERS. Everything else on this row is somebody's typing:
+  /// a number, a date, a figure. The argument a PO gets pulled up to settle -
+  /// "we ordered the 65-inch, not the 55" - is settled by the ORDER, and until
+  /// there was somewhere to put it the order lived in an email in the inbox of
+  /// whoever raised it.
+  ///
+  /// A REFERENCE, exactly like a room config or a building plan - see
+  /// [ProjectPlan]. The project does not copy the file or own it; it is stored
+  /// relative to the project file when it sits under the same folder tree, so
+  /// the job travels onto a laptop or into a backup with its paperwork still
+  /// attached. See [BuildingProject.storePath] and [resolvePath].
+  final String filePath;
+
   /// The running commentary, each entry signed. See [ProjectNote].
   final List<ProjectNote> notes;
 
@@ -552,8 +568,22 @@ class ProjectPo {
     this.issuedOn,
     this.expectedOn,
     this.amount = 0,
+    this.filePath = '',
     List<ProjectNote>? notes,
   }) : notes = notes ?? [];
+
+  /// Lower-case extension with no dot - 'pdf'. What decides which viewer
+  /// opens it, the same way a plan's does.
+  String get extension {
+    final ext = path.extension(filePath);
+    return ext.isEmpty ? '' : ext.substring(1).toLowerCase();
+  }
+
+  /// Whether the app can show the attached order itself rather than handing it
+  /// to whatever the machine opens the file type with.
+  bool get isViewable => kViewablePlanExtensions.contains(extension);
+
+  bool get isPdf => extension == 'pdf';
 
   ProjectPo copyWith({
     String? number,
@@ -564,6 +594,7 @@ class ProjectPo {
     DateTime? expectedOn,
     bool clearExpectedOn = false,
     double? amount,
+    String? filePath,
     List<ProjectNote>? notes,
   }) => ProjectPo(
     id: id,
@@ -573,6 +604,9 @@ class ProjectPo {
     issuedOn: clearIssuedOn ? null : (issuedOn ?? this.issuedOn),
     expectedOn: clearExpectedOn ? null : (expectedOn ?? this.expectedOn),
     amount: amount ?? this.amount,
+    // No clear- flag: '' is a perfectly good "there is no document", and
+    // unlike a date it cannot be confused with "leave it alone".
+    filePath: filePath ?? this.filePath,
     notes: notes ?? List<ProjectNote>.from(this.notes),
   );
 
@@ -584,6 +618,7 @@ class ProjectPo {
     if (issuedOn != null) 'issuedOn': formatIsoDate(issuedOn!),
     if (expectedOn != null) 'expectedOn': formatIsoDate(expectedOn!),
     if (amount > 0) 'amount': amount,
+    if (filePath.trim().isNotEmpty) 'filePath': filePath.trim(),
     if (notes.isNotEmpty) 'notes': [for (final n in notes) n.toJson()],
   };
 
@@ -595,6 +630,7 @@ class ProjectPo {
     issuedOn: parseIsoDate(json['issuedOn']),
     expectedOn: parseIsoDate(json['expectedOn']),
     amount: (json['amount'] as num?)?.toDouble() ?? 0,
+    filePath: json['filePath']?.toString() ?? '',
     notes: notesFromJson(json['notes']),
   );
 }
@@ -1153,6 +1189,49 @@ class ProjectTodo {
   );
 }
 
+// ---------------------------------------------------------------------------
+//  WHERE A VENDOR'S QUOTE HAS GOT TO
+// ---------------------------------------------------------------------------
+//  The app could build an RFQ per vendor and hand you the file. What happened
+//  after that - it went out on the 4th, two came back, one of those turned into
+//  a PO, the third vendor has never replied - lived in somebody's inbox, and on
+//  a job with six vendors that is the single most-asked question on the whole
+//  screen: WHICH OF THESE ARE WE STILL WAITING ON.
+//
+//  So the vendor row carries the three dates that answer it, and nothing else.
+//  Not a workflow, not a state machine with transitions to police: three dates,
+//  each of which is simply a fact somebody records when it happens.
+
+/// How far along one vendor's quote is.
+///
+/// Derived from the dates rather than stored beside them, because a stored
+/// state is a second thing that can be wrong: a vendor marked "ordered" with no
+/// order date is a row nobody can reconcile against the finance system, and a
+/// vendor with a PO on it that still reads "sent" is the same bug the other way
+/// round.
+enum VendorRfqStage {
+  /// Nobody has sent this vendor anything yet.
+  none('Not sent', 'no request out'),
+
+  /// The request has gone and nothing has come back.
+  sent('RFQ sent', 'waiting on the quote'),
+
+  /// A price came back. The one stage that is genuinely a decision point -
+  /// this is where somebody compares it against the estimate.
+  quoted('Quoted', 'quote in, not ordered'),
+
+  /// It was bought. [ProjectVendor.poNumber] says on what.
+  ordered('Ordered', 'on order');
+
+  /// What the chip on the card reads.
+  final String label;
+
+  /// The half-sentence form, for a line that reads as prose.
+  final String phrase;
+
+  const VendorRfqStage(this.label, this.phrase);
+}
+
 /// A company the job buys from, and what it is assumed to quote.
 class ProjectVendor {
   final String id;
@@ -1209,6 +1288,34 @@ class ProjectVendor {
   /// the same way the cable colours are stored on a bundle.
   final int? color;
 
+  /// The day the quote request went out. See [VendorRfqStage].
+  final DateTime? rfqSentOn;
+
+  /// The day a price came back.
+  final DateTime? quotedOn;
+
+  /// What the vendor quoted, in the job's currency. 0 means nobody has typed
+  /// it - NOT that the quote was free.
+  ///
+  /// Kept beside the date rather than only on the PO, because the two figures
+  /// answer different questions and routinely differ: a quote is what was
+  /// offered, and a PO is what was raised. Somebody comparing three quotes
+  /// against the estimate needs the first, and it exists weeks before there is
+  /// a PO to hold the second.
+  final double quoteAmount;
+
+  /// The vendor's own reference for the quote - 'Q-88421'. What to say on the
+  /// phone, and the only thing that finds it again in their system.
+  final String quoteRef;
+
+  /// The day the order went in.
+  final DateTime? orderedOn;
+
+  /// The purchase order it was bought on, as a NUMBER rather than a row id -
+  /// the same link a part and a delivery use, for the reason given above
+  /// [ProjectPo]. Blank while nothing has been ordered.
+  final String poNumber;
+
   const ProjectVendor({
     required this.id,
     required this.name,
@@ -1217,7 +1324,25 @@ class ProjectVendor {
     this.manufacturers = const [],
     this.categories = const [],
     this.color,
+    this.rfqSentOn,
+    this.quotedOn,
+    this.quoteAmount = 0,
+    this.quoteRef = '',
+    this.orderedOn,
+    this.poNumber = '',
   });
+
+  /// How far along this vendor's quote is, read off the dates. Latest fact
+  /// wins: a vendor that was ordered is ordered whether or not anybody
+  /// remembered to note the quote coming back.
+  VendorRfqStage get rfqStage {
+    if (orderedOn != null || poNumber.trim().isNotEmpty) {
+      return VendorRfqStage.ordered;
+    }
+    if (quotedOn != null) return VendorRfqStage.quoted;
+    if (rfqSentOn != null) return VendorRfqStage.sent;
+    return VendorRfqStage.none;
+  }
 
   /// [clearColor] rather than passing null, which cannot be told from "leave
   /// it alone" — and the two mean opposite things here: back to the derived
@@ -1230,6 +1355,15 @@ class ProjectVendor {
     List<String>? categories,
     int? color,
     bool clearColor = false,
+    DateTime? rfqSentOn,
+    bool clearRfqSentOn = false,
+    DateTime? quotedOn,
+    bool clearQuotedOn = false,
+    double? quoteAmount,
+    String? quoteRef,
+    DateTime? orderedOn,
+    bool clearOrderedOn = false,
+    String? poNumber,
   }) => ProjectVendor(
     id: id,
     name: name ?? this.name,
@@ -1238,6 +1372,15 @@ class ProjectVendor {
     manufacturers: manufacturers ?? this.manufacturers,
     categories: categories ?? this.categories,
     color: clearColor ? null : (color ?? this.color),
+    // Each date takes the same clear- flag every nullable field on this file
+    // takes: null cannot be told from "leave it alone", and on a date the two
+    // mean opposite things - un-sending an RFQ and not mentioning it.
+    rfqSentOn: clearRfqSentOn ? null : (rfqSentOn ?? this.rfqSentOn),
+    quotedOn: clearQuotedOn ? null : (quotedOn ?? this.quotedOn),
+    quoteAmount: quoteAmount ?? this.quoteAmount,
+    quoteRef: quoteRef ?? this.quoteRef,
+    orderedOn: clearOrderedOn ? null : (orderedOn ?? this.orderedOn),
+    poNumber: poNumber ?? this.poNumber,
   );
 
   /// True when this vendor's manufacturer rules claim [manufacturer].
@@ -1282,6 +1425,12 @@ class ProjectVendor {
     if (manufacturers.isNotEmpty) 'manufacturers': manufacturers,
     if (categories.isNotEmpty) 'categories': categories,
     if (color != null) 'color': color,
+    if (rfqSentOn != null) 'rfqSentOn': formatIsoDate(rfqSentOn!),
+    if (quotedOn != null) 'quotedOn': formatIsoDate(quotedOn!),
+    if (quoteAmount > 0) 'quoteAmount': quoteAmount,
+    if (quoteRef.trim().isNotEmpty) 'quoteRef': quoteRef.trim(),
+    if (orderedOn != null) 'orderedOn': formatIsoDate(orderedOn!),
+    if (poNumber.trim().isNotEmpty) 'poNumber': poNumber.trim(),
   };
 
   factory ProjectVendor.fromJson(Map<String, dynamic> json) {
@@ -1300,6 +1449,12 @@ class ProjectVendor {
       // Anything that is not a number is no assignment at all, which reads as
       // the derived colour rather than as black.
       color: raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? ''),
+      rfqSentOn: parseIsoDate(json['rfqSentOn']),
+      quotedOn: parseIsoDate(json['quotedOn']),
+      quoteAmount: (json['quoteAmount'] as num?)?.toDouble() ?? 0,
+      quoteRef: json['quoteRef']?.toString() ?? '',
+      orderedOn: parseIsoDate(json['orderedOn']),
+      poNumber: json['poNumber']?.toString() ?? '',
     );
   }
 }
@@ -2415,6 +2570,15 @@ class BuildingProject {
       if (v.id == id) return v;
     }
     return null;
+  }
+
+  /// Puts [vendor] back where the one with its id was. Does nothing when it
+  /// has gone - the ORDER of this list is a rule (see [vendorForPart]), so an
+  /// edit that landed a vendor at the end would silently change which vendor
+  /// claims a part.
+  void replaceVendor(ProjectVendor vendor) {
+    final at = vendors.indexWhere((v) => v.id == vendor.id);
+    if (at >= 0) vendors[at] = vendor;
   }
 
   ProjectRoomRef? roomById(String id) {

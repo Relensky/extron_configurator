@@ -160,11 +160,155 @@ PricingTier pricingTierFromName(String? name) =>
     ? PricingTier.education
     : PricingTier.msrp;
 
-/// The categories offered even when nothing is filed under them yet. The rack
-/// kinds are listed individually ('Vent plate', 'Shelf', ...) because that is
-/// how the rack editor groups its parts list — "Rack hardware" as a single
-/// bucket would put a drawer and a blanking plate in the same drawer.
+// ---------------------------------------------------------------------------
+//  THE CATEGORIES THAT TRACK TO THE MODULES
+// ---------------------------------------------------------------------------
+//  A category is free text and always will be — a catalog can say whatever it
+//  likes, and an importer says whatever the price list said. What that got the
+//  catalog was thirty-one different words for eighteen kinds of box: 'Fox
+//  Systems', 'XTP Systems', 'Scalers Switchers', 'Audio', 'DA', 'Matrix' —
+//  aisles of a manufacturer's web shop, filed as though they described the
+//  product.
+//
+//  THE APP ONLY UNDERSTANDS ONE VOCABULARY, and it is this one. A room's
+//  config holds a SWITCHERDEVICE_1 block with a python module behind it, and
+//  the words the app maps that block onto — for a base price, for a control
+//  module, for the replacement plan's grouping — are the words below. See
+//  categoryForConfigKey() in base_costs.dart, which is the mapping itself, and
+//  BaseCostBook.defaults, which prices exactly these.
+//
+//  A catalog entry filed under 'Fox Systems' therefore prices at nothing and
+//  groups under nothing, silently, with a perfectly reasonable-looking word in
+//  the column. So these are what the pickers offer, what a tidy-up retags onto
+//  (see the Device Editor's "Tidy categories"), and what a new entry should
+//  normally be given.
+//
+//  NOT A CLOSED SET. Anything can still be typed, and a site with a kind of
+//  product this list has no word for should invent one — the cost of a
+//  category the app does not track is that it prices off the room's config
+//  section instead, which is a fallback and not a failure.
+
+/// The device categories a room's own config sections map onto — the ones the
+/// base-cost card prices and the control prefill reads.
+///
+/// Kept in the same order as [BaseCostBook.defaults], which is roughly the
+/// order a rack is read in rather than alphabetical: a picker sorted A-Z puts
+/// 'Amplifier' above 'Camera' above 'Control processor' and buries the
+/// switcher everybody is looking for in the middle.
+const List<String> kTrackedCategories = [
+  'Switcher',
+  'Camera',
+  'DSP',
+  'Amplifier',
+  'Display',
+  'Projector',
+  'Screen',
+  'USB interface',
+  'Wireless presentation',
+  'Recorder / streamer',
+  'Control processor',
+  'Touch panel',
+  'Power controller',
+  'Network switch',
+  'Microphone',
+  'Speaker',
+  'Transmitter / receiver',
+  'Mount / bracket',
+];
+
+/// True when [category] is one of the words the app itself understands —
+/// either a tracked device kind or one of the four it keys behaviour off.
+bool isTrackedCategory(String category) {
+  final needle = category.trim().toLowerCase();
+  if (needle.isEmpty) return false;
+  for (final c in kWellKnownCategories) {
+    if (c.toLowerCase() == needle) return true;
+  }
+  return false;
+}
+
+/// What a catalog category that is NOT one of ours most likely meant, or ''
+/// when nothing here can honestly say.
+///
+/// SILENCE IS AN ANSWER. 'Matrix' is a switcher and nothing else, so it is
+/// filled in. 'Audio' holds DSPs, amplifiers, microphones and loudspeakers,
+/// and a guess there would retag a $90 mic as a $4,000 processor — so it is
+/// left blank and the person doing the tidy-up picks, or leaves it alone. The
+/// families deliberately absent are the manufacturer's aisles that hold more
+/// than one kind of box: Audio, Control Systems, DTP Systems, XTP Systems, Fox
+/// Systems, Architectural, Collaboration Systems, Streaming Systems.
+String catalogCategorySuggestion(String category) =>
+    kCatalogCategorySuggestions[category.trim().toLowerCase()] ?? '';
+
+/// The translations above, lower-cased. Deliberately short: every entry on it
+/// has to be true of EVERY product filed under the word.
+const Map<String, String> kCatalogCategorySuggestions = {
+  'matrix': 'Switcher',
+  'matrix switcher': 'Switcher',
+  'presentation switcher': 'Switcher',
+  'switchers': 'Switcher',
+  'videowall processors': 'Switcher',
+  'scaler': 'Switcher',
+  'cameras': 'Camera',
+  'ptz camera': 'Camera',
+  'audio processor': 'DSP',
+  'dsps': 'DSP',
+  'amplifiers': 'Amplifier',
+  'amp': 'Amplifier',
+  'flat panel': 'Display',
+  'flat panels': 'Display',
+  'monitor': 'Display',
+  'monitors': 'Display',
+  'displays': 'Display',
+  'projectors': 'Projector',
+  'screens': 'Screen',
+  'usb': 'USB interface',
+  'usb extender': 'USB interface',
+  'usb interfaces': 'USB interface',
+  'wireless': 'Wireless presentation',
+  'wireless presentation systems': 'Wireless presentation',
+  'streaming': 'Recorder / streamer',
+  'recorder': 'Recorder / streamer',
+  'encoder / decoder': 'Recorder / streamer',
+  'control processor': 'Control processor',
+  'control processors': 'Control processor',
+  'touch panels': 'Touch panel',
+  'touchpanel': 'Touch panel',
+  'power': 'Power controller',
+  'power controllers': 'Power controller',
+  'network switches': 'Network switch',
+  'switch': 'Network switch',
+  'microphones': 'Microphone',
+  'mics': 'Microphone',
+  'speakers': 'Speaker',
+  'loudspeaker': 'Speaker',
+  'loudspeakers': 'Speaker',
+  'transmitter': 'Transmitter / receiver',
+  'receiver': 'Transmitter / receiver',
+  'extender': 'Transmitter / receiver',
+  'extenders': 'Transmitter / receiver',
+  'mount': 'Mount / bracket',
+  'mounts': 'Mount / bracket',
+  'bracket': 'Mount / bracket',
+  'brackets': 'Mount / bracket',
+  'cables': kCategoryCable,
+  'cabling': kCategoryCable,
+  'consumables': kCategoryConsumable,
+  'misc': kCategoryMisc,
+  'miscellaneous': kCategoryMisc,
+  'other': kCategoryMisc,
+  'accessory': kCategoryMisc,
+  'accessories': kCategoryMisc,
+};
+
+/// The categories offered even when nothing is filed under them yet: the kinds
+/// the app tracks, then the rack parts, then the three it keys behaviour off.
+///
+/// The rack kinds are listed individually ('Vent plate', 'Shelf', ...) because
+/// that is how the rack editor groups its parts list — "Rack hardware" as a
+/// single bucket would put a drawer and a blanking plate in the same drawer.
 const List<String> kWellKnownCategories = [
+  ...kTrackedCategories,
   ...kRackItemCategories,
   kCategoryConsumable,
   kCategoryCable,
@@ -791,9 +935,10 @@ class AvDeviceLibrary {
 
   /// Categories in use, for the catalog filter and the "new device" form.
   ///
-  /// The three the app keys off are always offered even when nothing is filed
-  /// under them yet — a picker that hides "Consumable" until a consumable
-  /// exists is a picker you cannot create the first consumable with.
+  /// The ones the app keys off ([kWellKnownCategories]) are always offered
+  /// even when nothing is filed under them yet — a picker that hides
+  /// "Consumable" until a consumable exists is a picker you cannot create the
+  /// first consumable with.
   List<String> get categories {
     final set = <String>{
       ...kWellKnownCategories,
@@ -803,6 +948,51 @@ class AvDeviceLibrary {
     final list = set.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return list;
+  }
+
+  /// How many entries are filed under each category actually IN the catalog,
+  /// most-used first.
+  ///
+  /// The count is the whole point of the tidy-up screen: 'Fox Systems' with
+  /// eighty-nine products behind it and 'Matrix' with six are the same kind of
+  /// mistake and nothing like the same amount of it, and a list sorted A-Z
+  /// says nothing about which one is worth a decision. Unlike [categories]
+  /// this offers only what is there — a category nothing is filed under has
+  /// nothing to retag.
+  List<({String category, int count})> get categoryCounts {
+    final counts = <String, int>{};
+    final spelling = <String, String>{};
+    for (final t in _byModel.values) {
+      final name = t.category.trim();
+      if (name.isEmpty) continue;
+      final key = name.toLowerCase();
+      counts[key] = (counts[key] ?? 0) + 1;
+      spelling.putIfAbsent(key, () => name);
+    }
+    final list = [
+      for (final entry in counts.entries)
+        (category: spelling[entry.key]!, count: entry.value),
+    ]..sort((a, b) {
+        final byCount = b.count.compareTo(a.count);
+        return byCount != 0
+            ? byCount
+            : a.category.toLowerCase().compareTo(b.category.toLowerCase());
+      });
+    return list;
+  }
+
+  /// The models filed under [category], for saying what a category actually
+  /// HOLDS before somebody retags all of it. Capped: three examples answer
+  /// "is this one kind of thing", and eighty-nine do not.
+  List<String> examplesIn(String category, {int limit = 3}) {
+    final needle = category.trim().toLowerCase();
+    final names = <String>[];
+    for (final t in all) {
+      if (t.category.trim().toLowerCase() != needle) continue;
+      names.add(t.model);
+      if (names.length >= limit) break;
+    }
+    return names;
   }
 
   /// Everything still current — what the pickers that specify NEW work offer.
@@ -1106,6 +1296,48 @@ class AvDeviceLibrary {
     }
     _byModel[_norm(template.model)] = template.copyWith(custom: true);
     _invalidate();
+  }
+
+  /// Refiles every entry whose category is a key of [mapping] under that
+  /// key's value. Returns how many entries moved.
+  ///
+  /// THE CATALOG IS TIDIED A CATEGORY AT A TIME, not an entry at a time. An
+  /// import files two hundred products under 'Fox Systems' in one go, and
+  /// undoing that one entry at a time is two hundred edits nobody makes — so
+  /// the mess arrives in blocks and has to leave in blocks. See
+  /// [kTrackedCategories] for what it is being tidied ONTO, and
+  /// [catalogCategorySuggestion] for why the app will not guess at the
+  /// families that hold more than one kind of box.
+  ///
+  /// Keys are matched trimmed and case-insensitively, the way a person reads
+  /// them: 'usb', 'USB' and 'USB ' are one category. A mapping onto a blank
+  /// value, or onto the name it already has, is skipped rather than treated as
+  /// an edit — a tidy-up dialog offers every category it found, and most of
+  /// them are usually being left alone.
+  ///
+  /// Entries touched are marked custom, like every other edit: the tidy-up is
+  /// this site's decision about its own catalog, and it belongs in the file
+  /// this site saves rather than being lost on the next build.
+  int retagCategories(Map<String, String> mapping) {
+    final rules = <String, String>{};
+    for (final entry in mapping.entries) {
+      final from = entry.key.trim().toLowerCase();
+      final to = entry.value.trim();
+      if (from.isEmpty || to.isEmpty || from == to.toLowerCase()) continue;
+      rules[from] = to;
+    }
+    if (rules.isEmpty) return 0;
+
+    var moved = 0;
+    for (final key in _byModel.keys.toList()) {
+      final entry = _byModel[key]!;
+      final to = rules[entry.category.trim().toLowerCase()];
+      if (to == null) continue;
+      _byModel[key] = entry.copyWith(category: to, custom: true);
+      moved++;
+    }
+    if (moved > 0) _invalidate();
+    return moved;
   }
 
   /// Forgets an entry. A built-in comes back on the next launch — the file is

@@ -14051,6 +14051,206 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
+  // ==========================================================================
+  //  THE QUOTE, AND WHAT BECAME OF IT
+  // ==========================================================================
+  //  Three facts a vendor row can record - the request went, a price came back,
+  //  it was bought - and one of them has consequences. See [VendorRfqStage].
+
+  /// What a vendor is called in the log.
+  static String _vendorLogName(ProjectVendor vendor) =>
+      vendor.name.trim().isEmpty ? 'Vendor' : vendor.name.trim();
+
+  static String projectVendorItemKey(String id) => 'vendor:$id';
+
+  /// Records that the quote request went out. Null takes the date off again,
+  /// for the one that was marked by mistake.
+  void setVendorRfqSent(String vendorId, DateTime? sentOn) {
+    final vendor = project.vendorById(vendorId);
+    if (vendor == null) return;
+    project.replaceVendor(
+      vendor.copyWith(rfqSentOn: sentOn, clearRfqSentOn: sentOn == null),
+    );
+    _logProjectEdit(
+      itemKey: projectVendorItemKey(vendorId),
+      itemName: _vendorLogName(vendor),
+      field: 'RFQ',
+      summary: sentOn == null
+          ? 'no longer marked as sent'
+          : 'sent ${formatIsoDate(sentOn)}',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Records the quote coming back: when, for how much, and under what
+  /// reference. A null [quotedOn] takes the whole quote off the row.
+  void setVendorQuote(
+    String vendorId, {
+    DateTime? quotedOn,
+    double amount = 0,
+    String reference = '',
+  }) {
+    final vendor = project.vendorById(vendorId);
+    if (vendor == null) return;
+    project.replaceVendor(
+      vendor.copyWith(
+        quotedOn: quotedOn,
+        clearQuotedOn: quotedOn == null,
+        quoteAmount: quotedOn == null ? 0 : amount,
+        quoteRef: quotedOn == null ? '' : reference.trim(),
+      ),
+    );
+    _logProjectEdit(
+      itemKey: projectVendorItemKey(vendorId),
+      itemName: _vendorLogName(vendor),
+      field: 'RFQ',
+      summary: quotedOn == null
+          ? 'quote taken off the row'
+          : 'quote returned ${formatIsoDate(quotedOn)}'
+                '${amount > 0 ? ' for ${trimNumber(amount)}' : ''}'
+                '${reference.trim().isEmpty ? '' : ' (${reference.trim()})'}',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Marks a vendor's package ORDERED, on a purchase order, and puts the
+  /// equipment on it.
+  ///
+  /// THIS IS THE ONE THAT DOES SOMETHING. The other two record a date; this
+  /// makes three separate things true at once, and doing them one at a time
+  /// through three screens is how a job ends up with a PO nobody can trace to
+  /// any equipment:
+  ///
+  ///   * the VENDOR says it was ordered, on that number, on that day;
+  ///   * the JOB has a purchase order row with that number on it, pointed at
+  ///     this vendor, so the deliveries pane and the timeline can find it;
+  ///   * every PART this vendor is quoting says it was bought on that number,
+  ///     which is the link back from the PO to the equipment.
+  ///
+  /// [partKeys] is what goes on the PO - normally the vendor's whole package.
+  /// Passed in rather than worked out here because the packages are built by
+  /// the estimate, which this layer deliberately does not depend on.
+  ///
+  /// Returns how many parts were newly put on the order.
+  int markVendorOrdered(
+    String vendorId, {
+    required String poNumber,
+    DateTime? orderedOn,
+    DateTime? expectedOn,
+    double amount = 0,
+    String filePath = '',
+    Iterable<String> partKeys = const [],
+    Map<String, String> partNames = const {},
+  }) {
+    final vendor = project.vendorById(vendorId);
+    final number = poNumber.trim();
+    if (vendor == null || number.isEmpty) return 0;
+
+    // The PO row first, so the parts have something to point at. addPo hands
+    // back the row the job already has when the number is one it knows, which
+    // is what makes "ordered on the same PO as the last lot" work.
+    final po = project.addPo(
+      number: number,
+      vendorId: vendorId,
+      issuedOn: orderedOn,
+      expectedOn: expectedOn,
+      amount: amount,
+    );
+    project.updatePo(
+      po.copyWith(
+        vendorId: vendorId,
+        issuedOn: orderedOn ?? po.issuedOn,
+        expectedOn: expectedOn ?? po.expectedOn,
+        amount: amount > 0 ? amount : po.amount,
+        filePath: filePath.trim().isEmpty ? po.filePath : filePath.trim(),
+      ),
+    );
+
+    final moved = project.setPartsOnPo(
+      number,
+      onIt: partKeys,
+      orderedOn: orderedOn,
+      expectedOn: expectedOn,
+    );
+
+    project.replaceVendor(
+      vendor.copyWith(
+        orderedOn: orderedOn,
+        clearOrderedOn: orderedOn == null,
+        poNumber: number,
+      ),
+    );
+
+    final onIt = moved.added.length;
+    _logProjectEdit(
+      itemKey: projectVendorItemKey(vendorId),
+      itemName: _vendorLogName(vendor),
+      field: 'RFQ',
+      summary: [
+        'ordered on $number',
+        if (orderedOn != null) formatIsoDate(orderedOn),
+        if (onIt > 0) '- $onIt part${onIt == 1 ? '' : 's'} on it',
+      ].join(' '),
+    );
+    // One line per part, the same as every other edit that touches a part's
+    // order record - the history is read part-first ("this says bought, who
+    // said so"), and a single line on the vendor cannot answer that.
+    for (final key in moved.added) {
+      _logProjectEdit(
+        itemKey: projectPartItemKey(key),
+        itemName: partNames[key] ?? '',
+        field: 'Order',
+        summary: 'bought on $number',
+      );
+    }
+    _projectChanged(repricing: false);
+    return moved.added.length;
+  }
+
+  /// Un-marks an order: the vendor stops saying it was ordered. The PURCHASE
+  /// ORDER AND THE PARTS ARE LEFT ALONE - they record what happened, and a
+  /// mis-set flag on the vendor row is not a reason to unpick a job's
+  /// paperwork. Whoever needs that does it from the PO, where it can be seen.
+  void clearVendorOrdered(String vendorId) {
+    final vendor = project.vendorById(vendorId);
+    if (vendor == null) return;
+    final was = vendor.poNumber.trim();
+    project.replaceVendor(
+      vendor.copyWith(clearOrderedOn: true, poNumber: ''),
+    );
+    _logProjectEdit(
+      itemKey: projectVendorItemKey(vendorId),
+      itemName: _vendorLogName(vendor),
+      field: 'RFQ',
+      summary: was.isEmpty
+          ? 'no longer marked as ordered'
+          : 'no longer marked as ordered on $was - the PO and the parts on it '
+                'are unchanged',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Attaches the order itself to a PO, or takes it off with a blank path.
+  /// [absolutePath] is stored relative to the project file where it can be -
+  /// see [BuildingProject.storePath].
+  void setPoFile(String poId, String absolutePath) {
+    final po = project.poById(poId);
+    if (po == null) return;
+    final stored = absolutePath.trim().isEmpty
+        ? ''
+        : BuildingProject.storePath(absolutePath.trim(), currentProjectPath);
+    project.updatePo(po.copyWith(filePath: stored));
+    _logProjectEdit(
+      itemKey: projectPoItemKey(poId),
+      itemName: _poLogName(po),
+      field: 'Purchase order',
+      summary: stored.isEmpty
+          ? 'the attached order was removed'
+          : 'the order was attached',
+    );
+    _projectChanged(repricing: false);
+  }
+
   /// Signs a note onto a purchase order. The name and the time are taken, not
   /// typed — see [ProjectNote].
   void addProjectPoNote(String id, String text) {

@@ -103,22 +103,6 @@ enum _ProjectPane {
   const _ProjectPane(this.label, this.icon);
 }
 
-/// THE COLOUR A VENDOR'S PARTS ARE MARKED IN.
-///
-/// A vendor is an ORDER: everything tagged to it goes to one company on one
-/// purchase order. "Which of these two hundred parts am I buying from whom" is
-/// the question the master list is opened for, and until now the answer was a
-/// name in a narrow column that had to be read a row at a time. A colour
-/// answers it down the whole page at once.
-///
-/// Assigned first ([ProjectVendor.color]), derived from the name otherwise, so
-/// the list is legible on a job where nobody has set a colour. An untagged
-/// part has no vendor and takes the unsettled grey — it is not an order yet,
-/// and giving it a colour of its own would make it look like one.
-Color projectVendorColor(ProjectVendor? vendor) => vendor == null
-    ? kNameTintUnsettled
-    : resolveTint(assigned: vendor.color, name: vendor.name);
-
 /// The palette offered when a colour is assigned by hand.
 ///
 /// The same twelve the derived colours come out of, so an assigned colour and
@@ -4634,12 +4618,793 @@ class _VendorPicker extends StatelessWidget {
 //  VENDORS
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+//  WHERE THE QUOTE HAS GOT TO
+// ---------------------------------------------------------------------------
+//  This app builds the RFQ per vendor and hands you the .xlsx. Everything after
+//  that - it went out on the 4th, two came back, one turned into a PO, the
+//  third has never replied - lived in somebody's inbox, and on a six-vendor job
+//  "which of these are we still waiting on" is the single most-asked question
+//  on this screen.
+//
+//  Three dates answer it, and one of them does work. See [VendorRfqStage] for
+//  the states and [AppStateProvider.markVendorOrdered] for what ordering
+//  actually does: it raises the PO, points it at this vendor, and puts every
+//  part this vendor is quoting onto it - which is the LINK BACK from a PO
+//  number to the equipment it bought, and the thing nobody could produce
+//  before.
+
+/// The colour a stage is drawn in — read against the card's own fill, never
+/// straight out of the scheme. See contrast.dart.
+Color _rfqInk(ThemeData theme, VendorRfqStage stage) => switch (stage) {
+  VendorRfqStage.none => theme.colorScheme.onSurfaceVariant,
+  VendorRfqStage.sent => theme.colorScheme.onSurfaceVariant,
+  // The two that are an ANSWER rather than a wait.
+  VendorRfqStage.quoted => foregroundOn(
+    theme.colorScheme,
+    theme.cardColor,
+  ),
+  VendorRfqStage.ordered => foregroundOn(theme.colorScheme, theme.cardColor),
+};
+
+IconData _rfqIcon(VendorRfqStage stage) => switch (stage) {
+  VendorRfqStage.none => Icons.outbox_outlined,
+  VendorRfqStage.sent => Icons.hourglass_empty,
+  VendorRfqStage.quoted => Icons.request_quote_outlined,
+  VendorRfqStage.ordered => Icons.check_circle_outline,
+};
+
+/// The one-line state, for the collapsed card. A list of six vendors has to be
+/// readable as a list of six states without opening any of them.
+class VendorRfqChip extends StatelessWidget {
+  final ProjectVendor vendor;
+
+  const VendorRfqChip({super.key, required this.vendor});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final stage = vendor.rfqStage;
+    // A vendor nobody has sent anything to is the ordinary state of a job that
+    // has not gone out yet, and a row of grey "Not sent" chips down a fresh
+    // list is noise about nothing.
+    if (stage == VendorRfqStage.none) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Tooltip(
+        message: vendorRfqSentence(vendor),
+        child: Chip(
+          key: ValueKey('vendor_rfq_chip_${vendor.id}'),
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          avatar: Icon(
+            _rfqIcon(stage),
+            size: 16,
+            color: _rfqInk(theme, stage),
+          ),
+          label: Text(
+            stage == VendorRfqStage.ordered && vendor.poNumber.trim().isNotEmpty
+                ? vendor.poNumber.trim()
+                : stage.label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: _rfqInk(theme, stage),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The whole story of one vendor's quote as a sentence — what the chip's
+/// tooltip says, and what a report would print.
+String vendorRfqSentence(ProjectVendor vendor) {
+  final parts = <String>[];
+  if (vendor.rfqSentOn != null) {
+    parts.add('RFQ sent ${formatScheduleDate(vendor.rfqSentOn!)}');
+  }
+  if (vendor.quotedOn != null) {
+    parts.add('quoted ${formatScheduleDate(vendor.quotedOn!)}');
+  }
+  if (vendor.quoteRef.trim().isNotEmpty) {
+    parts.add('quote ${vendor.quoteRef.trim()}');
+  }
+  if (vendor.orderedOn != null) {
+    parts.add('ordered ${formatScheduleDate(vendor.orderedOn!)}');
+  }
+  if (vendor.poNumber.trim().isNotEmpty) {
+    parts.add('on ${vendor.poNumber.trim()}');
+  }
+  return parts.isEmpty ? 'No quote request out yet.' : parts.join(' · ');
+}
+
+/// The RFQ block on an OPEN vendor card: where the quote has got to, and the
+/// one or two things that can happen to it next.
+class VendorRfqStrip extends StatelessWidget {
+  final ProjectVendor vendor;
+  final VendorPackage? package;
+  final ProjectEstimate estimate;
+
+  const VendorRfqStrip({
+    super.key,
+    required this.vendor,
+    required this.package,
+    required this.estimate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.read<AppStateProvider>();
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final stage = vendor.rfqStage;
+    final po = vendor.poNumber.trim().isEmpty
+        ? null
+        : provider.project.poByNumber(vendor.poNumber);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.04),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(_rfqIcon(stage), size: 18, color: _rfqInk(theme, stage)),
+              const SizedBox(width: 6),
+              Text(
+                stage.label,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: _rfqInk(theme, stage),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  vendorRfqSentence(vendor),
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+              ),
+            ],
+          ),
+          // WHAT THE QUOTE SAID, AGAINST WHAT THE JOB THOUGHT. The one figure
+          // nobody had anywhere: the package total is this app's estimate of
+          // what the vendor's lines come to, and the quote is what the vendor
+          // actually wants for them. The gap is the whole reason a quote gets
+          // read.
+          if (vendor.quoteAmount > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              _quoteAgainstEstimate(
+                quoted: vendor.quoteAmount,
+                estimated: package?.total ?? 0,
+                currency: estimate.currency,
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (stage == VendorRfqStage.none)
+                OutlinedButton.icon(
+                  key: ValueKey('vendor_rfq_sent_${vendor.id}'),
+                  icon: const Icon(Icons.outbox, size: 18),
+                  label: const Text('RFQ sent'),
+                  onPressed: () => _markSent(context, provider),
+                ),
+              if (stage == VendorRfqStage.sent) ...[
+                FilledButton.tonalIcon(
+                  key: ValueKey('vendor_rfq_quoted_${vendor.id}'),
+                  icon: const Icon(Icons.request_quote_outlined, size: 18),
+                  label: const Text('Quote came back...'),
+                  onPressed: () => _markQuoted(context, provider),
+                ),
+                TextButton(
+                  key: ValueKey('vendor_rfq_unsent_${vendor.id}'),
+                  onPressed: () => provider.setVendorRfqSent(vendor.id, null),
+                  child: const Text('Not sent after all'),
+                ),
+              ],
+              if (stage == VendorRfqStage.quoted) ...[
+                FilledButton.icon(
+                  key: ValueKey('vendor_rfq_order_${vendor.id}'),
+                  icon: const Icon(Icons.shopping_cart_checkout, size: 18),
+                  label: const Text('Ordered...'),
+                  onPressed: () => _markOrdered(context, provider),
+                ),
+                TextButton(
+                  key: ValueKey('vendor_rfq_edit_quote_${vendor.id}'),
+                  onPressed: () => _markQuoted(context, provider),
+                  child: const Text('Edit the quote'),
+                ),
+              ],
+              if (stage == VendorRfqStage.ordered) ...[
+                // THE WAY BACK TO THE EQUIPMENT. A PO number on a vendor row
+                // that cannot be followed to the parts it bought is the exact
+                // dead end this was built to close.
+                if (po != null)
+                  OutlinedButton.icon(
+                    key: ValueKey('vendor_rfq_parts_${vendor.id}'),
+                    icon: const Icon(Icons.playlist_add_check, size: 18),
+                    label: Text(
+                      'Equipment on ${po.number.trim()} '
+                      '(${provider.project.partsOnPo(po.number).length})',
+                    ),
+                    onPressed: () => showPoPartsDialog(
+                      context,
+                      provider: provider,
+                      estimate: estimate,
+                      po: po,
+                    ),
+                  ),
+                if (po != null) PoFileButtons(po: po, provider: provider),
+                TextButton(
+                  key: ValueKey('vendor_rfq_unorder_${vendor.id}'),
+                  onPressed: () => provider.clearVendorOrdered(vendor.id),
+                  child: const Text('Not ordered after all'),
+                ),
+              ],
+            ],
+          ),
+          if (stage == VendorRfqStage.ordered && po == null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'The job has no purchase order numbered '
+              '"${vendor.poNumber.trim()}". It was probably renumbered or '
+              'deleted - mark it ordered again to put the row back.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: errorTextOn(theme.colorScheme, theme.cardColor),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// The quote beside the estimate, and the gap between them in the direction
+  /// somebody cares about: over is a problem and under is not.
+  static String _quoteAgainstEstimate({
+    required double quoted,
+    required double estimated,
+    required String currency,
+  }) {
+    final quote = 'Quoted ${formatMoney(quoted, currency)}';
+    if (estimated <= 0) return '$quote. The job has no figure to compare it to.';
+    final delta = quoted - estimated;
+    final estimate = formatMoney(estimated, currency);
+    if (delta.abs() < 0.005) return '$quote, exactly what the job estimated.';
+    return delta > 0
+        ? '$quote - ${formatMoney(delta, currency)} OVER the job\'s $estimate.'
+        : '$quote - ${formatMoney(-delta, currency)} under the job\'s '
+              '$estimate.';
+  }
+
+  Future<void> _markSent(
+    BuildContext context,
+    AppStateProvider provider,
+  ) async {
+    final picked = await showProjectDatePicker(
+      context,
+      initial: vendor.rfqSentOn ?? today(),
+      title: 'The day the request went to ${vendor.name}',
+    );
+    if (picked?.date == null) return;
+    provider.setVendorRfqSent(vendor.id, picked!.date);
+  }
+
+  Future<void> _markQuoted(
+    BuildContext context,
+    AppStateProvider provider,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _QuoteReturnedDialog(
+        vendor: vendor,
+        currency: estimate.currency,
+        estimated: package?.total ?? 0,
+      ),
+    );
+  }
+
+  Future<void> _markOrdered(
+    BuildContext context,
+    AppStateProvider provider,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _VendorOrderedDialog(
+        vendor: vendor,
+        package: package,
+        estimate: estimate,
+      ),
+    );
+  }
+}
+
+/// What came back from a vendor: when, for how much, under what reference.
+///
+/// THREE FIELDS AND NO MORE. The quote itself is a PDF in an email and this app
+/// is not going to hold it; what it holds is the three things somebody needs to
+/// compare six quotes against each other and against the job's own figure
+/// without opening any of them.
+class _QuoteReturnedDialog extends StatefulWidget {
+  final ProjectVendor vendor;
+  final String currency;
+
+  /// What the job thinks this vendor's lines come to, shown under the amount
+  /// so the comparison is on screen at the moment the figure is typed.
+  final double estimated;
+
+  const _QuoteReturnedDialog({
+    required this.vendor,
+    required this.currency,
+    required this.estimated,
+  });
+
+  @override
+  State<_QuoteReturnedDialog> createState() => _QuoteReturnedDialogState();
+}
+
+class _QuoteReturnedDialogState extends State<_QuoteReturnedDialog> {
+  late final TextEditingController _amount = TextEditingController(
+    text: widget.vendor.quoteAmount > 0
+        ? widget.vendor.quoteAmount.toStringAsFixed(2)
+        : '',
+  );
+  late final TextEditingController _reference = TextEditingController(
+    text: widget.vendor.quoteRef,
+  );
+  late DateTime? _on = widget.vendor.quotedOn ?? today();
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _reference.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    context.read<AppStateProvider>().setVendorQuote(
+      widget.vendor.id,
+      quotedOn: _on,
+      amount: double.tryParse(_amount.text.trim()) ?? 0,
+      reference: _reference.text,
+    );
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      key: const ValueKey('vendor_quote_dialog'),
+      title: Text('${widget.vendor.name}\'s quote'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('vendor_quote_date'),
+                    icon: const Icon(Icons.event, size: 18),
+                    label: Text(
+                      _on == null
+                          ? 'Pick the day it came back'
+                          : 'Came back ${formatScheduleDate(_on!)}',
+                    ),
+                    onPressed: () async {
+                      final picked = await showProjectDatePicker(
+                        context,
+                        initial: _on,
+                        title: 'The day the quote came back',
+                      );
+                      if (picked?.date != null) {
+                        setState(() => _on = picked!.date);
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('vendor_quote_amount'),
+              controller: _amount,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Quoted',
+                prefixText: widget.currency,
+                helperText: widget.estimated > 0
+                    ? 'The job estimates '
+                          '${formatMoney(widget.estimated, widget.currency)} '
+                          'for this vendor\'s lines.'
+                    : 'Blank when nobody has said. It is not zero.',
+                border: const OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('vendor_quote_ref'),
+              controller: _reference,
+              decoration: const InputDecoration(
+                labelText: 'Their quote number',
+                hintText: 'Q-88421',
+                helperText: 'What to say on the phone. Blank is fine.',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Recording a quote changes no price on the job. The estimate '
+              'stays what the parts say; this is what the vendor wants for '
+              'them.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        // Only when there IS one, so a first quote's dialog does not offer to
+        // delete something that has never been recorded.
+        if (widget.vendor.quotedOn != null)
+          TextButton(
+            key: const ValueKey('vendor_quote_clear'),
+            onPressed: () {
+              context.read<AppStateProvider>().setVendorQuote(
+                widget.vendor.id,
+                quotedOn: null,
+              );
+              Navigator.of(context).pop();
+            },
+            child: const Text('No quote after all'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('vendor_quote_save'),
+          onPressed: _on == null ? null : _save,
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Marking a vendor's package ORDERED: the PO number, the dates, and the
+/// equipment that goes on it.
+///
+/// ============================================================================
+///  ONE ACTION, THREE FACTS
+/// ============================================================================
+///  Before this, ordering a vendor's package was three separate jobs on two
+///  screens: raise the PO on the Deliveries pane, open it, tick nineteen parts.
+///  What happened on real jobs is that the first two got done and the third did
+///  not, which leaves a PO nobody can trace to any equipment and nineteen parts
+///  that read on the timeline as things nobody has bought.
+///
+///  So it is one dialog. The parts default to THE WHOLE PACKAGE, because that
+///  is what a purchase order to one vendor almost always is; the count is on
+///  screen, and the tick-list behind the PO is still there for the job where it
+///  was not.
+///
+///  ATTACHING THE ORDER IS OFFERED HERE, at the one moment somebody actually
+///  has the PDF in front of them. See [ProjectPo.filePath].
+class _VendorOrderedDialog extends StatefulWidget {
+  final ProjectVendor vendor;
+  final VendorPackage? package;
+  final ProjectEstimate estimate;
+
+  const _VendorOrderedDialog({
+    required this.vendor,
+    required this.package,
+    required this.estimate,
+  });
+
+  @override
+  State<_VendorOrderedDialog> createState() => _VendorOrderedDialogState();
+}
+
+class _VendorOrderedDialogState extends State<_VendorOrderedDialog> {
+  late final TextEditingController _number = TextEditingController(
+    text: widget.vendor.poNumber,
+  );
+  late final TextEditingController _amount = TextEditingController(
+    text: _openingAmount(),
+  );
+  late DateTime? _ordered = widget.vendor.orderedOn ?? today();
+  DateTime? _expected;
+
+  /// The document, absolute, until it is saved and stored relative.
+  String _filePath = '';
+
+  String _error = '';
+
+  /// What the PO was raised for, to start with: the quote if there is one,
+  /// otherwise what the job estimates the package at. Either is a better
+  /// opening than an empty box, and both are editable.
+  String _openingAmount() {
+    final quoted = widget.vendor.quoteAmount;
+    if (quoted > 0) return quoted.toStringAsFixed(2);
+    final total = widget.package?.total ?? 0;
+    return total > 0 ? total.toStringAsFixed(2) : '';
+  }
+
+  @override
+  void dispose() {
+    _number.dispose();
+    _amount.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    final picked = await FilePicker.pickFiles(
+      dialogTitle: 'Pick the order for ${widget.vendor.name}',
+    );
+    final chosen = picked?.files.single.path;
+    if (chosen == null || chosen.isEmpty) return;
+    setState(() => _filePath = chosen);
+  }
+
+  void _save() {
+    final provider = context.read<AppStateProvider>();
+    final number = _number.text.trim();
+    if (number.isEmpty) {
+      setState(() => _error = 'An order needs a PO number.');
+      return;
+    }
+
+    final lines = widget.package?.lines ?? const <MasterPartLine>[];
+    final onIt = provider.markVendorOrdered(
+      widget.vendor.id,
+      poNumber: number,
+      orderedOn: _ordered,
+      expectedOn: _expected,
+      amount: double.tryParse(_amount.text.trim()) ?? 0,
+      // Stored relative to the project where it can be - the provider does
+      // that, because only it knows where the project file is.
+      filePath: _filePath.trim().isEmpty
+          ? ''
+          : BuildingProject.storePath(
+              _filePath.trim(),
+              provider.currentProjectPath,
+            ),
+      partKeys: [for (final l in lines) l.key],
+      partNames: {for (final l in lines) l.key: l.description},
+    );
+
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(
+          onIt == 0
+              ? '${widget.vendor.name} marked ordered on $number.'
+              : '${widget.vendor.name} ordered on $number - $onIt part'
+                    '${onIt == 1 ? '' : 's'} now say so, and the timeline says '
+                    'they are bought.',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final lines = widget.package?.lines ?? const <MasterPartLine>[];
+
+    return AlertDialog(
+      key: const ValueKey('vendor_ordered_dialog'),
+      title: Text('Order ${widget.vendor.name}\'s package'),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                key: const ValueKey('vendor_ordered_number'),
+                controller: _number,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'PO number',
+                  hintText: 'PO-1188',
+                  helperText: 'The number finance uses. A number the job '
+                      'already knows is reused rather than duplicated.',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('vendor_ordered_date'),
+                      icon: const Icon(Icons.event, size: 18),
+                      label: Text(
+                        _ordered == null
+                            ? 'Ordered - pick a day'
+                            : 'Ordered ${formatScheduleDate(_ordered!)}',
+                      ),
+                      onPressed: () async {
+                        final picked = await showProjectDatePicker(
+                          context,
+                          initial: _ordered,
+                          title: 'The day the order went in',
+                        );
+                        if (picked?.date != null) {
+                          setState(() => _ordered = picked!.date);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('vendor_ordered_expected'),
+                      icon: const Icon(Icons.local_shipping_outlined, size: 18),
+                      label: Text(
+                        _expected == null
+                            ? 'Promised - optional'
+                            : 'Promised ${formatScheduleDate(_expected!)}',
+                      ),
+                      onPressed: () async {
+                        final picked = await showProjectDatePicker(
+                          context,
+                          initial: _expected,
+                          title: 'What the vendor promised for the order',
+                        );
+                        if (picked?.date != null) {
+                          setState(() => _expected = picked!.date);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('vendor_ordered_amount'),
+                controller: _amount,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Raised for',
+                  prefixText: widget.estimate.currency,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // WHAT IT BUYS. Said as a count and a total rather than as a
+              // list: the list is nineteen rows and this is a confirmation,
+              // not a picker. The PO's own tick-list is where a partial order
+              // is dealt with, and the sentence says so.
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.04),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      lines.isEmpty
+                          ? 'No parts are tagged to this vendor.'
+                          : '${lines.length} part'
+                                '${lines.length == 1 ? '' : 's'} go on this PO '
+                                '- ${formatMoney(widget.package!.total, widget.estimate.currency)} '
+                                'at the job\'s own prices.',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      lines.isEmpty
+                          ? 'The PO is still raised and the vendor still reads '
+                                'as ordered; tick the equipment onto it from '
+                                'the Deliveries pane.'
+                          : 'Each of them will say it was bought on this '
+                                'number, which is what links the PO back to the '
+                                'equipment. Ordering only part of the package? '
+                                'Do this, then untick the rest on the PO.',
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // THE PAPER, at the one moment somebody has it in front of them.
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('vendor_ordered_attach'),
+                      icon: const Icon(Icons.attach_file, size: 18),
+                      label: Text(
+                        _filePath.isEmpty
+                            ? 'Attach the order (optional)'
+                            : path.basename(_filePath),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onPressed: _pickFile,
+                    ),
+                  ),
+                  if (_filePath.isNotEmpty)
+                    IconButton(
+                      key: const ValueKey('vendor_ordered_detach'),
+                      tooltip: 'Do not attach anything',
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => setState(() => _filePath = ''),
+                    ),
+                ],
+              ),
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error,
+                  key: const ValueKey('vendor_ordered_error'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: errorTextOn(theme.colorScheme, theme.cardColor),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('vendor_ordered_save'),
+          onPressed: _save,
+          child: const Text('Mark ordered'),
+        ),
+      ],
+    );
+  }
+}
+
+
 /// The Vendors pane, as slivers for the tab's one scroll view.
 List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
   final provider = context.read<AppStateProvider>();
   final theme = Theme.of(context);
   final vendors = estimate.project.vendors;
   final conflicts = estimate.project.vendorConflicts;
+  // THE CATEGORIES ON THIS JOB, not the catalog's. A rule is only ever worth
+  // writing about a category the job actually has a part in - see
+  // [_CategoryPickerDialog].
+  final projectCategories = projectCategoryChoices(estimate);
   // Against the card's own error fill. The theme's title colour is chosen for
   // a surface, and onErrorContainer is only the scheme's PREFERENCE — it fails
   // WCAG on 45 of this app's 180 theme/accent combinations.
@@ -4745,6 +5510,8 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
             index: index,
             vendor: vendors[index],
             package: estimate.packageFor(vendors[index].id),
+            projectCategories: projectCategories,
+            estimate: estimate,
             currency: estimate.currency,
             isFirst: index == 0,
             isLast: index == vendors.length - 1,
@@ -4769,6 +5536,16 @@ class _VendorCard extends StatefulWidget {
   final int index;
   final ProjectVendor vendor;
   final VendorPackage? package;
+
+  /// Every category the job's own parts fall into, with how many parts each
+  /// claims - what the category picker offers.
+  final List<({String name, int count})> projectCategories;
+
+  /// The whole priced job. The RFQ strip needs it: a quote is only readable
+  /// against what the job thought the package was worth, and marking an order
+  /// has to know which parts go on the PO.
+  final ProjectEstimate estimate;
+
   final String currency;
   final bool isFirst;
   final bool isLast;
@@ -4778,6 +5555,8 @@ class _VendorCard extends StatefulWidget {
     required this.index,
     required this.vendor,
     required this.package,
+    required this.projectCategories,
+    required this.estimate,
     required this.currency,
     required this.isFirst,
     required this.isLast,
@@ -4935,6 +5714,11 @@ class _VendorCardState extends State<_VendorCard> {
                   ),
                   const SizedBox(width: 8),
                 ],
+                // WHERE THE QUOTE HAS GOT TO, on the row that is always
+                // there. A collapsed list of six vendors has to answer "which
+                // of these are we waiting on" without any of them being
+                // opened - see [VendorRfqChip].
+                VendorRfqChip(vendor: vendor),
                 if (package != null)
                   Chip(
                     label: Text(
@@ -4996,6 +5780,12 @@ class _VendorCardState extends State<_VendorCard> {
               ],
             ),
             const SizedBox(height: 8),
+            VendorRfqStrip(
+              vendor: vendor,
+              package: package,
+              estimate: widget.estimate,
+            ),
+            const SizedBox(height: 8),
             _RuleEditor(
               label: 'Manufacturers',
               hint: 'Extron',
@@ -5015,6 +5805,11 @@ class _VendorCardState extends State<_VendorCard> {
                   '"Camera - PTZ". Checked after the manufacturer rules.',
               values: vendor.categories,
               suggestions: facets.categories,
+              // TICKED, NOT TYPED. See [_CategoryPickerDialog]: on a real job
+              // this is a dozen boxes off a list, and typing a dozen exact
+              // strings is a dozen chances to write one that matches nothing.
+              choices: widget.projectCategories,
+              chooseLabel: 'Pick from the job',
               onChanged: (v) =>
                   provider.updateProjectVendor(vendor.copyWith(categories: v)),
             ),
@@ -5035,6 +5830,212 @@ class _VendorCardState extends State<_VendorCard> {
   }
 }
 
+/// Every category the job's own parts fall into, with how many parts each
+/// holds, most-used first.
+///
+/// THE JOB'S CATEGORIES AND NOT THE CATALOG'S. The catalog knows two thousand
+/// products in thirty categories; this job has parts in six of them, and a
+/// vendor rule about the other twenty-four claims nothing and says nothing.
+/// The count is what makes the list readable as a decision - "Display (18)"
+/// against "Screen (2)" is the difference between the order this vendor is
+/// really quoting and a line somebody added by accident.
+List<({String name, int count})> projectCategoryChoices(
+  ProjectEstimate estimate,
+) {
+  final counts = <String, int>{};
+  final spelling = <String, String>{};
+  for (final line in estimate.master) {
+    final name = line.category.trim();
+    if (name.isEmpty) continue;
+    final key = name.toLowerCase();
+    counts[key] = (counts[key] ?? 0) + 1;
+    spelling.putIfAbsent(key, () => name);
+  }
+  final list = [
+    for (final entry in counts.entries)
+      (name: spelling[entry.key]!, count: entry.value),
+  ]..sort((a, b) {
+      final byCount = b.count.compareTo(a.count);
+      return byCount != 0
+          ? byCount
+          : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+  return list;
+}
+
+/// The tick-list a vendor's category rules are set from.
+///
+/// ============================================================================
+///  SIX BOXES, NOT SIX EXACT STRINGS
+/// ============================================================================
+///  A category rule is matched exactly (or by prefix - see
+///  [ProjectVendor.quotesCategory]), which makes typing one the worst possible
+///  way to write it: "Cameras" against a catalog that says "Camera" is a rule
+///  that claims nothing, and there is nothing anywhere on the screen to say so.
+///  The autocomplete underneath helped and only after you had typed enough of
+///  the word for it to appear.
+///
+///  What people actually do on a live job is read down the list of what is
+///  being bought and say "that lot is Extron's, that lot is the AV reseller's".
+///  That is a tick-list, so this is one: every category the job has, how many
+///  parts are in it, and a box.
+///
+///  THE TYPED ROUTE SURVIVES. A rule for a category no part on the job has yet
+///  is a real thing to want - the job is not finished, and a vendor is often
+///  set up before the rooms are drawn - so anything the vendor already claims
+///  that the job has no parts in is carried at the bottom of the list, ticked,
+///  under a heading that says what it is. Unticking one is how it goes; the box
+///  on the card is how another is added.
+class _CategoryPickerDialog extends StatefulWidget {
+  final String title;
+  final List<({String name, int count})> choices;
+  final List<String> selected;
+
+  const _CategoryPickerDialog({
+    required this.title,
+    required this.choices,
+    required this.selected,
+  });
+
+  @override
+  State<_CategoryPickerDialog> createState() => _CategoryPickerDialogState();
+}
+
+class _CategoryPickerDialogState extends State<_CategoryPickerDialog> {
+  /// Lower-cased, because a rule is matched case-insensitively and a set that
+  /// held both spellings would tick one box and write two rules.
+  late final Set<String> _checked = {
+    for (final v in widget.selected) v.trim().toLowerCase(),
+  };
+
+  /// What this vendor claims that the job has no parts in - see the note on
+  /// the class. Worked out once: the choices do not change while the dialog is
+  /// open, and neither does what was already written.
+  late final List<String> _offList = [
+    for (final v in widget.selected)
+      if (!widget.choices.any(
+        (c) => c.name.toLowerCase() == v.trim().toLowerCase(),
+      ))
+        v.trim(),
+  ];
+
+  bool _isChecked(String name) => _checked.contains(name.trim().toLowerCase());
+
+  void _toggle(String name, bool on) => setState(() {
+    final key = name.trim().toLowerCase();
+    if (on) {
+      _checked.add(key);
+    } else {
+      _checked.remove(key);
+    }
+  });
+
+  /// What comes back out. Built from the DISPLAYED spellings rather than from
+  /// the lower-cased keys: a rule is written into the project file and read by
+  /// a person, and 'usb interface' is not what the catalog calls it.
+  List<String> get _result => [
+    for (final c in widget.choices)
+      if (_isChecked(c.name)) c.name,
+    for (final v in _offList)
+      if (_isChecked(v)) v,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final chosen = _result.length;
+
+    return AlertDialog(
+      key: const ValueKey('vendor_category_picker'),
+      title: Text('${widget.title} this vendor quotes'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.choices.isEmpty
+                  ? 'This job has no parts with a category on them yet. Draw a '
+                        'room, or type a rule on the card behind this.'
+                  : 'Every category on this job, and how many parts are in it. '
+                        'A part goes to the FIRST vendor whose rules claim it, '
+                        'so two vendors ticking the same box is decided by the '
+                        'order of the list behind this.',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+            const SizedBox(height: 8),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final c in widget.choices)
+                    CheckboxListTile(
+                      key: ValueKey('vendor_category_${c.name}'),
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: _isChecked(c.name),
+                      onChanged: (v) => _toggle(c.name, v ?? false),
+                      title: Text(c.name),
+                      subtitle: Text(
+                        '${c.count} part${c.count == 1 ? '' : 's'} on the job',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: muted,
+                        ),
+                      ),
+                    ),
+                  if (_offList.isNotEmpty) ...[
+                    const Divider(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'ALREADY WRITTEN, WITH NOTHING ON THE JOB IN IT',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: muted,
+                        ),
+                      ),
+                    ),
+                    for (final v in _offList)
+                      CheckboxListTile(
+                        key: ValueKey('vendor_category_off_$v'),
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: _isChecked(v),
+                        onChanged: (on) => _toggle(v, on ?? false),
+                        title: Text(v),
+                        subtitle: Text(
+                          'no part on this job is in it',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: muted,
+                          ),
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('vendor_category_picker_save'),
+          onPressed: () => Navigator.of(context).pop(_result),
+          child: Text(
+            chosen == 0 ? 'Claim nothing' : 'Claim $chosen',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// A list of rule strings as removable chips, with an autocomplete to add one.
 ///
 /// The autocomplete draws on the catalog rather than being free text with a
@@ -5047,6 +6048,15 @@ class _RuleEditor extends StatefulWidget {
   final String helper;
   final List<String> values;
   final List<String> suggestions;
+
+  /// What a TICK-LIST would offer, with how many of the job's parts each
+  /// choice claims. Empty leaves the button off and the editor is type-only,
+  /// which is right for a rule with no closed set behind it.
+  final List<({String name, int count})> choices;
+
+  /// What that button reads.
+  final String chooseLabel;
+
   final ValueChanged<List<String>> onChanged;
 
   const _RuleEditor({
@@ -5056,6 +6066,8 @@ class _RuleEditor extends StatefulWidget {
     required this.values,
     required this.suggestions,
     required this.onChanged,
+    this.choices = const [],
+    this.chooseLabel = 'Pick',
   });
 
   @override
@@ -5120,6 +6132,24 @@ class _RuleEditorState extends State<_RuleEditor> {
     });
   }
 
+  /// Opens the tick-list, and takes back whatever came out of it.
+  ///
+  /// The dialog owns the whole set rather than adding to it: unticking is as
+  /// much of the job as ticking, and a picker that could only add would leave
+  /// the deleting to the chips it just filled the row with.
+  Future<void> _pick() async {
+    final chosen = await showDialog<List<String>>(
+      context: context,
+      builder: (_) => _CategoryPickerDialog(
+        title: widget.label,
+        choices: widget.choices,
+        selected: widget.values,
+      ),
+    );
+    if (chosen == null) return;
+    widget.onChanged(chosen);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -5143,6 +6173,20 @@ class _RuleEditorState extends State<_RuleEditor> {
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
+        // THE LIST, IN ONE PLACE, WITH TICKS. The type-in box below is still
+        // here and still takes anything - a rule for a category no part on
+        // this job has yet is a legitimate thing to write - but it is no
+        // longer the only way in. See [_CategoryPickerDialog].
+        if (widget.choices.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: ValueKey('rule_pick_${widget.label}'),
+              icon: const Icon(Icons.checklist, size: 18),
+              label: Text(widget.chooseLabel),
+              onPressed: _pick,
+            ),
+          ),
         const SizedBox(height: 4),
         Wrap(
           spacing: 6,

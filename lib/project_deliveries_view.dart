@@ -1,10 +1,16 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart' show formatMoney;
+import 'pdf_viewer_dialog.dart';
 import 'project_estimate.dart';
 import 'project_schedule.dart' show formatScheduleDate;
 import 'project_timeline_view.dart'
@@ -438,23 +444,32 @@ class _PoCard extends StatelessWidget {
             // this", which is the question a PO is opened with and the one
             // that has to be answered before a packing slip can be checked
             // against anything.
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                key: ValueKey('po_parts_${po.id}'),
-                icon: const Icon(Icons.playlist_add_check, size: 18),
-                label: Text(
-                  parts.isEmpty
-                      ? 'Put equipment on this PO'
-                      : 'Equipment on this PO (${parts.length})',
+            //
+            // Beside it, THE ORDER ITSELF - see [PoFileButtons]. The two are
+            // one row because they are the two halves of the same question:
+            // what we think we bought, and what the paper says we bought.
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  key: ValueKey('po_parts_${po.id}'),
+                  icon: const Icon(Icons.playlist_add_check, size: 18),
+                  label: Text(
+                    parts.isEmpty
+                        ? 'Put equipment on this PO'
+                        : 'Equipment on this PO (${parts.length})',
+                  ),
+                  onPressed: () => showPoPartsDialog(
+                    context,
+                    provider: provider,
+                    estimate: estimate,
+                    po: po,
+                  ),
                 ),
-                onPressed: () => showPoPartsDialog(
-                  context,
-                  provider: provider,
-                  estimate: estimate,
-                  po: po,
-                ),
-              ),
+                PoFileButtons(po: po, provider: provider),
+              ],
             ),
             if (parts.isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -2206,6 +2221,179 @@ class _DateField extends StatelessWidget {
             tooltip: 'Take the $label date back off',
             onPressed: () => onPick(null),
           ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  THE ORDER ITSELF
+// ---------------------------------------------------------------------------
+//  A PO row is somebody's typing: a number, a date, a figure. The argument a
+//  purchase order actually gets pulled up to settle - "we ordered the 65-inch,
+//  not the 55" - is settled by the DOCUMENT, and until there was somewhere to
+//  put it, the signed order lived in the inbox of whoever raised it. See
+//  [ProjectPo.filePath].
+
+/// Where the order attached to [po] actually is on this machine.
+///
+/// Resolved against the project file exactly the way a room's config, a
+/// building plan and a cutsheet are, so a job folder that has been moved or
+/// handed over still finds its own paperwork.
+String resolvePoFilePath(AppStateProvider provider, ProjectPo po) {
+  if (po.filePath.trim().isEmpty) return '';
+  return BuildingProject.resolvePath(
+    po.filePath.trim(),
+    provider.currentProjectPath,
+  );
+}
+
+/// Picks the document a purchase order was raised as, and attaches it.
+///
+/// ANY file, not only a PDF. A PDF is what finance sends and it is not the
+/// only thing that ever turns up - a scan, a screenshot of the ordering system,
+/// the vendor's acknowledgement as an .msg - and a picker that hides those says
+/// the app does not support paperwork it in fact stores perfectly well. What
+/// it cannot DRAW it hands to the machine's own opener; see [openPoFile].
+Future<void> attachPoFile(
+  BuildContext context,
+  AppStateProvider provider,
+  ProjectPo po,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final picked = await FilePicker.pickFiles(
+    dialogTitle: 'Pick the order for '
+        '${po.number.trim().isEmpty ? 'this PO' : po.number.trim()}',
+  );
+  final path = picked?.files.single.path;
+  if (path == null || path.isEmpty) return;
+  provider.setPoFile(po.id, path);
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      content: Text(
+        'Attached. The project stores where it IS, not a copy of it - move '
+        'the file and the link goes with it.',
+      ),
+    ),
+  );
+}
+
+/// Opens the order behind a PO: IN THE APP where it can be drawn, otherwise in
+/// whatever this machine opens it with.
+///
+/// The same bargain the plans pane and the matrix's cutsheets make, and for the
+/// same reason - a PDF handed to the machine's reader is a second window that
+/// has to be found again every time, and the thing somebody is doing with it
+/// (checking a model number against the line they are reading) is a thing they
+/// are doing HERE.
+Future<void> openPoFile(
+  BuildContext context,
+  AppStateProvider provider,
+  ProjectPo po,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final resolved = resolvePoFilePath(provider, po);
+  final name = po.number.trim().isEmpty ? 'this PO' : po.number.trim();
+
+  // SAID, NOT THROWN. An order that has been moved or renamed is a fact about
+  // the file, and "the viewer failed" would send somebody looking in the wrong
+  // place for it.
+  if (resolved.isEmpty || !File(resolved).existsSync()) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(
+          'The order for $name is not where the project says it '
+          'is${resolved.isEmpty ? '' : ' ($resolved)'}.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  if (!po.isViewable) {
+    final error = await provider.openInDesktop(resolved);
+    if (error != null) {
+      showTimedSnackBar(messenger, SnackBar(content: Text(error)));
+    }
+    return;
+  }
+
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (_) => PdfViewerDialog(
+      filePath: resolved,
+      title: 'Order $name',
+      screenshotStem: p.basenameWithoutExtension(resolved),
+      onOpenExternally: () => provider.openInDesktop(resolved),
+    ),
+  );
+}
+
+/// The button row a PO card carries for its attached order: open it, swap it,
+/// take it off - or, when there is none, the one button that adds one.
+class PoFileButtons extends StatelessWidget {
+  final ProjectPo po;
+  final AppStateProvider provider;
+
+  const PoFileButtons({super.key, required this.po, required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final attached = po.filePath.trim().isNotEmpty;
+
+    if (!attached) {
+      return OutlinedButton.icon(
+        key: ValueKey('po_attach_${po.id}'),
+        icon: const Icon(Icons.attach_file, size: 18),
+        label: const Text('Attach the order'),
+        onPressed: () => attachPoFile(context, provider, po),
+      );
+    }
+
+    return Wrap(
+      spacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        // THE DOCUMENT IS THE BUTTON. Named by its own file, because that is
+        // what somebody recognises - 'PO-1188 signed.pdf' says more about
+        // whether this is the right paper than the word "order" ever will.
+        OutlinedButton.icon(
+          key: ValueKey('po_open_file_${po.id}'),
+          icon: Icon(
+            po.isPdf ? Icons.picture_as_pdf : Icons.description_outlined,
+            size: 18,
+          ),
+          label: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 260),
+            child: Text(
+              p.basename(po.filePath.trim()),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          onPressed: () => openPoFile(context, provider, po),
+        ),
+        IconButton(
+          key: ValueKey('po_replace_file_${po.id}'),
+          tooltip: 'Attach a different file',
+          icon: const Icon(Icons.find_replace, size: 18),
+          color: muted,
+          onPressed: () => attachPoFile(context, provider, po),
+        ),
+        IconButton(
+          key: ValueKey('po_detach_${po.id}'),
+          // The FILE is left where it is. This row is a pointer at it, and
+          // deleting somebody's paperwork off their disk is not something a
+          // project file gets to do.
+          tooltip: 'Take the link off. The file itself is left alone.',
+          icon: const Icon(Icons.link_off, size: 18),
+          color: muted,
+          onPressed: () => provider.setPoFile(po.id, ''),
+        ),
       ],
     );
   }

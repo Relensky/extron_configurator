@@ -262,6 +262,12 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   Widget _buildToolbar(AppStateProvider provider, AvDeviceLibrary library) {
     final theme = Theme.of(context);
     final duplicates = library.duplicateParts;
+    // How many categories in the catalog are words the app cannot map onto a
+    // config section. Counted here rather than in the button so the label and
+    // the dialog are reading the same list.
+    final untracked = library.categoryCounts
+        .where((c) => !isTrackedCategory(c.category))
+        .length;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
@@ -319,6 +325,25 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 icon: const Icon(Icons.merge, size: 18),
                 label: const Text('Merge from file...'),
                 onPressed: () => _startMerge(provider),
+              ),
+              // ONE VOCABULARY, OR THE APP UNDERSTANDS NONE OF IT. A price
+              // list imported under the manufacturer's own aisle names -
+              // 'Fox Systems', 'XTP Systems', 'Scalers Switchers' - reads
+              // perfectly well in the column and prices at nothing, because
+              // nothing in the app maps those words onto a room's config
+              // section. See [kTrackedCategories]. Labelled with the count so
+              // it says how much of the catalog is in that state, and shown
+              // in the ordinary style rather than in red: an untracked
+              // category is untidy, not broken.
+              OutlinedButton.icon(
+                key: const ValueKey('catalog_tidy_categories'),
+                icon: const Icon(Icons.label_outline, size: 18),
+                label: Text(
+                  untracked == 0
+                      ? 'Tidy categories...'
+                      : 'Tidy categories ($untracked)...',
+                ),
+                onPressed: () => _tidyCategories(provider),
               ),
               // ONE PART NUMBER, ONE ENTRY. Two imports of the same box under
               // two model names are two half-filled entries that drift apart,
@@ -636,12 +661,21 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                     setState(() => _apply(entry.copyWith(category: v))),
               ),
             ),
-            // The categories the app itself keys off. Typed text still works —
-            // this is a shortcut to the spellings that make an entry show up
-            // on the rack editor's parts list or in the cabling section, which
-            // are exactly the ones a typo silently costs you.
+            // THE CATEGORIES THE APP ITSELF UNDERSTANDS. Typed text still
+            // works — see [kTrackedCategories] on why the set is not closed —
+            // but these are the spellings that make an entry price off the
+            // base card, show up on the rack editor's parts list or land in
+            // the cabling section, which are exactly the ones a typo silently
+            // costs you.
+            //
+            // GROUPED, because the list is now three different kinds of
+            // answer: the device kinds a room's config maps onto, the rack
+            // parts, and the three billing buckets. Twenty-nine items in one
+            // undivided column is a menu people give up on and type into
+            // instead.
             PopupMenuButton<String>(
-              tooltip: 'Use a known category',
+              key: ValueKey('cat_pick_$key'),
+              tooltip: 'Use a category the app tracks',
               icon: const Icon(Icons.arrow_drop_down),
               onSelected: (v) => setState(
                 () => _apply(
@@ -658,7 +692,20 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 ),
               ),
               itemBuilder: (ctx) => [
-                for (final c in kWellKnownCategories)
+                _categoryHeading(ctx, 'Tracked to a config section'),
+                for (final c in kTrackedCategories)
+                  PopupMenuItem(value: c, child: Text(c)),
+                const PopupMenuDivider(),
+                _categoryHeading(ctx, 'Rack parts'),
+                for (final c in kRackItemCategories)
+                  PopupMenuItem(value: c, child: Text(c)),
+                const PopupMenuDivider(),
+                _categoryHeading(ctx, 'Billed, not drawn'),
+                for (final c in const [
+                  kCategoryConsumable,
+                  kCategoryCable,
+                  kCategoryMisc,
+                ])
                   PopupMenuItem(value: c, child: Text(c)),
               ],
             ),
@@ -1701,6 +1748,42 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     );
   }
 
+  /// The tidy-up: every category in the catalog, and what to refile it as.
+  ///
+  /// See [kTrackedCategories] for why this exists at all. The dialog hands
+  /// back a category -> category map; applying it here rather than inside the
+  /// dialog keeps the same shape as every other bulk edit on this tab — the
+  /// catalog is changed in memory and Save is still what writes it.
+  Future<void> _tidyCategories(AppStateProvider provider) async {
+    final mapping = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => _TidyCategoriesDialog(library: provider.avDeviceLibrary),
+    );
+    if (mapping == null || mapping.isEmpty || !mounted) return;
+
+    final moved = provider.avDeviceLibrary.retagCategories(mapping);
+    if (moved == 0) {
+      _snack('Nothing needed moving.');
+      return;
+    }
+    setState(() {
+      _dirty = true;
+      // The filter may name a category that no longer has anything in it,
+      // which would leave the list empty and nothing on screen saying why.
+      if (_categoryFilter.isNotEmpty &&
+          mapping.keys.any(
+            (k) => k.toLowerCase() == _categoryFilter.toLowerCase(),
+          )) {
+        _categoryFilter = '';
+      }
+    });
+    provider.avDeviceLibraryChanged();
+    _snack(
+      'Refiled $moved entr${moved == 1 ? 'y' : 'ies'} - Save catalog to write '
+      'it to disk.',
+    );
+  }
+
   Future<void> _startMerge(AppStateProvider provider) async {
     final picked = await FilePicker.pickFiles(
       dialogTitle: 'Pick the device catalog to merge in',
@@ -1809,6 +1892,299 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 // ---------------------------------------------------------------------------
 //  MERGE DIALOG
 // ---------------------------------------------------------------------------
+
+/// A heading inside the category menu, disabled so it cannot be chosen.
+///
+/// [PopupMenuDivider] alone says "these are two groups" and never says what
+/// either group IS, which on a menu whose three halves mean genuinely
+/// different things - a config section, a rack part, a billing bucket - is
+/// the only thing worth saying.
+PopupMenuItem<String> _categoryHeading(BuildContext context, String text) {
+  final theme = Theme.of(context);
+  return PopupMenuItem<String>(
+    enabled: false,
+    height: 30,
+    child: Text(
+      text.toUpperCase(),
+      style: theme.textTheme.labelSmall?.copyWith(
+        fontWeight: FontWeight.bold,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    ),
+  );
+}
+
+/// ============================================================================
+///  TIDYING THE CATALOG'S VOCABULARY
+/// ============================================================================
+///  Every category the catalog actually uses, with what it holds and how much
+///  of it, and a picker to refile the whole block. See [kTrackedCategories] for
+///  what is being tidied onto and why it matters: a category the app does not
+///  understand prices at nothing and groups under nothing, quietly, with a
+///  perfectly sensible-looking word in the column.
+///
+///  IT SUGGESTS AND IT DOES NOT DECIDE. 'Matrix' is filled in as 'Switcher'
+///  because every product ever filed under it is one. 'Audio' is left blank,
+///  because it holds DSPs, amplifiers, microphones and loudspeakers, and an
+///  app that guessed there would retag a $90 microphone as a $4,000 processor
+///  with nothing on screen to say so. The three example models on every row are
+///  there for exactly that judgement — they are what tells a reader at a glance
+///  whether a family is one kind of box or four.
+///
+///  NOTHING IS APPLIED UNTIL "Refile" IS PRESSED, and nothing is written to
+///  disk until Save. A retag of two hundred entries is the sort of edit people
+///  want to look at before it happens.
+class _TidyCategoriesDialog extends StatefulWidget {
+  final AvDeviceLibrary library;
+
+  const _TidyCategoriesDialog({required this.library});
+
+  @override
+  State<_TidyCategoriesDialog> createState() => _TidyCategoriesDialogState();
+}
+
+class _TidyCategoriesDialogState extends State<_TidyCategoriesDialog> {
+  /// Source category (as spelled in the catalog) -> what to refile it as.
+  /// A row not in here, or in here with a blank, is a row being left alone.
+  final Map<String, String> _target = {};
+
+  /// Categories the app already understands, folded away.
+  ///
+  /// On a catalog of a thousand parts most rows are already right, and a list
+  /// that opens with eighteen finished lines above the six that need a
+  /// decision buries the work. The finished ones are still reachable, because
+  /// "refile every Projector as Display" is a legitimate thing to want.
+  bool _showTracked = false;
+
+  /// Fills in every suggestion the app is confident about, in one press.
+  void _suggestAll(List<({String category, int count})> rows) {
+    setState(() {
+      for (final row in rows) {
+        final suggestion = catalogCategorySuggestion(row.category);
+        if (suggestion.isNotEmpty) _target[row.category] = suggestion;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final all = widget.library.categoryCounts;
+    final untracked = [
+      for (final row in all)
+        if (!isTrackedCategory(row.category)) row,
+    ];
+    final tracked = [
+      for (final row in all)
+        if (isTrackedCategory(row.category)) row,
+    ];
+    final rows = _showTracked ? [...untracked, ...tracked] : untracked;
+
+    // What would actually move, so the button can say so rather than reading
+    // "Refile" over a form nobody has filled in.
+    var moving = 0;
+    for (final entry in _target.entries) {
+      final to = entry.value.trim();
+      if (to.isEmpty || to.toLowerCase() == entry.key.toLowerCase()) continue;
+      for (final row in all) {
+        if (row.category == entry.key) moving += row.count;
+      }
+    }
+
+    final canSuggest = rows.any(
+      (r) =>
+          catalogCategorySuggestion(r.category).isNotEmpty &&
+          (_target[r.category] ?? '').isEmpty,
+    );
+
+    return AlertDialog(
+      key: const ValueKey('tidy_categories_dialog'),
+      title: const Text('Tidy the catalog categories'),
+      content: SizedBox(
+        width: 720,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              untracked.isEmpty
+                  ? 'Every category in this catalog is one the app tracks. A '
+                        'category on this list maps onto a room config section, '
+                        'so a part filed under it prices off the base-cost card '
+                        'and lands in the right group on the estimate.'
+                  : '${untracked.length} categor'
+                        '${untracked.length == 1 ? 'y is' : 'ies are'} words '
+                        'the app does not track. Parts filed under them still '
+                        'work, and they price off nothing and group under '
+                        'nothing - a room with one on it falls back to what its '
+                        'config section says it is. Pick what each one should '
+                        'be, or leave it alone.',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+            const SizedBox(height: 8),
+            // A WRAP, not a Row with a Spacer between them. A Spacer gives
+            // way to nothing: once the two controls are wider than the dialog
+            // - which they are the moment the type scales up - the Row paints
+            // the chip off the edge under a yellow-and-black bar instead of
+            // dropping it onto a second line.
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                TextButton.icon(
+                  key: const ValueKey('tidy_categories_suggest'),
+                  icon: const Icon(Icons.auto_fix_high, size: 18),
+                  label: const Text('Fill in what is obvious'),
+                  onPressed: canSuggest ? () => _suggestAll(rows) : null,
+                ),
+                FilterChip(
+                  key: const ValueKey('tidy_categories_show_tracked'),
+                  label: Text('Show the ${tracked.length} already tracked'),
+                  selected: _showTracked,
+                  onSelected: (v) => setState(() => _showTracked = v),
+                ),
+              ],
+            ),
+            const Divider(height: 16),
+            Flexible(
+              child: rows.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(
+                        'Nothing to tidy.',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: rows.length,
+                      separatorBuilder: (_, _) => const Divider(height: 12),
+                      itemBuilder: (context, i) =>
+                          _row(theme, muted, rows[i]),
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('tidy_categories_apply'),
+          onPressed: moving == 0
+              ? null
+              : () => Navigator.of(context).pop(Map<String, String>.of(_target)),
+          child: Text(
+            moving == 0
+                ? 'Refile'
+                : 'Refile $moving part${moving == 1 ? '' : 's'}',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _row(
+    ThemeData theme,
+    Color muted,
+    ({String category, int count}) row,
+  ) {
+    final examples = widget.library.examplesIn(row.category);
+    final chosen = _target[row.category] ?? '';
+    final suggestion = catalogCategorySuggestion(row.category);
+    final isTracked = isTrackedCategory(row.category);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 3,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isTracked ? Icons.check_circle_outline : Icons.help_outline,
+                    size: 16,
+                    color: muted,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      row.category,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${row.count}',
+                    style: theme.textTheme.labelMedium?.copyWith(color: muted),
+                  ),
+                ],
+              ),
+              // WHAT IS ACTUALLY IN IT. The only thing on the row that can
+              // answer "is this family one kind of box", which is the question
+              // the whole decision turns on.
+              if (examples.isNotEmpty)
+                Text(
+                  examples.join(', ') + (row.count > examples.length ? '...' : ''),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Icon(Icons.arrow_forward, size: 16, color: muted),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 3,
+          child: DropdownButtonFormField<String>(
+            key: ValueKey('tidy_target_${row.category}'),
+            initialValue: chosen.isEmpty ? '' : chosen,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              DropdownMenuItem(
+                value: '',
+                child: Text(
+                  suggestion.isEmpty
+                      ? 'Leave as is'
+                      : 'Leave as is (suggested: $suggestion)',
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              for (final c in kWellKnownCategories)
+                if (c.toLowerCase() != row.category.toLowerCase())
+                  DropdownMenuItem(value: c, child: Text(c)),
+            ],
+            onChanged: (v) => setState(() {
+              if (v == null || v.isEmpty) {
+                _target.remove(row.category);
+              } else {
+                _target[row.category] = v;
+              }
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 /// Every difference between the two catalogs, each with its own checkbox.
 /// New models come first (nothing of yours is at stake), then the models you
