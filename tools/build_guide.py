@@ -10,9 +10,16 @@ request — and this script renders it to the two formats people actually open:
 
     documentation/Room_Config_Builder_Guide.pdf
     Room_Config_Builder_Guide.docx
+    documentation/Beginners_Guide_to_Room_Config.pdf
+    documentation/Beginners_Guide_to_Room_Config.docx
 
-Both are overwritten in place, so the file names people have bookmarked keep
-working.
+There are two guides — the operation guide, which answers everything, and the
+beginner's guide, which answers the first week — and with no argument this
+builds both, because a change to the app is as likely to have dated one as the
+other. `python tools/build_guide.py beginners` builds just that one.
+
+All of them are overwritten in place, so the file names people have bookmarked
+keep working.
 
 The Markdown it understands is deliberately small — the subset a manual needs:
 
@@ -57,9 +64,37 @@ from reportlab.platypus import (
 from reportlab.platypus.tableofcontents import TableOfContents
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCE = os.path.join(ROOT, "documentation", "Room_Config_Builder_Guide.md")
-PDF_OUT = os.path.join(ROOT, "documentation", "Room_Config_Builder_Guide.pdf")
-DOCX_OUT = os.path.join(ROOT, "Room_Config_Builder_Guide.docx")
+DOCS = os.path.join(ROOT, "documentation")
+
+# THE GUIDES THIS BUILDS, by the name you pass on the command line.
+#
+# There are two, and they are two documents rather than one long and one short:
+# the operation guide answers everything, and the beginner's guide answers the
+# things somebody hits in their first week, in the order they hit them. Both are
+# Markdown in `documentation/`, so a change to the app and the change to its
+# documentation can travel in the same commit and be read as a diff.
+#
+# The .docx of each lands where its readers already look for it. The operation
+# guide's has been at the top of the repo since before it had a source; the
+# beginner's has always been in `documentation/`. Moving either would break the
+# links people have.
+GUIDES = {
+    "operation": {
+        "source": os.path.join(DOCS, "Room_Config_Builder_Guide.md"),
+        "pdf": os.path.join(DOCS, "Room_Config_Builder_Guide.pdf"),
+        "docx": os.path.join(ROOT, "Room_Config_Builder_Guide.docx"),
+    },
+    "beginners": {
+        "source": os.path.join(DOCS, "Beginners_Guide_to_Room_Config.md"),
+        "pdf": os.path.join(DOCS, "Beginners_Guide_to_Room_Config.pdf"),
+        "docx": os.path.join(DOCS, "Beginners_Guide_to_Room_Config.docx"),
+    },
+}
+
+# Where the current build is writing. Set by build_one() before anything
+# renders, so the two builders below did not have to grow a parameter each.
+PDF_OUT = GUIDES["operation"]["pdf"]
+DOCX_OUT = GUIDES["operation"]["docx"]
 
 WINDOWS_FONTS = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
 
@@ -677,11 +712,19 @@ def build_docx(blocks: list[dict], title: str, subtitle: str, tagline: str) -> N
 # ---------------------------------------------------------------------------
 
 
-def main() -> int:
-    if not os.path.exists(SOURCE):
-        print(f"No guide source at {SOURCE}", file=sys.stderr)
+def build_one(name: str) -> int:
+    """Renders one entry of [GUIDES] to its PDF and .docx."""
+    global PDF_OUT, DOCX_OUT
+
+    guide = GUIDES[name]
+    source = guide["source"]
+    if not os.path.exists(source):
+        print(f"No guide source at {source}", file=sys.stderr)
         return 1
-    md = io.open(SOURCE, encoding="utf-8").read()
+    PDF_OUT = guide["pdf"]
+    DOCX_OUT = guide["docx"]
+
+    md = io.open(source, encoding="utf-8").read()
 
     # The first three non-empty lines are the cover: title, subtitle, tagline.
     front = [ln.strip() for ln in md.split("\n") if ln.strip()][:3]
@@ -700,6 +743,26 @@ def main() -> int:
         build_docx(blocks, title, subtitle, tagline)
     except ImportError:
         print("python-docx is not installed — PDF only.", file=sys.stderr)
+    return 0
+
+
+def main() -> int:
+    # No argument builds BOTH, because the commonest reason to run this is that
+    # the app changed - and a change to the app is as likely to have dated the
+    # beginner's guide as the operation one. Naming a guide builds only it.
+    wanted = sys.argv[1:] or list(GUIDES)
+    unknown = [w for w in wanted if w not in GUIDES]
+    if unknown:
+        print(
+            f"Unknown guide(s): {', '.join(unknown)}. "
+            f"Try: {', '.join(GUIDES)}",
+            file=sys.stderr,
+        )
+        return 1
+    for name in wanted:
+        failed = build_one(name)
+        if failed:
+            return failed
     return 0
 
 

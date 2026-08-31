@@ -2071,16 +2071,34 @@ block.
 | `base_costs.json` | Startup | Cost tab, campus **Current models** | Every category unpriced |
 | `app_config.json` | Startup | App Config tab | First-run setup runs |
 
-# Keeping this guide honest
+# Keeping the guides honest
 
-This document is built from `documentation/Room_Config_Builder_Guide.md` in the
-repository. Edit that file and run:
+There are two documents, and both are built from Markdown in the repository:
+
+| Document | Source |
+|---|---|
+| This one - *Room Config Builder, operation guide* | `documentation/Room_Config_Builder_Guide.md` |
+| *The Beginner's Guide to Room Config* - the first week, in the order you hit it | `documentation/Beginners_Guide_to_Room_Config.md` |
+
+Edit the source and run:
 
 ```
 python tools/build_guide.py
 ```
 
-which rewrites both `documentation/Room_Config_Builder_Guide.pdf` and
-`Room_Config_Builder_Guide.docx`. Keeping the source in the repo means a change
-to the app and the change to its guide can travel together, and anybody can see
-what moved.
+which rewrites the `.pdf` and the `.docx` of **both**, in place, so the file
+names people have bookmarked keep working. Name one to build only it:
+
+```
+python tools/build_guide.py beginners
+```
+
+Keeping the sources in the repo means a change to the app and the change to its
+documentation can travel in the same commit, and anybody can see what moved. It
+also means neither can quietly go stale: a `.docx` somebody edits by hand and
+exports has nothing in the repo saying it is behind, and nobody can diff it.
+
+There is a third place all of this lives, and it is the one most people will
+actually read: the **help book inside the app**, on F1. It is written in
+`lib/help_content.dart` and travels with the build, so it cannot be a version
+behind on somebody's desktop. When a feature changes, all three want a look.
