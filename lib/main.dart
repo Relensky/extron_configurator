@@ -751,11 +751,13 @@ class _MainDashboardState extends State<MainDashboard> {
     //
     // Built here because they need this State's methods, but they live on the
     // banner, beside the job, where the rest of "which document am I working
-    // on" lives — Undo and Redo, the conversion, the processor transfers and
-    // the EXPORTS. The title bar keeps what is about the APPLICATION and what
-    // begins, writes or puts back a FILE: New, Open, Save, the revert to the
-    // saved backup, the history of what has been changed, the screenshot, the
-    // theme and the gear.
+    // on" lives — the conversion, the processor transfers and the EXPORTS.
+    //
+    // The title bar keeps two blocks and nothing else: the APP in its left
+    // corner — the gear, Help, the theme and the screenshot — and everything
+    // that begins, steps, puts back or writes a FILE at the other end: New,
+    // Open, Undo and Redo, the history, the revert to the saved backup, and
+    // Save in the far corner.
     //
     // The exports moved down here because they are about the DOCUMENT, not
     // the app: "give me this as a spreadsheet" is the same kind of question
@@ -768,15 +770,6 @@ class _MainDashboardState extends State<MainDashboard> {
     // the revert to the last saved backup went up with it, because the file it
     // puts back is the one Save wrote.
     final documentActions = <Widget>[
-      // BACK ONE STEP ON WHATEVER THIS PAGE EDITS, driven by the same
-      // question the save button answers, and on the same row as the rest of
-      // what acts on the open document. Nothing at all on the pages that carry
-      // their own pair - see [toolbarUndoTarget].
-      ToolbarUndoButtons(
-        tab: (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
-            ? AppTab.values[selectedIndex]
-            : AppTab.wizard,
-      ),
       // CONVERT: the migration a legacy file needs, on demand. The load
       // already ran the conversion in memory — this is where it gets
       // reviewed, accepted or thrown away. Grayed out when the loaded
@@ -919,12 +912,6 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
         ],
       ),
-      // HELP, in the corner of this row and under the gear in the corner of
-      // the one above it - the two controls that are about the app rather than
-      // about the document, one over the other. See [HelpBook]: it opens on
-      // its search box, over whatever you were doing, and closes again without
-      // losing it.
-      const HelpButton(),
     ];
 
     // The bar the gear's SELECTED accent is painted on, so it can be measured
@@ -937,12 +924,88 @@ class _MainDashboardState extends State<MainDashboard> {
 
     final page = Scaffold(
       appBar: AppBar(
-        // The app's name, and — once a project is open — which of its rooms
-        // you are looking at. Beside the title rather than out in the actions
-        // because it is not an action: it says what is on screen.
+        // THE APP'S OWN CONTROLS, AND THEN WHAT IS ON SCREEN.
+        //
+        // The gear, Help, the theme and the screenshot are about the
+        // APPLICATION rather than about the document, and not one of them
+        // changes as you move between tabs. So they sit together in the left
+        // corner as a fixed block a hand can learn, ahead of the job — and the
+        // other end of the row is left to the FILE: New, Open, the two
+        // step-backwards arrows, the way back to the last save, and Save
+        // itself in the far corner.
+        //
+        // In the title slot rather than in a leading: an AppBar's leading is
+        // one narrow widget, and these are four.
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // THE CORNER BLOCK GIVES WAY RATHER THAN OVERFLOWING.
+            //
+            // Four buttons is a fixed 200-odd pixels, and the title slot is
+            // only ever what the actions leave over — so on a window narrow
+            // enough (a 600-pixel test harness, a user dragging the frame in)
+            // they ran off the end of the bar and painted the striped overflow
+            // banner. Flexible lets the block shrink and the scroll view lets
+            // what will not fit be reached anyway; at any width this app is
+            // actually worked at there is room for all four and this lays out
+            // exactly as a plain Row would.
+            Flexible(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // APP CONFIG: ONE OF THE ROW UNTIL IT IS THE PAGE YOU ARE ON.
+                    //
+                    // The gear used to be painted the accent while App Config was
+                    // closed, which drew an eye to it over New, Open and Save — and it
+                    // is not more important than any of them. So it takes the bar's
+                    // own ink like its neighbours, and stands out only while you are
+                    // actually standing on App Config, where the colour says which tab
+                    // is open rather than advertising a way in.
+                    //
+                    // legibleTone rather than readableOn for that selected accent:
+                    // readableOn hands back the bar's own ink on any theme whose app
+                    // bar IS the accent — Classic is one — which would paint the two
+                    // states the same colour and leave them indistinguishable.
+                    // legibleTone keeps the accent's HUE and moves its lightness until
+                    // it reads on the bar, so there is always a difference to see.
+                    IconButton(
+                      key: const ValueKey('banner_app_config'),
+                      icon: const Icon(Icons.settings),
+                      isSelected: selectedIndex == AppTab.appConfig.index,
+                      selectedIcon: Icon(
+                        Icons.settings,
+                        color: legibleTone(
+                          theme.colorScheme.secondary,
+                          appBarFill,
+                          minRatio: kContrastLarge,
+                        ),
+                      ),
+                      tooltip: 'App Config - file locations, theme, pricing, autosave',
+                      onPressed: () => provider.selectTab(AppTab.appConfig.index),
+                    ),
+                    // HELP IS A PROPERTY OF THE APP, not of whichever tab is open, so
+                    // it sits beside the gear rather than moving about. See [HelpBook]
+                    // - it opens on its search box, over whatever you were doing, and
+                    // closes again without losing it.
+                    const HelpButton(),
+                    IconButton(
+                      icon:
+                          Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+                      tooltip: 'Toggle Theme',
+                      onPressed: () => provider.toggleTheme(),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.photo_camera),
+                      tooltip: 'Screenshot & annotate',
+                      onPressed: () => _takeScreenshot(context, selectedIndex),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
             // THE APP'S OWN NAME GIVES THE SLOT UP TO THE JOB.
             //
             // The title slot is whatever New, Open, Save and the rest of the
@@ -968,7 +1031,9 @@ class _MainDashboardState extends State<MainDashboard> {
             const Flexible(child: ProjectRoomPicker()),
           ],
         ),
-        titleSpacing: 16,
+        // No inset: the corner block starts in the corner, and an IconButton
+        // brings its own margin with it.
+        titleSpacing: 4,
         actions: [
           // NEW AND OPEN, first and leftmost.
           //
@@ -1026,34 +1091,25 @@ class _MainDashboardState extends State<MainDashboard> {
             tooltip: 'Open a room config, a project or a campus',
             onPressed: () => _openExistingConfig(context, provider),
           ),
-          IconButton(
-            icon: const Icon(Icons.photo_camera),
-            tooltip: 'Screenshot & annotate',
-            onPressed: () => _takeScreenshot(context, selectedIndex),
+          // BACK ONE STEP ON WHATEVER THIS PAGE EDITS, driven by the same
+          // question the Save button at the end of this row answers. Nothing
+          // at all on the pages that carry their own pair - see
+          // [toolbarUndoTarget].
+          ToolbarUndoButtons(
+            tab: (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
+                ? AppTab.values[selectedIndex]
+                : AppTab.wizard,
           ),
+          // WHO CHANGED WHAT, from wherever you are standing. It used to be a
+          // pane on the Project tab, which meant looking up what you had just
+          // done on a drawing meant leaving the drawing — so half of what the log
+          // records was the half nobody ever went and read.
           IconButton(
-            icon: Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
-            tooltip: 'Toggle Theme',
-            onPressed: () => provider.toggleTheme(),
+            key: const ValueKey('show_history'),
+            icon: const Icon(Icons.history),
+            tooltip: 'History - what has been changed on this room and this job',
+            onPressed: () => showHistoryDialog(context),
           ),
-          // SAVE, AND EVERY OTHER WAY OF SAVING — on the top row.
-          //
-          // One button that writes whatever document the tab on screen belongs
-          // to: the room on the room tabs, the job on the Project tab, the
-          // catalog on the Catalog tab. It carries a dot when that document is
-          // behind its file, and a menu beside it holding Save As, the other
-          // document, Save All to a room folder, and an on-demand backup. See
-          // save_actions.dart for why the three buttons that used to be here
-          // were not enough.
-          //
-          // Up here beside New and Open rather than down on the document row,
-          // because those three are what every other application on the
-          // machine puts together and what a hand goes to without reading:
-          // the file you start, the file you open, the file you write. Its
-          // place in the row is fixed — the buttons to its left are the same
-          // three on every tab — so it is still where it was a moment ago
-          // whatever is on screen.
-          const SaveToolbar(),
           // REVERT TO THE SAVED BACKUP: put back the '<name>_previous.json' copy
           // the save took of the file beforehand. Enabled only while that backup
           // belongs to the file currently loaded — see canUndoLastSave.
@@ -1065,9 +1121,9 @@ class _MainDashboardState extends State<MainDashboard> {
           // typed a price reached for the undo arrow in the title bar, got this,
           // and was told "the config already matches the backup" — a true sentence
           // about a question they had not asked. The step-backwards buttons are
-          // Ctrl+Z, the pair on the document row below, and the pair on each
-          // page that draws; this one is a way back to the last file, and now
-          // looks like one.
+          // Ctrl+Z, the pair a few buttons to the left of this one, and the
+          // pair on each page that draws; this one is a way back to the last
+          // file, and now looks like one.
           IconButton(
             key: const ValueKey('revert_to_backup'),
             icon: const Icon(Icons.settings_backup_restore),
@@ -1082,51 +1138,26 @@ class _MainDashboardState extends State<MainDashboard> {
                 ? () => _undoLastSave(context, provider)
                 : null,
           ),
-          // WHO CHANGED WHAT, from wherever you are standing. It used to be a
-          // pane on the Project tab, which meant looking up what you had just
-          // done on a drawing meant leaving the drawing — so half of what the log
-          // records was the half nobody ever went and read.
-          IconButton(
-            key: const ValueKey('show_history'),
-            icon: const Icon(Icons.history),
-            tooltip: 'History - what has been changed on this room and this job',
-            onPressed: () => showHistoryDialog(context),
-          ),
-          // App Config, at the end of the row that is about the app itself.
-          IconButton(
-            key: const ValueKey('banner_app_config'),
-            // ONE OF THE ROW UNTIL IT IS THE PAGE YOU ARE ON.
-            //
-            // The gear used to be painted the accent while App Config was
-            // closed, which drew an eye to it over New, Open and Save — and it
-            // is not more important than any of them. So it takes the bar's
-            // own ink like its neighbours, and stands out only while you are
-            // actually standing on App Config, where the colour says which tab
-            // is open rather than advertising a way in.
-            //
-            // legibleTone rather than readableOn for that selected accent:
-            // readableOn hands back appBarInk on any theme whose app bar IS
-            // the accent — Classic is one — which would paint the two states
-            // the same colour and leave them indistinguishable. legibleTone
-            // keeps the accent's HUE and moves its lightness until it reads on
-            // the bar, so there is always a difference to see.
-            icon: const Icon(Icons.settings),
-            isSelected: selectedIndex == AppTab.appConfig.index,
-            selectedIcon: Icon(
-              Icons.settings,
-              color: legibleTone(
-                theme.colorScheme.secondary,
-                appBarFill,
-                minRatio: kContrastLarge,
-              ),
-            ),
-            tooltip: 'App Config - file locations, theme, pricing, autosave',
-            onPressed: () => provider.selectTab(AppTab.appConfig.index),
-          ),
-          // The gear stays last. Save sits before it rather than after,
-          // because the corner of this row has been the way into App Config
-          // for as long as the row has existed, and a settings button that
-          // moves is one somebody hunts for.
+          // SAVE, AND EVERY OTHER WAY OF SAVING — on the top row.
+          //
+          // One button that writes whatever document the tab on screen belongs
+          // to: the room on the room tabs, the job on the Project tab, the
+          // catalog on the Catalog tab. It carries a dot when that document is
+          // behind its file, and a menu beside it holding Save As, the other
+          // document, Save All to a room folder, and an on-demand backup. See
+          // save_actions.dart for why the three buttons that used to be here
+          // were not enough.
+          //
+          // Up here with New and Open rather than down on the document row,
+          // because those three are what every other application on the
+          // machine puts together and what a hand goes to without reading:
+          // the file you start, the file you open, the file you write.
+          //
+          // AND LAST, IN THE FAR CORNER. It is the most pressed button on the
+          // bar, and a corner is the one place on a row that cannot move: the
+          // controls to its left change what they mean with the tab, but the
+          // end of the row is the end of the row on every page.
+          const SaveToolbar(),
         ],
       ),
       body: Column(
@@ -1752,10 +1783,10 @@ class TopLevelBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
 
-  /// The document's own buttons — Undo and Redo, convert, the two SFTP
-  /// transfers and the exports, with Help in the corner. Handed in rather than
-  /// built here because they need the dashboard's own methods, and they live on
-  /// THIS row because they are about the document the job is made of.
+  /// The document's own buttons — convert, the two SFTP transfers and the
+  /// exports. Handed in rather than built here because they need the
+  /// dashboard's own methods, and they live on THIS row because they are about
+  /// the document the job is made of, not about the application.
   final List<Widget> actions;
 
   const TopLevelBar({

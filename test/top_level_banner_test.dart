@@ -98,14 +98,21 @@ void main() {
       'Open a room config, a project or a campus',
     );
 
-    // The title bar: the things that are about the application, plus the
-    // three that begin or write a file — New (a menu over the two things
-    // there are to start), Open, and Save.
+    // The title bar: the app's own corner — the gear, Help, the theme and the
+    // screenshot, none of which changes with the tab — and, at the other end,
+    // everything that begins, steps, puts back or writes a FILE: New (a menu
+    // over the two things there are to start), Open, Undo and Redo, the
+    // history, the revert to the last saved backup, and Save.
     for (final key in [
       'new_menu',
       'open_config',
+      'toolbar_undo',
+      'toolbar_redo',
+      'show_history',
+      'revert_to_backup',
       'save_context',
       'banner_app_config',
+      'open_help',
     ]) {
       expect(
         find.descendant(
@@ -122,6 +129,52 @@ void main() {
         ),
         findsNothing,
         reason: '$key is not also on the document row',
+      );
+    }
+
+    // SAVE IS THE FAR CORNER, and the app's own four are the near one. The
+    // most-pressed button on the bar is the one worth being unable to move,
+    // and a corner is the only place on a row that cannot: what sits between
+    // the two ends changes with the tab, the ends do not.
+    final barRight = tester.getRect(find.byType(AppBar)).right;
+    final saveRight = tester
+        .getRect(find.descendant(
+          of: find.byType(AppBar),
+          matching: find.byKey(const ValueKey('save_context')),
+        ))
+        .right;
+    for (final key in ['new_menu', 'open_config', 'toolbar_undo',
+        'toolbar_redo', 'show_history', 'revert_to_backup']) {
+      expect(
+        tester
+            .getRect(find.descendant(
+              of: find.byType(AppBar),
+              matching: find.byKey(ValueKey(key)),
+            ))
+            .right,
+        lessThan(saveRight),
+        reason: '$key belongs to the left of Save',
+      );
+    }
+    // Only the save menu's own arrow is further right than Save itself.
+    expect(barRight - saveRight, lessThan(80));
+
+    for (final key in ['banner_app_config', 'open_help']) {
+      expect(
+        tester
+            .getRect(find.descendant(
+              of: find.byType(AppBar),
+              matching: find.byKey(ValueKey(key)),
+            ))
+            .left,
+        lessThan(tester
+            .getRect(find.descendant(
+              of: find.byType(AppBar),
+              matching: find.byKey(const ValueKey('new_menu')),
+            ))
+            .left),
+        reason: '$key is in the left corner, ahead of the job and the file '
+            'buttons',
       );
     }
 
@@ -185,12 +238,13 @@ void main() {
     // over to the RIGHT of the buttons, parking the corner control 600 pixels
     // from the corner.
     final banner = tester.getRect(find.byType(TopLevelBar));
-    // The LAST control on the banner — Help, which sits in this row's corner
-    // under the gear in the corner of the title bar above it.
+    // The LAST control on the banner — the per-tab export menu, which is the
+    // end of the document row now that Save, Undo and Help have gone up to the
+    // title bar.
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('open_help')),
+        matching: find.byKey(const ValueKey('export_tab_menu')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1),
@@ -212,7 +266,7 @@ void main() {
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('open_help')),
+        matching: find.byKey(const ValueKey('export_tab_menu')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1));
