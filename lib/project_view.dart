@@ -430,6 +430,18 @@ class _ProjectViewState extends State<ProjectView> {
         break;
       }
     }
+    // THE JUMP CARRIES WHAT IT WAS ABOUT. A request that names a filter was
+    // made from a sentence about those rows - "19 parts go to Extron" - and
+    // landing on four hundred unfiltered rows makes the reader ask their own
+    // question again. The search and the room narrowing go with it, for the
+    // reason on [_setVendorFilter]: a filter nobody can see on screen is a
+    // list quietly missing rows.
+    final filter = provider.requestedPartsVendorFilter;
+    if (filter.isNotEmpty) {
+      _vendorFilter = filter;
+      _spareRoom = '';
+      _search = '';
+    }
   }
 
   @override
@@ -5738,11 +5750,28 @@ class _VendorCardState extends State<_VendorCard> {
                 // of these are we waiting on" without any of them being
                 // opened - see [VendorRfqChip].
                 VendorRfqChip(vendor: vendor),
+                // THE COUNT IS THE WAY TO THE ROWS IT COUNTS. This said
+                // "19 lines - $18,400" and did nothing, which left the
+                // obvious next question - WHICH nineteen - to be answered by
+                // going to the Parts pane and finding this vendor's chip by
+                // hand. Pressing it now opens the master list already
+                // narrowed to exactly the parts this figure was added up
+                // from. See [AppStateProvider.requestedPartsVendorFilter].
                 if (package != null)
-                  Chip(
+                  ActionChip(
+                    key: ValueKey('vendor_package_parts_${vendor.id}'),
+                    avatar: const Icon(Icons.list_alt, size: 16),
+                    tooltip: 'Show these '
+                        '${package.lines.length} part'
+                        '${package.lines.length == 1 ? '' : 's'} on the '
+                        'Equipment list',
                     label: Text(
                       '${package.lines.length} lines  ·  '
                       '${formatMoney(package.total, currency)}',
+                    ),
+                    onPressed: () => provider.requestProjectPane(
+                      'parts',
+                      partsVendorFilter: vendor.id,
                     ),
                   ),
                 // Kept beside the handle rather than replaced by it: a drag is

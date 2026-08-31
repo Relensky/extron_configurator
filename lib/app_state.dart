@@ -294,6 +294,31 @@ const Map<AppDataDocument, String> kAppDataDocumentNames = {
 };
 
 class AppStateProvider extends ChangeNotifier {
+  // ---------------------------------------------------------------------------
+  //  "HAS ANYTHING CHANGED SINCE I LAST ASKED"
+  // ---------------------------------------------------------------------------
+  //  The drawing tabs derive their whole model in build() — the AV flow model
+  //  is a walk of every node, cable and config device, and the cabling
+  //  schematic on top of it places every box against every box already
+  //  placed. That is the right amount of work when something has actually
+  //  changed, and it was being done on every FRAME of a drag, because a drag
+  //  is local setState: the preview offset moves, build() runs, and the model
+  //  gets rebuilt from a provider that did not move at all.
+  //
+  //  So the views hold their derived model and ask this whether it is still
+  //  good. Bumped in [notifyListeners] rather than at the write sites,
+  //  because there are two hundred and thirty-odd of those and one of them
+  //  will always be the one somebody forgets — the same reasoning as
+  //  [_openConfigMaps]. Monotonic, so a view compares with `==` and never has
+  //  to reason about what changed, only that something did.
+  int _revision = 0;
+
+  /// How many times this provider has announced a change. See the block
+  /// above: a view caches derived work against this and recomputes when it
+  /// moves. Bumped in [notifyListeners], alongside the other caches that are
+  /// dropped there for the same reason.
+  int get revision => _revision;
+
   /// Whether this room has a control system yet. See [RoomMode]; persisted in
   /// the AV sidecar, because for an AV-only room that is the only document
   /// that exists.
@@ -350,9 +375,26 @@ class AppStateProvider extends ChangeNotifier {
   /// would not have changed, and the tab honours changes.
   int projectPaneRequestId = 0;
 
+  /// What the Parts pane should be NARROWED TO when it opens, as the same
+  /// filter value that pane's own chips carry — usually a vendor id.
+  ///
+  /// ARRIVING ON A PANE IS NOT THE WHOLE ANSWER. "Nineteen parts go to Extron"
+  /// is a sentence on the Vendors pane, and following it used to mean landing
+  /// on a list of four hundred rows and finding the Extron chip yourself. A
+  /// jump that does not carry what it was a jump ABOUT leaves the reader to
+  /// re-ask the question they had just asked.
+  ///
+  /// Blank means "leave the filter alone", which is what every older caller
+  /// wants: a jump to Lifecycle has nothing to say about the master list.
+  String requestedPartsVendorFilter = '';
+
   /// Opens the Project tab on [pane] — see [requestedProjectPane].
-  void requestProjectPane(String pane) {
+  ///
+  /// [partsVendorFilter] narrows the Parts pane on arrival; it is ignored by
+  /// every other pane. See [requestedPartsVendorFilter].
+  void requestProjectPane(String pane, {String partsVendorFilter = ''}) {
     requestedProjectPane = pane;
+    requestedPartsVendorFilter = partsVendorFilter;
     projectPaneRequestId++;
     notifyListeners();
   }
@@ -14942,6 +14984,10 @@ class AppStateProvider extends ChangeNotifier {
   /// [_projectEstimate].
   @override
   void notifyListeners() {
+    // WHAT THE DRAWING TABS KEY THEIR DERIVED MODELS ON. Moved here for the
+    // third time and the same reason as everything else in this method: this
+    // is the one place every mutation passes through. See [revision].
+    _revision++;
     // Consumed here whether or not it was set, so a flag can never outlive the
     // one change it was set for.
     if (_keepEstimate) {

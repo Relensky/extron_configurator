@@ -14,7 +14,12 @@ import 'name_colors.dart' show projectVendorColor;
 import 'project_deliveries_view.dart' show PoFileButtons, showPoPartsDialog;
 import 'equipment_lifecycle.dart'
     show RoomLifecycle, buildProjectLifecycle, formatLifecycleMoney;
-import 'pinned_grid.dart' show gridMetric;
+import 'pinned_grid.dart'
+    show
+        GridZoomControls,
+        gridMetric,
+        kGridZoomNormal,
+        kTimelineZoomSteps;
 import 'project_estimate.dart';
 import 'project_history_view.dart' show ItemHistory;
 import 'project_reminders.dart';
@@ -2002,7 +2007,13 @@ typedef _DateMark = ({DateTime date, String label, Color color});
 /// a stem drawn to a lane no card is in is a line pointing at nothing.
 const double _kMarkWidth = 128;
 const double _kMarkHeight = 44;
-const int _kMarkLanes = 3;
+
+/// FOUR RATHER THAN THREE, since the vendors' quote requests came onto the
+/// rail. On a six-vendor job the RFQ dates cluster - they all went out the
+/// same week - and three lanes put two of them on top of each other. Zooming
+/// in is the real answer to a cluster; a fourth lane is what keeps the fitted
+/// view honest until somebody does.
+const int _kMarkLanes = 4;
 const double _kMarkGap = 6;
 
 /// How much rail one month label needs to itself before the months thin out.
@@ -2014,7 +2025,7 @@ const double _kMonthLabelWidth = 56;
 /// date on it is not a graph - it is a date with a line through it - so the
 /// graph appears once there are two, which is also the first moment the
 /// distance between them means anything.
-class ProjectDateGraph extends StatelessWidget {
+class ProjectDateGraph extends StatefulWidget {
   final ProjectSchedule schedule;
   final BuildingProject project;
 
@@ -2023,6 +2034,83 @@ class ProjectDateGraph extends StatelessWidget {
     required this.schedule,
     required this.project,
   });
+
+  @override
+  State<ProjectDateGraph> createState() => _ProjectDateGraphState();
+}
+
+/// ============================================================================
+///  A RAIL THAT IS SIX YEARS LONG AND HAS TO BE READ BY THE WEEK
+/// ============================================================================
+///  The rail always fitted the whole job into the width of the card, which is
+///  the right default and was for a long time the only thing it did. On a
+///  campus refresh that runs three years, one pixel of it is four days: every
+///  order date in a fortnight is one dot, the four RFQs that went out in March
+///  are one dot, and the question somebody actually has - "does the conduit
+///  order go in before or after the walls close" - is a question about a gap
+///  narrower than the dot drawn over it.
+///
+///  So the rail zooms. FITTED IS STILL THE DEFAULT and still the whole job;
+///  from there it goes in as far as thirty-two times, at which point three
+///  years of rail is about six weeks in the frame, and it scrolls sideways
+///  under a bar. See [kTimelineZoomSteps].
+///
+///  ZOOMING HOLDS THE MIDDLE OF THE FRAME. A zoom that jumped back to January
+///  every time would make the arrows useless for the thing they are for, which
+///  is looking harder at the fortnight already on screen.
+class _ProjectDateGraphState extends State<ProjectDateGraph> {
+  /// How far in the rail is read at. 1 is the whole job in the frame - see
+  /// [kTimelineZoomSteps], which does not go below it.
+  double _zoom = kGridZoomNormal;
+
+  final ScrollController _scroll = ScrollController();
+
+  ProjectSchedule get schedule => widget.schedule;
+  BuildingProject get project => widget.project;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Where the middle of the frame is, as a fraction of the whole rail. What a
+  /// zoom is anchored on.
+  double _centreFraction() {
+    if (!_scroll.hasClients) return 0;
+    final view = _scroll.position.viewportDimension;
+    final whole = view + _scroll.position.maxScrollExtent;
+    if (whole <= 0) return 0;
+    return ((_scroll.offset + view / 2) / whole).clamp(0.0, 1.0);
+  }
+
+  /// Puts [fraction] of the rail back under the middle of the frame.
+  void _centreOn(double fraction) {
+    if (!_scroll.hasClients) return;
+    final view = _scroll.position.viewportDimension;
+    final whole = view + _scroll.position.maxScrollExtent;
+    _scroll.jumpTo(
+      (fraction * whole - view / 2).clamp(0.0, _scroll.position.maxScrollExtent),
+    );
+  }
+
+  void _setZoom(double zoom) {
+    // Read BEFORE the rail changes width, put back AFTER it has been laid out
+    // at the new one.
+    final centre = _centreFraction();
+    setState(() => _zoom = zoom);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _centreOn(centre);
+    });
+  }
+
+  /// The whole job back in the frame, from wherever somebody had got to.
+  void _fitAll() {
+    setState(() => _zoom = kGridZoomNormal);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _scroll.jumpTo(0);
+    });
+  }
 
   /// The dates worth a label. Order days are on the rail as dots - there can
   /// be thirty of them and a name on each is a graph nobody can read - so what
@@ -2090,6 +2178,43 @@ class ProjectDateGraph extends StatelessWidget {
       ));
     }
 
+    // WHERE EACH VENDOR HAS GOT TO, ON THE SAME RAIL AS EVERYTHING ELSE.
+    //
+    // An RFQ is a date somebody is waiting on, and the block below reads it as
+    // a list - which has the failing every list on this pane has: no distance
+    // in it. "Extron quoted on the 11th and the conduit order goes in on the
+    // 14th" is three days or three months apart depending on the year, and the
+    // list says the same thing either way.
+    //
+    // ONE MARK PER VENDOR, on its LATEST date, because that is where the
+    // vendor actually is - the same reading the QUOTE REQUESTS block gives.
+    // Every date in a vendor's history on the rail would be three cards per
+    // vendor saying what one card says.
+    //
+    // IN THE VENDOR'S OWN COLOUR, the one its parts carry on the master list
+    // and its order carries below. The callout draws the colour as a fill at
+    // 12% behind text in onSurface, so it is a second way to read the rail and
+    // never the only one - the words say which vendor it is too.
+    for (final vendor in project.vendors) {
+      final tint = projectVendorColor(vendor);
+      final name = vendor.name.trim().isEmpty ? 'Vendor' : vendor.name.trim();
+      switch (vendor.rfqStage) {
+        case VendorRfqStage.none:
+          break;
+        case VendorRfqStage.sent:
+          out.add((date: vendor.rfqSentOn!, label: '$name RFQ out', color: tint));
+        case VendorRfqStage.quoted:
+          out.add((date: vendor.quotedOn!, label: '$name quoted', color: tint));
+        case VendorRfqStage.ordered:
+          // An ordered vendor without a date is one somebody typed a PO number
+          // against - real, and not a point on a calendar.
+          final on = vendor.orderedOn;
+          if (on != null) {
+            out.add((date: on, label: '$name ordered', color: tint));
+          }
+      }
+    }
+
     // The same date under the same name twice is one card, not two on top of
     // each other.
     final seen = <String>{};
@@ -2148,23 +2273,69 @@ class ProjectDateGraph extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  // HOW FAR IN THE RAIL IS READ AT, said as a stretch of time
+                  // rather than as a multiplier: '6 weeks' is the number
+                  // somebody wants off a calendar, and '800%' is the number
+                  // they would have to divide the job by to get it.
+                  GridZoomControls(
+                    keyPrefix: 'timeline_graph',
+                    zoom: _zoom,
+                    steps: kTimelineZoomSteps,
+                    levelLabel: _spanLabel(span, _zoom),
+                    zoomOutTooltip: 'A longer stretch of the job in the frame',
+                    zoomInTooltip: 'A shorter stretch, read closer',
+                    fitted: _zoom == kGridZoomNormal,
+                    onFit: _fitAll,
+                    onChanged: _setZoom,
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
+              // THE RAIL SCROLLS ONCE IT IS LONGER THAN THE CARD. Fitted it
+              // never is, and the bar stays out of the way; zoomed it is the
+              // only way to reach March, so the bar is always shown rather
+              // than fading in on a gesture nobody made yet.
               LayoutBuilder(
-                builder: (context, box) => _plot(
-                  context,
-                  width: box.maxWidth,
-                  marks: marks,
-                  first: first,
-                  span: span,
-                ),
+                builder: (context, box) {
+                  final plotWidth = box.maxWidth * _zoom;
+                  final plot = _plot(
+                    context,
+                    width: plotWidth,
+                    marks: marks,
+                    first: first,
+                    span: span,
+                  );
+                  if (_zoom == kGridZoomNormal) return plot;
+                  return Scrollbar(
+                    controller: _scroll,
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      controller: _scroll,
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: SizedBox(width: plotWidth, child: plot),
+                    ),
+                  );
+                },
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// HOW MUCH OF THE JOB IS IN FRONT OF SOMEBODY, in the unit they would say
+  /// it in. Kept to four characters or so, because it sits in a fixed box
+  /// between two arrows that must not shuffle sideways as it changes.
+  static String _spanLabel(int span, double zoom) {
+    final days = (span / zoom).round();
+    if (days <= 0) return '1 d';
+    if (days < 21) return '$days d';
+    if (days < 120) return '${(days / 7).round()} wk';
+    if (days < 730) return '${(days / 30.44).round()} mo';
+    final years = days / 365.25;
+    return '${years.toStringAsFixed(years < 10 ? 1 : 0)} yr';
   }
 
   /// The rail and everything on it, at the height this particular job needs.

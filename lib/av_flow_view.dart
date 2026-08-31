@@ -72,6 +72,50 @@ import 'xlsx_writer.dart';
 //  MODEL BUILDING
 // ---------------------------------------------------------------------------
 
+/// Something derived from the provider, worked out again only when the
+/// provider has actually moved.
+///
+/// THE DRAWING TABS DERIVE THEIR MODEL IN build(), which is right — a model
+/// held in State is a model that goes stale — but build() runs for two quite
+/// different reasons and only one of them is a change. A drag is the other:
+/// the preview offset lives in the widget's own State, every pointer event
+/// calls setState, and the model was being rebuilt from a provider that had
+/// not changed since the last frame. On the cabling sheet that is the whole
+/// signal flow walked and every box placed against every box already placed,
+/// sixty times a second, to redraw one box two pixels to the left.
+///
+/// So the work is held against [AppStateProvider.revision] and the drag
+/// frames read it back. A real edit bumps the revision and the next build
+/// recomputes, which is the behaviour that was there before — this only
+/// removes the repeats.
+///
+/// One memo holds one thing. A view deriving a model AND a schematic from it
+/// keeps two, so the cheap one is not thrown away with the expensive one.
+class ProviderMemo<T> {
+  int _revision = -1;
+  AppStateProvider? _from;
+  bool _held = false;
+  late T _value;
+
+  /// [build]'s result, computed on the first ask and after every change.
+  ///
+  /// The provider is checked by identity as well as by revision. A revision
+  /// only counts changes to the provider it came from, and two of them both
+  /// early in their lives would agree on a number while disagreeing about
+  /// everything else — so a swapped provider is a miss, not a coincidence.
+  T of(AppStateProvider provider, T Function() build) {
+    if (_held &&
+        identical(_from, provider) &&
+        _revision == provider.revision) {
+      return _value;
+    }
+    _from = provider;
+    _revision = provider.revision;
+    _held = true;
+    return _value = build();
+  }
+}
+
 /// Resolves the current diagram: the stored nodes and cables, plus the canvas
 /// size they need and the config devices still waiting in the palette.
 AvFlowModel buildAvFlowModel(AppStateProvider provider) {
@@ -194,6 +238,11 @@ class _AvFlowViewState extends State<AvFlowView>
     with SingleTickerProviderStateMixin {
   final GlobalKey _diagramKey = GlobalKey();
   final TransformationController _transform = TransformationController();
+
+  /// The diagram, rebuilt when the room changes rather than when the pointer
+  /// moves. The drag preview is laid over it per frame — see [ProviderMemo]
+  /// and [_withDragPreview].
+  final ProviderMemo<AvFlowModel> _modelMemo = ProviderMemo();
 
   /// Drives the chevrons travelling along the selected run - see
   /// [_SignalFlowPainter].
@@ -962,7 +1011,10 @@ class _AvFlowViewState extends State<AvFlowView>
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
-    final model = _withDragPreview(provider, buildAvFlowModel(provider));
+    final model = _withDragPreview(
+      provider,
+      _modelMemo.of(provider, () => buildAvFlowModel(provider)),
+    );
     final theme = Theme.of(context);
 
     // A backdrop imported (or removed) elsewhere in the session has to reach

@@ -111,37 +111,70 @@ class ToolbarUndoButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     final target = toolbarUndoTarget(tab);
     if (target == null) return const SizedBox.shrink();
-    final provider = context.watch<AppStateProvider>();
 
     final noun = toolbarUndoNoun(target);
     final appData = _appDataFor(target);
-    final canUndo = switch (target) {
-      ToolbarUndoTarget.project => provider.canUndoProject,
-      ToolbarUndoTarget.room => provider.canUndoRoom,
-      _ => provider.canUndoAppData(appData!),
-    };
-    final canRedo = switch (target) {
-      ToolbarUndoTarget.project => provider.canRedoProject,
-      ToolbarUndoTarget.room => provider.canRedoRoom,
-      _ => provider.canRedoAppData(appData!),
-    };
-    final undoLabel = switch (target) {
-      ToolbarUndoTarget.project => provider.projectUndoLabel,
-      ToolbarUndoTarget.room => provider.roomUndoLabel,
-      _ => provider.appDataUndoLabel(appData!),
-    };
-    final redoLabel = switch (target) {
-      ToolbarUndoTarget.project => provider.projectRedoLabel,
-      ToolbarUndoTarget.room => provider.roomRedoLabel,
-      _ => provider.appDataRedoLabel(appData!),
-    };
 
-    // WHERE THE PRESS WOULD TAKE YOU, said before it is pressed. Only the room
-    // moves the view — it is the only document spread across pages — and only
-    // when the change is somewhere other than where you already are.
-    String goingTo(bool redo) => target == ToolbarUndoTarget.room
-        ? roomUndoDestination(provider, redo: redo)
-        : '';
+    // WHAT THIS BAR ACTUALLY SHOWS: two enabled flags, two step names and,
+    // for the room, where each press would land. Six small values.
+    //
+    // Watched one at a time rather than watching the whole provider, because
+    // this bar is app chrome — it is on screen on every tab, for the whole
+    // session — and a plain watch rebuilt it on every one of the two hundred
+    // and thirty-odd things the provider announces. Ninety-nine of every
+    // hundred of those left all six of these exactly as they were. A record
+    // compares by value in Dart, so [select] does the comparison itself and
+    // this rebuilds when the undo stacks move and not otherwise.
+    //
+    // The presses below read the provider instead of watching it: a callback
+    // fires long after the build that made it, and wants the state as it is
+    // when the button is hit.
+    final ({
+      bool canUndo,
+      bool canRedo,
+      String undoLabel,
+      String redoLabel,
+      String undoTo,
+      String redoTo,
+    }) view = context.select((AppStateProvider p) => (
+          canUndo: switch (target) {
+            ToolbarUndoTarget.project => p.canUndoProject,
+            ToolbarUndoTarget.room => p.canUndoRoom,
+            _ => p.canUndoAppData(appData!),
+          },
+          canRedo: switch (target) {
+            ToolbarUndoTarget.project => p.canRedoProject,
+            ToolbarUndoTarget.room => p.canRedoRoom,
+            _ => p.canRedoAppData(appData!),
+          },
+          undoLabel: switch (target) {
+            ToolbarUndoTarget.project => p.projectUndoLabel,
+            ToolbarUndoTarget.room => p.roomUndoLabel,
+            _ => p.appDataUndoLabel(appData!),
+          },
+          redoLabel: switch (target) {
+            ToolbarUndoTarget.project => p.projectRedoLabel,
+            ToolbarUndoTarget.room => p.roomRedoLabel,
+            _ => p.appDataRedoLabel(appData!),
+          },
+          // WHERE THE PRESS WOULD TAKE YOU, said before it is pressed. Only
+          // the room moves the view — it is the only document spread across
+          // pages — and only when the change is somewhere other than where
+          // you already are.
+          undoTo: target == ToolbarUndoTarget.room
+              ? roomUndoDestination(p, redo: false)
+              : '',
+          redoTo: target == ToolbarUndoTarget.room
+              ? roomUndoDestination(p, redo: true)
+              : '',
+        ));
+
+    final provider = context.read<AppStateProvider>();
+    final canUndo = view.canUndo;
+    final canRedo = view.canRedo;
+    final undoLabel = view.undoLabel;
+    final redoLabel = view.redoLabel;
+    String goingTo(bool redo) => redo ? view.redoTo : view.undoTo;
 
     void report(String message) {
       if (message.isEmpty) return;

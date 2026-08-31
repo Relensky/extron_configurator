@@ -163,7 +163,22 @@ class RoomConfigApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppStateProvider>();
+    // THE SIX SETTINGS THIS WIDGET IS MADE OF, and nothing else.
+    //
+    // This is the root MaterialApp: rebuilding it reconciles the entire app
+    // below it. Watching the whole provider did that on every announcement it
+    // makes — every keystroke in the wizard, every box dropped on a drawing,
+    // every price typed into the estimate — to rebuild a theme out of six
+    // values that only App Config can change. Selected as a record, which
+    // compares by value, so the app is rebuilt when the LOOK of it changes.
+    final theme = context.select((AppStateProvider p) => (
+          style: p.themeStyle,
+          dark: p.isDarkMode,
+          classic: p.classicColor,
+          auris: p.aurisColor,
+          secondary: p.classicSecondary,
+          textScale: p.textScale,
+        ));
 
     return MaterialApp(
       // Remount the whole tree when crossing the Auris <-> Classic boundary.
@@ -174,23 +189,23 @@ class RoomConfigApp extends StatelessWidget {
       // also animate their text styles — a remount skips every in-flight
       // animation. Auris accent changes and the dark/light toggle keep
       // the same key, so those still switch without losing UI state.
-      key: ValueKey(provider.themeStyle == 'classic'),
+      key: ValueKey(theme.style == 'classic'),
       title: 'Deployment Configurator',
       // Style comes from App Config (Classic with a pickable accent color —
       // the default — or the Auris amber/teal/magenta variants); the
       // sun/moon toggle still switches dark <-> light within any style.
       theme: themeFor(
-          provider.themeStyle,
-          provider.isDarkMode,
-          provider.classicColor,
-          provider.aurisColor,
-          provider.classicSecondary),
+          theme.style,
+          theme.dark,
+          theme.classic,
+          theme.auris,
+          theme.secondary),
       themeAnimationDuration: Duration.zero,
       // App-wide text size (App Config > Text Size): scale every text style
       // by wrapping the whole app in a MediaQuery text scaler.
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(
-          textScaler: TextScaler.linear(provider.textScale),
+          textScaler: TextScaler.linear(theme.textScale),
         ),
         child: child!,
       ),
@@ -1682,8 +1697,43 @@ class TopLevelBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final provider = context.watch<AppStateProvider>();
     final onProject = selectedIndex == AppTab.project.index;
+
+    // Whether the page underneath is about the ROOM. Every tab that needs a
+    // config is one, which is the same question the start screen asks to
+    // decide whether it has anything to show - see [AppTab.worksWithoutConfig].
+    // Worked out before the selection below because the name in the strip
+    // reads differently on a room tab, and this comes off the widget rather
+    // than off the provider.
+    final onRoomTab = selectedIndex >= 0 &&
+        selectedIndex < AppTab.values.length &&
+        !AppTab.values[selectedIndex].worksWithoutConfig;
+
+    // THREE FLAGS AND A NAME, watched instead of the whole provider. This
+    // strip is on screen on every tab for the whole session, and a plain watch
+    // rebuilt it on everything the provider announces — a box moved on a
+    // drawing, a price typed into the estimate — to redraw a line that had not
+    // changed. The name is built inside the selection rather than out here so
+    // it stays live: it carries the room name the wizard is being typed into,
+    // and a record compares by value, so this rebuilds when that line would
+    // actually read differently. See the same reasoning at the root
+    // MaterialApp.
+    final state = context.select((AppStateProvider p) {
+      final hasProject = p.hasOpenProject;
+      final hasRoom =
+          p.roomConfig.isNotEmpty || p.currentConfigPath.isNotEmpty;
+      return (
+        hasProject: hasProject,
+        hasRoom: hasRoom,
+        projectDirty: p.projectDirty,
+        documentName: _bannerDocumentName(
+          p,
+          hasProject: hasProject,
+          hasRoom: hasRoom,
+          onRoomTab: onRoomTab,
+        ),
+      );
+    });
 
     // WHICH DOCUMENT THIS STRIP IS ABOUT, which is not always a job.
     //
@@ -1697,16 +1747,8 @@ class TopLevelBar extends StatelessWidget {
     // ROOM when there is only a room, and nothing at all on a cold start. A
     // job is started from New Project or Open Project - see the title bar -
     // and never by pressing something that was already on screen.
-    final hasProject = provider.hasOpenProject;
-    final hasRoom = provider.roomConfig.isNotEmpty ||
-        provider.currentConfigPath.isNotEmpty;
-
-    // Whether the page underneath is about the ROOM. Every tab that needs a
-    // config is one, which is the same question the start screen asks to
-    // decide whether it has anything to show - see [AppTab.worksWithoutConfig].
-    final onRoomTab = selectedIndex >= 0 &&
-        selectedIndex < AppTab.values.length &&
-        !AppTab.values[selectedIndex].worksWithoutConfig;
+    final hasProject = state.hasProject;
+    final hasRoom = state.hasRoom;
 
     // THE STRIP IS A DIFFERENT COLOUR IN EACH MODE.
     //
@@ -1780,7 +1822,7 @@ class TopLevelBar extends StatelessWidget {
                   ],
                   minRatio: kContrastLarge,
                 ),
-                onPressed: () => closeProjectFile(context, provider),
+                onPressed: () => closeProjectFile(context, context.read<AppStateProvider>()),
               ),
               // AND THE ROOM'S OWN WAY OUT, on the pages that are about the
               // room. A job stays open behind it - closing means the room, not
@@ -1792,7 +1834,7 @@ class TopLevelBar extends StatelessWidget {
                   tooltip: 'Close the room (the job stays open)',
                   fill: bannerFill,
                   icon: Icons.meeting_room_outlined,
-                  onPressed: () => closeRoomFile(context, provider),
+                  onPressed: () => closeRoomFile(context, context.read<AppStateProvider>()),
                 ),
               // ONE LEVEL UP FROM THE JOB. The campus is the same session in a
               // wider frame - this job and the others on one calendar - and it
@@ -1843,7 +1885,7 @@ class TopLevelBar extends StatelessWidget {
                 keyValue: 'banner_room_close',
                 tooltip: 'Close the room and go back to the start screen',
                 fill: bannerFill,
-                onPressed: () => closeRoomFile(context, provider),
+                onPressed: () => closeRoomFile(context, context.read<AppStateProvider>()),
               ),
               const SizedBox(width: 12),
             ],
@@ -1866,15 +1908,10 @@ class TopLevelBar extends StatelessWidget {
               child: Text(
                 // The name of whatever this strip is about - see
                 // [_bannerDocumentName].
-                _bannerDocumentName(
-                  provider,
-                  hasProject: hasProject,
-                  hasRoom: hasRoom,
-                  onRoomTab: onRoomTab,
-                ),
+                state.documentName,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: hasProject && provider.projectDirty
+                  color: hasProject && state.projectDirty
                       // The banner is a fill, so the container answer — but
                       // held to the small-text bar, because "— unsaved" is
                       // the smallest and most important red on the page.

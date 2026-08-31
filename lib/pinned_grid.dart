@@ -44,17 +44,33 @@ const List<double> kGridZoomSteps = <double>[0.5, 0.75, 1, 1.25, 1.5, 2];
 /// The natural size, and what a grid opens at.
 const double kGridZoomNormal = 1;
 
+/// The ladder a TIME AXIS climbs, which is a much longer one.
+///
+/// A grid zooms to read a figure in a cell, and past twice size there is
+/// nothing more to see. A timeline zooms to change WHAT UNIT IT IS READ IN: a
+/// three-year refresh fitted to a window is a rail where one pixel is four
+/// days, and the question "which week does the conduit order go in" cannot be
+/// answered on it at any magnification this list's short cousin offers. At the
+/// top of this one, three years of rail is about six weeks in the frame.
+///
+/// IT DOES NOT GO BELOW 1. Fitted is the whole job in the frame, and there is
+/// nothing further out than all of it.
+const List<double> kTimelineZoomSteps = <double>[
+  1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32,
+];
+
 /// The step above [zoom], or [zoom] itself at the top of the range.
-double gridZoomIn(double zoom) => kGridZoomSteps.firstWhere(
-  (s) => s > zoom + 0.001,
-  orElse: () => zoom,
-);
+///
+/// [steps] is the ladder to climb. It is a parameter because not every zoomed
+/// thing in this app has the same range: a grid of cells is unreadable past
+/// twice size, and a timeline that has to get from six years down to one week
+/// needs a ladder an order of magnitude longer. See [kTimelineZoomSteps].
+double gridZoomIn(double zoom, [List<double> steps = kGridZoomSteps]) =>
+    steps.firstWhere((s) => s > zoom + 0.001, orElse: () => zoom);
 
 /// The step below [zoom], or [zoom] itself at the bottom of the range.
-double gridZoomOut(double zoom) => kGridZoomSteps.lastWhere(
-  (s) => s < zoom - 0.001,
-  orElse: () => zoom,
-);
+double gridZoomOut(double zoom, [List<double> steps = kGridZoomSteps]) =>
+    steps.lastWhere((s) => s < zoom - 0.001, orElse: () => zoom);
 
 /// How many years of a plan a grid shows at [zoom], given the [natural] window.
 ///
@@ -113,6 +129,20 @@ class GridZoomControls extends StatelessWidget {
   final bool fitted;
   final VoidCallback? onFit;
 
+  /// The ladder the arrows climb - see [gridZoomIn].
+  final List<double> steps;
+
+  /// What the two arrows say they do. The defaults are a GRID's - 'cells' and
+  /// 'years in the frame' - and a time axis is zooming something else.
+  final String? zoomOutTooltip;
+  final String? zoomInTooltip;
+
+  /// What the middle button says instead of the percentage. A multiplier is
+  /// the honest readout for a grid, where the cells really are 150% the size;
+  /// on a time axis the number somebody wants is how much of the job is in
+  /// front of them.
+  final String? levelLabel;
+
   const GridZoomControls({
     super.key,
     required this.zoom,
@@ -120,13 +150,17 @@ class GridZoomControls extends StatelessWidget {
     required this.keyPrefix,
     this.fitted = false,
     this.onFit,
+    this.steps = kGridZoomSteps,
+    this.zoomOutTooltip,
+    this.zoomInTooltip,
+    this.levelLabel,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final out = gridZoomOut(zoom);
-    final into = gridZoomIn(zoom);
+    final out = gridZoomOut(zoom, steps);
+    final into = gridZoomIn(zoom, steps);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -136,7 +170,7 @@ class GridZoomControls extends StatelessWidget {
           icon: const Icon(Icons.zoom_out),
           iconSize: 20,
           visualDensity: VisualDensity.compact,
-          tooltip: 'Smaller cells, and more years in the frame',
+          tooltip: zoomOutTooltip ?? 'Smaller cells, and more years in the frame',
         ),
         SizedBox(
           // A fixed box, so the arrows do not shuffle sideways as the figure
@@ -153,7 +187,7 @@ class GridZoomControls extends StatelessWidget {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: Text(
-              '${(zoom * 100).round()}%',
+              levelLabel ?? '${(zoom * 100).round()}%',
               textAlign: TextAlign.center,
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -167,7 +201,7 @@ class GridZoomControls extends StatelessWidget {
           icon: const Icon(Icons.zoom_in),
           iconSize: 20,
           visualDensity: VisualDensity.compact,
-          tooltip: 'Bigger cells',
+          tooltip: zoomInTooltip ?? 'Bigger cells',
         ),
         // THE ONE PRESS THAT ANSWERS "how much of this is there". The steps
         // are for reading; this is for seeing the shape of the whole thing,

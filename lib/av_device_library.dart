@@ -887,7 +887,8 @@ class AvDeviceLibrary {
   /// Entries that belong to the user — loaded from av_devices.json or edited
   /// in the Device Editor. Only these are written back, so an untouched
   /// built-in can still be improved by a later app build.
-  int get customCount => _byModel.values.where((t) => t.custom).length;
+  int get customCount => _customCount ??=
+      _byModel.values.where((t) => t.custom).length;
 
   /// Sorted view of [_byModel], rebuilt only when the catalog changes.
   /// The Device Editor reads [all] on every keystroke of its search box, and
@@ -899,9 +900,31 @@ class AvDeviceLibrary {
   /// keystroke of its search box, and this walks the whole catalog.
   List<DuplicatePartGroup>? _duplicates;
 
+  // EVERYTHING THE DEVICE EDITOR'S TOOLBAR ASKS FOR, held the same way.
+  //
+  // That toolbar is rebuilt on every character typed into the search box, and
+  // each of these walks all sixteen hundred entries — two of them sort what
+  // they find. Five full passes of the catalog per keystroke, to redraw a
+  // count and fill a dropdown that only change when the catalog does.
+  int? _customCount;
+  int? _retiredCount;
+  List<String>? _categories;
+  List<({String category, int count})>? _categoryCounts;
+  List<AvDeviceTemplate>? _active;
+
+  /// The unmodifiable view handed out by [familyDefaults], held rather than
+  /// rebuilt: the wrapper is a copy, and the map behind it is already ours.
+  Map<String, AvDeviceTemplate>? _familyDefaultsView;
+
   void _invalidate() {
     _sorted = null;
     _duplicates = null;
+    _customCount = null;
+    _retiredCount = null;
+    _categories = null;
+    _categoryCounts = null;
+    _active = null;
+    _familyDefaultsView = null;
   }
 
   /// Every entry, ordered the way the catalog list reads: manufacturer, then
@@ -924,14 +947,7 @@ class AvDeviceLibrary {
   /// The family fallbacks read from the file, kept so a save round-trips
   /// them instead of quietly dropping the block.
   Map<String, AvDeviceTemplate> get familyDefaults =>
-      Map.unmodifiable(_familyDefaults);
-
-  /// Every known model name, for the "add custom device" model picker.
-  List<String> get knownModels {
-    final names = _byModel.values.map((t) => t.model).toList();
-    names.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return names;
-  }
+      _familyDefaultsView ??= Map.unmodifiable(_familyDefaults);
 
   /// Categories in use, for the catalog filter and the "new device" form.
   ///
@@ -940,6 +956,8 @@ class AvDeviceLibrary {
   /// "Consumable" until a consumable exists is a picker you cannot create the
   /// first consumable with.
   List<String> get categories {
+    final cached = _categories;
+    if (cached != null) return cached;
     final set = <String>{
       ...kWellKnownCategories,
       for (final t in _byModel.values)
@@ -947,7 +965,7 @@ class AvDeviceLibrary {
     };
     final list = set.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return list;
+    return _categories = List.unmodifiable(list);
   }
 
   /// How many entries are filed under each category actually IN the catalog,
@@ -960,6 +978,8 @@ class AvDeviceLibrary {
   /// this offers only what is there — a category nothing is filed under has
   /// nothing to retag.
   List<({String category, int count})> get categoryCounts {
+    final cached = _categoryCounts;
+    if (cached != null) return cached;
     final counts = <String, int>{};
     final spelling = <String, String>{};
     for (final t in _byModel.values) {
@@ -978,7 +998,7 @@ class AvDeviceLibrary {
             ? byCount
             : a.category.toLowerCase().compareTo(b.category.toLowerCase());
       });
-    return list;
+    return _categoryCounts = List.unmodifiable(list);
   }
 
   /// The models filed under [category], for saying what a category actually
@@ -998,10 +1018,11 @@ class AvDeviceLibrary {
   /// Everything still current — what the pickers that specify NEW work offer.
   /// Retired entries stay in [all] so rooms that already use them still
   /// resolve their ports and prices.
-  List<AvDeviceTemplate> get active =>
-      all.where((t) => !t.retired).toList();
+  List<AvDeviceTemplate> get active => _active ??=
+      List.unmodifiable(all.where((t) => !t.retired));
 
-  int get retiredCount => _byModel.values.where((t) => t.retired).length;
+  int get retiredCount => _retiredCount ??=
+      _byModel.values.where((t) => t.retired).length;
 
   /// The rack editor's parts list: vent plates, blanks, shelves and drawers,
   /// shortest first so a 1U blank is the first thing offered.
@@ -1383,6 +1404,7 @@ class AvDeviceLibrary {
     } else {
       _familyDefaults[prefix] = template;
     }
+    _invalidate();
   }
 
   /// Writes the user's entries to [toPath] (defaults to [filePath]). Returns
@@ -1525,11 +1547,17 @@ class AvDeviceLibrary {
     // Family defaults are a whole-entry decision — a fallback port set is one
     // fact, not ten — so one somebody else added is kept and anything this
     // copy holds a view on stays as it is.
+    var tookFamily = false;
     for (final e in disk._familyDefaults.entries) {
-      _familyDefaults.putIfAbsent(e.key, () => e.value);
+      if (_familyDefaults.containsKey(e.key)) continue;
+      _familyDefaults[e.key] = e.value;
+      tookFamily = true;
     }
 
-    if (adopted > 0) _invalidate();
+    // A fallback taken from disk is a change even when no ENTRY moved, and
+    // [familyDefaults] is handed out from a held view now. Counting only
+    // [adopted] here would leave that view showing the set we arrived with.
+    if (adopted > 0 || tookFamily) _invalidate();
     return adopted;
   }
 
@@ -1657,7 +1685,6 @@ class AvDeviceLibrary {
           // list is filled in long before anybody draws that model's ports.
           if (t.model.isEmpty) continue;
           library._byModel[_norm(t.model)] = t;
-          library._invalidate();
           added++;
         }
         final families = doc['familyDefaults'];
@@ -1673,6 +1700,10 @@ class AvDeviceLibrary {
             }
           });
         }
+        // ONCE, AFTER THE WHOLE FILE. Nothing reads a derived view partway
+        // through a load, and this was being called sixteen hundred times to
+        // clear caches that had not been rebuilt in between.
+        library._invalidate();
         library.filePath = candidate;
         library.source = candidate;
         // What the file held when it was read, which is what a later save

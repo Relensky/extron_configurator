@@ -8,9 +8,14 @@ import 'package:provider/provider.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart'
-    show bendInsertIndex, kCableSwatches, latticeRoute, routeThrough;
+    show
+        AvFlowModel,
+        bendInsertIndex,
+        kCableSwatches,
+        latticeRoute,
+        routeThrough;
 import 'av_flow_report.dart' show cablingSections;
-import 'av_flow_view.dart' show buildAvFlowModel;
+import 'av_flow_view.dart' show ProviderMemo, buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
 import 'cabling_schematic.dart';
 import 'color_wheel_picker.dart';
@@ -72,6 +77,16 @@ class _CablingViewState extends State<CablingView> {
   /// dragged on exactly the same terms.
   String _dragId = '';
   Offset _dragOffset = Offset.zero;
+
+  /// THE OTHER HALF OF THAT BARGAIN. Holding the drag here stopped the
+  /// provider write per frame, but build() still re-derived the whole drawing
+  /// from the room on every one of those frames — which is the expensive half:
+  /// the signal flow walked, then every box placed against every box already
+  /// placed. Held against the provider's revision instead, so a drag frame
+  /// reads back the drawing it was already given and only lays the preview
+  /// offset over it. See [ProviderMemo].
+  final ProviderMemo<AvFlowModel> _modelMemo = ProviderMemo();
+  final ProviderMemo<CablingSchematic> _schematicMemo = ProviderMemo();
 
   /// Which cable type the drawing is showing, or '' for all of them.
   ///
@@ -173,8 +188,11 @@ class _CablingViewState extends State<CablingView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
-    final model = buildAvFlowModel(provider);
-    final drawing = _asDrawn(provider, provider.cablingSchematic(model));
+    final model = _modelMemo.of(provider, () => buildAvFlowModel(provider));
+    final drawing = _asDrawn(
+      provider,
+      _schematicMemo.of(provider, () => provider.cablingSchematic(model)),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

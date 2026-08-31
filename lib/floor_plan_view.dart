@@ -12,7 +12,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
-import 'av_flow_view.dart' show buildAvFlowModel;
+import 'av_flow_view.dart' show ProviderMemo, buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
 import 'cable_colors_dialog.dart';
 import 'cabling_schematic.dart';
@@ -116,6 +116,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   final GlobalKey _viewportKey = GlobalKey();
   final TransformationController _transform = TransformationController();
 
+  /// The room and its cabling, worked out when the room changes rather than
+  /// on every frame of a drag across the plan. See [ProviderMemo].
+  final ProviderMemo<AvFlowModel> _modelMemo = ProviderMemo();
+  final ProviderMemo<CablingSchematic> _schematicMemo = ProviderMemo();
+
   /// What a click on the plan drops. Off by default: the common visit is to
   /// look at the plan, not to edit it, and a page where every stray click
   /// leaves a marker behind is a page people stop clicking on.
@@ -199,6 +204,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// second. Measured at 45 rebuilds over 60 drag frames.
   String _markerDragId = '';
   Offset _markerDrag = Offset.zero;
+
+  /// The callout being dragged, on exactly the terms above. This one was the
+  /// last marker on the sheet still writing to the provider per pointer
+  /// event — and with `recordUndo: false`, so a callout dragged clear across
+  /// the drawing left nothing to undo either.
+  String _calloutDragId = '';
+  Offset _calloutDrag = Offset.zero;
 
   final ValueNotifier<int> _dragTick = ValueNotifier<int>(0);
 
@@ -630,11 +642,15 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
-    final model = buildAvFlowModel(provider);
+    final model = _modelMemo.of(provider, () => buildAvFlowModel(provider));
     final plan = provider.activeFloorPlan;
     // Built once and handed down: the layer chips, the runs and the count of
-    // what could not be placed are three readings of the same drawing.
-    final drawing = provider.cablingSchematic(model);
+    // what could not be placed are three readings of the same drawing. Held
+    // across builds for the same reason — see [ProviderMemo].
+    final drawing = _schematicMemo.of(
+      provider,
+      () => provider.cablingSchematic(model),
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncImage(provider);
@@ -3019,17 +3035,41 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     const r = kCalloutMarkerRadius;
     final selected = _selectedCalloutId == callout.id;
     final target = _calloutSubtitle(model, callout);
+    final at = callout.pos +
+        (_calloutDragId == callout.id ? _calloutDrag : Offset.zero);
 
     return Positioned(
-      left: callout.pos.dx - r,
-      top: callout.pos.dy - r,
+      left: at.dx - r,
+      top: at.dy - r,
       child: GestureDetector(
         onTap: () => setState(() => _selectedCalloutId = callout.id),
-        onPanUpdate: (d) => provider.updateAvCallout(
-          plan.id,
-          callout.copyWith(pos: callout.pos + d.delta),
-          recordUndo: false,
-        ),
+        onPanStart: (_) => setState(() {
+          _calloutDragId = callout.id;
+          _calloutDrag = Offset.zero;
+        }),
+        onPanUpdate: (d) {
+          _calloutDrag += d.delta;
+          _dragTick.value++;
+        },
+        onPanEnd: (_) {
+          final moved = _calloutDrag;
+          final id = _calloutDragId;
+          setState(() {
+            _calloutDragId = '';
+            _calloutDrag = Offset.zero;
+          });
+          if (id.isEmpty || moved == Offset.zero) return;
+          // ONE write, on release, and one undo entry with it — see the
+          // location marker above, which this now matches.
+          provider.updateAvCallout(
+            plan.id,
+            callout.copyWith(pos: callout.pos + moved),
+          );
+        },
+        onPanCancel: () => setState(() {
+          _calloutDragId = '';
+          _calloutDrag = Offset.zero;
+        }),
         onDoubleTap: () => _showCalloutEditor(provider, model, plan, callout),
         child: Tooltip(
           message: [
