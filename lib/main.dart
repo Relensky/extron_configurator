@@ -35,6 +35,7 @@ import 'undo_bar.dart' show ToolbarUndoTarget, toolbarUndoTarget;
 import 'nav_rail.dart';
 import 'project_room_picker.dart';
 import 'project_history_view.dart' show showHistoryDialog;
+import 'help_view.dart';
 import 'project_view.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
@@ -69,6 +70,11 @@ void main() {
 
 class RoomConfigApp extends StatelessWidget {
   const RoomConfigApp({super.key});
+
+  /// The app's one navigator, so a shortcut registered ABOVE it can still open
+  /// a dialog inside it — see [_helpShortcuts].
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
 
   /// The swatches offered by the Auris accent picker. Amber first (the
   /// package's canonical accent), then HUD-intensity alternates.
@@ -203,15 +209,58 @@ class RoomConfigApp extends StatelessWidget {
       themeAnimationDuration: Duration.zero,
       // App-wide text size (App Config > Text Size): scale every text style
       // by wrapping the whole app in a MediaQuery text scaler.
+      navigatorKey: navigatorKey,
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.linear(theme.textScale),
         ),
-        child: child!,
+        child: _helpShortcuts(child!),
       ),
       home: const MainDashboard(),
     );
   }
+
+  /// F1, FROM ANYWHERE, ON EVERY TAB.
+  ///
+  /// ============================================================================
+  ///  WHY IT IS UP HERE AND NOT WITH THE OTHER SHORTCUTS
+  /// ============================================================================
+  ///  The save and undo keys are bound inside the page, which means they only
+  ///  fire once something in the page has taken focus - a field, a button,
+  ///  anything clicked. That is fine for them: nobody presses Ctrl+Z before
+  ///  they have touched the thing they want undone.
+  ///
+  ///  Help is the opposite. It is pressed by somebody who has just arrived,
+  ///  has not clicked anything, and does not know what to click - which is
+  ///  precisely the state in which the primary focus is still the route's own
+  ///  scope, an ANCESTOR of the page. A binding inside the page would never see
+  ///  the key.
+  ///
+  ///  MaterialApp's builder inserts above the Navigator, so the key event
+  ///  bubbling up out of that scope passes through here. The dialog still has
+  ///  to open INSIDE the navigator, which is what [navigatorKey] is for.
+  static Widget _helpShortcuts(Widget child) => Shortcuts(
+    shortcuts: const {
+      SingleActivator(LogicalKeyboardKey.f1): _OpenHelpIntent(),
+    },
+    child: Actions(
+      actions: {
+        _OpenHelpIntent: CallbackAction<_OpenHelpIntent>(
+          onInvoke: (_) {
+            final context = navigatorKey.currentContext;
+            if (context != null) showHelpBook(context);
+            return null;
+          },
+        ),
+      },
+      child: child,
+    ),
+  );
+}
+
+/// Press F1 - see [RoomConfigApp._helpShortcuts].
+class _OpenHelpIntent extends Intent {
+  const _OpenHelpIntent();
 }
 
 class MainDashboard extends StatefulWidget {
@@ -1051,6 +1100,17 @@ class _MainDashboardState extends State<MainDashboard> {
             selectedIcon: Icon(Icons.settings, color: appBarInk),
             tooltip: 'App Config - file locations, theme, pricing, autosave',
             onPressed: () => provider.selectTab(AppTab.appConfig.index),
+          ),
+          // HELP IS A PROPERTY OF THE APP, not of whichever tab is open, so it
+          // sits up here with the gear rather than moving about. See
+          // [HelpBook] - it opens on its search box, over whatever you were
+          // doing, and closes again without losing it.
+          HelpButton(
+            color: legibleTone(
+              theme.colorScheme.secondary,
+              appBarFill,
+              minRatio: kContrastLarge,
+            ),
           ),
           // The gear stays last. Save sits before it rather than after,
           // because the corner of this row has been the way into App Config

@@ -378,6 +378,32 @@ class AvDeviceTemplate {
   /// from every room that already used it.
   final bool retired;
 
+  /// WHAT YOU WOULD BUY INSTEAD. The model that replaces this one, by name,
+  /// blank when nobody has said or the product is still current.
+  ///
+  /// ============================================================================
+  ///  A RETIRED PRICE IS THE WRONG PRICE, AND IT IS WRONG SILENTLY
+  /// ============================================================================
+  ///  Retiring an entry kept it out of the pickers, which is right, and left
+  ///  every room that already held one being budgeted at the price of a product
+  ///  nobody can buy. A campus refresh plan is read four years out and priced
+  ///  entirely off that number: forty rooms holding a 2016 projector were being
+  ///  planned at its 2016 list, and the actual replacement had gone up by a
+  ///  third. Nothing on any screen said so, because the figure was a real price
+  ///  for a real catalog entry.
+  ///
+  ///  So a retired entry can name its successor, and everything that asks what
+  ///  it costs to replace this position asks the SUCCESSOR - see
+  ///  [AvDeviceLibrary.successorFor], which follows the chain as far as it
+  ///  goes. A 2012 model replaced by a 2016 one replaced by a 2024 one prices
+  ///  at the 2024 one, because that is what the purchase order would say.
+  ///
+  ///  BY MODEL NAME, the same way [AvNode.model] points at a catalog entry and
+  ///  a vendor rule names a manufacturer. A name that no longer resolves is a
+  ///  chain that stops there, which is the same answer as no successor at all -
+  ///  never a crash and never a zero.
+  final String replacedBy;
+
   /// NOTHING WILL EVER DRIVE THIS. A USB capture stick, a passive splitter, a
   /// wall plate: real equipment, on the drawing and on the quote, with no
   /// control interface of any kind.
@@ -482,6 +508,7 @@ class AvDeviceTemplate {
     this.price = 0,
     this.educationPrice = 0,
     this.retired = false,
+    this.replacedBy = '',
     this.neverControlled = false,
     this.cableSignal,
     this.cableLengthFt = 0,
@@ -552,6 +579,7 @@ class AvDeviceTemplate {
     double? price,
     double? educationPrice,
     bool? retired,
+    String? replacedBy,
     bool? neverControlled,
     SignalType? cableSignal,
     double? cableLengthFt,
@@ -579,6 +607,7 @@ class AvDeviceTemplate {
     price: price ?? this.price,
     educationPrice: educationPrice ?? this.educationPrice,
     retired: retired ?? this.retired,
+    replacedBy: replacedBy ?? this.replacedBy,
     neverControlled: neverControlled ?? this.neverControlled,
     cableSignal: clearCableSignal ? null : (cableSignal ?? this.cableSignal),
     cableLengthFt: cableLengthFt ?? this.cableLengthFt,
@@ -604,6 +633,7 @@ class AvDeviceTemplate {
     if (price > 0) 'price': price,
     if (educationPrice > 0) 'educationPrice': educationPrice,
     if (retired) 'retired': true,
+    if (replacedBy.trim().isNotEmpty) 'replacedBy': replacedBy.trim(),
     if (neverControlled) 'neverControlled': true,
     if (cableSignal != null) 'cableSignal': cableSignal!.name,
     if (cableLengthFt > 0) 'cableLengthFt': cableLengthFt,
@@ -671,6 +701,7 @@ class AvDeviceTemplate {
         (json['eduPrice'] as num?)?.toDouble() ??
         0,
     retired: json['retired'] == true,
+    replacedBy: json['replacedBy']?.toString().trim() ?? '',
     neverControlled: json['neverControlled'] == true,
     cableSignal: json['cableSignal'] == null
         ? null
@@ -1736,6 +1767,61 @@ class AvDeviceLibrary {
   AvDeviceTemplate? templateForModel(String model) {
     if (model.trim().isEmpty) return null;
     return _byModel[_norm(model)];
+  }
+
+  /// How far a replacement chain is followed before it is treated as broken.
+  ///
+  /// A chain longer than this is not a product history, it is a mistake -
+  /// somebody has pointed two entries at each other, or built a loop through a
+  /// third. Six is more product generations than any AV model has, and a cap
+  /// is what makes this safe to call from a grid cell.
+  static const int kMaxSuccessorHops = 6;
+
+  /// WHAT YOU WOULD ACTUALLY BUY to fill this position today.
+  ///
+  /// Follows [AvDeviceTemplate.replacedBy] from [model] to the end of the
+  /// chain and returns what it lands on. Null when [model] is not in the
+  /// catalog at all.
+  ///
+  /// THE END OF THE CHAIN IS WHERE IT STOPS BEING RETIRED, or where the names
+  /// stop resolving, or where a loop is detected, whichever comes first. Each
+  /// of those is the same answer to the caller - "this is the newest thing the
+  /// catalog knows about in this line" - and the entry it returns is a real
+  /// entry with a real price either way.
+  ///
+  /// A CURRENT MODEL IS ITS OWN SUCCESSOR. An entry that is not retired
+  /// returns itself, so a caller never has to ask twice or special-case the
+  /// commonest answer.
+  AvDeviceTemplate? successorFor(String model) {
+    var current = templateForModel(model);
+    if (current == null) return null;
+    final seen = <String>{_norm(current.model)};
+    for (var hop = 0; hop < kMaxSuccessorHops; hop++) {
+      if (!current!.retired) return current;
+      final next = current.replacedBy.trim();
+      if (next.isEmpty) return current;
+      final key = _norm(next);
+      // A loop, or a name pointing back at somewhere already visited. The
+      // entry in hand is the best answer there is.
+      if (!seen.add(key)) return current;
+      final template = _byModel[key];
+      // A name the catalog does not have. The chain stops here, and the
+      // retired entry it stopped on is still a real price - see
+      // [AvDeviceTemplate.replacedBy].
+      if (template == null) return current;
+      current = template;
+    }
+    return current;
+  }
+
+  /// True when [model] is a retired entry that names something else to buy -
+  /// which is the one case where the price on screen is not the price of the
+  /// thing on the drawing, and has to say so.
+  bool hasSuccessor(String model) {
+    final template = templateForModel(model);
+    if (template == null || !template.retired) return false;
+    final successor = successorFor(model);
+    return successor != null && _norm(successor.model) != _norm(template.model);
   }
 
   /// The connector set for a device: its model's template when one exists,

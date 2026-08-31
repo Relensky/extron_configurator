@@ -12,6 +12,7 @@ import 'app_state.dart';
 import 'contrast.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
+import 'av_flow_swap_dialogs.dart' show pickCatalogModel;
 import 'av_port_editor.dart';
 import 'cost_estimate.dart' show trimNumber, formatMoney;
 import 'device_merge.dart';
@@ -135,6 +136,110 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   /// Writes an edited entry back into the catalog (in memory). Disk is only
   /// touched by Save, so a mistyped price is one Ctrl-Z of the mind away
   /// rather than already on everyone's shared drive.
+  /// WHAT REPLACES A RETIRED ENTRY, and what that costs today.
+  ///
+  /// ============================================================================
+  ///  RETIRING WITHOUT SAYING WHAT INSTEAD IS HALF AN ANSWER
+  /// ============================================================================
+  ///  Retiring an entry answers "do not specify this any more" and leaves
+  ///  "what does it cost to replace the forty of them already on the estate"
+  ///  answered with the discontinued product's own list price - a real figure,
+  ///  for a real catalog entry, that nobody can buy anything at. On a
+  ///  four-year refresh plan that is the entire budget, wrong by whatever the
+  ///  successor went up by, with nothing on any screen saying so.
+  ///
+  ///  Naming the successor here fixes it in every reader at once: the room's
+  ///  cost page, the project report and the campus report all price a
+  ///  replacement through the same ladder, and its first rung follows this.
+  ///  See [AvDeviceLibrary.successorFor] and [equipmentReplacementPrice].
+  ///
+  ///  PICKED, NOT TYPED, for the reason every model reference in this app is:
+  ///  a name the catalog does not have is a chain that stops, silently, at the
+  ///  price it was trying to get away from.
+  Widget _replacedBy(BuildContext context, AvDeviceTemplate entry) {
+    final theme = Theme.of(context);
+    final provider = context.read<AppStateProvider>();
+    final library = provider.avDeviceLibrary;
+    final named = entry.replacedBy.trim();
+    final successor = named.isEmpty ? null : library.templateForModel(named);
+    // The end of the chain, which is what a replacement is actually priced at
+    // - a 2012 model replaced by a 2016 one replaced by a 2024 one prices at
+    // the 2024 one.
+    final buying = library.successorFor(entry.model);
+    final chained = buying != null &&
+        successor != null &&
+        AvDeviceLibrary.normalizeModel(buying.model) !=
+            AvDeviceLibrary.normalizeModel(successor.model);
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 32, top: 4, bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('catalog_replaced_by'),
+                icon: const Icon(Icons.sync_alt, size: 18),
+                label: Text(
+                  named.isEmpty ? 'Replaced by...' : named,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onPressed: () async {
+                  final picked = await pickCatalogModel(
+                    context,
+                    provider,
+                    title: 'What replaces ${entry.model}?',
+                    actionLabel: 'This one',
+                    currentModel: named.isEmpty ? null : named,
+                    note: 'Every room already holding a ${entry.model} will '
+                        'be budgeted at what this one costs.',
+                  );
+                  if (picked == null) return;
+                  setState(
+                    () => _apply(entry.copyWith(replacedBy: picked.model)),
+                  );
+                },
+              ),
+              if (named.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  key: const ValueKey('catalog_replaced_by_clear'),
+                  tooltip: 'No successor. Rooms holding one are budgeted at '
+                      'this entry\'s own price again.',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () =>
+                      setState(() => _apply(entry.copyWith(replacedBy: ''))),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            named.isEmpty
+                ? 'Nothing named, so a room holding one is still budgeted at '
+                      'this entry\'s own price - which is the price of a '
+                      'product nobody sells.'
+                : successor == null
+                ? 'The catalog has no "$named". The chain stops here and rooms '
+                      'holding one are budgeted at this entry\'s own price.'
+                : chained
+                ? 'Rooms holding a ${entry.model} are budgeted at '
+                      '${buying.model} - $named is retired too, and the '
+                      'chain runs on to it.'
+                : 'Rooms holding a ${entry.model} are budgeted at what a '
+                      '$named costs'
+                      '${successor.price > 0 ? ' - ${formatMoney(successor.price, provider.currencySymbol)}' : ''}'
+                      '.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _apply(AvDeviceTemplate updated, {String previousModel = ''}) {
     final provider = context.read<AppStateProvider>();
     provider.avDeviceLibrary.upsert(updated, previousModel: previousModel);
@@ -959,6 +1064,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         // height — for the rooms that already have one, and takes it out of
         // the pickers that specify new work.
         CheckboxListTile(
+          key: const ValueKey('catalog_retired'),
           dense: true,
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
@@ -971,6 +1077,14 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             'already use it keep its connectors and price.',
           ),
         ),
+        // WHAT YOU WOULD BUY INSTEAD, asked at the one moment somebody knows
+        // it: they are retiring the entry because a successor came out, and
+        // the successor's name is the thing they have just been reading.
+        //
+        // Only when the entry is retired. A current product has no successor,
+        // and a box asking for one on every entry in the catalog is a box
+        // nobody fills in on the one entry where it matters.
+        if (entry.retired) _replacedBy(context, entry),
         // A cable entry says what it carries. That is the whole hinge of the
         // cabling estimate: every run of this signal type on the AV flow is
         // quoted at this entry's price.

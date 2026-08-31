@@ -1319,23 +1319,48 @@ class _ItemRow extends StatelessWidget {
           // category, which is the right number to budget from and the wrong
           // one to quote from - so it is marked, not quietly mixed in with the
           // prices that are this box's own.
+          // AND WHOSE PRICE IT IS. A retired model is budgeted at what
+          // replaces it, which is the right figure and NOT this box's - see
+          // [AvDeviceTemplate.replacedBy]. Said on the row rather than only
+          // in the total, because the difference between "the projector
+          // costs this" and "the projector that replaces it costs this" is
+          // the difference between a budget and a wrong budget.
           child: Tooltip(
-            message: item.costIsEstimate
+            message: item.replacedByAnother
+                ? '${item.node.model} is retired. This is what a '
+                      '${item.replacementModel} costs - which is what would '
+                      'actually be bought.'
+                : item.costIsEstimate
                 ? 'Typical price for its category - the catalog has no price '
                       'for this model'
                 : 'Catalog price for this model',
-            child: Text(
-              item.costIsEstimate
-                  ? '~${formatLifecycleMoney(item.replacementCost, currency)}'
-                  : formatLifecycleMoney(item.replacementCost, currency),
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontStyle: item.costIsEstimate
-                    ? FontStyle.italic
-                    : FontStyle.normal,
-                color: item.costIsEstimate
-                    ? theme.colorScheme.onSurfaceVariant
-                    : null,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.costIsEstimate
+                      ? '~${formatLifecycleMoney(item.replacementCost, currency)}'
+                      : formatLifecycleMoney(item.replacementCost, currency),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontStyle: item.costIsEstimate
+                        ? FontStyle.italic
+                        : FontStyle.normal,
+                    color: item.costIsEstimate
+                        ? theme.colorScheme.onSurfaceVariant
+                        : null,
+                  ),
+                ),
+                if (item.replacedByAnother)
+                  Text(
+                    '→ ${item.replacementModel}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

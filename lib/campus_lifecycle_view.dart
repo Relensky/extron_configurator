@@ -13,6 +13,7 @@ import 'building_project.dart' show kProjectFileSuffix;
 import 'campus_file.dart';
 import 'campus_lifecycle.dart';
 import 'manual_rooms_dialog.dart';
+import 'model_standards_view.dart';
 import 'online_copy_dialog.dart' show publishCampusCopy;
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
@@ -248,6 +249,15 @@ class _CampusViewState extends State<_CampusView> {
 
   /// True while the sheet is being drawn off screen for a spreadsheet.
   bool _exporting = false;
+
+  /// WHICH OF THE TWO QUESTIONS THIS ESTATE IS BEING ASKED.
+  ///
+  /// The plan answers WHEN - which room falls due in which year, and what that
+  /// year comes to. The current-models tab answers WHAT WE WOULD BUY, which is
+  /// the number every figure on the plan is made of and had nowhere to be
+  /// decided. Two readings of one estate rather than two documents, so they
+  /// share the assembly, the read and the exports.
+  bool _standards = false;
 
   @override
   void initState() {
@@ -912,16 +922,50 @@ class _CampusViewState extends State<_CampusView> {
                       ),
                     _CampusHeadline(campus: campus),
                     const SizedBox(height: 12),
-                    const EquipmentTimingKey(),
-                    const SizedBox(height: 12),
-                    CampusYearGrid(campus: campus, onOpenJob: _openJobPlan),
-                    const SizedBox(height: 16),
-                    _JobList(
-                      campus: campus,
-                      onRemove: _remove,
-                      onOpen: _openJob,
-                      onManualRooms: _manualRooms,
+                    // THE TWO QUESTIONS AN ESTATE GETS ASKED - see
+                    // [_standards]. A segmented pair rather than tabs, the
+                    // same control the project tab uses for its panes, so
+                    // switching reading is the same gesture everywhere.
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: SegmentedButton<bool>(
+                        key: const ValueKey('campus_pane'),
+                        segments: const [
+                          ButtonSegment(
+                            value: false,
+                            icon: Icon(Icons.calendar_month, size: 18),
+                            label: Text('The plan'),
+                          ),
+                          ButtonSegment(
+                            value: true,
+                            icon: Icon(Icons.inventory_2_outlined, size: 18),
+                            label: Text('Current models'),
+                          ),
+                        ],
+                        selected: {_standards},
+                        showSelectedIcon: false,
+                        onSelectionChanged: (v) =>
+                            setState(() => _standards = v.first),
+                      ),
                     ),
+                    const SizedBox(height: 12),
+                    if (_standards)
+                      CampusModelStandards(
+                        campus: campus,
+                        onChanged: _reread,
+                      )
+                    else ...[
+                      const EquipmentTimingKey(),
+                      const SizedBox(height: 12),
+                      CampusYearGrid(campus: campus, onOpenJob: _openJobPlan),
+                      const SizedBox(height: 16),
+                      _JobList(
+                        campus: campus,
+                        onRemove: _remove,
+                        onOpen: _openJob,
+                        onManualRooms: _manualRooms,
+                      ),
+                    ],
                     if (campus.failed.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Text(

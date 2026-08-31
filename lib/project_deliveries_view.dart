@@ -318,6 +318,14 @@ class _AddPoBarState extends State<_AddPoBar> {
 
   @override
   Widget build(BuildContext context) {
+    final project = widget.provider.project;
+    // Everything the job mentions anywhere, minus what already has a row -
+    // see [BuildingProject.poNumbersInUse].
+    final loose = [
+      for (final n in project.poNumbersInUse)
+        if (project.poByNumber(n) == null) n,
+    ];
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Row(
@@ -327,11 +335,39 @@ class _AddPoBarState extends State<_AddPoBar> {
               key: const ValueKey('po_new_number'),
               controller: _number,
               focusNode: _focus,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Add a purchase order',
                 hintText: 'PO-1188',
-                border: OutlineInputBorder(),
+                helperText: loose.isEmpty
+                    ? null
+                    : '${loose.length} number'
+                          '${loose.length == 1 ? '' : 's'} on the job have no '
+                          'row yet',
+                border: const OutlineInputBorder(),
                 isDense: true,
+                // NUMBERS THE JOB ALREADY KNOWS AND HAS NO ROW FOR. A PO
+                // marked on a vendor, typed onto a part or written on a
+                // delivery is a number that exists; until somebody raises the
+                // row for it there is nothing to attach the order to and
+                // nothing to tick equipment onto. Offering them here is the
+                // difference between finding that out and retyping a number
+                // off another screen.
+                suffixIcon: loose.isEmpty
+                    ? null
+                    : PopupMenuButton<String>(
+                        key: const ValueKey('po_new_pick'),
+                        tooltip: 'A number the job mentions but has no row for',
+                        icon: const Icon(Icons.arrow_drop_down),
+                        itemBuilder: (_) => [
+                          for (final n in loose)
+                            PopupMenuItem(value: n, child: Text(n)),
+                        ],
+                        onSelected: (v) {
+                          _number.text = v;
+                          _focus.requestFocus();
+                          setState(() {});
+                        },
+                      ),
               ),
               onSubmitted: (_) => _add(),
             ),
@@ -2098,8 +2134,12 @@ class _LocationField extends StatelessWidget {
       controller: controller,
       decoration: InputDecoration(
         labelText: stored ? 'Held where' : 'Delivered to',
+        // THE ROOM IT ACTUALLY GOES IN. Held gear lands in general storage,
+        // which on this estate is one specific room, and a hint naming a place
+        // that does not exist is a hint somebody types over rather than one
+        // that tells them the shape of the answer.
         hintText: stored
-            ? 'Bessey basement, rack 3'
+            ? 'MLIB 031'
             : 'Bessey loading dock, Central Stores, 1 Campus Drive',
         helperText: 'Any address or place - type one that is not on the list.',
         border: const OutlineInputBorder(),

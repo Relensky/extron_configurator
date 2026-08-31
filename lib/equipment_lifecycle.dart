@@ -348,6 +348,16 @@ class EquipmentLife {
   /// 1" — and its [AvNode.model] is whatever is in that position now.
   final AvNode node;
 
+  /// What KIND of thing this is - 'Projector', 'Switcher', 'Camera'.
+  ///
+  /// Resolved once, here, the same way the price ladder resolves it: the
+  /// catalog's category for the model when there is one, otherwise what the
+  /// position's config key says the device DOES in the room. Carried on the
+  /// row rather than looked up by every reader, because the campus report
+  /// groups an entire estate by it and doing that lookup per position per
+  /// render is the same mistake the due dates used to make.
+  final String category;
+
   /// Where in the room it is, already resolved to a name so a report does not
   /// have to carry the location list around with it.
   final String locationName;
@@ -391,8 +401,24 @@ class EquipmentLife {
   /// typical price presented as a quote is how a budget goes wrong quietly.
   final bool costIsEstimate;
 
+  /// WHOSE PRICE THIS IS, when it is not the price of the box on the drawing.
+  ///
+  /// Blank on the ordinary row, where the figure is the drawn model's own -
+  /// naming it there would repeat what the row already says. Filled when the
+  /// drawn model is retired and something else is what would actually be
+  /// bought (see [AvDeviceTemplate.replacedBy]), or when the figure came off a
+  /// base card that names the product it was benchmarked on (see
+  /// [BaseCost.standardModel]).
+  ///
+  /// A REPLACEMENT COST THAT IS NOT THIS MODEL'S HAS TO SAY SO. It is the
+  /// difference between "the projector costs 4,200" and "the projector that
+  /// replaces it costs 4,200", and a plan read four years out is signed off by
+  /// somebody who cannot ask which was meant.
+  final String replacementModel;
+
   EquipmentLife({
     required this.node,
+    this.category = '',
     required this.locationName,
     required this.zone,
     required this.installedOn,
@@ -401,7 +427,15 @@ class EquipmentLife {
     required this.asOf,
     required this.replacementCost,
     this.costIsEstimate = false,
+    this.replacementModel = '',
   });
+
+  /// True when the box in this position is not the box that would be bought to
+  /// fill it - which is the one case a reader has to be told about.
+  bool get replacedByAnother =>
+      replacementModel.trim().isNotEmpty &&
+      replacementModel.trim().toLowerCase() !=
+          node.model.trim().toLowerCase();
 
   // -------------------------------------------------------------------------
   //  WORKED OUT ONCE
@@ -830,8 +864,8 @@ class _RoomIndex {
 /// [asOf] is the day it is measured on and defaults to today. Passed explicitly
 /// by the reports and by every test, because a figure that changes with the
 /// clock cannot be checked.
-/// What one position costs to replace, and whether that figure is a typical
-/// one rather than this model's own.
+/// What one position costs to replace, whether that figure is a typical one
+/// rather than a model's own, and WHICH MODEL it is the price of.
 ///
 /// THE SAME LADDER THE ESTIMATE CLIMBS, minus the rung that does not apply: a
 /// room's quoted price is what THIS job pays for a box being bought now, and a
@@ -839,15 +873,52 @@ class _RoomIndex {
 /// model, then the base card for the category the catalog files it under, then
 /// the base card for what the device DOES in the room - which is the only
 /// category a position with no model at all has.
-({double cost, bool estimated}) equipmentReplacementPrice({
+///
+/// ============================================================================
+///  A RETIRED MODEL IS PRICED AT WHAT REPLACES IT
+/// ============================================================================
+///  The first rung used to be "the catalog's price for the model on the
+///  drawing", full stop, and on a refresh plan that is the wrong question. The
+///  drawing says what is IN the room; this figure is what it costs to take
+///  that out and put something in, and for a discontinued product those are
+///  two different numbers - often a third apart, always in the same direction.
+///
+///  So when the entry is retired and names a successor, the successor's price
+///  is what comes back, and [model] says whose price it is. See
+///  [AvDeviceLibrary.successorFor]. Nothing is guessed: an entry that is
+///  retired and names nothing prices exactly as it did before, because its own
+///  price is still the best figure anybody has.
+///
+///  [library] is optional and the whole feature is off without it - callers
+///  that only have a template still get the old answer rather than an error.
+({double cost, bool estimated, String model}) equipmentReplacementPrice({
   required AvNode node,
   AvDeviceTemplate? template,
   BaseCostBook? baseCosts,
   PricingTier tier = PricingTier.msrp,
+  AvDeviceLibrary? library,
 }) {
-  final catalog = template?.priceForTier(tier).price ?? 0;
-  if (catalog > 0) return (cost: catalog, estimated: false);
-  if (baseCosts == null) return (cost: 0, estimated: false);
+  // WHAT WOULD ACTUALLY BE BOUGHT, which is the drawn model itself unless it
+  // has been retired in favour of something else.
+  final buying = template == null || library == null
+      ? template
+      : library.successorFor(template.model) ?? template;
+
+  final catalog = buying?.priceForTier(tier).price ?? 0;
+  if (catalog > 0) {
+    return (
+      cost: catalog,
+      estimated: false,
+      // Named only when it is NOT the box on the drawing. A model name beside
+      // every figure would be noise on the ninety per cent of rows where it
+      // says what the row already says.
+      model: buying!.model.trim().toLowerCase() ==
+              (template?.model.trim().toLowerCase() ?? '')
+          ? ''
+          : buying.model,
+    );
+  }
+  if (baseCosts == null) return (cost: 0, estimated: false, model: '');
 
   // Two goes at the card, for the reason set out in the estimate's own
   // ladder: 'Matrix' is what Extron calls a switcher, and the card is written
@@ -858,12 +929,21 @@ class _RoomIndex {
       : byRole;
 
   var base = baseCosts.priceFor(category, tier);
+  var card = baseCosts.byCategory(category);
   if (base.price <= 0 && byRole.isNotEmpty && byRole != category) {
     base = baseCosts.priceFor(byRole, tier);
+    card = baseCosts.byCategory(byRole);
   }
   return base.price > 0
-      ? (cost: base.price, estimated: true)
-      : (cost: 0.0, estimated: false);
+      ? (
+          cost: base.price,
+          estimated: true,
+          // THE CARD CAN NAME THE MODEL IT WAS PRICED ON - see
+          // [BaseCost.standardModel]. A typical figure with a model beside it
+          // is a budget somebody can argue with; one without is a number.
+          model: card?.standardModel.trim() ?? '',
+        )
+      : (cost: 0.0, estimated: false, model: '');
 }
 
 RoomLifecycle buildRoomLifecycle({
@@ -904,15 +984,27 @@ RoomLifecycle buildRoomLifecycle({
       source = EquipmentLifeSource.fallback;
     }
 
+    // THE SAME TWO GOES THE PRICE LADDER TAKES, for the same reason: 'Matrix'
+    // is what a manufacturer calls a switcher, and a position with no model on
+    // it at all still knows what it DOES from its config key.
+    final category = (template?.category.trim().isNotEmpty ?? false)
+        ? template!.category.trim()
+        : categoryForConfigKey(node.id);
+
     final price = equipmentReplacementPrice(
       node: node,
       template: template,
       baseCosts: baseCosts,
       tier: tier,
+      // WHAT WOULD ACTUALLY BE BOUGHT. Without the library the ladder cannot
+      // follow a retired entry to its successor, and a refresh plan prices
+      // forty rooms at the list of a product nobody sells.
+      library: library,
     );
 
     final entry = EquipmentLife(
       node: node,
+      category: category,
       locationName: model.locationNameOf(node.id),
       zone: model.zoneOf(node.id),
       installedOn: node.installedOn,
@@ -921,6 +1013,7 @@ RoomLifecycle buildRoomLifecycle({
       asOf: day,
       replacementCost: price.cost,
       costIsEstimate: price.estimated,
+      replacementModel: price.model,
     );
     // Off the cycle entirely, and out of everything derived from the list —
     // the counts, the colours, the money and the year grid.
@@ -1178,6 +1271,10 @@ RoomLifecycle buildManualRoomLifecycle({
 
   double cost = room.replacementCost;
   var estimated = false;
+  // What the card was benchmarked on, when the figure came off the card - see
+  // [BaseCost.standardModel]. A typed figure is somebody's own and says
+  // nothing about a model.
+  var benchmark = '';
   if (cost <= 0 && baseCosts != null) {
     final wanted = room.category.trim().isEmpty
         ? kRoomRefreshCategory
@@ -1186,6 +1283,7 @@ RoomLifecycle buildManualRoomLifecycle({
     if (base.price > 0) {
       cost = base.price;
       estimated = true;
+      benchmark = baseCosts.byCategory(wanted)?.standardModel.trim() ?? '';
     }
   }
 
@@ -1220,6 +1318,7 @@ RoomLifecycle buildManualRoomLifecycle({
         asOf: day,
         replacementCost: cost,
         costIsEstimate: estimated,
+        replacementModel: benchmark,
       ),
     ],
   );
@@ -1376,6 +1475,12 @@ List<ReportSection> roomLifecycleSections(
         'Status',
         'Timing',
         'Replacement',
+        // WHOSE PRICE THE REPLACEMENT FIGURE IS. Blank on the ordinary row,
+        // where it is the model's own; filled when the model is retired and
+        // something else is what would actually be bought. A sheet that
+        // carried the figure without the name is a sheet somebody prices a
+        // discontinued product off. See [EquipmentLife.replacementModel].
+        'Priced as',
       ],
       rows: [
         for (final i in room.items)
@@ -1395,6 +1500,7 @@ List<ReportSection> roomLifecycleSections(
             // of the three amber years it is in.
             kEquipmentTimingCodes[i.timing]!,
             formatLifecycleMoney(i.replacementCost, currency),
+            i.replacedByAnother ? i.replacementModel : '',
           ],
       ],
     ),

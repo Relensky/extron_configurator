@@ -4789,19 +4789,28 @@ class VendorRfqStrip extends StatelessWidget {
                 // THE WAY BACK TO THE EQUIPMENT. A PO number on a vendor row
                 // that cannot be followed to the parts it bought is the exact
                 // dead end this was built to close.
+                //
+                // TO THE LIST, NOT TO A TICK-BOX DIALOG. This opened the PO's
+                // own tick-list, which is the tool for the other job - saying
+                // that only fourteen of the nineteen were actually ordered -
+                // and it is the wrong answer to the question the button asks.
+                // "Equipment on PO-1188 (19)" is read as "show me the
+                // nineteen", and the nineteen are rows on the master list,
+                // with their prices, their lead times and their rooms on
+                // them. The tick-list is still on the Deliveries pane and on
+                // this PO's own card on the timeline, which is where a
+                // partial order gets sorted out.
                 if (po != null)
                   OutlinedButton.icon(
                     key: ValueKey('vendor_rfq_parts_${vendor.id}'),
-                    icon: const Icon(Icons.playlist_add_check, size: 18),
+                    icon: const Icon(Icons.list_alt, size: 18),
                     label: Text(
                       'Equipment on ${po.number.trim()} '
                       '(${provider.project.partsOnPo(po.number).length})',
                     ),
-                    onPressed: () => showPoPartsDialog(
-                      context,
-                      provider: provider,
-                      estimate: estimate,
-                      po: po,
+                    onPressed: () => provider.requestProjectPane(
+                      'parts',
+                      partsVendorFilter: vendor.id,
                     ),
                   ),
                 if (po != null) PoFileButtons(po: po, provider: provider),

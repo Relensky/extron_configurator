@@ -3065,13 +3065,21 @@ class BuildingProject {
     return null;
   }
 
-  /// Every PO number this job mentions ANYWHERE — the rows, the part orders
-  /// and the delivery log — each in the spelling it was first seen in, in the
-  /// order they turn up.
+  /// Every PO number this job mentions ANYWHERE — the rows, the vendors, the
+  /// part orders and the delivery log — each in the spelling it was first seen
+  /// in, in the order they turn up.
   ///
   /// What a "which PO?" dropdown offers, so a number typed onto a part before
   /// anybody entered the PO is still one click away rather than something to
   /// retype and mistype.
+  ///
+  /// THE VENDORS ARE ON THE LIST TOO. Marking a vendor ordered raises the PO
+  /// row as well, so most of the time its number is already here twice over -
+  /// but not always: a row that was renumbered, or deleted, or a number typed
+  /// straight onto a vendor leaves the vendor holding the only copy. Whoever
+  /// is logging the delivery is reading that number off the vendor's card, and
+  /// a dropdown that does not offer it is a number retyped and eventually
+  /// mistyped.
   List<String> get poNumbersInUse {
     final seen = <String>{};
     final out = <String>[];
@@ -3083,6 +3091,9 @@ class BuildingProject {
 
     for (final po in purchaseOrders) {
       take(po.number);
+    }
+    for (final vendor in vendors) {
+      take(vendor.poNumber);
     }
     for (final order in partOrders.values) {
       take(order.poNumber);

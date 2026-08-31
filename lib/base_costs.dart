@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'app_logger.dart';
 import 'av_device_library.dart' show PricingTier;
+import 'building_project.dart' show formatIsoDate, parseIsoDate;
 
 /// ============================================================================
 ///  BASE COSTS
@@ -62,12 +63,54 @@ class BaseCost {
   /// What this figure assumes — the spec level it was priced at.
   final String notes;
 
+  /// THE MODEL THIS CATEGORY IS BENCHMARKED ON, by name, blank when nobody has
+  /// said.
+  ///
+  /// ============================================================================
+  ///  A TYPICAL PRICE NOBODY CAN ARGUE WITH IS A TYPICAL PRICE NOBODY TRUSTS
+  /// ============================================================================
+  ///  "A projector is about $4,200" is the figure a four-year refresh plan for
+  ///  forty rooms is built on, and until now it was a number somebody typed
+  ///  once with nothing beside it saying which projector, at what spec, in
+  ///  which year. A finance office asked to sign off eleven of those wants to
+  ///  know what they are eleven OF, and the honest answer was in whoever typed
+  ///  it's head.
+  ///
+  ///  So the card can name the model it was priced on and the day it was
+  ///  priced. Both come from the estate's own catalog when the figure is set
+  ///  from the campus report's current-models tab, which is the whole point of
+  ///  that tab: pick this year's projector, see what forty of them come to,
+  ///  and make that the number the plan is built on.
+  ///
+  ///  IT DOES NOT DRIVE THE PRICE. The figures above are still the figures -
+  ///  this says where they came from, so a card set on a 2022 model in 2026
+  ///  can be SEEN to be four years stale rather than having to be remembered
+  ///  to be.
+  final String standardModel;
+
+  /// The day [standardModel] and the figures beside it were last set from the
+  /// catalog. Null when nobody has, which is every card written by hand.
+  final DateTime? standardSetOn;
+
   const BaseCost({
     required this.category,
     this.price = 0,
     this.educationPrice = 0,
     this.notes = '',
+    this.standardModel = '',
+    this.standardSetOn,
   });
+
+  /// How many whole years old the benchmark is as of [asOf]. Null when there
+  /// is no benchmark to age.
+  int? standardAgeYears(DateTime asOf) {
+    final set = standardSetOn;
+    if (set == null) return null;
+    final years = asOf.year - set.year;
+    final beforeAnniversary =
+        asOf.month < set.month || (asOf.month == set.month && asOf.day < set.day);
+    return (beforeAnniversary ? years - 1 : years).clamp(0, 99);
+  }
 
   /// True when either tier has a figure — one price is still a price.
   bool get isSet => price > 0 || educationPrice > 0;
@@ -88,11 +131,20 @@ class BaseCost {
     double? price,
     double? educationPrice,
     String? notes,
+    String? standardModel,
+    DateTime? standardSetOn,
+    /// Null cannot be told from "leave it alone", and on this the two mean
+    /// opposite things: a card gone back to hand-typed, and a card whose
+    /// price was edited without touching its benchmark.
+    bool clearStandard = false,
   }) => BaseCost(
     category: category ?? this.category,
     price: price ?? this.price,
     educationPrice: educationPrice ?? this.educationPrice,
     notes: notes ?? this.notes,
+    standardModel: clearStandard ? '' : (standardModel ?? this.standardModel),
+    standardSetOn:
+        clearStandard ? null : (standardSetOn ?? this.standardSetOn),
   );
 
   Map<String, dynamic> toJson() => {
@@ -100,6 +152,8 @@ class BaseCost {
     'price': price,
     'educationPrice': educationPrice,
     if (notes.isNotEmpty) 'notes': notes,
+    if (standardModel.trim().isNotEmpty) 'standardModel': standardModel.trim(),
+    if (standardSetOn != null) 'standardSetOn': formatIsoDate(standardSetOn!),
   };
 
   factory BaseCost.fromJson(Map<String, dynamic> json) => BaseCost(
@@ -112,6 +166,8 @@ class BaseCost {
         (json['eduPrice'] as num?)?.toDouble() ??
         0,
     notes: json['notes']?.toString() ?? '',
+    standardModel: json['standardModel']?.toString().trim() ?? '',
+    standardSetOn: parseIsoDate(json['standardSetOn']),
   );
 }
 
@@ -278,7 +334,11 @@ class BaseCostBook {
         'catalog\'s own category names onto the categories below - '
         '"Matrix": "Switcher" - for families the app does not already know; '
         'leave a family out when it holds more than one kind of device, and '
-        'the estimate will price it from the room\'s config section instead.',
+        'the estimate will price it from the room\'s config section instead. '
+        '"standardModel" and "standardSetOn" record WHICH product a '
+        'category\'s figure was benchmarked on and when, so a refresh plan can '
+        'say what its projectors are eleven OF; they are set from the campus '
+        'report and never change a price themselves.',
     'costs': [for (final c in costs) c.toJson()],
     if (aliases.isNotEmpty) 'aliases': Map<String, String>.of(aliases),
   };
