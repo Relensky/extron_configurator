@@ -751,13 +751,14 @@ class _MainDashboardState extends State<MainDashboard> {
     //
     // Built here because they need this State's methods, but they live on the
     // banner, beside the job, where the rest of "which document am I working
-    // on" lives — the conversion, the processor transfers and the EXPORTS.
+    // on" lives — the conversion, the processor transfers and the EXPORTS —
+    // plus the theme toggle and the screenshot, the two app-level buttons that
+    // get pressed while working rather than while setting the app up.
     //
     // The title bar keeps two blocks and nothing else: the APP in its left
-    // corner — the gear, Help, the theme and the screenshot — and everything
-    // that begins, steps, puts back or writes a FILE at the other end: New,
-    // Open, Undo and Redo, the history, the revert to the saved backup, and
-    // Save in the far corner.
+    // corner — the gear and Help — and everything that begins, steps, puts
+    // back or writes a FILE at the other end: New, Open, Undo and Redo, the
+    // history, the revert to the saved backup, and Save in the far corner.
     //
     // The exports moved down here because they are about the DOCUMENT, not
     // the app: "give me this as a spreadsheet" is the same kind of question
@@ -770,6 +771,25 @@ class _MainDashboardState extends State<MainDashboard> {
     // the revert to the last saved backup went up with it, because the file it
     // puts back is the one Save wrote.
     final documentActions = <Widget>[
+      // THE THEME AND THE SCREENSHOT, at the head of the document row.
+      //
+      // Both are about the APP rather than about the room, and they used to
+      // stand with the gear and Help in the title bar's left corner. They sit
+      // here instead because they are the two of that block a hand actually
+      // reaches for while working — flipping to light to read a drawing in a
+      // bright room, and photographing whatever is on screen to send it on —
+      // and this row is where the eye already is: beside Convert and the
+      // exports, on the strip that names what is open.
+      IconButton(
+        icon: Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+        tooltip: 'Toggle Theme',
+        onPressed: () => provider.toggleTheme(),
+      ),
+      IconButton(
+        icon: const Icon(Icons.photo_camera),
+        tooltip: 'Screenshot & annotate',
+        onPressed: () => _takeScreenshot(context, selectedIndex),
+      ),
       // CONVERT: the migration a legacy file needs, on demand. The load
       // already ran the conversion in memory — this is where it gets
       // reviewed, accepted or thrown away. Grayed out when the loaded
@@ -926,29 +946,31 @@ class _MainDashboardState extends State<MainDashboard> {
       appBar: AppBar(
         // THE APP'S OWN CONTROLS, AND THEN WHAT IS ON SCREEN.
         //
-        // The gear, Help, the theme and the screenshot are about the
-        // APPLICATION rather than about the document, and not one of them
-        // changes as you move between tabs. So they sit together in the left
-        // corner as a fixed block a hand can learn, ahead of the job — and the
-        // other end of the row is left to the FILE: New, Open, the two
-        // step-backwards arrows, the way back to the last save, and Save
-        // itself in the far corner.
+        // The gear and Help are about the APPLICATION rather than about the
+        // document, and neither changes as you move between tabs. So they sit
+        // together in the left corner as a fixed block a hand can learn, ahead
+        // of the job — and the other end of the row is left to the FILE: New,
+        // Open, the two step-backwards arrows, the way back to the last save,
+        // and Save itself in the far corner.
+        //
+        // The theme toggle and the screenshot used to stand here too; they are
+        // on the document row now, beside Convert — see [documentActions].
         //
         // In the title slot rather than in a leading: an AppBar's leading is
-        // one narrow widget, and these are four.
+        // one narrow widget, and these are two.
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             // THE CORNER BLOCK GIVES WAY RATHER THAN OVERFLOWING.
             //
-            // Four buttons is a fixed 200-odd pixels, and the title slot is
-            // only ever what the actions leave over — so on a window narrow
-            // enough (a 600-pixel test harness, a user dragging the frame in)
-            // they ran off the end of the bar and painted the striped overflow
-            // banner. Flexible lets the block shrink and the scroll view lets
-            // what will not fit be reached anyway; at any width this app is
-            // actually worked at there is room for all four and this lays out
-            // exactly as a plain Row would.
+            // The block is a fixed width, and the title slot is only ever
+            // what the actions leave over — so on a window narrow enough (a
+            // 600-pixel test harness, a user dragging the frame in) the
+            // buttons ran off the end of the bar and painted the striped
+            // overflow banner. Flexible lets the block shrink and the scroll
+            // view lets what will not fit be reached anyway; at any width this
+            // app is actually worked at there is room for both and this lays
+            // out exactly as a plain Row would.
             Flexible(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -990,17 +1012,6 @@ class _MainDashboardState extends State<MainDashboard> {
                     // - it opens on its search box, over whatever you were doing, and
                     // closes again without losing it.
                     const HelpButton(),
-                    IconButton(
-                      icon:
-                          Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
-                      tooltip: 'Toggle Theme',
-                      onPressed: () => provider.toggleTheme(),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.photo_camera),
-                      tooltip: 'Screenshot & annotate',
-                      onPressed: () => _takeScreenshot(context, selectedIndex),
-                    ),
                   ],
                 ),
               ),
@@ -1784,9 +1795,11 @@ class TopLevelBar extends StatelessWidget {
   final ValueChanged<int> onSelect;
 
   /// The document's own buttons — convert, the two SFTP transfers and the
-  /// exports. Handed in rather than built here because they need the
-  /// dashboard's own methods, and they live on THIS row because they are about
-  /// the document the job is made of, not about the application.
+  /// exports — led by the theme toggle and the screenshot. Handed in rather
+  /// than built here because they need the dashboard's own methods, and most
+  /// of them live on THIS row because they are about the document the job is
+  /// made of, not about the application; the two app-level ones are here
+  /// because they are pressed while working rather than while setting up.
   final List<Widget> actions;
 
   const TopLevelBar({
@@ -1869,6 +1882,17 @@ class TopLevelBar extends StatelessWidget {
     final bannerFill = hasProject
         ? theme.colorScheme.surfaceContainerHighest
         : roomModeBannerFill(theme);
+
+    // The ink every button on this strip is painted in, held to the icon bar
+    // rather than the body one — see the group at the end of the row.
+    final actionInk = readableOn(
+      bannerFill,
+      prefer: [
+        theme.textTheme.bodySmall?.color ?? theme.colorScheme.onSurfaceVariant,
+        theme.colorScheme.onSurface,
+      ],
+      minRatio: kContrastLarge,
+    );
 
     return Material(
       color: bannerFill,
@@ -2030,7 +2054,44 @@ class TopLevelBar extends StatelessWidget {
                 ),
               ),
             ),
-            ...actions,
+            // THE DOCUMENT'S BUTTONS, MEASURED AGAINST THE STRIP THEY SIT ON.
+            //
+            // Same reasoning as [_BannerClose] and the job name above it: this
+            // row is a CONTAINER colour, and in the Classic theme container
+            // colours are tinted from an accent somebody picks out of a wheel.
+            // Taking the page's own icon ink meant these were the one block on
+            // the banner nobody had checked — a tinted fill can leave
+            // onSurfaceVariant at 2:1 on the strip, which is a row of icons
+            // you can find only by knowing where they are.
+            //
+            // Two wrappers because the group is not all one widget: the icon
+            // buttons take the ink through [IconButtonTheme], and the export
+            // menu's icon reads [IconTheme] directly. Both are handed the same
+            // colour, so which one wins does not matter.
+            //
+            // The disabled entry is that ink faded rather than the theme's own
+            // disabled grey, for the same reason: Convert and the exports
+            // spend most of a session greyed out, and "greyed out" should mean
+            // a fainter version of the row's ink and not a colour picked
+            // against a surface this row is not.
+            IconButtonTheme(
+              data: IconButtonThemeData(
+                style: ButtonStyle(
+                  foregroundColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.disabled)
+                        ? actionInk.withValues(alpha: 0.38)
+                        : actionInk,
+                  ),
+                ),
+              ),
+              child: IconTheme.merge(
+                data: IconThemeData(color: actionInk),
+                // A plain Row, so the group lays out exactly as the spread it
+                // replaced: every one of these is a fixed-size button, and
+                // none of them was ever flexible.
+                child: Row(mainAxisSize: MainAxisSize.min, children: actions),
+              ),
+            ),
           ],
         ),
       ),

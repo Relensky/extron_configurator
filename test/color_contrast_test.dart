@@ -453,6 +453,21 @@ void main() {
           t.name,
           min: kContrastLarge,
         );
+        // The document buttons at the other end of the strip — the theme, the
+        // screenshot, Convert, the transfers and the exports — take the ink
+        // the row itself is measured in rather than the page's icon colour,
+        // and the faded one they wear while disabled is measured too: a row
+        // of greyed-out buttons still has to be findable.
+        final actionInk = readableOn(
+          bg,
+          prefer: [
+            t.theme.textTheme.bodySmall?.color ?? s.onSurfaceVariant,
+            s.onSurface,
+          ],
+          minRatio: kContrastLarge,
+        );
+        expectReadable('the document buttons', actionInk, bg, t.name,
+            min: kContrastLarge);
         // And it has to be TELLABLE from the other one, which is the whole
         // point of tinting it.
         expect(
@@ -478,6 +493,19 @@ void main() {
           'the gear',
           readableOn(bg,
               prefer: [s.onSurfaceVariant, s.onSurface],
+              minRatio: kContrastLarge),
+          bg,
+          t.name,
+          min: kContrastLarge,
+        );
+        // The same group as in room mode, against the job's own fill.
+        expectReadable(
+          'the document buttons',
+          readableOn(bg,
+              prefer: [
+                t.theme.textTheme.bodySmall?.color ?? s.onSurfaceVariant,
+                s.onSurface,
+              ],
               minRatio: kContrastLarge),
           bg,
           t.name,
