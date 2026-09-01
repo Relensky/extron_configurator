@@ -598,6 +598,7 @@
         "power1_outlet_8": "USB\\rSwitch",
         "power1_outlet_8_supports_reboot": true,
         "power1_outlet_8_reboot_only": false,
+        "save_program_logs": true,
         "share_audio_nav_input": "6",
         "share_audio_output": "1",
         "share_audio_switcher": "1",

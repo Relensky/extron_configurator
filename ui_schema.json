@@ -274,6 +274,7 @@
     "gui_capture_source_available": "No",
     "gui_usb_or_vga": "USB",
     "use_qos": true,
+    "save_program_logs": true,
     "disable_inactivity_timer": false,
     "active_reboot_listener": true,
     "reboot_listener_port": 3510,
@@ -996,6 +997,12 @@
     "active_notifications": {
       "type": "bool",
       "description": "Send the room's Teams notifications (device offline, system errors) to the teams_webhook URL. The panel can toggle this at runtime and the processor saves the new value back into config.json."
+    },
+    "save_program_logs": {
+      "type": "bool",
+      "label": "Save Program Logs (save_program_logs)",
+      "helperText": "Logs are kept on the processor for 30 days",
+      "description": "Write the room's program log to storage on the processor, where it is kept for 30 days, instead of only living in memory until the next restart. Leave it true so a fault that happened last week can still be read back off the box; false keeps nothing on disk. Separate from active_debug_server, which is about watching the log live while the room runs - this one is about what is still there afterwards."
     },
     "disable_inactivity_timer": {
       "type": "bool",

@@ -582,6 +582,12 @@
       "true": true,
       "false": false
     },
+    "save_program_logs": {
+      "True": true,
+      "False": false,
+      "true": true,
+      "false": false
+    },
     "dev_dsps": {
       "Yes": "1",
       "No": "0"

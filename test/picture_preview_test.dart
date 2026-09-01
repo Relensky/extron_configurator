@@ -287,13 +287,15 @@ void main() {
     return data!.buffer.asUint8List();
   }
 
-  /// The annotation editor, open over a picture [w] x [h] in a 700x500 window.
+  /// The annotation editor, open over a picture [w] x [h] in a [window]-sized
+  /// window.
   Future<void> openEditor(
     WidgetTester tester, {
     int w = 600,
     int h = 400,
+    Size window = const Size(700, 500),
   }) async {
-    tester.view.physicalSize = const Size(700, 500);
+    tester.view.physicalSize = window;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
@@ -340,6 +342,19 @@ void main() {
         ),
       );
 
+  /// A point on the picture with nothing drawn on it - its far corner, away
+  /// from the marks these tests put near the top-left.
+  ///
+  /// Measured off the canvas as laid out rather than written down as a fixed
+  /// offset: how much of the window the picture gets depends on how many
+  /// lines the toolbar has wrapped onto, and a fixed offset that lands
+  /// OUTSIDE the canvas is a click that never reaches it - which reads in a
+  /// test as a mark that refused to be dropped.
+  Offset bareCanvas(WidgetTester tester) =>
+      tester.getRect(find.byKey(const ValueKey('annotation_canvas')))
+          .bottomRight -
+      const Offset(20, 20);
+
   int editorZoom(WidgetTester tester) {
     final label = tester.widget<Text>(
       find.byKey(const ValueKey('annotation_zoom_level')),
@@ -369,10 +384,11 @@ void main() {
   testWidgets('zooming in makes the drawing surface bigger', (tester) async {
     await openEditor(tester);
     final Size fitted = canvasSize(tester);
+    final int fittedZoom = editorZoom(tester);
 
     await press(tester, 'annotation_zoom_in');
 
-    expect(editorZoom(tester), greaterThan(100));
+    expect(editorZoom(tester), greaterThan(fittedZoom));
     expect(canvasSize(tester).width, greaterThan(fitted.width));
 
     await press(tester, 'annotation_zoom_fit');
@@ -396,7 +412,7 @@ void main() {
     expect(canvasSize(tester).height, lessThanOrEqualTo(500));
   });
 
-  /// Selects a tool off the toolbar, which at 700px has to be scrolled to.
+  /// Selects a tool off the toolbar.
   Future<void> pickTool(WidgetTester tester, String tooltip) async {
     await tester.ensureVisible(find.byTooltip(tooltip));
     await tester.pump();
@@ -415,6 +431,77 @@ void main() {
           (w) => w is IconButton && w.key == ValueKey(key),
         ),
       );
+
+  /// Every control on the toolbar, by the finder that reaches it.
+  ///
+  /// The colors are counted rather than named: they are drawn containers
+  /// with no text or tooltip on them, so what is checked is that all eight
+  /// are laid out and hittable.
+  const List<String> toolbarTooltips = [
+    'Pen',
+    'Highlighter',
+    'Arrow',
+    'Rectangle',
+    'Text (click to place)',
+    'Select - move, recolor or retype a mark',
+    'Move the picture',
+    'Clear all annotations',
+    'Edit the selected text',
+    'Delete the selected mark',
+    'Close without saving',
+  ];
+
+  /// THE BAR WRAPS RATHER THAN CUTS. The editor is opened over whatever it is
+  /// annotating, so it gets shrunk - and a color or a Save button that has
+  /// gone off the edge, behind an overflow stripe or into a sideways
+  /// scroller, is one nobody can press and most will not know is there. At
+  /// every width the bar is allowed to get taller instead, and everything
+  /// stays on screen.
+  for (final Size window in [
+    const Size(1200, 700),
+    const Size(700, 500),
+    const Size(460, 620),
+  ]) {
+    testWidgets('the toolbar keeps every control at ${window.width}px wide',
+        (tester) async {
+      await openEditor(tester, window: window);
+
+      // An overflowing Row reports itself as an exception when it paints.
+      expect(tester.takeException(), isNull);
+
+      for (final String tip in toolbarTooltips) {
+        expect(find.byTooltip(tip), findsOne, reason: '$tip is missing');
+        expect(tester.getRect(find.byTooltip(tip)).right,
+            lessThanOrEqualTo(window.width),
+            reason: '$tip runs off the right-hand edge');
+      }
+      expect(find.text('Copy'), findsOne);
+      expect(find.text('Save PNG'), findsOne);
+      expect(tester.getRect(find.text('Save PNG')).right,
+          lessThanOrEqualTo(window.width));
+
+      // All eight colors, inside the window, without a scroll.
+      final Finder swatches = find.byWidgetPredicate((w) =>
+          w is Container &&
+          w.decoration is BoxDecoration &&
+          (w.decoration as BoxDecoration).shape == BoxShape.circle);
+      expect(swatches, findsNWidgets(8));
+      for (int i = 0; i < 8; i++) {
+        expect(tester.getRect(swatches.at(i)).right,
+            lessThanOrEqualTo(window.width),
+            reason: 'color $i runs off the right-hand edge');
+      }
+    });
+  }
+
+  testWidgets('the narrow toolbar leaves the picture room to be drawn on',
+      (tester) async {
+    // Wrapping costs height, and the canvas pays for it - but it is the
+    // canvas the editor exists for, so it has to keep a usable share of a
+    // small window rather than being squeezed to a sliver by the bar.
+    await openEditor(tester, window: const Size(460, 620));
+    expect(canvasSize(tester).height, greaterThan(200));
+  });
 
   /// The controller behind the picture's vertical scroll.
   ScrollController downController(WidgetTester tester) => tester
@@ -531,7 +618,7 @@ void main() {
   //  and take the screenshot again.
   //
   //  The marks are a list right up to the moment Save turns them into pixels,
-  //  so the pointer tool can reach any of them: pick it up, move it, recolour
+  //  so the pointer tool can reach any of them: pick it up, move it, recolor
   //  it, retype it, throw it away - however many marks have been made since.
   // ==========================================================================
 
@@ -572,7 +659,7 @@ void main() {
   testWidgets('the pointer is a tool of its own', (tester) async {
     await openEditor(tester);
     expect(
-      find.byTooltip('Select - move, recolour or retype a mark'),
+      find.byTooltip('Select - move, recolor or retype a mark'),
       findsOne,
     );
     // Nothing is in hand yet, so there is nothing to delete.
@@ -591,7 +678,7 @@ void main() {
     // this instead.
     await drawArrow(tester);
 
-    await pickTool(tester, 'Select - move, recolour or retype a mark');
+    await pickTool(tester, 'Select - move, recolor or retype a mark');
     final canvas = find.byKey(const ValueKey('annotation_canvas'));
     final onLabel = tester.getTopLeft(canvas) + const Offset(70, 72);
 
@@ -634,7 +721,7 @@ void main() {
   ) async {
     await openEditor(tester);
     await addLabel(tester, 'Screen', at: const Offset(60, 60));
-    await pickTool(tester, 'Select - move, recolour or retype a mark');
+    await pickTool(tester, 'Select - move, recolor or retype a mark');
 
     // A gesture is not an affordance: somebody who has clicked a label and can
     // see it is held has to be TOLD its words can be changed.
@@ -653,7 +740,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
 
     // ...and it stays dark for a mark that has no words.
-    await tester.tapAt(tester.getTopLeft(canvas) + const Offset(300, 300));
+    await tester.tapAt(bareCanvas(tester));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(toolbarButton(tester, 'annotation_edit_text').onPressed, isNull);
@@ -664,7 +751,7 @@ void main() {
   ) async {
     await openEditor(tester);
     await addLabel(tester, 'Here', at: const Offset(60, 60));
-    await pickTool(tester, 'Select - move, recolour or retype a mark');
+    await pickTool(tester, 'Select - move, recolor or retype a mark');
 
     final canvas = find.byKey(const ValueKey('annotation_canvas'));
 
@@ -678,7 +765,7 @@ void main() {
     );
 
     // Bare picture: nothing under the pointer, so nothing in hand.
-    await tester.tapAt(tester.getTopLeft(canvas) + const Offset(300, 300));
+    await tester.tapAt(bareCanvas(tester));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(
@@ -712,7 +799,7 @@ void main() {
       final data = (await image.toByteData())!;
       image.dispose();
 
-      // The picture underneath is one flat colour, so anything else on it is
+      // The picture underneath is one flat color, so anything else on it is
       // either the mark or the halo.
       const backdrop = 0xFF2E7D6F;
       var left = w, top = h, right = -1, bottom = -1;
@@ -746,7 +833,7 @@ void main() {
   testWidgets('the halo lands on the mark at every zoom', (tester) async {
     await openEditor(tester);
     await addLabel(tester, 'Screen', at: const Offset(120, 90));
-    await pickTool(tester, 'Select - move, recolour or retype a mark');
+    await pickTool(tester, 'Select - move, recolor or retype a mark');
 
     final canvas = find.byKey(const ValueKey('annotation_canvas'));
     final onLabel = tester.getTopLeft(canvas) + const Offset(130, 100);
@@ -797,7 +884,7 @@ void main() {
   testWidgets('the halo is never saved into the picture', (tester) async {
     await openEditor(tester);
     await addLabel(tester, 'Screen', at: const Offset(120, 90));
-    await pickTool(tester, 'Select - move, recolour or retype a mark');
+    await pickTool(tester, 'Select - move, recolor or retype a mark');
     await tester.tapAt(
       tester.getTopLeft(find.byKey(const ValueKey('annotation_canvas'))) +
           const Offset(130, 100),
@@ -811,10 +898,7 @@ void main() {
     // the halo - and the saved file is the picture with the halo gone. A
     // dashed box round whichever mark happened to be selected at the moment
     // somebody pressed Save is not a mark anybody made.
-    await tester.tapAt(
-      tester.getTopLeft(find.byKey(const ValueKey('annotation_canvas'))) +
-          const Offset(400, 300),
-    );
+    await tester.tapAt(bareCanvas(tester));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     final dropped = await inkBounds(tester);
@@ -913,7 +997,7 @@ void main() {
       findsOneWidget,
     );
     // And a tool still takes a tap, which is what broke last time.
-    await pickTool(tester, 'Select - move, recolour or retype a mark');
+    await pickTool(tester, 'Select - move, recolor or retype a mark');
   });
 
   testWidgets('the mark in hand is deleted without touching the others', (
@@ -923,7 +1007,7 @@ void main() {
     await addLabel(tester, 'Wrong', at: const Offset(60, 60));
     await drawArrow(tester);
 
-    await pickTool(tester, 'Select - move, recolour or retype a mark');
+    await pickTool(tester, 'Select - move, recolor or retype a mark');
     final canvas = find.byKey(const ValueKey('annotation_canvas'));
     await tester.tapAt(tester.getTopLeft(canvas) + const Offset(70, 72));
     await tester.pump();

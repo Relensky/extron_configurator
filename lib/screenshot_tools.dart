@@ -76,17 +76,17 @@ Future<Uint8List?> captureBoundary(GlobalKey boundaryKey,
 }
 
 /// Wraps a drawing so it renders the way it should PRINT: light theme,
-/// no colour.
+/// no color.
 ///
 /// A cabling sheet is a working document. It gets printed, photocopied, marked
 /// up on a clipboard and faxed back, and none of that survives a drawing whose
 /// only distinction between six Cat 6a and five Cat 5e is that one line is
-/// blue. Forcing the light theme as well as dropping the colour matters
+/// blue. Forcing the light theme as well as dropping the color matters
 /// separately: a dark-mode capture converted to grey is a black page with pale
 /// lines on it, which a printer renders as a black page.
 ///
-/// This is why the runs carry a dash pattern as well as a colour — see
-/// `run_painting.dart`. Take the colour away and the pattern is what is left.
+/// This is why the runs carry a dash pattern as well as a color — see
+/// `run_painting.dart`. Take the color away and the pattern is what is left.
 ///
 /// [enabled] false returns [child] untouched, so the normal on-screen path
 /// costs nothing.
@@ -94,13 +94,13 @@ Widget printSkin({required bool enabled, required Widget child}) {
   if (!enabled) return child;
   return Theme(
     // The drawings ask the theme whether they are in dark mode and pick their
-    // label and backing-plate colours off the answer.
+    // label and backing-plate colors off the answer.
     data: ThemeData(brightness: Brightness.light, useMaterial3: true),
     child: ColorFiltered(colorFilter: kGreyscaleFilter, child: child),
   );
 }
 
-/// Rec. 709 luminance — the same weighting a printer's own colour conversion
+/// Rec. 709 luminance — the same weighting a printer's own color conversion
 /// uses, so what comes out of the app matches what comes out of the printer.
 const ColorFilter kGreyscaleFilter = ColorFilter.matrix(<double>[
   0.2126, 0.7152, 0.0722, 0, 0, //
@@ -151,7 +151,7 @@ Future<void> showAnnotationEditor(BuildContext context, Uint8List pngBytes,
 ///     bigger than the window - see [_AnnotationEditorState.build].
 ///   * [select] is the pointer, and it is what makes the marks EDITABLE rather
 ///     than final. Everything on this canvas is a mark until Save turns it
-///     into pixels; until then a mark can be picked up, moved, recoloured,
+///     into pixels; until then a mark can be picked up, moved, recolored,
 ///     retyped or thrown away, however many other marks have been made since.
 ///     See [_AnnotationEditorState._selected].
 enum AnnotationTool { pen, highlighter, arrow, rect, text, pan, select }
@@ -321,7 +321,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
   /// NOTHING HERE IS FINAL UNTIL SAVE. The marks are a list right up to the
   /// moment [_flatten] turns them into pixels, so one made ten marks ago is as
   /// editable as the one just drawn - picked up with the pointer tool, moved,
-  /// recoloured, retyped, deleted. Before this, the only way back to a mark
+  /// recolored, retyped, deleted. Before this, the only way back to a mark
   /// was Undo, which meant a typo in the first label cost every arrow drawn
   /// since.
   _Annotation? _selected;
@@ -513,7 +513,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
       );
       _undoneAnnotations.clear();
       _annotations.add(added);
-      // Left selected, so the label just placed is the one the next colour or
+      // Left selected, so the label just placed is the one the next color or
       // size change lands on - and so it is obvious it can still be moved.
       _selected = added;
     });
@@ -741,8 +741,8 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2.0),
       child: InkWell(
-        // A colour is both a setting for the next mark and an edit to the one
-        // in hand. Picking one while a mark is held recolours it, which is the
+        // A color is both a setting for the next mark and an edit to the one
+        // in hand. Picking one while a mark is held recolors it, which is the
         // obvious reading of pressing red with something selected.
         onTap: () => setState(() {
           _color = color;
@@ -782,167 +782,196 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                 : Colors.grey[200],
             borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
           ),
-          // THE WAYS OUT ARE PINNED; THE TOOLS SCROLL.
+          // NOTHING FALLS OFF THE EDGE; THE BAR GETS TALLER INSTEAD.
           //
           // This bar was a plain Row of everything, and it had no slack left:
-          // adding one tool pushed Save and Close off the right-hand edge
+          // narrow the window and Save and Close went off the right-hand edge
           // behind a yellow-and-black overflow bar, where they could not be
-          // pressed. An editor somebody cannot leave - or cannot save from -
-          // is worse than one with a tool they have to scroll to.
+          // pressed. Giving the tools a horizontal scroller fixed the buttons
+          // and cost the colors instead - a palette somebody has to drag
+          // sideways to see is a palette they do not know is there, and the
+          // color they want is the one that scrolled away.
           //
-          // So the left-hand group is given whatever room is left over and
-          // scrolls inside it, and the buttons that finish the job keep their
-          // places. On a dialog wide enough for everything - which is most of
-          // them - this looks exactly as it always did.
-          child: Row(
+          // A screenshot editor is shrunk all the time, because it is opened
+          // over whatever it is annotating. So the bar wraps: it is a [Wrap]
+          // of GROUPS, each an unbreakable Row, and a group that will not fit
+          // beside the one before it drops to the next line. Two lines at a
+          // typical dialog width, three when it is really squeezed, one when
+          // there is room - and every tool, color and button stays on screen
+          // and stays pressable at all of them.
+          //
+          // Keep the groups small. The widest one sets the narrowest window
+          // this bar survives, which is why the drawing tools and the two
+          // that move things about are separate groups rather than one row of
+          // seven, and why the ways out sit together at the end where they
+          // are looked for.
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.photo_camera_outlined, size: 18),
-                      const SizedBox(width: 8),
-                      const Text('Annotate Screenshot',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 16),
-                      _toolButton(AnnotationTool.pen, Icons.edit, 'Pen'),
-                      _toolButton(AnnotationTool.highlighter,
-                          Icons.border_color, 'Highlighter'),
-                      _toolButton(
-                          AnnotationTool.arrow, Icons.north_east, 'Arrow'),
-                      _toolButton(AnnotationTool.rect,
-                          Icons.check_box_outline_blank, 'Rectangle'),
-                      _toolButton(AnnotationTool.text, Icons.text_fields,
-                          'Text (click to place)'),
-                      // THE POINTER. Nothing here is final until Save, and
-                      // this is how that is reached: click a mark to pick it
-                      // up, drag to move it, double-click a label to retype
-                      // it. See [_selected].
-                      _toolButton(
-                          AnnotationTool.select,
-                          Icons.near_me_outlined,
-                          'Select - move, recolour or retype a mark'),
-                      // THE HAND. Moves the picture under the pointer, itself
-                      // - see [_dragPicture] for why it cannot leave that to
-                      // the scroll views.
-                      _toolButton(AnnotationTool.pan, Icons.pan_tool_outlined,
-                          'Move the picture'),
-                      const SizedBox(width: 12),
-                      ..._palette.map(_colorSwatch),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.line_weight, size: 16),
-                      SizedBox(
-                        width: 110,
-                        child: Slider(
-                          value: _strokeWidth,
-                          min: 2,
-                          max: 20,
-                          // Resizes the held mark as well - see [_colorSwatch].
-                          onChanged: (val) => setState(() {
-                            _strokeWidth = val;
-                            _selected?.strokeWidth = val;
-                          }),
-                        ),
-                      ),
-                      // STARTING OVER LIVES WITH THE TOOLS. It is the one
-                      // control here nobody reaches for in a hurry - and
-                      // something had to leave the pinned group to make room
-                      // for Redo beside Undo, which people DO reach for in a
-                      // hurry. See the note at the head of this bar for why
-                      // that group cannot simply grow.
-                      const SizedBox(width: 12),
-                      IconButton(
-                        key: const ValueKey('annotation_clear'),
-                        icon: const Icon(Icons.delete_outline, size: 20),
-                        tooltip: 'Clear all annotations',
-                        onPressed: _annotations.isEmpty
-                            ? null
-                            : () => setState(() {
-                                  _annotations.clear();
-                                  _undoneAnnotations.clear();
-                                  _selected = null;
-                                }),
-                      ),
-                    ],
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.photo_camera_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Annotate Screenshot',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              // The five that leave a mark.
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _toolButton(AnnotationTool.pen, Icons.edit, 'Pen'),
+                  _toolButton(AnnotationTool.highlighter, Icons.border_color,
+                      'Highlighter'),
+                  _toolButton(AnnotationTool.arrow, Icons.north_east, 'Arrow'),
+                  _toolButton(AnnotationTool.rect,
+                      Icons.check_box_outline_blank, 'Rectangle'),
+                  _toolButton(AnnotationTool.text, Icons.text_fields,
+                      'Text (click to place)'),
+                ],
+              ),
+              // The two that draw nothing and move things instead.
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // THE POINTER. Nothing here is final until Save, and this
+                  // is how that is reached: click a mark to pick it up, drag
+                  // to move it, double-click a label to retype it. See
+                  // [_selected].
+                  _toolButton(AnnotationTool.select, Icons.near_me_outlined,
+                      'Select - move, recolor or retype a mark'),
+                  // THE HAND. Moves the picture under the pointer, itself -
+                  // see [_dragPicture] for why it cannot leave that to the
+                  // scroll views.
+                  _toolButton(AnnotationTool.pan, Icons.pan_tool_outlined,
+                      'Move the picture'),
+                ],
+              ),
+              // THE WHOLE PALETTE, ALWAYS. It is one group so the eight
+              // colors are never split across two lines, which would read as
+              // two palettes.
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: _palette.map(_colorSwatch).toList(),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.line_weight, size: 16),
+                  SizedBox(
+                    width: 110,
+                    child: Slider(
+                      value: _strokeWidth,
+                      min: 2,
+                      max: 20,
+                      // Resizes the held mark as well - see [_colorSwatch].
+                      onChanged: (val) => setState(() {
+                        _strokeWidth = val;
+                        _selected?.strokeWidth = val;
+                      }),
+                    ),
                   ),
-                ),
+                  // STARTING OVER LIVES WITH THE TOOLS, not with the ways
+                  // out: it is destructive, and it does not belong next to
+                  // the button somebody is aiming for when they want to
+                  // finish.
+                  IconButton(
+                    key: const ValueKey('annotation_clear'),
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    tooltip: 'Clear all annotations',
+                    onPressed: _annotations.isEmpty
+                        ? null
+                        : () => setState(() {
+                              _annotations.clear();
+                              _undoneAnnotations.clear();
+                              _selected = null;
+                            }),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              // BACK AND FORWARD, PINNED. Undo has always been reachable
-              // without scrolling and has to stay that way: it is what
-              // somebody grabs the instant a stroke goes wrong, and a control
-              // you have to go looking for at that moment is one you stop
-              // trusting. Redo earns its place beside it for the same reason
-              // the rest of the app has one — an undo that cannot be
-              // reconsidered is an undo people are wary of pressing.
-              //
-              // Room was made by moving Clear all in with the tools rather
-              // than by widening this group, which has none to spare.
-              IconButton(
-                key: const ValueKey('annotation_undo'),
-                icon: const Icon(Icons.undo, size: 20),
-                tooltip: _annotations.isEmpty
-                    ? 'Nothing to undo - no marks on this picture yet'
-                    : 'Undo the last mark drawn on this picture',
-                onPressed: _annotations.isEmpty ? null : _undoAnnotation,
+              // BACK AND FORWARD, AND THE ONE MARK IN HAND. Undo is what
+              // somebody grabs the instant a stroke goes wrong, and Redo
+              // earns its place beside it for the same reason the rest of the
+              // app has one - an undo that cannot be reconsidered is an undo
+              // people are wary of pressing.
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    key: const ValueKey('annotation_undo'),
+                    icon: const Icon(Icons.undo, size: 20),
+                    tooltip: _annotations.isEmpty
+                        ? 'Nothing to undo - no marks on this picture yet'
+                        : 'Undo the last mark drawn on this picture',
+                    onPressed: _annotations.isEmpty ? null : _undoAnnotation,
+                  ),
+                  IconButton(
+                    key: const ValueKey('annotation_redo'),
+                    icon: const Icon(Icons.redo, size: 20),
+                    tooltip: _undoneAnnotations.isEmpty
+                        ? 'Nothing to redo - nothing has been undone'
+                        : 'Redo the mark that was undone',
+                    onPressed:
+                        _undoneAnnotations.isEmpty ? null : _redoAnnotation,
+                  ),
+                  // RETYPING, SAID OUT LOUD. Double-clicking the label does
+                  // the same thing and is quicker, but a gesture is not an
+                  // affordance: somebody who has just clicked a label and can
+                  // see it is held needs to be told that its words can be
+                  // changed. Lit only for a label, because it is the only
+                  // mark that has any.
+                  IconButton(
+                    key: const ValueKey('annotation_edit_text'),
+                    icon: const Icon(Icons.edit_note, size: 20),
+                    tooltip: 'Edit the selected text',
+                    onPressed: _selected?.tool == AnnotationTool.text
+                        ? () => _editSelectedText()
+                        : null,
+                  ),
+                  // The one mark in hand, thrown away without touching the
+                  // others - the counterpart of the pointer tool, and what
+                  // the Delete key does. Undo only ever reaches the LAST
+                  // mark, which is no use for the label three arrows ago.
+                  IconButton(
+                    key: const ValueKey('annotation_delete_selected'),
+                    icon: const Icon(Icons.backspace_outlined, size: 18),
+                    tooltip: 'Delete the selected mark',
+                    onPressed: _selected == null ? null : _deleteSelected,
+                  ),
+                ],
               ),
-              IconButton(
-                key: const ValueKey('annotation_redo'),
-                icon: const Icon(Icons.redo, size: 20),
-                tooltip: _undoneAnnotations.isEmpty
-                    ? 'Nothing to redo - nothing has been undone'
-                    : 'Redo the mark that was undone',
-                onPressed:
-                    _undoneAnnotations.isEmpty ? null : _redoAnnotation,
-              ),
-              // RETYPING, SAID OUT LOUD. Double-clicking the label does the
-              // same thing and is quicker, but a gesture is not an
-              // affordance: somebody who has just clicked a label and can see
-              // it is held needs to be told that its words can be changed.
-              // Lit only for a label, because it is the only mark that has
-              // any.
-              IconButton(
-                key: const ValueKey('annotation_edit_text'),
-                icon: const Icon(Icons.edit_note, size: 20),
-                tooltip: 'Edit the selected text',
-                onPressed: _selected?.tool == AnnotationTool.text
-                    ? () => _editSelectedText()
-                    : null,
-              ),
-              // The one mark in hand, thrown away without touching the
-              // others - the counterpart of the pointer tool, and what the
-              // Delete key does. Undo only ever reaches the LAST mark, which
-              // is no use for the label three arrows ago.
-              IconButton(
-                key: const ValueKey('annotation_delete_selected'),
-                icon: const Icon(Icons.backspace_outlined, size: 18),
-                tooltip: 'Delete the selected mark',
-                onPressed: _selected == null ? null : _deleteSelected,
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                key: const ValueKey('annotation_copy'),
-                onPressed: _saving ? null : _copy,
-                icon: const Icon(Icons.copy_all_outlined, size: 16),
-                label: const Text('Copy'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: _saving ? null : _save,
-                icon: _saving
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.save, size: 16),
-                label: const Text('Save PNG'),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Close without saving',
-                onPressed: () => Navigator.of(context).pop(),
+              // THE WAYS OUT, TOGETHER AND LAST. Whichever line they land on,
+              // they land on it as a set, in the order somebody reads them.
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('annotation_copy'),
+                    onPressed: _saving ? null : _copy,
+                    icon: const Icon(Icons.copy_all_outlined, size: 16),
+                    label: const Text('Copy'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: _saving ? null : _save,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.save, size: 16),
+                    label: const Text('Save PNG'),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Close without saving',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1517,7 +1546,7 @@ class ZoomablePicturePreview extends StatefulWidget {
   /// ones belonging to a particular dialog.
   final String keyPrefix;
 
-  /// The colour behind the picture. The plate is white or near-black
+  /// The color behind the picture. The plate is white or near-black
   /// depending on the capture, and it needs something to sit ON for its edges
   /// to be visible.
   final Color? backdrop;
