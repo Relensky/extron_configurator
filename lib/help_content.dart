@@ -716,7 +716,13 @@ const List<HelpTopic> kHelpTopics = [
         'Every PO number the job mentions ANYWHERE - on a package, on a part, '
         'on an earlier delivery - is one click away in the PO boxes rather '
         'than something to retype and mistype. Numbers the job knows but has '
-        'no row for are offered when adding one.',
+        'no row for are offered when adding one. Picking a part that has '
+        'already gone out on a PO fills its number in for you, off the order '
+        'record; type over it when the packing slip disagrees.\n\n'
+        'A truckload is logged in one pass. "Log several" ticks off everything '
+        'that came together, with the place it went and the day it landed said '
+        'once for all of them - and each row still keeps the PO that bought '
+        'that part.',
   ),
   HelpTopic(
     title: 'The delivery timeline',

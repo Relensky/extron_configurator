@@ -115,6 +115,25 @@ List<Widget> deliveriesSlivers(BuildContext context, ProjectEstimate estimate) {
                   : 'DELIVERED (${_onHandSummary(project)})',
             ),
           ),
+          // TWO WAYS IN, because a delivery is either one thing or a truck.
+          // The second only appears when there is an equipment list to tick
+          // against - it has nothing to offer a job whose parts are not
+          // costed yet.
+          if (estimate.master.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                key: const ValueKey('delivery_log_many'),
+                icon: const Icon(Icons.playlist_add_check, size: 18),
+                label: const Text('Log several'),
+                onPressed: () => showBulkDeliveryDialog(
+                  context,
+                  provider: provider,
+                  estimate: estimate,
+                  rooms: roomChoices,
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: FilledButton.tonalIcon(
@@ -1707,6 +1726,20 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
   late String _roomId = widget.existing?.roomId ?? '';
   late bool _oneOff = widget.existing?.oneOff ?? false;
 
+  /// The number the part dropdown filled in for itself, so switching parts can
+  /// replace it without ever stepping on one somebody typed.
+  String _autoPo = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // A NEW ROW OPENS WITH THE PO ALREADY ON IT. The order record knows what
+    // bought this part; making somebody read the number off the same job they
+    // are standing in and retype it is how a delivery ends up on PO-1188 when
+    // the part went out on PO-1204.
+    if (widget.existing == null) _fillPoForPart();
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -1752,6 +1785,30 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
     }
     return 'Nothing says what this is. It will read as "something not on the '
         'equipment list" everywhere it appears.';
+  }
+
+  /// The PO the job's order record says bought [key] - empty when nothing
+  /// says, and for anything that is not on the equipment list.
+  String _poForPart(String key) {
+    if (key.isEmpty || key == _kOffList) return '';
+    return widget.provider.project.orderForPart(key)?.poNumber.trim() ?? '';
+  }
+
+  /// Puts the selected part's PO in the box, if the box is free to take it.
+  ///
+  /// FREE MEANS EMPTY, OR STILL HOLDING WHAT THIS FILLED IN LAST TIME. A
+  /// number somebody typed is what the packing slip said and outranks the
+  /// order record; a number this put there is a guess, and switching parts
+  /// makes it the wrong guess - so it goes, even when the new part has no PO
+  /// to put in its place.
+  void _fillPoForPart() {
+    if (_oneOff) return;
+    final typed = _po.text.trim();
+    if (typed.isNotEmpty && typed != _autoPo) return;
+    final number = _poForPart(_partKey);
+    if (typed.isEmpty && number.isEmpty) return;
+    _po.text = number;
+    _autoPo = number;
   }
 
   void _save() {
@@ -1841,7 +1898,10 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
                     child: Text('Something not on the equipment list'),
                   ),
                 ],
-                onChanged: (v) => setState(() => _partKey = v ?? _kOffList),
+                onChanged: (v) => setState(() {
+                  _partKey = v ?? _kOffList;
+                  _fillPoForPart();
+                }),
               ),
               if (!known || _partKey == _kOffList) ...[
                 const SizedBox(height: 8),
@@ -1904,6 +1964,22 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
                   ),
                 ],
               ),
+              // Where the number in the PO box came from, said out loud. A
+              // field that fills itself and does not say why is one people
+              // distrust and retype.
+              if (_autoPo.isNotEmpty && _po.text.trim() == _autoPo)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Filled in from the order: this part was bought on '
+                    '$_autoPo. Type over it if the packing slip says '
+                    'otherwise.',
+                    key: const ValueKey('delivery_po_auto'),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               if (_partKey.isNotEmpty && _partKey != _kOffList)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
@@ -1937,7 +2013,14 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
                 ),
                 onChanged: (v) => setState(() {
                   _oneOff = v ?? false;
-                  if (_oneOff) _po.clear();
+                  if (_oneOff) {
+                    _po.clear();
+                    _autoPo = '';
+                  } else {
+                    // Unticked, the box is open again - and the order record
+                    // still knows what bought this.
+                    _fillPoForPart();
+                  }
                 }),
               ),
               if (_warning.isNotEmpty)
@@ -2114,6 +2197,455 @@ String _alreadyHere(
           '${installed > 0 ? ', ${formatUnits(installed)} in a room' : ''}.',
   ];
   return parts.isEmpty ? '' : parts.join(' ');
+}
+
+// ---------------------------------------------------------------------------
+//  LOGGING SEVERAL AT ONCE
+// ---------------------------------------------------------------------------
+
+/// Logs a TRUCKLOAD: several parts that arrived together, at one place, on one
+/// day.
+///
+/// ONE PLACE AND ONE DAY, TYPED ONCE. A delivery is rarely one part. Nine
+/// lines come off the same pallet, go to the same dock on the same morning,
+/// and logged one at a time that is nine trips through the same dialog typing
+/// the same address and picking the same date - which is how a log ends up
+/// with the first two rows on it and the other seven in somebody's head.
+///
+/// EACH ROW STILL KEEPS ITS OWN PO, taken from what the job says bought that
+/// part, because one pallet can still carry two purchase orders. The number in
+/// the box below is the fallback, used on the rows the job has no order record
+/// for.
+Future<void> showBulkDeliveryDialog(
+  BuildContext context, {
+  required AppStateProvider provider,
+  required ProjectEstimate estimate,
+  required List<({String id, String name})> rooms,
+}) async {
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _BulkDeliveryDialog(
+      provider: provider,
+      estimate: estimate,
+      rooms: rooms,
+    ),
+  );
+}
+
+class _BulkDeliveryDialog extends StatefulWidget {
+  final AppStateProvider provider;
+  final ProjectEstimate estimate;
+  final List<({String id, String name})> rooms;
+
+  const _BulkDeliveryDialog({
+    required this.provider,
+    required this.estimate,
+    required this.rooms,
+  });
+
+  @override
+  State<_BulkDeliveryDialog> createState() => _BulkDeliveryDialogState();
+}
+
+class _BulkDeliveryDialogState extends State<_BulkDeliveryDialog> {
+  final Set<String> _checked = {};
+
+  /// One quantity box per part, made the first time that part is drawn and
+  /// kept for as long as the dialog is open - so a number typed against a row
+  /// survives the search box being used to go and find another one.
+  final Map<String, TextEditingController> _qty = {};
+
+  final TextEditingController _search = TextEditingController();
+  final TextEditingController _po = TextEditingController();
+  final TextEditingController _location = TextEditingController();
+  final TextEditingController _note = TextEditingController();
+  DateTime? _delivered = today();
+  DateTime? _installed;
+  DeliveryState _state = DeliveryState.delivered;
+  String _roomId = '';
+
+  @override
+  void dispose() {
+    for (final c in _qty.values) {
+      c.dispose();
+    }
+    _search.dispose();
+    _po.dispose();
+    _location.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  /// The PO the job's order record says bought [key].
+  String _poForPart(String key) =>
+      widget.provider.project.orderForPart(key)?.poNumber.trim() ?? '';
+
+  /// The quantity box for [line], opened on what is still outstanding: the job
+  /// buys eighteen, six are already logged, so twelve is the answer this
+  /// delivery is most likely to want.
+  TextEditingController _qtyFor(MasterPartLine line) =>
+      _qty.putIfAbsent(line.key, () {
+        final left =
+            line.qty - widget.provider.project.deliveredQty(line.key);
+        return TextEditingController(
+          text: formatUnits(left > 0 ? left : line.qty),
+        );
+      });
+
+  /// The equipment list, narrowed by whatever is in the search box.
+  List<MasterPartLine> get _shown {
+    final needle = _search.text.trim().toLowerCase();
+    if (needle.isEmpty) return widget.estimate.master;
+    return [
+      for (final m in widget.estimate.master)
+        if (m.description.toLowerCase().contains(needle) ||
+            m.model.toLowerCase().contains(needle) ||
+            m.partNumber.toLowerCase().contains(needle))
+          m,
+    ];
+  }
+
+  /// How many ticked rows the job cannot say a PO for. They are still logged -
+  /// see [ProjectDelivery.needsPaperwork] - but this is the one moment where
+  /// one number in one box fixes all of them at once.
+  int get _withoutPo {
+    if (_po.text.trim().isNotEmpty) return 0;
+    var n = 0;
+    for (final key in _checked) {
+      if (_poForPart(key).isEmpty) n++;
+    }
+    return n;
+  }
+
+  void _save() {
+    final names = {for (final m in widget.estimate.master) m.key: m.description};
+    final fallback = _po.text.trim();
+    final installing = _state == DeliveryState.installed;
+    final where = _location.text.trim();
+    var logged = 0;
+    // In equipment-list order rather than tick order, so the log reads the way
+    // the packing slip does.
+    for (final line in widget.estimate.master) {
+      if (!_checked.contains(line.key)) continue;
+      final own = _poForPart(line.key);
+      widget.provider.addProjectDelivery(
+        partKey: line.key,
+        itemName: names[line.key] ?? '',
+        poNumber: own.isNotEmpty ? own : fallback,
+        qty: double.tryParse(_qty[line.key]?.text.trim() ?? '') ?? 0,
+        deliveredOn: _delivered,
+        state: _state,
+        location: _location.text,
+        roomId: installing ? _roomId : '',
+        installedOn: installing ? (_installed ?? _delivered ?? today()) : null,
+        note: _note.text,
+      );
+      logged++;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 4),
+        content: Text(
+          '${logged == 1 ? '1 delivery' : '$logged deliveries'} logged'
+          '${where.isEmpty ? '' : ' - $where'}.',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final project = widget.provider.project;
+    final shown = _shown;
+    final missing = _withoutPo;
+    final warn = warningOn(
+      theme.dialogTheme.backgroundColor ?? theme.colorScheme.surface,
+    );
+
+    return AlertDialog(
+      key: const ValueKey('bulk_delivery_dialog'),
+      title: const Text('Log several deliveries'),
+      content: SizedBox(
+        width: 640,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Everything that came off the same truck. Where it went and '
+                'the day it landed are said once, here, and each part keeps '
+                'the PO the job says bought it.',
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DateField(
+                      label: 'Arrived',
+                      value: _delivered,
+                      buttonKey: const ValueKey('bulk_delivery_arrived'),
+                      onPick: (d) => setState(() => _delivered = d),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonFormField<DeliveryState>(
+                      key: const ValueKey('bulk_delivery_state'),
+                      initialValue: _state,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Where is it now',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        for (final s in DeliveryState.values)
+                          DropdownMenuItem(
+                            value: s,
+                            child: Row(
+                              children: [
+                                Icon(deliveryStateIcon(s), size: 16),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    s.label,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                      onChanged: (v) =>
+                          setState(() => _state = v ?? DeliveryState.delivered),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _LocationField(
+                controller: _location,
+                stored: _state == DeliveryState.stored,
+                known: project.deliveryLocations,
+                onPicked: (v) => setState(() => _location.text = v),
+              ),
+              if (_state == DeliveryState.installed) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        key: const ValueKey('bulk_delivery_room'),
+                        initialValue: widget.rooms.any((r) => r.id == _roomId)
+                            ? _roomId
+                            : '',
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'In which room',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: '',
+                            child: Text('Not saying'),
+                          ),
+                          for (final r in widget.rooms)
+                            DropdownMenuItem(
+                              value: r.id,
+                              child: Text(
+                                r.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: (v) => setState(() => _roomId = v ?? ''),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _DateField(
+                        label: 'Installed',
+                        value: _installed ?? _delivered,
+                        buttonKey: const ValueKey('bulk_delivery_installed_on'),
+                        onPick: (d) => setState(() => _installed = d),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 8),
+              _PoField(
+                controller: _po,
+                numbers: project.poNumbersInUse,
+                onPicked: (v) => setState(() => _po.text = v),
+                onChanged: (_) => setState(() {}),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Used only on the rows the job has no order record for. '
+                  'Anything already bought on a PO keeps its own number.',
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('bulk_delivery_search'),
+                controller: _search,
+                decoration: const InputDecoration(
+                  labelText: 'Find a part',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const Divider(height: 16),
+              SizedBox(
+                height: 240,
+                child: shown.isEmpty
+                    ? Center(
+                        child: Text(
+                          widget.estimate.master.isEmpty
+                              ? 'Nothing on the equipment list to log against. '
+                                    'Log these one at a time instead.'
+                              : 'Nothing matches that.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: muted,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: shown.length,
+                        itemBuilder: (context, i) =>
+                            _bulkRow(theme, muted, project, shown[i]),
+                      ),
+              ),
+              if (missing > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.warning_amber, size: 18, color: warn),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          missing == 1
+                              ? '1 of these is on no purchase order. A number '
+                                    'in the PO box above goes on that row.'
+                              : '$missing of these are on no purchase order. '
+                                    'A number in the PO box above goes on all '
+                                    'of them.',
+                          key: const ValueKey('bulk_delivery_no_po_warning'),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: warn,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('bulk_delivery_note'),
+                controller: _note,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Note',
+                  hintText: 'all on one pallet, seal intact',
+                  helperText: 'Signed with your name, and put on every row.',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('bulk_delivery_save'),
+          onPressed: _checked.isEmpty ? null : _save,
+          child: Text(_checked.isEmpty ? 'Log them' : 'Log ${_checked.length}'),
+        ),
+      ],
+    );
+  }
+
+  /// One part on the list: whether it came, how many of it, and what the job
+  /// already knows about it.
+  Widget _bulkRow(
+    ThemeData theme,
+    Color muted,
+    BuildingProject project,
+    MasterPartLine line,
+  ) {
+    final ticked = _checked.contains(line.key);
+    final po = _poForPart(line.key);
+    final here = project.deliveredQty(line.key);
+    return Row(
+      children: [
+        Expanded(
+          child: CheckboxListTile(
+            key: ValueKey('bulk_delivery_pick_${line.key}'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: ticked,
+            title: Text(
+              line.description,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium,
+            ),
+            subtitle: Text(
+              [
+                if (line.qty > 0) 'the job buys ${formatUnits(line.qty)}',
+                if (here > 0) '${formatUnits(here)} already logged',
+                if (po.isNotEmpty) 'bought on $po' else 'on no PO the job knows',
+              ].join(' - '),
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+            onChanged: (v) => setState(() {
+              if (v == true) {
+                _qtyFor(line);
+                _checked.add(line.key);
+              } else {
+                _checked.remove(line.key);
+              }
+            }),
+          ),
+        ),
+        SizedBox(
+          width: 92,
+          child: TextField(
+            key: ValueKey('bulk_delivery_qty_${line.key}'),
+            controller: _qtyFor(line),
+            enabled: ticked,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'How many',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 /// Where a delivery went: an address, a dock, a shelf — typed, with the places
