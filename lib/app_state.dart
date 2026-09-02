@@ -40,6 +40,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'secret_store.dart';
 import 'sftp_client.dart';
 import 'ui_schema.dart';
+import 'vendor_book.dart';
 import 'undo_history.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -569,6 +570,11 @@ class AppStateProvider extends ChangeNotifier {
   /// share as the catalog: a loading dock is a fact about the estate, not a
   /// per-machine preference.
   String deliveryLocationsFilePath = '';
+  /// Optional path to vendor_list.json - the companies every job's Packages
+  /// tab starts with. Worth pointing at the same share as the catalog: who the
+  /// department buys from is a fact about the department, and one directory is
+  /// what keeps 'Extron' from being spelled three ways across three jobs.
+  String vendorListFilePath = '';
   String documentationPath = ''; // Folder of per-module PDF manuals (blank = <root>/documentation)
 
   // --- Processor connection settings (App Config > Processor Connection) ---
@@ -873,6 +879,7 @@ class AppStateProvider extends ChangeNotifier {
       'avDevicesFilePath': avDevicesFilePath,
       'flowRulesFilePath': flowRulesFilePath,
       'deliveryLocationsFilePath': deliveryLocationsFilePath,
+      'vendorListFilePath': vendorListFilePath,
       'documentationPath': documentationPath,
       'onlineFolder': onlineFolder,
       'sftpUsername': sftpUsername,
@@ -1022,6 +1029,12 @@ class AppStateProvider extends ChangeNotifier {
   // Read from delivery_locations.json in the Root Folder, and empty until
   // somebody sets one up: there is no dock that is right for every campus.
   DeliveryLocationBook deliveryLocations = DeliveryLocationBook();
+
+  // --- Default vendors (who this shop asks to quote) ---
+  // The directory every job's Packages tab is seeded from. Read from
+  // vendor_list.json in the Root Folder, and empty until somebody sets one up:
+  // there is no supplier that is right for every shop.
+  VendorBook vendorBook = VendorBook();
 
   /// The active working file on disk: the file opened locally, or the working
   /// copy chosen during an SFTP download. Empty when the session started from
@@ -7019,6 +7032,7 @@ class AppStateProvider extends ChangeNotifier {
       avDevicesFilePath = str('avDevicesFilePath', '');
       flowRulesFilePath = str('flowRulesFilePath', '');
       deliveryLocationsFilePath = str('deliveryLocationsFilePath', '');
+      vendorListFilePath = str('vendorListFilePath', '');
       documentationPath = str('documentationPath', '');
       onlineFolder = str('onlineFolder', '');
       sftpUsername = str('sftpUsername', 'admin');
@@ -7104,6 +7118,8 @@ class AppStateProvider extends ChangeNotifier {
       await loadBaseCosts();
       // Load the delivery locations (empty when no file exists)
       await loadDeliveryLocations();
+      // Load the default vendor list (empty when no file exists)
+      await loadVendorBook();
 
       // Load files into memory on boot. The loaders resolve their own
       // default paths (Root Folder / working directory) when no explicit
@@ -7941,6 +7957,8 @@ class AppStateProvider extends ChangeNotifier {
         // ignore: unawaited_futures
         loadDeliveryLocations();
         // ignore: unawaited_futures
+        loadVendorBook();
+        // ignore: unawaited_futures
         loadBuildingsList();
         // ignore: unawaited_futures
         loadProcessorsList();
@@ -7986,6 +8004,11 @@ class AppStateProvider extends ChangeNotifier {
         deliveryLocationsFilePath = value;
         // ignore: unawaited_futures
         loadDeliveryLocations(); // Re-read the places from the new location
+        break;
+      case 'vendorListFilePath':
+        vendorListFilePath = value;
+        // ignore: unawaited_futures
+        loadVendorBook(); // Re-read the directory from the new location
         break;
       case 'documentationPath':
         documentationPath = value; // PDFs are resolved on demand — no reload
@@ -8362,6 +8385,108 @@ class AppStateProvider extends ChangeNotifier {
         usedOnThisJob: project.deliveryLocations,
         storage: storage,
       );
+
+  // --- default vendors: who this shop asks to quote ------------------------
+
+  /// vendor_list.json: explicit choice, else `<root>/vendor_list.json` -
+  /// beside the catalog, the rate cards and the delivery locations, which is
+  /// where the rest of the app's shared documents live.
+  String get effectiveVendorListPath => vendorListFilePath.isNotEmpty
+      ? vendorListFilePath
+      : (vendorBook.filePath.isNotEmpty
+            ? vendorBook.filePath
+            : path.join(effectiveRootFolder, 'vendor_list.json'));
+
+  /// (Re)reads the directory. [explicitPath] opens somebody else's list, which
+  /// is how another site's suppliers get looked at without adopting them.
+  Future<void> loadVendorBook({String explicitPath = ''}) async {
+    vendorBook = await VendorBook.load(
+      explicitPath.isNotEmpty ? explicitPath : effectiveVendorListPath,
+    );
+    notifyListeners();
+  }
+
+  /// Writes the directory. Returns the file written, or '' on failure.
+  Future<String> saveVendorBook() async {
+    final saved = await vendorBook.save(toPath: effectiveVendorListPath);
+    notifyListeners();
+    return saved;
+  }
+
+  /// The list is a plain object, not a listenable, so every edit path goes
+  /// through here rather than each view remembering to notify.
+  void vendorBookChanged() => notifyListeners();
+
+  /// The saved companies this job has not got yet, matched on the NAME.
+  ///
+  /// By name rather than by id, because a job's vendor is a copy taken when it
+  /// was seeded: the ids are the job's own, and a vendor typed by hand before
+  /// the shared list existed is still the same company.
+  List<DefaultVendor> get vendorsOffProject {
+    final have = {
+      for (final v in project.vendors) v.name.trim().toLowerCase(),
+    };
+    return [
+      for (final v in vendorBook.vendors)
+        if (v.name.trim().isNotEmpty &&
+            !have.contains(v.name.trim().toLowerCase()))
+          v,
+    ];
+  }
+
+  /// Puts saved companies onto the job's directory, and says how many landed.
+  ///
+  /// [ids] picks particular ones; empty means every company the job has not
+  /// got. Nothing is ever added twice - see [vendorsOffProject] - so this is
+  /// safe to press on a job that was already seeded.
+  ///
+  /// APPENDED, not inserted at the top like [addProjectVendor]: this adds a
+  /// list rather than one row, and a list that arrived reversed would not read
+  /// as the directory it came from.
+  int addProjectVendorsFromBook({List<String> ids = const []}) {
+    final wanted = ids.toSet();
+    final adding = [
+      for (final v in vendorsOffProject)
+        if (wanted.isEmpty || wanted.contains(v.id)) v,
+    ];
+    if (adding.isEmpty) return 0;
+    for (final v in adding) {
+      project.vendors.add(
+        ProjectVendor(
+          id: project.nextVendorId(),
+          name: v.name,
+          contact: v.contact,
+          notes: v.notes,
+        ),
+      );
+    }
+    _projectChanged();
+    return adding.length;
+  }
+
+  /// Seeds a brand-new job's directory from the shared list, quietly.
+  ///
+  /// SEPARATE FROM THE BUTTON because it must not mark the job dirty or write
+  /// a history entry: nobody has done anything yet, and a new project that
+  /// arrives with unsaved changes is a project that asks to be saved before it
+  /// has been worked on.
+  void _seedProjectVendors() {
+    if (vendorBook.isEmpty || project.vendors.isNotEmpty) return;
+    for (final v in vendorBook.vendors) {
+      if (v.name.trim().isEmpty) continue;
+      project.vendors.add(
+        ProjectVendor(
+          id: project.nextVendorId(),
+          name: v.name,
+          contact: v.contact,
+          notes: v.notes,
+        ),
+      );
+    }
+    AppLogger.logInfo(
+      'Seeded ${project.vendors.length} vendors from the shared list.',
+    );
+  }
 
   /// Something outside this class rewrote the room config — the control-side
   /// prefill is the one that does — so every page reading it repaints.
@@ -12027,6 +12152,9 @@ class AppStateProvider extends ChangeNotifier {
       currency: currencySymbol,
     );
     seedStarterPackages(project);
+    // And the companies the shop buys from, off the shared list, so the first
+    // package is invitable without retyping the directory per job.
+    _seedProjectVendors();
     currentProjectPath = '';
     projectDirty = false;
     _projectStarted = true;
@@ -12264,6 +12392,7 @@ class AppStateProvider extends ChangeNotifier {
     // starters on purpose is not offered them again on the next room.
     if (project.rooms.isEmpty && project.rfqs.isEmpty) {
       seedStarterPackages(project);
+      _seedProjectVendors();
       AppLogger.logInfo(
         'Seeded the default buying split on the first room of a new project.',
       );

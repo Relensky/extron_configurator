@@ -230,9 +230,12 @@ const List<HelpTopic> kHelpTopics = [
         'power draw, price, life. Edited on the Catalog tab.\n\n'
         'base_costs.json and labor_rates.json are what the estimate falls back '
         'to when no model has been chosen yet. Edited from the Cost tab.\n\n'
-        'delivery_locations.json is the docks a truck can back up to and the '
+        'delivery_locations.json is the docks kit is dropped at and the '
         'rooms gear is held in. Edited from App Config, and offered on every '
         'delivery.\n\n'
+        'vendor_list.json is the companies the shop asks to quote. Edited '
+        'from App Config, and every new job starts with them on its '
+        'Packages tab.\n\n'
         'If the app does something you do not want, the fix is usually a rule '
         'or a schema entry rather than a new build.',
   ),
@@ -722,7 +725,7 @@ const List<HelpTopic> kHelpTopics = [
         'no row for are offered when adding one. Picking a part that has '
         'already gone out on a PO fills its number in for you, off the order '
         'record; type over it when the packing slip disagrees.\n\n'
-        'A truckload is logged in one pass. "Log several" ticks off everything '
+        'A whole load is logged in one pass. "Log several" ticks off everything '
         'that came together, with the place it went and the day it landed said '
         'once for all of them - and each row still keeps the PO that bought '
         'that part.\n\n'
@@ -746,13 +749,13 @@ const List<HelpTopic> kHelpTopics = [
       'move',
     ],
     body:
-        'The docks a truck can back up to and the rooms gear waits in, set up '
+        'The docks kit is dropped at and the rooms gear waits in, set up '
         'once and then one click away on every delivery. A loading dock is a '
         'fact about the estate rather than about one job, and retyping '
         '"MLIB basement, rack 3" per delivery is how one shelf becomes four '
         'spellings that no filter can put back together.\n\n'
         'Each place carries a name, what it is used for - deliveries, '
-        'storage, or both - an address, and anything the driver needs. The '
+        'storage, or both - an address, and notes on the room itself. The '
         'NAME is what gets written onto a delivery; the address is looked up '
         'here rather than retyped onto every row.\n\n'
         'They live in delivery_locations.json. Point the path at a shared '
@@ -766,6 +769,39 @@ const List<HelpTopic> kHelpTopics = [
         'press "Move these". Every row moved keeps a signed note saying where '
         'it came from and where it went, so the log can still answer "where '
         'was it in March" after somebody has moved it twice.',
+  ),
+  HelpTopic(
+    title: 'The default vendor list',
+    section: 'The job',
+    where: 'App Config tab -> Default vendors, and Project tab -> Packages',
+    keywords: [
+      'vendor',
+      'supplier',
+      'default',
+      'directory',
+      'company',
+      'rep',
+      'quote',
+      'packages',
+      'shared',
+    ],
+    body:
+        'The companies this shop asks to quote, set up once and then on every '
+        'job without being retyped. Who the department buys from is a fact '
+        'about the department rather than about one building.\n\n'
+        'Each company carries a name, who a request goes to, and anything '
+        'worth knowing about them - the account number, the terms, what they '
+        'are slow on.\n\n'
+        'They live in vendor_list.json. Point the path at a shared drive and '
+        'everybody starts from one directory, which is what stops the same '
+        'supplier being spelled three ways across three quote comparisons.\n\n'
+        'A NEW JOB ARRIVES WITH THEM on its Packages tab. A job started before '
+        'a company was added can take it from the button beside Add vendor on '
+        'the same tab, which only ever offers what the job has not got.\n\n'
+        'What lands on a job is a COPY. Renaming a vendor there, or dropping '
+        'the ones this job is not using, changes nothing on the share - and '
+        'changing the share does not rewrite a job that has already been '
+        'quoted.',
   ),
   HelpTopic(
     title: 'The delivery timeline',

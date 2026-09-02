@@ -6,8 +6,8 @@ import 'app_logger.dart';
 /// ============================================================================
 ///  DELIVERY LOCATIONS
 /// ============================================================================
-///  The docks a truck can back up to, and the rooms kit is held in until it
-///  goes up. Kept in a file of its own (`delivery_locations.json` in the Root
+///  The docks kit is dropped at, and the rooms it is held in until it goes
+///  up. Kept in a file of its own (`delivery_locations.json` in the Root
 ///  Folder) rather than per job, for the reason the rate card is: a loading
 ///  dock is a fact about the ESTATE, and retyping "MLIB basement, rack 3" on
 ///  every delivery is how one shelf becomes four spellings that no filter can
@@ -25,7 +25,7 @@ import 'app_logger.dart';
 /// What a place is for. A dock takes deliveries, a store holds gear, and most
 /// of the useful ones do both.
 enum DeliveryLocationUse {
-  /// Somewhere a truck delivers to.
+  /// Somewhere kit gets dropped.
   delivery('Delivery point', 'takes deliveries'),
 
   /// Somewhere gear is held until it goes in.
@@ -45,7 +45,7 @@ enum DeliveryLocationUse {
   /// True when this place should be offered for holding gear.
   bool get holds => this != DeliveryLocationUse.delivery;
 
-  /// True when this place should be offered as somewhere a truck delivers to.
+  /// True when this place should be offered as somewhere kit gets dropped.
   bool get receives => this != DeliveryLocationUse.storage;
 }
 
@@ -83,7 +83,7 @@ class DeliveryLocation {
 
   final DeliveryLocationUse use;
 
-  /// Anything the person delivering needs: the hours, who to ring, which door.
+  /// Notes on the room itself: the hours, who to ring, which door.
   final String notes;
 
   const DeliveryLocation({
@@ -187,8 +187,8 @@ class DeliveryLocationBook {
     return null;
   }
 
-  /// The places worth offering for one side of the question: somewhere a
-  /// truck delivers to, or somewhere gear is held.
+  /// The places worth offering for one side of the question: somewhere kit
+  /// gets dropped, or somewhere gear is held.
   List<DeliveryLocation> forUse({required bool storage}) => [
     for (final p in places)
       if (storage ? p.use.holds : p.use.receives) p,
@@ -263,7 +263,7 @@ class DeliveryLocationBook {
   Map<String, dynamic> toJson() => {
     '__readme':
         'Delivery and storage locations for the Room Config Builder. One '
-        'entry per place a truck can deliver to or gear can be held at; the '
+        'entry per place kit can be dropped at or held at; the '
         'name is what gets written onto a delivery row, and the address is '
         'looked up here rather than typed onto every row. Put this file on a '
         'shared drive to give the whole shop one set of names. A delivery can '

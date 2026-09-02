@@ -767,7 +767,7 @@ class ProjectDelivery {
   /// shipping container', 'my office'.
   ///
   /// Free text, and typed rather than picked. A job takes delivery wherever
-  /// the vendor could get a truck to that week, and a fixed list of places
+  /// the vendor could reach that week, and a fixed list of places
   /// would mean the one delivery that went somewhere else is the one that
   /// cannot be written down. The places this job has already used are offered
   /// as suggestions - see [BuildingProject.deliveryLocations] - so the usual
@@ -903,6 +903,58 @@ class ProjectDelivery {
         installedOn: parseIsoDate(json['installedOn']),
         notes: notesFromJson(json['notes']),
       );
+}
+
+/// Some of one part, and where it is.
+///
+/// The delivery log read the way somebody standing in a corridor reads it:
+/// not "what arrived" but "where is my kit". Arrivals in the same state at the
+/// same place are one of these however many packing slips they came on - see
+/// [BuildingProject.partLocationsFor].
+///
+/// Only ever built from lots the job still has. A returned lot is somewhere
+/// else's problem and saying it is 'on site' is how a tracker sends somebody
+/// looking for a box that went back in March.
+class PartLocation {
+  final DeliveryState state;
+
+  /// The project room id, on an installed lot. '' on every other state - a
+  /// lot in storage is at a PLACE, not in a room.
+  final String roomId;
+
+  /// The place off the delivery row, as it was typed. '' when nobody said.
+  final String location;
+
+  /// How many units are here.
+  final double qty;
+
+  const PartLocation({
+    required this.state,
+    this.roomId = '',
+    this.location = '',
+    this.qty = 0,
+  });
+
+  bool get isInstalled => state == DeliveryState.installed;
+
+  /// Where these units are, in the fewest words that are still true.
+  ///
+  /// [roomName] is the code on the door, which this class cannot look up
+  /// itself: a room id means nothing to anybody reading a parts list. Without
+  /// one an installed lot says only that it went in, which is still the
+  /// answer to the question that was asked.
+  String label({String roomName = ''}) {
+    final room = roomName.trim();
+    final place = location.trim();
+    return switch (state) {
+      DeliveryState.installed =>
+        room.isEmpty ? 'Installed' : 'Installed in $room',
+      DeliveryState.stored =>
+        place.isEmpty ? 'In storage' : 'In storage at $place',
+      DeliveryState.delivered => place.isEmpty ? 'On site' : 'On site at $place',
+      DeliveryState.returned => 'Returned',
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -3712,6 +3764,61 @@ class BuildingProject {
       if (d.partKey == partKey && test(d)) total += d.qty;
     }
     return total;
+  }
+
+  /// Every place some of [partKey] is, biggest lot first.
+  ///
+  /// The delivery log answers this per ARRIVAL - six on the 3rd, four on the
+  /// 11th - and "where is it" is a different question: three arrivals that all
+  /// went to Central Stores are one answer, not three. See [PartLocation].
+  List<PartLocation> partLocationsFor(String partKey) => _groupPartLocations([
+    for (final d in deliveries)
+      if (d.partKey == partKey && d.isOnHand) d,
+  ]);
+
+  /// The same, for every part at once - ONE pass over the log.
+  ///
+  /// What a list of two hundred parts asks for: calling [partLocationsFor] per
+  /// row would walk the whole delivery log per row, per rebuild, while
+  /// somebody drags a scrollbar.
+  Map<String, List<PartLocation>> partLocationsByKey() {
+    final rows = <String, List<ProjectDelivery>>{};
+    for (final d in deliveries) {
+      if (d.partKey.isEmpty || !d.isOnHand) continue;
+      rows.putIfAbsent(d.partKey, () => []).add(d);
+    }
+    return {for (final e in rows.entries) e.key: _groupPartLocations(e.value)};
+  }
+
+  /// Merges arrivals that are in the same place, biggest lot first.
+  ///
+  /// Two rows are the same place when they are in the same STATE and name the
+  /// same room or the same location. The location is matched case-blind - the
+  /// same shelf typed twice is one shelf - and the first spelling is the one
+  /// kept, because it is the one the shared list wrote.
+  static List<PartLocation> _groupPartLocations(List<ProjectDelivery> rows) {
+    final byPlace = <String, PartLocation>{};
+    for (final d in rows) {
+      final room = d.state == DeliveryState.installed ? d.roomId : '';
+      final place = d.location.trim();
+      final key = '${d.state.name}|$room|${place.toLowerCase()}';
+      final at = byPlace[key];
+      byPlace[key] = PartLocation(
+        state: d.state,
+        roomId: room,
+        location: at?.location ?? place,
+        qty: (at?.qty ?? 0) + d.qty,
+      );
+    }
+    final out = byPlace.values.toList();
+    // Biggest first, and the settled state before the unsettled one when two
+    // are the same size: a part half in the room and half on a dock reads as
+    // the room it reached, then the bit still to carry.
+    out.sort((a, b) {
+      final byQty = b.qty.compareTo(a.qty);
+      return byQty != 0 ? byQty : b.state.index.compareTo(a.state.index);
+    });
+    return out;
   }
 
   /// Logs an arrival and returns the row it made.

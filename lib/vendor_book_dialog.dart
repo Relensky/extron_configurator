@@ -6,43 +6,42 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_port_editor.dart' show avRowIcon;
 import 'contrast.dart';
-import 'delivery_locations.dart';
 import 'live_text_field.dart';
+import 'vendor_book.dart';
 
 /// ============================================================================
-///  THE DELIVERY LOCATION EDITOR
+///  THE DEFAULT VENDOR EDITOR
 /// ============================================================================
-///  The docks kit is dropped at and the rooms gear is held in, set up
-///  once and then one click away on every delivery. Same shape as the base
-///  cost card and the rate card, and for the same reason: a loading dock is a
-///  fact about the estate rather than about one job.
+///  The companies this shop asks to quote, set up once and then on every job's
+///  Packages tab without being retyped. Same shape as the delivery location
+///  editor and the rate cards, and for the same reason: who the department
+///  buys from is a fact about the department rather than about one job.
 ///
 ///  The file is meant to be SHARED. Point the path on App Config at a drive
-///  everybody reads and the whole shop logs deliveries against the same names,
-///  which is the only thing that makes "everything at Central Stores" a
-///  question a job can answer.
+///  everybody reads and every job starts from one directory, which is what
+///  stops the same supplier being spelled three ways across three quote
+///  comparisons.
 ///
-///  It never restricts a delivery. A row's location stays free text; this is
-///  what the picker offers, not what it allows.
+///  IT NEVER OWNS A JOB'S VENDOR. What lands on a job is a copy: renaming it
+///  there does not touch this list, and this list changing does not rewrite a
+///  job that has already been quoted.
 /// ============================================================================
 
-Future<void> showDeliveryLocationsDialog(BuildContext context) =>
-    showDialog<void>(
-      context: context,
-      builder: (_) => const DeliveryLocationsDialog(),
-    );
+Future<void> showVendorBookDialog(BuildContext context) => showDialog<void>(
+  context: context,
+  builder: (_) => const VendorBookDialog(),
+);
 
-class DeliveryLocationsDialog extends StatefulWidget {
-  const DeliveryLocationsDialog({super.key});
+class VendorBookDialog extends StatefulWidget {
+  const VendorBookDialog({super.key});
 
   @override
-  State<DeliveryLocationsDialog> createState() =>
-      _DeliveryLocationsDialogState();
+  State<VendorBookDialog> createState() => _VendorBookDialogState();
 }
 
-class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
+class _VendorBookDialogState extends State<VendorBookDialog> {
   /// Edits are in memory until Save, exactly as the rate cards work, so a
-  /// half-typed address is not on everybody's share yet.
+  /// half-typed rep's name is not on everybody's share yet.
   bool _dirty = false;
 
   final TextEditingController _newName = TextEditingController();
@@ -63,36 +62,36 @@ class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
     );
   }
 
-  void _edit(AppStateProvider provider, DeliveryLocation place) {
-    provider.deliveryLocations.upsert(place);
+  void _edit(AppStateProvider provider, DefaultVendor vendor) {
+    provider.vendorBook.upsert(vendor);
     setState(() => _dirty = true);
-    provider.deliveryLocationsChanged();
+    provider.vendorBookChanged();
   }
 
   void _add(AppStateProvider provider) {
     final name = _newName.text.trim();
     if (name.isEmpty) return;
-    if (provider.deliveryLocations.byName(name) != null) {
+    if (provider.vendorBook.byName(name) != null) {
       _snack('$name is already on the list.');
       return;
     }
-    provider.deliveryLocations.add(name: name);
+    provider.vendorBook.add(name: name);
     _newName.clear();
     setState(() => _dirty = true);
-    provider.deliveryLocationsChanged();
+    provider.vendorBookChanged();
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
-    final book = provider.deliveryLocations;
+    final book = provider.vendorBook;
     final theme = Theme.of(context);
 
     return AlertDialog(
-      key: const ValueKey('delivery_locations_dialog'),
+      key: const ValueKey('vendor_book_dialog'),
       title: Row(
         children: [
-          const Text('Delivery locations'),
+          const Text('Default vendors'),
           const SizedBox(width: 12),
           if (_dirty)
             Chip(
@@ -119,38 +118,30 @@ class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'The places deliveries land at and the rooms gear is held in. '
-              'The name is what gets written onto a delivery; the address is '
-              'looked up here rather than retyped onto every row. Deliveries '
-              'can still be logged to a place that is not on this list.',
+              'The companies this shop asks to quote. A new job starts with '
+              'these on its Packages tab, and an older job can take any of '
+              'them from the same tab. Editing a vendor on a job does not '
+              'change this list.',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
             Row(
               children: [
                 SizedBox(
-                  width: 230,
-                  child: Text('Name', style: theme.textTheme.labelSmall),
+                  width: 260,
+                  child: Text('Company', style: theme.textTheme.labelSmall),
                 ),
                 const SizedBox(width: 8),
                 SizedBox(
-                  width: 170,
-                  child: Text('Used for', style: theme.textTheme.labelSmall),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 200,
+                  width: 260,
                   child: Text(
-                    'Address or room',
+                    'Who a request goes to',
                     style: theme.textTheme.labelSmall,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    'Room notes',
-                    style: theme.textTheme.labelSmall,
-                  ),
+                  child: Text('Notes', style: theme.textTheme.labelSmall),
                 ),
                 const SizedBox(width: 108),
               ],
@@ -163,103 +154,69 @@ class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       child: Text(
-                        'No places saved yet. Add the docks kit gets dropped '
-                        'at and the rooms gear waits in, and every delivery can '
-                        'be filed against one of them in a click.',
+                        'No vendors saved yet. Add the companies the shop asks '
+                        'to quote, and every new job starts with them instead '
+                        'of the directory being retyped per building.',
                         style: theme.textTheme.bodyMedium,
                       ),
                     ),
-                  for (final place in book.places)
+                  for (final vendor in book.vendors)
                     Padding(
-                      key: ValueKey('delivery_location_row_${place.id}'),
+                      key: ValueKey('vendor_book_row_${vendor.id}'),
                       padding: const EdgeInsets.symmetric(vertical: 3),
                       child: Row(
                         children: [
                           SizedBox(
-                            width: 230,
+                            width: 260,
                             child: LiveTextField(
-                              fieldId: 'locname_${place.id}',
-                              initial: place.name,
-                              hint: 'MLIB loading dock',
+                              fieldId: 'vbname_${vendor.id}',
+                              initial: vendor.name,
+                              hint: 'Extron',
                               onChanged: (v) =>
-                                  _edit(provider, place.copyWith(name: v)),
+                                  _edit(provider, vendor.copyWith(name: v)),
                             ),
                           ),
                           const SizedBox(width: 8),
                           SizedBox(
-                            width: 170,
-                            child: DropdownButtonFormField<DeliveryLocationUse>(
-                              key: ValueKey('locuse_${place.id}'),
-                              initialValue: place.use,
-                              isExpanded: true,
-                              decoration: const InputDecoration(isDense: true),
-                              items: [
-                                for (final u in DeliveryLocationUse.values)
-                                  DropdownMenuItem(
-                                    value: u,
-                                    child: Text(
-                                      u.label,
-                                      style: const TextStyle(fontSize: 13),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                              ],
-                              onChanged: (v) => v == null
-                                  ? null
-                                  : _edit(provider, place.copyWith(use: v)),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 200,
+                            width: 260,
                             child: LiveTextField(
-                              fieldId: 'locaddr_${place.id}',
-                              initial: place.address,
-                              hint: '1 Campus Drive',
+                              fieldId: 'vbcontact_${vendor.id}',
+                              initial: vendor.contact,
+                              hint: 'rep, or the quotes address',
                               onChanged: (v) =>
-                                  _edit(provider, place.copyWith(address: v)),
+                                  _edit(provider, vendor.copyWith(contact: v)),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: LiveTextField(
-                              fieldId: 'locnote_${place.id}',
-                              initial: place.notes,
-                              hint: 'hours, who to ring, which door',
+                              fieldId: 'vbnote_${vendor.id}',
+                              initial: vendor.notes,
+                              hint: 'account number, terms, what they are slow on',
                               onChanged: (v) =>
-                                  _edit(provider, place.copyWith(notes: v)),
+                                  _edit(provider, vendor.copyWith(notes: v)),
                             ),
                           ),
-                          // THE ORDER IS THE ORDER THEY ARE OFFERED IN, so the
-                          // two places most deliveries go to belong at the top
-                          // and it has to be possible to put them there.
-                          avRowIcon(
-                            Icons.arrow_upward,
-                            'Move up',
-                            () {
-                              provider.deliveryLocations
-                                  .move(place.id, up: true);
-                              setState(() => _dirty = true);
-                              provider.deliveryLocationsChanged();
-                            },
-                          ),
-                          avRowIcon(
-                            Icons.arrow_downward,
-                            'Move down',
-                            () {
-                              provider.deliveryLocations
-                                  .move(place.id, up: false);
-                              setState(() => _dirty = true);
-                              provider.deliveryLocationsChanged();
-                            },
-                          ),
+                          // THE ORDER IS THE ORDER A JOB IS SEEDED IN, so the
+                          // two companies most packages go to belong at the
+                          // top and it has to be possible to put them there.
+                          avRowIcon(Icons.arrow_upward, 'Move up', () {
+                            provider.vendorBook.move(vendor.id, up: true);
+                            setState(() => _dirty = true);
+                            provider.vendorBookChanged();
+                          }),
+                          avRowIcon(Icons.arrow_downward, 'Move down', () {
+                            provider.vendorBook.move(vendor.id, up: false);
+                            setState(() => _dirty = true);
+                            provider.vendorBookChanged();
+                          }),
                           avRowIcon(
                             Icons.delete_outline,
-                            'Remove this place',
+                            'Remove this company',
                             () {
-                              provider.deliveryLocations.remove(place.id);
+                              provider.vendorBook.remove(vendor.id);
                               setState(() => _dirty = true);
-                              provider.deliveryLocationsChanged();
+                              provider.vendorBookChanged();
                             },
                             danger: true,
                           ),
@@ -270,13 +227,13 @@ class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
                   Row(
                     children: [
                       SizedBox(
-                        width: 230,
+                        width: 260,
                         child: TextField(
-                          key: const ValueKey('delivery_location_new'),
+                          key: const ValueKey('vendor_book_new'),
                           controller: _newName,
                           decoration: const InputDecoration(
-                            labelText: 'New place',
-                            hintText: 'e.g. Central Stores',
+                            labelText: 'New company',
+                            hintText: 'e.g. Extron',
                             isDense: true,
                           ),
                           onSubmitted: (_) => _add(provider),
@@ -284,7 +241,7 @@ class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
                       ),
                       const SizedBox(width: 8),
                       TextButton.icon(
-                        key: const ValueKey('delivery_location_add'),
+                        key: const ValueKey('vendor_book_add'),
                         icon: const Icon(Icons.add, size: 16),
                         label: const Text('Add'),
                         onPressed: () => _add(provider),
@@ -307,7 +264,7 @@ class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
                   ),
                 ),
                 Text(
-                  '${book.count} place${book.count == 1 ? '' : 's'}',
+                  '${book.count} vendor${book.count == 1 ? '' : 's'}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.disabledColor,
                   ),
@@ -333,15 +290,15 @@ class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
           child: const Text('Close'),
         ),
         ElevatedButton(
-          key: const ValueKey('delivery_locations_save'),
+          key: const ValueKey('vendor_book_save'),
           onPressed: () async {
-            final saved = await provider.saveDeliveryLocations();
+            final saved = await provider.saveVendorBook();
             if (saved.isEmpty) {
-              _snack('Could not save the delivery locations.', error: true);
+              _snack('Could not save the vendor list.', error: true);
               return;
             }
             setState(() => _dirty = false);
-            _snack('Delivery locations saved to $saved');
+            _snack('Default vendors saved to $saved');
           },
           child: const Text('Save'),
         ),
@@ -351,35 +308,35 @@ class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
 
   Future<void> _load(AppStateProvider provider) async {
     final picked = await FilePicker.pickFiles(
-      dialogTitle: 'Open a delivery location list',
+      dialogTitle: 'Open a vendor list',
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
     final path = picked?.files.single.path;
     if (path == null) return;
-    await provider.loadDeliveryLocations(explicitPath: path);
+    await provider.loadVendorBook(explicitPath: path);
     if (!mounted) return;
     setState(() => _dirty = false);
-    _snack('Loaded ${provider.deliveryLocations.count} places from $path');
+    _snack('Loaded ${provider.vendorBook.count} vendors from $path');
   }
 
   Future<void> _saveAs(AppStateProvider provider) async {
     String? output = await FilePicker.saveFile(
-      dialogTitle: 'Save the delivery locations as',
-      fileName: 'delivery_locations.json',
+      dialogTitle: 'Save the vendor list as',
+      fileName: 'vendor_list.json',
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
     if (output == null) return;
     if (!output.toLowerCase().endsWith('.json')) output += '.json';
-    final saved = await provider.deliveryLocations.save(toPath: output);
+    final saved = await provider.vendorBook.save(toPath: output);
     if (!mounted) return;
     if (saved.isEmpty) {
-      _snack('Could not write the delivery locations.', error: true);
+      _snack('Could not write the vendor list.', error: true);
       return;
     }
     setState(() => _dirty = false);
-    provider.deliveryLocationsChanged();
-    showSavedFileSnack(context, provider, 'Delivery locations', saved);
+    provider.vendorBookChanged();
+    showSavedFileSnack(context, provider, 'Default vendors', saved);
   }
 }

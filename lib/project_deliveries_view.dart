@@ -159,7 +159,7 @@ List<Widget> deliveriesSlivers(
                     ),
             ),
           ),
-          // TWO WAYS IN, because a delivery is either one thing or a truck.
+          // TWO WAYS IN, because a delivery is either one thing or a load.
           // The second only appears when there is an equipment list to tick
           // against - it has nothing to offer a job whose parts are not
           // costed yet.
@@ -2721,7 +2721,7 @@ String _alreadyHere(
 //  LOGGING SEVERAL AT ONCE
 // ---------------------------------------------------------------------------
 
-/// Logs a TRUCKLOAD: several parts that arrived together, at one place, on one
+/// Logs a WHOLE LOAD: several parts that arrived together, at one place, on one
 /// day.
 ///
 /// ONE PLACE AND ONE DAY, TYPED ONCE. A delivery is rarely one part. Nine
@@ -2896,7 +2896,7 @@ class _BulkDeliveryDialogState extends State<_BulkDeliveryDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Everything that came off the same truck. Where it went and '
+                'Everything that came in on the same load. Where it went and '
                 'the day it landed are said once, here, and each part keeps '
                 'the PO the job says bought it.',
                 style: theme.textTheme.bodySmall?.copyWith(color: muted),
@@ -3172,8 +3172,8 @@ class _BulkDeliveryDialogState extends State<_BulkDeliveryDialog> {
 /// Where a delivery went: an address, a dock, a shelf — typed, with the places
 /// this job has already used one click away.
 ///
-/// TYPED, NOT PICKED. A job takes delivery wherever the vendor could get a
-/// truck that week, and the delivery that matters — the one that went to the
+/// TYPED, NOT PICKED. A job takes delivery wherever the vendor could reach
+/// that week, and the delivery that matters — the one that went to the
 /// wrong building, or to a store across campus — is precisely the one a
 /// dropdown of known places could not have recorded. The suggestions exist so
 /// the usual two or three do not get retyped into four spellings; see

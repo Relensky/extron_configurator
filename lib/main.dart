@@ -24,6 +24,7 @@ import 'error_reporting.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
 import 'delivery_locations_dialog.dart';
+import 'vendor_book_dialog.dart';
 import 'device_editor_view.dart';
 import 'flow_rules_view.dart';
 import 'schema_editor_view.dart';
@@ -3442,7 +3443,7 @@ class AppSettingsView extends StatelessWidget {
 
         // Delivery Locations (delivery_locations.json) Path
         //
-        // The docks a truck can back up to and the rooms gear is held in.
+        // The docks kit is dropped at and the rooms gear is held in.
         // Worth pointing at the same share as the catalog, and for the same
         // reason: a loading dock is a fact about the estate, and one list of
         // names is what makes "everything at Central Stores" a question a job
@@ -3531,6 +3532,95 @@ class AppSettingsView extends StatelessWidget {
             ),
           ],
         ),
+        // Default Vendors (vendor_list.json) Path
+        //
+        // Who the shop asks to quote. Same reason to share it as the delivery
+        // locations: the spelling of a company name and the rep behind it are
+        // facts about the department, and one directory is what keeps three
+        // jobs from comparing quotes from three different 'Extron's.
+        Text('Default vendors', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        Text(
+          'Set the companies up once and every new job starts with them on '
+          'its Packages tab, instead of the same directory being retyped per '
+          'building. A job can still add, rename or drop any vendor it likes.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                key: ValueKey(
+                    'vendorListFilePath_${provider.vendorListFilePath}'),
+                decoration: InputDecoration(
+                  labelText: 'Default Vendor List File Path (vendor_list.json)',
+                  hintText:
+                      'Blank = vendor_list.json in the Root Folder / next to '
+                      'the app',
+                  helperText:
+                      'Active list: ${provider.vendorBook.source.isEmpty ? 'none' : provider.vendorBook.source} - '
+                      '${provider.vendorBook.count} vendor'
+                      '${provider.vendorBook.count == 1 ? '' : 's'}. '
+                      'Put it on a shared drive to give the whole shop one '
+                      'directory.',
+                  helperMaxLines: 3,
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.file_open),
+                    tooltip: 'Select JSON File',
+                    onPressed: () async {
+                      FilePickerResult? result = await FilePicker.pickFiles(
+                        type: FileType.custom,
+                        allowedExtensions: ['json'],
+                      );
+                      if (result != null) {
+                        provider.updateSetting(
+                            'vendorListFilePath', result.files.single.path!);
+                      }
+                    },
+                  ),
+                ),
+                initialValue: provider.vendorListFilePath,
+                onChanged: (val) =>
+                    provider.updateSetting('vendorListFilePath', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              height: 56, // Matches the height of the TextFormField
+              child: ElevatedButton.icon(
+                key: const ValueKey('edit_default_vendors'),
+                icon: const Icon(Icons.store_outlined),
+                label: const Text('Edit Vendors'),
+                onPressed: () => showVendorBookDialog(context),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 56,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reload'),
+                onPressed: () async {
+                  // Pick up what a colleague has saved to the share since this
+                  // copy read it.
+                  await provider.loadVendorBook();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(
+                          'Default vendors reloaded: '
+                          '${provider.vendorBook.count} vendors'),
+                    ));
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
         const SizedBox(height: 20),
 
         // Legacy Key Map (key_map.json) Path

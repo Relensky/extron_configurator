@@ -2755,6 +2755,12 @@ List<Widget> partsSlivers(
   // Built once for the whole list rather than per row — see [_PartRow].
   final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
 
+  // WHERE THE KIT ACTUALLY IS, off the delivery log, for the same reason and
+  // in the same way: one pass over the log for the whole list rather than one
+  // per row. Empty on a job that logs no deliveries, and the rows say nothing
+  // then — see [_PartRow.locations].
+  final locations = estimate.project.partLocationsByKey();
+
   // How many parts nothing on the job can drive. One pass, for the chip.
   var controlGapParts = 0;
   for (final l in estimate.master) {
@@ -2925,6 +2931,7 @@ List<Widget> partsSlivers(
             line: shown[index],
             estimate: estimate,
             roomNames: roomNames,
+            locations: locations[shown[index].key] ?? const [],
             spareRoom: room,
             sparesOnly: sparesOnly,
             installedUnspared: unspared[shown[index].key] ?? 0,
@@ -3406,6 +3413,13 @@ class _PartRow extends StatelessWidget {
   /// rows lazily while somebody drags the scrollbar.
   final Map<String, String> roomNames;
 
+  /// Where this part is, off the delivery log: the rooms it went into and
+  /// the places the rest of it is sitting. Empty until something is logged
+  /// against it, and the row says nothing at all then.
+  ///
+  /// Built for the whole list at once and handed down, like [roomNames].
+  final List<PartLocation> locations;
+
   /// The room whose spares the list is narrowed to, '' for all of them.
   /// Only ever set while [sparesOnly] is.
   final String spareRoom;
@@ -3439,6 +3453,7 @@ class _PartRow extends StatelessWidget {
     required this.line,
     required this.estimate,
     required this.roomNames,
+    this.locations = const [],
     this.spareRoom = '',
     this.sparesOnly = false,
     this.installedUnspared = 0,
@@ -3464,6 +3479,23 @@ class _PartRow extends StatelessWidget {
       if (line.partNumber.isNotEmpty) 'PN ${line.partNumber}',
       kMasterPartKindLabels[line.kind]!,
     ].join('  ·  ');
+
+    // WHERE THE UNITS ARE, once anything has been logged against this part on
+    // the Deliveries pane: the rooms they went into, and the places the rest
+    // of them are sitting. THE QUESTION THIS LIST GETS ASKED IN JUNE - the
+    // master list says what the job buys, and 'has it turned up, and where is
+    // it' was an answer you had to go to another pane and filter for.
+    //
+    // MERGED PER PLACE, NOT PER ARRIVAL. Three pallets that all went to
+    // Central Stores are one line here; the log keeps the three rows.
+    final where = [
+      for (final at in locations)
+        '${at.label(roomName: roomNames[at.roomId] ?? '')} '
+            '×${trimNumber(at.qty)}',
+    ];
+    // What is on site against what the job is buying — the check somebody is
+    // really making, and too long for the row, so it goes in the tooltip.
+    final onHand = locations.fold<double>(0, (sum, at) => sum + at.qty);
 
     // WHO ASKED FOR THE SPARES. Named rather than totaled, for the same
     // reason the undriven list below is: "4 spare" is a figure to go and
@@ -3591,6 +3623,40 @@ class _PartRow extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  // NOTHING AT ALL until something has been logged against
+                  // this part. A job that does not track deliveries should not
+                  // grow a line on every row of its master list saying so.
+                  if (where.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Tooltip(
+                        message: [
+                          '${trimNumber(onHand)} of ${trimNumber(line.qty)} '
+                              'on site',
+                          ...where,
+                        ].join('\n'),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.place_outlined,
+                              size: 13,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                where.join('  ·  '),
+                                key: ValueKey('part_where_${line.key}'),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   if (line.hasSpares)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
@@ -5931,6 +5997,9 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
   final rfqs = estimate.project.rfqs;
   final vendors = estimate.project.vendors;
   final conflicts = estimate.project.rfqConflicts;
+  // THE SHARED DIRECTORY MINUS WHAT THIS JOB ALREADY HAS, matched on the
+  // company name - see [AppStateProvider.vendorsOffProject].
+  final offList = provider.vendorsOffProject;
   // THE MAKERS AND CATEGORIES ON THIS JOB, not the catalog's. A rule is only
   // ever worth writing about something the job actually has a part in - see
   // [_RulePickerDialog].
@@ -6063,12 +6132,44 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add vendor'),
             ),
+            // THE SHARED DIRECTORY, one press away. A new job is seeded from
+            // it already (see AppStateProvider._seedProjectVendors); this is
+            // the way in for the job that was started before a company was
+            // added to the list, and for the one somebody trimmed. It says
+            // how many are missing rather than just 'add', because the count
+            // is what makes it worth pressing.
+            if (offList.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                key: const ValueKey('add_saved_vendors'),
+                onPressed: () {
+                  final added = provider.addProjectVendorsFromBook();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        added == 1
+                            ? '1 vendor added from the shared list.'
+                            : '$added vendors added from the shared list.',
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.playlist_add, size: 18),
+                label: Text(
+                  offList.length == 1
+                      ? 'Add 1 saved vendor'
+                      : 'Add ${offList.length} saved vendors',
+                ),
+              ),
+            ],
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 vendors.isEmpty
                     ? 'Vendors are the companies you ask to quote. Add one per '
-                          'company, then invite it onto a package above.'
+                          'company, then invite it onto a package above. The '
+                          'shared list on App Config is what a new job starts '
+                          'with.'
                     : 'The companies this job asks to quote. A vendor claims '
                           'no parts of its own - what it is asked for is a '
                           'property of the package that invited it.',
