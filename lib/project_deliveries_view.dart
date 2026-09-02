@@ -9,6 +9,8 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'contrast.dart';
+import 'delivery_locations.dart';
+import 'delivery_locations_dialog.dart';
 import 'cost_estimate.dart' show formatMoney;
 import 'pdf_viewer_dialog.dart';
 import 'project_estimate.dart';
@@ -47,7 +49,19 @@ import 'project_timeline_view.dart'
 /// ============================================================================
 
 /// The deliveries pane, as slivers for the project tab's one scroll view.
-List<Widget> deliveriesSlivers(BuildContext context, ProjectEstimate estimate) {
+///
+/// [selected] and the three callbacks are the ticked rows, held by the project
+/// tab rather than here for the reason the parts list's are: a selection is a
+/// way of LOOKING at the log, not a fact about the job, and it has to survive
+/// this function being rebuilt on every keystroke.
+List<Widget> deliveriesSlivers(
+  BuildContext context,
+  ProjectEstimate estimate, {
+  Set<String> selected = const {},
+  ValueChanged<String>? onToggleSelected,
+  ValueChanged<List<String>>? onSelectShown,
+  VoidCallback? onClearSelected,
+}) {
   final provider = context.watch<AppStateProvider>();
   final project = provider.project;
 
@@ -113,6 +127,36 @@ List<Widget> deliveriesSlivers(BuildContext context, ProjectEstimate estimate) {
               text: deliveries.isEmpty
                   ? 'DELIVERED'
                   : 'DELIVERED (${_onHandSummary(project)})',
+              // TICK EVERYTHING, or untick it. Only once there is something to
+              // tick: a box above an empty log is a control with nothing to
+              // control.
+              leading: (onSelectShown == null || deliveries.isEmpty)
+                  ? null
+                  : Tooltip(
+                      message: 'Select every delivery',
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: Checkbox(
+                          key: const ValueKey('delivery_select_all'),
+                          // Three states, and the box says which: none of the
+                          // rows are ticked, all of them are, or some are.
+                          tristate: true,
+                          value: deliveries.every(
+                                (d) => selected.contains(d.id),
+                              )
+                              ? true
+                              : (deliveries.any((d) => selected.contains(d.id))
+                                    ? null
+                                    : false),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          onChanged: (_) =>
+                              onSelectShown([for (final d in deliveries) d.id]),
+                        ),
+                      ),
+                    ),
             ),
           ),
           // TWO WAYS IN, because a delivery is either one thing or a truck.
@@ -172,6 +216,25 @@ List<Widget> deliveriesSlivers(BuildContext context, ProjectEstimate estimate) {
       )
     else ...[
       SliverToBoxAdapter(child: _PaperworkLine(project: project)),
+      // ABOVE THE LIST rather than floating over it, for the reason the parts
+      // list's bar is: a bar that pushed the rows up and down under the
+      // pointer while somebody was ticking would make the next tick land on
+      // the wrong row.
+      if (onToggleSelected != null && selected.isNotEmpty)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: _DeliverySelectionBar(
+              rows: [
+                for (final d in deliveries)
+                  if (selected.contains(d.id)) d,
+              ],
+              provider: provider,
+              rooms: roomChoices,
+              onClear: onClearSelected ?? () {},
+            ),
+          ),
+        ),
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         sliver: SliverList.builder(
@@ -182,6 +245,10 @@ List<Widget> deliveriesSlivers(BuildContext context, ProjectEstimate estimate) {
             estimate: estimate,
             rooms: roomChoices,
             roomNames: roomNames,
+            selected: selected.contains(deliveries[i].id),
+            onSelect: onToggleSelected == null
+                ? null
+                : () => onToggleSelected(deliveries[i].id),
           ),
         ),
       ),
@@ -269,20 +336,34 @@ String _onHandSummary(BuildingProject project) {
 class _SectionLabel extends StatelessWidget {
   final String text;
 
-  const _SectionLabel({required this.text});
+  /// Sits in the indent the heading would otherwise be holding, so a tick box
+  /// in front of a section does not shove its name out of line with the
+  /// headings above it.
+  final Widget? leading;
+
+  const _SectionLabel({required this.text, this.leading});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 12, 16, 4),
-      child: Text(
-        text,
-        style: theme.textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
+    final label = Text(
+      text,
+      style: theme.textTheme.labelSmall?.copyWith(
+        fontWeight: FontWeight.bold,
+        color: theme.colorScheme.onSurfaceVariant,
       ),
+    );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(leading == null ? 28 : 8, 12, 16, 4),
+      child: leading == null
+          ? label
+          : Row(
+              children: [
+                leading!,
+                const SizedBox(width: 4),
+                Flexible(child: label),
+              ],
+            ),
     );
   }
 }
@@ -1127,12 +1208,19 @@ class _DeliveryCard extends StatelessWidget {
   final List<({String id, String name})> rooms;
   final Map<String, String> roomNames;
 
+  /// Ticked for a bulk move. Null [onSelect] means this pane is not offering
+  /// selection at all, and no box is drawn.
+  final bool selected;
+  final VoidCallback? onSelect;
+
   const _DeliveryCard({
     required this.row,
     required this.provider,
     required this.estimate,
     required this.rooms,
     required this.roomNames,
+    this.selected = false,
+    this.onSelect,
   });
 
   @override
@@ -1156,6 +1244,16 @@ class _DeliveryCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (onSelect != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Checkbox(
+                      key: ValueKey('delivery_select_${row.id}'),
+                      value: selected,
+                      visualDensity: VisualDensity.compact,
+                      onChanged: (_) => onSelect!(),
+                    ),
+                  ),
                 Icon(deliveryStateIcon(row.state), size: 18, color: muted),
                 const SizedBox(width: 8),
                 Expanded(
@@ -1290,7 +1388,7 @@ class _WhereRow extends StatelessWidget {
           label: 'Where is it being held?',
           hint: 'MLIB 031, rack 3',
           initial: row.location,
-          suggestions: provider.project.deliveryLocations,
+          places: () => provider.deliveryPlacesFor(storage: true),
         );
         if (where == null) return;
         provider.setProjectDeliveryState(
@@ -1306,7 +1404,24 @@ class _WhereRow extends StatelessWidget {
           DeliveryState.installed,
           roomId: roomId,
         );
+      // ON SITE ASKS WHERE TOO. 'It is here' with nothing after it is the
+      // answer that sends somebody walking round a campus looking for a
+      // pallet, and the saved docks make it one press to answer properly.
       case DeliveryState.delivered:
+        final where = await _askText(
+          context,
+          title: 'On site',
+          label: 'Where was it delivered?',
+          hint: 'MLIB loading dock',
+          initial: row.location,
+          places: () => provider.deliveryPlacesFor(storage: false),
+        );
+        if (where == null) return;
+        provider.setProjectDeliveryState(
+          row.id,
+          DeliveryState.delivered,
+          location: where,
+        );
       case DeliveryState.returned:
         provider.setProjectDeliveryState(row.id, state);
     }
@@ -1341,6 +1456,378 @@ class _WhereRow extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+//  MOVING SEVERAL AT ONCE
+// ---------------------------------------------------------------------------
+//  A pallet arrives on a dock and is moved off it in one afternoon, as a
+//  pallet. Doing that a row at a time is nine trips through the same two
+//  questions, which is how a log ends up saying four of the nine boxes are
+//  still on a dock they left in March.
+//
+//  AND A MOVE IS A THING THAT HAPPENED. Overwriting the location loses where
+//  it had been, so every row moved this way keeps a signed note saying what it
+//  moved from and to, with the name and the time on it. See
+//  [AppStateProvider.moveProjectDeliveries].
+
+/// The bar that appears once anything is ticked: what is selected, and the one
+/// thing worth doing to a handful of deliveries at once.
+class _DeliverySelectionBar extends StatelessWidget {
+  final List<ProjectDelivery> rows;
+  final AppStateProvider provider;
+  final List<({String id, String name})> rooms;
+  final VoidCallback onClear;
+
+  const _DeliverySelectionBar({
+    required this.rows,
+    required this.provider,
+    required this.rooms,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ink = foregroundOn(
+      theme.colorScheme,
+      theme.colorScheme.secondaryContainer,
+    );
+    final count = rows.length;
+    // WHERE THEY ARE NOW, in one phrase: 'all on the MLIB dock' is what tells
+    // somebody the selection is the pallet they meant.
+    final places = <String>{
+      for (final r in rows) provider.deliveryWherePhrase(r),
+    };
+    final scope = places.length == 1
+        ? places.single
+        : '${places.length} different places';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_box_outlined, size: 18, color: ink),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$count deliver${count == 1 ? 'y' : 'ies'} selected  ·  $scope',
+              key: const ValueKey('deliveries_selected_count'),
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(color: ink),
+            ),
+          ),
+          TextButton(
+            key: const ValueKey('deliveries_selection_clear'),
+            onPressed: onClear,
+            child: const Text('Clear'),
+          ),
+          const SizedBox(width: 4),
+          FilledButton.icon(
+            key: const ValueKey('deliveries_selection_move'),
+            icon: const Icon(Icons.moving, size: 18),
+            label: const Text('Move these...'),
+            onPressed: () => showMoveDeliveriesDialog(
+              context,
+              provider: provider,
+              rows: rows,
+              rooms: rooms,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Moves every ticked lot to one place, in one gesture.
+Future<void> showMoveDeliveriesDialog(
+  BuildContext context, {
+  required AppStateProvider provider,
+  required List<ProjectDelivery> rows,
+  required List<({String id, String name})> rooms,
+}) async {
+  if (rows.isEmpty) return;
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _MoveDeliveriesDialog(
+      provider: provider,
+      rows: rows,
+      rooms: rooms,
+    ),
+  );
+}
+
+class _MoveDeliveriesDialog extends StatefulWidget {
+  final AppStateProvider provider;
+  final List<ProjectDelivery> rows;
+  final List<({String id, String name})> rooms;
+
+  const _MoveDeliveriesDialog({
+    required this.provider,
+    required this.rows,
+    required this.rooms,
+  });
+
+  @override
+  State<_MoveDeliveriesDialog> createState() => _MoveDeliveriesDialogState();
+}
+
+class _MoveDeliveriesDialogState extends State<_MoveDeliveriesDialog> {
+  final TextEditingController _location = TextEditingController();
+  final TextEditingController _note = TextEditingController();
+
+  /// Where the ticked rows are going. Starts on storage: a bulk move is nearly
+  /// always a pallet coming off a dock onto a shelf, and starting on the state
+  /// the rows are ALREADY in would make the commonest move two changes.
+  DeliveryState _state = DeliveryState.stored;
+
+  String _roomId = '';
+
+  /// The day the move happened. Not the arrival date, which stays exactly as
+  /// it was: a lot that landed in March and moved in June has both facts, and
+  /// overwriting the first with the second is how a delivery log stops being
+  /// able to say anything about how long a part took to turn up.
+  DateTime? _movedOn = today();
+
+  @override
+  void initState() {
+    super.initState();
+    // The place they are all already at, when there is one, so a move that is
+    // only a change of state does not have to retype it.
+    final places = {for (final r in widget.rows) r.location.trim()};
+    if (places.length == 1) _location.text = places.single;
+    final theRooms = {for (final r in widget.rows) r.roomId};
+    if (theRooms.length == 1) _roomId = theRooms.single;
+  }
+
+  @override
+  void dispose() {
+    _location.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  /// What one row would read as after the move, so the dialog can show the
+  /// before and the after rather than asking somebody to picture it.
+  String _after(ProjectDelivery row) {
+    final where = _location.text.trim();
+    return widget.provider.deliveryWherePhrase(
+      row.copyWith(
+        state: _state,
+        location: where.isEmpty ? null : where,
+        roomId: _state == DeliveryState.installed ? _roomId : '',
+      ),
+    );
+  }
+
+  void _save() {
+    final messenger = ScaffoldMessenger.of(context);
+    final where = _location.text.trim();
+    final moved = widget.provider.moveProjectDeliveries(
+      [for (final r in widget.rows) r.id],
+      state: _state,
+      location: where,
+      roomId: _roomId,
+      on: _movedOn,
+      note: _note.text,
+    );
+    Navigator.of(context).pop();
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 4),
+        content: Text(
+          moved == 0
+              ? 'Nothing moved - everything selected was already there.'
+              : '${moved == 1 ? '1 delivery' : '$moved deliveries'} moved'
+                    '${where.isEmpty ? '' : ' to $where'}. '
+                    'Each row keeps a note of where it came from.',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final installing = _state == DeliveryState.installed;
+
+    return AlertDialog(
+      key: const ValueKey('move_deliveries_dialog'),
+      title: Text(
+        widget.rows.length == 1
+            ? 'Move 1 delivery'
+            : 'Move ${widget.rows.length} deliveries',
+      ),
+      content: SizedBox(
+        width: 620,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Everything ticked goes to the same place on the same day. '
+                'The day each lot ARRIVED is left alone, and where it moved '
+                'from is kept as a signed note on every row.',
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<DeliveryState>(
+                      key: const ValueKey('move_deliveries_state'),
+                      initialValue: _state,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Where are they now',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        for (final s in DeliveryState.values)
+                          DropdownMenuItem(
+                            value: s,
+                            child: Row(
+                              children: [
+                                Icon(deliveryStateIcon(s), size: 16),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    s.label,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                      onChanged: (v) =>
+                          setState(() => _state = v ?? DeliveryState.stored),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _DateField(
+                      label: 'Moved on',
+                      value: _movedOn,
+                      buttonKey: const ValueKey('move_deliveries_date'),
+                      onPick: (d) => setState(() => _movedOn = d),
+                    ),
+                  ),
+                ],
+              ),
+              if (_state != DeliveryState.returned) ...[
+                const SizedBox(height: 8),
+                _LocationField(
+                  controller: _location,
+                  stored: _state == DeliveryState.stored,
+                  places: widget.provider.deliveryPlacesFor(
+                    storage: _state == DeliveryState.stored,
+                  ),
+                  onPicked: (v) => setState(() => _location.text = v),
+                  onEdited: () => setState(() {}),
+                ),
+              ],
+              if (installing) ...[
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  key: const ValueKey('move_deliveries_room'),
+                  initialValue: widget.rooms.any((r) => r.id == _roomId)
+                      ? _roomId
+                      : '',
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'In which room',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: '',
+                      child: Text('Not saying'),
+                    ),
+                    for (final r in widget.rooms)
+                      DropdownMenuItem(
+                        value: r.id,
+                        child: Text(r.name, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (v) => setState(() => _roomId = v ?? ''),
+                ),
+              ],
+              const SizedBox(height: 8),
+              TextField(
+                key: const ValueKey('move_deliveries_note'),
+                controller: _note,
+                decoration: const InputDecoration(
+                  labelText: 'Anything to add to the note (optional)',
+                  hintText: 'two boxes water damaged, kept separate',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('What changes', style: theme.textTheme.labelLarge),
+              const SizedBox(height: 4),
+              // THE BEFORE AND THE AFTER, ROW BY ROW. A bulk edit somebody
+              // cannot see the effect of before pressing it is a bulk edit
+              // that gets pressed once and then undone by hand.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 200),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final row in widget.rows)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Text(
+                            '${_movingName(row)}  ·  '
+                            '${widget.provider.deliveryWherePhrase(row)} '
+                            'to ${_after(row)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: muted,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('move_deliveries_save'),
+          onPressed: _save,
+          child: const Text('Move them'),
+        ),
+      ],
+    );
+  }
+}
+
+/// '6 x Wall plate' - what a row being moved is called on the preview.
+String _movingName(ProjectDelivery row) {
+  final name = row.itemName.trim().isEmpty
+      ? 'Something not on the equipment list'
+      : row.itemName.trim();
+  final qty = formatUnits(row.qty);
+  return qty.isEmpty ? name : '$qty x $name';
+}
+
 /// Asks for one line of text, offering what the job has typed before.
 ///
 /// Suggestions rather than a fixed list, because a storage place is described
@@ -1352,7 +1839,7 @@ Future<String?> _askText(
   required String label,
   String hint = '',
   String initial = '',
-  List<String> suggestions = const [],
+  required List<DeliveryPlaceChoice> Function() places,
 }) => showDialog<String>(
   context: context,
   builder: (_) => _TextPrompt(
@@ -1360,7 +1847,7 @@ Future<String?> _askText(
     label: label,
     hint: hint,
     initial: initial,
-    suggestions: suggestions,
+    places: places,
   ),
 );
 
@@ -1374,14 +1861,17 @@ class _TextPrompt extends StatefulWidget {
   final String label;
   final String hint;
   final String initial;
-  final List<String> suggestions;
+
+  /// Re-read rather than handed over, so a place added from the editor below
+  /// is offered here the moment that dialog closes.
+  final List<DeliveryPlaceChoice> Function() places;
 
   const _TextPrompt({
     required this.title,
     required this.label,
     required this.hint,
     required this.initial,
-    required this.suggestions,
+    required this.places,
   });
 
   @override
@@ -1392,6 +1882,8 @@ class _TextPromptState extends State<_TextPrompt> {
   late final TextEditingController _text = TextEditingController(
     text: widget.initial,
   );
+
+  late List<DeliveryPlaceChoice> _places = widget.places();
 
   @override
   void dispose() {
@@ -1419,20 +1911,43 @@ class _TextPromptState extends State<_TextPrompt> {
             ),
             onSubmitted: (v) => Navigator.of(context).pop(v),
           ),
-          if (widget.suggestions.isNotEmpty) ...[
+          // ONE PRESS FOR THE USUAL ANSWER. The saved places come first and
+          // the ones this job has typed follow; the tooltip carries the
+          // address, which is what tells two docks in one building apart.
+          if (_places.isNotEmpty) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 6,
               runSpacing: 4,
               children: [
-                for (final s in widget.suggestions.take(6))
-                  ActionChip(
-                    label: Text(s),
-                    onPressed: () => _text.text = s,
+                for (final place in _places.take(8))
+                  Tooltip(
+                    message: place.detail,
+                    child: ActionChip(
+                      key: ValueKey('delivery_where_chip_${place.name}'),
+                      avatar: place.saved
+                          ? const Icon(Icons.place_outlined, size: 16)
+                          : null,
+                      label: Text(place.name),
+                      onPressed: () => _text.text = place.name,
+                    ),
                   ),
               ],
             ),
           ],
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('delivery_where_edit_places'),
+              icon: const Icon(Icons.warehouse_outlined, size: 16),
+              label: const Text('Edit saved places...'),
+              onPressed: () async {
+                await showDeliveryLocationsDialog(context);
+                if (mounted) setState(() => _places = widget.places());
+              },
+            ),
+          ),
         ],
       ),
     ),
@@ -2093,8 +2608,11 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
               _LocationField(
                 controller: _location,
                 stored: _state == DeliveryState.stored,
-                known: project.deliveryLocations,
+                places: widget.provider.deliveryPlacesFor(
+                  storage: _state == DeliveryState.stored,
+                ),
                 onPicked: (v) => setState(() => _location.text = v),
+                onEdited: () => setState(() {}),
               ),
               if (_state == DeliveryState.installed) ...[
                 const SizedBox(height: 8),
@@ -2433,8 +2951,11 @@ class _BulkDeliveryDialogState extends State<_BulkDeliveryDialog> {
               _LocationField(
                 controller: _location,
                 stored: _state == DeliveryState.stored,
-                known: project.deliveryLocations,
+                places: widget.provider.deliveryPlacesFor(
+                  storage: _state == DeliveryState.stored,
+                ),
                 onPicked: (v) => setState(() => _location.text = v),
+                onEdited: () => setState(() {}),
               ),
               if (_state == DeliveryState.installed) ...[
                 const SizedBox(height: 8),
@@ -2664,18 +3185,28 @@ class _LocationField extends StatelessWidget {
   /// question is 'held where' rather than 'delivered to'.
   final bool stored;
 
-  final List<String> known;
+  /// The saved places first, then whatever this job has typed before. See
+  /// [deliveryPlaceChoices].
+  final List<DeliveryPlaceChoice> places;
+
   final ValueChanged<String> onPicked;
+
+  /// Called once the saved-places editor closes, so the dialog holding this
+  /// field re-reads the list: a place added in there is offered here without
+  /// the delivery having to be abandoned and started again.
+  final VoidCallback onEdited;
 
   const _LocationField({
     required this.controller,
     required this.stored,
-    required this.known,
+    required this.places,
     required this.onPicked,
+    required this.onEdited,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return TextField(
       key: const ValueKey('delivery_location'),
       controller: controller,
@@ -2691,22 +3222,56 @@ class _LocationField extends StatelessWidget {
         helperText: 'Any address or place - type one that is not on the list.',
         border: const OutlineInputBorder(),
         isDense: true,
-        suffixIcon: known.isEmpty
-            ? null
-            : PopupMenuButton<String>(
-                key: const ValueKey('delivery_location_pick'),
-                tooltip: 'Somewhere this job has taken delivery before',
-                icon: const Icon(Icons.arrow_drop_down),
-                itemBuilder: (_) => [
-                  for (final place in known)
-                    PopupMenuItem(value: place, child: Text(place)),
-                ],
-                onSelected: onPicked,
+        // ALWAYS THERE, even with nothing saved yet: with an empty list the
+        // menu is the one place that says the list exists and where to fill
+        // it in, and a control that appears only once somebody has already
+        // done the thing is a control nobody finds.
+        suffixIcon: PopupMenuButton<String>(
+          key: const ValueKey('delivery_location_pick'),
+          tooltip: 'Pick a saved place',
+          icon: const Icon(Icons.arrow_drop_down),
+          itemBuilder: (_) => [
+            for (final place in places)
+              PopupMenuItem(
+                value: place.name,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(place.name, overflow: TextOverflow.ellipsis),
+                    Text(
+                      place.detail,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
+            if (places.isNotEmpty) const PopupMenuDivider(),
+            const PopupMenuItem(
+              value: _kEditPlaces,
+              child: Text('Edit saved places...'),
+            ),
+          ],
+          onSelected: (value) async {
+            if (value == _kEditPlaces) {
+              await showDeliveryLocationsDialog(context);
+              onEdited();
+              return;
+            }
+            onPicked(value);
+          },
+        ),
       ),
     );
   }
 }
+
+/// The sentinel the location picker uses for its "Edit saved places" entry.
+/// Not a place anybody would type, so it can never collide with one.
+const String _kEditPlaces = '|edit saved places|';
 
 /// A PO number field with the job's existing numbers one click away.
 class _PoField extends StatelessWidget {

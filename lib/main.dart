@@ -23,6 +23,7 @@ import 'contrast.dart';
 import 'error_reporting.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
+import 'delivery_locations_dialog.dart';
 import 'device_editor_view.dart';
 import 'flow_rules_view.dart';
 import 'schema_editor_view.dart';
@@ -3430,6 +3431,99 @@ class AppSettingsView extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(
                           'Flow rules reloaded: ${provider.flowRules.source}'),
+                    ));
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Delivery Locations (delivery_locations.json) Path
+        //
+        // The docks a truck can back up to and the rooms gear is held in.
+        // Worth pointing at the same share as the catalog, and for the same
+        // reason: a loading dock is a fact about the estate, and one list of
+        // names is what makes "everything at Central Stores" a question a job
+        // can answer.
+        Text('Delivery locations',
+            style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        Text(
+          'Set the places up once and every delivery on every job can be '
+          'filed against one of them in a click, instead of the same dock '
+          'being typed four ways. A delivery can still be logged somewhere '
+          'that is not on the list.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                key: ValueKey(
+                    'deliveryLocationsFilePath_${provider.deliveryLocationsFilePath}'),
+                decoration: InputDecoration(
+                  labelText:
+                      'Delivery Locations File Path (delivery_locations.json)',
+                  hintText:
+                      'Blank = delivery_locations.json in the Root Folder / '
+                      'next to the app',
+                  helperText:
+                      'Active list: ${provider.deliveryLocations.source.isEmpty ? 'none' : provider.deliveryLocations.source} - '
+                      '${provider.deliveryLocations.count} place'
+                      '${provider.deliveryLocations.count == 1 ? '' : 's'}. '
+                      'Put it on a shared drive to give the whole shop one set '
+                      'of names.',
+                  helperMaxLines: 3,
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.file_open),
+                    tooltip: 'Select JSON File',
+                    onPressed: () async {
+                      FilePickerResult? result = await FilePicker.pickFiles(
+                        type: FileType.custom,
+                        allowedExtensions: ['json'],
+                      );
+                      if (result != null) {
+                        provider.updateSetting('deliveryLocationsFilePath',
+                            result.files.single.path!);
+                      }
+                    },
+                  ),
+                ),
+                initialValue: provider.deliveryLocationsFilePath,
+                onChanged: (val) =>
+                    provider.updateSetting('deliveryLocationsFilePath', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              height: 56, // Matches the height of the TextFormField
+              child: ElevatedButton.icon(
+                key: const ValueKey('edit_delivery_locations'),
+                icon: const Icon(Icons.warehouse_outlined),
+                label: const Text('Edit Locations'),
+                onPressed: () => showDeliveryLocationsDialog(context),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 56,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reload'),
+                onPressed: () async {
+                  // Pick up what a colleague has saved to the share since this
+                  // copy read it.
+                  await provider.loadDeliveryLocations();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(
+                          'Delivery locations reloaded: '
+                          '${provider.deliveryLocations.count} places'),
                     ));
                   }
                 },

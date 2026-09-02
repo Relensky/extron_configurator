@@ -230,6 +230,9 @@ const List<HelpTopic> kHelpTopics = [
         'power draw, price, life. Edited on the Catalog tab.\n\n'
         'base_costs.json and labor_rates.json are what the estimate falls back '
         'to when no model has been chosen yet. Edited from the Cost tab.\n\n'
+        'delivery_locations.json is the docks a truck can back up to and the '
+        'rooms gear is held in. Edited from App Config, and offered on every '
+        'delivery.\n\n'
         'If the app does something you do not want, the fix is usually a rule '
         'or a schema entry rather than a new build.',
   ),
@@ -722,7 +725,47 @@ const List<HelpTopic> kHelpTopics = [
         'A truckload is logged in one pass. "Log several" ticks off everything '
         'that came together, with the place it went and the day it landed said '
         'once for all of them - and each row still keeps the PO that bought '
-        'that part.',
+        'that part.\n\n'
+        'Kit that MOVES is moved in one pass too. Tick the rows that came off '
+        'the dock together, press "Move these", and they all go to the same '
+        'place on the same day - each one keeping a signed note of where it '
+        'moved from and to. See "Saved delivery locations".',
+  ),
+  HelpTopic(
+    title: 'Saved delivery locations',
+    section: 'The job',
+    where: 'App Config tab -> Delivery locations, and every delivery log',
+    keywords: [
+      'delivery location',
+      'storage',
+      'dock',
+      'warehouse',
+      'address',
+      'stores',
+      'held',
+      'move',
+    ],
+    body:
+        'The docks a truck can back up to and the rooms gear waits in, set up '
+        'once and then one click away on every delivery. A loading dock is a '
+        'fact about the estate rather than about one job, and retyping '
+        '"MLIB basement, rack 3" per delivery is how one shelf becomes four '
+        'spellings that no filter can put back together.\n\n'
+        'Each place carries a name, what it is used for - deliveries, '
+        'storage, or both - an address, and anything the driver needs. The '
+        'NAME is what gets written onto a delivery; the address is looked up '
+        'here rather than retyped onto every row.\n\n'
+        'They live in delivery_locations.json. Point the path at a shared '
+        'drive and the whole shop logs deliveries against the same names, '
+        'which is what makes "everything at Central Stores" a question a job '
+        'can answer.\n\n'
+        'It never restricts anything. A delivery can still be logged to a '
+        'place that is not on the list, because the delivery worth writing '
+        'down carefully is usually the one that went somewhere new.\n\n'
+        'To move several lots at once, tick them in the delivery log and '
+        'press "Move these". Every row moved keeps a signed note saying where '
+        'it came from and where it went, so the log can still answer "where '
+        'was it in March" after somebody has moved it twice.',
   ),
   HelpTopic(
     title: 'The delivery timeline',

@@ -15,6 +15,7 @@ import 'equipment_lifecycle.dart'
 import 'responsibility_matrix.dart';
 import 'base_costs.dart';
 import 'config_dictionary.dart';
+import 'delivery_locations.dart';
 import 'config_key_mapper.dart';
 import 'flow_rules.dart';
 import 'cabling_schematic.dart';
@@ -563,6 +564,11 @@ class AppStateProvider extends ChangeNotifier {
   /// rules are a description of how this shop builds rooms, not a per-machine
   /// preference.
   String flowRulesFilePath = '';
+  /// Optional path to delivery_locations.json — the docks and stores a
+  /// delivery row's location can be filled from. Worth pointing at the same
+  /// share as the catalog: a loading dock is a fact about the estate, not a
+  /// per-machine preference.
+  String deliveryLocationsFilePath = '';
   String documentationPath = ''; // Folder of per-module PDF manuals (blank = <root>/documentation)
 
   // --- Processor connection settings (App Config > Processor Connection) ---
@@ -866,6 +872,7 @@ class AppStateProvider extends ChangeNotifier {
       'keyMapPath': keyMapPath,
       'avDevicesFilePath': avDevicesFilePath,
       'flowRulesFilePath': flowRulesFilePath,
+      'deliveryLocationsFilePath': deliveryLocationsFilePath,
       'documentationPath': documentationPath,
       'onlineFolder': onlineFolder,
       'sftpUsername': sftpUsername,
@@ -1009,6 +1016,12 @@ class AppStateProvider extends ChangeNotifier {
   // diagram has no model, or has one the catalog doesn't price. Read from
   // base_costs.json in the Root Folder; ships with every figure unset.
   BaseCostBook baseCosts = BaseCostBook.builtIn();
+
+  // --- Delivery locations (the docks, and the rooms gear is held in) ---
+  // The places a delivery row's "where is it" can be filled from in one click.
+  // Read from delivery_locations.json in the Root Folder, and empty until
+  // somebody sets one up: there is no dock that is right for every campus.
+  DeliveryLocationBook deliveryLocations = DeliveryLocationBook();
 
   /// The active working file on disk: the file opened locally, or the working
   /// copy chosen during an SFTP download. Empty when the session started from
@@ -7005,6 +7018,7 @@ class AppStateProvider extends ChangeNotifier {
       keyMapPath = str('keyMapPath', '');
       avDevicesFilePath = str('avDevicesFilePath', '');
       flowRulesFilePath = str('flowRulesFilePath', '');
+      deliveryLocationsFilePath = str('deliveryLocationsFilePath', '');
       documentationPath = str('documentationPath', '');
       onlineFolder = str('onlineFolder', '');
       sftpUsername = str('sftpUsername', 'admin');
@@ -7088,6 +7102,8 @@ class AppStateProvider extends ChangeNotifier {
       await loadLaborRates();
       // Load the base cost card (every category unset when no file exists)
       await loadBaseCosts();
+      // Load the delivery locations (empty when no file exists)
+      await loadDeliveryLocations();
 
       // Load files into memory on boot. The loaders resolve their own
       // default paths (Root Folder / working directory) when no explicit
@@ -7923,6 +7939,8 @@ class AppStateProvider extends ChangeNotifier {
         // ignore: unawaited_futures
         loadBaseCosts();
         // ignore: unawaited_futures
+        loadDeliveryLocations();
+        // ignore: unawaited_futures
         loadBuildingsList();
         // ignore: unawaited_futures
         loadProcessorsList();
@@ -7963,6 +7981,11 @@ class AppStateProvider extends ChangeNotifier {
         flowRulesFilePath = value;
         // ignore: unawaited_futures
         loadFlowRules(); // Re-read the rule book from the new location
+        break;
+      case 'deliveryLocationsFilePath':
+        deliveryLocationsFilePath = value;
+        // ignore: unawaited_futures
+        loadDeliveryLocations(); // Re-read the places from the new location
         break;
       case 'documentationPath':
         documentationPath = value; // PDFs are resolved on demand — no reload
@@ -8296,6 +8319,49 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   void baseCostsChanged() => notifyListeners();
+
+  // --- delivery locations: the docks, and the rooms gear is held in --------
+
+  /// delivery_locations.json: explicit choice, else
+  /// `<root>/delivery_locations.json` — beside the catalog and the rate cards,
+  /// which is where the rest of the app's shared documents live.
+  String get effectiveDeliveryLocationsPath =>
+      deliveryLocationsFilePath.isNotEmpty
+          ? deliveryLocationsFilePath
+          : (deliveryLocations.filePath.isNotEmpty
+              ? deliveryLocations.filePath
+              : path.join(effectiveRootFolder, 'delivery_locations.json'));
+
+  /// (Re)reads the places. [explicitPath] opens somebody else's list, which is
+  /// how a second site's docks get looked at without adopting them.
+  Future<void> loadDeliveryLocations({String explicitPath = ''}) async {
+    deliveryLocations = await DeliveryLocationBook.load(
+      explicitPath.isNotEmpty ? explicitPath : effectiveDeliveryLocationsPath,
+    );
+    notifyListeners();
+  }
+
+  /// Writes the places. Returns the file written, or '' on failure.
+  Future<String> saveDeliveryLocations() async {
+    final saved = await deliveryLocations.save(
+      toPath: effectiveDeliveryLocationsPath,
+    );
+    notifyListeners();
+    return saved;
+  }
+
+  /// The list is a plain object, not a listenable, so every edit path goes
+  /// through here rather than each view remembering to notify.
+  void deliveryLocationsChanged() => notifyListeners();
+
+  /// What a location picker offers: the saved places first, then whatever this
+  /// job has already typed. See [deliveryPlaceChoices].
+  List<DeliveryPlaceChoice> deliveryPlacesFor({required bool storage}) =>
+      deliveryPlaceChoices(
+        book: deliveryLocations,
+        usedOnThisJob: project.deliveryLocations,
+        storage: storage,
+      );
 
   /// Something outside this class rewrote the room config — the control-side
   /// prefill is the one that does — so every page reading it repaints.
@@ -14833,6 +14899,88 @@ class AppStateProvider extends ChangeNotifier {
       );
     }
     _projectChanged(repricing: false);
+  }
+
+  /// Where a lot is, in the words a note about moving it should use: the state
+  /// and the place, with the ROOM named when it is in one.
+  ///
+  /// [ProjectDelivery.whereText] stops at 'Installed', which is the right
+  /// length for a card that names the room on the line above it and the wrong
+  /// one for a note that has to stand on its own a year later.
+  String deliveryWherePhrase(ProjectDelivery row) {
+    if (row.state != DeliveryState.installed) return row.whereText;
+    final room = projectRoomLogName(row.roomId);
+    return room.isEmpty ? 'Installed' : 'Installed in $room';
+  }
+
+  /// MOVES SEVERAL LOTS AT ONCE: the pallet that came off the dock this
+  /// morning and went to one store, all of it, in one gesture.
+  ///
+  /// ============================================================================
+  ///  A MOVE IS A THING THAT HAPPENED, SO IT LEAVES A NOTE
+  /// ============================================================================
+  ///  Setting the location on a row overwrites where it used to be, and where
+  ///  it used to be is the whole question three weeks later: nine boxes are in
+  ///  MLIB 031 and somebody swears four of them were on the Bessey dock, and
+  ///  a log that only holds the current answer cannot settle it.
+  ///
+  ///  So every row moved this way gets a SIGNED note - who moved it, when, and
+  ///  what it moved from and to - on top of the entry in the project history.
+  ///  See [ProjectNote]: the name and the time are taken, not typed.
+  ///
+  ///  Rows that would not actually change are skipped rather than stamped with
+  ///  a note saying nothing happened, so ticking a row that is already in the
+  ///  store costs nothing.
+  ///
+  /// Returns how many rows moved.
+  int moveProjectDeliveries(
+    Iterable<String> ids, {
+    required DeliveryState state,
+    String location = '',
+    String roomId = '',
+    DateTime? on,
+    String note = '',
+  }) {
+    final when = dateOnly(on ?? DateTime.now());
+    final where = location.trim();
+    var moved = 0;
+    for (final id in ids) {
+      final row = project.deliveryById(id);
+      if (row == null) continue;
+      final next = row.copyWith(
+        state: state,
+        // Only overwritten when one is given, exactly as a single move does:
+        // a lot that goes into a room keeps saying where it had been.
+        location: where.isEmpty ? null : where,
+        roomId: state == DeliveryState.installed ? roomId : '',
+        installedOn: state == DeliveryState.installed ? when : null,
+        clearInstalledOn: state != DeliveryState.installed,
+      );
+      final was = deliveryWherePhrase(row);
+      final now = deliveryWherePhrase(next);
+      if (was == now && row.state == next.state) continue;
+      project.updateDelivery(next);
+      moved++;
+      // THE NOTE CARRIES BOTH ENDS. 'Moved from X to Y' is the sentence
+      // somebody needs; the name and the time on it come with the note.
+      project.addDeliveryNote(
+        id,
+        ProjectNote.now(
+          [
+            'Moved from $was to $now.',
+            if (note.trim().isNotEmpty) note.trim(),
+          ].join(' '),
+        ),
+      );
+      _logProjectEdit(
+        itemKey: projectDeliveryItemKey(id),
+        itemName: _deliveryLogName(next),
+        field: 'Delivery',
+        summary: 'moved from $was to $now',
+      );
+    }
+    if (moved > 0) _projectChanged(repricing: false);
+    return moved;
   }
 
   void removeProjectDelivery(String id) {

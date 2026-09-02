@@ -397,6 +397,25 @@ class _ProjectViewState extends State<ProjectView> {
 
   void _clearSelectedParts() => setState(_selectedParts.clear);
 
+  /// The delivery rows ticked for a bulk move, by [ProjectDelivery.id]. Held
+  /// here for the same reason the parts are, and written to the file for the
+  /// same reason they are not: a selection is a way of looking at the log.
+  final Set<String> _selectedDeliveries = <String>{};
+
+  void _toggleSelectedDelivery(String id) => setState(() {
+    if (!_selectedDeliveries.remove(id)) _selectedDeliveries.add(id);
+  });
+
+  void _selectShownDeliveries(List<String> ids) => setState(() {
+    if (ids.every(_selectedDeliveries.contains)) {
+      _selectedDeliveries.removeAll(ids);
+    } else {
+      _selectedDeliveries.addAll(ids);
+    }
+  });
+
+  void _clearSelectedDeliveries() => setState(_selectedDeliveries.clear);
+
   /// One controller for the whole tab, so the scrollbar has something to drag
   /// and switching panes can put the view back at the top — landing halfway
   /// down a different list is disorienting.
@@ -634,8 +653,14 @@ class _ProjectViewState extends State<ProjectView> {
             ),
             _ProjectPane.plans => plansSlivers(context, estimate),
             _ProjectPane.timeline => timelineSlivers(context, estimate),
-            _ProjectPane.deliveries =>
-              deliveriesSlivers(context, estimate),
+            _ProjectPane.deliveries => deliveriesSlivers(
+              context,
+              estimate,
+              selected: _selectedDeliveries,
+              onToggleSelected: _toggleSelectedDelivery,
+              onSelectShown: _selectShownDeliveries,
+              onClearSelected: _clearSelectedDeliveries,
+            ),
             _ProjectPane.lifecycle => lifecycleSlivers(context, estimate),
             _ProjectPane.responsibility =>
               responsibilitySlivers(context, estimate),
