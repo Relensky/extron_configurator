@@ -9,7 +9,6 @@ import 'package:provider/provider.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
-import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/project_view.dart';
 
 /// THE COUNT IS THE WAY TO THE ROWS IT COUNTS.
@@ -78,13 +77,9 @@ void main() {
         ),
       );
     p.newProject(name: 'Bessey refresh', building: 'BSS');
-    final epson = p.addProjectVendor(name: 'Epson Direct');
-    p.updateProjectVendor(
-      ProjectVendor(
-        id: epson.id,
-        name: 'Epson Direct',
-        manufacturers: const ['Epson'],
-      ),
+    final epson = p.addProjectRfq(title: 'Epson Direct');
+    p.updateProjectRfq(
+      epson.copyWith(manufacturers: const ['Epson']),
     );
     p.addRoomToProject(writeRoom('r0'));
     return (p: p, epson: epson.id);
@@ -110,13 +105,13 @@ void main() {
   }
 
   group('following the package count', () {
-    testWidgets('the chip is on the vendor card, closed or open', (
+    testWidgets('the chip is on the package card, closed or open', (
       tester,
     ) async {
       final (:p, :epson) = job();
       await openPane(tester, p, 'vendors');
       expect(
-        find.byKey(ValueKey('vendor_package_parts_$epson')),
+        find.byKey(ValueKey('rfq_package_parts_$epson')),
         findsOneWidget,
       );
     });
@@ -127,7 +122,7 @@ void main() {
       final (:p, :epson) = job();
       await openPane(tester, p, 'vendors');
 
-      await tester.tap(find.byKey(ValueKey('vendor_package_parts_$epson')));
+      await tester.tap(find.byKey(ValueKey('rfq_package_parts_$epson')));
       await tester.pumpAndSettle();
 
       // The Epson line is there and the Sharp one is not - which is the whole
@@ -142,12 +137,12 @@ void main() {
       // the tab honors changes. See [AppStateProvider.projectPaneRequestId].
       final (:p, :epson) = job();
       await openPane(tester, p, 'vendors');
-      await tester.tap(find.byKey(ValueKey('vendor_package_parts_$epson')));
+      await tester.tap(find.byKey(ValueKey('rfq_package_parts_$epson')));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(ValueKey('vendor_package_parts_$epson')));
+      await tester.tap(find.byKey(ValueKey('rfq_package_parts_$epson')));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('PowerLite L610U'), findsWidgets);

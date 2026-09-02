@@ -72,7 +72,7 @@ void main() {
     test('closing leaves an EMPTY job, not a new one', () {
       final p = withProject();
       expect(p.project.rooms, isNotEmpty);
-      expect(p.project.vendors, isNotEmpty, reason: 'New seeds the split');
+      expect(p.project.rfqs, isNotEmpty, reason: 'New seeds the split');
 
       p.closeProject();
 
@@ -80,9 +80,9 @@ void main() {
       expect(p.project.name, isEmpty);
       expect(p.currentProjectPath, isEmpty);
       expect(p.projectDirty, isFalse);
-      // Not "a new project": Close that left the starter vendors behind would
+      // Not "a new project": Close that left the starter packages behind would
       // be a Close that did not close anything.
-      expect(p.project.vendors, isEmpty);
+      expect(p.project.rfqs, isEmpty);
       expect(p.project.isEmpty, isTrue);
     });
 
@@ -109,7 +109,7 @@ void main() {
 
       expect(p.project.name, 'Second job');
       expect(p.project.rooms, isEmpty);
-      expect(p.project.vendors, isNotEmpty, reason: 'New seeds them again');
+      expect(p.project.rfqs, isNotEmpty, reason: 'New seeds them again');
     });
   });
 
@@ -158,7 +158,7 @@ void main() {
 
       expect(p.project.rooms, isEmpty);
       // The room file is untouched either way — only the room list, the
-      // vendors and the tags were ever at stake.
+      // packages and the tags were ever at stake.
       expect(File('${dir.path}/bss101_config.json').existsSync(), isTrue);
       await letTheSnackBarGo(tester);
     });

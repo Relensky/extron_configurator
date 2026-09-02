@@ -144,10 +144,10 @@ void main() {
             after.cablingTotal +
             after.extrasTotal,
       );
-      // ...and the total now agrees with what the vendors are being asked for,
-      // which on a job with no labor or tax is the same money twice.
+      // ...and the total now agrees with what the packages are being quoted
+      // for, which on a job with no labor or tax is the same money twice.
       expect(
-        after.vendors.fold<double>(0, (sum, v) => sum + v.total),
+        after.packages.fold<double>(0, (sum, v) => sum + v.total),
         after.grandTotal,
       );
     });

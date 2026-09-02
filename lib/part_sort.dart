@@ -54,7 +54,7 @@ const Map<PartSortKey, String> kPartSortLabels = {
   PartSortKey.qty: 'Qty',
   PartSortKey.unit: 'Unit',
   PartSortKey.extended: 'Extended',
-  PartSortKey.vendor: 'Vendor',
+  PartSortKey.vendor: 'Package',
   PartSortKey.leadTime: 'Lead time',
   PartSortKey.orderBy: 'Order by',
 };
@@ -106,9 +106,14 @@ List<MasterPartLine> sortMasterParts(
       case PartSortKey.extended:
         return line.unpriced ? null : line.total;
       case PartSortKey.vendor:
+        // BY PACKAGE, not by the winning vendor. Sorting by supplier would
+        // scatter one order across the page for as long as it is out to quote
+        // and then gather it up again on the day it is awarded, which is the
+        // opposite of what a sort is for.
+        //
         // An untagged part is the one worth finding, so it is a blank rather
         // than an empty string that would sort first and look deliberate.
-        final name = line.vendor?.name.trim() ?? '';
+        final name = line.rfq?.name.trim() ?? '';
         return name.isEmpty ? null : name.toLowerCase();
       case PartSortKey.leadTime:
         final days = schedulePart(

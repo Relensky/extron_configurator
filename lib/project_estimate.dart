@@ -488,9 +488,17 @@ class MasterPartLine {
   /// retyped on every project that specifies it.
   final int? catalogLeadDays;
 
-  /// The vendor this part is tagged to, and how it got there.
+  /// The buying package this part is in, and how it got there.
+  final ProjectRfq? rfq;
+  final RfqTagSource tagSource;
+
+  /// The company actually supplying it: the vendor that WON [rfq], or null
+  /// while the package is still out to quote.
+  ///
+  /// DERIVED, and blank on purpose until there is an award. A part in a
+  /// package three vendors are bidding has no supplier yet, and the list said
+  /// otherwise for as long as a vendor was the package.
   final ProjectVendor? vendor;
-  final VendorTagSource tagSource;
 
   /// Room id -> units of this part in that room that nothing will drive.
   ///
@@ -531,8 +539,9 @@ class MasterPartLine {
     required this.unitPrice,
     required this.maxUnitPrice,
     required this.qtyByRoom,
-    required this.vendor,
+    required this.rfq,
     required this.tagSource,
+    required this.vendor,
     required this.unpriced,
     this.undrivenByRoom = const {},
     this.lineKeysByRoom = const {},
@@ -575,29 +584,54 @@ class MasterPartLine {
   }
 }
 
-/// Everything one vendor is being asked to quote.
+/// One package of parts, priced — everything that goes out as a single quote
+/// request, whoever ends up quoting it.
 class VendorPackage {
   /// Null for the untagged package — the parts no rule and no pin claimed.
   /// Kept as a package rather than hidden, because it is the project's own
   /// to-do list: a building is not ready to go out for quotes while it has
   /// one.
-  final ProjectVendor? vendor;
+  final ProjectRfq? rfq;
+
+  /// The company that won it, or null while it is still out to quote (and
+  /// always, for the untagged pile).
+  final ProjectVendor? awardedVendor;
 
   final List<MasterPartLine> lines;
+
+  /// What WE hold for it. Not what anybody quoted — see [ProjectRfq.bids] for
+  /// that. This is the number the quotes get measured against.
   final double total;
 
   /// Units across the package — what a vendor sees as "how big is this job".
   final double qty;
 
   const VendorPackage({
-    required this.vendor,
+    required this.rfq,
+    this.awardedVendor,
     required this.lines,
     required this.total,
     required this.qty,
   });
 
-  bool get isUntagged => vendor == null;
-  String get name => vendor?.name ?? 'Untagged';
+  bool get isUntagged => rfq == null;
+
+  /// What the package is called. The AWARDED VENDOR once there is one, and the
+  /// package's own title until then.
+  ///
+  /// That switch is the answer to "once chosen we only need the chosen vendor
+  /// listed": while a package is out, naming any one of three bidders would be
+  /// a guess, and after an award the package name is no longer the useful
+  /// half — the company that has to deliver it is.
+  String get name =>
+      awardedVendor?.name ?? (rfq == null ? 'Untagged' : rfq!.name);
+
+  /// The package's own title, whatever it was awarded to. What the request
+  /// went out headed with, and what a comparison of bids is titled.
+  String get packageName => rfq == null ? 'Untagged' : rfq!.name;
+
+  /// The id everything filters and pins by.
+  String get id => rfq?.id ?? '';
 }
 
 /// One room's whole spares bill — what it asked for, and what that costs.
@@ -755,7 +789,9 @@ class ProjectEstimate {
   final List<ProjectRoomCost> costedRooms;
 
   final List<MasterPartLine> master;
-  final List<VendorPackage> vendors;
+
+  /// The buying packages, priced — the untagged pile last. See [VendorPackage].
+  final List<VendorPackage> packages;
 
   /// The sum of each room's own grand total — fees and tax computed per room,
   /// under that room's rates. See the header note on why this is not derived
@@ -815,7 +851,7 @@ class ProjectEstimate {
     required this.rooms,
     required this.costedRooms,
     required this.master,
-    required this.vendors,
+    required this.packages,
     required this.grandTotal,
     required this.equipmentTotal,
     required this.hardwareTotal,
@@ -1133,13 +1169,20 @@ class ProjectEstimate {
   /// True when nothing is missing: every room read, every part priced.
   bool get isComplete => failedRooms == 0 && unpricedParts == 0;
 
-  /// The package for one vendor id, or null.
-  VendorPackage? packageFor(String vendorId) {
-    for (final p in vendors) {
-      if (p.vendor?.id == vendorId) return p;
+  /// The package for one rfq id, or null.
+  VendorPackage? packageFor(String rfqId) {
+    for (final p in packages) {
+      if (p.rfq?.id == rfqId) return p;
     }
     return null;
   }
+
+  /// Every package this vendor is bidding or has won — what a vendor's own row
+  /// is read from now that a vendor owns no parts of its own.
+  List<VendorPackage> packagesFor(String vendorId) => [
+    for (final p in packages)
+      if (p.rfq?.bidFor(vendorId) != null) p,
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -1385,12 +1428,12 @@ ProjectEstimate computeProjectEstimate({
   var untaggedParts = 0;
 
   for (final a in acc.values) {
-    final tag = project.vendorForPart(
+    final tag = project.rfqForPart(
       a.key,
       manufacturer: a.manufacturer,
       category: a.category,
     );
-    if (tag.vendor == null) untaggedParts++;
+    if (tag.rfq == null) untaggedParts++;
     if (a.unpriced) unpricedParts++;
 
     master.add(MasterPartLine(
@@ -1406,8 +1449,11 @@ ProjectEstimate computeProjectEstimate({
       unitPrice: a.lowUnitPrice,
       maxUnitPrice: a.maxUnitPrice,
       qtyByRoom: a.qtyByRoom,
-      vendor: tag.vendor,
+      rfq: tag.rfq,
       tagSource: tag.source,
+      // Only once the package has been awarded. Before that nobody is
+      // supplying this part yet, and saying so is the point.
+      vendor: project.vendorById(tag.rfq?.awardedVendorId ?? ''),
       unpriced: a.unpriced,
       undrivenByRoom: a.undrivenByRoom,
       lineKeysByRoom: a.lineKeysByRoom,
@@ -1420,31 +1466,32 @@ ProjectEstimate computeProjectEstimate({
 
   master.sort(_compareMasterLines);
 
-  // --- split by vendor -----------------------------------------------------
-  final byVendor = <String, List<MasterPartLine>>{};
+  // --- split by package ----------------------------------------------------
+  final byRfq = <String, List<MasterPartLine>>{};
   for (final line in master) {
-    byVendor.putIfAbsent(line.vendor?.id ?? '', () => []).add(line);
+    byRfq.putIfAbsent(line.rfq?.id ?? '', () => []).add(line);
   }
 
   final packages = <VendorPackage>[];
-  // In the project's own vendor order, so the workbook's tabs are in the order
-  // the vendor list is on screen rather than in whatever order the parts
+  // In the project's own package order, so the workbook's tabs are in the
+  // order the list is on screen rather than in whatever order the parts
   // happened to merge.
-  for (final v in project.vendors) {
-    final lines = byVendor[v.id] ?? const <MasterPartLine>[];
+  for (final q in project.rfqs) {
+    final lines = byRfq[q.id] ?? const <MasterPartLine>[];
     if (lines.isEmpty) continue;
     packages.add(VendorPackage(
-      vendor: v,
+      rfq: q,
+      awardedVendor: project.vendorById(q.awardedVendorId),
       lines: lines,
       total: lines.fold(0.0, (s, l) => s + l.total),
       qty: lines.fold(0.0, (s, l) => s + l.qty),
     ));
   }
   // Untagged last: it is the exception list, and it belongs after the work.
-  final loose = byVendor[''] ?? const <MasterPartLine>[];
+  final loose = byRfq[''] ?? const <MasterPartLine>[];
   if (loose.isNotEmpty) {
     packages.add(VendorPackage(
-      vendor: null,
+      rfq: null,
       lines: loose,
       total: loose.fold(0.0, (s, l) => s + l.total),
       qty: loose.fold(0.0, (s, l) => s + l.qty),
@@ -1464,7 +1511,7 @@ ProjectEstimate computeProjectEstimate({
     rooms: costed,
     costedRooms: included,
     master: master,
-    vendors: packages,
+    packages: packages,
     // The rooms' own totals, plus the spares the JOB bought on top of them.
     // Not taxed: a tax rate on this job is a ROOM's setting, and a switcher on
     // a shelf for the building belongs to no room to borrow one from.

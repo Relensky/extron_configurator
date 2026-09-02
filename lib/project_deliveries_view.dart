@@ -853,12 +853,27 @@ class _PoPartsDialogState extends State<_PoPartsDialog> {
     super.dispose();
   }
 
-  /// The master lines tagged to this PO's vendor.
+  /// The master lines this PO is most likely buying.
   ///
-  /// Matched on the vendor ROW when the PO points at one and on the name
-  /// otherwise, so a PO raised on a distributor that never earned a vendor row
-  /// still lines up with the parts tagged to that name.
+  /// THE PACKAGE THAT RAISED IT first, matched on the PO NUMBER - which is the
+  /// link everything else on a job uses, and the only one that works before an
+  /// award has given any part a supplier at all. A PO raised straight off a
+  /// package is the ordinary case, and its whole line list is the answer.
+  ///
+  /// Failing that, every package the PO's vendor has WON: a number typed in by
+  /// hand on the Deliveries pane still lines up with what that company is
+  /// supplying. And failing that, the vendor's name off the row, so a PO
+  /// raised on a distributor that never earned a vendor row still narrows to
+  /// something.
   List<MasterPartLine> _vendorLines() {
+    final project = widget.provider.project;
+    final rfq = project.rfqByPoNumber(widget.po.number);
+    if (rfq != null) {
+      return [
+        for (final m in widget.estimate.master)
+          if (m.rfq?.id == rfq.id) m,
+      ];
+    }
     final id = widget.po.vendorId.trim();
     final name = widget.po.vendor.trim().toLowerCase();
     if (id.isEmpty && name.isEmpty) return const [];

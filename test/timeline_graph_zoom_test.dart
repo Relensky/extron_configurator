@@ -60,7 +60,7 @@ void main() {
 
   /// A job with a deadline far enough out that the rail has a real span, and
   /// two vendors to put on it.
-  ({AppStateProvider p, String epson, String sharp}) job() {
+  ({AppStateProvider p, String epson, String sharp, String bidder}) job() {
     final p = AppStateProvider(autoLoadSettings: false);
     p.avDeviceLibrary = AvDeviceLibrary.empty()
       ..upsert(
@@ -82,26 +82,22 @@ void main() {
         ),
       );
     p.newProject(name: 'Bessey refresh', building: 'BSS');
-    final epson = p.addProjectVendor(name: 'Epson Direct');
-    p.updateProjectVendor(
-      ProjectVendor(
-        id: epson.id,
-        name: 'Epson Direct',
-        manufacturers: const ['Epson'],
-      ),
+    p.project.rfqs.clear();
+    final bidder = p.addProjectVendor(name: 'Alpha AV').id;
+    final epson = p.addProjectRfq(title: 'Epson Direct');
+    p.updateProjectRfq(
+      epson.copyWith(manufacturers: const ['Epson']),
     );
-    final sharp = p.addProjectVendor(name: 'Sharp Reseller');
-    p.updateProjectVendor(
-      ProjectVendor(
-        id: sharp.id,
-        name: 'Sharp Reseller',
-        manufacturers: const ['Sharp'],
-      ),
+    p.inviteVendorToRfq(epson.id, bidder);
+    final sharp = p.addProjectRfq(title: 'Sharp Reseller');
+    p.updateProjectRfq(
+      sharp.copyWith(manufacturers: const ['Sharp']),
     );
+    p.inviteVendorToRfq(sharp.id, bidder);
     p.addRoomToProject(writeRoom('r0'));
     // A MULTI-YEAR JOB. Three years of rail is the case the zoom exists for.
     p.setProjectDeadline(today().add(const Duration(days: 1100)));
-    return (p: p, epson: epson.id, sharp: sharp.id);
+    return (p: p, epson: epson.id, sharp: sharp.id, bidder: bidder);
   }
 
   Future<void> openTimeline(WidgetTester tester, AppStateProvider p) async {
@@ -119,17 +115,17 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  group('the vendors are on the rail', () {
+  group('the packages are on the rail', () {
     testWidgets('a request that went out gets a mark of its own', (
       tester,
     ) async {
-      final (:p, :epson, sharp: _) = job();
-      p.setVendorRfqSent(epson, today().add(const Duration(days: 20)));
+      final (:p, :epson, sharp: _, :bidder) = job();
+      p.markRfqSent(epson, sentOn: today().add(const Duration(days: 20)));
       await openTimeline(tester, p);
 
       expect(find.byKey(const ValueKey('timeline_date_graph')), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('timeline_date_mark_Epson Direct RFQ out')),
+        find.byKey(const ValueKey('timeline_date_mark_Epson Direct out to 1')),
         findsOneWidget,
       );
     });
@@ -139,9 +135,9 @@ void main() {
     ) async {
       // ONE MARK PER VENDOR, on its latest date. Three cards per vendor saying
       // what one card says is a rail nobody can read.
-      final (:p, :epson, sharp: _) = job();
-      p.setVendorRfqSent(epson, today().add(const Duration(days: 20)));
-      p.setVendorQuote(epson, quotedOn: today().add(const Duration(days: 40)));
+      final (:p, :epson, sharp: _, :bidder) = job();
+      p.markRfqSent(epson, sentOn: today().add(const Duration(days: 20)));
+      p.setBidQuote(epson, bidder, quotedOn: today().add(const Duration(days: 40)));
       await openTimeline(tester, p);
 
       expect(
@@ -149,34 +145,34 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('timeline_date_mark_Epson Direct RFQ out')),
+        find.byKey(const ValueKey('timeline_date_mark_Epson Direct out to 1')),
         findsNothing,
       );
     });
 
     testWidgets('two vendors are two marks', (tester) async {
-      final (:p, :epson, :sharp) = job();
-      p.setVendorRfqSent(epson, today().add(const Duration(days: 20)));
-      p.setVendorRfqSent(sharp, today().add(const Duration(days: 60)));
+      final (:p, :epson, :sharp, :bidder) = job();
+      p.markRfqSent(epson, sentOn: today().add(const Duration(days: 20)));
+      p.markRfqSent(sharp, sentOn: today().add(const Duration(days: 60)));
       await openTimeline(tester, p);
 
       expect(
-        find.byKey(const ValueKey('timeline_date_mark_Epson Direct RFQ out')),
+        find.byKey(const ValueKey('timeline_date_mark_Epson Direct out to 1')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('timeline_date_mark_Sharp Reseller RFQ out')),
+        find.byKey(const ValueKey('timeline_date_mark_Sharp Reseller out to 1')),
         findsOneWidget,
       );
     });
 
     testWidgets('a vendor nobody has written to is not on it', (tester) async {
-      final (:p, :epson, :sharp) = job();
-      p.setVendorRfqSent(epson, today().add(const Duration(days: 20)));
+      final (:p, :epson, :sharp, :bidder) = job();
+      p.markRfqSent(epson, sentOn: today().add(const Duration(days: 20)));
       await openTimeline(tester, p);
 
       expect(
-        find.byKey(const ValueKey('timeline_date_mark_Sharp Reseller RFQ out')),
+        find.byKey(const ValueKey('timeline_date_mark_Sharp Reseller out to 1')),
         findsNothing,
       );
     });
@@ -184,8 +180,8 @@ void main() {
 
   group('the rail zooms', () {
     testWidgets('it opens fitted, with nothing to scroll to', (tester) async {
-      final (:p, :epson, sharp: _) = job();
-      p.setVendorRfqSent(epson, today().add(const Duration(days: 20)));
+      final (:p, :epson, sharp: _, :bidder) = job();
+      p.markRfqSent(epson, sentOn: today().add(const Duration(days: 20)));
       await openTimeline(tester, p);
 
       expect(
@@ -203,8 +199,8 @@ void main() {
     testWidgets('the readout is a stretch of time, not a multiplier', (
       tester,
     ) async {
-      final (:p, :epson, sharp: _) = job();
-      p.setVendorRfqSent(epson, today().add(const Duration(days: 20)));
+      final (:p, :epson, sharp: _, :bidder) = job();
+      p.markRfqSent(epson, sentOn: today().add(const Duration(days: 20)));
       await openTimeline(tester, p);
 
       // Three years fitted. The number somebody wants off a calendar is how
@@ -213,8 +209,8 @@ void main() {
     });
 
     testWidgets('zooming in shortens the stretch in the frame', (tester) async {
-      final (:p, :epson, sharp: _) = job();
-      p.setVendorRfqSent(epson, today().add(const Duration(days: 20)));
+      final (:p, :epson, sharp: _, :bidder) = job();
+      p.markRfqSent(epson, sentOn: today().add(const Duration(days: 20)));
       await openTimeline(tester, p);
 
       for (var i = 0; i < 4; i++) {
@@ -236,8 +232,8 @@ void main() {
     });
 
     testWidgets('fit puts the whole job back in the frame', (tester) async {
-      final (:p, :epson, sharp: _) = job();
-      p.setVendorRfqSent(epson, today().add(const Duration(days: 20)));
+      final (:p, :epson, sharp: _, :bidder) = job();
+      p.markRfqSent(epson, sentOn: today().add(const Duration(days: 20)));
       await openTimeline(tester, p);
 
       await tester.tap(find.byKey(const ValueKey('timeline_graph_zoom_in')));

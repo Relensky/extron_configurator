@@ -108,7 +108,7 @@ void main() {
       // The point of keywords: the words on the button are not always the
       // words in somebody's head.
       for (final (query, expected) in [
-        ('rfq', 'Quote requests - where a vendor has got to'),
+        ('rfq', 'Sending one package to several vendors'),
         ('ryg', 'How old the gear is, and when it falls due'),
         ('msrp', 'Pricing tier - list or education'),
         ('bom', 'The master parts list'),
@@ -214,16 +214,16 @@ void main() {
       // The first hit is already open on the wide layout.
       await tester.tap(
         find.byKey(
-          const ValueKey('help_topic_Quote requests - where a vendor has got '
-              'to'),
+          const ValueKey('help_topic_Sending one package to several vendors'),
         ),
       );
       await tester.pumpAndSettle();
 
       await tester.tap(
         find.byKey(
-          const ValueKey('help_keyword_Quote requests - where a vendor has got '
-              'to_chase'),
+          const ValueKey(
+            'help_keyword_Sending one package to several vendors_bidder',
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -232,7 +232,7 @@ void main() {
         (tester.widget<TextField>(
           find.byKey(const ValueKey('help_search')),
         )).controller?.text,
-        'chase',
+        'bidder',
       );
     });
 

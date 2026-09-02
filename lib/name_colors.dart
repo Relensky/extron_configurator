@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'building_project.dart' show ProjectVendor;
+import 'building_project.dart' show ProjectRfq;
 import 'contrast.dart';
 
 /// ============================================================================
@@ -336,18 +336,21 @@ class NameTintKey extends StatelessWidget {
   }
 }
 
-/// THE COLOR A VENDOR'S PARTS ARE MARKED IN.
+/// THE COLOR A PACKAGE'S PARTS ARE MARKED IN.
 ///
-/// A vendor is an ORDER: everything tagged to it goes to one company on one
-/// purchase order. "Which of these two hundred parts am I buying from whom" is
-/// the question the master list is opened for, and until now the answer was a
-/// name in a narrow column that had to be read a row at a time. A color
-/// answers it down the whole page at once.
+/// A package is an ORDER-TO-BE: everything in it goes out as one request and
+/// comes back as one purchase order. "Which of these two hundred parts are
+/// bought together" is the question the master list is opened for, and until
+/// now the answer was a name in a narrow column that had to be read a row at a
+/// time. A color answers it down the whole page at once.
 ///
-/// Assigned first ([ProjectVendor.color]), derived from the name otherwise, so
-/// the list is legible on a job where nobody has set a color. An untagged
-/// part has no vendor and takes the unsettled gray — it is not an order yet,
-/// and giving it a color of its own would make it look like one.
-Color projectVendorColor(ProjectVendor? vendor) => vendor == null
+/// ON THE PACKAGE AND NOT THE WINNER, so the page does not repaint itself the
+/// day an award lands. See [ProjectRfq.color].
+///
+/// Assigned first, derived from the title otherwise, so the list is legible on
+/// a job where nobody has set a color. An untagged part is in no package and
+/// takes the unsettled gray — it is not an order yet, and giving it a color of
+/// its own would make it look like one.
+Color projectRfqColor(ProjectRfq? rfq) => rfq == null
     ? kNameTintUnsettled
-    : resolveTint(assigned: vendor.color, name: vendor.name);
+    : resolveTint(assigned: rfq.color, name: rfq.name);

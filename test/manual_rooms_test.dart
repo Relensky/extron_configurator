@@ -170,7 +170,7 @@ void main() {
         rooms: const [],
         costedRooms: const [],
         master: const [],
-        vendors: const [],
+        packages: const [],
         grandTotal: 0,
         equipmentTotal: 0,
         hardwareTotal: 0,

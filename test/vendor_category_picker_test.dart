@@ -94,7 +94,7 @@ void main() {
         ),
       );
     p.newProject(name: 'Bessey refresh', building: 'BSS');
-    final vendor = p.addProjectVendor(name: 'AV Reseller');
+    final vendor = p.addProjectRfq(title: 'AV Reseller');
     p.addRoomToProject(writeRoom('r0'));
     return (p: p, vendorId: vendor.id);
   }
@@ -120,7 +120,7 @@ void main() {
     String vendorId,
   ) async {
     await openVendors(tester, p);
-    await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+    await tester.tap(find.byKey(ValueKey('rfq_toggle_$vendorId')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('rule_pick_Categories')));
     await tester.pumpAndSettle();
@@ -146,7 +146,7 @@ void main() {
     testWidgets('the button is on the categories editor', (tester) async {
       final (:p, :vendorId) = job();
       await openVendors(tester, p);
-      await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$vendorId')));
       await tester.pumpAndSettle();
 
       expect(
@@ -174,7 +174,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final vendor = p.project.vendorById(vendorId)!;
+      final vendor = p.project.rfqById(vendorId)!;
       expect(vendor.categories, containsAll(['Display', 'Projector']));
       // And the rules actually claim the parts, which is the whole point of
       // ticking rather than typing.
@@ -184,8 +184,8 @@ void main() {
 
     testWidgets('unticking is how a rule goes', (tester) async {
       final (:p, :vendorId) = job();
-      p.updateProjectVendor(
-        p.project.vendorById(vendorId)!.copyWith(
+      p.updateProjectRfq(
+        p.project.rfqById(vendorId)!.copyWith(
           categories: const ['Display', 'Projector'],
         ),
       );
@@ -198,7 +198,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(p.project.vendorById(vendorId)!.categories, ['Projector']);
+      expect(p.project.rfqById(vendorId)!.categories, ['Projector']);
     });
 
     testWidgets('backing out changes nothing', (tester) async {
@@ -210,7 +210,7 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
-      expect(p.project.vendorById(vendorId)!.categories, isEmpty);
+      expect(p.project.rfqById(vendorId)!.categories, isEmpty);
     });
 
     testWidgets('a rule the job has no parts for is carried, not dropped', (
@@ -221,8 +221,8 @@ void main() {
       // real thing to want - and a picker that silently deleted it would be
       // worse than no picker.
       final (:p, :vendorId) = job();
-      p.updateProjectVendor(
-        p.project.vendorById(vendorId)!.copyWith(
+      p.updateProjectRfq(
+        p.project.rfqById(vendorId)!.copyWith(
           categories: const ['Camera'],
         ),
       );
@@ -238,13 +238,13 @@ void main() {
         find.byKey(const ValueKey('vendor_category_picker_save')),
       );
       await tester.pumpAndSettle();
-      expect(p.project.vendorById(vendorId)!.categories, ['Camera']);
+      expect(p.project.rfqById(vendorId)!.categories, ['Camera']);
     });
 
     testWidgets('the box beside it still takes anything typed', (tester) async {
       final (:p, :vendorId) = job();
       await openVendors(tester, p);
-      await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$vendorId')));
       await tester.pumpAndSettle();
 
       // The tick-list is a way in, not the only one. A category this job has
@@ -257,7 +257,7 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(p.project.vendorById(vendorId)!.categories, contains('Videowall'));
+      expect(p.project.rfqById(vendorId)!.categories, contains('Videowall'));
     });
   });
 }

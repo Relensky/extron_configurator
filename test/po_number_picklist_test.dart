@@ -19,12 +19,12 @@ void main() {
       expect(p.poNumbersInUse, contains('PO-1188'));
     });
 
-    test('a number that only a vendor holds is on it too', () {
+    test('a number that only a package holds is on it too', () {
       final p = job();
-      p.vendors.add(
-        const ProjectVendor(
+      p.rfqs.add(
+        const ProjectRfq(
           id: 'v1',
-          name: 'Epson Direct',
+          title: 'Epson Direct',
           poNumber: 'PO-2044',
         ),
       );
@@ -38,10 +38,10 @@ void main() {
 
     test('the same number twice is one entry', () {
       final p = job()..addPo(number: 'PO-1188');
-      p.vendors.add(
-        const ProjectVendor(
+      p.rfqs.add(
+        const ProjectRfq(
           id: 'v1',
-          name: 'Epson Direct',
+          title: 'Epson Direct',
           poNumber: 'PO-1188',
         ),
       );
@@ -55,8 +55,8 @@ void main() {
 
     test('a blank number is not a number', () {
       final p = job();
-      p.vendors.add(
-        const ProjectVendor(id: 'v1', name: 'Epson Direct', poNumber: '   '),
+      p.rfqs.add(
+        const ProjectRfq(id: 'v1', title: 'Epson Direct', poNumber: '   '),
       );
       expect(p.poNumbersInUse, isEmpty);
     });
@@ -67,8 +67,8 @@ void main() {
       // where the hyphen was is a DIFFERENT number, and quietly folding the
       // two together would hide somebody's typo rather than show it.
       final p = job()..addPo(number: 'PO-1188');
-      p.vendors.add(
-        const ProjectVendor(id: 'v1', name: 'Epson Direct', poNumber: 'po-1188'),
+      p.rfqs.add(
+        const ProjectRfq(id: 'v1', title: 'Epson Direct', poNumber: 'po-1188'),
       );
       expect(p.poNumbersInUse, ['PO-1188']);
     });
@@ -77,10 +77,10 @@ void main() {
       // What the "Add a purchase order" box offers: until a row exists there
       // is nothing to attach the order to and nothing to tick equipment onto.
       final p = job();
-      p.vendors.add(
-        const ProjectVendor(
+      p.rfqs.add(
+        const ProjectRfq(
           id: 'v1',
-          name: 'Epson Direct',
+          title: 'Epson Direct',
           poNumber: 'PO-2044',
         ),
       );

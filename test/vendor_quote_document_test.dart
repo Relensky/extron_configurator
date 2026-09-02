@@ -53,7 +53,7 @@ void main() {
     return configPath;
   }
 
-  ({AppStateProvider p, String vendorId}) job() {
+  ({AppStateProvider p, String rfqId, String vendorId}) job() {
     final p = AppStateProvider(autoLoadSettings: false);
     p.avDeviceLibrary = AvDeviceLibrary.empty()
       ..upsert(
@@ -66,16 +66,12 @@ void main() {
         ),
       );
     p.newProject(name: 'Bessey refresh', building: 'BSS');
+    final rfq = p.addProjectRfq(title: 'Epson package');
+    p.updateProjectRfq(rfq.copyWith(manufacturers: const ['Epson']));
     final vendor = p.addProjectVendor(name: 'Epson Direct');
-    p.updateProjectVendor(
-      ProjectVendor(
-        id: vendor.id,
-        name: 'Epson Direct',
-        manufacturers: const ['Epson'],
-      ),
-    );
+    p.inviteVendorToRfq(rfq.id, vendor.id);
     p.addRoomToProject(writeRoom('r0', 'Bessey 101'));
-    return (p: p, vendorId: vendor.id);
+    return (p: p, rfqId: rfq.id, vendorId: vendor.id);
   }
 
   Future<void> openPane(
@@ -103,12 +99,13 @@ void main() {
 
   group('the quote is a pointer at a file, never a copy of it', () {
     test('stored relative to the job, so the folder can move', () {
-      final (:p, :vendorId) = job();
+      final (:p, :rfqId, :vendorId) = job();
       p.currentProjectPath = path.join(dir.path, 'bessey_project.json');
 
       final pdf = path.join(dir.path, 'Q-88421.pdf');
       File(pdf).writeAsStringSync('%PDF-1.4');
-      p.setVendorQuote(
+      p.setBidQuote(
+        rfqId,
         vendorId,
         quotedOn: DateTime(2026, 3, 11),
         amount: 18400,
@@ -116,7 +113,7 @@ void main() {
         filePath: pdf,
       );
 
-      final stored = p.project.vendorById(vendorId)!.quoteFilePath;
+      final stored = p.project.rfqById(rfqId)!.bidFor(vendorId)!.filePath;
       expect(
         path.isAbsolute(stored),
         isFalse,
@@ -135,30 +132,32 @@ void main() {
       // The dialog hands back whatever it was opened with when nobody picked a
       // new file. Storing an already-relative path a second time would resolve
       // it against the working directory and produce a pointer at nothing.
-      final (:p, :vendorId) = job();
+      final (:p, :rfqId, :vendorId) = job();
       p.currentProjectPath = path.join(dir.path, 'bessey_project.json');
       final pdf = path.join(dir.path, 'quotes', 'Q-88421.pdf');
       Directory(path.dirname(pdf)).createSync(recursive: true);
       File(pdf).writeAsStringSync('%PDF-1.4');
 
-      p.setVendorQuote(
+      p.setBidQuote(
+        rfqId,
         vendorId,
         quotedOn: DateTime(2026, 3, 11),
         filePath: pdf,
       );
-      final stored = p.project.vendorById(vendorId)!.quoteFilePath;
+      final stored = p.project.rfqById(rfqId)!.bidFor(vendorId)!.filePath;
 
-      p.setVendorQuote(
+      p.setBidQuote(
+        rfqId,
         vendorId,
         quotedOn: DateTime(2026, 3, 12),
         amount: 18400,
         filePath: stored,
       );
 
-      expect(p.project.vendorById(vendorId)!.quoteFilePath, stored);
+      expect(p.project.rfqById(rfqId)!.bidFor(vendorId)!.filePath, stored);
       expect(
         BuildingProject.resolvePath(
-          p.project.vendorById(vendorId)!.quoteFilePath,
+          p.project.rfqById(rfqId)!.bidFor(vendorId)!.filePath,
           p.currentProjectPath,
         ),
         path.normalize(pdf),
@@ -166,51 +165,54 @@ void main() {
     });
 
     test('taking the quote off the row takes the document with it', () {
-      final (:p, :vendorId) = job();
+      final (:p, :rfqId, :vendorId) = job();
       final pdf = path.join(dir.path, 'Q-88421.pdf');
       File(pdf).writeAsStringSync('%PDF-1.4');
-      p.setVendorQuote(
+      p.setBidQuote(
+        rfqId,
         vendorId,
         quotedOn: DateTime(2026, 3, 11),
         amount: 18400,
         filePath: pdf,
       );
 
-      p.setVendorQuote(vendorId, quotedOn: null);
+      p.setBidQuote(
+        rfqId,
+        vendorId, quotedOn: null);
 
-      final vendor = p.project.vendorById(vendorId)!;
-      expect(vendor.quoteFilePath, isEmpty);
-      expect(vendor.quoteAmount, 0);
+      final bid = p.project.rfqById(rfqId)!.bidFor(vendorId)!;
+      expect(bid.filePath, isEmpty);
+      expect(bid.amount, 0);
       // The FILE is left where it is. Deleting somebody's paperwork off their
       // disk is not something a project file gets to do.
       expect(File(pdf).existsSync(), isTrue);
     });
 
     test('it survives a save and a reload', () {
-      final vendor = ProjectVendor(
-        id: 'vendor1',
-        name: 'Extron',
+      final bid = RfqBid(
+        vendorId: 'vendor1',
         quotedOn: DateTime(2026, 3, 11),
-        quoteFilePath: 'quotes/Q-88421.pdf',
+        filePath: 'quotes/Q-88421.pdf',
       );
       expect(
-        ProjectVendor.fromJson(vendor.toJson()).quoteFilePath,
+        RfqBid.fromJson(bid.toJson()).filePath,
         'quotes/Q-88421.pdf',
       );
     });
 
-    test('it is in the history under the vendor', () {
-      final (:p, :vendorId) = job();
+    test('it is in the history under the package', () {
+      final (:p, :rfqId, :vendorId) = job();
       final pdf = path.join(dir.path, 'Q-88421.pdf');
       File(pdf).writeAsStringSync('%PDF-1.4');
-      p.setVendorQuote(
+      p.setBidQuote(
+        rfqId,
         vendorId,
         quotedOn: DateTime(2026, 3, 11),
         filePath: pdf,
       );
       expect(
         p.project.history.where(
-          (h) => h.itemKind == 'vendor' && h.summary.contains('document'),
+          (h) => h.itemKind == 'rfq' && h.summary.contains('document'),
         ),
         isNotEmpty,
       );
@@ -225,13 +227,15 @@ void main() {
     testWidgets('the quote dialog attaches the document itself', (
       tester,
     ) async {
-      final (:p, :vendorId) = job();
-      p.setVendorRfqSent(vendorId, DateTime(2026, 3, 4));
+      final (:p, :rfqId, :vendorId) = job();
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
       await openPane(tester, p, 'vendors');
-      await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$rfqId')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(ValueKey('vendor_rfq_quoted_$vendorId')));
+      await tester.tap(
+        find.byKey(ValueKey('rfq_bid_edit_${rfqId}_$vendorId')),
+      );
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('vendor_quote_dialog')), findsOne);
@@ -244,12 +248,14 @@ void main() {
     testWidgets('nothing attached offers nothing to open or unlink', (
       tester,
     ) async {
-      final (:p, :vendorId) = job();
-      p.setVendorRfqSent(vendorId, DateTime(2026, 3, 4));
+      final (:p, :rfqId, :vendorId) = job();
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
       await openPane(tester, p, 'vendors');
-      await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$rfqId')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(ValueKey('vendor_rfq_quoted_$vendorId')));
+      await tester.tap(
+        find.byKey(ValueKey('rfq_bid_edit_${rfqId}_$vendorId')),
+      );
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('vendor_quote_open')), findsNothing);
@@ -259,20 +265,23 @@ void main() {
     testWidgets('an attached quote is named on the dialog and unlinkable', (
       tester,
     ) async {
-      final (:p, :vendorId) = job();
+      final (:p, :rfqId, :vendorId) = job();
       final pdf = path.join(dir.path, 'Q-88421.pdf');
       File(pdf).writeAsStringSync('%PDF-1.4');
-      p.setVendorRfqSent(vendorId, DateTime(2026, 3, 4));
-      p.setVendorQuote(
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
+      p.setBidQuote(
+        rfqId,
         vendorId,
         quotedOn: DateTime(2026, 3, 11),
         amount: 18400,
         filePath: pdf,
       );
       await openPane(tester, p, 'vendors');
-      await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$rfqId')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(ValueKey('vendor_rfq_edit_quote_$vendorId')));
+      await tester.tap(
+        find.byKey(ValueKey('rfq_bid_edit_${rfqId}_$vendorId')),
+      );
       await tester.pumpAndSettle();
 
       // THE DOCUMENT IS THE BUTTON - named by its own file, because that is
@@ -283,7 +292,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('vendor_quote_save')));
       await tester.pumpAndSettle();
 
-      expect(p.project.vendorById(vendorId)!.quoteFilePath, isEmpty);
+      expect(p.project.rfqById(rfqId)!.bidFor(vendorId)!.filePath, isEmpty);
       expect(
         File(pdf).existsSync(),
         isTrue,
@@ -291,22 +300,23 @@ void main() {
       );
     });
 
-    testWidgets('the vendor card is the way back to it', (tester) async {
-      final (:p, :vendorId) = job();
+    testWidgets('the comparison row is the way back to it', (tester) async {
+      final (:p, :rfqId, :vendorId) = job();
       final pdf = path.join(dir.path, 'Q-88421.pdf');
       File(pdf).writeAsStringSync('%PDF-1.4');
-      p.setVendorRfqSent(vendorId, DateTime(2026, 3, 4));
-      p.setVendorQuote(
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
+      p.setBidQuote(
+        rfqId,
         vendorId,
         quotedOn: DateTime(2026, 3, 11),
         filePath: pdf,
       );
       await openPane(tester, p, 'vendors');
-      await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$rfqId')));
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(ValueKey('vendor_quote_open_$vendorId')),
+        find.byKey(ValueKey('rfq_bid_quote_${rfqId}_$vendorId')),
         findsOneWidget,
       );
     });

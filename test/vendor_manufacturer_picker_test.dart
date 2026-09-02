@@ -89,7 +89,7 @@ void main() {
         ),
       );
     p.newProject(name: 'Bessey refresh', building: 'BSS');
-    final vendor = p.addProjectVendor(name: 'AV Reseller');
+    final vendor = p.addProjectRfq(title: 'AV Reseller');
     p.addRoomToProject(writeRoom('r0'));
     return (p: p, vendorId: vendor.id);
   }
@@ -115,7 +115,7 @@ void main() {
     String vendorId,
   ) async {
     await openVendors(tester, p);
-    await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+    await tester.tap(find.byKey(ValueKey('rfq_toggle_$vendorId')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('rule_pick_Manufacturers')));
     await tester.pumpAndSettle();
@@ -139,7 +139,7 @@ void main() {
     testWidgets('the button is on the manufacturers editor', (tester) async {
       final (:p, :vendorId) = job();
       await openVendors(tester, p);
-      await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$vendorId')));
       await tester.pumpAndSettle();
 
       expect(
@@ -166,7 +166,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final vendor = p.project.vendorById(vendorId)!;
+      final vendor = p.project.rfqById(vendorId)!;
       expect(vendor.manufacturers, containsAll(['Sharp', 'Epson']));
       // And the rules actually claim the parts, which is the whole point of
       // ticking rather than typing.
@@ -176,8 +176,8 @@ void main() {
 
     testWidgets('unticking is how a rule goes', (tester) async {
       final (:p, :vendorId) = job();
-      p.updateProjectVendor(
-        p.project.vendorById(vendorId)!.copyWith(
+      p.updateProjectRfq(
+        p.project.rfqById(vendorId)!.copyWith(
           manufacturers: const ['Sharp', 'Epson'],
         ),
       );
@@ -190,7 +190,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(p.project.vendorById(vendorId)!.manufacturers, ['Epson']);
+      expect(p.project.rfqById(vendorId)!.manufacturers, ['Epson']);
     });
 
     testWidgets('backing out changes nothing', (tester) async {
@@ -202,7 +202,7 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
-      expect(p.project.vendorById(vendorId)!.manufacturers, isEmpty);
+      expect(p.project.rfqById(vendorId)!.manufacturers, isEmpty);
     });
 
     testWidgets('a maker the job buys nothing from is carried, not dropped', (
@@ -213,8 +213,8 @@ void main() {
       // real thing to want - and a picker that silently deleted it would be
       // worse than no picker.
       final (:p, :vendorId) = job();
-      p.updateProjectVendor(
-        p.project.vendorById(vendorId)!.copyWith(
+      p.updateProjectRfq(
+        p.project.rfqById(vendorId)!.copyWith(
           manufacturers: const ['Crestron'],
         ),
       );
@@ -230,13 +230,13 @@ void main() {
         find.byKey(const ValueKey('vendor_manufacturer_picker_save')),
       );
       await tester.pumpAndSettle();
-      expect(p.project.vendorById(vendorId)!.manufacturers, ['Crestron']);
+      expect(p.project.rfqById(vendorId)!.manufacturers, ['Crestron']);
     });
 
     testWidgets('the box beside it still takes anything typed', (tester) async {
       final (:p, :vendorId) = job();
       await openVendors(tester, p);
-      await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$vendorId')));
       await tester.pumpAndSettle();
 
       final field = find.descendant(
@@ -248,7 +248,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        p.project.vendorById(vendorId)!.manufacturers,
+        p.project.rfqById(vendorId)!.manufacturers,
         contains('Biamp'),
       );
     });

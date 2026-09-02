@@ -122,13 +122,13 @@ void main() {
       expect(p.priceProject().rooms.first.name, 'Bessey 101 (phase 2)');
     });
 
-    test('a part pinned to another vendor', () {
+    test('a part pinned to another package', () {
       final p = withProject();
       final line = p.priceProject().master.first;
-      final vendor = p.project.vendors.last;
+      final rfq = p.project.rfqs.last;
 
-      p.pinProjectPart(line.key, vendor.id, partName: line.description);
-      expect(p.priceProject().master.first.vendor?.id, vendor.id);
+      p.pinProjectPart(line.key, rfq.id, partName: line.description);
+      expect(p.priceProject().master.first.rfq?.id, rfq.id);
     });
 
     test('saving the open room re-reads that room and no other', () async {

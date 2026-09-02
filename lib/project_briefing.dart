@@ -60,7 +60,7 @@ const Map<BriefingPane, String> kBriefingPaneLabels = {
   BriefingPane.parts: 'Equipment',
   BriefingPane.plans: 'Plans',
   BriefingPane.timeline: 'Timeline',
-  BriefingPane.vendors: 'Vendors',
+  BriefingPane.vendors: 'Packages',
   BriefingPane.todo: 'To do',
 };
 
@@ -576,13 +576,13 @@ ProjectBriefing buildProjectBriefing({
     lines.add(BriefingLine(
       urgency: BriefingUrgency.open,
       message: estimate.untaggedParts == 1
-          ? '1 part is not tagged to a vendor, so it is on no quote request'
-          : '${estimate.untaggedParts} parts are not tagged to a vendor, so '
+          ? '1 part is in no buying package, so it is on no quote request'
+          : '${estimate.untaggedParts} parts are in no buying package, so '
               'they are on no quote request',
       pane: BriefingPane.vendors,
       detail: _some([
         for (final l in estimate.master)
-          if (l.vendor == null) l.description,
+          if (l.rfq == null) l.description,
       ]),
     ));
   }

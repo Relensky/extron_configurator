@@ -33,8 +33,9 @@ void main() {
       unitPrice: 50,
       maxUnitPrice: 50,
       qtyByRoom: const {},
+      rfq: null,
       vendor: null,
-      tagSource: VendorTagSource.none,
+      tagSource: RfqTagSource.none,
       unpriced: false,
     );
   }
@@ -48,7 +49,7 @@ void main() {
     rooms: const [],
     costedRooms: const [],
     master: master,
-    vendors: const [],
+    packages: const [],
     grandTotal: 0,
     equipmentTotal: 0,
     hardwareTotal: 0,

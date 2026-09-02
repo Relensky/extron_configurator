@@ -116,12 +116,20 @@ void main() {
     }
     project.vendors.addAll(const [
       ProjectVendor(
-        id: 'v1',
-        name: 'Extron Direct',
+        id: 'bidder1',
+        name: 'Alpha AV',
         contact: 'orders@extron.example',
-        manufacturers: ['Extron'],
       ),
-      ProjectVendor(id: 'v2', name: 'AV Reseller', categories: ['Camera']),
+      ProjectVendor(id: 'bidder2', name: 'Beta Supply'),
+    ]);
+    project.rfqs.addAll(const [
+      ProjectRfq(
+        id: 'v1',
+        title: 'Extron Direct',
+        manufacturers: ['Extron'],
+        bids: [RfqBid(vendorId: 'bidder1'), RfqBid(vendorId: 'bidder2')],
+      ),
+      ProjectRfq(id: 'v2', title: 'AV Reseller', categories: ['Camera']),
     ]);
 
     return computeProjectEstimate(
@@ -175,6 +183,8 @@ void main() {
         // cannot answer in a column, read by different people.
         'Order Timeline',
         'Spares',
+        // The sheet the award is taken off, before the packages it compares.
+        'Quote comparison',
         'Extron Direct',
         'AV Reseller',
         'Bessey 101',
@@ -317,7 +327,7 @@ void main() {
 
     test('untagged parts are called out on the summary', () {
       final estimate = job();
-      estimate.project.vendors.clear();
+      estimate.project.rfqs.clear();
       final rebuilt = computeProjectEstimate(
         project: estimate.project,
         projectPath: path.join(dir.path, 'bss_project.json'),
@@ -330,7 +340,7 @@ void main() {
       expect(tabNames(archive), contains('Untagged'));
       expect(
         sheetNamed(archive, 'Summary'),
-        contains('not tagged to any vendor'),
+        contains('in no buying package'),
       );
     });
   });
@@ -416,11 +426,14 @@ void main() {
       final archive = ZipDecoder().decodeBytes(buildVendorRfqBytes(
         estimate: estimate,
         package: estimate.packageFor('v1')!,
+        vendor: estimate.project.vendorById('bidder1'),
       ));
 
       final sheet = sheetText(archive, 1);
       expect(tabNames(archive), ['Extron Direct']);
       expect(sheet, contains('60-1439-13'));
+      // The addressee is the ONE thing that differs between copies.
+      expect(sheet, contains('Alpha AV'));
       expect(sheet, contains('orders@extron.example'));
       expect(sheet, contains('Bessey 101 ×1, Bessey 103 ×1'));
       // Somewhere for the supplier to write, which is the point of the sheet.
@@ -489,9 +502,10 @@ void main() {
         package: estimate.packageFor('v1')!,
       ));
 
+      // NOT the addressee: the book's tab is the package, and the standalone
+      // file is one vendor's copy of it. Everything else is the same document.
       for (final needle in const [
         '60-1439-13',
-        'orders@extron.example',
         'Your unit price',
       ]) {
         expect(sheetNamed(book, 'Extron Direct'), contains(needle));
@@ -519,7 +533,7 @@ void main() {
 
   test('the vendor packages add up to the parts total on the summary', () {
     final estimate = job();
-    final split = estimate.vendors.fold(0.0, (s, p) => s + p.total);
+    final split = estimate.packages.fold(0.0, (s, p) => s + p.total);
 
     expect(split, closeTo(estimate.partsTotal, 0.001));
     // And the book is written, so a rounding fault would show as a bad file
@@ -562,9 +576,9 @@ void main() {
         id: project.nextRoomId(),
         configPath: BuildingProject.storePath(a, projectPath),
       ));
-      project.vendors.add(const ProjectVendor(
+      project.rfqs.add(const ProjectRfq(
         id: 'v1',
-        name: 'Extron Direct',
+        title: 'Extron Direct',
         manufacturers: ['Extron'],
       ));
       return computeProjectEstimate(
@@ -636,7 +650,7 @@ void main() {
 
       project.addPo(
         number: 'PO-1188',
-        vendorId: 'v2',
+        vendorId: 'bidder2',
         issuedOn: DateTime(2026, 3, 4),
         expectedOn: DateTime(2026, 5, 1),
         amount: 4000,
@@ -690,6 +704,7 @@ void main() {
         'Order Timeline',
         'Spares',
         kProjectPurchasingSheet,
+        'Quote comparison',
         'Extron Direct',
         'AV Reseller',
         'Bessey 101',
@@ -703,7 +718,7 @@ void main() {
       final sheet = sheetNamed(archive, kProjectPurchasingSheet);
 
       expect(sheet, contains('PO-1188'));
-      expect(sheet, contains('AV Reseller'));
+      expect(sheet, contains('Beta Supply'));
       expect(sheet, contains('RoboSHOT 12E'));
       // Raised, promised, and what it was raised for.
       expect(sheet, contains('4000'));
@@ -815,6 +830,7 @@ void main() {
         // A record about the JOB, so it sits with the job's own sheets rather
         // than pushing the tabs somebody actually sends further along.
         'History',
+        'Quote comparison',
         'Extron Direct',
         'AV Reseller',
         'Bessey 101',
@@ -865,7 +881,7 @@ void main() {
       final archive = ZipDecoder().decodeBytes(
         buildVendorRfqBytes(
           estimate: estimate,
-          package: estimate.vendors.first,
+          package: estimate.packages.first,
         ),
       );
 

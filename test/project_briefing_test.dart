@@ -32,8 +32,9 @@ void main() {
       unitPrice: 50,
       maxUnitPrice: 50,
       qtyByRoom: const {},
+      rfq: null,
       vendor: null,
-      tagSource: VendorTagSource.none,
+      tagSource: RfqTagSource.none,
       unpriced: unpriced,
       spareQty: spared ? 1 : 0,
     );
@@ -52,7 +53,7 @@ void main() {
     rooms: const [],
     costedRooms: const [],
     master: master,
-    vendors: const [],
+    packages: const [],
     grandTotal: 0,
     equipmentTotal: 0,
     hardwareTotal: 0,
@@ -168,7 +169,7 @@ void main() {
 
     final all = briefing.openLines.map((l) => l.message).join(' | ');
     expect(all, contains('no price'));
-    expect(all, contains('not tagged to a vendor'));
+    expect(all, contains('in no buying package'));
     expect(all, contains('No delivery deadline'));
     // Nothing on this job is spared, and nothing else would ever raise it.
     expect(all, contains('spare'));

@@ -13,20 +13,22 @@ import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/project_view.dart';
 
 /// ============================================================================
-///  WHERE THE QUOTE GOT TO, AND WHAT IT BOUGHT
+///  WHERE THE QUOTES GOT TO, AND WHAT THE WINNER BOUGHT
 /// ============================================================================
-///  This app builds the RFQ per vendor and hands over the file. Everything
-///  after that - it went out on the 4th, two came back, one turned into a PO,
-///  the third has never replied - lived in somebody's inbox, and on a six-vendor
-///  job "which of these are we still waiting on" is the most-asked question on
-///  the screen.
+///  A job writes a PACKAGE and sends the same one to several vendors, who come
+///  back with several prices. One wins and turns into a purchase order; the
+///  others are why anybody can defend the choice six months later.
 ///
-///  The failure this guards is the one at the end of that chain. Ordering a
-///  vendor's package used to be three jobs on two screens: raise the PO, open
-///  it, tick nineteen parts. What happened on real jobs is that the first two
-///  got done and the third did not - leaving a PO nobody could trace to any
-///  equipment, and nineteen parts reading on the timeline as things nobody had
-///  bought.
+///  Two failures are guarded here. The first is the one that made this shape
+///  necessary: a vendor used to BE the package, so it could only ever hold one
+///  price, and a job that competed forty lines between three companies had
+///  nowhere to put two of the answers.
+///
+///  The second is at the end of the chain. Ordering a package used to be three
+///  jobs on two screens: raise the PO, open it, tick nineteen parts. What
+///  happened on real jobs is that the first two got done and the third did not
+///  - leaving a PO nobody could trace to any equipment, and nineteen parts
+///  reading on the timeline as things nobody had bought.
 void main() {
   late Directory dir;
 
@@ -38,7 +40,7 @@ void main() {
   });
 
   /// A room with an Epson projector and a Sharp display on the drawing - two
-  /// parts from two makers, so a vendor rule has something to sort.
+  /// parts from two makers, so a package rule has something to sort.
   String writeRoom(String stem, String name) {
     final configPath = path.join(dir.path, '${stem}_config.json');
     File(configPath).writeAsStringSync(
@@ -69,8 +71,9 @@ void main() {
     return configPath;
   }
 
-  /// The job, and the id of the vendor whose rule claims the Epson line.
-  ({AppStateProvider p, String vendorId}) job() {
+  /// The job: one package claiming the Epson line, and two vendors invited to
+  /// bid it.
+  ({AppStateProvider p, String rfqId, String alpha, String beta}) job() {
     final p = AppStateProvider(autoLoadSettings: false);
     p.avDeviceLibrary = AvDeviceLibrary.empty()
       ..upsert(
@@ -93,17 +96,15 @@ void main() {
       );
     p.newProject(name: 'Bessey refresh', building: 'BSS');
     // First in the list, so this rule wins the Epson line over anything the
-    // starter split claims - see [BuildingProject.vendorForPart].
-    final vendor = p.addProjectVendor(name: 'Epson Direct');
-    p.updateProjectVendor(
-      ProjectVendor(
-        id: vendor.id,
-        name: 'Epson Direct',
-        manufacturers: const ['Epson'],
-      ),
-    );
+    // starter split claims - see [BuildingProject.rfqForPart].
+    final rfq = p.addProjectRfq(title: 'Epson package');
+    p.updateProjectRfq(rfq.copyWith(manufacturers: const ['Epson']));
+    final alpha = p.addProjectVendor(name: 'Alpha AV');
+    final beta = p.addProjectVendor(name: 'Beta Supply');
+    p.inviteVendorToRfq(rfq.id, alpha.id);
+    p.inviteVendorToRfq(rfq.id, beta.id);
     p.addRoomToProject(writeRoom('r0', 'Bessey 101'));
-    return (p: p, vendorId: vendor.id);
+    return (p: p, rfqId: rfq.id, alpha: alpha.id, beta: beta.id);
   }
 
   String epsonKey(AppStateProvider p) {
@@ -114,151 +115,361 @@ void main() {
   }
 
   // -------------------------------------------------------------------------
-  //  THE THREE DATES
+  //  THE STAGE
   // -------------------------------------------------------------------------
 
-  group('the stage is read off the dates, never stored beside them', () {
-    test('nothing recorded is nothing sent', () {
-      const vendor = ProjectVendor(id: 'vendor1', name: 'Extron');
-      expect(vendor.rfqStage, VendorRfqStage.none);
+  group('the stage is read off the bids, never stored beside them', () {
+    test('nothing asked is a draft', () {
+      const rfq = ProjectRfq(id: 'rfq1', title: 'Extron');
+      expect(rfq.stage, RfqStage.draft);
+      // Inviting somebody is not sending to them.
+      expect(
+        rfq.withBid(const RfqBid(vendorId: 'v1')).stage,
+        RfqStage.draft,
+      );
     });
 
-    test('each date moves it along', () {
-      const base = ProjectVendor(id: 'vendor1', name: 'Extron');
-      expect(
-        base.copyWith(rfqSentOn: DateTime(2026, 3, 4)).rfqStage,
-        VendorRfqStage.sent,
+    test('a round moves along as the answers come in', () {
+      final out = const ProjectRfq(id: 'rfq1', title: 'Extron')
+          .withBid(RfqBid(vendorId: 'v1', sentOn: DateTime(2026, 3, 4)))
+          .withBid(RfqBid(vendorId: 'v2', sentOn: DateTime(2026, 3, 4)));
+      expect(out.stage, RfqStage.out);
+
+      // ONE BACK OF TWO is its own state. It is the one that names the
+      // chasing, and a two-state model had to call it either "waiting" - which
+      // hides the price that did arrive - or "quoted", which hides the vendor
+      // who still owes an answer.
+      final partial = out.withBid(
+        out.bidFor('v1')!.copyWith(
+          quotedOn: DateTime(2026, 3, 9),
+          amount: 18400,
+        ),
       );
-      expect(
-        base
-            .copyWith(
-              rfqSentOn: DateTime(2026, 3, 4),
-              quotedOn: DateTime(2026, 3, 11),
-            )
-            .rfqStage,
-        VendorRfqStage.quoted,
+      expect(partial.stage, RfqStage.partial);
+      expect(partial.outstanding.single.vendorId, 'v2');
+
+      final quoted = partial.withBid(
+        partial.bidFor('v2')!.copyWith(
+          quotedOn: DateTime(2026, 3, 11),
+          amount: 17900,
+        ),
       );
-      expect(
-        base.copyWith(poNumber: 'PO-1188').rfqStage,
-        VendorRfqStage.ordered,
-      );
+      expect(quoted.stage, RfqStage.quoted);
+      expect(quoted.lowestBid!.vendorId, 'v2');
+    });
+
+    test('a decline is an answer, so it completes the round', () {
+      final rfq = const ProjectRfq(id: 'rfq1', title: 'Extron')
+          .withBid(
+            RfqBid(
+              vendorId: 'v1',
+              sentOn: DateTime(2026, 3, 4),
+              quotedOn: DateTime(2026, 3, 9),
+              amount: 18400,
+            ),
+          )
+          .withBid(
+            RfqBid(
+              vendorId: 'v2',
+              sentOn: DateTime(2026, 3, 4),
+              declined: true,
+            ),
+          );
+      expect(rfq.stage, RfqStage.quoted);
+      expect(rfq.outstanding, isEmpty);
+      // And a no-bid is never the cheapest quote.
+      expect(rfq.lowestBid!.vendorId, 'v1');
     });
 
     test('the latest fact wins over the ones nobody recorded', () {
-      // A vendor that was ordered is ordered whether or not anybody remembered
-      // to note the quote coming back.
-      const vendor = ProjectVendor(
-        id: 'vendor1',
-        name: 'Extron',
+      // A package that was awarded is awarded whether or not anybody
+      // remembered to note the quotes coming back.
+      const rfq = ProjectRfq(
+        id: 'rfq1',
+        title: 'Extron',
         poNumber: 'PO-1188',
       );
-      expect(vendor.rfqStage, VendorRfqStage.ordered);
+      expect(rfq.stage, RfqStage.awarded);
     });
 
     test('it survives a save and a reload', () {
-      final vendor = ProjectVendor(
-        id: 'vendor1',
-        name: 'Extron',
-        rfqSentOn: DateTime(2026, 3, 4),
-        quotedOn: DateTime(2026, 3, 11),
-        quoteAmount: 18400,
-        quoteRef: 'Q-88421',
-        orderedOn: DateTime(2026, 3, 14),
+      final rfq = ProjectRfq(
+        id: 'rfq1',
+        title: 'Extron',
+        scope: 'Net 30',
+        dueBy: DateTime(2026, 3, 10),
+        bids: [
+          RfqBid(
+            vendorId: 'v1',
+            sentOn: DateTime(2026, 3, 4),
+            quotedOn: DateTime(2026, 3, 11),
+            amount: 18400,
+            reference: 'Q-88421',
+            expectedOn: DateTime(2026, 5, 1),
+            notes: 'excludes freight',
+          ),
+          const RfqBid(vendorId: 'v2', declined: true),
+        ],
+        awardedVendorId: 'v1',
+        awardedOn: DateTime(2026, 3, 14),
         poNumber: 'PO-1188',
       );
-      final back = ProjectVendor.fromJson(vendor.toJson());
-      expect(back.rfqSentOn, DateTime(2026, 3, 4));
-      expect(back.quotedOn, DateTime(2026, 3, 11));
-      expect(back.quoteAmount, 18400);
-      expect(back.quoteRef, 'Q-88421');
-      expect(back.orderedOn, DateTime(2026, 3, 14));
+      final back = ProjectRfq.fromJson(rfq.toJson());
+
+      expect(back.scope, 'Net 30');
+      expect(back.dueBy, DateTime(2026, 3, 10));
+      // THE LOSING BID COMES BACK TOO. It is the record of the competition,
+      // and a file that dropped it would leave an award nobody could explain.
+      expect(back.bids, hasLength(2));
+      expect(back.bidFor('v2')!.declined, isTrue);
+      final won = back.winningBid!;
+      expect(won.amount, 18400);
+      expect(won.reference, 'Q-88421');
+      expect(won.expectedOn, DateTime(2026, 5, 1));
+      expect(won.notes, 'excludes freight');
       expect(back.poNumber, 'PO-1188');
-      expect(back.rfqStage, VendorRfqStage.ordered);
+      expect(back.stage, RfqStage.awarded);
     });
   });
 
-  group('recording the request and the quote', () {
-    test('sent, then quoted, then un-quoted', () {
-      final (:p, :vendorId) = job();
+  // -------------------------------------------------------------------------
+  //  THE FILE WRITTEN BEFORE PACKAGES EXISTED
+  // -------------------------------------------------------------------------
 
-      p.setVendorRfqSent(vendorId, DateTime(2026, 3, 4));
-      expect(p.project.vendorById(vendorId)!.rfqStage, VendorRfqStage.sent);
+  group('a project saved when a vendor was the package', () {
+    test('becomes one package per vendor, with that vendor as its one bid',
+        () async {
+      final file = path.join(dir.path, 'old_project.json');
+      File(file).writeAsStringSync(
+        jsonEncode({
+          'name': 'Bessey refresh',
+          'rooms': [],
+          'vendorCounter': 2,
+          'vendors': [
+            {
+              'id': 'vendor1',
+              'name': 'Epson Direct',
+              'notes': 'Net 30, delivered to the dock.',
+              'manufacturers': ['Epson'],
+              'color': 0xFF1E88E5,
+              'rfqSentOn': '2026-03-04',
+              'quotedOn': '2026-03-11',
+              'quoteAmount': 18400,
+              'quoteRef': 'Q-88421',
+              'orderedOn': '2026-03-14',
+              'poNumber': 'PO-1188',
+            },
+            // Never given a rule and never asked anything: only ever a
+            // contact, and it stays one.
+            {'id': 'vendor2', 'name': 'Somebody we know'},
+          ],
+          'partVendors': {'equipment|pn:QM86R': 'vendor1'},
+        }),
+      );
 
-      p.setVendorQuote(
-        vendorId,
+      final back = await BuildingProject.load(file);
+
+      // Both companies survive as companies.
+      expect(back.vendors.map((v) => v.name), [
+        'Epson Direct',
+        'Somebody we know',
+      ]);
+      // One package, from the vendor that owned parts.
+      expect(back.rfqs, hasLength(1));
+      final rfq = back.rfqs.single;
+      expect(rfq.title, 'Epson Direct');
+      expect(rfq.manufacturers, ['Epson']);
+      expect(rfq.color, 0xFF1E88E5);
+      // The terms MOVED rather than copied - the same paragraph in two places
+      // would now mean two different things.
+      expect(rfq.scope, 'Net 30, delivered to the dock.');
+      expect(back.vendors.first.notes, isEmpty);
+      // The quote it held becomes its one bid, and the order becomes an award.
+      final bid = rfq.bids.single;
+      expect(bid.vendorId, 'vendor1');
+      expect(bid.sentOn, DateTime(2026, 3, 4));
+      expect(bid.quotedOn, DateTime(2026, 3, 11));
+      expect(bid.amount, 18400);
+      expect(bid.reference, 'Q-88421');
+      expect(rfq.awardedVendorId, 'vendor1');
+      expect(rfq.poNumber, 'PO-1188');
+      expect(rfq.stage, RfqStage.awarded);
+      // And the pin follows the parts onto the package that replaced it.
+      expect(back.partRfqs['equipment|pn:QM86R'], rfq.id);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  ASKING, AND WHAT COMES BACK
+  // -------------------------------------------------------------------------
+
+  group('recording the request and the quotes', () {
+    test('invited, sent, quoted, then un-quoted', () {
+      final (:p, :rfqId, :alpha, :beta) = job();
+      expect(p.project.rfqById(rfqId)!.bids, hasLength(2));
+
+      // ONE ACTION FOR THE WHOLE PACKAGE: the file is written once and emailed
+      // to both in one sitting.
+      expect(p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4)), 2);
+      expect(p.project.rfqById(rfqId)!.stage, RfqStage.out);
+
+      p.setBidQuote(
+        rfqId,
+        alpha,
         quotedOn: DateTime(2026, 3, 11),
         amount: 18400,
         reference: 'Q-88421',
       );
-      final quoted = p.project.vendorById(vendorId)!;
-      expect(quoted.rfqStage, VendorRfqStage.quoted);
-      expect(quoted.quoteAmount, 18400);
-      expect(quoted.quoteRef, 'Q-88421');
+      final partial = p.project.rfqById(rfqId)!;
+      expect(partial.stage, RfqStage.partial);
+      expect(partial.bidFor(alpha)!.amount, 18400);
+      expect(partial.bidFor(alpha)!.reference, 'Q-88421');
 
-      // Taking the quote off takes the figure with it: a vendor with no quote
-      // date and a price still on the row is a number nobody can source.
-      p.setVendorQuote(vendorId, quotedOn: null);
-      final unquoted = p.project.vendorById(vendorId)!;
-      expect(unquoted.rfqStage, VendorRfqStage.sent);
-      expect(unquoted.quoteAmount, 0);
-      expect(unquoted.quoteRef, isEmpty);
+      // Taking the quote off takes the figure with it: a bid with no quote
+      // date and a price still on it is a number nobody can source.
+      p.setBidQuote(rfqId, alpha, quotedOn: null);
+      final unquoted = p.project.rfqById(rfqId)!;
+      expect(unquoted.stage, RfqStage.out);
+      expect(unquoted.bidFor(alpha)!.amount, 0);
+      expect(unquoted.bidFor(alpha)!.reference, isEmpty);
+    });
+
+    test('a vendor invited late gets a send date of their own', () {
+      final (:p, :rfqId, :alpha, :beta) = job();
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
+      final late = p.addProjectVendor(name: 'Gamma Ltd');
+      p.inviteVendorToRfq(rfqId, late.id);
+
+      // Only the new one is marked, and the two originals keep their date.
+      expect(p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 11)), 1);
+      final rfq = p.project.rfqById(rfqId)!;
+      expect(rfq.bidFor(alpha)!.sentOn, DateTime(2026, 3, 4));
+      expect(rfq.bidFor(late.id)!.sentOn, DateTime(2026, 3, 11));
+    });
+
+    test('a vendor cannot be invited to the same package twice', () {
+      final (:p, :rfqId, :alpha, beta: _) = job();
+      p.inviteVendorToRfq(rfqId, alpha);
+      expect(p.project.rfqById(rfqId)!.bids, hasLength(2));
+    });
+
+    test('declining clears any price, because they are one answer', () {
+      final (:p, :rfqId, :alpha, beta: _) = job();
+      p.setBidQuote(rfqId, alpha, quotedOn: DateTime(2026, 3, 11), amount: 18400);
+      p.setBidDeclined(rfqId, alpha, true);
+
+      final bid = p.project.rfqById(rfqId)!.bidFor(alpha)!;
+      expect(bid.declined, isTrue);
+      expect(bid.quotedOn, isNull);
+      expect(bid.amount, 0);
+
+      // And typing a price back in takes the decline off.
+      p.setBidQuote(rfqId, alpha, quotedOn: DateTime(2026, 3, 12), amount: 17000);
+      expect(p.project.rfqById(rfqId)!.bidFor(alpha)!.declined, isFalse);
     });
 
     test('recording a quote changes no price on the job', () {
-      final (:p, :vendorId) = job();
+      final (:p, :rfqId, :alpha, beta: _) = job();
       final before = p.priceProject().grandTotal;
-      p.setVendorQuote(
-        vendorId,
+      p.setBidQuote(
+        rfqId,
+        alpha,
         quotedOn: DateTime(2026, 3, 11),
         amount: 999999,
       );
       expect(p.priceProject().grandTotal, before);
     });
 
-    test('the vendor keeps its place in the list, because the order is a rule', () {
-      final (:p, :vendorId) = job();
-      final was = p.project.vendors.indexWhere((v) => v.id == vendorId);
-      p.setVendorRfqSent(vendorId, DateTime(2026, 3, 4));
-      expect(p.project.vendors.indexWhere((v) => v.id == vendorId), was);
+    test('the package keeps its place in the list, because order is a rule', () {
+      final (:p, :rfqId, :alpha, beta: _) = job();
+      final was = p.project.rfqs.indexWhere((r) => r.id == rfqId);
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
+      expect(p.project.rfqs.indexWhere((r) => r.id == rfqId), was);
     });
   });
 
   // -------------------------------------------------------------------------
-  //  ORDERING, WHICH IS THE ONE THAT DOES SOMETHING
+  //  UNTIL IT IS AWARDED, NOBODY IS SUPPLYING ANYTHING
   // -------------------------------------------------------------------------
 
-  group('marking a package ordered', () {
-    test('raises the PO, points it at the vendor, and puts the kit on it', () {
-      final (:p, :vendorId) = job();
-      final estimate = p.priceProject();
-      final package = estimate.packageFor(vendorId)!;
-      final key = epsonKey(p);
+  group('the supplier on a part', () {
+    test('is blank while the package is out to quote', () {
+      final (:p, :rfqId, :alpha, beta: _) = job();
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
+      p.setBidQuote(rfqId, alpha, quotedOn: DateTime(2026, 3, 11), amount: 18400);
 
-      final onIt = p.markVendorOrdered(
-        vendorId,
+      final line = p.priceProject().master.firstWhere(
+        (l) => l.manufacturer.toLowerCase() == 'epson',
+      );
+      // The part is in a package - that much is decided...
+      expect(line.rfq?.id, rfqId);
+      // ...but naming a supplier before an award would be reading a
+      // purchasing assumption as a fact.
+      expect(line.vendor, isNull);
+    });
+
+    test('is the winner once one is awarded', () {
+      final (:p, :rfqId, :alpha, :beta) = job();
+      final package = p.priceProject().packageFor(rfqId)!;
+      p.awardRfq(
+        rfqId,
+        vendorId: beta,
         poNumber: 'PO-1188',
-        orderedOn: DateTime(2026, 3, 14),
+        partKeys: [for (final l in package.lines) l.key],
+      );
+
+      final line = p.priceProject().master.firstWhere(
+        (l) => l.manufacturer.toLowerCase() == 'epson',
+      );
+      expect(line.vendor?.name, 'Beta Supply');
+      // And the package now reads as the company, which is what "once chosen
+      // we only need the chosen vendor listed" means.
+      expect(p.priceProject().packageFor(rfqId)!.name, 'Beta Supply');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  AWARDING, WHICH IS THE ONE THAT DOES SOMETHING
+  // -------------------------------------------------------------------------
+
+  group('awarding a package', () {
+    test('raises the PO, points it at the winner, and puts the kit on it', () {
+      final (:p, :rfqId, :alpha, :beta) = job();
+      final package = p.priceProject().packageFor(rfqId)!;
+      final key = epsonKey(p);
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
+      p.setBidQuote(rfqId, alpha, quotedOn: DateTime(2026, 3, 9), amount: 18400);
+      p.setBidQuote(rfqId, beta, quotedOn: DateTime(2026, 3, 10), amount: 17900);
+
+      final onIt = p.awardRfq(
+        rfqId,
+        vendorId: beta,
+        poNumber: 'PO-1188',
+        awardedOn: DateTime(2026, 3, 14),
         expectedOn: DateTime(2026, 5, 1),
-        amount: 18400,
+        amount: 17900,
         partKeys: [for (final l in package.lines) l.key],
         partNames: {for (final l in package.lines) l.key: l.description},
       );
 
       expect(onIt, package.lines.length);
 
-      // 1. The vendor says so.
-      final vendor = p.project.vendorById(vendorId)!;
-      expect(vendor.rfqStage, VendorRfqStage.ordered);
-      expect(vendor.poNumber, 'PO-1188');
-      expect(vendor.orderedOn, DateTime(2026, 3, 14));
+      // 1. The package says so - and keeps the losing quote, which is what
+      //    makes the choice explainable later.
+      final rfq = p.project.rfqById(rfqId)!;
+      expect(rfq.stage, RfqStage.awarded);
+      expect(rfq.awardedVendorId, beta);
+      expect(rfq.poNumber, 'PO-1188');
+      expect(rfq.awardedOn, DateTime(2026, 3, 14));
+      expect(rfq.bidFor(alpha)!.amount, 18400);
 
-      // 2. The job has the purchase order, pointed back at the vendor - which
-      //    is what lets the Deliveries pane and the timeline find it.
+      // 2. The job has the purchase order, pointed at the winner - which is
+      //    what lets the Deliveries pane and the timeline find it.
       final po = p.project.poByNumber('PO-1188')!;
-      expect(po.vendorId, vendorId);
+      expect(po.vendorId, beta);
       expect(po.issuedOn, DateTime(2026, 3, 14));
       expect(po.expectedOn, DateTime(2026, 5, 1));
-      expect(po.amount, 18400);
+      expect(po.amount, 17900);
 
       // 3. THE LINK BACK TO THE EQUIPMENT. This is the whole point: a PO
       //    number that cannot be followed to what it bought is a number, not
@@ -270,13 +481,14 @@ void main() {
       expect(order.expectedOn, DateTime(2026, 5, 1));
     });
 
-    test('the Sharp line is left alone - it is another vendor\'s order', () {
-      final (:p, :vendorId) = job();
-      final package = p.priceProject().packageFor(vendorId)!;
-      p.markVendorOrdered(
-        vendorId,
+    test('the Sharp line is left alone - it is another package', () {
+      final (:p, :rfqId, alpha: _, :beta) = job();
+      final package = p.priceProject().packageFor(rfqId)!;
+      p.awardRfq(
+        rfqId,
+        vendorId: beta,
         poNumber: 'PO-1188',
-        orderedOn: DateTime(2026, 3, 14),
+        awardedOn: DateTime(2026, 3, 14),
         partKeys: [for (final l in package.lines) l.key],
       );
       for (final line in p.priceProject().master) {
@@ -287,12 +499,13 @@ void main() {
     });
 
     test('a number the job already knows is reused, not duplicated', () {
-      final (:p, :vendorId) = job();
+      final (:p, :rfqId, alpha: _, :beta) = job();
       p.addProjectPo(number: 'PO-1188');
-      p.markVendorOrdered(
-        vendorId,
+      p.awardRfq(
+        rfqId,
+        vendorId: beta,
         poNumber: 'PO-1188',
-        orderedOn: DateTime(2026, 3, 14),
+        awardedOn: DateTime(2026, 3, 14),
       );
       expect(
         p.project.purchaseOrders.where((o) => o.number == 'PO-1188').length,
@@ -300,62 +513,121 @@ void main() {
       );
     });
 
-    test('a blank number orders nothing', () {
-      final (:p, :vendorId) = job();
-      expect(p.markVendorOrdered(vendorId, poNumber: '   '), 0);
+    test('a blank number, or nobody named, awards nothing', () {
+      final (:p, :rfqId, alpha: _, :beta) = job();
+      expect(p.awardRfq(rfqId, vendorId: beta, poNumber: '   '), 0);
+      expect(p.awardRfq(rfqId, vendorId: '', poNumber: 'PO-1188'), 0);
       expect(p.project.purchaseOrders, isEmpty);
-      expect(
-        p.project.vendorById(vendorId)!.rfqStage,
-        isNot(VendorRfqStage.ordered),
-      );
+      expect(p.project.rfqById(rfqId)!.stage, isNot(RfqStage.awarded));
     });
 
-    test('un-marking leaves the PO and the parts exactly as they were', () {
-      final (:p, :vendorId) = job();
-      final package = p.priceProject().packageFor(vendorId)!;
+    test('un-awarding leaves the PO, the parts and every bid as they were', () {
+      final (:p, :rfqId, :alpha, :beta) = job();
+      final package = p.priceProject().packageFor(rfqId)!;
       final key = epsonKey(p);
-      p.markVendorOrdered(
-        vendorId,
+      p.setBidQuote(rfqId, alpha, quotedOn: DateTime(2026, 3, 9), amount: 18400);
+      p.awardRfq(
+        rfqId,
+        vendorId: beta,
         poNumber: 'PO-1188',
-        orderedOn: DateTime(2026, 3, 14),
+        awardedOn: DateTime(2026, 3, 14),
         partKeys: [for (final l in package.lines) l.key],
       );
 
-      p.clearVendorOrdered(vendorId);
+      p.clearRfqAward(rfqId);
 
-      // The vendor row stops claiming it...
-      expect(
-        p.project.vendorById(vendorId)!.rfqStage,
-        isNot(VendorRfqStage.ordered),
-      );
+      // The package stops claiming it...
+      final rfq = p.project.rfqById(rfqId)!;
+      expect(rfq.stage, isNot(RfqStage.awarded));
+      expect(rfq.awardedVendorId, isEmpty);
+      // ...the quotes are still there to decide again...
+      expect(rfq.bidFor(alpha)!.amount, 18400);
       // ...and the paperwork is untouched, because it records what HAPPENED.
-      // A mis-set flag on a vendor row is not a reason to unpick a job.
+      // A mis-set award is not a reason to unpick a job.
       expect(p.project.poByNumber('PO-1188'), isNotNull);
       expect(p.project.partsOnPo('PO-1188'), contains(key));
     });
 
-    test('it is in the history, under the vendor and under each part', () {
-      final (:p, :vendorId) = job();
-      final package = p.priceProject().packageFor(vendorId)!;
-      p.markVendorOrdered(
-        vendorId,
+    test('the winner cannot be un-invited out from under the award', () {
+      final (:p, :rfqId, alpha: _, :beta) = job();
+      p.awardRfq(rfqId, vendorId: beta, poNumber: 'PO-1188');
+      p.removeVendorFromRfq(rfqId, beta);
+      expect(p.project.rfqById(rfqId)!.bidFor(beta), isNotNull);
+    });
+
+    test('deleting the winning company takes the award back, not the PO', () {
+      final (:p, :rfqId, alpha: _, :beta) = job();
+      final package = p.priceProject().packageFor(rfqId)!;
+      p.awardRfq(
+        rfqId,
+        vendorId: beta,
         poNumber: 'PO-1188',
-        orderedOn: DateTime(2026, 3, 14),
+        partKeys: [for (final l in package.lines) l.key],
+      );
+
+      p.removeProjectVendor(beta);
+
+      final rfq = p.project.rfqById(rfqId)!;
+      expect(rfq.awardedVendorId, isEmpty);
+      expect(rfq.bidFor(beta), isNull);
+      // The order still happened.
+      expect(p.project.poByNumber('PO-1188'), isNotNull);
+      expect(p.project.partsOnPo('PO-1188'), isNotEmpty);
+    });
+
+    test('it is in the history, under the package and under each part', () {
+      final (:p, :rfqId, :alpha, :beta) = job();
+      final package = p.priceProject().packageFor(rfqId)!;
+      p.setBidQuote(rfqId, alpha, quotedOn: DateTime(2026, 3, 9), amount: 17000);
+      p.setBidQuote(rfqId, beta, quotedOn: DateTime(2026, 3, 10), amount: 17900);
+      p.awardRfq(
+        rfqId,
+        vendorId: beta,
+        poNumber: 'PO-1188',
+        awardedOn: DateTime(2026, 3, 14),
         partKeys: [for (final l in package.lines) l.key],
         partNames: {for (final l in package.lines) l.key: l.description},
       );
 
       final log = p.project.history;
+      final onRfq = log.where(
+        (h) => h.itemKind == 'rfq' && h.summary.contains('PO-1188'),
+      );
+      expect(onRfq, isNotEmpty);
+      // "We did not take the lowest" is the decision that gets asked about, so
+      // it is written down at the moment it is taken rather than left to be
+      // reconstructed from the bids.
       expect(
-        log.where((h) => h.itemKind == 'vendor' && h.summary.contains('PO-1188')),
-        isNotEmpty,
+        onRfq.any((h) => h.summary.contains('not the lowest')),
+        isTrue,
       );
       expect(
         log.where((h) => h.itemKind == 'part' && h.summary.contains('PO-1188')),
         isNotEmpty,
         reason: '"this says bought - who said so" is asked of the PART, and a '
-            'single line on the vendor cannot answer it',
+            'single line on the package cannot answer it',
       );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  SPLIT AWARDS
+  // -------------------------------------------------------------------------
+
+  group('half a package going to somebody else', () {
+    test('is said by splitting the package, not by two vendors on one part',
+        () {
+      final (:p, :rfqId, alpha: _, beta: _) = job();
+      final key = epsonKey(p);
+      final other = p.addProjectRfq(title: 'Long-lead items');
+
+      expect(p.movePartsToRfq([key], toRfqId: other.id), 1);
+
+      // The part is in exactly one package - the invariant every PO, delivery
+      // and color downstream rests on.
+      expect(p.project.partRfqs[key], other.id);
+      final line = p.priceProject().master.firstWhere((l) => l.key == key);
+      expect(line.rfq?.id, other.id);
     });
   });
 
@@ -365,7 +637,7 @@ void main() {
 
   group('the PO carries the order itself', () {
     test('it is stored relative to the job, so the folder can move', () {
-      final (:p, :vendorId) = job();
+      final (:p, rfqId: _, alpha: _, beta: _) = job();
       p.currentProjectPath = path.join(dir.path, 'bessey_project.json');
 
       final pdf = path.join(dir.path, 'PO-1188 signed.pdf');
@@ -398,7 +670,7 @@ void main() {
     });
 
     test('taking the link off does not touch the file', () {
-      final (:p, :vendorId) = job();
+      final (:p, rfqId: _, alpha: _, beta: _) = job();
       final pdf = path.join(dir.path, 'PO-1188.pdf');
       File(pdf).writeAsStringSync('%PDF-1.4');
       final po = p.addProjectPo(number: 'PO-1188');
@@ -444,51 +716,86 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  group('the vendor card', () {
-    testWidgets('a closed card says where the quote has got to', (
+  group('the package card', () {
+    testWidgets('a closed card says where the quotes have got to', (
       tester,
     ) async {
-      final (:p, :vendorId) = job();
-      p.setVendorRfqSent(vendorId, DateTime(2026, 3, 4));
+      final (:p, :rfqId, alpha: _, beta: _) = job();
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
       await openPane(tester, p, 'vendors');
 
-      // A collapsed list of six vendors has to answer "which of these are we
+      // A collapsed list of six packages has to answer "which of these are we
       // waiting on" without any of them being opened.
-      expect(
-        find.byKey(ValueKey('vendor_rfq_chip_$vendorId')),
-        findsOneWidget,
-      );
-      expect(find.text('RFQ sent'), findsWidgets);
+      expect(find.byKey(ValueKey('rfq_chip_$rfqId')), findsOneWidget);
+      expect(find.text('Out'), findsWidgets);
     });
 
-    testWidgets('a vendor nobody has written to carries no chip', (
+    testWidgets('a package nobody has written to carries no chip', (
       tester,
     ) async {
-      final (:p, :vendorId) = job();
+      final (:p, :rfqId, alpha: _, beta: _) = job();
       await openPane(tester, p, 'vendors');
-      expect(find.byKey(ValueKey('vendor_rfq_chip_$vendorId')), findsNothing);
+      expect(find.byKey(ValueKey('rfq_chip_$rfqId')), findsNothing);
     });
 
-    testWidgets('the ordered card offers the way back to the equipment', (
+    testWidgets('the comparison lists every bidder, cheapest first', (
       tester,
     ) async {
-      final (:p, :vendorId) = job();
-      final package = p.priceProject().packageFor(vendorId)!;
-      p.markVendorOrdered(
-        vendorId,
+      final (:p, :rfqId, :alpha, :beta) = job();
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
+      p.setBidQuote(rfqId, alpha, quotedOn: DateTime(2026, 3, 9), amount: 18400);
+      p.setBidQuote(rfqId, beta, quotedOn: DateTime(2026, 3, 10), amount: 17900);
+      await openPane(tester, p, 'vendors');
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$rfqId')));
+      await tester.pumpAndSettle();
+
+      final cheap = tester.getTopLeft(
+        find.byKey(ValueKey('rfq_bid_${rfqId}_$beta')),
+      );
+      final dear = tester.getTopLeft(
+        find.byKey(ValueKey('rfq_bid_${rfqId}_$alpha')),
+      );
+      expect(cheap.dy, lessThan(dear.dy));
+      // The lowest is marked even before anybody awards anything.
+      expect(find.text('lowest'), findsOneWidget);
+      // And there is something to press once a price is in.
+      expect(find.byKey(ValueKey('rfq_award_$rfqId')), findsOneWidget);
+    });
+
+    testWidgets('a vendor still owed an answer is on the table too', (
+      tester,
+    ) async {
+      final (:p, :rfqId, :alpha, beta: _) = job();
+      p.markRfqSent(rfqId, sentOn: DateTime(2026, 3, 4));
+      p.setBidQuote(rfqId, alpha, quotedOn: DateTime(2026, 3, 9), amount: 18400);
+      await openPane(tester, p, 'vendors');
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$rfqId')));
+      await tester.pumpAndSettle();
+
+      // Leaving them off would make a comparison of one look complete when a
+      // second was asked and never answered - the state most worth seeing
+      // before awarding, because a phone call can still fix it.
+      expect(find.textContaining('no reply'), findsOneWidget);
+    });
+
+    testWidgets('the awarded card offers the way back to the equipment', (
+      tester,
+    ) async {
+      final (:p, :rfqId, alpha: _, :beta) = job();
+      final package = p.priceProject().packageFor(rfqId)!;
+      p.awardRfq(
+        rfqId,
+        vendorId: beta,
         poNumber: 'PO-1188',
-        orderedOn: DateTime(2026, 3, 14),
+        awardedOn: DateTime(2026, 3, 14),
         partKeys: [for (final l in package.lines) l.key],
       );
       await openPane(tester, p, 'vendors');
 
-      await tester.tap(find.byKey(ValueKey('vendor_toggle_$vendorId')));
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$rfqId')));
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(ValueKey('vendor_rfq_parts_$vendorId')),
-        findsOneWidget,
-      );
+      expect(find.byKey(ValueKey('rfq_parts_$rfqId')), findsOneWidget);
       // And the order itself can be attached from here.
       final po = p.project.poByNumber('PO-1188')!;
       expect(find.byKey(ValueKey('po_attach_${po.id}')), findsOneWidget);
@@ -497,12 +804,13 @@ void main() {
 
   group('the timeline', () {
     testWidgets('what has already gone is a block of its own', (tester) async {
-      final (:p, :vendorId) = job();
-      final package = p.priceProject().packageFor(vendorId)!;
-      p.markVendorOrdered(
-        vendorId,
+      final (:p, :rfqId, alpha: _, :beta) = job();
+      final package = p.priceProject().packageFor(rfqId)!;
+      p.awardRfq(
+        rfqId,
+        vendorId: beta,
         poNumber: 'PO-1188',
-        orderedOn: DateTime(2026, 3, 14),
+        awardedOn: DateTime(2026, 3, 14),
         partKeys: [for (final l in package.lines) l.key],
       );
       await openPane(tester, p, 'timeline');
@@ -520,7 +828,7 @@ void main() {
     testWidgets('a job with nothing ordered says nothing about orders', (
       tester,
     ) async {
-      final (:p, :vendorId) = job();
+      final (:p, rfqId: _, alpha: _, beta: _) = job();
       await openPane(tester, p, 'timeline');
       // A heading over an empty box is one more thing to read.
       expect(find.textContaining('ORDERED ('), findsNothing);

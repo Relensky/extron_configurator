@@ -30,59 +30,64 @@ import 'responsibility_matrix.dart';
 ///  fixed in a room this morning is in the building total this afternoon
 ///  without anybody re-importing anything.
 ///
-///  VENDORS are the other half. Which company quotes a part is a fact about
-///  the JOB, not about the product — the same 86" display goes through the
-///  manufacturer on one contract and a reseller on the next — so the tags live
-///  here rather than in the catalog. They are assigned two ways:
+///  PACKAGES are the other half. How the parts are split up to be bought is a
+///  fact about the JOB, not about the product — the same 86" display goes out
+///  on a display package on one contract and lands in a whole-room bid on the
+///  next — so the split lives here rather than in the catalog. Parts join a
+///  package two ways:
 ///
-///    * BY RULE. A vendor lists the manufacturers it quotes, and every part by
-///      those makers tags itself. One line of setup covers "all Extron to
-///      Extron Direct" for the whole building.
-///    * BY HAND. Any part on the master list can be pinned to a vendor,
+///    * BY RULE. A package lists the manufacturers it claims, and every part by
+///      those makers tags itself. One line of setup covers "all Extron in the
+///      Extron package" for the whole building.
+///    * BY HAND. Any part on the master list can be pinned to a package,
 ///      overriding the rules. Stored per PART rather than per room-line,
-///      because that is the decision being made: "we buy the ceiling mics from
-///      the integrator" is true of the whole job at once.
+///      because that is the decision being made: "the ceiling mics go out with
+///      the integrator's lot" is true of the whole job at once.
+///
+///  Each package is then sent to as many VENDORS as the job wants to hear from,
+///  one bid each, and one of those bids is awarded — which is what finally puts
+///  a supplier's name against a part. See [ProjectRfq].
 ///
 ///  LEAD TIMES AND THE DEADLINE are the third half — the part of a job that is
 ///  not money and not who sells it, but WHEN it has to be bought. They live
-///  here for the same reason vendor tags do: how long a part takes to arrive is
+///  here for the same reason the package split does: how long a part takes to arrive is
 ///  a fact about this order on this job, and the date it has to be on site by
 ///  is a fact about the building, not about any one room. See
 ///  project_schedule.dart for the arithmetic that turns them into an order-by
 ///  date per part.
 ///
 ///  See project_estimate.dart for the rollup that turns this plus the rooms on
-///  disk into per-room totals, a core components list and per-vendor packages.
+///  disk into per-room totals, a core components list and the buying packages.
 /// ============================================================================
 
 // ---------------------------------------------------------------------------
-//  VENDORS
+//  PACKAGES
 // ---------------------------------------------------------------------------
 
-/// How a part came by the vendor it is tagged with — shown on the master list
-/// so a tag can be argued with. "Why is the projector going to the reseller?"
-/// has three different answers and three different fixes, and a bare vendor
-/// name gives none of them.
-enum VendorTagSource {
+/// How a part came by the package it is in — shown on the master list so a tag
+/// can be argued with. "Why is the projector going out with the reseller's
+/// lot?" has three different answers and three different fixes, and a bare
+/// package name gives none of them.
+enum RfqTagSource {
   /// Somebody pinned this part by hand. Beats every rule.
   pinned,
 
-  /// A vendor's manufacturer list claims the maker.
+  /// A package's manufacturer list claims the maker.
   manufacturerRule,
 
-  /// A vendor's category list claims the kind of part.
+  /// A package's category list claims the kind of part.
   categoryRule,
 
   /// Nothing claims it — it lands in the untagged package, which is the
-  /// project's to-do list rather than a vendor.
+  /// project's to-do list rather than something anybody can buy.
   none,
 }
 
-const Map<VendorTagSource, String> kVendorTagSourceLabels = {
-  VendorTagSource.pinned: 'Pinned',
-  VendorTagSource.manufacturerRule: 'By manufacturer',
-  VendorTagSource.categoryRule: 'By category',
-  VendorTagSource.none: 'Untagged',
+const Map<RfqTagSource, String> kRfqTagSourceLabels = {
+  RfqTagSource.pinned: 'Pinned',
+  RfqTagSource.manufacturerRule: 'By manufacturer',
+  RfqTagSource.categoryRule: 'By category',
+  RfqTagSource.none: 'Untagged',
 };
 
 // ---------------------------------------------------------------------------
@@ -990,8 +995,8 @@ class ProjectTrack {
 }
 
 /// The split nearly every job has, offered on a new project the way
-/// [starterVendors] offers the usual vendor split — as a starting point to
-/// edit, not a structure to work around.
+/// [seedStarterPackages] offers the usual buying split — as a starting point
+/// to edit, not a structure to work around.
 List<ProjectTrack> starterTracks(BuildingProject project) => [
   ProjectTrack(
     id: project.nextTrackId(),
@@ -1190,38 +1195,56 @@ class ProjectTodo {
 }
 
 // ---------------------------------------------------------------------------
-//  WHERE A VENDOR'S QUOTE HAS GOT TO
+//  WHAT IS BEING QUOTED, AND WHO IS QUOTING IT
 // ---------------------------------------------------------------------------
-//  The app could build an RFQ per vendor and hand you the file. What happened
-//  after that - it went out on the 4th, two came back, one of those turned into
-//  a PO, the third vendor has never replied - lived in somebody's inbox, and on
-//  a job with six vendors that is the single most-asked question on the whole
-//  screen: WHICH OF THESE ARE WE STILL WAITING ON.
+//  A job does not send one vendor one list. Somebody writes a PACKAGE - these
+//  forty lines, this delivery date, these terms - and sends the SAME package
+//  to three vendors, who come back with three prices. One wins and turns into
+//  a purchase order; the other two are why anybody can defend that choice six
+//  months later when finance asks.
 //
-//  So the vendor row carries the three dates that answer it, and nothing else.
-//  Not a workflow, not a state machine with transitions to police: three dates,
-//  each of which is simply a fact somebody records when it happens.
+//  So the PACKAGE is the thing with an identity, and vendors hang off it as
+//  bids. That split is the whole design here:
+//
+//    * a PART belongs to exactly one [ProjectRfq]. The same invariant this job
+//      has always had - one part, one package, one PO, one delivery - and
+//      every color, filter and delivery link downstream still rests on it.
+//    * an RFQ owns the SPLIT RULES that claim its parts, and the generic
+//      header every copy of the request goes out under.
+//    * a VENDOR is a company: a name, a contact, a phone number. It claims no
+//      parts and quotes nothing on its own.
+//    * a BID is one vendor's answer on one package - sent, came back, at what,
+//      on what paper.
+//
+//  A part's VENDOR is therefore DERIVED: the awarded bid's, and blank while
+//  the package is still out. That is the honest answer. Before an award nobody
+//  knows who is supplying the thing, and a list that named one anyway was
+//  reading a purchasing assumption as a fact.
 
-/// How far along one vendor's quote is.
+/// How far along a package's quote round is.
 ///
-/// Derived from the dates rather than stored beside them, because a stored
-/// state is a second thing that can be wrong: a vendor marked "ordered" with no
-/// order date is a row nobody can reconcile against the finance system, and a
-/// vendor with a PO on it that still reads "sent" is the same bug the other way
-/// round.
-enum VendorRfqStage {
-  /// Nobody has sent this vendor anything yet.
-  none('Not sent', 'no request out'),
+/// Derived from the bids rather than stored beside them, because a stored
+/// state is a second thing that can be wrong: a package marked "awarded" with
+/// no award date is a row nobody can reconcile against the finance system, and
+/// a package with a PO on it that still reads "out" is the same bug the other
+/// way round.
+enum RfqStage {
+  /// Written, not sent. Nobody has been asked anything yet.
+  draft('Draft', 'not sent yet'),
 
-  /// The request has gone and nothing has come back.
-  sent('RFQ sent', 'waiting on the quote'),
+  /// Out with at least one vendor, and nothing back.
+  out('Out', 'waiting on quotes'),
 
-  /// A price came back. The one stage that is genuinely a decision point -
-  /// this is where somebody compares it against the estimate.
-  quoted('Quoted', 'quote in, not ordered'),
+  /// Some answers in, some still owed. The stage that names the chasing, and
+  /// the one a single-vendor round can never be in.
+  partial('Part quoted', 'some quotes still out'),
 
-  /// It was bought. [ProjectVendor.poNumber] says on what.
-  ordered('Ordered', 'on order');
+  /// Everybody asked has answered or declined. THE DECISION POINT - this is
+  /// where the quotes get compared against each other and the estimate.
+  quoted('Quoted', 'quotes in, not awarded'),
+
+  /// A bid won. [ProjectRfq.poNumber] says on what.
+  awarded('Awarded', 'on order');
 
   /// What the chip on the card reads.
   final String label;
@@ -1229,84 +1252,44 @@ enum VendorRfqStage {
   /// The half-sentence form, for a line that reads as prose.
   final String phrase;
 
-  const VendorRfqStage(this.label, this.phrase);
+  const RfqStage(this.label, this.phrase);
 }
 
-/// A company the job buys from, and what it is assumed to quote.
-class ProjectVendor {
-  final String id;
-  final String name;
-
-  /// Who the RFQ goes to. Written onto the vendor's own quote sheet, because
-  /// the file gets emailed and the person emailing it should not have to go
-  /// looking for the address in a different system.
-  final String contact;
-
-  /// Anything the quote request should say — contract number, terms, the fact
-  /// that this one needs a delivery date before it can be approved.
-  final String notes;
-
-  /// The makers this vendor quotes, matched case-insensitively against a
-  /// part's manufacturer.
-  final List<String> manufacturers;
-
-  /// The catalog categories this vendor quotes — 'Camera', 'Display',
-  /// 'USB Extender'. The other half of the rule, and the half the split is
-  /// usually described with: "everything Extron" is a maker, but "cameras,
-  /// screens and USB interfaces" is three categories from four different
-  /// makers, and no list of manufacturers expresses it without naming every
-  /// brand anybody might ever specify.
+/// One vendor's answer on one package.
+class RfqBid {
+  /// The vendor on the job's own list this went to.
   ///
-  /// Matched case-insensitively, and by PREFIX as well as in full, because
-  /// the catalog's categories are finer than a purchasing split is: a rule
-  /// for 'Camera' should claim 'Camera - PTZ' without the buyer having to
-  /// enumerate the variants a catalog import invented.
-  final List<String> categories;
+  /// An id, never typed text: winning a bid raises a purchase order against a
+  /// real row, and a company that only exists as a spelling on one quote is a
+  /// PO nobody can chase.
+  final String vendorId;
 
-  /// Both lists empty = assigned by hand only, which is a legitimate setup:
-  /// an integrator quoting a mixed bag of parts has nothing about the parts
-  /// themselves that identifies it.
-  bool get hasRules => manufacturers.isNotEmpty || categories.isNotEmpty;
-
-  /// The color this vendor's parts are marked in, as an ARGB int, or null to
-  /// let one be derived from the name.
+  /// The day the request went out to THIS vendor. Null while the package is
+  /// still being written.
   ///
-  /// WHY A COLOR IS A PROPERTY OF THE VENDOR. A vendor IS an order: every
-  /// part tagged to it goes on one purchase order, to one company, on one
-  /// date. Reading a master list of two hundred parts and asking "which of
-  /// these am I ordering from whom" is the question the list is opened for,
-  /// and the answer was a name in a narrow column that had to be read row by
-  /// row. A color answers it down the whole page at once.
-  ///
-  /// ASSIGNABLE, because the buyer's own colors mean things this app cannot
-  /// know — the vendor that is always late, the one the contract covers, the
-  /// order that has already been placed. Null is not "no color": a vendor
-  /// nobody has assigned one still gets a stable color off its name, so a
-  /// list is legible before anybody has set anything up.
-  ///
-  /// Stored as an int rather than a Color to keep this file free of Flutter,
-  /// the same way the cable colors are stored on a bundle.
-  final int? color;
+  /// Per bid rather than per package on purpose: a fourth vendor invited a
+  /// week late is a fact worth being able to see, and it explains a quote that
+  /// arrived after the decision was taken.
+  final DateTime? sentOn;
 
-  /// The day the quote request went out. See [VendorRfqStage].
-  final DateTime? rfqSentOn;
-
-  /// The day a price came back.
+  /// The day their price came back.
   final DateTime? quotedOn;
 
-  /// What the vendor quoted, in the job's currency. 0 means nobody has typed
-  /// it - NOT that the quote was free.
-  ///
-  /// Kept beside the date rather than only on the PO, because the two figures
-  /// answer different questions and routinely differ: a quote is what was
-  /// offered, and a PO is what was raised. Somebody comparing three quotes
-  /// against the estimate needs the first, and it exists weeks before there is
-  /// a PO to hold the second.
-  final double quoteAmount;
+  /// What they quoted, in the job's currency. 0 means nobody has typed it -
+  /// NOT that the quote was free.
+  final double amount;
 
-  /// The vendor's own reference for the quote - 'Q-88421'. What to say on the
-  /// phone, and the only thing that finds it again in their system.
-  final String quoteRef;
+  /// Their own reference for it - 'Q-88421'. What to say on the phone, and the
+  /// only thing that finds the quote again in their system.
+  final String reference;
+
+  /// What they promised for the package as a whole.
+  ///
+  /// AN AWARD CRITERION, not a footnote. The cheapest quote that lands three
+  /// weeks after the deadline is not the cheapest quote, and until this sat
+  /// beside the money the comparison could not be made on the screen where the
+  /// decision was actually taken.
+  final DateTime? expectedOn;
 
   /// The quote ITSELF - the PDF that came back in the email.
   ///
@@ -1315,93 +1298,338 @@ class ProjectVendor {
   /// folder, absolute otherwise. The app never copies it, so moving the file
   /// moves what this opens.
   ///
-  /// THE THREE FIELDS WERE NOT ENOUGH. A date, a figure and a reference answer
-  /// "who is cheapest"; the argument a quote gets pulled up to settle - what
-  /// was actually in it, at what lead time, with which accessories - is settled
-  /// by the paper, and until this existed the paper lived in the inbox of
-  /// whoever asked for it. Same bargain [ProjectPo.filePath] makes for the
-  /// order.
-  final String quoteFilePath;
+  /// A DATE, A FIGURE AND A REFERENCE ARE NOT ENOUGH. They answer "who is
+  /// cheapest"; the argument a quote gets pulled up to settle - what was
+  /// actually in it, at what lead time, with which accessories - is settled by
+  /// the paper. Same bargain [ProjectPo.filePath] makes for the order.
+  final String filePath;
 
-  /// The day the order went in.
-  final DateTime? orderedOn;
+  /// Exceptions, substitutions, 'excludes freight', 'price holds 30 days'.
+  ///
+  /// The half of a quote that decides an award and does not fit in a number.
+  /// Two prices four hundred apart are the same price when the cheaper one has
+  /// left the mounts out, and that only ever lived in the covering email.
+  final String notes;
+
+  /// They were asked and said no.
+  ///
+  /// A FACT, not an absence. A vendor who declined and a vendor who has not
+  /// replied look identical in a column of empty dates and mean opposite
+  /// things: one is a closed line, the other is somebody who needs chasing
+  /// this afternoon.
+  final bool declined;
+
+  const RfqBid({
+    required this.vendorId,
+    this.sentOn,
+    this.quotedOn,
+    this.amount = 0,
+    this.reference = '',
+    this.expectedOn,
+    this.filePath = '',
+    this.notes = '',
+    this.declined = false,
+  });
+
+  /// True once this vendor has been asked.
+  bool get isSent => sentOn != null;
+
+  /// True once they have said something - a price, or no thanks. What
+  /// "everybody has answered" is counted with.
+  bool get hasAnswered => quotedOn != null || declined;
+
+  /// True when there is a price on it to compare. A declined bid never has
+  /// one, and a zero is nobody having typed it.
+  bool get hasPrice => !declined && quotedOn != null && amount > 0;
+
+  /// Each nullable field takes a clear- flag, because null cannot be told from
+  /// "leave it alone" and on a date the two mean opposite things - un-sending
+  /// a request and not mentioning it.
+  RfqBid copyWith({
+    DateTime? sentOn,
+    bool clearSentOn = false,
+    DateTime? quotedOn,
+    bool clearQuotedOn = false,
+    double? amount,
+    String? reference,
+    DateTime? expectedOn,
+    bool clearExpectedOn = false,
+    String? filePath,
+    String? notes,
+    bool? declined,
+  }) => RfqBid(
+    vendorId: vendorId,
+    sentOn: clearSentOn ? null : (sentOn ?? this.sentOn),
+    quotedOn: clearQuotedOn ? null : (quotedOn ?? this.quotedOn),
+    amount: amount ?? this.amount,
+    reference: reference ?? this.reference,
+    expectedOn: clearExpectedOn ? null : (expectedOn ?? this.expectedOn),
+    filePath: filePath ?? this.filePath,
+    notes: notes ?? this.notes,
+    declined: declined ?? this.declined,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'vendorId': vendorId,
+    if (sentOn != null) 'sentOn': formatIsoDate(sentOn!),
+    if (quotedOn != null) 'quotedOn': formatIsoDate(quotedOn!),
+    if (amount > 0) 'amount': amount,
+    if (reference.trim().isNotEmpty) 'reference': reference.trim(),
+    if (expectedOn != null) 'expectedOn': formatIsoDate(expectedOn!),
+    if (filePath.trim().isNotEmpty) 'filePath': filePath.trim(),
+    if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+    if (declined) 'declined': true,
+  };
+
+  factory RfqBid.fromJson(Map<String, dynamic> json) => RfqBid(
+    vendorId: json['vendorId']?.toString() ?? '',
+    sentOn: parseIsoDate(json['sentOn']),
+    quotedOn: parseIsoDate(json['quotedOn']),
+    amount: (json['amount'] as num?)?.toDouble() ?? 0,
+    reference: json['reference']?.toString() ?? '',
+    expectedOn: parseIsoDate(json['expectedOn']),
+    filePath: json['filePath']?.toString() ?? '',
+    notes: json['notes']?.toString() ?? '',
+    declined: json['declined'] == true,
+  );
+}
+
+/// A package of parts put out to quote, and everyone asked to quote it.
+class ProjectRfq {
+  /// Row identity - `rfq1`.
+  final String id;
+
+  /// What the package is called on the job - 'Displays and mounts', 'Extron
+  /// package'. The heading on every copy of the request, and the name the
+  /// master list groups under until an award gives the parts a vendor.
+  final String title;
+
+  /// What the request says above the parts: contract number, terms, the fact
+  /// that a delivery date is wanted before it can be approved.
+  ///
+  /// ON THE PACKAGE rather than on the vendor, which is where it used to live.
+  /// The point of competing a package is that every vendor answers the SAME
+  /// question, and terms that differed per vendor made the prices that came
+  /// back incomparable without anybody being able to see that they had.
+  final String scope;
+
+  /// When quotes are wanted back. Written on the request, so the date is the
+  /// vendor's problem rather than a diary note on this end.
+  final DateTime? dueBy;
+
+  /// The makers this package claims, matched case-insensitively against a
+  /// part's manufacturer.
+  final List<String> manufacturers;
+
+  /// The catalog categories this package claims - 'Camera', 'Display', 'USB
+  /// Extender'. The other half of the rule, and the half a purchasing split is
+  /// usually described with: "everything Extron" is a maker, but "cameras,
+  /// screens and USB interfaces" is three categories from four different
+  /// makers, and no list of manufacturers expresses it without naming every
+  /// brand anybody might ever specify.
+  ///
+  /// Matched case-insensitively, and by PREFIX as well as in full, because the
+  /// catalog's categories are finer than a purchasing split is: a rule for
+  /// 'Camera' should claim 'Camera - PTZ' without the buyer having to
+  /// enumerate the variants a catalog import invented.
+  final List<String> categories;
+
+  /// Both lists empty = filled by hand only, which is a legitimate setup: a
+  /// package assembled for one negotiation - the four long-lead items, the
+  /// bits left off the last order - has nothing about the parts themselves
+  /// that identifies it.
+  bool get hasRules => manufacturers.isNotEmpty || categories.isNotEmpty;
+
+  /// The color this package's parts are marked in, as an ARGB int, or null to
+  /// let one be derived from the title.
+  ///
+  /// WHY THE COLOR IS THE PACKAGE'S AND NOT THE VENDOR'S. Reading a master
+  /// list of two hundred parts and asking "which of these go together" is the
+  /// question the list is opened for, and the grouping that answers it is the
+  /// package: it is what goes out as one request and comes back as one order.
+  /// Hanging the color on the winning vendor instead would leave every part
+  /// gray until the award and then repaint the whole page at the moment
+  /// somebody is least able to afford the list moving under them.
+  ///
+  /// ASSIGNABLE, because the buyer's own colors mean things this app cannot
+  /// know - the package that is always late, the one the contract covers, the
+  /// one already spent. Null is not "no color": a package nobody has assigned
+  /// one still gets a stable color off its title, so a list is legible before
+  /// anybody has set anything up.
+  ///
+  /// Stored as an int rather than a Color to keep this file free of Flutter,
+  /// the same way the cable colors are stored on a bundle.
+  final int? color;
+
+  /// Everyone asked, in the order they were added. One per vendor - see
+  /// [bidFor].
+  final List<RfqBid> bids;
+
+  /// Whether the request that goes out carries OUR OWN estimate beside each
+  /// line.
+  ///
+  /// Null is not "no", it is "nobody has said", and the answer is then read
+  /// off the competition: shown to a single source, withheld once there is
+  /// more than one bid. A sole vendor quoting a package they already own gains
+  /// from seeing the figure we hold, because the argument there is whether the
+  /// line is right. Three vendors bidding the same forty lines do not - handing
+  /// every one of them our number anchors all three to it, and the spread that
+  /// makes running the competition worth anything collapses.
+  final bool? showEstimate;
+
+  /// The vendor that won, or '' while it is still a competition.
+  final String awardedVendorId;
+
+  /// The day it was awarded.
+  final DateTime? awardedOn;
 
   /// The purchase order it was bought on, as a NUMBER rather than a row id -
   /// the same link a part and a delivery use, for the reason given above
   /// [ProjectPo]. Blank while nothing has been ordered.
   final String poNumber;
 
-  const ProjectVendor({
+  const ProjectRfq({
     required this.id,
-    required this.name,
-    this.contact = '',
-    this.notes = '',
+    this.title = '',
+    this.scope = '',
+    this.dueBy,
     this.manufacturers = const [],
     this.categories = const [],
     this.color,
-    this.rfqSentOn,
-    this.quotedOn,
-    this.quoteAmount = 0,
-    this.quoteRef = '',
-    this.quoteFilePath = '',
-    this.orderedOn,
+    this.bids = const [],
+    this.showEstimate,
+    this.awardedVendorId = '',
+    this.awardedOn,
     this.poNumber = '',
   });
 
-  /// How far along this vendor's quote is, read off the dates. Latest fact
-  /// wins: a vendor that was ordered is ordered whether or not anybody
-  /// remembered to note the quote coming back.
-  VendorRfqStage get rfqStage {
-    if (orderedOn != null || poNumber.trim().isNotEmpty) {
-      return VendorRfqStage.ordered;
+  /// What to call it on screen. Never blank: an untitled package is still a
+  /// row somebody has to point at.
+  String get name => title.trim().isEmpty ? id : title.trim();
+
+  /// True when this is a competition rather than a single source. The line
+  /// that decides how the comparison is drawn, and whether our estimate goes
+  /// out on the sheet.
+  bool get isCompetitive => bids.length > 1;
+
+  /// Whether the request sheet carries our own prices. See [showEstimate].
+  bool get sendsEstimate => showEstimate ?? bids.length < 2;
+
+  /// This vendor's bid on the package, or null when they were never asked.
+  RfqBid? bidFor(String vendorId) {
+    if (vendorId.isEmpty) return null;
+    for (final b in bids) {
+      if (b.vendorId == vendorId) return b;
     }
-    if (quotedOn != null) return VendorRfqStage.quoted;
-    if (rfqSentOn != null) return VendorRfqStage.sent;
-    return VendorRfqStage.none;
+    return null;
+  }
+
+  /// The bid that won, or null while it is still out. Null too when the award
+  /// names a vendor that was never bid - the award still stands, it just has
+  /// no quote behind it, which is a thing buyers do and the screen says so.
+  RfqBid? get winningBid => bidFor(awardedVendorId);
+
+  /// The cheapest priced bid, or null when nothing comparable is in.
+  ///
+  /// Not the recommendation. It is the number an award gets measured against,
+  /// including - especially - when the award went elsewhere, because "we did
+  /// not take the lowest" is exactly the decision that has to be explainable.
+  RfqBid? get lowestBid {
+    RfqBid? best;
+    for (final b in bids) {
+      if (!b.hasPrice) continue;
+      if (best == null || b.amount < best.amount) best = b;
+    }
+    return best;
+  }
+
+  /// Bids that have been sent and are still owed an answer. Who to chase.
+  List<RfqBid> get outstanding => [
+    for (final b in bids)
+      if (b.isSent && !b.hasAnswered) b,
+  ];
+
+  /// How far along this package is, read off the bids. Latest fact wins: an
+  /// awarded package is awarded whether or not anybody remembered to note the
+  /// quotes coming back.
+  RfqStage get stage {
+    if (awardedOn != null ||
+        awardedVendorId.trim().isNotEmpty ||
+        poNumber.trim().isNotEmpty) {
+      return RfqStage.awarded;
+    }
+    final sent = [
+      for (final b in bids)
+        if (b.isSent) b,
+    ];
+    if (sent.isEmpty) return RfqStage.draft;
+    final back = [
+      for (final b in sent)
+        if (b.hasAnswered) b,
+    ].length;
+    if (back == 0) return RfqStage.out;
+    return back < sent.length ? RfqStage.partial : RfqStage.quoted;
   }
 
   /// [clearColor] rather than passing null, which cannot be told from "leave
-  /// it alone" — and the two mean opposite things here: back to the derived
-  /// color, or keep the one that was assigned.
-  ProjectVendor copyWith({
-    String? name,
-    String? contact,
-    String? notes,
+  /// it alone" - and the two mean opposite things here: back to the derived
+  /// color, or keep the one that was assigned. Same for every date, and for
+  /// the award, where clearing it is un-ordering the job.
+  ProjectRfq copyWith({
+    String? title,
+    String? scope,
+    DateTime? dueBy,
+    bool clearDueBy = false,
     List<String>? manufacturers,
     List<String>? categories,
     int? color,
     bool clearColor = false,
-    DateTime? rfqSentOn,
-    bool clearRfqSentOn = false,
-    DateTime? quotedOn,
-    bool clearQuotedOn = false,
-    double? quoteAmount,
-    String? quoteRef,
-    String? quoteFilePath,
-    DateTime? orderedOn,
-    bool clearOrderedOn = false,
+    List<RfqBid>? bids,
+    bool? showEstimate,
+    bool clearShowEstimate = false,
+    String? awardedVendorId,
+    DateTime? awardedOn,
+    bool clearAwardedOn = false,
     String? poNumber,
-  }) => ProjectVendor(
+  }) => ProjectRfq(
     id: id,
-    name: name ?? this.name,
-    contact: contact ?? this.contact,
-    notes: notes ?? this.notes,
+    title: title ?? this.title,
+    scope: scope ?? this.scope,
+    dueBy: clearDueBy ? null : (dueBy ?? this.dueBy),
     manufacturers: manufacturers ?? this.manufacturers,
     categories: categories ?? this.categories,
     color: clearColor ? null : (color ?? this.color),
-    // Each date takes the same clear- flag every nullable field on this file
-    // takes: null cannot be told from "leave it alone", and on a date the two
-    // mean opposite things - un-sending an RFQ and not mentioning it.
-    rfqSentOn: clearRfqSentOn ? null : (rfqSentOn ?? this.rfqSentOn),
-    quotedOn: clearQuotedOn ? null : (quotedOn ?? this.quotedOn),
-    quoteAmount: quoteAmount ?? this.quoteAmount,
-    quoteRef: quoteRef ?? this.quoteRef,
-    quoteFilePath: quoteFilePath ?? this.quoteFilePath,
-    orderedOn: clearOrderedOn ? null : (orderedOn ?? this.orderedOn),
+    bids: bids ?? this.bids,
+    showEstimate: clearShowEstimate
+        ? null
+        : (showEstimate ?? this.showEstimate),
+    awardedVendorId: awardedVendorId ?? this.awardedVendorId,
+    awardedOn: clearAwardedOn ? null : (awardedOn ?? this.awardedOn),
     poNumber: poNumber ?? this.poNumber,
   );
 
-  /// True when this vendor's manufacturer rules claim [manufacturer].
+  /// The package with [bid] put back where the one for its vendor was, or
+  /// added at the end when that vendor has not been asked yet.
+  ProjectRfq withBid(RfqBid bid) {
+    final next = [...bids];
+    final at = next.indexWhere((b) => b.vendorId == bid.vendorId);
+    if (at >= 0) {
+      next[at] = bid;
+    } else {
+      next.add(bid);
+    }
+    return copyWith(bids: next);
+  }
+
+  /// The package with this vendor's bid taken off.
+  ProjectRfq withoutBid(String vendorId) => copyWith(
+    bids: [
+      for (final b in bids)
+        if (b.vendorId != vendorId) b,
+    ],
+  );
+
+  /// True when this package's manufacturer rules claim [manufacturer].
   bool quotesManufacturer(String manufacturer) {
     final needle = manufacturer.trim().toLowerCase();
     if (needle.isEmpty) return false;
@@ -1411,7 +1639,7 @@ class ProjectVendor {
     return false;
   }
 
-  /// True when this vendor's category rules claim [category], in full or as
+  /// True when this package's category rules claim [category], in full or as
   /// the head of a finer one ('Camera' claims 'Camera - PTZ').
   bool quotesCategory(String category) {
     final needle = category.trim().toLowerCase();
@@ -1430,53 +1658,109 @@ class ProjectVendor {
     return false;
   }
 
-  /// True when either rule claims the part. Manufacturer is checked first
-  /// only for reporting — for the answer itself, either is enough.
+  /// True when either rule claims the part. Manufacturer is checked first only
+  /// for reporting - for the answer itself, either is enough.
   bool quotes({String manufacturer = '', String category = ''}) =>
       quotesManufacturer(manufacturer) || quotesCategory(category);
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    if (title.trim().isNotEmpty) 'title': title.trim(),
+    if (scope.trim().isNotEmpty) 'scope': scope.trim(),
+    if (dueBy != null) 'dueBy': formatIsoDate(dueBy!),
+    if (manufacturers.isNotEmpty) 'manufacturers': manufacturers,
+    if (categories.isNotEmpty) 'categories': categories,
+    if (color != null) 'color': color,
+    if (bids.isNotEmpty) 'bids': [for (final b in bids) b.toJson()],
+    if (showEstimate != null) 'showEstimate': showEstimate,
+    if (awardedVendorId.trim().isNotEmpty)
+      'awardedVendorId': awardedVendorId.trim(),
+    if (awardedOn != null) 'awardedOn': formatIsoDate(awardedOn!),
+    if (poNumber.trim().isNotEmpty) 'poNumber': poNumber.trim(),
+  };
+
+  factory ProjectRfq.fromJson(Map<String, dynamic> json) {
+    List<String> list(String key) => [
+      for (final m in (json[key] as List? ?? []))
+        if (m.toString().trim().isNotEmpty) m.toString().trim(),
+    ];
+    final raw = json['color'];
+    final rawShow = json['showEstimate'];
+    return ProjectRfq(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      scope: json['scope']?.toString() ?? '',
+      dueBy: parseIsoDate(json['dueBy']),
+      manufacturers: list('manufacturers'),
+      categories: list('categories'),
+      // Anything that is not a number is no assignment at all, which reads as
+      // the derived color rather than as black.
+      color: raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? ''),
+      bids: [
+        for (final b in (json['bids'] as List? ?? []))
+          if (b is Map) RfqBid.fromJson(Map<String, dynamic>.from(b)),
+      ],
+      // Absent stays absent - see [showEstimate], where null is a third answer
+      // rather than a missing boolean.
+      showEstimate: rawShow is bool ? rawShow : null,
+      awardedVendorId: json['awardedVendorId']?.toString() ?? '',
+      awardedOn: parseIsoDate(json['awardedOn']),
+      poNumber: json['poNumber']?.toString() ?? '',
+    );
+  }
+}
+
+/// A company the job buys from.
+///
+/// A DIRECTORY ENTRY and nothing more, since packages became their own thing:
+/// no rules, no dates, no money, no parts. What a vendor is asked to quote is
+/// a property of the PACKAGE that invited it (see [ProjectRfq]), and a vendor
+/// that lost every bid on this job is still a company worth keeping a phone
+/// number for.
+class ProjectVendor {
+  final String id;
+  final String name;
+
+  /// Who a request goes to. Written onto the copy of the request this vendor
+  /// gets, because the file gets emailed and the person emailing it should not
+  /// have to go looking for the address in a different system.
+  final String contact;
+
+  /// Anything worth knowing about the company - 'account 4471', 'slow on small
+  /// orders', 'quotes exclude freight'.
+  ///
+  /// NOT terms for a quote request. Those belong to the package, where every
+  /// vendor answering it sees the same ones - see [ProjectRfq.scope].
+  final String notes;
+
+  const ProjectVendor({
+    required this.id,
+    required this.name,
+    this.contact = '',
+    this.notes = '',
+  });
+
+  ProjectVendor copyWith({String? name, String? contact, String? notes}) =>
+      ProjectVendor(
+        id: id,
+        name: name ?? this.name,
+        contact: contact ?? this.contact,
+        notes: notes ?? this.notes,
+      );
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     if (contact.isNotEmpty) 'contact': contact,
     if (notes.isNotEmpty) 'notes': notes,
-    if (manufacturers.isNotEmpty) 'manufacturers': manufacturers,
-    if (categories.isNotEmpty) 'categories': categories,
-    if (color != null) 'color': color,
-    if (rfqSentOn != null) 'rfqSentOn': formatIsoDate(rfqSentOn!),
-    if (quotedOn != null) 'quotedOn': formatIsoDate(quotedOn!),
-    if (quoteAmount > 0) 'quoteAmount': quoteAmount,
-    if (quoteRef.trim().isNotEmpty) 'quoteRef': quoteRef.trim(),
-    if (quoteFilePath.trim().isNotEmpty) 'quoteFilePath': quoteFilePath.trim(),
-    if (orderedOn != null) 'orderedOn': formatIsoDate(orderedOn!),
-    if (poNumber.trim().isNotEmpty) 'poNumber': poNumber.trim(),
   };
 
-  factory ProjectVendor.fromJson(Map<String, dynamic> json) {
-    List<String> list(String key) => [
-      for (final m in (json[key] as List? ?? []))
-        if (m.toString().trim().isNotEmpty) m.toString().trim(),
-    ];
-    final raw = json['color'];
-    return ProjectVendor(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? 'Vendor',
-      contact: json['contact']?.toString() ?? '',
-      notes: json['notes']?.toString() ?? '',
-      manufacturers: list('manufacturers'),
-      categories: list('categories'),
-      // Anything that is not a number is no assignment at all, which reads as
-      // the derived color rather than as black.
-      color: raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? ''),
-      rfqSentOn: parseIsoDate(json['rfqSentOn']),
-      quotedOn: parseIsoDate(json['quotedOn']),
-      quoteAmount: (json['quoteAmount'] as num?)?.toDouble() ?? 0,
-      quoteRef: json['quoteRef']?.toString() ?? '',
-      quoteFilePath: json['quoteFilePath']?.toString() ?? '',
-      orderedOn: parseIsoDate(json['orderedOn']),
-      poNumber: json['poNumber']?.toString() ?? '',
-    );
-  }
+  factory ProjectVendor.fromJson(Map<String, dynamic> json) => ProjectVendor(
+    id: json['id']?.toString() ?? '',
+    name: json['name']?.toString() ?? 'Vendor',
+    contact: json['contact']?.toString() ?? '',
+    notes: json['notes']?.toString() ?? '',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -2069,7 +2353,16 @@ class BuildingProject {
   /// drawn, because there is nothing in them to price.
   final List<ManualRoom> manualRooms;
 
+  /// The companies this job buys from. A directory — see [ProjectVendor].
   final List<ProjectVendor> vendors;
+
+  /// The buying packages, in the order they are shown. Each one is a set of
+  /// parts put out to quote and the bids that came back — see [ProjectRfq].
+  ///
+  /// The ORDER is a rule, the same way the vendor list's used to be: when two
+  /// packages both claim a part by rule, the earlier one wins. See
+  /// [rfqForPart].
+  final List<ProjectRfq> rfqs;
 
   /// Whose job each piece of scope is - see [ResponsibilityItem].
   ///
@@ -2094,14 +2387,14 @@ class BuildingProject {
   /// Keyed by the NORMALIZED name so 'CTS Chico' and 'cts  chico' are one
   /// party rather than two entries fighting over one column, and an int rather
   /// than a Color to keep this file free of Flutter - the same bargain the
-  /// vendor colors and the cable colors make.
+  /// package colors and the cable colors make.
   final Map<String, int> partyColors;
 
-  /// Core component key (see [masterPartKey]) -> vendor id, for the parts
+  /// Core component key (see [masterPartKey]) -> package id, for the parts
   /// somebody has pinned by hand. Beats the manufacturer rules; an entry whose
-  /// vendor has since been deleted resolves to untagged rather than to a
+  /// package has since been deleted resolves to untagged rather than to a
   /// dangling name.
-  final Map<String, String> partVendors;
+  final Map<String, String> partRfqs;
 
   // -------------------------------------------------------------------------
   //  WHEN IT HAS TO BE BOUGHT
@@ -2217,6 +2510,7 @@ class BuildingProject {
   int _roomCounter;
   int _manualRoomCounter;
   int _vendorCounter;
+  int _rfqCounter;
   int _todoCounter;
   int _trackCounter;
   int _spareCounter;
@@ -2240,9 +2534,10 @@ class BuildingProject {
     this.onlineFileStamp,
     List<ManualRoom>? manualRooms,
     List<ProjectVendor>? vendors,
+    List<ProjectRfq>? rfqs,
     List<ResponsibilityItem>? responsibility,
     Map<String, int>? partyColors,
-    Map<String, String>? partVendors,
+    Map<String, String>? partRfqs,
     this.deliveryDeadline,
     Map<String, int>? partLeadTimes,
     Map<String, DateTime>? partNeedBy,
@@ -2259,6 +2554,7 @@ class BuildingProject {
     int roomCounter = 0,
     int manualRoomCounter = 0,
     int vendorCounter = 0,
+    int rfqCounter = 0,
     int todoCounter = 0,
     int trackCounter = 0,
     int spareCounter = 0,
@@ -2269,9 +2565,10 @@ class BuildingProject {
   }) : rooms = rooms ?? [],
        manualRooms = manualRooms ?? [],
        vendors = vendors ?? [],
+       rfqs = rfqs ?? [],
        responsibility = responsibility ?? [],
        partyColors = partyColors ?? {},
-       partVendors = partVendors ?? {},
+       partRfqs = partRfqs ?? {},
        partLeadTimes = partLeadTimes ?? {},
        partNeedBy = partNeedBy ?? {},
        todos = todos ?? [],
@@ -2286,6 +2583,7 @@ class BuildingProject {
        _roomCounter = roomCounter,
        _manualRoomCounter = manualRoomCounter,
        _vendorCounter = vendorCounter,
+       _rfqCounter = rfqCounter,
        _todoCounter = todoCounter,
        _trackCounter = trackCounter,
        _spareCounter = spareCounter,
@@ -2298,7 +2596,8 @@ class BuildingProject {
       rooms.isEmpty &&
       manualRooms.isEmpty &&
       vendors.isEmpty &&
-      partVendors.isEmpty &&
+      rfqs.isEmpty &&
+      partRfqs.isEmpty &&
       deliveryDeadline == null &&
       partLeadTimes.isEmpty &&
       partNeedBy.isEmpty &&
@@ -2360,6 +2659,8 @@ class BuildingProject {
   void removeManualRoom(String id) =>
       manualRooms.removeWhere((r) => r.id == id);
   String nextVendorId() => 'vendor${++_vendorCounter}';
+
+  String nextRfqId() => 'rfq${++_rfqCounter}';
   String nextTodoId() => 'todo${++_todoCounter}';
   String nextTrackId() => 'track${++_trackCounter}';
   String nextSpareId() => 'spare${++_spareCounter}';
@@ -2593,13 +2894,55 @@ class BuildingProject {
   }
 
   /// Puts [vendor] back where the one with its id was. Does nothing when it
-  /// has gone - the ORDER of this list is a rule (see [vendorForPart]), so an
-  /// edit that landed a vendor at the end would silently change which vendor
-  /// claims a part.
+  /// has gone.
   void replaceVendor(ProjectVendor vendor) {
     final at = vendors.indexWhere((v) => v.id == vendor.id);
     if (at >= 0) vendors[at] = vendor;
   }
+
+  ProjectRfq? rfqById(String id) {
+    if (id.isEmpty) return null;
+    for (final r in rfqs) {
+      if (r.id == id) return r;
+    }
+    return null;
+  }
+
+  /// Puts [rfq] back where the one with its id was. Does nothing when it has
+  /// gone - the ORDER of this list is a rule (see [rfqForPart]), so an edit
+  /// that landed a package at the end would silently change which package
+  /// claims a part.
+  void replaceRfq(ProjectRfq rfq) {
+    final at = rfqs.indexWhere((r) => r.id == rfq.id);
+    if (at >= 0) rfqs[at] = rfq;
+  }
+
+  /// The package [partKey] is being bought on, or null when nothing claims it.
+  ProjectRfq? rfqForPartKey(String partKey) => rfqById(partRfqs[partKey] ?? '');
+
+  /// Every package this vendor was asked to bid, in the job's own order.
+  List<ProjectRfq> rfqsFor(String vendorId) => [
+    for (final r in rfqs)
+      if (r.bidFor(vendorId) != null) r,
+  ];
+
+  /// The package that raised this purchase order, or null when the number was
+  /// typed somewhere else. Matched on the NUMBER, the way everything else that
+  /// points at a PO is — see [ProjectPo].
+  ProjectRfq? rfqByPoNumber(String number) {
+    final key = normalizePoNumber(number);
+    if (key.isEmpty) return null;
+    for (final r in rfqs) {
+      if (normalizePoNumber(r.poNumber) == key) return r;
+    }
+    return null;
+  }
+
+  /// Every package this vendor WON.
+  List<ProjectRfq> rfqsAwardedTo(String vendorId) => [
+    for (final r in rfqs)
+      if (vendorId.isNotEmpty && r.awardedVendorId == vendorId) r,
+  ];
 
   ProjectRoomRef? roomById(String id) {
     for (final r in rooms) {
@@ -2608,77 +2951,76 @@ class BuildingProject {
     return null;
   }
 
-  /// Which vendor quotes a part, and why.
+  /// Which package a part is bought on, and why.
   ///
   /// The hand pin first — it exists precisely to beat the rules. Then the
   /// MANUFACTURER rules before the CATEGORY ones, because that is the
-  /// stronger statement: "we buy Extron direct" is a purchasing relationship,
-  /// while "the reseller does screens" is a default for everything nobody has
-  /// a relationship for. A job that buys Extron direct and screens from a
-  /// reseller must not send the Extron display to the reseller just because
-  /// it is a screen — and without this ordering, whichever vendor happened to
-  /// be created first would decide.
+  /// stronger statement: "the Extron goes out as its own package" is a
+  /// purchasing decision, while "screens go in the reseller lot" is a default
+  /// for everything nobody has decided about. A job that competes its Extron
+  /// separately must not fold the Extron display into the screen package just
+  /// because it is a screen — and without this ordering, whichever package
+  /// happened to be created first would decide.
   ///
-  /// Within a tier, the first matching vendor wins. That is deliberate and the
-  /// UI says so: two vendors both claiming Extron is a setup mistake, and
+  /// Within a tier, the first matching package wins. That is deliberate and
+  /// the UI says so: two packages both claiming Extron is a setup mistake, and
   /// picking the earlier one gives a stable, explainable answer instead of an
-  /// arbitrary one that moves when a vendor is renamed.
-  ({ProjectVendor? vendor, VendorTagSource source}) vendorForPart(
+  /// arbitrary one that moves when a package is renamed.
+  ({ProjectRfq? rfq, RfqTagSource source}) rfqForPart(
     String partKey, {
     String manufacturer = '',
     String category = '',
   }) {
-    final pinnedId = partVendors[partKey];
+    final pinnedId = partRfqs[partKey];
     if (pinnedId != null && pinnedId.isNotEmpty) {
-      final v = vendorById(pinnedId);
-      // A pin to a vendor that has been deleted is dead, not sticky: fall
+      final r = rfqById(pinnedId);
+      // A pin to a package that has been deleted is dead, not sticky: fall
       // through to the rules so the part lands somewhere real.
-      if (v != null) return (vendor: v, source: VendorTagSource.pinned);
+      if (r != null) return (rfq: r, source: RfqTagSource.pinned);
     }
-    for (final v in vendors) {
-      if (v.quotesManufacturer(manufacturer)) {
-        return (vendor: v, source: VendorTagSource.manufacturerRule);
+    for (final r in rfqs) {
+      if (r.quotesManufacturer(manufacturer)) {
+        return (rfq: r, source: RfqTagSource.manufacturerRule);
       }
     }
-    for (final v in vendors) {
-      if (v.quotesCategory(category)) {
-        return (vendor: v, source: VendorTagSource.categoryRule);
+    for (final r in rfqs) {
+      if (r.quotesCategory(category)) {
+        return (rfq: r, source: RfqTagSource.categoryRule);
       }
     }
-    return (vendor: null, source: VendorTagSource.none);
+    return (rfq: null, source: RfqTagSource.none);
   }
 
-  /// Vendors whose rules overlap — the setup mistake [vendorForPart] resolves
-  /// by order. Surfaced so it can be fixed rather than lived with.
+  /// Packages whose rules overlap — the setup mistake [rfqForPart] resolves by
+  /// order. Surfaced so it can be fixed rather than lived with.
   ///
   /// Only LIKE rules collide. A manufacturer rule and a category rule that
   /// both cover the same part are not a mistake, they are the normal case the
   /// tier ordering exists for, and reporting them would bury the real
   /// conflicts under noise on every project.
-  List<({String rule, String kind, List<ProjectVendor> vendors})>
-  get vendorConflicts {
-    final out = <({String rule, String kind, List<ProjectVendor> vendors})>[];
+  List<({String rule, String kind, List<ProjectRfq> rfqs})> get rfqConflicts {
+    final out = <({String rule, String kind, List<ProjectRfq> rfqs})>[];
 
-    void collide(String kind, List<String> Function(ProjectVendor) rulesOf) {
-      final byRule = <String, List<ProjectVendor>>{};
+    void collide(String kind, List<String> Function(ProjectRfq) rulesOf) {
+      final byRule = <String, List<ProjectRfq>>{};
       final display = <String, String>{};
-      for (final v in vendors) {
-        for (final r in rulesOf(v)) {
+      for (final q in rfqs) {
+        for (final r in rulesOf(q)) {
           final key = r.trim().toLowerCase();
           if (key.isEmpty) continue;
           display.putIfAbsent(key, () => r.trim());
-          byRule.putIfAbsent(key, () => []).add(v);
+          byRule.putIfAbsent(key, () => []).add(q);
         }
       }
-      byRule.forEach((key, vs) {
-        if (vs.length > 1) {
-          out.add((rule: display[key] ?? key, kind: kind, vendors: vs));
+      byRule.forEach((key, qs) {
+        if (qs.length > 1) {
+          out.add((rule: display[key] ?? key, kind: kind, rfqs: qs));
         }
       });
     }
 
-    collide('Manufacturer', (v) => v.manufacturers);
-    collide('Category', (v) => v.categories);
+    collide('Manufacturer', (q) => q.manufacturers);
+    collide('Category', (q) => q.categories);
     out.sort((a, b) {
       final byKind = a.kind.compareTo(b.kind);
       return byKind != 0
@@ -2688,13 +3030,33 @@ class BuildingProject {
     return out;
   }
 
-  /// Pins [partKey] to [vendorId], or clears the pin when it is blank.
-  void pinPart(String partKey, String vendorId) {
-    if (vendorId.isEmpty) {
-      partVendors.remove(partKey);
+  /// Pins [partKey] to [rfqId], or clears the pin when it is blank.
+  void pinPart(String partKey, String rfqId) {
+    if (rfqId.isEmpty) {
+      partRfqs.remove(partKey);
     } else {
-      partVendors[partKey] = vendorId;
+      partRfqs[partKey] = rfqId;
     }
+  }
+
+  /// Moves [partKeys] onto [rfqId] in one go — the SPLIT, which is how a job
+  /// answers a part-award without breaking the one-part-one-package rule.
+  ///
+  /// Purchasing really does award half a package to one vendor and half to
+  /// another. Letting a part carry two vendors to express that would put a
+  /// second supplier on every downstream link — the PO, the delivery, the
+  /// color — for the sake of a case that is better said out loud: these four
+  /// lines are their own package now, and it gets its own award.
+  ///
+  /// Returns how many parts actually moved.
+  int movePartsToRfq(Iterable<String> partKeys, String rfqId) {
+    var moved = 0;
+    for (final key in partKeys) {
+      if ((partRfqs[key] ?? '') == rfqId) continue;
+      pinPart(key, rfqId);
+      moved++;
+    }
+    return moved;
   }
 
   // -------------------------------------------------------------------------
@@ -3073,12 +3435,12 @@ class BuildingProject {
   /// anybody entered the PO is still one click away rather than something to
   /// retype and mistype.
   ///
-  /// THE VENDORS ARE ON THE LIST TOO. Marking a vendor ordered raises the PO
-  /// row as well, so most of the time its number is already here twice over -
-  /// but not always: a row that was renumbered, or deleted, or a number typed
-  /// straight onto a vendor leaves the vendor holding the only copy. Whoever
-  /// is logging the delivery is reading that number off the vendor's card, and
-  /// a dropdown that does not offer it is a number retyped and eventually
+  /// THE PACKAGES ARE ON THE LIST TOO. Awarding one raises the PO row as well,
+  /// so most of the time its number is already here twice over - but not
+  /// always: a row that was renumbered, or deleted, or a number typed straight
+  /// onto an award leaves the package holding the only copy. Whoever is
+  /// logging the delivery is reading that number off the package card, and a
+  /// dropdown that does not offer it is a number retyped and eventually
   /// mistyped.
   List<String> get poNumbersInUse {
     final seen = <String>{};
@@ -3092,8 +3454,8 @@ class BuildingProject {
     for (final po in purchaseOrders) {
       take(po.number);
     }
-    for (final vendor in vendors) {
-      take(vendor.poNumber);
+    for (final rfq in rfqs) {
+      take(rfq.poNumber);
     }
     for (final order in partOrders.values) {
       take(order.poNumber);
@@ -3482,11 +3844,35 @@ class BuildingProject {
     }
   }
 
-  /// Drops a vendor and every pin that named it. Leaving the pins would make
-  /// the parts unreachable — tagged to a vendor with no row to click.
+  /// Drops a vendor, every bid that named it, and any award it had won.
+  ///
+  /// The PARTS AND THE PURCHASE ORDERS ARE LEFT ALONE. A deleted company does
+  /// not un-buy what was bought on it — the PO row still records the order and
+  /// still names the vendor in its own text — but a package cannot go on
+  /// claiming to have been awarded to a row that no longer exists, because
+  /// nothing on the screen could then be clicked to explain it.
   void removeVendor(String id) {
+    if (id.isEmpty) return;
     vendors.removeWhere((v) => v.id == id);
-    partVendors.removeWhere((_, v) => v == id);
+    for (var i = 0; i < rfqs.length; i++) {
+      final r = rfqs[i];
+      if (r.bidFor(id) == null && r.awardedVendorId != id) continue;
+      final stripped = r.withoutBid(id);
+      rfqs[i] = r.awardedVendorId == id
+          ? stripped.copyWith(awardedVendorId: '', clearAwardedOn: true)
+          : stripped;
+    }
+  }
+
+  /// Drops a package and every pin that named it. Leaving the pins would make
+  /// the parts unreachable — tagged to a package with no row to click.
+  ///
+  /// The purchase order an awarded package raised is left standing, for the
+  /// reason given on [removeVendor]: it is a record of something that happened.
+  void removeRfq(String id) {
+    if (id.isEmpty) return;
+    rfqs.removeWhere((r) => r.id == id);
+    partRfqs.removeWhere((_, r) => r == id);
   }
 
   // -------------------------------------------------------------------------
@@ -3588,10 +3974,11 @@ class BuildingProject {
     if (manualRooms.isNotEmpty)
       'manualRooms': [for (final r in manualRooms) r.toJson()],
     'vendors': [for (final v in vendors) v.toJson()],
+    'rfqs': [for (final r in rfqs) r.toJson()],
     if (responsibility.isNotEmpty)
       'responsibility': [for (final r in responsibility) r.toJson()],
     if (partyColors.isNotEmpty) 'partyColors': partyColors,
-    if (partVendors.isNotEmpty) 'partVendors': partVendors,
+    if (partRfqs.isNotEmpty) 'partRfqs': partRfqs,
     if (deliveryDeadline != null)
       'deliveryDeadline': formatIsoDate(deliveryDeadline!),
     if (partLeadTimes.isNotEmpty) 'partLeadTimes': partLeadTimes,
@@ -3624,6 +4011,7 @@ class BuildingProject {
     'roomCounter': _roomCounter,
     if (_manualRoomCounter > 0) 'manualRoomCounter': _manualRoomCounter,
     'vendorCounter': _vendorCounter,
+    'rfqCounter': _rfqCounter,
     if (_todoCounter > 0) 'todoCounter': _todoCounter,
     if (_trackCounter > 0) 'trackCounter': _trackCounter,
     if (_spareCounter > 0) 'spareCounter': _spareCounter,
@@ -3646,10 +4034,100 @@ class BuildingProject {
         if (r is Map && r['name']?.toString().trim().isNotEmpty == true)
           ManualRoom.fromJson(Map<String, dynamic>.from(r)),
     ];
-    final vendors = [
+    final rawVendors = [
       for (final v in (json['vendors'] as List? ?? []))
-        if (v is Map) ProjectVendor.fromJson(Map<String, dynamic>.from(v)),
+        if (v is Map) Map<String, dynamic>.from(v),
     ];
+    final vendors = [for (final v in rawVendors) ProjectVendor.fromJson(v)];
+    var rfqCounter = (json['rfqCounter'] as num?)?.toInt() ?? 0;
+    final rfqs = [
+      for (final r in (json['rfqs'] as List? ?? []))
+        if (r is Map) ProjectRfq.fromJson(Map<String, dynamic>.from(r)),
+    ];
+
+    // --- the file written before packages existed ---------------------------
+    //  A vendor USED TO BE the package: it carried the rules that claimed the
+    //  parts, the terms the request went out under, and the one quote that
+    //  came back. Splitting the two leaves those files needing somewhere for
+    //  all of that to land, and it lands in the only shape that keeps every
+    //  fact: one package per vendor that owned any, holding that vendor's
+    //  rules and exactly one bid — the quote it had.
+    //
+    //  Which reads correctly rather than merely losslessly. A job that bought
+    //  from four vendors on rules WAS running four single-source packages; it
+    //  just had no way to say so, or to invite a second price onto any of
+    //  them. Nothing is invented and nothing is dropped, and the first thing
+    //  anybody can now do to one of those packages is ask somebody else.
+    final migratedRfqByVendor = <String, String>{};
+    if (json['rfqs'] == null) {
+      final oldPins = json['partVendors'];
+      final pinnedVendorIds = <String>{
+        if (oldPins is Map)
+          for (final v in oldPins.values) v.toString(),
+      };
+      for (final v in rawVendors) {
+        final id = v['id']?.toString() ?? '';
+        if (id.isEmpty) continue;
+        List<String> list(String key) => [
+          for (final m in (v[key] as List? ?? []))
+            if (m.toString().trim().isNotEmpty) m.toString().trim(),
+        ];
+        final makers = list('manufacturers');
+        final cats = list('categories');
+        final sentOn = parseIsoDate(v['rfqSentOn']);
+        final quotedOn = parseIsoDate(v['quotedOn']);
+        final orderedOn = parseIsoDate(v['orderedOn']);
+        final po = v['poNumber']?.toString().trim() ?? '';
+        final touched =
+            sentOn != null || quotedOn != null || orderedOn != null ||
+            po.isNotEmpty;
+        // A vendor that claimed nothing, was never asked anything and won
+        // nothing was only ever a contact. It stays one.
+        if (makers.isEmpty &&
+            cats.isEmpty &&
+            !touched &&
+            !pinnedVendorIds.contains(id)) {
+          continue;
+        }
+        final rawColor = v['color'];
+        final bid = RfqBid(
+          vendorId: id,
+          sentOn: sentOn,
+          quotedOn: quotedOn,
+          amount: (v['quoteAmount'] as num?)?.toDouble() ?? 0,
+          reference: v['quoteRef']?.toString() ?? '',
+          filePath: v['quoteFilePath']?.toString() ?? '',
+        );
+        final rfqId = 'rfq${++rfqCounter}';
+        migratedRfqByVendor[id] = rfqId;
+        rfqs.add(
+          ProjectRfq(
+            id: rfqId,
+            title: v['name']?.toString() ?? 'Package',
+            // The terms MOVE rather than copy: a vendor's notes were always
+            // what the request said, and leaving them on the company too
+            // would put the same paragraph in two places that now mean
+            // different things.
+            scope: v['notes']?.toString() ?? '',
+            manufacturers: makers,
+            categories: cats,
+            color: rawColor is num
+                ? rawColor.toInt()
+                : int.tryParse(rawColor?.toString() ?? ''),
+            bids: [if (sentOn != null || quotedOn != null || touched) bid],
+            awardedVendorId: orderedOn != null || po.isNotEmpty ? id : '',
+            awardedOn: orderedOn,
+            poNumber: po,
+          ),
+        );
+      }
+      // Terms that became a package's scope are off the company, per above.
+      for (var i = 0; i < vendors.length; i++) {
+        if (migratedRfqByVendor.containsKey(vendors[i].id)) {
+          vendors[i] = vendors[i].copyWith(notes: '');
+        }
+      }
+    }
     // A line with no scope on it names nothing and can be neither agreed nor
     // bid, so it is dropped the way an empty note is.
     final responsibility = [
@@ -3672,9 +4150,19 @@ class BuildingProject {
     }
 
     final pins = <String, String>{};
-    final rawPins = json['partVendors'];
+    final rawPins = json['partRfqs'] ?? json['partVendors'];
     if (rawPins is Map) {
-      rawPins.forEach((k, v) => pins[k.toString()] = v.toString());
+      rawPins.forEach((k, v) {
+        final target = v.toString();
+        // On a migrated file the pins still name VENDORS. Repoint each one at
+        // the package that vendor's rules became; a pin whose vendor never
+        // became a package is dropped, exactly as a pin to a deleted vendor
+        // always was.
+        final id = json['rfqs'] == null
+            ? (migratedRfqByVendor[target] ?? '')
+            : target;
+        if (id.isNotEmpty) pins[k.toString()] = id;
+      });
     }
 
     // Lead times and the dates that go with them. A figure that is not a
@@ -3819,9 +4307,10 @@ class BuildingProject {
       ),
       manualRooms: manualRooms,
       vendors: vendors,
+      rfqs: rfqs,
       responsibility: responsibility,
       partyColors: partyColors,
-      partVendors: pins,
+      partRfqs: pins,
       deliveryDeadline: parseIsoDate(json['deliveryDeadline']),
       partLeadTimes: leadTimes,
       partNeedBy: needBy,
@@ -3894,6 +4383,14 @@ class BuildingProject {
         (json['vendorCounter'] as num?)?.toInt() ?? 0,
         highest(vendors.map((v) => v.id), 'vendor'),
       ].reduce((a, b) => a > b ? a : b),
+      // Counted off the packages as well as the stored figure, because a
+      // MIGRATED file has packages the counter it was saved with never knew
+      // about - and a next id that collided with one of them would put two
+      // rows under one identity.
+      rfqCounter: [
+        rfqCounter,
+        highest(rfqs.map((r) => r.id), 'rfq'),
+      ].reduce((a, b) => a > b ? a : b),
     );
     // A PO number typed onto a part under an older build becomes a row on the
     // job's PO list the first time the file is opened - see [_adoptPoNumbers].
@@ -3945,9 +4442,10 @@ class BuildingProject {
     onlineFileStamp: onlineFileStamp,
     manualRooms: List<ManualRoom>.from(manualRooms),
     vendors: List<ProjectVendor>.from(vendors),
+    rfqs: List<ProjectRfq>.from(rfqs),
     responsibility: List<ResponsibilityItem>.from(responsibility),
     partyColors: Map<String, int>.from(partyColors),
-    partVendors: Map<String, String>.from(partVendors),
+    partRfqs: Map<String, String>.from(partRfqs),
     deliveryDeadline: deliveryDeadline,
     partLeadTimes: Map<String, int>.from(partLeadTimes),
     partNeedBy: Map<String, DateTime>.from(partNeedBy),
@@ -3967,6 +4465,7 @@ class BuildingProject {
     roomCounter: _roomCounter,
     manualRoomCounter: _manualRoomCounter,
     vendorCounter: _vendorCounter,
+    rfqCounter: _rfqCounter,
     todoCounter: _todoCounter,
     trackCounter: _trackCounter,
     spareCounter: _spareCounter,
@@ -4045,41 +4544,50 @@ void appendEdit(
 /// project?" check agree on one spelling.
 const String kProjectFileSuffix = '_project.json';
 
-/// The vendor split nearly every job starts from: the control line bought
-/// direct from its manufacturer, and the room hardware — cameras, screens,
-/// USB — bought from whoever resells it.
+/// The split nearly every job starts from, as two PACKAGES: the control line
+/// bought direct from its manufacturer, and the room hardware — cameras,
+/// screens, USB — bought from whoever resells it.
 ///
 /// Offered on a new project rather than imposed, and expressed the way the
 /// split is actually described: ONE manufacturer rule for the direct line,
 /// CATEGORY rules for the rest. Naming categories rather than brands is what
-/// makes the second vendor survive contact with a real room — a job that
-/// specifies a camera brand nobody listed still tags it, instead of landing
-/// in the untagged pile for somebody to notice.
+/// makes the second package survive contact with a real room — a job that
+/// specifies a camera brand nobody listed still tags it, instead of landing in
+/// the untagged pile for somebody to notice.
 ///
-/// The manufacturer rule is on the FIRST vendor deliberately: an Extron
-/// display is bought direct, not from the reseller who does screens, and
-/// [BuildingProject.vendorForPart] resolves that by tier rather than by luck.
-List<ProjectVendor> starterVendors(BuildingProject project) => [
-  ProjectVendor(
-    id: project.nextVendorId(),
-    name: 'Extron Direct',
-    notes: 'Everything Extron makes, bought on the direct account.',
-    manufacturers: const ['Extron'],
-  ),
-  ProjectVendor(
-    id: project.nextVendorId(),
-    name: 'AV Reseller',
-    notes: 'Cameras, screens, USB and the mounting hardware that goes with '
-        'them.',
-    categories: const [
-      'Camera',
-      'Display',
-      'Projector',
-      'Screen',
-      'Mount',
-      'USB',
-      'Speaker',
-      'Microphone',
-    ],
-  ),
-];
+/// The manufacturer rule is on the FIRST package deliberately: an Extron
+/// display belongs with the direct line, not with the screens, and
+/// [BuildingProject.rfqForPart] resolves that by tier rather than by luck.
+///
+/// NO VENDORS AND NO BIDS. That is the change from when a vendor was the
+/// package: the app can guess how a building splits up, because that follows
+/// from the equipment, and it cannot guess who anybody buys from. Seeding a
+/// company nobody deals with would put a name on a purchase order by default,
+/// which is the one thing on this screen that has to be somebody's decision.
+void seedStarterPackages(BuildingProject project) {
+  project.rfqs.addAll([
+    ProjectRfq(
+      id: project.nextRfqId(),
+      title: 'Extron direct',
+      scope: 'Everything Extron makes, bought on the direct account.',
+      manufacturers: const ['Extron'],
+    ),
+    ProjectRfq(
+      id: project.nextRfqId(),
+      title: 'Room hardware',
+      scope:
+          'Cameras, screens, USB and the mounting hardware that goes with '
+          'them.',
+      categories: const [
+        'Camera',
+        'Display',
+        'Projector',
+        'Screen',
+        'Mount',
+        'USB',
+        'Speaker',
+        'Microphone',
+      ],
+    ),
+  ]);
+}

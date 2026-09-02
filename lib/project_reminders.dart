@@ -167,7 +167,12 @@ ReminderExport buildOrderReminders({
       ..write('\n\n');
     for (final p in parts) {
       body.write('• ${p.line.qty.toStringAsFixed(0)} × ${p.line.description}');
-      if (p.line.vendor != null) body.write('  -  ${p.line.vendor!.name}');
+      // The SUPPLIER once a package has been awarded, and the package until
+      // then. A reminder to order something is read by somebody about to pick
+      // up the phone, and "which lot is this in" is the answer that helps
+      // before anybody has won it.
+      final who = p.line.vendor?.name ?? p.line.rfq?.name;
+      if (who != null) body.write('  -  $who');
       body.write('  (lead ${formatLeadTime(p.leadDays)}');
       if (p.needBy != null) {
         body.write(', on site by ${formatScheduleDate(p.needBy!)}');

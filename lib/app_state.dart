@@ -11952,7 +11952,7 @@ class AppStateProvider extends ChangeNotifier {
 
   // --- the file ------------------------------------------------------------
 
-  /// Starts a new project, pre-loaded with the usual vendor split so the first
+  /// Starts a new project, pre-loaded with the usual buying split so the first
   /// room added is already tagged instead of landing in the untagged pile.
   void newProject({String name = '', String building = ''}) {
     project = BuildingProject(
@@ -11960,7 +11960,7 @@ class AppStateProvider extends ChangeNotifier {
       building: building,
       currency: currencySymbol,
     );
-    project.vendors.addAll(starterVendors(project));
+    seedStarterPackages(project);
     currentProjectPath = '';
     projectDirty = false;
     _projectStarted = true;
@@ -12187,19 +12187,19 @@ class AppStateProvider extends ChangeNotifier {
       }
     }
 
-    // The first room onto an UNTOUCHED project brings the usual vendor split
+    // The first room onto an UNTOUCHED project brings the usual buying split
     // with it, so the master list is tagged the moment there is something on
     // it. Pressing New does this too; this covers the other way in — landing
-    // on the tab and adding the open room — where a project with no vendors
+    // on the tab and adding the open room — where a project with no packages
     // would otherwise put every part in the untagged pile and make the
     // feature look broken.
     //
-    // Only when there are no rooms AND no vendors: somebody who deleted the
+    // Only when there are no rooms AND no packages: somebody who deleted the
     // starters on purpose is not offered them again on the next room.
-    if (project.rooms.isEmpty && project.vendors.isEmpty) {
-      project.vendors.addAll(starterVendors(project));
+    if (project.rooms.isEmpty && project.rfqs.isEmpty) {
+      seedStarterPackages(project);
       AppLogger.logInfo(
-        'Seeded the default vendor split on the first room of a new project.',
+        'Seeded the default buying split on the first room of a new project.',
       );
     }
 
@@ -13370,19 +13370,12 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Adds a vendor AT THE TOP of the list.
   ///
-  /// Where it lands is not cosmetic: a part is tagged by the first vendor
-  /// whose rules claim it. Top is still the right place for a new one, for two
-  /// reasons that point the same way.
-  ///
-  /// A vendor with no rules yet claims nothing, so arriving first changes no
-  /// tag on the job the moment it appears. And the reason somebody presses Add
-  /// is almost always that this vendor is the one that should win: 'buy Extron
-  /// direct' is added to beat the reseller already on the list, and appended
-  /// at the bottom it would lose to it until somebody noticed and walked it
-  /// back up past six others.
-  ///
-  /// It is also simply where it can be seen. Appended to a list of nine, a new
-  /// vendor arrives below the fold on the card somebody is looking at.
+  /// Cosmetic now, which it was not when a vendor owned parts: the order used
+  /// to decide which vendor claimed a manufacturer, and that rule moved to the
+  /// package (see [reorderProjectRfq]). Top is still where a new row can be
+  /// seen — appended to a list of nine, it arrives below the fold on the card
+  /// somebody is looking at, and the reason they pressed Add is to type into
+  /// it.
   ProjectVendor addProjectVendor({String name = 'New vendor'}) {
     final vendor = ProjectVendor(id: project.nextVendorId(), name: name);
     project.vendors.insert(0, vendor);
@@ -13397,14 +13390,28 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  /// Drops a vendor, and with it every bid and award that named the company.
+  /// The purchase orders it won are left standing — see
+  /// [BuildingProject.removeVendor].
   void removeProjectVendor(String vendorId) {
+    final vendor = project.vendorById(vendorId);
+    if (vendor == null) return;
+    final won = project.rfqsAwardedTo(vendorId).length;
     project.removeVendor(vendorId);
+    _logProjectEdit(
+      itemKey: projectVendorItemKey(vendorId),
+      itemName: _vendorLogName(vendor),
+      field: 'Vendor',
+      summary: won == 0
+          ? 'removed'
+          : 'removed - $won award${won == 1 ? '' : 's'} taken back, the '
+                'purchase orders unchanged',
+    );
     _projectChanged();
   }
 
-  /// Moves a vendor up or down. Order is not cosmetic: it decides which vendor
-  /// wins when two claim the same manufacturer or category — see
-  /// [BuildingProject.vendorForPart].
+  /// Moves a vendor up or down the directory. Presentation only — what a
+  /// vendor claims is a property of the packages it was invited to.
   void moveProjectVendor(String vendorId, int delta) {
     final from = project.vendors.indexWhere((v) => v.id == vendorId);
     if (from < 0) return;
@@ -13429,15 +13436,6 @@ class AppStateProvider extends ChangeNotifier {
     if (to == oldIndex) return;
     final vendor = project.vendors.removeAt(oldIndex);
     project.vendors.insert(to, vendor);
-    _logProjectEdit(
-      itemKey: 'vendor:${vendor.id}',
-      itemName: vendor.name,
-      field: 'Priority',
-      // The position is what the rule turns on, so the log says the position:
-      // "moved" alone would not tell anybody why a part started going to a
-      // different supplier.
-      summary: 'moved to ${to + 1} of ${project.vendors.length}',
-    );
     _projectChanged();
   }
 
@@ -13584,17 +13582,17 @@ class AppStateProvider extends ChangeNotifier {
         '${items.last}';
   }
 
-  /// Pins one master-list part to a vendor, or clears the pin (blank id) so it
-  /// falls back to the rules.
-  void pinProjectPart(String partKey, String vendorId, {String partName = ''}) {
-    project.pinPart(partKey, vendorId);
+  /// Pins one master-list part to a buying package, or clears the pin (blank
+  /// id) so it falls back to the rules.
+  void pinProjectPart(String partKey, String rfqId, {String partName = ''}) {
+    project.pinPart(partKey, rfqId);
     _logProjectEdit(
       itemKey: projectPartItemKey(partKey),
       itemName: partName,
-      field: 'Vendor',
-      summary: vendorId.isEmpty
-          ? 'pin cleared - back to the vendor rules'
-          : 'pinned to ${project.vendorById(vendorId)?.name ?? vendorId}',
+      field: 'Package',
+      summary: rfqId.isEmpty
+          ? 'pin cleared - back to the package rules'
+          : 'pinned to ${project.rfqById(rfqId)?.name ?? rfqId}',
     );
     _projectChanged();
   }
@@ -14094,10 +14092,15 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   // ==========================================================================
-  //  THE QUOTE, AND WHAT BECAME OF IT
+  //  THE QUOTES, AND WHICH ONE WON
   // ==========================================================================
-  //  Three facts a vendor row can record - the request went, a price came back,
-  //  it was bought - and one of them has consequences. See [VendorRfqStage].
+  //  A package goes out to as many vendors as the job wants to hear from. Each
+  //  of them records the same three facts - the request went, a price came
+  //  back, on this paper - and then ONE of those bids is awarded, which is the
+  //  step with consequences. See [RfqStage] and [awardRfq].
+
+  /// What a package is called in the log.
+  static String _rfqLogName(ProjectRfq rfq) => rfq.name;
 
   /// What a vendor is called in the log.
   static String _vendorLogName(ProjectVendor vendor) =>
@@ -14105,72 +14108,285 @@ class AppStateProvider extends ChangeNotifier {
 
   static String projectVendorItemKey(String id) => 'vendor:$id';
 
-  /// Records that the quote request went out. Null takes the date off again,
-  /// for the one that was marked by mistake.
-  void setVendorRfqSent(String vendorId, DateTime? sentOn) {
-    final vendor = project.vendorById(vendorId);
-    if (vendor == null) return;
-    project.replaceVendor(
-      vendor.copyWith(rfqSentOn: sentOn, clearRfqSentOn: sentOn == null),
-    );
+  static String projectRfqItemKey(String id) => 'rfq:$id';
+
+  /// Adds a package AT THE TOP of the list.
+  ///
+  /// Where it lands is not cosmetic: a part joins the first package whose
+  /// rules claim it. Top is still the right place for a new one, for two
+  /// reasons that point the same way.
+  ///
+  /// A package with no rules yet claims nothing, so arriving first changes no
+  /// tag on the job the moment it appears. And the reason somebody presses Add
+  /// is almost always that this package is the one that should win: 'compete
+  /// the Extron separately' is added to beat the catch-all already on the
+  /// list, and appended at the bottom it would lose to it until somebody
+  /// noticed and walked it back up past six others.
+  ProjectRfq addProjectRfq({String title = 'New package'}) {
+    final rfq = ProjectRfq(id: project.nextRfqId(), title: title);
+    project.rfqs.insert(0, rfq);
     _logProjectEdit(
-      itemKey: projectVendorItemKey(vendorId),
-      itemName: _vendorLogName(vendor),
-      field: 'RFQ',
-      summary: sentOn == null
-          ? 'no longer marked as sent'
-          : 'sent ${formatIsoDate(sentOn)}',
+      itemKey: projectRfqItemKey(rfq.id),
+      itemName: _rfqLogName(rfq),
+      field: 'Package',
+      summary: 'added',
+    );
+    _projectChanged();
+    return rfq;
+  }
+
+  void updateProjectRfq(ProjectRfq rfq) {
+    final index = project.rfqs.indexWhere((r) => r.id == rfq.id);
+    if (index < 0) return;
+    project.rfqs[index] = rfq;
+    _projectChanged();
+  }
+
+  void removeProjectRfq(String rfqId) {
+    final rfq = project.rfqById(rfqId);
+    if (rfq == null) return;
+    project.removeRfq(rfqId);
+    _logProjectEdit(
+      itemKey: projectRfqItemKey(rfqId),
+      itemName: _rfqLogName(rfq),
+      field: 'Package',
+      summary: rfq.poNumber.trim().isEmpty
+          ? 'removed'
+          : 'removed - ${rfq.poNumber.trim()} and the parts on it are '
+                'unchanged',
+    );
+    _projectChanged();
+  }
+
+  /// Moves a package up or down. Order is not cosmetic: it decides which
+  /// package wins when two claim the same manufacturer or category — see
+  /// [BuildingProject.rfqForPart].
+  void moveProjectRfq(String rfqId, int delta) {
+    final from = project.rfqs.indexWhere((r) => r.id == rfqId);
+    if (from < 0) return;
+    final to = from + delta;
+    if (to < 0 || to >= project.rfqs.length) return;
+    final rfq = project.rfqs.removeAt(from);
+    project.rfqs.insert(to, rfq);
+    _projectChanged();
+  }
+
+  /// Drops the package at [oldIndex] in at [newIndex] — the drag-and-drop
+  /// version of [moveProjectRfq].
+  ///
+  /// Takes INDEXES rather than an id and a delta because that is what a
+  /// reorderable list hands over. [newIndex] is the position in the list with
+  /// the dragged row already taken OUT of it, which is what
+  /// `SliverReorderableList.onReorderItem` passes — the older `onReorder`
+  /// passed the un-adjusted index and left every caller to subtract one.
+  void reorderProjectRfq(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= project.rfqs.length) return;
+    final to = newIndex.clamp(0, project.rfqs.length - 1);
+    if (to == oldIndex) return;
+    final rfq = project.rfqs.removeAt(oldIndex);
+    project.rfqs.insert(to, rfq);
+    _logProjectEdit(
+      itemKey: projectRfqItemKey(rfq.id),
+      itemName: _rfqLogName(rfq),
+      field: 'Priority',
+      // The position is what the rule turns on, so the log says the position:
+      // "moved" alone would not tell anybody why a part started going out on a
+      // different package.
+      summary: 'moved to ${to + 1} of ${project.rfqs.length}',
+    );
+    _projectChanged();
+  }
+
+  /// Splits [partKeys] out of whatever package they are in and onto [toRfqId].
+  ///
+  /// THE ANSWER TO A SPLIT AWARD. Purchasing genuinely does give half a
+  /// package to one vendor and half to another, and the way to say that here
+  /// is to make the half its own package rather than to let a part carry two
+  /// suppliers — which would put a second answer on every PO, delivery and
+  /// color downstream. Pull the four lines out, and award each package on its
+  /// own.
+  ///
+  /// Returns how many parts moved.
+  int movePartsToRfq(
+    Iterable<String> partKeys, {
+    required String toRfqId,
+    Map<String, String> partNames = const {},
+  }) {
+    final target = project.rfqById(toRfqId);
+    if (target == null && toRfqId.isNotEmpty) return 0;
+    final keys = partKeys.toList();
+    final moved = project.movePartsToRfq(keys, toRfqId);
+    if (moved == 0) return 0;
+    final where = target == null
+        ? 'untagged - back to the package rules'
+        : 'moved to ${_rfqLogName(target)}';
+    for (final key in keys) {
+      _logProjectEdit(
+        itemKey: projectPartItemKey(key),
+        itemName: partNames[key] ?? '',
+        field: 'Package',
+        summary: where,
+      );
+    }
+    _projectChanged();
+    return moved;
+  }
+
+  /// Invites a vendor to bid a package. Does nothing when they are already on
+  /// it — an invitation is not a thing you can hold two of.
+  void inviteVendorToRfq(String rfqId, String vendorId) {
+    final rfq = project.rfqById(rfqId);
+    final vendor = project.vendorById(vendorId);
+    if (rfq == null || vendor == null || rfq.bidFor(vendorId) != null) return;
+    project.replaceRfq(rfq.withBid(RfqBid(vendorId: vendorId)));
+    _logProjectEdit(
+      itemKey: projectRfqItemKey(rfqId),
+      itemName: _rfqLogName(rfq),
+      field: 'Bidders',
+      summary: '${_vendorLogName(vendor)} invited to quote',
     );
     _projectChanged(repricing: false);
   }
 
-  /// Records the quote coming back: when, for how much, under what reference,
-  /// and — when somebody had the paper in front of them — where the quote
-  /// itself is. A null [quotedOn] takes the whole quote off the row, document
-  /// and all: the pointer belonged to a quote that no longer exists.
+  /// Takes a vendor back off a package.
+  ///
+  /// REFUSED once they have won it. Un-inviting the awarded bidder would leave
+  /// a package claiming to have been awarded to somebody who was never asked,
+  /// and the way back from an award is [clearRfqAward], which says out loud
+  /// what it leaves standing.
+  void removeVendorFromRfq(String rfqId, String vendorId) {
+    final rfq = project.rfqById(rfqId);
+    final vendor = project.vendorById(vendorId);
+    if (rfq == null || rfq.bidFor(vendorId) == null) return;
+    if (rfq.awardedVendorId == vendorId) return;
+    project.replaceRfq(rfq.withoutBid(vendorId));
+    _logProjectEdit(
+      itemKey: projectRfqItemKey(rfqId),
+      itemName: _rfqLogName(rfq),
+      field: 'Bidders',
+      summary: '${vendor == null ? vendorId : _vendorLogName(vendor)} taken '
+          'off the package',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Records that the request went out to one vendor. Null takes the date off
+  /// again, for the one that was marked by mistake.
+  void setBidSent(String rfqId, String vendorId, DateTime? sentOn) {
+    final rfq = project.rfqById(rfqId);
+    final bid = rfq?.bidFor(vendorId);
+    if (rfq == null || bid == null) return;
+    project.replaceRfq(
+      rfq.withBid(bid.copyWith(sentOn: sentOn, clearSentOn: sentOn == null)),
+    );
+    _logProjectEdit(
+      itemKey: projectRfqItemKey(rfqId),
+      itemName: _rfqLogName(rfq),
+      field: 'RFQ',
+      summary: sentOn == null
+          ? 'no longer marked as sent to ${_bidderName(vendorId)}'
+          : 'sent to ${_bidderName(vendorId)} ${formatIsoDate(sentOn)}',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Marks the whole package as gone out today (or on [sentOn]) to everybody
+  /// invited who has not already been sent it.
+  ///
+  /// The ordinary case is one action: the request is written once and emailed
+  /// to four vendors in one sitting, and making that four clicks invites the
+  /// fourth to be forgotten. Anybody invited LATER still gets their own date
+  /// through [setBidSent], which is why the date lives on the bid.
+  ///
+  /// Returns how many vendors it newly marked.
+  int markRfqSent(String rfqId, {DateTime? sentOn}) {
+    final rfq = project.rfqById(rfqId);
+    if (rfq == null || rfq.bids.isEmpty) return 0;
+    final when = sentOn ?? today();
+    final newly = [
+      for (final b in rfq.bids)
+        if (!b.isSent) b,
+    ].length;
+    if (newly == 0) return 0;
+    project.replaceRfq(
+      rfq.copyWith(
+        bids: [
+          for (final b in rfq.bids)
+            if (b.isSent) b else b.copyWith(sentOn: when),
+        ],
+      ),
+    );
+    _logProjectEdit(
+      itemKey: projectRfqItemKey(rfqId),
+      itemName: _rfqLogName(rfq),
+      field: 'RFQ',
+      summary: 'sent ${formatIsoDate(when)} to $newly '
+          'vendor${newly == 1 ? '' : 's'}',
+    );
+    _projectChanged(repricing: false);
+    return newly;
+  }
+
+  /// Records one vendor's quote coming back: when, for how much, under what
+  /// reference, what they promised, and — when somebody had the paper in front
+  /// of them — where the quote itself is. A null [quotedOn] takes the whole
+  /// quote off the bid, document and all: the pointer belonged to a quote that
+  /// no longer exists.
   ///
   /// [filePath] is ABSOLUTE, as it comes off a file picker; it is stored
   /// relative to the project where it can be, the way every other document on
-  /// a job is. Pass the vendor's existing [ProjectVendor.quoteFilePath]
-  /// unchanged and it survives — it is already stored, so it is left alone.
-  void setVendorQuote(
+  /// a job is. Pass the bid's existing [RfqBid.filePath] unchanged and it
+  /// survives — it is already stored, so it is left alone.
+  void setBidQuote(
+    String rfqId,
     String vendorId, {
     DateTime? quotedOn,
     double amount = 0,
     String reference = '',
     String filePath = '',
+    DateTime? expectedOn,
+    String notes = '',
   }) {
-    final vendor = project.vendorById(vendorId);
-    if (vendor == null) return;
-    final wasAttached = vendor.quoteFilePath.trim();
+    final rfq = project.rfqById(rfqId);
+    final bid = rfq?.bidFor(vendorId);
+    if (rfq == null || bid == null) return;
+    final wasAttached = bid.filePath.trim();
     final picked = filePath.trim();
     // Already-stored paths come back through here untouched; only a fresh
-    // absolute pick is relativized, because storePath on a relative path
-    // would resolve it against the wrong folder.
+    // absolute pick is relativized, because storePath on a relative path would
+    // resolve it against the wrong folder.
     final stored = picked.isEmpty || picked == wasAttached
         ? picked
         : BuildingProject.storePath(picked, currentProjectPath);
-    project.replaceVendor(
-      vendor.copyWith(
-        quotedOn: quotedOn,
-        clearQuotedOn: quotedOn == null,
-        quoteAmount: quotedOn == null ? 0 : amount,
-        quoteRef: quotedOn == null ? '' : reference.trim(),
-        quoteFilePath: quotedOn == null ? '' : stored,
+    project.replaceRfq(
+      rfq.withBid(
+        bid.copyWith(
+          quotedOn: quotedOn,
+          clearQuotedOn: quotedOn == null,
+          amount: quotedOn == null ? 0 : amount,
+          reference: quotedOn == null ? '' : reference.trim(),
+          filePath: quotedOn == null ? '' : stored,
+          expectedOn: quotedOn == null ? null : expectedOn,
+          clearExpectedOn: quotedOn == null || expectedOn == null,
+          notes: quotedOn == null ? '' : notes.trim(),
+          // A price and a no-bid are the same field's two answers: typing one
+          // in is how somebody takes back the other.
+          declined: quotedOn == null ? bid.declined : false,
+        ),
       ),
     );
     final paper = quotedOn == null || stored == wasAttached
         ? ''
         : stored.isEmpty
-              ? ', quote document unlinked'
-              : ', quote document attached';
+        ? ', quote document unlinked'
+        : ', quote document attached';
     _logProjectEdit(
-      itemKey: projectVendorItemKey(vendorId),
-      itemName: _vendorLogName(vendor),
-      field: 'RFQ',
+      itemKey: projectRfqItemKey(rfqId),
+      itemName: _rfqLogName(rfq),
+      field: 'Quote',
       summary: quotedOn == null
-          ? 'quote taken off the row'
-          : 'quote returned ${formatIsoDate(quotedOn)}'
+          ? '${_bidderName(vendorId)}\'s quote taken off the package'
+          : '${_bidderName(vendorId)} quoted ${formatIsoDate(quotedOn)}'
                 '${amount > 0 ? ' for ${trimNumber(amount)}' : ''}'
                 '${reference.trim().isEmpty ? '' : ' (${reference.trim()})'}'
                 '$paper',
@@ -14178,38 +14394,90 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
-  /// Marks a vendor's package ORDERED, on a purchase order, and puts the
+  /// Records that a vendor was asked and said no, or takes that back.
+  ///
+  /// A CLOSED LINE, not an empty one. Without this a no-bid is indistinguishable
+  /// from silence, the package never reads as fully quoted, and somebody chases
+  /// a vendor who already answered.
+  void setBidDeclined(String rfqId, String vendorId, bool declined) {
+    final rfq = project.rfqById(rfqId);
+    final bid = rfq?.bidFor(vendorId);
+    if (rfq == null || bid == null || bid.declined == declined) return;
+    project.replaceRfq(
+      rfq.withBid(
+        declined
+            // Declining clears the quote: a price and a no-bid cannot both be
+            // this vendor's answer.
+            ? bid.copyWith(
+                declined: true,
+                clearQuotedOn: true,
+                amount: 0,
+                reference: '',
+                clearExpectedOn: true,
+              )
+            : bid.copyWith(declined: false),
+      ),
+    );
+    _logProjectEdit(
+      itemKey: projectRfqItemKey(rfqId),
+      itemName: _rfqLogName(rfq),
+      field: 'Quote',
+      summary: declined
+          ? '${_bidderName(vendorId)} declined to quote'
+          : '${_bidderName(vendorId)} no longer marked as declined',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// The name to write in the log for a bidder, without blowing up on a vendor
+  /// that has since been deleted.
+  String _bidderName(String vendorId) {
+    final v = project.vendorById(vendorId);
+    return v == null ? vendorId : _vendorLogName(v);
+  }
+
+  /// AWARDS a package to one of its bidders, on a purchase order, and puts the
   /// equipment on it.
   ///
-  /// THIS IS THE ONE THAT DOES SOMETHING. The other two record a date; this
-  /// makes three separate things true at once, and doing them one at a time
-  /// through three screens is how a job ends up with a PO nobody can trace to
-  /// any equipment:
+  /// THIS IS THE ONE THAT DOES SOMETHING. Everything above records a date;
+  /// this makes four separate things true at once, and doing them one at a
+  /// time through three screens is how a job ends up with a PO nobody can
+  /// trace to any equipment:
   ///
-  ///   * the VENDOR says it was ordered, on that number, on that day;
+  ///   * the PACKAGE says it was awarded, to that vendor, on that number, on
+  ///     that day - and the losing quotes stay on it, which is what makes the
+  ///     choice explainable six months later;
   ///   * the JOB has a purchase order row with that number on it, pointed at
-  ///     this vendor, so the deliveries pane and the timeline can find it;
-  ///   * every PART this vendor is quoting says it was bought on that number,
-  ///     which is the link back from the PO to the equipment.
+  ///     the winner, so the deliveries pane and the timeline can find it;
+  ///   * every PART in the package says it was bought on that number, which is
+  ///     the link back from the PO to the equipment;
+  ///   * every part's VENDOR resolves, for the first time, to the company
+  ///     actually supplying it.
   ///
-  /// [partKeys] is what goes on the PO - normally the vendor's whole package.
-  /// Passed in rather than worked out here because the packages are built by
-  /// the estimate, which this layer deliberately does not depend on.
+  /// [partKeys] is what goes on the PO - normally the package's whole line
+  /// list. Passed in rather than worked out here because the packages are
+  /// built by the estimate, which this layer deliberately does not depend on.
+  ///
+  /// Awarding a vendor who never bid is ALLOWED - a package can be handed to
+  /// somebody on a standing contract without a competition - but they must at
+  /// least be a vendor on the job, because the PO has to point at a real row.
   ///
   /// Returns how many parts were newly put on the order.
-  int markVendorOrdered(
-    String vendorId, {
+  int awardRfq(
+    String rfqId, {
+    required String vendorId,
     required String poNumber,
-    DateTime? orderedOn,
+    DateTime? awardedOn,
     DateTime? expectedOn,
     double amount = 0,
     String filePath = '',
     Iterable<String> partKeys = const [],
     Map<String, String> partNames = const {},
   }) {
+    final rfq = project.rfqById(rfqId);
     final vendor = project.vendorById(vendorId);
     final number = poNumber.trim();
-    if (vendor == null || number.isEmpty) return 0;
+    if (rfq == null || vendor == null || number.isEmpty) return 0;
 
     // The PO row first, so the parts have something to point at. addPo hands
     // back the row the job already has when the number is one it knows, which
@@ -14217,14 +14485,14 @@ class AppStateProvider extends ChangeNotifier {
     final po = project.addPo(
       number: number,
       vendorId: vendorId,
-      issuedOn: orderedOn,
+      issuedOn: awardedOn,
       expectedOn: expectedOn,
       amount: amount,
     );
     project.updatePo(
       po.copyWith(
         vendorId: vendorId,
-        issuedOn: orderedOn ?? po.issuedOn,
+        issuedOn: awardedOn ?? po.issuedOn,
         expectedOn: expectedOn ?? po.expectedOn,
         amount: amount > 0 ? amount : po.amount,
         filePath: filePath.trim().isEmpty ? po.filePath : filePath.trim(),
@@ -14234,32 +14502,47 @@ class AppStateProvider extends ChangeNotifier {
     final moved = project.setPartsOnPo(
       number,
       onIt: partKeys,
-      orderedOn: orderedOn,
+      orderedOn: awardedOn,
       expectedOn: expectedOn,
     );
 
-    project.replaceVendor(
-      vendor.copyWith(
-        orderedOn: orderedOn,
-        clearOrderedOn: orderedOn == null,
+    project.replaceRfq(
+      rfq.copyWith(
+        awardedVendorId: vendorId,
+        awardedOn: awardedOn,
+        clearAwardedOn: awardedOn == null,
         poNumber: number,
       ),
     );
 
     final onIt = moved.added.length;
+    final lost = [
+      for (final b in rfq.bids)
+        if (b.vendorId != vendorId && b.hasPrice) b,
+    ].length;
+    final low = rfq.lowestBid;
+    // "We did not take the lowest" is the decision that has to survive being
+    // asked about, so the log records it at the moment it is taken rather
+    // than leaving it to be reconstructed from the bids.
+    final notLowest =
+        low != null && low.vendorId != vendorId && low.amount > 0;
     _logProjectEdit(
-      itemKey: projectVendorItemKey(vendorId),
-      itemName: _vendorLogName(vendor),
-      field: 'RFQ',
+      itemKey: projectRfqItemKey(rfqId),
+      itemName: _rfqLogName(rfq),
+      field: 'Award',
       summary: [
-        'ordered on $number',
-        if (orderedOn != null) formatIsoDate(orderedOn),
+        'awarded to ${_vendorLogName(vendor)} on $number',
+        if (awardedOn != null) formatIsoDate(awardedOn),
+        if (lost > 0) 'over $lost other quote${lost == 1 ? '' : 's'}',
+        if (notLowest)
+          '- not the lowest (${_bidderName(low.vendorId)} at '
+              '${trimNumber(low.amount)})',
         if (onIt > 0) '- $onIt part${onIt == 1 ? '' : 's'} on it',
       ].join(' '),
     );
     // One line per part, the same as every other edit that touches a part's
     // order record - the history is read part-first ("this says bought, who
-    // said so"), and a single line on the vendor cannot answer that.
+    // said so"), and a single line on the package cannot answer that.
     for (final key in moved.added) {
       _logProjectEdit(
         itemKey: projectPartItemKey(key),
@@ -14268,31 +14551,38 @@ class AppStateProvider extends ChangeNotifier {
         summary: 'bought on $number',
       );
     }
-    _projectChanged(repricing: false);
+    _projectChanged();
     return moved.added.length;
   }
 
-  /// Un-marks an order: the vendor stops saying it was ordered. The PURCHASE
-  /// ORDER AND THE PARTS ARE LEFT ALONE - they record what happened, and a
-  /// mis-set flag on the vendor row is not a reason to unpick a job's
-  /// paperwork. Whoever needs that does it from the PO, where it can be seen.
-  void clearVendorOrdered(String vendorId) {
-    final vendor = project.vendorById(vendorId);
-    if (vendor == null) return;
-    final was = vendor.poNumber.trim();
-    project.replaceVendor(
-      vendor.copyWith(clearOrderedOn: true, poNumber: ''),
+  /// Un-awards a package: it goes back to being a competition.
+  ///
+  /// THE PURCHASE ORDER, THE PARTS AND EVERY BID ARE LEFT ALONE - they record
+  /// what happened, and a mis-set award is not a reason to unpick a job's
+  /// paperwork or throw away three quotes. Whoever needs that does it from the
+  /// PO, where it can be seen.
+  void clearRfqAward(String rfqId) {
+    final rfq = project.rfqById(rfqId);
+    if (rfq == null) return;
+    final was = rfq.poNumber.trim();
+    final winner = rfq.awardedVendorId;
+    project.replaceRfq(
+      rfq.copyWith(
+        awardedVendorId: '',
+        clearAwardedOn: true,
+        poNumber: '',
+      ),
     );
     _logProjectEdit(
-      itemKey: projectVendorItemKey(vendorId),
-      itemName: _vendorLogName(vendor),
-      field: 'RFQ',
+      itemKey: projectRfqItemKey(rfqId),
+      itemName: _rfqLogName(rfq),
+      field: 'Award',
       summary: was.isEmpty
-          ? 'no longer marked as ordered'
-          : 'no longer marked as ordered on $was - the PO and the parts on it '
-                'are unchanged',
+          ? 'award taken back'
+          : 'award to ${_bidderName(winner)} taken back - $was and the parts '
+                'on it are unchanged',
     );
-    _projectChanged(repricing: false);
+    _projectChanged();
   }
 
   /// Attaches the order itself to a PO, or takes it off with a blank path.

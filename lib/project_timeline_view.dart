@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
@@ -10,7 +9,7 @@ import 'app_state.dart';
 import 'building_project.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart' show formatMoney, trimNumber;
-import 'name_colors.dart' show projectVendorColor;
+import 'name_colors.dart' show projectRfqColor;
 import 'project_deliveries_view.dart' show PoFileButtons, showPoPartsDialog;
 import 'equipment_lifecycle.dart'
     show RoomLifecycle, buildProjectLifecycle, formatLifecycleMoney;
@@ -582,20 +581,21 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
 // ---------------------------------------------------------------------------
 //  A quote request is a DATE somebody is waiting on, which makes it the same
 //  kind of thing as everything else on this pane and it was on none of it. The
-//  Vendors pane knows perfectly well that the Extron RFQ went out on the 4th
-//  and has never been answered; the timeline - the screen somebody opens to
-//  ask "what is late" - did not, so the answer to "are we waiting on anybody"
-//  was a second pane and a memory of which vendors there are.
+//  Packages pane knows perfectly well that the Extron request went out on the
+//  4th to three vendors and two have never answered; the timeline - the screen
+//  somebody opens to ask "what is late" - did not, so the answer to "are we
+//  waiting on anybody" was a second pane and a memory of who was asked.
 //
-//  So every vendor whose RFQ has gone ANYWHERE is here: sent and unanswered,
-//  quoted and undecided, or ordered. It is the VENDOR's story. The block under
-//  it is the PURCHASE ORDER's, which is a different question with a different
-//  answer - a PO raised outside any vendor is there and not here, and a vendor
-//  whose PO was renumbered is here and not there.
+//  So every package whose request has gone ANYWHERE is here: out and
+//  unanswered, part-quoted, fully quoted and undecided, or awarded. It is the
+//  PACKAGE's story, and the count of who is still owed is the point of it. The
+//  block under it is the PURCHASE ORDER's, which is a different question with
+//  a different answer - a PO raised outside any package is there and not here,
+//  and a package whose PO was renumbered is here and not there.
 
-/// One vendor's RFQ, with what the job thinks the package is worth.
+/// One package's quote round, with what the job thinks it is worth.
 typedef _QuoteRequest = ({
-  ProjectVendor vendor,
+  ProjectRfq rfq,
   Color tint,
   VendorPackage? package,
 
@@ -604,45 +604,65 @@ typedef _QuoteRequest = ({
   DateTime? on,
 });
 
-/// Every vendor with an RFQ out, the one that needs looking at first at the
-/// top.
+/// The latest thing that happened to a package, which is the date its row is
+/// read by.
+DateTime? _rfqLatestDate(ProjectRfq rfq) {
+  if (rfq.awardedOn != null) return rfq.awardedOn;
+  DateTime? latest;
+  void take(DateTime? d) {
+    if (d == null) return;
+    if (latest == null || d.isAfter(latest!)) latest = d;
+  }
+
+  for (final b in rfq.bids) {
+    take(b.quotedOn);
+  }
+  if (latest != null) return latest;
+  for (final b in rfq.bids) {
+    take(b.sentOn);
+  }
+  return latest;
+}
+
+/// Every package with a request out, the one that needs looking at first at
+/// the top.
 ///
-/// SENT BEFORE QUOTED BEFORE ORDERED, and inside each, OLDEST FIRST. The order
-/// is the question being asked: an RFQ sent three weeks ago and never answered
-/// is the thing to chase, and a quote that came back a month ago and has not
-/// turned into an order is the thing going stale. Newest-first - which is the
-/// right sort for the order log below, where the question is "what just
-/// happened" - would bury both.
+/// OUT BEFORE PART-QUOTED BEFORE QUOTED BEFORE AWARDED, and inside each,
+/// OLDEST FIRST. The order is the question being asked: a request sent three
+/// weeks ago that nobody has answered is the thing to chase, and a set of
+/// quotes that all came back a month ago and has not been awarded is the thing
+/// going stale. Newest-first - which is the right sort for the order log
+/// below, where the question is "what just happened" - would bury both.
 List<_QuoteRequest> _quoteRequests(
   BuildingProject project,
   ProjectEstimate estimate,
 ) {
   final rows = <_QuoteRequest>[];
-  for (final vendor in project.vendors) {
-    if (vendor.rfqStage == VendorRfqStage.none) continue;
+  for (final rfq in project.rfqs) {
+    if (rfq.stage == RfqStage.draft) continue;
     rows.add((
-      vendor: vendor,
-      tint: projectVendorColor(vendor),
-      package: estimate.packageFor(vendor.id),
-      on: vendor.orderedOn ?? vendor.quotedOn ?? vendor.rfqSentOn,
+      rfq: rfq,
+      tint: projectRfqColor(rfq),
+      package: estimate.packageFor(rfq.id),
+      on: _rfqLatestDate(rfq),
     ));
   }
   rows.sort((a, b) {
-    final byStage = a.vendor.rfqStage.index.compareTo(b.vendor.rfqStage.index);
+    final byStage = a.rfq.stage.index.compareTo(b.rfq.stage.index);
     if (byStage != 0) return byStage;
     final ad = a.on;
     final bd = b.on;
     // A stage with no date on it has not really happened yet as far as the
     // paperwork goes, so it sorts last rather than reading as the oldest.
     if (ad == null && bd == null) {
-      return a.vendor.name.toLowerCase().compareTo(b.vendor.name.toLowerCase());
+      return a.rfq.name.toLowerCase().compareTo(b.rfq.name.toLowerCase());
     }
     if (ad == null) return 1;
     if (bd == null) return -1;
     final byDate = ad.compareTo(bd);
     return byDate != 0
         ? byDate
-        : a.vendor.name.toLowerCase().compareTo(b.vendor.name.toLowerCase());
+        : a.rfq.name.toLowerCase().compareTo(b.rfq.name.toLowerCase());
   });
   return rows;
 }
@@ -662,10 +682,10 @@ class _QuoteRequests extends StatelessWidget {
     // priced. A heading over an empty box would be one more thing to read.
     if (rows.isEmpty) return const SizedBox.shrink();
 
-    final waiting = [
-      for (final r in rows)
-        if (r.vendor.rfqStage == VendorRfqStage.sent) r,
-    ].length;
+    // Vendors still owed an answer, across every package - which is the
+    // number somebody is chasing, and is no longer the same as the number of
+    // packages.
+    final waiting = rows.fold(0, (n, r) => n + r.rfq.outstanding.length);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -712,31 +732,63 @@ class _QuoteRequestCard extends StatelessWidget {
     final theme = Theme.of(context);
     final provider = context.read<AppStateProvider>();
     final muted = theme.colorScheme.onSurfaceVariant;
-    final vendor = row.vendor;
-    final stage = vendor.rfqStage;
+    final rfq = row.rfq;
+    final stage = rfq.stage;
     final package = row.package;
-    final quote = vendor.quoteFilePath.trim();
+    final winner = provider.project.vendorById(rfq.awardedVendorId);
+    final owed = rfq.outstanding.length;
+    // Cheapest first — the order a comparison is read in.
+    final priced = [
+      for (final b in rfq.bids)
+        if (b.hasPrice) b,
+    ]..sort((a, b) => a.amount.compareTo(b.amount));
 
-    // THE WAIT, on the two stages where waiting is the question being asked.
-    // An order that went in four months ago is not "119 days out" - it is
+    // THE WAIT, on the stages where waiting is the question being asked. An
+    // order that went in four months ago is not "119 days out" - it is
     // delivered or it is late, and the blocks below answer that.
+    //
+    // The date it is measured from differs by stage on purpose: while anybody
+    // is still owed an answer the clock runs from the OLDEST unanswered
+    // request, because that is the one going stale; once they are all in it
+    // runs from the LAST one, because that is when the decision became
+    // possible.
+    DateTime? oldest(Iterable<DateTime?> dates) {
+      DateTime? out;
+      for (final d in dates) {
+        if (d == null) continue;
+        if (out == null || d.isBefore(out)) out = d;
+      }
+      return out;
+    }
+
+    DateTime? newest(Iterable<DateTime?> dates) {
+      DateTime? out;
+      for (final d in dates) {
+        if (d == null) continue;
+        if (out == null || d.isAfter(out)) out = d;
+      }
+      return out;
+    }
+
     final since = switch (stage) {
-      VendorRfqStage.sent => vendor.rfqSentOn,
-      VendorRfqStage.quoted => vendor.quotedOn,
+      RfqStage.out ||
+      RfqStage.partial => oldest(rfq.outstanding.map((b) => b.sentOn)),
+      RfqStage.quoted => newest(rfq.bids.map((b) => b.quotedOn)),
       _ => null,
     };
     final waited = since == null
         ? ''
-        : stage == VendorRfqStage.sent
-        ? 'out ${_waited(since, today())} with no answer'
-        : 'in ${_waited(since, today())}, not ordered';
+        : stage == RfqStage.quoted
+        ? 'all in ${_waited(since, today())}, not awarded'
+        : 'out ${_waited(since, today())} with '
+              '$owed answer${owed == 1 ? '' : 's'} still owed';
 
     return Card(
-      key: ValueKey('timeline_rfq_${vendor.id}'),
+      key: ValueKey('timeline_rfq_${rfq.id}'),
       margin: const EdgeInsets.only(bottom: 8),
-      // The card wears the vendor's color, the same one its parts carry on
+      // The card wears the package's color, the same one its parts carry on
       // the master list and its order carries below - so the three lists are
-      // visibly the same four vendors rather than three to cross-reference by
+      // visibly the same four packages rather than three to cross-reference by
       // name.
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -757,24 +809,33 @@ class _QuoteRequestCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        vendor.name.trim().isEmpty
-                            ? '(unnamed vendor)'
-                            : vendor.name.trim(),
+                        // The WINNER once there is one, with the package it
+                        // came off - which is what somebody reading a timeline
+                        // after an award is actually looking for.
+                        winner == null
+                            ? rfq.name
+                            : '${winner.name} - ${rfq.name}',
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       // The whole story as one sentence, said exactly the way
-                      // the vendor card says it - see [vendorRfqSentence].
+                      // the package card says it - see [rfqSentence].
                       Text(
-                        vendorRfqSentence(vendor),
+                        rfqSentence(
+                          rfq,
+                          awardedVendorName: winner?.name ?? '',
+                        ),
                         style: theme.textTheme.bodySmall?.copyWith(color: muted),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                VendorRfqChip(vendor: vendor),
+                VendorRfqChip(
+                  rfq: rfq,
+                  awardedVendorName: winner?.name ?? '',
+                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -787,43 +848,149 @@ class _QuoteRequestCard extends StatelessWidget {
                       '${formatMoney(package.total, estimate.currency)} at the '
                       'job\'s own prices'
                 else
-                  'nothing on the job is tagged to this vendor',
+                  'nothing on the job is in this package',
               ].join('  ·  '),
               style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
-            // THE PAPER, one press from the row it belongs to. Attached on the
-            // Vendors pane at the moment the quote came back; read here, which
-            // is where somebody is asking what it said.
-            if (quote.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  key: ValueKey('timeline_rfq_quote_${vendor.id}'),
-                  icon: Icon(
-                    quoteDrawableHere(quote)
-                        ? Icons.picture_as_pdf
-                        : Icons.description_outlined,
-                    size: 18,
-                  ),
-                  label: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 260),
-                    child: Text(
-                      path.basename(quote),
-                      overflow: TextOverflow.ellipsis,
+            // THE PRICES, SIDE BY SIDE. The reason this block exists at all
+            // is that there is now more than one answer per package, and a
+            // timeline that showed a single figure would be picking one of
+            // them without saying which. Cheapest first; the winner marked.
+            //
+            // The paper is one press from each price, which is where somebody
+            // reading "why is that one four hundred more" wants it.
+            if (priced.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  for (final b in priced)
+                    _BidPill(
+                      key: ValueKey('timeline_bid_${rfq.id}_${b.vendorId}'),
+                      name:
+                          provider.project.vendorById(b.vendorId)?.name ??
+                          '(removed)',
+                      amount: formatMoney(b.amount, estimate.currency),
+                      won: rfq.awardedVendorId == b.vendorId,
+                      lowest: rfq.lowestBid?.vendorId == b.vendorId,
+                      quotePath: b.filePath.trim(),
+                      onOpenQuote: b.filePath.trim().isEmpty
+                          ? null
+                          : () => openVendorQuoteFile(
+                              context,
+                              provider,
+                              stored: b.filePath.trim(),
+                              vendorName:
+                                  provider.project
+                                      .vendorById(b.vendorId)
+                                      ?.name ??
+                                  'the vendor',
+                            ),
                     ),
-                  ),
-                  onPressed: () => openVendorQuoteFile(
-                    context,
-                    provider,
-                    stored: quote,
-                    vendorName: vendor.name,
-                  ),
-                ),
+                ],
               ),
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One vendor's price on a package, as a pill: who, how much, and the quote
+/// itself where there is one.
+///
+/// Small on purpose. Four of these in a row IS the comparison at timeline
+/// altitude - the question here is "are these close together or miles apart",
+/// and the table that answers "why" lives on the Packages pane.
+class _BidPill extends StatelessWidget {
+  final String name;
+  final String amount;
+  final bool won;
+  final bool lowest;
+  final String quotePath;
+  final VoidCallback? onOpenQuote;
+
+  const _BidPill({
+    super.key,
+    required this.name,
+    required this.amount,
+    required this.won,
+    required this.lowest,
+    required this.quotePath,
+    this.onOpenQuote,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final ink = won
+        ? foregroundOn(theme.colorScheme, theme.cardColor)
+        : muted;
+    final label = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (won)
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Icon(Icons.check_circle_outline, size: 14, color: ink),
+          ),
+        Text(
+          '$name  $amount',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: ink,
+            fontWeight: won ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        // The lowest price is marked even when it did not win - especially
+        // then. "We did not take the cheapest" is the decision that gets
+        // asked about, and hiding which one it was does not make it go away.
+        if (lowest && !won)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Text(
+              'low',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: muted,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        if (quotePath.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Icon(
+              quoteDrawableHere(quotePath)
+                  ? Icons.picture_as_pdf
+                  : Icons.description_outlined,
+              size: 14,
+              color: muted,
+            ),
+          ),
+      ],
+    );
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: won
+              ? ink.withValues(alpha: 0.7)
+              : theme.dividerColor,
+          width: won ? 1.4 : 1,
+        ),
+      ),
+      child: label,
+    );
+    if (onOpenQuote == null) return chip;
+    return Tooltip(
+      message: "Open $name's quote",
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onOpenQuote,
+        child: chip,
       ),
     );
   }
@@ -878,7 +1045,13 @@ List<_PlacedOrder> _placedOrders(BuildingProject project) {
     rows.add((
       po: po,
       vendorName: vendor?.name.trim() ?? po.vendor.trim(),
-      tint: vendor == null ? null : projectVendorColor(vendor),
+      // The PACKAGE's color, so a purchase order matches the parts it bought
+      // on the master list. A PO typed in outside any package has none, and
+      // gets no border rather than a borrowed one.
+      tint: () {
+        final rfq = project.rfqByPoNumber(po.number);
+        return rfq == null ? null : projectRfqColor(rfq);
+      }(),
       parts: parts.length,
       received: [
         for (final key in parts)
@@ -2178,39 +2351,64 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
       ));
     }
 
-    // WHERE EACH VENDOR HAS GOT TO, ON THE SAME RAIL AS EVERYTHING ELSE.
+    // WHERE EACH PACKAGE HAS GOT TO, ON THE SAME RAIL AS EVERYTHING ELSE.
     //
-    // An RFQ is a date somebody is waiting on, and the block below reads it as
-    // a list - which has the failing every list on this pane has: no distance
-    // in it. "Extron quoted on the 11th and the conduit order goes in on the
-    // 14th" is three days or three months apart depending on the year, and the
-    // list says the same thing either way.
+    // A quote request is a date somebody is waiting on, and the block below
+    // reads it as a list - which has the failing every list on this pane has:
+    // no distance in it. "The Extron quotes came in on the 11th and the
+    // conduit order goes in on the 14th" is three days or three months apart
+    // depending on the year, and the list says the same thing either way.
     //
-    // ONE MARK PER VENDOR, on its LATEST date, because that is where the
-    // vendor actually is - the same reading the QUOTE REQUESTS block gives.
-    // Every date in a vendor's history on the rail would be three cards per
-    // vendor saying what one card says.
+    // ONE MARK PER PACKAGE, on its LATEST date, because that is where the
+    // package actually is - the same reading the QUOTE REQUESTS block gives.
+    // A mark per BID would be four cards on one week saying what one card
+    // says, and the rail is the one place on this pane with no room for it.
     //
-    // IN THE VENDOR'S OWN COLOR, the one its parts carry on the master list
+    // IN THE PACKAGE'S OWN COLOR, the one its parts carry on the master list
     // and its order carries below. The callout draws the color as a fill at
     // 12% behind text in onSurface, so it is a second way to read the rail and
-    // never the only one - the words say which vendor it is too.
-    for (final vendor in project.vendors) {
-      final tint = projectVendorColor(vendor);
-      final name = vendor.name.trim().isEmpty ? 'Vendor' : vendor.name.trim();
-      switch (vendor.rfqStage) {
-        case VendorRfqStage.none:
+    // never the only one - the words say which package it is too.
+    for (final rfq in project.rfqs) {
+      final tint = projectRfqColor(rfq);
+      final name = rfq.name;
+      switch (rfq.stage) {
+        case RfqStage.draft:
           break;
-        case VendorRfqStage.sent:
-          out.add((date: vendor.rfqSentOn!, label: '$name RFQ out', color: tint));
-        case VendorRfqStage.quoted:
-          out.add((date: vendor.quotedOn!, label: '$name quoted', color: tint));
-        case VendorRfqStage.ordered:
-          // An ordered vendor without a date is one somebody typed a PO number
-          // against - real, and not a point on a calendar.
-          final on = vendor.orderedOn;
+        case RfqStage.out:
+        case RfqStage.partial:
+          final sent = [
+            for (final b in rfq.bids)
+              if (b.sentOn != null) b.sentOn!,
+          ];
+          if (sent.isNotEmpty) {
+            final first = sent.reduce((a, b) => a.isBefore(b) ? a : b);
+            final n = rfq.bids.where((b) => b.isSent).length;
+            out.add((
+              date: first,
+              label: '$name out to $n',
+              color: tint,
+            ));
+          }
+        case RfqStage.quoted:
+          // The LAST quote in, because that is the day the decision became
+          // possible - which is what a rail reader is measuring from.
+          final back = [
+            for (final b in rfq.bids)
+              if (b.quotedOn != null) b.quotedOn!,
+          ];
+          if (back.isNotEmpty) {
+            out.add((
+              date: back.reduce((a, b) => a.isAfter(b) ? a : b),
+              label: '$name quoted',
+              color: tint,
+            ));
+          }
+        case RfqStage.awarded:
+          // An awarded package without a date is one somebody typed a PO
+          // number against - real, and not a point on a calendar.
+          final on = rfq.awardedOn;
           if (on != null) {
-            out.add((date: on, label: '$name ordered', color: tint));
+            out.add((date: on, label: '$name awarded', color: tint));
           }
       }
     }

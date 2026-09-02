@@ -6,8 +6,8 @@
 ///  WHY IT IS DART AND NOT A PDF. There is a guide in `documentation/` and it is
 ///  a good one, and it is also a file somebody has to find, open in another
 ///  window and search separately - which on a laptop with a drawing open is a
-///  thing that does not get done. Somebody stuck on the Vendors pane wants to
-///  know what the Vendors pane does, now, without leaving it. So the book lives
+///  thing that does not get done. Somebody stuck on the Packages pane wants to
+///  know what the Packages pane does, now, without leaving it. So the book lives
 ///  here: no asset to load, no file to ship alongside the exe, no version of it
 ///  on somebody's desktop that is eighteen months old.
 ///
@@ -40,7 +40,7 @@ class HelpTopic {
   final String section;
 
   /// How to get to it, said as a path through the app: 'Project tab →
-  /// Vendors'. Never a coordinate on a screen, which changes; always the names
+  /// Packages'. Never a coordinate on a screen, which changes; always the names
   /// of the things that are pressed.
   final String where;
 
@@ -196,7 +196,7 @@ const List<HelpTopic> kHelpTopics = [
         'From one room you get a control schematic, an AV signal flow, rack '
         'elevations, a floor plan, a cable schedule and a priced estimate. '
         'From a folder of rooms you get a building: a master parts list, '
-        'vendor packages, purchase orders, a delivery log and a refresh plan. '
+        'buying packages, purchase orders, a delivery log and a refresh plan. '
         'From a folder of buildings you get an estate.\n\n'
         'Nothing on any of those is typed twice. A model changed on the '
         'drawing changes the quote, the rack, the cable schedule and the '
@@ -464,7 +464,8 @@ const List<HelpTopic> kHelpTopics = [
     keywords: ['project', 'building', 'job', 'rollup'],
     body:
         'A building, quoted as one job: a list of rooms, everything they need '
-        'merged into one parts list, and the vendors, orders, deliveries, '
+        'merged into one parts list, and the packages, quotes, orders, '
+        'deliveries, '
         'dates and refresh plan that go with it.\n\n'
         'The panes across the top are readings of the same job. Whichever one '
         'is open, the figure in the header is what the building costs.',
@@ -496,37 +497,42 @@ const List<HelpTopic> kHelpTopics = [
       'filter',
     ],
     body:
-        'Every part on the job once, with quantities merged across rooms, '
-        'tagged to the vendor that will quote it.\n\n'
-        'The chips across the top narrow the list: to one vendor, to the parts '
-        'nothing has claimed, to the ones with no price, to the devices '
+        'Every part on the job once, with quantities merged across rooms, in '
+        'the buying PACKAGE it will be quoted on.\n\n'
+        'The Vendor column stays BLANK until that package is awarded. While it '
+        'is out, three companies may be quoting the same lines and naming one '
+        'of them would be a guess; the moment a bid wins, every part in the '
+        'package says who is supplying it.\n\n'
+        'The chips across the top narrow the list: to one package, to the '
+        'parts nothing has claimed, to the ones with no price, to the devices '
         'nothing can drive, to spares. The counts on those chips are the job\'s '
         'own to-do list - a building is not ready to go out for quotes while '
         'anything is untagged or unpriced.\n\n'
-        'Rows can be selected in bulk to set a lead time or a vendor across '
-        'many at once.',
+        'Rows can be selected in bulk to set a lead time, or moved onto '
+        'another package, many at once.',
   ),
   HelpTopic(
-    title: 'Vendors and the rules that tag parts',
+    title: 'Packages and the rules that fill them',
     section: 'The job',
-    where: 'Project tab → Vendors',
+    where: 'Project tab → Packages',
     keywords: [
-      'vendor',
-      'supplier',
-      'reseller',
-      'distributor',
+      'package',
+      'lot',
+      'split',
       'rules',
       'manufacturer',
       'category',
       'tag',
+      'group',
     ],
     body:
-        'One vendor per company you send quote requests to, each with the '
-        'MANUFACTURERS and CATEGORIES it sells.\n\n'
-        'A part is tagged by the FIRST vendor whose rules claim it. '
-        'Manufacturer rules are checked before category rules, so an Extron '
-        'rule beats "AV reseller for speakers" on an Extron speaker. Order '
-        'matters: drag a vendor up its list to give it priority.\n\n'
+        'A PACKAGE is a set of parts the job buys as one lot: what goes out as '
+        'one quote request and comes back as one purchase order. Each one '
+        'carries the MANUFACTURERS and CATEGORIES it claims.\n\n'
+        'A part joins the FIRST package whose rules claim it. Manufacturer '
+        'rules are checked before category rules, so an Extron rule beats "the '
+        'reseller lot does speakers" on an Extron speaker. Order matters: drag '
+        'a package up its list to give it priority.\n\n'
         'Both rule boxes offer a TICK-LIST built from what the job actually '
         'holds, with a count beside each - "Display (18)" against "Screen '
         '(2)". Rules are matched exactly, so typing "Extron Electronics" '
@@ -534,58 +540,155 @@ const List<HelpTopic> kHelpTopics = [
         'nothing and says nothing about it; ticking cannot go wrong that way. '
         'The typed box is still there for a maker or category the job has no '
         'parts in yet.\n\n'
-        'The count chip on a vendor card - "19 lines, \$18,400" - opens the '
+        'Any part can also be pinned to a package by hand from the Equipment '
+        'list, which beats every rule.\n\n'
+        'The count chip on a package card - "19 lines, \$18,400" - opens the '
         'Equipment list already narrowed to exactly those parts.',
   ),
   HelpTopic(
-    title: 'Quote requests - where a vendor has got to',
+    title: 'Vendors - the companies you ask',
     section: 'The job',
-    where: 'Project tab → Vendors, and the Timeline',
+    where: 'Project tab → Packages, below the packages',
+    keywords: [
+      'vendor',
+      'supplier',
+      'reseller',
+      'distributor',
+      'company',
+      'contact',
+      'directory',
+    ],
+    body:
+        'A vendor is a company: a name, who the request goes to, and anything '
+        'worth knowing about dealing with them.\n\n'
+        'That is ALL it is. A vendor claims no parts and holds no rules - what '
+        'it is being asked to price is a property of the PACKAGE that invited '
+        'it. The same company can be bidding three packages at once and have '
+        'won none of them, which is the ordinary state of a job halfway '
+        'through pricing.\n\n'
+        'The line at the end of each row says where the company stands: '
+        '"bidding 2, won 1". A vendor that lost every bid is still worth '
+        'keeping a phone number for.\n\n'
+        'Deleting a company takes its bids off every package and hands back '
+        'any award it held. The purchase orders it won are LEFT ALONE - they '
+        'record something that happened.',
+  ),
+  HelpTopic(
+    title: 'Sending one package to several vendors',
+    section: 'The job',
+    where: 'Project tab → Packages → Invite a vendor',
     keywords: [
       'rfq',
       'quote request',
-      'quote',
-      'sent',
-      'quoted',
-      'ordered',
-      'waiting',
-      'chase',
+      'invite',
+      'bid',
+      'bidder',
+      'send',
+      'multiple vendors',
+      'competitive',
+      'tender',
     ],
     body:
-        'Four states, read off three dates. Not sent, sent, quoted, ordered - '
-        'and every vendor card says which, on the row, so a list of six '
-        'vendors answers "which of these are we still waiting on" without any '
-        'of them being opened.\n\n'
-        'Recording a quote takes when it came back, for how much, and the '
-        'vendor\'s own quote number - the three things needed to compare six '
-        'quotes against each other and against the job\'s own figure. The gap '
-        'between what the vendor wants and what the job estimated is shown on '
-        'the card, which is the whole reason a quote gets read.\n\n'
-        'The quote PDF is attached in the same dialog, at the moment somebody '
-        'has it in front of them. Nothing is copied - the project stores where '
-        'the file IS, so moving it moves what this opens.\n\n'
-        'Recording a quote changes no price on the job. The estimate stays '
-        'what the parts say.',
+        'Open a package and INVITE as many vendors as you want prices from. '
+        'Each gets an identical copy of the request - the same parts, the same '
+        'terms, the same due date - because three vendors pricing three '
+        'slightly different requests come back with three numbers nobody can '
+        'compare.\n\n'
+        'Sent is ONE action for the whole package, because that is how it '
+        'happens: the file is written once and emailed to four companies in '
+        'one sitting. A vendor invited a week later gets a send date of their '
+        'own, so a quote that arrived after the decision is explainable.\n\n'
+        'OUR OWN ESTIMATE is left OFF the sheet once more than one vendor is '
+        'bidding. Handing every bidder the figure the job holds anchors all of '
+        'them to it and collapses the spread that makes running a competition '
+        'worth anything. A single-source package still shows it, because there '
+        'the argument is whether the line is right. The switch on the card '
+        'overrides either way.\n\n'
+        'Exporting the quote requests writes one file per bidder, named for '
+        'the job, the package and the company, so a folder of them can be read '
+        'without opening any.',
   ),
   HelpTopic(
-    title: 'Marking a vendor ordered',
+    title: 'Comparing the quotes that come back',
     section: 'The job',
-    where: 'Project tab → Vendors → Ordered...',
-    keywords: ['order', 'po', 'purchase order', 'raise', 'buy'],
+    where: 'Project tab → Packages, and the Timeline',
+    keywords: [
+      'quote',
+      'compare',
+      'comparison',
+      'quoted',
+      'price',
+      'declined',
+      'no bid',
+      'waiting',
+      'chase',
+      'lowest',
+    ],
     body:
-        'One action that makes three things true: it raises the purchase '
-        'order, points it at this vendor, and puts every part this vendor is '
-        'quoting onto it.\n\n'
-        'That last one is the link back from a PO number to the equipment it '
+        'Every vendor asked is a row on the package card, cheapest first, '
+        'against the figure the job holds for those lines. Four columns, '
+        'because four things decide an award and were never on one screen '
+        'together: WHO, HOW MUCH, HOW FAR OFF our number, and WHEN they can '
+        'deliver. A quote four hundred cheaper that lands three weeks after '
+        'the deadline is not a cheaper quote.\n\n'
+        'The vendors who have NOT answered are on the table too, at the '
+        'bottom. Leaving them off would make a comparison of two look complete '
+        'when four were asked - the state most worth seeing before awarding, '
+        'because a phone call can still fix it.\n\n'
+        'A vendor who wrote back to say no is marked DECLINED. That is an '
+        'answer, not silence: without it the package never reads as fully '
+        'quoted and somebody chases a company that already replied.\n\n'
+        'Recording a quote takes the date, the amount, the vendor\'s own quote '
+        'number, what they promised, and the exclusions - "excludes freight" '
+        'is what makes two prices four hundred apart actually the same price. '
+        'The quote PDF is attached in the same dialog, at the moment somebody '
+        'has it in front of them. Nothing is copied: the project stores where '
+        'the file IS, so moving it moves what this opens.\n\n'
+        'Recording a quote changes no price on the job. The estimate stays '
+        'what the parts say.\n\n'
+        'The stage chip on a closed card says where the round has got to - '
+        'Draft, Out, "2 of 4 in", Quoted, Awarded - so a list of six packages '
+        'answers "which of these are we still waiting on" without any of them '
+        'being opened. The Timeline says the same thing, with the prices side '
+        'by side and each quote one press away.',
+  ),
+  HelpTopic(
+    title: 'Awarding a package',
+    section: 'The job',
+    where: 'Project tab → Packages → Award...',
+    keywords: [
+      'award',
+      'order',
+      'po',
+      'purchase order',
+      'raise',
+      'buy',
+      'winner',
+      'chosen',
+    ],
+    body:
+        'Pick the winning bid, and one action makes four things true: it '
+        'raises the purchase order, points it at that vendor, puts every part '
+        'in the package onto it, and finally gives those parts a supplier at '
+        'all.\n\n'
+        'The third one is the link back from a PO number to the equipment it '
         'bought. Before it existed the first two got done and the third did '
         'not, which leaves a PO nobody can trace to any equipment and nineteen '
         'parts reading on the timeline as things nobody has bought.\n\n'
+        'THE LOSING QUOTES STAY ON THE PACKAGE. That is the point of running a '
+        'competition: six months later, "why did we not take the cheapest" has '
+        'to be answerable, and the card says which bid was lowest even when it '
+        'did not win. Awarding above the lowest is allowed and is written into '
+        'the history at the moment it is done.\n\n'
         'The parts default to the WHOLE package, because that is what a '
-        'purchase order to one vendor almost always is. Ordering only part of '
-        'it? Do this, then untick the rest on the PO\'s own list on the '
-        'Deliveries pane.\n\n'
+        'purchase order almost always is. Awarding only HALF of one to a '
+        'different vendor? Move those lines onto a package of their own first, '
+        'then award each - one part belongs to one package, one PO and one '
+        'delivery, and every color, filter and delivery link on the job rests '
+        'on that.\n\n'
         'The signed order is attached here too, at the one moment somebody has '
-        'the PDF.',
+        'the PDF. Un-awarding hands the package back to the competition and '
+        'LEAVES the PO, the parts and every bid exactly as they were.',
   ),
   HelpTopic(
     title: 'Purchase orders and the delivery log',
@@ -610,7 +713,7 @@ const List<HelpTopic> kHelpTopics = [
         'where it went: a dock, an address, or general storage. Gear held '
         'rather than installed is tracked as held, so "we have it, it is just '
         'not in the room yet" is a state the job can be in.\n\n'
-        'Every PO number the job mentions ANYWHERE - on a vendor, on a part, '
+        'Every PO number the job mentions ANYWHERE - on a package, on a part, '
         'on an earlier delivery - is one click away in the PO boxes rather '
         'than something to retype and mistype. Numbers the job knows but has '
         'no row for are offered when adding one.',
@@ -641,7 +744,7 @@ const List<HelpTopic> kHelpTopics = [
         'trip.\n\n'
         'Above the list, the whole job is drawn on one rail - today, the first '
         'order, each phase\'s on-site day, every order date as a dot, each '
-        'vendor\'s quote request, and the delivery deadline. Nothing on it is '
+        'package\'s quote round, and the delivery deadline. Nothing on it is '
         'a new fact; it is the same schedule seen from far enough away to have '
         'a shape.',
   ),
@@ -725,7 +828,7 @@ const List<HelpTopic> kHelpTopics = [
     body:
         'Every edit to the job, under the thing it was about. "This says '
         'bought - who said so, and when" is asked of the PART, and a single '
-        'line on the vendor cannot answer it, so orders, quotes, prices and '
+        'line on the package cannot answer it, so orders, quotes, prices and '
         'dates are all logged against both.',
   ),
 
@@ -921,19 +1024,26 @@ const List<HelpTopic> kHelpTopics = [
         'captured off the working pane. What is on a pane is an editor, with '
         'buttons on every row, and photographing an editor produces a picture '
         'with delete buttons in it.\n\n'
-        'A whole job can go out as one workbook: rooms, parts, vendors, quote '
-        'requests, orders, the schedule and the plan, each on its own sheet.',
+        'A whole job can go out as one workbook: rooms, parts, packages, the '
+        'quote comparison, orders, the schedule and the plan, each on its own '
+        'sheet.',
   ),
   HelpTopic(
     title: 'Quote request packs',
     section: 'Getting work out',
-    where: 'Project tab → Vendors → export',
+    where: 'Project tab → Packages → export',
     keywords: ['rfq', 'quote request', 'send to vendor', 'pack', 'xlsx'],
     body:
-        'One spreadsheet per vendor, holding exactly the parts that vendor\'s '
-        'rules claimed, ready to send. What happens after that - it went out '
-        'on the 4th, two came back, one turned into a PO - is tracked back on '
-        'the vendor cards.',
+        'One spreadsheet per BIDDER, holding exactly the parts that package\'s '
+        'rules claimed, ready to send. A package with three vendors on it '
+        'produces three files, identical but for the name at the top; one with '
+        'nobody invited yet produces a single unaddressed draft to read before '
+        'deciding who to send it to.\n\n'
+        'The files are named for the job, the package and the company, so a '
+        'folder of them can be read without opening any - and so the second '
+        'copy does not overwrite the first.\n\n'
+        'What happens after that - it went out on the 4th to three of them, '
+        'two came back, one won - is tracked back on the package cards.',
   ),
   HelpTopic(
     title: 'Online copy',
@@ -970,7 +1080,7 @@ const List<HelpTopic> kHelpTopics = [
         'successor. A retired entry is never deleted - deleting it would '
         'silently strip the ports and the price from every room that already '
         'used it.\n\n'
-        'The category is what the base cost card and the vendor rules both '
+        'The category is what the base cost card and the package rules both '
         'match on, so it is worth keeping tidy.',
   ),
   HelpTopic(

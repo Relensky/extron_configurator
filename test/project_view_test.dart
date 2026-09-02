@@ -469,22 +469,22 @@ void main() {
     });
   });
 
-  group('vendors', () {
-    testWidgets('a new vendor lands at the top of the list', (tester) async {
+  group('packages', () {
+    testWidgets('a new package lands at the top of the list', (tester) async {
       final p = withProject();
-      final wasFirst = p.project.vendors.first.id;
+      final wasFirst = p.project.rfqs.first.id;
       await pump(tester, p);
       await tester.tap(find.byIcon(Icons.local_shipping).first);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Add vendor'));
+      await tester.tap(find.text('Add package'));
       await tester.pumpAndSettle();
 
-      // Order decides which vendor claims a part, and the reason somebody
+      // Order decides which package claims a part, and the reason somebody
       // presses Add is nearly always that this one should win. It also has to
       // be somewhere they can see it.
-      expect(p.project.vendors.first.name, 'New vendor');
-      expect(p.project.vendors[1].id, wasFirst);
+      expect(p.project.rfqs.first.title, 'New package');
+      expect(p.project.rfqs[1].id, wasFirst);
     });
 
     testWidgets('the add box survives adding a rule and keeps the focus',
@@ -495,7 +495,7 @@ void main() {
       await tester.pumpAndSettle();
       // The cards are closed by default now; the rules are behind the toggle.
       await tester.tap(
-        find.byKey(ValueKey('vendor_toggle_${p.project.vendors.first.id}')),
+        find.byKey(ValueKey('rfq_toggle_${p.project.rfqs.first.id}')),
       );
       await tester.pumpAndSettle();
 
@@ -516,7 +516,7 @@ void main() {
     });
   });
 
-  testWidgets('the starter vendors tag the parts without any setup',
+  testWidgets('the starter packages tag the parts without any setup',
       (tester) async {
     final p = withProject();
     await pump(tester, p);
@@ -528,22 +528,19 @@ void main() {
     // feature was asked for, out of the box.
     expect(estimate.untaggedParts, 0);
     expect(
-      estimate.master
-          .firstWhere((l) => l.manufacturer == 'Extron')
-          .vendor
-          ?.name,
-      'Extron Direct',
+      estimate.master.firstWhere((l) => l.manufacturer == 'Extron').rfq?.name,
+      'Extron direct',
     );
     expect(
-      estimate.master
-          .firstWhere((l) => l.manufacturer == 'Vaddio')
-          .vendor
-          ?.name,
-      'AV Reseller',
+      estimate.master.firstWhere((l) => l.manufacturer == 'Vaddio').rfq?.name,
+      'Room hardware',
     );
+    // And NOBODY is supplying any of it yet: a package that has not been
+    // awarded has no vendor to name, and naming one would be a guess.
+    expect(estimate.master.every((l) => l.vendor == null), isTrue);
   });
 
-  testWidgets('a part can be pinned to a different vendor from the list',
+  testWidgets('a part can be pinned to a different package from the list',
       (tester) async {
     final p = withProject();
     await pump(tester, p);
@@ -557,18 +554,18 @@ void main() {
         .key;
 
     // Pin it away from the rule, the way the dropdown does.
-    p.pinProjectPart(extronKey, p.project.vendors.last.id);
+    p.pinProjectPart(extronKey, p.project.rfqs.last.id);
     await tester.pumpAndSettle();
 
     final line = p
         .priceProject()
         .master
         .firstWhere((l) => l.manufacturer == 'Extron');
-    expect(line.vendor?.name, 'AV Reseller');
-    expect(line.tagSource, VendorTagSource.pinned);
+    expect(line.rfq?.name, 'Room hardware');
+    expect(line.tagSource, RfqTagSource.pinned);
   });
 
-  testWidgets('the vendors pane lists the rules and their totals',
+  testWidgets('the packages pane lists the rules and their totals',
       (tester) async {
     final p = withProject();
     await pump(tester, p);
@@ -577,16 +574,16 @@ void main() {
     await tester.pumpAndSettle();
 
     // Closed, the card is the name, what it claims, and what it comes to.
-    expect(find.text('Extron Direct'), findsOneWidget);
+    expect(find.text('Extron direct'), findsOneWidget);
     expect(find.textContaining(r'$1,000.00'), findsWidgets);
 
     // The rules are one press away.
-    await tester.tap(find.byKey(const ValueKey('vendor_toggle_vendor1')));
+    await tester.tap(find.byKey(const ValueKey('rfq_toggle_rfq1')));
     await tester.pumpAndSettle();
     expect(find.text('Extron'), findsWidgets, reason: 'the manufacturer rule');
   });
 
-  testWidgets('the vendor list opens one card at a time', (tester) async {
+  testWidgets('the package list opens one card at a time', (tester) async {
     final p = withProject();
     await pump(tester, p);
     await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
@@ -595,23 +592,23 @@ void main() {
     // CLOSED BY DEFAULT. The screen is about the ORDER, and two open cards
     // never fitted on it together. Checked against a label only an OPEN card
     // has - the header's own identity fields are LiveTextFields too.
-    const inside = 'Notes on the quote request';
+    const inside = 'Terms on the quote request';
     expect(find.text(inside), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('vendor_toggle_vendor1')));
+    await tester.tap(find.byKey(const ValueKey('rfq_toggle_rfq1')));
     await tester.pumpAndSettle();
     expect(find.text(inside), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('vendor_toggle_vendor1')));
+    await tester.tap(find.byKey(const ValueKey('rfq_toggle_rfq1')));
     await tester.pumpAndSettle();
     expect(find.text(inside), findsNothing);
   });
 
-  testWidgets('a vendor is dragged into a different priority', (tester) async {
-    // The order is a RULE - the first vendor whose rules claim a part gets it
+  testWidgets('a package is dragged into a different priority', (tester) async {
+    // The order is a RULE - the first package whose rules claim a part gets it
     // - so dragging one is a change to how the job is tagged, not a tidy-up.
     final p = withProject();
-    final before = p.project.vendors.map((v) => v.name).toList();
+    final before = p.project.rfqs.map((r) => r.name).toList();
     expect(before, hasLength(greaterThan(1)));
 
     await pump(tester, p);
@@ -619,10 +616,10 @@ void main() {
     await tester.pumpAndSettle();
 
     final first = tester.getCenter(
-      find.byKey(ValueKey('vendor_drag_${p.project.vendors.first.id}')),
+      find.byKey(ValueKey('rfq_drag_${p.project.rfqs.first.id}')),
     );
     final second = tester.getCenter(
-      find.byKey(ValueKey('vendor_drag_${p.project.vendors[1].id}')),
+      find.byKey(ValueKey('rfq_drag_${p.project.rfqs[1].id}')),
     );
 
     // Moved in steps rather than in one jump: a reorderable list decides where
@@ -639,11 +636,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      p.project.vendors.map((v) => v.name).toList(),
+      p.project.rfqs.map((r) => r.name).toList(),
       isNot(before),
       reason: 'the drag must have moved it',
     );
-    expect(p.project.vendors[1].name, before.first);
+    expect(p.project.rfqs[1].name, before.first);
   });
 
   testWidgets('an empty project says what to do rather than showing zeros',
@@ -668,10 +665,10 @@ void main() {
     expect(p.priceProject().failedRooms, 1);
   });
 
-  testWidgets('the first room onto an untouched project brings the vendor '
+  testWidgets('the first room onto an untouched project brings the buying '
       'split with it', (tester) async {
     // Landing on the tab and adding the open room, without pressing New. A
-    // project with no vendors would put every part in the untagged pile.
+    // project with no packages would put every part in the untagged pile.
     final p = AppStateProvider(autoLoadSettings: false);
     p.avDeviceLibrary = AvDeviceLibrary.empty()
       ..upsert(const AvDeviceTemplate(
@@ -680,28 +677,28 @@ void main() {
         price: 500,
         ports: [],
       ));
-    expect(p.project.vendors, isEmpty);
+    expect(p.project.rfqs, isEmpty);
 
     p.addRoomToProject(writeRoom('a', 'Bessey 101', [
       device('d1', 'Lectern TX', 'DTP2 T 211'),
     ]));
     await pump(tester, p);
 
-    expect(p.project.vendors, isNotEmpty);
+    expect(p.project.rfqs, isNotEmpty);
     expect(p.priceProject().untaggedParts, 0);
   });
 
-  testWidgets('a project whose vendors were all deleted does not get them '
+  testWidgets('a project whose packages were all deleted does not get them '
       'back on the next room', (tester) async {
     final p = withProject();
-    p.project.vendors.clear();
+    p.project.rfqs.clear();
 
     p.addRoomToProject(writeRoom('c', 'Bessey 105', [
       device('d1', 'Lectern TX', 'DTP2 T 211'),
     ]));
     await pump(tester, p);
 
-    expect(p.project.vendors, isEmpty, reason: 'deleting them meant it');
+    expect(p.project.rfqs, isEmpty, reason: 'deleting them meant it');
   });
 
   testWidgets('the open room is swapped in memory rather than on disk',

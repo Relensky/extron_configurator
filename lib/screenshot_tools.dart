@@ -129,14 +129,26 @@ Future<void> captureAndAnnotate(BuildContext context, GlobalKey boundaryKey,
 /// Opens the annotation editor dialog over [pngBytes].
 Future<void> showAnnotationEditor(BuildContext context, Uint8List pngBytes,
     {String defaultFileName = 'screenshot.png'}) async {
+  // THE EDITOR IS CHROME, NOT PART OF THE PICTURE.
+  //
+  // showDialog copies the caller's inherited themes into the route it pushes.
+  // Opened from inside [printSkin] - which forces a LIGHT theme so a drawing
+  // prints as paper - that handed the editor a light theme while the app was
+  // in dark mode, and a light gray toolbar with it. The theme above the
+  // Navigator is the app's own, whatever the caller is standing in.
+  final ThemeData appTheme =
+      Theme.of(Navigator.of(context, rootNavigator: true).context);
   await showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (context) => Dialog(
-      insetPadding: const EdgeInsets.all(24.0),
-      child: AnnotationEditor(
-        pngBytes: pngBytes,
-        defaultFileName: defaultFileName,
+    builder: (context) => Theme(
+      data: appTheme,
+      child: Dialog(
+        insetPadding: const EdgeInsets.all(24.0),
+        child: AnnotationEditor(
+          pngBytes: pngBytes,
+          defaultFileName: defaultFileName,
+        ),
       ),
     ),
   );
@@ -777,9 +789,10 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
           decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Colors.black26
-                : Colors.grey[200],
+            // Off the scheme rather than a hardcoded gray, so the bar is
+            // dark in a dark theme - see [showAnnotationEditor], which is
+            // what used to hand this a light one.
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
           ),
           // THE BAR WRAPS RATHER THAN CUTS. The editor opens over whatever
@@ -943,9 +956,9 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
         // ----- Canvas -----
         Expanded(
           child: Container(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Colors.black45
-                : Colors.grey[350],
+            // Dimmer than the bar in either theme, so the picture reads as
+            // sitting ON something.
+            color: Theme.of(context).colorScheme.surfaceDim,
             padding: const EdgeInsets.all(12.0),
             child: image == null
                 ? const Center(child: CircularProgressIndicator())
@@ -1888,9 +1901,7 @@ class _CapturedPictureDialogState extends State<_CapturedPictureDialog> {
         height: media.size.height * 0.72,
         child: ZoomablePicturePreview(
           keyPrefix: 'captured_picture',
-          backdrop: Theme.of(context).brightness == Brightness.dark
-              ? Colors.black45
-              : Colors.grey[350],
+          backdrop: Theme.of(context).colorScheme.surfaceDim,
           child: Image.memory(widget.png, filterQuality: FilterQuality.medium),
         ),
       ),

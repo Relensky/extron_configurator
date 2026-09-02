@@ -174,6 +174,7 @@ void main() {
         unitPrice: 0,
         maxUnitPrice: 0,
         qtyByRoom: line.qtyByRoom,
+        rfq: null,
         vendor: null,
         tagSource: line.tagSource,
         unpriced: true,

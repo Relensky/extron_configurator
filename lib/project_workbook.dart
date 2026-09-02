@@ -190,22 +190,32 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
     ),
   ];
 
-  // Vendors get a summary block here as well as their own tabs: "who are we
-  // buying from and for how much" is a question asked long before anybody
-  // opens a per-vendor sheet, and it is the number that decides whether the
-  // split is worth making at all.
-  if (estimate.vendors.isNotEmpty) {
+  // Packages get a summary block here as well as their own tabs: "how is this
+  // job split up, for how much, and where has each lot got to" is a question
+  // asked long before anybody opens a per-package sheet, and it is the number
+  // that decides whether the split is worth making at all.
+  if (estimate.packages.isNotEmpty) {
     sections.add((
-      title: 'By vendor',
-      header: const ['Vendor', 'Lines', 'Units', 'Parts total', 'Contact'],
+      title: 'By package',
+      header: const [
+        'Package',
+        'Lines',
+        'Units',
+        'Our estimate',
+        'Stage',
+        'Bids',
+        'Awarded to',
+      ],
       rows: [
-        for (final p in estimate.vendors)
+        for (final p in estimate.packages)
           [
-            p.isUntagged ? 'UNTAGGED - no vendor rule matched' : p.name,
+            p.isUntagged ? 'UNTAGGED - no package rule matched' : p.packageName,
             p.lines.length,
             trimNumber(p.qty),
             cash(p.total),
-            p.vendor?.contact ?? '',
+            p.rfq?.stage.label ?? '',
+            p.rfq?.bids.length ?? '',
+            p.awardedVendor?.name ?? '',
           ],
         [
           'All parts',
@@ -358,8 +368,8 @@ List<String> _projectWarnings(ProjectEstimate estimate) {
         'whatever they cost.',
   if (estimate.untaggedParts > 0)
     '${estimate.untaggedParts} part'
-        '${estimate.untaggedParts == 1 ? ' is' : 's are'} not tagged to any '
-        'vendor, so '
+        '${estimate.untaggedParts == 1 ? ' is' : 's are'} in no buying '
+        'package, so '
         '${estimate.untaggedParts == 1 ? 'it is' : 'they are'} on no quote '
         'request. See the Untagged rows on Core Components.',
   // Not a pricing problem, and on the pricing sheet anyway. A building quoted
@@ -398,10 +408,10 @@ List<String> _projectWarnings(ProjectEstimate estimate) {
         '${missingPlans.length == 1 ? ' is' : 's are'} not where the project '
         'says ${missingPlans.length == 1 ? 'it is' : 'they are'} - see the '
         'Plans table above.',
-  for (final c in estimate.project.vendorConflicts)
+  for (final c in estimate.project.rfqConflicts)
     '${c.kind} rule "${c.rule}" is claimed by '
-        '${c.vendors.map((v) => v.name).join(' and ')}. '
-        '${c.vendors.first.name} wins; the others never see those parts.',
+        '${c.rfqs.map((r) => r.name).join(' and ')}. '
+        '${c.rfqs.first.name} wins; the others never see those parts.',
   ];
 }
 
@@ -469,6 +479,9 @@ List<ReportSection> masterPartsSections(
         'For install',
         'Unit price',
         'Extended',
+        if (includeVendorColumn) 'Package',
+        // Blank until the package is awarded — before that nobody is
+        // supplying this line yet.
         if (includeVendorColumn) 'Vendor',
         if (includeVendorColumn) 'Tagged',
         // Blank on everything that is driven, and on everything that was never
@@ -488,9 +501,9 @@ List<ReportSection> masterPartsSections(
             l.hasSpares ? l.drawnQty : '',
             unit(l),
             cash(l.total),
-            if (includeVendorColumn) l.vendor?.name ?? 'UNTAGGED',
-            if (includeVendorColumn)
-              kVendorTagSourceLabels[l.tagSource] ?? '',
+            if (includeVendorColumn) l.rfq?.name ?? 'UNTAGGED',
+            if (includeVendorColumn) l.vendor?.name ?? '',
+            if (includeVendorColumn) kRfqTagSourceLabels[l.tagSource] ?? '',
             if (includeVendorColumn) _controlNote(l, roomNames),
             rooms(l),
           ],
@@ -1438,20 +1451,195 @@ List<ReportSection> projectControlGapSections(ProjectEstimate estimate) {
   ];
 }
 
-/// One vendor's quote request: what they are being asked to price, and where
-/// it goes.
+/// EVERY QUOTE ON THE JOB, PACKAGE BY PACKAGE - the sheet the award is argued
+/// from.
 ///
-/// Deliberately NOT a copy of the master list filtered down. It carries no
-/// labor, no fees, no tax, no other vendor's parts and no project total —
-/// those are the stakeholder's numbers, and a quote request that leaks them is
-/// a negotiating position handed to a supplier.
-List<ReportSection> vendorPackageSections(
-  ProjectEstimate estimate,
-  VendorPackage package,
-) {
+/// One row per bid rather than one per package, because the question is not
+/// "what did this cost" but "what did each of them say, and how far apart were
+/// they". A package with a single bid still gets its row: a sole quote against
+/// our own estimate is the same comparison with one fewer column.
+///
+/// Empty when nobody has been asked anything, so a job that has not gone out
+/// yet does not carry a blank sheet around.
+List<ReportSection> quoteComparisonSections(ProjectEstimate estimate) {
   final currency = estimate.currency;
   XlsxMoney cash(double v) => money(v, currency);
   final project = estimate.project;
+  final sections = <ReportSection>[];
+
+  for (final package in estimate.packages) {
+    final rfq = package.rfq;
+    if (rfq == null || rfq.bids.isEmpty) continue;
+    sections.addAll(packageQuoteSections(estimate, package));
+  }
+  if (sections.isEmpty) return const [];
+
+  // The job-wide line, at the end, where a total belongs. Only the AWARDED
+  // packages: adding up quotes nobody has accepted would be a number that
+  // reads like a commitment and is not one.
+  final awarded = [
+    for (final p in estimate.packages)
+      if (p.rfq?.winningBid != null) p,
+  ];
+  if (awarded.isNotEmpty) {
+    sections.add((
+      title: 'Awarded so far',
+      header: const ['Package', 'Vendor', 'PO', 'Quoted', 'Our estimate'],
+      rows: [
+        for (final p in awarded)
+          [
+            p.packageName,
+            p.awardedVendor?.name ?? '',
+            p.rfq!.poNumber,
+            p.rfq!.winningBid!.amount > 0
+                ? cash(p.rfq!.winningBid!.amount)
+                : '',
+            cash(p.total),
+          ],
+        [
+          'Total',
+          '',
+          '',
+          cash(
+            awarded.fold(0.0, (t, p) => t + p.rfq!.winningBid!.amount),
+          ),
+          cash(awarded.fold(0.0, (t, p) => t + p.total)),
+        ],
+      ],
+    ));
+  }
+  // The project number is on the header of every other sheet; this one is read
+  // on its own often enough to say which job it belongs to.
+  if (project.projectNumber.trim().isNotEmpty) {
+    sections.insert(0, (
+      title: 'Project',
+      header: const ['', ''],
+      rows: [
+        ['Project number', project.projectNumber.trim()],
+      ],
+    ));
+  }
+  return sections;
+}
+
+/// One package's quotes, side by side — who was asked, what came back, and how
+/// each answer sits against the figure we hold.
+///
+/// The DELTA is the column that does the work. Four raw prices in a column are
+/// four numbers somebody has to subtract in their head, and the question being
+/// asked of them is always the same one: is this above or below what we
+/// budgeted, and by how much.
+///
+/// Returns nothing at all for a package nobody has been asked to quote.
+List<ReportSection> packageQuoteSections(
+  ProjectEstimate estimate,
+  VendorPackage package,
+) {
+  final rfq = package.rfq;
+  if (rfq == null || rfq.bids.isEmpty) return const [];
+  final currency = estimate.currency;
+  XlsxMoney cash(double v) => money(v, currency);
+  final project = estimate.project;
+
+  String vendorName(String id) =>
+      project.vendorById(id)?.name ?? '(vendor removed)';
+
+  // Cheapest first, then everybody who has answered, then the silent ones.
+  // The order a comparison is actually read in: the shortlist is at the top
+  // and the chasing list is at the bottom.
+  final ordered = [...rfq.bids]
+    ..sort((a, b) {
+      if (a.hasPrice != b.hasPrice) return a.hasPrice ? -1 : 1;
+      if (a.hasPrice && b.hasPrice) return a.amount.compareTo(b.amount);
+      if (a.hasAnswered != b.hasAnswered) return a.hasAnswered ? -1 : 1;
+      return vendorName(a.vendorId).toLowerCase().compareTo(
+        vendorName(b.vendorId).toLowerCase(),
+      );
+    });
+
+  final low = rfq.lowestBid;
+  return [
+    (
+      title: '${package.packageName} - quotes',
+      header: const [
+        'Vendor',
+        'Sent',
+        'Quoted',
+        'Reference',
+        'Amount',
+        'vs our estimate',
+        'Promised',
+        'Status',
+        'Notes',
+      ],
+      rows: [
+        for (final b in ordered)
+          [
+            vendorName(b.vendorId),
+            b.sentOn == null ? '' : formatIsoDate(b.sentOn!),
+            b.quotedOn == null ? '' : formatIsoDate(b.quotedOn!),
+            b.reference,
+            b.hasPrice ? cash(b.amount) : '',
+            // Signed on purpose: '+1,240' and '-1,240' are opposite answers
+            // and an unsigned column makes them look like the same one.
+            b.hasPrice && package.total > 0
+                ? '${b.amount >= package.total ? '+' : '-'}'
+                      '${trimNumber((b.amount - package.total).abs())}'
+                : '',
+            b.expectedOn == null ? '' : formatIsoDate(b.expectedOn!),
+            [
+              if (rfq.awardedVendorId == b.vendorId) 'AWARDED',
+              if (b.declined) 'declined',
+              if (!b.declined && b.quotedOn == null && b.isSent) 'awaited',
+              if (!b.isSent) 'not sent',
+              if (low != null && low.vendorId == b.vendorId && b.hasPrice)
+                'lowest',
+            ].join(', '),
+            b.notes,
+          ],
+        [
+          'Our estimate',
+          '',
+          '',
+          '',
+          cash(package.total),
+          '',
+          '',
+          '${package.lines.length} lines',
+          '',
+        ],
+      ],
+    ),
+  ];
+}
+
+/// One package's quote request, addressed to one vendor: what they are being
+/// asked to price, under what terms, and by when.
+///
+/// EVERY COPY IS THE SAME DOCUMENT except the addressee. That is the point of
+/// competing a package — three vendors pricing three slightly different
+/// requests produce three numbers that cannot be compared, and nobody can see
+/// from the answers that they differed. The parts, the terms and the due date
+/// come off the package; only the name at the top comes off the vendor.
+///
+/// Deliberately NOT a copy of the master list filtered down. It carries no
+/// labor, no fees, no tax, no other package's parts and no project total —
+/// those are the stakeholder's numbers, and a quote request that leaks them is
+/// a negotiating position handed to a supplier.
+///
+/// OUR OWN ESTIMATE is on the sheet only when the package says so — see
+/// [ProjectRfq.showEstimate]. Withheld by default from a competition, because
+/// handing every bidder the figure we hold anchors all of them to it.
+List<ReportSection> vendorPackageSections(
+  ProjectEstimate estimate,
+  VendorPackage package, {
+  ProjectVendor? vendor,
+}) {
+  final currency = estimate.currency;
+  XlsxMoney cash(double v) => money(v, currency);
+  final project = estimate.project;
+  final rfq = package.rfq;
+  final showEstimate = rfq?.sendsEstimate ?? true;
   // The code here too: it is what will be on the label when this arrives, and
   // what the person unpacking it is standing in front of.
   final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
@@ -1466,17 +1654,19 @@ List<ReportSection> vendorPackageSections(
       title: 'Quote request',
       header: const ['', ''],
       rows: [
-        ['Vendor', package.name],
-        if ((package.vendor?.contact ?? '').isNotEmpty)
-          ['Contact', package.vendor!.contact],
+        ['Package', package.packageName],
+        if (vendor != null) ['To', vendor.name],
+        if ((vendor?.contact ?? '').isNotEmpty) ['Contact', vendor!.contact],
         if (project.name.trim().isNotEmpty) ['Project', project.name],
         if (project.building.trim().isNotEmpty) ['Building', project.building],
         if (project.projectNumber.trim().isNotEmpty)
           ['Project number', project.projectNumber],
         ['Line items', package.lines.length],
         ['Total units', trimNumber(package.qty)],
-        if ((package.vendor?.notes ?? '').isNotEmpty)
-          ['Notes', package.vendor!.notes],
+        // The date is ON THE PAPER rather than in a diary on this end: a due
+        // date the vendor never saw is not a due date.
+        if (rfq?.dueBy != null) ['Quotes due by', formatIsoDate(rfq!.dueBy!)],
+        if ((rfq?.scope ?? '').trim().isNotEmpty) ['Terms', rfq!.scope.trim()],
       ],
     ),
   ];
@@ -1486,17 +1676,17 @@ List<ReportSection> vendorPackageSections(
     if (lines.isEmpty) continue;
     sections.add((
       title: kMasterPartKindLabels[kind]!,
-      header: const [
+      header: [
         'Item',
         'Manufacturer',
         'Model',
         'Part number',
         'Qty',
-        // The prices we HOLD, so a returned quote can be compared against
-        // them line by line. A blank column would make the sheet unreadable
-        // on the way back in, which is the half of an RFQ that matters.
-        'Our estimate (unit)',
-        'Our estimate (ext)',
+        // The prices we HOLD, so a returned quote can be compared against them
+        // line by line. Off by default once more than one vendor is bidding -
+        // see the note on this function.
+        if (showEstimate) 'Our estimate (unit)',
+        if (showEstimate) 'Our estimate (ext)',
         // Left empty on purpose: this is where the vendor writes.
         'Your unit price',
         'Your extended',
@@ -1511,8 +1701,8 @@ List<ReportSection> vendorPackageSections(
             l.model,
             l.partNumber,
             l.qty,
-            l.unpriced ? '' : cash(l.unitPrice),
-            l.unpriced ? '' : cash(l.total),
+            if (showEstimate) l.unpriced ? '' : cash(l.unitPrice),
+            if (showEstimate) l.unpriced ? '' : cash(l.total),
             '',
             '',
             '',
@@ -1688,20 +1878,37 @@ Uint8List buildProjectWorkbookBytes({
     ));
   }
 
-  for (final package in estimate.vendors) {
+  // THE COMPARISON, before the package tabs. It is the sheet the decision gets
+  // taken off - who quoted what against what we held - and it is the one thing
+  // in this book that did not exist while a vendor was a package, because
+  // there was never more than one price to put in a row.
+  final comparison = quoteComparisonSections(estimate);
+  if (comparison.isNotEmpty) {
     sheets.add(buildStackedReportSheet(
-      // The vendor's name is the tab, so the book is navigable by the thing
+      sheetName: tab('Quote comparison'),
+      title: '$title - quotes received',
+      sections: comparison,
+      generated: stamp,
+    ));
+  }
+
+  for (final package in estimate.packages) {
+    sheets.add(buildStackedReportSheet(
+      // The package's name is the tab, so the book is navigable by the thing
       // somebody is looking for.
-      sheetName: tab(package.isUntagged ? 'Untagged' : package.name),
-      title: '$title - ${package.name}',
-      sections: vendorPackageSections(estimate, package),
+      sheetName: tab(package.isUntagged ? 'Untagged' : package.packageName),
+      title: '$title - ${package.packageName}',
+      sections: [
+        ...packageQuoteSections(estimate, package),
+        ...vendorPackageSections(estimate, package),
+      ],
       generated: stamp,
     ));
   }
 
   // THE FORM, at the end. It is the sheet somebody TYPES in rather than one
   // they read, so it sits after everything that gets read — and after the
-  // vendor tabs, which are what a reader is usually looking for.
+  // package tabs, which are what a reader is usually looking for.
   if (editable) {
     sheets.add(buildEditableDeliveriesSheet(
       estimate.project,
@@ -1733,14 +1940,15 @@ Uint8List buildProjectWorkbookBytes({
 Uint8List buildVendorRfqBytes({
   required ProjectEstimate estimate,
   required VendorPackage package,
+  ProjectVendor? vendor,
   DateTime? generated,
 }) => buildXlsx([
   buildStackedReportSheet(
     sheetName: xlsxSheetName(
-      package.isUntagged ? 'Untagged' : package.name,
+      package.isUntagged ? 'Untagged' : package.packageName,
     ),
     title: '${_projectTitle(estimate.project)} - quote request',
-    sections: vendorPackageSections(estimate, package),
+    sections: vendorPackageSections(estimate, package, vendor: vendor),
     generated: generated ?? DateTime.now(),
   ),
 ]);
@@ -1758,9 +1966,14 @@ String _projectTitle(BuildingProject project) {
   return 'Project';
 }
 
-/// A file name stem for one vendor's RFQ, safe on every platform: the project
-/// and the vendor, so a folder of them can be read without opening any.
-String vendorRfqFileStem(BuildingProject project, VendorPackage package) {
+/// A file name stem for one copy of a quote request, safe on every platform:
+/// the project, the package and who it is going to, so a folder of them can be
+/// read without opening any.
+String vendorRfqFileStem(
+  BuildingProject project,
+  VendorPackage package, {
+  ProjectVendor? vendor,
+}) {
   String clean(String s) => s
       .trim()
       .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
@@ -1768,10 +1981,15 @@ String vendorRfqFileStem(BuildingProject project, VendorPackage package) {
   final job = clean(
     project.name.trim().isNotEmpty ? project.name : project.building,
   );
-  final vendor = clean(package.name);
+  final lot = clean(package.packageName);
+  // The VENDOR too, now that one package produces a file per bidder: three
+  // copies of Campus_Displays_RFQ.xlsx in one folder is three files nobody can
+  // tell apart, and the second one silently overwrites the first.
+  final to = clean(vendor?.name ?? '');
   final stem = [
     if (job.isNotEmpty) job,
-    if (vendor.isNotEmpty) vendor,
+    if (lot.isNotEmpty) lot,
+    if (to.isNotEmpty) to,
     'RFQ',
   ].join('_');
   return stem.isEmpty ? 'RFQ' : stem;

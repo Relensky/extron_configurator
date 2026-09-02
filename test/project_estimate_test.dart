@@ -416,20 +416,20 @@ void main() {
 
     test('a manufacturer rule claims every part by that maker', () {
       final project = oneOfEach();
-      project.vendors.add(const ProjectVendor(
+      project.rfqs.add(const ProjectRfq(
         id: 'v1',
-        name: 'Extron Direct',
+        title: 'Extron Direct',
         manufacturers: ['Extron'],
       ));
 
       final estimate = price(project);
 
-      expect(partNamed(estimate, 'TX').vendor?.name, 'Extron Direct');
+      expect(partNamed(estimate, 'TX').rfq?.name, 'Extron Direct');
       expect(
         partNamed(estimate, 'TX').tagSource,
-        VendorTagSource.manufacturerRule,
+        RfqTagSource.manufacturerRule,
       );
-      expect(partNamed(estimate, 'Camera').vendor, isNull);
+      expect(partNamed(estimate, 'Camera').rfq, isNull);
       expect(estimate.untaggedParts, 2);
     });
 
@@ -437,27 +437,27 @@ void main() {
       // The split the feature was asked for: cameras and screens together,
       // from two different manufacturers, without naming either.
       final project = oneOfEach();
-      project.vendors.add(const ProjectVendor(
+      project.rfqs.add(const ProjectRfq(
         id: 'v1',
-        name: 'AV Reseller',
+        title: 'AV Reseller',
         categories: ['Camera', 'Display'],
       ));
 
       final estimate = price(project);
 
-      expect(partNamed(estimate, 'Camera').vendor?.name, 'AV Reseller');
-      expect(partNamed(estimate, 'Panel').vendor?.name, 'AV Reseller');
+      expect(partNamed(estimate, 'Camera').rfq?.name, 'AV Reseller');
+      expect(partNamed(estimate, 'Panel').rfq?.name, 'AV Reseller');
       expect(
         partNamed(estimate, 'Camera').tagSource,
-        VendorTagSource.categoryRule,
+        RfqTagSource.categoryRule,
       );
-      expect(partNamed(estimate, 'TX').vendor, isNull);
+      expect(partNamed(estimate, 'TX').rfq, isNull);
     });
 
     test('a category rule matches a finer category on a word boundary', () {
-      const vendor = ProjectVendor(
+      const vendor = ProjectRfq(
         id: 'v1',
-        name: 'Reseller',
+        title: 'Reseller',
         categories: ['Camera'],
       );
 
@@ -475,42 +475,42 @@ void main() {
         device('d1', 'TX', 'DTP2 T 211'),
       ]);
       final project = projectOver([config]);
-      project.vendors.addAll(const [
+      project.rfqs.addAll(const [
         // Deliberately listed FIRST, so an order-only rule would pick it.
-        ProjectVendor(
+        ProjectRfq(
           id: 'v2',
-          name: 'AV Reseller',
+          title: 'AV Reseller',
           categories: ['Transmitter'],
         ),
-        ProjectVendor(
+        ProjectRfq(
           id: 'v1',
-          name: 'Extron Direct',
+          title: 'Extron Direct',
           manufacturers: ['Extron'],
         ),
       ]);
 
       final estimate = price(project);
 
-      expect(partNamed(estimate, 'TX').vendor?.name, 'Extron Direct');
+      expect(partNamed(estimate, 'TX').rfq?.name, 'Extron Direct');
     });
 
     test('a pin beats every rule', () {
       final project = oneOfEach();
-      project.vendors.addAll(const [
-        ProjectVendor(
+      project.rfqs.addAll(const [
+        ProjectRfq(
           id: 'v1',
-          name: 'Extron Direct',
+          title: 'Extron Direct',
           manufacturers: ['Extron'],
         ),
-        ProjectVendor(id: 'v2', name: 'Integrator'),
+        ProjectRfq(id: 'v2', title: 'Integrator'),
       ]);
 
       final key = partNamed(price(project), 'TX').key;
       project.pinPart(key, 'v2');
       final estimate = price(project);
 
-      expect(partNamed(estimate, 'TX').vendor?.name, 'Integrator');
-      expect(partNamed(estimate, 'TX').tagSource, VendorTagSource.pinned);
+      expect(partNamed(estimate, 'TX').rfq?.name, 'Integrator');
+      expect(partNamed(estimate, 'TX').tagSource, RfqTagSource.pinned);
     });
 
     test('a pin survives the part moving to another room', () {
@@ -520,7 +520,7 @@ void main() {
         device('d1', 'TX', 'DTP2 T 211'),
       ]);
       final project = projectOver([a]);
-      project.vendors.add(const ProjectVendor(id: 'v2', name: 'Integrator'));
+      project.rfqs.add(const ProjectRfq(id: 'v2', title: 'Integrator'));
       project.pinPart(partNamed(price(project), 'TX').key, 'v2');
 
       // Same part, different room, different node id.
@@ -536,45 +536,45 @@ void main() {
         ),
       ));
 
-      expect(partNamed(price(project), 'TX').vendor?.name, 'Integrator');
+      expect(partNamed(price(project), 'TX').rfq?.name, 'Integrator');
     });
 
-    test('a pin to a deleted vendor falls back to the rules', () {
+    test('a pin to a deleted package falls back to the rules', () {
       final project = oneOfEach();
-      project.vendors.addAll(const [
-        ProjectVendor(
+      project.rfqs.addAll(const [
+        ProjectRfq(
           id: 'v1',
-          name: 'Extron Direct',
+          title: 'Extron Direct',
           manufacturers: ['Extron'],
         ),
-        ProjectVendor(id: 'v2', name: 'Integrator'),
+        ProjectRfq(id: 'v2', title: 'Integrator'),
       ]);
       project.pinPart(partNamed(price(project), 'TX').key, 'v2');
 
-      project.removeVendor('v2');
+      project.removeRfq('v2');
       final estimate = price(project);
 
-      expect(partNamed(estimate, 'TX').vendor?.name, 'Extron Direct');
+      expect(partNamed(estimate, 'TX').rfq?.name, 'Extron Direct');
       // And the dead pin is gone rather than lurking.
-      expect(project.partVendors.values, isNot(contains('v2')));
+      expect(project.partRfqs.values, isNot(contains('v2')));
     });
 
     test('overlapping rules of the same kind are reported', () {
       final project = oneOfEach();
-      project.vendors.addAll(const [
-        ProjectVendor(id: 'v1', name: 'One', manufacturers: ['Extron']),
-        ProjectVendor(id: 'v2', name: 'Two', manufacturers: ['extron']),
+      project.rfqs.addAll(const [
+        ProjectRfq(id: 'v1', title: 'One', manufacturers: ['Extron']),
+        ProjectRfq(id: 'v2', title: 'Two', manufacturers: ['extron']),
         // A manufacturer rule and a category rule that both cover a part are
         // the normal case, not a conflict — the tiers resolve it.
-        ProjectVendor(id: 'v3', name: 'Three', categories: ['Transmitter']),
+        ProjectRfq(id: 'v3', title: 'Three', categories: ['Transmitter']),
       ]);
 
-      final conflicts = project.vendorConflicts;
+      final conflicts = project.rfqConflicts;
 
       expect(conflicts, hasLength(1));
       expect(conflicts.single.kind, 'Manufacturer');
       expect(
-        conflicts.single.vendors.map((v) => v.name),
+        conflicts.single.rfqs.map((r) => r.name),
         containsAll(['One', 'Two']),
       );
     });
@@ -596,15 +596,15 @@ void main() {
       ]);
 
       final project = projectOver([a, b]);
-      project.vendors.addAll(const [
-        ProjectVendor(
+      project.rfqs.addAll(const [
+        ProjectRfq(
           id: 'v1',
-          name: 'Extron Direct',
+          title: 'Extron Direct',
           manufacturers: ['Extron'],
         ),
-        ProjectVendor(
+        ProjectRfq(
           id: 'v2',
-          name: 'AV Reseller',
+          title: 'AV Reseller',
           categories: ['Camera', 'Display'],
         ),
       ]);
@@ -612,7 +612,7 @@ void main() {
       final estimate = price(project);
 
       expect(estimate.untaggedParts, 0);
-      expect(estimate.vendors, hasLength(2));
+      expect(estimate.packages, hasLength(2));
 
       final extron = estimate.packageFor('v1')!;
       expect(extron.lines, hasLength(1));
@@ -634,16 +634,16 @@ void main() {
         device('d2', 'Camera', 'RoboSHOT 12E'),
       ]);
       final project = projectOver([a]);
-      project.vendors.add(const ProjectVendor(
+      project.rfqs.add(const ProjectRfq(
         id: 'v1',
-        name: 'Extron Direct',
+        title: 'Extron Direct',
         manufacturers: ['Extron'],
       ));
 
       final estimate = price(project);
 
-      expect(estimate.vendors.last.isUntagged, isTrue);
-      expect(estimate.vendors.last.lines, hasLength(1));
+      expect(estimate.packages.last.isUntagged, isTrue);
+      expect(estimate.packages.last.lines, hasLength(1));
       expect(estimate.untaggedParts, 1);
     });
 
@@ -653,15 +653,15 @@ void main() {
         device('d2', 'Camera', 'RoboSHOT 12E'),
       ]);
       final project = projectOver([a]);
-      project.vendors.addAll(const [
-        ProjectVendor(id: 'v2', name: 'Reseller', categories: ['Camera']),
-        ProjectVendor(id: 'v1', name: 'Extron', manufacturers: ['Extron']),
+      project.rfqs.addAll(const [
+        ProjectRfq(id: 'v2', title: 'Reseller', categories: ['Camera']),
+        ProjectRfq(id: 'v1', title: 'Extron', manufacturers: ['Extron']),
       ]);
 
       final estimate = price(project);
 
       expect(
-        estimate.vendors.map((p) => p.name).toList(),
+        estimate.packages.map((p) => p.name).toList(),
         ['Reseller', 'Extron'],
       );
     });
@@ -671,34 +671,34 @@ void main() {
   //  THE PROJECT FILE
   // -------------------------------------------------------------------------
 
-  group('the color on a vendor', () {
+  group('the color on a package', () {
     test('is not written until somebody assigns one', () {
-      const plain = ProjectVendor(id: 'v1', name: 'Extron Direct');
+      const plain = ProjectRfq(id: 'r1', title: 'Extron Direct');
       expect(plain.color, isNull);
       expect(plain.toJson().containsKey('color'), isFalse);
       // And a file written before colors existed reads as unassigned rather
       // than as black.
       expect(
-        ProjectVendor.fromJson(const {'id': 'v1', 'name': 'Extron'}).color,
+        ProjectRfq.fromJson(const {'id': 'r1', 'title': 'Extron'}).color,
         isNull,
       );
     });
 
     test('survives an edit to anything else, and can be taken back', () {
-      const vendor = ProjectVendor(id: 'v1', name: 'One', color: 0xFF43A047);
-      // copyWith leaves it alone: renaming a vendor must not silently
+      const rfq = ProjectRfq(id: 'r1', title: 'One', color: 0xFF43A047);
+      // copyWith leaves it alone: renaming a package must not silently
       // recolor every part on its order.
-      expect(vendor.copyWith(name: 'Two').color, 0xFF43A047);
+      expect(rfq.copyWith(title: 'Two').color, 0xFF43A047);
       // Back to the derived color is its own answer, because null on its own
       // cannot be told from "leave it".
-      expect(vendor.copyWith(clearColor: true).color, isNull);
+      expect(rfq.copyWith(clearColor: true).color, isNull);
     });
 
     test('a color that is not a number is no assignment at all', () {
       expect(
-        ProjectVendor.fromJson(const {
-          'id': 'v1',
-          'name': 'Extron',
+        ProjectRfq.fromJson(const {
+          'id': 'r1',
+          'title': 'Extron',
           'color': 'blue',
         }).color,
         isNull,
@@ -722,15 +722,23 @@ void main() {
         notes: 'phase 2',
         included: false,
       ));
-      project.vendors.add(ProjectVendor(
-        id: project.nextVendorId(),
-        name: 'Extron Direct',
-        contact: 'orders@example.com',
+      project.vendors.add(
+        ProjectVendor(
+          id: project.nextVendorId(),
+          name: 'Extron Direct',
+          contact: 'orders@example.com',
+        ),
+      );
+      project.rfqs.add(ProjectRfq(
+        id: project.nextRfqId(),
+        title: 'Extron package',
+        scope: 'Net 30, delivered to the dock.',
         manufacturers: const ['Extron'],
         categories: const ['Transmitter'],
         color: 0xFF1E88E5,
+        bids: [RfqBid(vendorId: project.vendors.single.id, amount: 1200)],
       ));
-      project.pinPart('equipment|pn:QM86R', project.vendors.single.id);
+      project.pinPart('equipment|pn:QM86R', project.rfqs.single.id);
 
       final file = path.join(dir.path, 'bss_project.json');
       await project.save(file);
@@ -742,15 +750,21 @@ void main() {
       expect(back.rooms.single.included, isFalse);
       expect(back.rooms.single.notes, 'phase 2');
       expect(back.vendors.single.contact, 'orders@example.com');
-      expect(back.vendors.single.categories, ['Transmitter']);
+      expect(back.rfqs.single.scope, 'Net 30, delivered to the dock.');
+      expect(back.rfqs.single.categories, ['Transmitter']);
+      // The bids travel too - a package that came back from disk with its
+      // quotes missing would be a competition nobody could finish.
+      expect(back.rfqs.single.bids.single.vendorId, 'vendor1');
+      expect(back.rfqs.single.bids.single.amount, 1200);
       // The color the buyer put on this order travels with the job: it is
       // how the parts list is read, and one that reset on save would have to
       // be re-chosen every time the file was opened.
-      expect(back.vendors.single.color, 0xFF1E88E5);
-      expect(back.partVendors['equipment|pn:QM86R'], 'vendor1');
+      expect(back.rfqs.single.color, 0xFF1E88E5);
+      expect(back.partRfqs['equipment|pn:QM86R'], 'rfq1');
       // Counters carry over, so the next id cannot collide with a stored one.
       expect(back.nextRoomId(), 'room2');
       expect(back.nextVendorId(), 'vendor2');
+      expect(back.nextRfqId(), 'rfq2');
     });
 
     test('ids added by hand cannot be handed out again', () async {

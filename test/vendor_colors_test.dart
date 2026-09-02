@@ -83,77 +83,77 @@ void main() {
   }
 
   group('what color an order is', () {
-    test('a vendor nobody has colored still has one', () {
+    test('a package nobody has colored still has one', () {
       // Derived from the name, so a list is legible before anybody has set
-      // anything up — and the same vendor is the same color every time.
-      const vendor = ProjectVendor(id: 'v1', name: 'Extron Direct');
-      expect(projectVendorColor(vendor), tintForName('Extron Direct'));
-      expect(projectVendorColor(vendor), isNot(kNameTintUnsettled));
+      // anything up — and the same package is the same color every time.
+      const vendor = ProjectRfq(id: 'v1', title: 'Extron Direct');
+      expect(projectRfqColor(vendor), tintForName('Extron Direct'));
+      expect(projectRfqColor(vendor), isNot(kNameTintUnsettled));
     });
 
     test('an assigned color beats the derived one', () {
-      const vendor = ProjectVendor(
+      const vendor = ProjectRfq(
         id: 'v1',
-        name: 'Extron Direct',
+        title: 'Extron Direct',
         color: 0xFF43A047,
       );
-      expect(projectVendorColor(vendor), const Color(0xFF43A047));
+      expect(projectRfqColor(vendor), const Color(0xFF43A047));
     });
 
     test('an untagged part is not an order, and reads as one that is not', () {
       // Gray rather than a color of its own: an untagged part is the thing
       // the list is meant to catch, and a cheerful color would file it with
       // the decided ones.
-      expect(projectVendorColor(null), kNameTintUnsettled);
+      expect(projectRfqColor(null), kNameTintUnsettled);
     });
   });
 
   group('assigning one', () {
-    testWidgets('the swatch on a vendor sets the color, and Automatic takes '
+    testWidgets('the swatch on a package sets the color, and Automatic takes '
         'it back', (tester) async {
       final p = withJob();
-      final vendor = p.addProjectVendor(name: 'Extron Direct');
+      final vendor = p.addProjectRfq(title: 'Extron Direct');
       await openPane(tester, p, 'vendors');
 
-      await tester.tap(find.byKey(ValueKey('vendor_color_${vendor.id}')));
+      await tester.tap(find.byKey(ValueKey('rfq_color_${vendor.id}')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('vendor_color_dialog')), findsOneWidget);
+      expect(find.byKey(const ValueKey('rfq_color_dialog')), findsOneWidget);
 
       const chosen = Color(0xFFD81B60);
       await tester.tap(
         find.byKey(
           ValueKey(
-            'vendor_color_${vendor.id}_'
+            'rfq_color_${vendor.id}_'
             '${(chosen.toARGB32() & 0xFFFFFF).toRadixString(16)}',
           ),
         ),
       );
       await tester.pumpAndSettle();
-      ProjectVendor mine() =>
-          p.project.vendors.firstWhere((v) => v.id == vendor.id);
+      ProjectRfq mine() =>
+          p.project.rfqs.firstWhere((v) => v.id == vendor.id);
       expect(mine().color, chosen.toARGB32());
 
       // Back to the derived color, which is a different answer from "no
       // color at all".
-      await tester.tap(find.byKey(const ValueKey('vendor_color_auto')));
+      await tester.tap(find.byKey(const ValueKey('rfq_color_auto')));
       await tester.pumpAndSettle();
       expect(mine().color, isNull);
-      expect(projectVendorColor(mine()), tintForName('Extron Direct'));
+      expect(projectRfqColor(mine()), tintForName('Extron Direct'));
 
-      await tester.tap(find.byKey(const ValueKey('vendor_color_done')));
+      await tester.tap(find.byKey(const ValueKey('rfq_color_done')));
       await tester.pumpAndSettle();
     });
 
-    testWidgets('a renamed vendor keeps the color somebody chose', (
+    testWidgets('a renamed package keeps the color somebody chose', (
       tester,
     ) async {
       final p = withJob();
-      final vendor = p.addProjectVendor(name: 'Extron Direct');
-      ProjectVendor mine() =>
-          p.project.vendors.firstWhere((v) => v.id == vendor.id);
-      p.updateProjectVendor(vendor.copyWith(color: 0xFF1E88E5));
-      p.updateProjectVendor(mine().copyWith(name: 'Extron, direct'));
-      // The order did not change supplier because somebody fixed a comma.
+      final vendor = p.addProjectRfq(title: 'Extron Direct');
+      ProjectRfq mine() =>
+          p.project.rfqs.firstWhere((v) => v.id == vendor.id);
+      p.updateProjectRfq(vendor.copyWith(color: 0xFF1E88E5));
+      p.updateProjectRfq(mine().copyWith(title: 'Extron, direct'));
+      // The order did not change color because somebody fixed a comma.
       expect(mine().color, 0xFF1E88E5);
       expect(mine().name, 'Extron, direct');
       await openPane(tester, p, 'parts');

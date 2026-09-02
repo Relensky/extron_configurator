@@ -17,7 +17,7 @@ void main() {
     double unit = 50,
     bool unpriced = false,
     int? catalogLead,
-    ProjectVendor? vendor,
+    ProjectRfq? rfq,
   }) {
     final key = masterPartKey(
       kind: 'equipment',
@@ -37,9 +37,9 @@ void main() {
       unitPrice: unit,
       maxUnitPrice: unit,
       qtyByRoom: const {},
-      vendor: vendor,
-      tagSource:
-          vendor == null ? VendorTagSource.none : VendorTagSource.pinned,
+      rfq: rfq,
+      vendor: null,
+      tagSource: rfq == null ? RfqTagSource.none : RfqTagSource.pinned,
       unpriced: unpriced,
       catalogLeadDays: catalogLead,
     );
@@ -215,13 +215,13 @@ void main() {
       );
     });
 
-    test('by vendor, with the untagged parts collected at the end', () {
-      const extron = ProjectVendor(id: 'vendor1', name: 'Extron');
-      const shure = ProjectVendor(id: 'vendor2', name: 'Shure');
+    test('by package, with the untagged parts collected at the end', () {
+      const extron = ProjectRfq(id: 'rfq1', title: 'Extron');
+      const shure = ProjectRfq(id: 'rfq2', title: 'Shure');
       final lines = [
-        part('Mic', vendor: shure),
+        part('Mic', rfq: shure),
         part('Bracket'),
-        part('Switcher', vendor: extron),
+        part('Switcher', rfq: extron),
       ];
       expect(
         namesOf(lines, key: PartSortKey.vendor),

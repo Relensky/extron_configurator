@@ -63,10 +63,10 @@ void main() {
     return configPath;
   }
 
-  /// The job, and the id of the vendor whose rule claims the Epson line. A new
-  /// project starts with the usual vendor split on it, so ours is found by the
-  /// row that was added rather than by being the only one.
-  ({AppStateProvider p, String vendorId}) job() {
+  /// The job: the package whose rule claims the Epson line, and a company to
+  /// award it to. A new project starts with the usual split on it, so ours is
+  /// found by the row that was added rather than by being the only one.
+  ({AppStateProvider p, String rfqId, String vendorId}) job() {
     final p = AppStateProvider(autoLoadSettings: false);
     p.avDeviceLibrary = AvDeviceLibrary.empty()
       ..upsert(const AvDeviceTemplate(
@@ -85,17 +85,13 @@ void main() {
       ));
     p.newProject(name: 'Bessey refresh', building: 'BSS');
     // First in the list, so this rule wins the Epson line over anything the
-    // starter split claims - see [BuildingProject.vendorForPart].
+    // starter split claims - see [BuildingProject.rfqForPart].
+    final rfq = p.addProjectRfq(title: 'Epson package');
+    p.updateProjectRfq(rfq.copyWith(manufacturers: const ['Epson']));
     final vendor = p.addProjectVendor(name: 'Epson Direct');
-    p.updateProjectVendor(
-      ProjectVendor(
-        id: vendor.id,
-        name: 'Epson Direct',
-        manufacturers: const ['Epson'],
-      ),
-    );
+    p.inviteVendorToRfq(rfq.id, vendor.id);
     p.addRoomToProject(writeRoom('r0', 'Bessey 101'));
-    return (p: p, vendorId: vendor.id);
+    return (p: p, rfqId: rfq.id, vendorId: vendor.id);
   }
 
   Future<void> openDeliveries(WidgetTester tester, AppStateProvider p) async {
@@ -127,27 +123,31 @@ void main() {
     return (epson: found('Epson'), sharp: found('Sharp'));
   }
 
-  testWidgets("the box opens on the PO's own vendor, and can be widened", (
+  testWidgets("the box opens on the PO's own package, and can be widened", (
     tester,
   ) async {
-    final (:p, :vendorId) = job();
-    final po = p.addProjectPo(
-      number: 'PO-1188',
+    final (:p, :rfqId, :vendorId) = job();
+    // Awarded, which is how a PO gets raised against a package - and what
+    // gives the box something to narrow to.
+    p.awardRfq(
+      rfqId,
       vendorId: vendorId,
-      issuedOn: DateTime(2026, 3, 4),
+      poNumber: 'PO-1188',
+      awardedOn: DateTime(2026, 3, 4),
     );
+    final po = p.project.poByNumber('PO-1188')!;
     await openDeliveries(tester, p);
 
     await tester.tap(find.byKey(ValueKey('po_parts_${po.id}')));
     await tester.pumpAndSettle();
 
     final keys = keysOf(p);
-    // Only what this vendor is supplying: a hundred-line master list with the
-    // other vendors mixed into it is one nobody reads to the bottom of.
+    // Only what this PO's package holds: a hundred-line master list with the
+    // other packages mixed into it is one nobody reads to the bottom of.
     expect(find.byKey(ValueKey('po_part_${keys.epson}')), findsOneWidget);
     expect(find.byKey(ValueKey('po_part_${keys.sharp}')), findsNothing);
 
-    // And the filter comes off, because a PO does pick up a part the vendor
+    // And the filter comes off, because a PO does pick up a part the package
     // rules never claimed.
     await tester.tap(find.byKey(const ValueKey('po_parts_vendor_only')));
     await tester.pumpAndSettle();
@@ -157,7 +157,7 @@ void main() {
   testWidgets('ticking puts the equipment on the PO, ordered on its date', (
     tester,
   ) async {
-    final (:p, :vendorId) = job();
+    final (:p, :rfqId, :vendorId) = job();
     final po = p.addProjectPo(
       number: 'PO-1188',
       vendorId: vendorId,
@@ -198,7 +198,7 @@ void main() {
   testWidgets('unticking takes it back off the PO and off the bought list', (
     tester,
   ) async {
-    final (:p, vendorId: _) = job();
+    final (:p, rfqId: _, vendorId: _) = job();
     final po = p.addProjectPo(number: 'PO-1188', issuedOn: DateTime(2026, 3, 4));
     final keys = keysOf(p);
     p.setProjectPartsOnPo(
@@ -224,7 +224,7 @@ void main() {
   testWidgets('a delivery can be pulled straight off the PO number', (
     tester,
   ) async {
-    final (:p, vendorId: _) = job();
+    final (:p, rfqId: _, vendorId: _) = job();
     p.addProjectPo(number: 'PO-1188', issuedOn: DateTime(2026, 3, 4));
     final keys = keysOf(p);
     p.setProjectPartsOnPo('PO-1188', onIt: [keys.epson]);
