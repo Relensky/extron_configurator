@@ -296,7 +296,7 @@ class PinnedGrid extends StatefulWidget {
 
   /// How wide a frozen column has to be to hold [lines] set in [style].
   ///
-  /// A NAME THAT IS ELLIPSISED IS NOT A LABEL. The column was a fixed width
+  /// A NAME THAT IS ELLIPSIZED IS NOT A LABEL. The column was a fixed width
   /// chosen for a room number, and the campus sheet puts BUILDING names down
   /// it - 'Farm Agricultural Education Center' in 126 pixels is 'Farm Agri…',
   /// which names nothing. So the column is measured against what actually goes
@@ -404,7 +404,7 @@ class _PinnedGridState extends State<PinnedGrid> {
         // THE FROZEN COLUMN GIVES WAY BEFORE THE CELLS DO. On a narrow window
         // a 168-pixel room name column against 200 pixels of grid is a sheet
         // with no sheet on it, so the pinned half is capped at a third of what
-        // there is and ellipsises instead.
+        // there is and ellipsizes instead.
         final frozenWidth = math.min(
           widget.frozenWidth,
           math.max(72.0, box.maxWidth * 0.34),

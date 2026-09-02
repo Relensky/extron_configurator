@@ -291,7 +291,7 @@ ConnectorRef parsePortLabel(String label) {
 /// a new model does not need a table entry. Deliberately NOT matched on the
 /// signal: the catalog files this connector under Dante on the boxes that
 /// have it, and it is not a Dante socket in any sense a network engineer
-/// would recognise.
+/// would recognize.
 AvPort? _expansionPort(AvNode node) {
   for (final p in node.ports) {
     final words = p.label.toUpperCase().split(RegExp(r'[^A-Z0-9]+'));
@@ -753,7 +753,7 @@ RoutingPlan planRoutingFromConfig(
   // How many outputs the box HAS, which its connector labels do not always
   // say — see [portForIoValue] pass 5. Read off the MODEL, so it is only
   // asked of a switcher: `switcherSize` answers "4 in, 1 out" for anything it
-  // does not recognise, and a display is not a four-input matrix.
+  // does not recognize, and a display is not a four-input matrix.
   final declaredInputs =
       matrix == null ? 0 : AvDeviceLibrary.switcherSize(matrix.model).$1;
   final declaredOutputs =
@@ -932,7 +932,7 @@ RoutingPlan planRoutingFromConfig(
   }
 
   /// Whether [nodeId] is already on the far end of [port] of [node] — used to
-  /// recognise the receiver a DTP run was drawn through on an earlier pass.
+  /// recognize the receiver a DTP run was drawn through on an earlier pass.
   bool joinedTo(AvNode node, AvPort port, String nodeId) =>
       feedsInto(node.id, port.id).any((f) => f.node == nodeId);
 
@@ -1061,7 +1061,7 @@ RoutingPlan planRoutingFromConfig(
           key,
           value,
           displayHub == null
-              ? 'No input on ${switcher.label} is labelled $value.'
+              ? 'No input on ${switcher.label} is labeled $value.'
               : 'This room has no switcher, so $key is a socket on '
                   '${switcher.label} - and it has no input called "$value". '
                   'Its inputs are '
@@ -1082,7 +1082,7 @@ RoutingPlan planRoutingFromConfig(
     //
     // Not counted: a far end that IS the switcher (this tie, already drawn)
     // or a transmitter sitting on the switcher input this tie names, which is
-    // this pass recognising the box it put in on an earlier run.
+    // this pass recognizing the box it put in on an earlier run.
     final onThatSocket = feedsInto(source.id, out.id);
     final servesThisTie = onThatSocket.any((f) =>
         f.node == switcher.id || joinedTo(switcher, switcherPort, f.node));
@@ -1307,7 +1307,7 @@ RoutingPlan planRoutingFromConfig(
   /// The receiver for one DTP run: the box, the socket the twisted pair
   /// lands on and the socket the short HDMI lead leaves by.
   ///
-  /// Recognised before it is created, three ways, because none of them is
+  /// Recognized before it is created, three ways, because none of them is
   /// reliable on its own: the id this feature gives it, a box this same
   /// plan has already put in, and — for a diagram drawn before any of this
   /// existed — a receiver already cabled into the display, whatever it was
@@ -1363,7 +1363,7 @@ RoutingPlan planRoutingFromConfig(
     );
     if (switcherPort == null) {
       unresolved.add(UnroutedTie(key, value,
-          'No output on ${switcher.label} is labelled $value. Extron spells '
+          'No output on ${switcher.label} is labeled $value. Extron spells '
           'the same socket differently between models - check the connector '
           'names on the device tab and draw this one by hand.'));
       return;
@@ -1388,7 +1388,7 @@ RoutingPlan planRoutingFromConfig(
 
     /// True when what is already on [p] is THIS tie's cable — drawn straight
     /// off the switcher's output, or off the receiver that output feeds. A
-    /// second pass has to recognise its own work, or it walks along the box's
+    /// second pass has to recognize its own work, or it walks along the box's
     /// inputs drawing a fresh lead every time it runs.
     bool ownedByThisTie(AvPort p) => feedsInto(dest.id, p.id).any((f) =>
         (f.node == switcher.id && f.port == switcherPort.id) ||
@@ -1533,9 +1533,9 @@ RoutingPlan planRoutingFromConfig(
               p.signal == rxRule.switcherType! &&
               (p.isInput || p.direction == PortDirection.bidirectional))
           .firstOrNull;
-      final catalogued =
+      final catalogd =
           provider.avDeviceLibrary.templateForModel(dest.model) != null;
-      if (native != null && (catalogued || toPort?.id == native.id)) {
+      if (native != null && (catalogd || toPort?.id == native.id)) {
         draw(
           configKey: key,
           value: value,
@@ -1666,7 +1666,7 @@ RoutingPlan planRoutingFromConfig(
       // Already cabled off that socket — see [switcherSocketTaken]. This is how
       // a room stamped from a room type grew a SECOND confidence monitor: the
       // preset draws one off HDMI OUT 2 and calls it what it likes, and the box
-      // this pass would place is recognised by model, so a monitor named
+      // this pass would place is recognized by model, so a monitor named
       // differently was not found and another one was bought.
       if (switcherSocketTaken(value, wantOutput: true, signals: signals)) {
         alreadyDrawn++;
@@ -2182,7 +2182,7 @@ AvNode? _existingByModelOrLabel(
 /// A generated `AVNODE_7` would be a different box every time the numbers were
 /// read again. Keyed on the field that placed it, the PC that `input_pc` puts
 /// on the canvas is the same node on every pass — which is what lets this run
-/// by itself: a second pass recognises the box instead of drawing a second
+/// by itself: a second pass recognizes the box instead of drawing a second
 /// one, and a box somebody deleted on purpose is remembered as deleted (see
 /// [AppStateProvider.avDismissedDevices]).
 String avAutoNodeId(String configKey) => 'AVSOURCE_${configKey.toUpperCase()}';
@@ -2221,7 +2221,7 @@ const RoutingResult _noRouting =
 ///
 /// Safe to call on every visit to any tab that reads the diagram:
 ///
-///   * a box already on the canvas is recognised, not duplicated;
+///   * a box already on the canvas is recognized, not duplicated;
 ///   * a cable already drawn between the same two connectors is left alone;
 ///   * a box somebody deleted stays deleted;
 ///   * a room whose switcher is not on the canvas yet is left completely

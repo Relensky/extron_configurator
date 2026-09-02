@@ -11,7 +11,7 @@ import 'package:extron_configurator/room_sidecar.dart';
 
 /// The cabling drawing is EDITED, and the three things that were awkward about
 /// editing it were: you could not delete anything with the keyboard, you could
-/// not pick one line out of six that ran thirteen pixels apart, and a colour
+/// not pick one line out of six that ran thirteen pixels apart, and a color
 /// belonged to a line rather than to a cable. This covers all three, plus the
 /// end labels a sheet is read at the wall for and the redo that makes Delete
 /// safe to press.
@@ -95,9 +95,9 @@ void main() {
     });
   });
 
-  group('one colour per cable', () {
+  group('one color per cable', () {
     /// Two runs of the same cable between the same two places, plus one of a
-    /// different cable — the shape that makes a per-line colour useless.
+    /// different cable — the shape that makes a per-line color useless.
     (AppStateProvider, List<String>) threeRuns() {
       final p = room();
       final a = p.addCablingBox(kind: CablingBoxKind.pullBox);
@@ -127,7 +127,7 @@ void main() {
         .bundles
         .firstWhere((b) => b.id == id);
 
-    test('recolouring a cable moves every run of it, and only those', () {
+    test('recoloring a cable moves every run of it, and only those', () {
       final (p, ids) = threeRuns();
       final other = drawn(p, ids[2]).color;
 
@@ -139,9 +139,9 @@ void main() {
       expect(drawn(p, ids[2]).color, other);
     });
 
-    test('a run painted by hand still wins over its cable\'s colour', () {
+    test('a run painted by hand still wins over its cable\'s color', () {
       // The drawing set's own convention overriding the app's is the one thing
-      // a colour rule must never take away.
+      // a color rule must never take away.
       final (p, ids) = threeRuns();
       p.setCablingBundleColor(ids[0], 0xFF123456);
       p.setCablingTypeColor([cablingColorKey(drawn(p, ids[1]))], 0xFF00FF00);

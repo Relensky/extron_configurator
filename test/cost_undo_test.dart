@@ -11,7 +11,7 @@ import 'package:extron_configurator/room_sidecar.dart';
 ///
 /// The four drawing tabs have had it for years and the estimate did not: the
 /// scope was left out on purpose, because nothing on that page recorded an
-/// entry and a scope no edit is filed under is a button that is always grey.
+/// entry and a scope no edit is filed under is a button that is always gray.
 /// That made the most retyped edits in the app the least recoverable — a
 /// negotiated price typed over a catalog figure, a fee, a labor line, a whole
 /// quote re-sorted.

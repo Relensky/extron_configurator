@@ -62,7 +62,7 @@ const Map<ConnType, String> kConnLabels = {
   ConnType.touchpanel: 'Touch Panel',
 };
 
-/// The color a connection category is drawn in, honouring the room's
+/// The color a connection category is drawn in, honoring the room's
 /// overrides. Nothing reads [kConnColors] directly except this — recoloring
 /// a category has to move the lines, the box borders AND the legend together
 /// or the key stops describing the drawing.
@@ -79,13 +79,13 @@ const List<Color> kLinkSwatches = [
 const double kNodeWidth = 190;
 const double kNodeHeight = 78;
 
-/// How a box added by hand is drawn: a dashed border in a neutral grey.
+/// How a box added by hand is drawn: a dashed border in a neutral gray.
 ///
-/// Deliberately NOT one of the [kConnColors]. On this drawing a colour means
+/// Deliberately NOT one of the [kConnColors]. On this drawing a color means
 /// "this is how the processor talks to it", and the whole point of a related
-/// box is that the processor does not — colouring it network-blue because it
+/// box is that the processor does not — coloring it network-blue because it
 /// happens to be a network switch would say the opposite of the truth. The
-/// dashes and the grey say "here, and real, but not driven from here"; the
+/// dashes and the gray say "here, and real, but not driven from here"; the
 /// legend spells it out.
 const Color kRelatedNodeColor = Color(0xFF8D95A0);
 
@@ -552,7 +552,7 @@ class SchematicModel {
         title: extra['title'] ?? id,
         subtitle: extra['subtitle'] ?? '',
         icon: relatedNodeIcon(extra['icon'] ?? ''),
-        // Never drawn in a category colour — see [kRelatedNodeColor] — but the
+        // Never drawn in a category color — see [kRelatedNodeColor] — but the
         // field is not nullable, so it carries the one the box is not.
         conn: ConnType.network,
         related: true,
@@ -568,7 +568,7 @@ class SchematicModel {
     // destination: the drops land on it and it goes on to the processor, and
     // without that uplink the drawing has a switch feeding nothing and a
     // processor that reaches none of the gear plugged into it. Drawn like the
-    // IDF's own uplink — same colour, same weight — because it is the same
+    // IDF's own uplink — same color, same weight — because it is the same
     // kind of line, with the note saying which network it carries.
     //
     // One per box, however many things land on it: the devices and the panel
@@ -1409,7 +1409,7 @@ class _SchematicViewState extends State<SchematicView> {
           'That means letting go of $extras box(es) added by hand and $links '
           'line(s) drawn by hand, putting $hidden hidden line(s) back, and '
           'forgetting where anybody has dragged a box to.\n\n'
-          'Your line colours are kept - they have their own Reset all on the '
+          'Your line colors are kept - they have their own Reset all on the '
           'Colors dialog - and Undo puts the layout back.',
         ),
         actions: [

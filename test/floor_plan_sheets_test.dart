@@ -9,7 +9,7 @@ import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/floor_plan_view.dart';
 import 'package:extron_configurator/room_locations.dart';
 
-/// A room has more than one sheet as soon as it has more than one storey, a
+/// A room has more than one sheet as soon as it has more than one story, a
 /// reflected ceiling plan beside the furniture plan, or a demolition sheet
 /// beside the new work. The model always held a list of plans; until now the
 /// page only ever opened the first, so the second was unreachable.

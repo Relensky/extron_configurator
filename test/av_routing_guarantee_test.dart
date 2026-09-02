@@ -153,7 +153,7 @@ void main() {
     });
 
     test('every run in 200 random layouts stays clear', () {
-      // Fixed seed: a failure has to be reproducible, not a rumour.
+      // Fixed seed: a failure has to be reproducible, not a rumor.
       final rng = Random(20260809);
       int routed = 0;
 
@@ -309,7 +309,7 @@ void main() {
         obstacles: obstacles,
       );
 
-      // Nothing is in the way, so the bend is honoured untouched.
+      // Nothing is in the way, so the bend is honored untouched.
       expect(route.length, 3);
       expect(route[1], const Offset(300, 400));
     });

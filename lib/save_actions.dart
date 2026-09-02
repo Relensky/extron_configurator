@@ -309,7 +309,7 @@ String _projectFileStem(BuildingProject project) {
 ///
 /// Returns true when nothing was left unsaved. A room that has never been
 /// saved opens its Save As dialog, because there is no other way to save it —
-/// and if that is cancelled, this honestly reports that work is still loose.
+/// and if that is canceled, this honestly reports that work is still loose.
 Future<bool> saveEverything(
   BuildContext context,
   AppStateProvider provider,
@@ -414,7 +414,7 @@ Future<bool> startNewProject(
   // THE QUESTIONS COME FIRST, AND BACKING OUT OF THEM CHANGES NOTHING.
   //
   // The job used to be created and the app switched into project mode before
-  // the setup screen opened, so cancelling out of it left somebody who had
+  // the setup screen opened, so canceling out of it left somebody who had
   // been working on a room standing in an empty project they never started.
   // Room mode and project mode are the two states this app is ever in, and
   // nothing may move between them except a decision somebody actually made.
@@ -960,7 +960,7 @@ Future<void> saveAllToRoomFolder(
     //
     // This is the whole difference between walking one room and walking nine.
     // Opening a room reads a config and three sidecars off disk; capturing it
-    // then forces five drawing tabs to build, lay out, paint and rasterise -
+    // then forces five drawing tabs to build, lay out, paint and rasterize -
     // for a room nobody may have opened in months. A floor plan whose image
     // has moved, a sidecar hand-edited into invalid JSON, a canvas that has
     // not painted yet: any of them throws, and unguarded that took down the
@@ -1234,7 +1234,7 @@ Future<bool> confirmCloseWithUnsavedWork(
 
   if (answer == 'save') {
     if (!context.mounted) return false;
-    // A save that fails — or a Save As that was cancelled — must not close the
+    // A save that fails — or a Save As that was canceled — must not close the
     // app: that would lose exactly the work the user just asked to keep.
     return saveEverything(context, provider);
   }

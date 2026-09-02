@@ -197,11 +197,11 @@ const List<_Col> _kItemsCols = [
 /// The ink the quiet columns are set in - the model number beside a device,
 /// where a price came from, the note under a row.
 ///
-/// ON SCREEN it is Material's disabled grey, which is what those columns have
+/// ON SCREEN it is Material's disabled gray, which is what those columns have
 /// always been and reads as "this is secondary" at a glance. ON THE IMAGE it
-/// is the theme's measured muted ink instead: disabled grey is 38% of the
+/// is the theme's measured muted ink instead: disabled gray is 38% of the
 /// page's ink by definition, which lands at 2.6:1 on a light sheet and 3.6:1
-/// on a dark one - fine for something greyed out on a screen, and not fine for
+/// on a dark one - fine for something grayed out on a screen, and not fine for
 /// a model number on a quote somebody is reading off a printout.
 Color mutedInk(BuildContext context, ThemeData theme) => PrintMode.of(context)
     ? theme.colorScheme.onSurfaceVariant
@@ -217,7 +217,7 @@ class CostEstimateView extends StatefulWidget {
   ///
   /// A testing seam, because the real path runs through a native save dialog
   /// and a widget test has no business opening one — and the frame is the part
-  /// worth checking: what it hides, how tall it is, what colour it is.
+  /// worth checking: what it hides, how tall it is, what color it is.
   @visibleForTesting
   final Brightness? debugCaptureBrightness;
 
@@ -363,7 +363,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     );
     // THE CARDS ARE BUILT FROM WHATEVER CONTEXT ASKS FOR THEM, which is the
     // whole point: the image is rendered under a theme of its own - see the
-    // frame below - and a card built out here would carry the APP's colours
+    // frame below - and a card built out here would carry the APP's colors
     // into it. A dark image taken from a light app came out with black
     // headings, black figures and the totals in a white box, because the
     // paper was the only thing that had heard about the brightness.
@@ -429,7 +429,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                     // A Builder, so the cards are built BELOW the theme above
-                    // and read the image's colours rather than the app's.
+                    // and read the image's colors rather than the app's.
                     child: Builder(
                       builder: (context) => Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2002,7 +2002,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             'frame here. Quoted with the racked hardware and '
                             'marked as not racked.',
                       _ExtraPart.misc =>
-                        'A billable line off the catalog - a licence, a '
+                        'A billable line off the catalog - a license, a '
                             'mount, a rental, a trip charge. It keeps its '
                             'catalog price, so a revision reaches every '
                             'estimate that uses it. Add them on the Device '
@@ -3539,7 +3539,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// The row is a GROUP of identical items in the frames, so the swap has to
   /// reach every one of them or the elevation and the quote stop agreeing
   /// about what the same plate is. An item whose new height no longer fits
-  /// where it was comes off its rail rather than overlapping its neighbour —
+  /// where it was comes off its rail rather than overlapping its neighbor —
   /// [AppStateProvider.swapAvRackItem] decides which, and the message says how
   /// many so nobody has to go looking for them.
   Future<void> _swapHardware(
@@ -5088,7 +5088,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 ),
               ),
             // Short on purpose is still short: said plainly, and in the plain
-            // text colour rather than the error one, because this one is a
+            // text color rather than the error one, because this one is a
             // decision somebody made rather than something missing.
             if (estimate.excludedDevices > 0)
               Padding(
@@ -5179,7 +5179,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         //
         // Narrow columns wrap their caption — "Unit price" over a 130-pixel
         // column is two lines, "Qty" over a 60-pixel one is not — and a Row
-        // centres what it is given, so the tall ones rode 8 pixels higher than
+        // centers what it is given, so the tall ones rode 8 pixels higher than
         // the short ones and the whole caption row read as crooked. A fixed
         // box with the text against the bottom of it puts one line and two on
         // the same rule, which is the line the divider under them draws.
@@ -5254,8 +5254,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// gets typed onto the wrong row, and the only thing that was holding the
   /// eye on one was three pixels of padding.
   ///
-  /// A NEUTRAL WASH, not a colour. The stripe is here to keep a line together,
-  /// so it must not look like it MEANS anything — the coloured things on this
+  /// A NEUTRAL WASH, not a color. The stripe is here to keep a line together,
+  /// so it must not look like it MEANS anything — the colored things on this
   /// page (the signal dot on a cable row, the red on an unpriced source) are
   /// saying something, and a row tinted by its vendor would be a third
   /// vocabulary competing with both.
@@ -5483,7 +5483,7 @@ class _CellText extends StatelessWidget {
 /// would have cost the device and model names 160 pixels between them.
 const double kStepButtonWidth = 24.0;
 
-/// The − or + beside a quantity. Null [onPressed] greys it out — which is what
+/// The − or + beside a quantity. Null [onPressed] grays it out — which is what
 /// − does at zero, since a quote cannot buy minus one of anything.
 ///
 /// Gone from the photographed estimate, like every other control: the column

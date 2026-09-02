@@ -172,7 +172,7 @@ void main() {
     expect(all, contains('No delivery deadline'));
     // Nothing on this job is spared, and nothing else would ever raise it.
     expect(all, contains('spare'));
-    // The open note is not summarised into a line — it is listed in full in
+    // The open note is not summarized into a line — it is listed in full in
     // the overview, and a count over the top of the list says it twice.
     expect(
       [for (final t in briefing.overview.todos) t.text],
@@ -440,7 +440,7 @@ void main() {
           'chase Extron on the DTP lead time',
         ]),
       );
-      // ...and NOT also summarised in a line over the top of the list.
+      // ...and NOT also summarized in a line over the top of the list.
       expect(
         briefing.openLines.map((l) => l.message).join(' '),
         isNot(contains('still open')),
@@ -571,7 +571,7 @@ void main() {
       // A status mail that says what is wrong and not where it is answered
       // comes straight back as a question.
       expect(text, contains('Fixed on Timeline'));
-      // The specifics come with it rather than being summarised away.
+      // The specifics come with it rather than being summarized away.
       expect(text, contains('Projection screen'));
     });
 

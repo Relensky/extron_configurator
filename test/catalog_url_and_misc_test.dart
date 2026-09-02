@@ -10,7 +10,7 @@ import 'package:extron_configurator/cost_estimate.dart';
 ///
 ///   * the URL a price and a heat figure were read off, so next year somebody
 ///     can check whether they still hold;
-///   * AV/Misc entries — a licence, a mount, a trip charge — which are money
+///   * AV/Misc entries — a license, a mount, a trip charge — which are money
 ///     on a job without being a box on a diagram, and which the estimate's
 ///     "Other items" prices off the catalog rather than from whatever was
 ///     typed the day the line was added.
@@ -70,7 +70,7 @@ void main() {
       final library = AvDeviceLibrary.empty();
       library.upsert(
         const AvDeviceTemplate(
-          model: 'Old licence',
+          model: 'Old license',
           category: kCategoryMisc,
           price: 100,
           retired: true,
@@ -78,7 +78,7 @@ void main() {
         ),
       );
       expect(library.miscItems, isEmpty);
-      expect(library.templateForModel('Old licence')?.price, 100);
+      expect(library.templateForModel('Old license')?.price, 100);
     });
   });
 

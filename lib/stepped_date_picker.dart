@@ -180,7 +180,7 @@ class _SteppedDatePickerDialogState extends State<_SteppedDatePickerDialog> {
   /// January 2036 has a single day — so the year grid has to ask the same
   /// question the month grid does rather than assume every year in the span is
   /// open. Without this, picking the last year drops onto a month grid with
-  /// eleven months greyed out and no reason given.
+  /// eleven months grayed out and no reason given.
   bool _yearSelectable(int year) {
     for (var month = 1; month <= 12; month++) {
       if (_monthSelectable(year, month)) return true;
@@ -229,7 +229,7 @@ class _SteppedDatePickerDialogState extends State<_SteppedDatePickerDialog> {
           ),
           const SizedBox(height: 2),
           // The date as it will be RECORDED, in the app's own format, so the
-          // answer never has to be recognised in two different shapes.
+          // answer never has to be recognized in two different shapes.
           Text(
             formatScheduleDate(_selected),
             style: theme.textTheme.headlineSmall,

@@ -46,7 +46,7 @@ void main() {
   }
 
   group('the number', () {
-    test('a run drawn on the canvas is labelled with its cable id', () {
+    test('a run drawn on the canvas is labeled with its cable id', () {
       final p = room();
       final cable = p.addAvCable(
         fromNodeId: 'A',
@@ -88,7 +88,7 @@ void main() {
     });
 
     test('nowhere at all when no leg is long enough to write on', () {
-      // A patch between adjacent boxes is better unlabelled than covered by
+      // A patch between adjacent boxes is better unlabeled than covered by
       // its own cable number.
       expect(
         cableLabelAnchor(const [Offset(0, 0), Offset(12, 0)]),

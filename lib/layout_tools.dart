@@ -75,7 +75,7 @@ Offset nonOverlappingPosition({
 /// The grid a diagram's boxes line up on when "Snap to grid" is on.
 ///
 /// A drawing is read by eye, and the eye picks up a box sitting four pixels
-/// below its neighbour long before anybody can say why the sheet looks wrong.
+/// below its neighbor long before anybody can say why the sheet looks wrong.
 /// Dragging with a mouse cannot land the same y twice, so the two ways to get
 /// a tidy drawing are a full auto-arrange — which throws away every deliberate
 /// placement — or a grid. 20 divides into the column pitch and the row gap the
@@ -87,7 +87,7 @@ const double kDiagramGridStep = 20;
 /// false.
 ///
 /// The flag is a parameter rather than the caller's `if` so that a page can
-/// route every placement through one line and the setting cannot be honoured
+/// route every placement through one line and the setting cannot be honored
 /// in the drag preview but forgotten on the drop — which is the bug that makes
 /// a snap feel broken: the box jumps somewhere other than where it was shown.
 Offset snapToGrid(
@@ -100,7 +100,7 @@ Offset snapToGrid(
       (p.dy / step).roundToDouble() * step);
 }
 
-/// How close a dragged bend has to come to lining up with its neighbour
+/// How close a dragged bend has to come to lining up with its neighbor
 /// before it is pulled square with it.
 ///
 /// Cable in a building runs along walls, trays and corridors, so the bends
@@ -109,21 +109,21 @@ Offset snapToGrid(
 /// do. Small enough that a deliberately diagonal leg is left alone.
 const double kRightAngleSnap = 9;
 
-/// [point] pulled square with whichever of [neighbours] it has come close to.
+/// [point] pulled square with whichever of [neighbors] it has come close to.
 ///
 /// Each axis is considered separately, so a bend can end up square with the
 /// point before it horizontally and the one after it vertically — which is
 /// exactly the corner an L-shaped route is made of.
 Offset snapToRightAngle(
   Offset point,
-  Iterable<Offset> neighbours, {
+  Iterable<Offset> neighbors, {
   double tolerance = kRightAngleSnap,
 }) {
   var x = point.dx;
   var y = point.dy;
   var bestX = tolerance;
   var bestY = tolerance;
-  for (final n in neighbours) {
+  for (final n in neighbors) {
     final dx = (point.dx - n.dx).abs();
     if (dx <= bestX) {
       bestX = dx;
@@ -179,7 +179,7 @@ List<Offset> rightAngleTurn(Offset a, Offset b, {double jog = 44}) {
 /// [margin] clearance and taking the shortest way out.
 ///
 /// A cable bend dropped inside a device is the one case the router can't
-/// honour — there is no path out of a solid box — so the bend is nudged clear
+/// honor — there is no path out of a solid box — so the bend is nudged clear
 /// as it's dragged rather than left somewhere that forces a line through the
 /// device.
 Offset pushOutOfRects(Offset p, List<Rect> rects, {double margin = 10}) {

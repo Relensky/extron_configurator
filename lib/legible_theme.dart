@@ -33,11 +33,11 @@ import 'contrast.dart';
 ///       [FilledButtonTheme] and differ only in which roles they read. Fixed
 ///       with [readableOn], which keeps the generator's answer wherever it
 ///       reads and falls back to black or white where it does not — the same
-///       two colours Material would have chosen itself.
+///       two colors Material would have chosen itself.
 ///    2. INK ON A SURFACE. A text button's label is the accent on the page
 ///       behind it, and there is no `on` role for that. Fixed with
 ///       [legibleTone], which KEEPS THE HUE and moves the lightness: a blue
-///       button that turned grey would stop being the app's blue, and the
+///       button that turned gray would stop being the app's blue, and the
 ///       point is a readable blue rather than no blue.
 ///
 ///  NOTHING MOVES THAT ALREADY READS. Every repair here is measured first and
@@ -52,7 +52,7 @@ ThemeData legibleTheme(ThemeData theme) {
   final fixed = theme.copyWith(colorScheme: scheme);
 
   // WHAT SITS BEHIND A TRANSPARENT BUTTON. A text button is used on the page,
-  // inside a card and inside a dialog, and its one label colour has to read on
+  // inside a card and inside a dialog, and its one label color has to read on
   // all three — so the tone is walked against each in turn rather than against
   // whichever one somebody happened to think of.
   final behind = <Color>{
@@ -105,10 +105,10 @@ ThemeData legibleTheme(ThemeData theme) {
       ),
     ),
     // A CHIP CHANGES FILL WHEN IT IS PRESSED, and a theme that pins its label
-    // colours pins them for both states. Auris does, and on a black accent
+    // colors pins them for both states. Auris does, and on a black accent
     // that left a near-black label on a near-black selected chip: 1.06:1.
     //
-    // Only the colours the theme actually names are touched. Where it names
+    // Only the colors the theme actually names are touched. Where it names
     // none - Classic names none - the chip reads `onSurfaceVariant` and
     // `onSecondaryContainer` off the scheme, which the pass above has already
     // been through.
@@ -131,7 +131,7 @@ ThemeData legibleTheme(ThemeData theme) {
     //  1.00:1, a nav-rail label at 1.02:1, a tab label at 1.03:1.
     //
     //  [legibleTone] rather than [readableOn] throughout: these are the app's
-    //  own colours on the app's own furniture, and an accent that turned white
+    //  own colors on the app's own furniture, and an accent that turned white
     //  would stop being the accent. The tone keeps the hue and moves the
     //  lightness only as far as it has to.
     appBarTheme: _measuredAppBar(theme.appBarTheme, scheme),
@@ -150,7 +150,7 @@ ThemeData legibleTheme(ThemeData theme) {
   );
 }
 
-/// A colour that reads on EVERY ground in [grounds].
+/// A color that reads on EVERY ground in [grounds].
 ///
 /// The same question the transparent buttons ask: a list tile is used on the
 /// page, in a card and in a dialog, and a field is dropped into all three too.
@@ -158,7 +158,7 @@ ThemeData legibleTheme(ThemeData theme) {
 /// two to chance - which is how a tile's ink came out fine on `surface` and
 /// unreadable on the card the app actually draws it in.
 ///
-/// WALKED TO A FIXED POINT, not once per ground. [legibleTone] moves a colour
+/// WALKED TO A FIXED POINT, not once per ground. [legibleTone] moves a color
 /// the NEARER way, so fixing it against a light ground can push it back under
 /// the bar on a dark one - and one pass down a list of four leaves whichever
 /// ground came first to chance. Repeating until nothing moves settles it,
@@ -196,11 +196,11 @@ TextStyle? _styleOnAll(TextStyle? style, List<Color> grounds,
         ? style
         : style!.copyWith(color: _inkOnAll(style.color, grounds, min: min));
 
-/// A colour moved onto [ground] only if it does not already read there.
+/// A color moved onto [ground] only if it does not already read there.
 Color? _ink(Color? ink, Color ground, {double min = kContrastBody}) =>
     ink == null ? null : legibleTone(ink, ground, minRatio: min);
 
-/// A text style whose colour has been measured against [ground].
+/// A text style whose color has been measured against [ground].
 TextStyle? _inkStyle(TextStyle? style, Color ground,
         {double min = kContrastBody}) =>
     style?.color == null
@@ -338,19 +338,19 @@ NavigationRailThemeData _measuredRail(
   );
 }
 
-/// A chip's label colour, measured against the fill of the state it is drawn
-/// in — and still one colour per state afterwards.
+/// A chip's label color, measured against the fill of the state it is drawn
+/// in — and still one color per state afterwards.
 ///
-/// A CHIP LABEL IS STATE-AWARE OR IT IS NOTHING. Auris hands its label colour
+/// A CHIP LABEL IS STATE-AWARE OR IT IS NOTHING. Auris hands its label color
 /// over as a [WidgetStateColor] that answers one thing selected and another
 /// unselected, and the selected fill is not the unselected one — so measuring
-/// the colour this getter happens to return and writing back a flat
+/// the color this getter happens to return and writing back a flat
 /// replacement loses the state it was carrying. That is not a hypothetical:
-/// doing it made selected chips render the UNSELECTED colour, a repair that
+/// doing it made selected chips render the UNSELECTED color, a repair that
 /// broke the thing it was measuring.
 ///
 /// So each state is resolved, measured against the fill THAT state paints, and
-/// put back as a state-aware colour. A theme that names no colour is left
+/// put back as a state-aware color. A theme that names no color is left
 /// alone: its chips read the scheme roles, which [_legibleScheme] has already
 /// been through.
 TextStyle? _measuredChipLabel(
@@ -384,8 +384,8 @@ TextStyle? _measuredChipLabel(
 ///
 /// [readableOn] rather than [legibleTone] on purpose: these are labels ON a
 /// fill, where black and white are the right answers and are what Material
-/// picks itself. Keeping the hue matters for a coloured label on a neutral
-/// page; it does not for white text on a coloured button.
+/// picks itself. Keeping the hue matters for a colored label on a neutral
+/// page; it does not for white text on a colored button.
 ColorScheme _legibleScheme(ColorScheme s) {
   // THE ACCENT ITSELF, WHERE NO INK IS COMFORTABLE ON IT.
   //
@@ -394,13 +394,13 @@ ColorScheme _legibleScheme(ColorScheme s) {
   // is the case where that is not enough: it is too dark for black and too
   // light for white, so black lands around 5:1, white around 4:1, the pass
   // picks black because it is the better of the two, and the result is a
-  // filled button with BLACK text on a colour, sitting next to a tonal button
+  // filled button with BLACK text on a color, sitting next to a tonal button
   // in white. Both clear the WCAG bar and it still reads badly.
   //
   // So `primary` - and only `primary`, the one role this app paints solid
   // buttons out of - is taken the way its own mode already goes: darker in a
   // light theme so white sits on it, lighter in a dark one so black does. The
-  // hue is kept, as everywhere else here, so the button is still the colour
+  // hue is kept, as everywhere else here, so the button is still the color
   // somebody picked. An accent that already carries a comfortable ink is left
   // exactly where it is, which is most of them and all of Auris.
   final primary = _comfortableFill(s.primary, s.brightness);
@@ -498,7 +498,7 @@ ButtonStyle? _measuredStyle(
   return (base ?? const ButtonStyle()).copyWith(
     foregroundColor: WidgetStateProperty.resolveWith(resolve),
     // The icon follows the label. Left out, an icon button keeps reading the
-    // default — which is the colour this pass just moved off.
+    // default — which is the color this pass just moved off.
     iconColor: WidgetStateProperty.resolveWith(resolve),
   );
 }

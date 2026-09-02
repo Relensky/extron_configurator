@@ -77,7 +77,7 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
           if (_dirty)
             Chip(
               // A CHIP THAT OVERRIDES ITS FILL HAS TO OVERRIDE ITS INK. The
-              // theme's label colour was measured against the chip's DEFAULT
+              // theme's label color was measured against the chip's DEFAULT
               // fill, and this one is not that fill.
               label: Text(
                 'Unsaved',

@@ -112,7 +112,7 @@ void main() {
       );
 
   group('the AV Flow tab', () {
-    testWidgets('asks first, and a cancelled question changes nothing',
+    testWidgets('asks first, and a canceled question changes nothing',
         (tester) async {
       final p = flowRoom();
       await pumpFlow(tester, p);

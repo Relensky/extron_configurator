@@ -104,7 +104,7 @@ DEVICE_INFO = {
   block has filled in **differently** from what the model's own driver states -
   the device converted to SSH because its family is SSH while its driver says
   TCP on a port of its own - with the connection and keep-alive keys ticked and
-  the driver's naming left alone. Its neighbour **Check Defaults** answers the
+  the driver's naming left alone. Its neighbor **Check Defaults** answers the
   other question: which keys the block is *missing*.
 
 ## Device Editor (the `Catalog` tab)
@@ -381,7 +381,7 @@ On top of the equipment:
   taxable.
 
 Devices nobody has priced are counted and called out rather than being quietly
-totalled as free.
+totaled as free.
 
 **Add to catalog** (the 📚 icon on any line added by hand) is the trip back the
 other way. A typed line is how a part enters the building - somebody is quoted
@@ -390,7 +390,7 @@ now that was where it stopped, so the next room typed the same box in again at
 whatever price that person remembered. It writes the entry to `av_devices.json`
 once, points the line at it and drops the typed price, so the line is priced
 like everything else from then on and a revision reaches every room that uses
-it. Offered on Equipment, Rack hardware, Cabling and Other items; greyed out on
+it. Offered on Equipment, Rack hardware, Cabling and Other items; grayed out on
 a line that already comes off the catalog, and on a counted line, whose price
 belongs to the thing on the diagram.
 
@@ -818,15 +818,15 @@ keystroke, not the second-to-last one.
 
 It is a **log, not an undo**. Nothing on it puts anything back.
 
-## Colour contrast
+## Color contrast
 
 There are four themes - Classic and Auris, each light and dark - and **Classic's
-accent is a colour the user picks out of a wheel**. That last part is why
-hand-picking foreground colours does not work here: there is no fixed palette to
+accent is a color the user picks out of a wheel**. That last part is why
+hand-picking foreground colors does not work here: there is no fixed palette to
 check against, because the palette is whatever somebody chose this morning.
 
 `contrast.dart` measures instead. `contrastRatio` is the WCAG formula;
-`readableOn` takes the colours a design would *like* and returns the first that
+`readableOn` takes the colors a design would *like* and returns the first that
 actually reads on the background it is going on, falling back to plain black or
 white when none do. `errorOn` and `foregroundOn` are the two shapes that come
 up constantly. WCAG AA is 4.5:1 for body text and 3:1 for large text and icons
@@ -843,14 +843,14 @@ What the audit found and what changed:
 | `onSurfaceVariant` on `errorContainer` | **1.5–3.6:1** | Default chip label on a warn-filled chip. Now set explicitly. |
 | `onSecondaryContainer` on `secondaryContainer` | **2.7:1** (Classic dark) | The rail's selected row. Now `readableOn`. |
 | `tertiary` on `surface` | **2.1–2.4:1** (light themes) | Info and warning icons. Now `readableOn` at the 3:1 icon threshold. |
-| `Colors.red` snackbar under themed text | **3.1–5.4:1** | 29 sites. Now `snackErrorFill`, which picks the fill *against the bar's own text colour* - contrast is symmetric, so the same question asked the other way round. |
+| `Colors.red` snackbar under themed text | **3.1–5.4:1** | 29 sites. Now `snackErrorFill`, which picks the fill *against the bar's own text color* - contrast is symmetric, so the same question asked the other way round. |
 | `Colors.red` as text on a surface | **~4:1** | 8 sites. Now `colorScheme.error`, which measures 4.9–7.1:1. |
 
 Two further fixes came out of the same pass:
 
 - **The Raw JSON tab's status indicator** already carried an icon and a
-  sentence alongside its colour, so the state was never colour-only - but the
-  colours themselves were `Colors.green` (2.8:1 on a light surface) and
+  sentence alongside its color, so the state was never color-only - but the
+  colors themselves were `Colors.green` (2.8:1 on a light surface) and
   `Colors.orange` (2.0:1), both under the 3:1 an icon needs to be seen at all.
   They now come from `successOn` / `warningOn`, which supply the tone Material
   3 has no role for and then measure it. The invalid-JSON banner was a fixed
@@ -865,9 +865,9 @@ Two further fixes came out of the same pass:
 The editor's syntax-highlighting palette (string green, number orange) is left
 alone: it already branches on light/dark and both branches measure above 4.5:1.
 
-**The drawings are deliberately out of scope.** Cable colours, conversion
+**The drawings are deliberately out of scope.** Cable colors, conversion
 highlights and plan annotations are a fixed vocabulary - HDMI is that blue on
-every machine, and a run that changed colour with the theme would stop matching
+every machine, and a run that changed color with the theme would stop matching
 its own legend and its printout.
 
 ## The left rail fits, whatever the window
@@ -900,7 +900,7 @@ Three modes, picked by measurement rather than by breakpoint:
    words, and it is often the difference between "Floor Plan" taking one line
    and taking two - worth ~150 pixels down the rail.
 3. **Icons with tooltips** - the last resort, for a window with no room for
-   fifteen legible labelled rows. Not a nice rail, and it beats the two
+   fifteen legible labeled rows. Not a nice rail, and it beats the two
    alternatives at 420 pixels of height: type nobody can read, or five tabs
    hidden below the fold.
 
@@ -1062,7 +1062,7 @@ it is found.
 The window's X asks before it takes the work with it. The prompt lists what is
 loose - one line per document, naming the file - says what the recovery copy is
 holding, and offers three answers: *Save and close*, *Close without saving*, and
-*Keep working*. A save that fails, or a Save As that is cancelled, does **not**
+*Keep working*. A save that fails, or a Save As that is canceled, does **not**
 close the app: that would lose exactly the work the user just asked to keep.
 
 A session with everything saved closes as immediately as it always did.
@@ -1137,8 +1137,8 @@ shrinking it, which is what makes a title-bar icon look softer than the crisp
 one Explorer shows for the same file.
 
 The script also takes a PDF. It does NOT take `.ai` or `.eps`: Illustrator's
-EPS is PostScript, and rasterising PostScript needs Ghostscript, which is not
-part of this project's toolchain. Artwork that is not square is centred on a
+EPS is PostScript, and rasterizing PostScript needs Ghostscript, which is not
+part of this project's toolchain. Artwork that is not square is centered on a
 transparent square rather than stretched - a logo drawn 4% taller than it is
 wide is a logo somebody drew that way, and the squash shows at 16 pixels while
 the margin does not.
@@ -1197,8 +1197,8 @@ and every convention on it means nothing on its own. So each sheet carries a
 **key**, drawn on the sheet itself and inside the boundary that gets captured -
 it is part of the exported image and of the sheet in the workbook, not a panel
 that only exists on screen. It lists the **mounting-surface icons** actually
-used on that sheet, the **cable runs** with their colour, dash pattern and
-number, the **callouts** and what each points at, and the **notation** colours.
+used on that sheet, the **cable runs** with their color, dash pattern and
+number, the **callouts** and what each points at, and the **notation** colors.
 Drag it where it reads best (per sheet - a legend clear of the title block on
 one drawing can be on top of it on another) or turn it off from the toolbar.
 
@@ -1211,35 +1211,35 @@ pixels. It is part of the sheet, so it is in the exported PNG and in the
 workbook image - and adding space on the left or top moves everything already
 drawn with the plan, so a marker stays on the wall it was placed on.
 
-### Label colours
+### Label colors
 
 An architectural plan is a line drawing, and text dropped straight onto one
 lands on a wall. Every label on the sheet is therefore printed on a plate, and
-**Label colours** on the toolbar says what colour that plate and the words on
+**Label colors** on the toolbar says what color that plate and the words on
 it are - separately for **location names**, **callout markers** and **cable run
 labels**, because the three are read at different moments by different people:
 a sheet issued for rough-in wants the runs shouting and the callouts quiet, and
 the same sheet in a design review wants the opposite.
 
-The colours are per sheet, like everything else drawn on one, and stored in the
-sidecar. A kind nobody has recoloured follows the light or dark drawing it is
+The colors are per sheet, like everything else drawn on one, and stored in the
+sidecar. A kind nobody has recolored follows the light or dark drawing it is
 on, exactly as it always did; the reset arrow on each row puts it back.
 
-### Reading a drawing that is not in colour
+### Reading a drawing that is not in color
 
-Colour alone fails the moment a sheet is printed, photocopied, or read by
+Color alone fails the moment a sheet is printed, photocopied, or read by
 somebody who cannot distinguish red from green - and it fails hardest on the
 three parallel lines between the same two boxes, which is exactly where it
-matters. So a run carries a **dash pattern** as well as a colour, keyed off the
+matters. So a run carries a **dash pattern** as well as a color, keyed off the
 cable rather than the run, so "Cat 6a is the dashed one" is true of every Cat 6a
 on the sheet. Crossings are drawn as a **hop**, because two lines meeting at a
 point is otherwise indistinguishable from two lines joining at one. A run that
 carries on past the sheet - to the IDF, or simply to a location nobody has
-placed on this drawing - leaves the page as a **squiggle** labelled with where
+placed on this drawing - leaves the page as a **squiggle** labeled with where
 it is going, rather than a line that stops at the border for no reason.
 
 Both drawings export a **black-and-white version for print**, rendered in the
-light theme before the colour is dropped: a dark-mode capture converted to grey
+light theme before the color is dropped: a dark-mode capture converted to gray
 is a black page with pale lines on it, which a printer renders as a black page.
 
 ### Editing a run by hand
@@ -1378,7 +1378,7 @@ raised rather than reset.
 **The book icon in the toolbar**, on every tab, writes a workbook. With a room
 open inside a job it **asks which one** - the room, or the building - because
 both are documents somebody means by "the workbook" and the button used to
-answer that by itself, always in favour of the room. With only one of them open
+answer that by itself, always in favor of the room. With only one of them open
 there is nothing to ask.
 
 ### The room workbook

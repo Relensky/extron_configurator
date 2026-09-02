@@ -32,7 +32,7 @@ import 'project_estimate.dart';
 ///     reads the room's own JSON, replaces the `nodes` and `cables` keys and
 ///     the device blocks that changed, and writes the rest back exactly as it
 ///     was found — including into the pre-rename sidecar name, if that is what
-///     the room has. A swap has no business reorganising somebody's folder.
+///     the room has. A swap has no business reorganizing somebody's folder.
 ///
 ///  3. THE OPEN ROOM IS NEVER WRITTEN BEHIND THE APP'S BACK. If the room in
 ///     the editor is on the project, writing its files would put the swap on
@@ -373,7 +373,7 @@ const JsonEncoder _encoder = JsonEncoder.withIndent('    ');
   }
 
   // The flow file as it sits on disk, with only the two keys the swap owns
-  // replaced. Everything else in it — the colours, the room mode, the
+  // replaced. Everything else in it — the colors, the room mode, the
   // backdrop, and on a pre-split room the racks and plans and estimate too —
   // is written back byte-identical.
   final flowFile = File(loaded.flowPath);

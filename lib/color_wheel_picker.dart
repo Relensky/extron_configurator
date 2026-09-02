@@ -256,20 +256,20 @@ class _WheelPainter extends CustomPainter {
   bool shouldRepaint(covariant _WheelPainter old) => old.hsv != hsv;
 }
 
-/// The mark on the chosen swatch: a checkbox drawn ON the colour.
+/// The mark on the chosen swatch: a checkbox drawn ON the color.
 ///
 /// It used to sit in a solid square of its own — a little white or black tile
 /// laid over the swatch — which read clearly enough but hid the very thing
-/// the row is for: on a 24x20 chip the tile covered most of the colour, so
+/// the row is for: on a 24x20 chip the tile covered most of the color, so
 /// the selected swatch was the one you could no longer see. The checkbox
 /// keeps its outline and its tick, both in whichever of white/near-black
-/// reads on that swatch, and the swatch's own colour stays its ground.
+/// reads on that swatch, and the swatch's own color stays its ground.
 ///
 /// Sized off the swatch so the small chips on the cable and signal dialogs
 /// (24x20) get one that fits, and the full-size ones get one that is worth
 /// seeing.
 class _SelectedTick extends StatelessWidget {
-  /// The colour that reads on the swatch — white on a dark one, near-black on
+  /// The color that reads on the swatch — white on a dark one, near-black on
   /// a light one. The checkbox outline AND the tick are both drawn in it; the
   /// ground behind them is the swatch.
   final Color onColor;
@@ -300,22 +300,22 @@ class _SelectedTick extends StatelessWidget {
   }
 }
 
-/// A colour chip marked as chosen by A CHECKBOX ON THE COLOUR AND A GLOW
+/// A color chip marked as chosen by A CHECKBOX ON THE COLOR AND A GLOW
 /// BEHIND IT.
 ///
 /// THE BOX AROUND IT IS WHAT WENT. It used to draw a three-pixel ring in the
-/// theme's primary as well, and a ring is a second colour laid hard against
+/// theme's primary as well, and a ring is a second color laid hard against
 /// the one being chosen - on a palette of twelve, the chosen swatch was the
 /// one you could no longer judge, because it was being read through a thick
 /// border of a completely different hue.
 ///
 /// The glow stays, and is the reason the ring is not missed. It sits BEHIND
 /// the chip rather than on top of it, so it says "this one" from across the
-/// row without touching the colour itself, and being a shadow it costs no
+/// row without touching the color itself, and being a shadow it costs no
 /// layout - the row does not reflow when the choice moves along it.
 ///
 /// The tick is the other half: [_SelectedTick], drawn in whichever of white or
-/// near-black reads on that colour, with the colour itself as its ground. It
+/// near-black reads on that color, with the color itself as its ground. It
 /// is what still answers the question in a screenshot, on a monochrome
 /// display, or for anybody who cannot pick the glow out.
 ///

@@ -36,7 +36,7 @@ import 'xlsx_writer.dart';
 /// ============================================================================
 ///  The one-line drawing the trades are handed: boxes for the places in the
 ///  room, pull boxes for the junctions cable routes through, and between them
-///  a bundle labelled with what runs and how much of it, ending at the pathway
+///  a bundle labeled with what runs and how much of it, ending at the pathway
 ///  back to the telecom room.
 ///
 ///  It draws itself from the room and is then edited by hand — see
@@ -97,7 +97,7 @@ class _CablingViewState extends State<CablingView> {
   String _exportLayer = '';
 
   /// True while the drawing is being rendered the way it should PRINT — light
-  /// theme, no colour. Held for the one frame a black-and-white export
+  /// theme, no color. Held for the one frame a black-and-white export
   /// captures, then put back; see [printSkin].
   bool _printMode = false;
 
@@ -474,7 +474,7 @@ class _CablingViewState extends State<CablingView> {
           ),
           const SizedBox(width: 8),
           // The key is part of the drawing, not a view setting: it exports
-          // with the PNG and it is what makes the colours mean anything. The
+          // with the PNG and it is what makes the colors mean anything. The
           // toggle is here for the rare sheet that carries its legend in the
           // title block instead.
           // Shared with the AV Flow and Schematic drawings — see
@@ -526,14 +526,14 @@ class _CablingViewState extends State<CablingView> {
               );
             },
           ),
-          // Every cable type's colour in one place, the way the Schematic
+          // Every cable type's color in one place, the way the Schematic
           // tab's "Colors" button has always worked. Setting them one
           // selected run at a time is how a sheet ends up with three shades
           // of network on it.
           OutlinedButton.icon(
             key: const ValueKey('cabling_colors'),
             icon: const Icon(Icons.palette_outlined, size: 18),
-            label: const Text('Cable colours'),
+            label: const Text('Cable colors'),
             onPressed: () => showCableColorsDialog(context, provider),
           ),
           OutlinedButton.icon(
@@ -555,7 +555,7 @@ class _CablingViewState extends State<CablingView> {
             itemBuilder: (ctx) => const [
               PopupMenuItem(value: 'one', child: Text('As drawn (.png)')),
               // The one that gets printed and marked up on a clipboard. The
-              // runs carry a dash pattern as well as a colour precisely so
+              // runs carry a dash pattern as well as a color precisely so
               // this stays readable.
               PopupMenuItem(
                 value: 'bw',
@@ -917,10 +917,10 @@ class _CablingViewState extends State<CablingView> {
         icon: const Icon(Icons.playlist_add, size: 16),
         label: const Text('Add cable type'),
         onPressed: () {
-          // No colour is chosen here any more: the key hands one out per cable
-          // type, so the new line is a different colour from the one it was
+          // No color is chosen here any more: the key hands one out per cable
+          // type, so the new line is a different color from the one it was
           // added beside for the only reason that should ever make two lines
-          // different colours — it is a different cable.
+          // different colors — it is a different cable.
           final added = provider.addCablingBundle(
             fromBoxId: bundle.fromBoxId,
             toBoxId: bundle.toBoxId,
@@ -947,12 +947,12 @@ class _CablingViewState extends State<CablingView> {
     ];
   }
 
-  /// The colours a run can be drawn in, for the sheet whose office has its own
+  /// The colors a run can be drawn in, for the sheet whose office has its own
   /// convention. The palette first, then the picker for anything the app has
   /// never heard of.
   ///
-  /// Recolouring one run is an EXCEPTION now: the key gives every cable type
-  /// its own colour, so the ordinary way to make two runs read alike is to
+  /// Recoloring one run is an EXCEPTION now: the key gives every cable type
+  /// its own color, so the ordinary way to make two runs read alike is to
   /// give them the same cable type, not to paint them.
   List<Widget> _colorPicker(AppStateProvider provider, CablingBundle bundle) {
     final current = Color(bundle.color);
@@ -972,12 +972,12 @@ class _CablingViewState extends State<CablingView> {
         ),
       avRowIcon(
         Icons.colorize,
-        'Any other colour',
+        'Any other color',
         () async {
           final picked = await showColorWheelDialog(
             context,
             initial: current,
-            title: 'Colour for ${bundle.label}',
+            title: 'Color for ${bundle.label}',
           );
           if (picked != null) {
             provider.setCablingBundleColor(bundle.id, picked.toARGB32());
@@ -985,11 +985,11 @@ class _CablingViewState extends State<CablingView> {
         },
       ),
       // Only offered once there is something to go back to: a hand-picked
-      // colour is the one thing that hides what the key says this cable is.
+      // color is the one thing that hides what the key says this cable is.
       if (provider.avCabling.colors.containsKey(bundle.id))
         avRowIcon(
           Icons.format_color_reset,
-          'Back to the colour the key gives this cable',
+          'Back to the color the key gives this cable',
           () => provider.setCablingBundleColor(bundle.id, null),
         ),
     ];
@@ -1102,7 +1102,7 @@ class _CablingViewState extends State<CablingView> {
         value: 'edit',
         child: Text('Edit this run...'),
       ),
-      const PopupMenuItem(value: 'color', child: Text('Colour...')),
+      const PopupMenuItem(value: 'color', child: Text('Color...')),
       if (siblings.length > 1)
         PopupMenuItem(
           value: 'next',
@@ -1126,7 +1126,7 @@ class _CablingViewState extends State<CablingView> {
         final picked = await showColorWheelDialog(
           context,
           initial: Color(bundle.color),
-          title: 'Colour for ${bundle.label}',
+          title: 'Color for ${bundle.label}',
         );
         if (picked != null) {
           provider.setCablingBundleColor(bundle.id, picked.toARGB32());
@@ -1359,7 +1359,7 @@ class _CablingViewState extends State<CablingView> {
   ///
   /// The print skin is a WIDGET, not a filter over the bytes, so the drawing is
   /// re-laid-out in the light theme before it is captured — a dark-mode capture
-  /// converted to grey is a black page with pale lines on it, which a printer
+  /// converted to gray is a black page with pale lines on it, which a printer
   /// renders as a black page.
   Future<Uint8List?> _captureDrawing({bool monochrome = false}) async {
     if (!monochrome) return captureBoundary(_canvasKey, pixelRatio: 2.0);
@@ -1565,7 +1565,7 @@ class _CablingViewState extends State<CablingView> {
   // --- the key --------------------------------------------------------------
 
   /// Whether the key is on the sheet. On by default: a drawing whose lines are
-  /// colour-coded and whose key is opt-in is a drawing that gets issued
+  /// color-coded and whose key is opt-in is a drawing that gets issued
   /// without one.
   bool _keyShown(AppStateProvider provider) =>
       !provider.avCabling.hidden.contains(kCablingKeyId);
@@ -1595,9 +1595,9 @@ class _CablingViewState extends State<CablingView> {
     return Rect.fromLTWH(at.dx, at.dy, kCablingKeyWidth, height);
   }
 
-  /// The key: one line per cable on the sheet, in its colour.
+  /// The key: one line per cable on the sheet, in its color.
   ///
-  /// This is the half of a colour-coded drawing that makes the colours mean
+  /// This is the half of a color-coded drawing that makes the colors mean
   /// anything. It is derived from the same bundles the lines are drawn from —
   /// see [CablingSchematic.key] — so it cannot fall out of step with them the
   /// way a legend somebody maintains by hand always eventually does.
@@ -1677,7 +1677,7 @@ class _CablingViewState extends State<CablingView> {
                     height: 30,
                     child: Row(
                       children: [
-                        // The same dash the run captions carry — colour AND
+                        // The same dash the run captions carry — color AND
                         // pattern — so a line in the key and a line on the
                         // drawing read as the same mark rather than two
                         // different notations. The pattern is the half that
@@ -1702,7 +1702,7 @@ class _CablingViewState extends State<CablingView> {
                                 // The category only when it is doing work —
                                 // when two categories share a cable type and
                                 // the reader has to be told which Cat 6a this
-                                // colour means.
+                                // color means.
                                 e.categoryMatters
                                     ? '${e.type}  (${e.category})'
                                     : e.type,
@@ -1945,7 +1945,7 @@ class _CablingViewState extends State<CablingView> {
   /// The bends [bundleId] is drawn with right now: what is stored, with the
   /// bend under the pointer moved to where the pointer has it.
   ///
-  /// A dragged bend is snapped square with its neighbours as it comes close to
+  /// A dragged bend is snapped square with its neighbors as it comes close to
   /// them, because cable in a building runs along walls and trays and hitting
   /// an exact right angle by dragging a dot is a thing nobody can do.
   List<Offset> _bendsOf(
@@ -1959,14 +1959,14 @@ class _CablingViewState extends State<CablingView> {
     if (bundleId != _bendRunId || _bendIndex < 0) return stored ?? const [];
     final next = List<Offset>.from(stored ?? const <Offset>[]);
     if (_bendIndex >= next.length) return next;
-    final neighbours = <Offset>[
+    final neighbors = <Offset>[
       if (_bendIndex == 0) from else next[_bendIndex - 1],
       if (_bendIndex == next.length - 1) to else next[_bendIndex + 1],
     ];
     // A bend dropped inside a box is the one place the router cannot route out
     // of, so the line would have to cross the box to reach it. Nudged clear.
     next[_bendIndex] = pushOutOfRects(
-      snapToRightAngle(next[_bendIndex] + _bendDelta, neighbours),
+      snapToRightAngle(next[_bendIndex] + _bendDelta, neighbors),
       rects.values.toList(),
     );
     return next;
@@ -2135,7 +2135,7 @@ class _CablingViewState extends State<CablingView> {
     // WHERE THE RUN LANDS on each of its two boxes. A run arrives at the
     // middle of a box by default, which is right for a one-line drawing and
     // wrong the moment somebody is describing real work: cable comes into a
-    // floor box from one side, and four runs pointing at the centre of the
+    // floor box from one side, and four runs pointing at the center of the
     // same box say nothing about which knockout each of them uses.
     for (final end in [
       (atStart: true, boxId: bundle.fromBoxId, at: ends.from),
@@ -2197,7 +2197,7 @@ class _CablingViewState extends State<CablingView> {
               ),
               child: Tooltip(
                 message: 'Drag to move where this run lands on the box · '
-                    'double-click to centre it',
+                    'double-click to center it',
                 child: Container(
                   width: r * 2,
                   height: r * 2,
@@ -2469,9 +2469,9 @@ class _CablingViewState extends State<CablingView> {
 
 /// Draws the bundles and their labels.
 ///
-/// Runs sharing an edge are drawn as parallel lines in their own colours, and
+/// Runs sharing an edge are drawn as parallel lines in their own colors, and
 /// their labels are stacked into ONE block beside the middle of the edge —
-/// "6x Cat 6a" over "5x Cat 5e", each with a dash of its own colour. Two
+/// "6x Cat 6a" over "5x Cat 5e", each with a dash of its own color. Two
 /// captions at the same midpoint would sit on top of each other, which is how
 /// a drawing quietly loses half of what it is supposed to be ordering.
 /// The short line drawn beside a cable's name in the key. Painted rather than
@@ -2571,7 +2571,7 @@ class _BundlePainter extends CustomPainter {
     // it sits over the runs rather than under the next one drawn. Each dodges
     // everything already down, the captions included.
     //
-    // Anchored clear of the box it leaves: a run starts at the CENTRE of its
+    // Anchored clear of the box it leaves: a run starts at the CENTER of its
     // box and the boxes are drawn over the lines, so a label a fixed distance
     // in from the end of the route would be printed underneath the box.
     for (final bundle in drawing.bundles) {
@@ -2614,7 +2614,7 @@ class _BundlePainter extends CustomPainter {
     for (final row in caption.rows) {
       // The dash is the key: it is what ties "6x Cat 6a" to the line it names
       // when three run side by side — so it is stroked in that run's own
-      // pattern, not just its colour, or the tie breaks the moment the sheet
+      // pattern, not just its color, or the tie breaks the moment the sheet
       // is printed in black and white.
       paintRunSpecimen(
         canvas: canvas,
@@ -2725,7 +2725,7 @@ List<_CablingCaption> _cablingCaptions({
   Set<String> hiddenLabels = const {},
   /// The sheet itself, so a label cannot be dragged off the edge of it — off
   /// the drawing is off the exported PNG, and a label the pointer has carried
-  /// past the border is one the drag is cancelled on halfway.
+  /// past the border is one the drag is canceled on halfway.
   Size canvasSize = Size.zero,
 }) {
   final styles = drawing.bundleLineStyles;
@@ -2737,7 +2737,7 @@ List<_CablingCaption> _cablingCaptions({
     final group = entry.value;
     // Halfway ALONG the route rather than halfway between the boxes: on a run
     // that detours around a rack the straight-line midpoint can land well off
-    // the line it is supposed to be labelling.
+    // the line it is supposed to be labeling.
     final route = routes[group.first.id];
     if (route == null || route.isEmpty) continue;
 
@@ -2760,8 +2760,8 @@ List<_CablingCaption> _cablingCaptions({
               fontSize: selected ? 12.5 : 11.5,
               fontWeight: FontWeight.bold,
               fontStyle: FontStyle.italic,
-              // The selected run is underlined rather than recoloured: its
-              // colour is data on this drawing and must not move to say
+              // The selected run is underlined rather than recolored: its
+              // color is data on this drawing and must not move to say
               // "picked".
               decoration: selected ? TextDecoration.underline : null,
             ),

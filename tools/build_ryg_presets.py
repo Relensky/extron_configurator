@@ -84,7 +84,7 @@ CATALOG = {
     'Switcher: 84': 'DTP CrossPoint 84 4K IPCP Q SA',
     'Switcher: 108': 'DTP CrossPoint 108 4K IPCP Q SA LL',
     # The Equipment tab spells this with two spaces and one room-type
-    # sheet with one. Both normalise to the single-space form.
+    # sheet with one. Both normalize to the single-space form.
     'Switcher: 42': 'DTP3 CrossPoint 42',
     'Touch Panel: 10"': 'TLP Pro 1025',
     'Touch Panel: 7"': 'TLP Pro 725',

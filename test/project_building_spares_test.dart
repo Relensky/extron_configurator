@@ -145,7 +145,7 @@ void main() {
             after.extrasTotal,
       );
       // ...and the total now agrees with what the vendors are being asked for,
-      // which on a job with no labour or tax is the same money twice.
+      // which on a job with no labor or tax is the same money twice.
       expect(
         after.vendors.fold<double>(0, (sum, v) => sum + v.total),
         after.grandTotal,

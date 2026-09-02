@@ -279,7 +279,7 @@ class AddManualRoomLineButton extends StatelessWidget {
 /// One line item as a card, for the job's room list.
 ///
 /// It sits under the drawn rooms and looks deliberately unlike them: a room
-/// card carries labour, parts and a room total, and this carries a date, a
+/// card carries labor, parts and a room total, and this carries a date, a
 /// cycle and one figure, because that is all there is. Dressing it up to match
 /// would be claiming a parts list that does not exist.
 class ManualRoomLineCard extends StatelessWidget {

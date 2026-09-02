@@ -124,7 +124,7 @@ void main() {
 
     test('the code on the door beats the label and the file name', () {
       final project = BuildingProject(name: 'Bessey refresh');
-      // A room nobody labelled: without a code it can only be named after the
+      // A room nobody labeled: without a code it can only be named after the
       // file it is stored in, which is what the matrix used to print.
       project.rooms.add(
         ProjectRoomRef(
@@ -272,7 +272,7 @@ void main() {
         'BSS 103',
         'Total',
       ]);
-      // As TEXT: the two party cells carry their colour as well as their name
+      // As TEXT: the two party cells carry their color as well as their name
       // now - see [responsibilityPartyCell] - and a tinted cell prints exactly
       // the string it replaced.
       List<String> text(List<dynamic> row) => [for (final c in row) '$c'];
@@ -297,7 +297,7 @@ void main() {
         'Screens',
         furnishedBy: 'Owner',
         installedBy: 'Contractor',
-        work: 'Install 120V motorised screens.',
+        work: 'Install 120V motorized screens.',
         notes: 'Sizes TBD',
       );
       final work = responsibilityMatrixSections(
@@ -306,7 +306,7 @@ void main() {
       ).firstWhere((s) => s.title == 'Description of Work');
       expect(work.rows.single, [
         'Screens',
-        'Install 120V motorised screens.',
+        'Install 120V motorized screens.',
         '',
         '',
         'Sizes TBD',

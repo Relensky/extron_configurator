@@ -57,7 +57,7 @@ void main() {
       expect(parts[RoomSidecarPart.racks]!['racks'], isNotNull);
       expect(parts[RoomSidecarPart.cost]!['cost'], isNotNull);
       // The plans keep their places: a callout points at a location, and a
-      // sheet whose places had gone would be unlabelled dots.
+      // sheet whose places had gone would be unlabeled dots.
       expect(parts[RoomSidecarPart.floorPlans]!['locations'], isNotNull);
       // The flow file does not carry a second copy of anything.
       expect(parts[RoomSidecarPart.flow]!.containsKey('racks'), isFalse);

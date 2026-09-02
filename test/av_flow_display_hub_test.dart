@@ -210,7 +210,7 @@ void main() {
       expect(ties(plan, 'input_wireless'), ['HDMI OUT -> HDMI 2']);
     });
 
-    test('a run already drawn through a DTP pair is recognised', () {
+    test('a run already drawn through a DTP pair is recognized', () {
       final p = room();
       // The wireless box reaches the panel the way the huddle preset wires
       // it: a transmitter in the credenza, twisted pair across the room, a

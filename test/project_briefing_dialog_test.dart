@@ -115,7 +115,7 @@ void main() {
       find.byKey(const ValueKey('briefing_marker_delivery_2026-12-01')),
       findsOneWidget,
     );
-    // Read against a real calendar rather than against its neighbours.
+    // Read against a real calendar rather than against its neighbors.
     expect(find.text('Delivery'), findsWidgets);
   });
 

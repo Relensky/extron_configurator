@@ -10,7 +10,7 @@ import 'package:extron_configurator/app_state.dart';
 /// `<config>_control_schematic.json` beside it, and must come back from that
 /// folder
 /// when the config is opened — not only when the Schematic tab is visited.
-/// The one judgement call is a session that already has a diagram of its own;
+/// The one judgment call is a session that already has a diagram of its own;
 /// that is the case the UI prompts about, driven by [schematicLayoutNeedsChoice].
 void main() {
   late Directory dir;

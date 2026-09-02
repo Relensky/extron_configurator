@@ -59,7 +59,7 @@ import 'room_sidecar.dart';
 /// This is the name written on the door, on the work order and in the job's
 /// history, and it is the one to show anywhere a room has to be picked out of
 /// a list of rooms in the same building. The FILE name is right nowhere:
-/// 'BSS_101_config' is an artefact of how the room is stored, not what anybody
+/// 'BSS_101_config' is an artifact of how the room is stored, not what anybody
 /// calls it.
 ///
 /// A plain function on the config rather than a method on a loaded room,
@@ -113,7 +113,7 @@ class LoadedRoom {
   /// one to show anywhere a room has to be picked out of a list of rooms in
   /// the same building. [title] is the full prose name ('Behavioral And Social
   /// Science 103') which is right on a quote and too long for a row; the
-  /// FILE name is right nowhere — "BSS_101_config" is an artefact of how the
+  /// FILE name is right nowhere — "BSS_101_config" is an artifact of how the
   /// room is stored, not what anybody calls it.
   ///
   /// Read straight off the config rather than through the provider's building
@@ -603,7 +603,7 @@ class VendorPackage {
 /// One room's whole spares bill — what it asked for, and what that costs.
 ///
 /// A record rather than a class because it is a row on a summary and nothing
-/// else: it has no behaviour, it is rebuilt from [ProjectEstimate.master]
+/// else: it has no behavior, it is rebuilt from [ProjectEstimate.master]
 /// every time it is asked for, and nothing stores it.
 typedef SpareRoomTally = ({
   /// The room's id on the project, so a row can be filtered back to the room.
@@ -725,7 +725,7 @@ typedef SparePartCover = ({
   double recommended,
 
   /// Units that would have to be ADDED to reach [recommended], and 0 once the
-  /// recommendation is met. What the button that tops the row up is labelled
+  /// recommendation is met. What the button that tops the row up is labeled
   /// with, and what the note on the row is written from: "recommend 4, add 3"
   /// is a decision and "10% cover" is a figure to go and work out.
   double toRecommend,
@@ -906,7 +906,7 @@ class ProjectEstimate {
   // -------------------------------------------------------------------------
   //  ONE SPARE, OR NONE. That is the whole rule: a part the job installs and
   //  holds nothing spare of is the row worth doing something about, and the
-  //  second spare of a part that already has one is a judgement call nobody
+  //  second spare of a part that already has one is a judgment call nobody
   //  needs a table to make.
   //
   //  This replaced a percentage policy - "hold 10% of everything" - which
@@ -1252,7 +1252,7 @@ ProjectEstimate computeProjectEstimate({
   ///
   /// Built once per room rather than searched per line: a building with forty
   /// parts and nine rooms would otherwise walk every room's gap list three
-  /// hundred and sixty times to colour one column.
+  /// hundred and sixty times to color one column.
   final undriven = <String, Map<String, int>>{};
   for (final room in included) {
     if (room.controlGaps.isEmpty) continue;

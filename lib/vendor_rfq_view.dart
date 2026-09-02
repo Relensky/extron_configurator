@@ -30,11 +30,11 @@ import 'project_schedule.dart' show formatScheduleDate;
 //  THIS FILE IS THE SHARED HALF. The vendor card owns the editing - the strip,
 //  the dialogs, the buttons - and lives on the Vendors pane. What is here is
 //  everything a SECOND screen needs to say the same thing the same way: the
-//  colours, the icon, the one-line sentence, the chip, and the way a quote
+//  colors, the icon, the one-line sentence, the chip, and the way a quote
 //  document is found and opened. The timeline reads all of it, and a copy of
 //  it there would be two screens disagreeing about what "quoted" looks like.
 
-/// The colour a stage is drawn in — read against the card's own fill, never
+/// The color a stage is drawn in — read against the card's own fill, never
 /// straight out of the scheme. See contrast.dart.
 Color rfqInk(ThemeData theme, VendorRfqStage stage) => switch (stage) {
   VendorRfqStage.none => theme.colorScheme.onSurfaceVariant,
@@ -149,7 +149,7 @@ class VendorRfqChip extends StatelessWidget {
     final theme = Theme.of(context);
     final stage = vendor.rfqStage;
     // A vendor nobody has sent anything to is the ordinary state of a job that
-    // has not gone out yet, and a row of grey "Not sent" chips down a fresh
+    // has not gone out yet, and a row of gray "Not sent" chips down a fresh
     // list is noise about nothing.
     if (stage == VendorRfqStage.none) return const SizedBox.shrink();
     return Padding(

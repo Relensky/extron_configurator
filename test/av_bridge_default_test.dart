@@ -40,7 +40,7 @@ void main() {
         .then((library) {
       final entry = library.templateForModel('AV Bridge 2x1')!;
       expect(entry.ports.any((p) => p.signal == SignalType.hdbaset), isFalse);
-      // Categorised as what it is, too. The category is what the estimate
+      // Categorized as what it is, too. The category is what the estimate
       // falls back to when no model price is known, so a recorder filed
       // under Switcher is priced as a switcher.
       expect(entry.category, 'Recorder / streamer');

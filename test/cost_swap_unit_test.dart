@@ -380,7 +380,7 @@ void main() {
       expect(p.avNodeById('PROJECTORDEVICE_1')!.model, 'Display 65');
     });
 
-    testWidgets('cancelling leaves the room exactly as it was', (tester) async {
+    testWidgets('canceling leaves the room exactly as it was', (tester) async {
       final p = room(driven: false);
       p.setAvCostPrice('model:display 65', 800);
       await pump(tester, p);
@@ -392,7 +392,7 @@ void main() {
       expect(p.avNodeById('PROJECTORDEVICE_1')!.model, 'Display 65');
       expect((p.roomConfig['PROJECTORDEVICE_1'] as Map)['model'], 'Display 65');
       expect(p.avCost.priceOverrides['model:display 65'], 800,
-          reason: 'a cancelled swap must not clear the room price either');
+          reason: 'a canceled swap must not clear the room price either');
     });
 
     testWidgets('going ahead anyway is allowed, and says what is left undone',

@@ -169,7 +169,7 @@ void main() {
   });
 
   group('printing it', () {
-    testWidgets('the print skin forces the light theme and drops the colour', (
+    testWidgets('the print skin forces the light theme and drops the color', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -190,7 +190,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // A dark-mode capture converted to grey is a black page with pale lines
+      // A dark-mode capture converted to gray is a black page with pale lines
       // on it, which a printer renders as a black page.
       expect(find.text('light'), findsOneWidget);
       expect(find.byType(ColorFiltered), findsOneWidget);

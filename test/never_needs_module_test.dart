@@ -246,7 +246,7 @@ void main() {
       expect(find.text('Never needs one'), findsNWidgets(2));
     });
 
-    testWidgets('confirms before writing, and cancelling writes nothing',
+    testWidgets('confirms before writing, and canceling writes nothing',
         (tester) async {
       final p = withProject();
       await pump(tester, p);

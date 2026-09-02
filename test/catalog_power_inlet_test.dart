@@ -124,7 +124,7 @@ void main() {
       expect(saved.ports.where((p) => p.isPowerInlet).length, 1);
     });
 
-    test('the inlet a PoE entry was saved with is relabelled', () async {
+    test('the inlet a PoE entry was saved with is relabeled', () async {
       // The toggle relabels the inlet as it moves, but an entry can arrive
       // from a hand-edited file or a merge with the two out of step.
       final library = AvDeviceLibrary.empty()

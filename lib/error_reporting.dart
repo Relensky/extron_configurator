@@ -14,12 +14,12 @@ import 'app_logger.dart';
 ///  has no console — so every error the app did not catch by hand went
 ///  precisely nowhere: not into deployment_app_error_log.txt, which is the file
 ///  this app asks people to send in, and not onto the screen, which showed a
-///  grey rectangle where the page should have been.
+///  gray rectangle where the page should have been.
 ///
 ///  That is the gap these three handlers close. They do not stop anything going
 ///  wrong; they make what went wrong land in the same log as everything the app
 ///  catches deliberately, so a report of "it went blank" arrives with the stack
-///  trace attached instead of a description of a grey rectangle.
+///  trace attached instead of a description of a gray rectangle.
 ///
 ///  WHAT EACH ONE COVERS:
 ///
@@ -99,7 +99,7 @@ void installGlobalErrorHandlers() {
   FlutterError.onError = (FlutterErrorDetails details) {
     presentAsUsual?.call(details);
     // `silent` is Flutter's own marker for an error it has already accounted
-    // for and does not want repeated. Honouring it here keeps the log readable
+    // for and does not want repeated. Honoring it here keeps the log readable
     // rather than filling it with duplicates of one failure.
     if (details.silent) return;
     reportUncaughtError(

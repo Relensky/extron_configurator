@@ -86,7 +86,7 @@ import 'xlsx_writer.dart';
 ///
 /// So the work is held against [AppStateProvider.revision] and the drag
 /// frames read it back. A real edit bumps the revision and the next build
-/// recomputes, which is the behaviour that was there before — this only
+/// recomputes, which is the behavior that was there before — this only
 /// removes the repeats.
 ///
 /// One memo holds one thing. A view deriving a model AND a schematic from it
@@ -244,7 +244,7 @@ class _AvFlowViewState extends State<AvFlowView>
   /// and [_withDragPreview].
   final ProviderMemo<AvFlowModel> _modelMemo = ProviderMemo();
 
-  /// Drives the chevrons travelling along the selected run - see
+  /// Drives the chevrons traveling along the selected run - see
   /// [_SignalFlowPainter].
   ///
   /// RUNS ONLY WHILE SOMETHING IS SELECTED. A canvas with nothing picked has
@@ -348,7 +348,7 @@ class _AvFlowViewState extends State<AvFlowView>
     super.dispose();
   }
 
-  /// The colour of the run the chevrons are travelling along, so they read as
+  /// The color of the run the chevrons are traveling along, so they read as
   /// part of the line rather than as something dropped on top of it.
   ///
   /// Falls back to nothing visible when the selected run has gone - a cable
@@ -1578,7 +1578,7 @@ class _AvFlowViewState extends State<AvFlowView>
     );
   }
 
-  /// The cable numbers, one per labelled run.
+  /// The cable numbers, one per labeled run.
   ///
   /// Widgets rather than paint because they are DRAGGED: a run's number lands
   /// on the midpoint of its longest leg, which is right most of the time and
@@ -1638,7 +1638,7 @@ class _AvFlowViewState extends State<AvFlowView>
           // Keyed by the run it names: it is the one reliable handle on a
           // cable, since the line itself is paint rather than a widget.
           key: ValueKey('av_cable_label_${cable.id}'),
-          // Centred on the anchor. FractionalTranslation rather than measuring
+          // Centered on the anchor. FractionalTranslation rather than measuring
           // the text: the label is as wide as whatever somebody typed in it.
           left: at.dx,
           top: at.dy,
@@ -4807,7 +4807,7 @@ Rect avRoomTitleRect(String title, TextStyle? style) {
 /// longest leg, which is the stretch with the most room for text.
 ///
 /// Null when no leg is long enough to write on — a two-inch patch between
-/// adjacent boxes is better left unlabelled on the drawing than covered by
+/// adjacent boxes is better left unlabeled on the drawing than covered by
 /// its own cable number.
 Offset? cableLabelAnchor(List<Offset> points) {
   var bestIndex = 0;
@@ -4823,7 +4823,7 @@ Offset? cableLabelAnchor(List<Offset> points) {
   return (points[bestIndex] + points[bestIndex + 1]) / 2;
 }
 
-/// Roughly what a run's label covers, centred on [at]. Measured from the
+/// Roughly what a run's label covers, centered on [at]. Measured from the
 /// character count rather than laid out for real: this runs for every label on
 /// every repaint, and a few pixels either way only decides whether two labels
 /// are judged to be touching.
@@ -4982,7 +4982,7 @@ class _CablePainter extends CustomPainter {
 //  WHICH WAY THE SIGNAL GOES
 // ---------------------------------------------------------------------------
 
-/// The chevrons travelling along the selected run.
+/// The chevrons traveling along the selected run.
 ///
 /// WHY IT MOVES. A selected cable was already drawn thicker and haloed, which
 /// says "this one" and nothing else. On a crowded canvas the question that
@@ -5038,7 +5038,7 @@ class _SelectedSignalFlow extends StatelessWidget {
   }
 }
 
-/// Paints the travelling chevrons. See [_SelectedSignalFlow] for why.
+/// Paints the traveling chevrons. See [_SelectedSignalFlow] for why.
 class _SignalFlowPainter extends CustomPainter {
   final List<Offset> points;
   final Color color;
@@ -5056,7 +5056,7 @@ class _SignalFlowPainter extends CustomPainter {
 
   /// How far apart the chevrons sit along the run.
   ///
-  /// Far enough apart to read as separate marks travelling rather than as a
+  /// Far enough apart to read as separate marks traveling rather than as a
   /// crawling dashed line, and close enough that a short run between two
   /// adjacent boxes still gets two of them.
   static const double _spacing = 30;
@@ -5091,7 +5091,7 @@ class _SignalFlowPainter extends CustomPainter {
         if (tangent == null) continue;
 
         // Faded at both ends. A chevron sitting on top of the connector it
-        // starts from, or on the arrowhead it is travelling into, reads as a
+        // starts from, or on the arrowhead it is traveling into, reads as a
         // smudge on the drawing.
         final fade = math.min(at, length - at) / _spacing;
         final alpha = fade.clamp(0.0, 1.0);

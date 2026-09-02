@@ -265,7 +265,7 @@ class ConfigKeyMap {
   /// rest of the carry-over work exactly as it does for a current model.
   ///
   /// Scoped by section rather than global on purpose — 'AV Bridge' means the
-  /// recorder in a RECORDERDEVICE block and is not a licence to rewrite the
+  /// recorder in a RECORDERDEVICE block and is not a license to rewrite the
   /// word wherever else it appears.
   final Map<String, Map<String, String>> modelRenames = {};
 

@@ -301,7 +301,7 @@ class _ManualRoomsDialogState extends State<_ManualRoomsDialog> {
 /// line, would make the same room mean two things depending on which door was
 /// used.
 ///
-/// Returns null when it is cancelled. The returned room carries [id] through
+/// Returns null when it is canceled. The returned room carries [id] through
 /// unchanged, so an edit comes back as the SAME room rather than as a new one.
 Future<ManualRoom?> showManualRoomForm(
   BuildContext context, {

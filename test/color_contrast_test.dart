@@ -11,14 +11,14 @@ import 'package:extron_configurator/project_spares_view.dart'
 /// Text somebody can actually read, in every theme this app can be set to.
 ///
 /// There are four — Classic and Auris, each light and dark — and Classic's
-/// accent is a colour the user picks out of a wheel, so the palette is not a
+/// accent is a color the user picks out of a wheel, so the palette is not a
 /// fixed thing that can be eyeballed once. Every pairing below is measured, at
 /// several accents, against the WCAG thresholds: 4.5:1 for body text, 3:1 for
 /// large text and for icons that carry meaning.
 ///
-/// The drawings are deliberately not in scope. Cable colours, conversion
+/// The drawings are deliberately not in scope. Cable colors, conversion
 /// highlights and plan annotations are a fixed vocabulary — HDMI is that blue
-/// on every machine, and a run that changed colour with the theme would stop
+/// on every machine, and a run that changed color with the theme would stop
 /// matching its legend and its printout.
 void main() {
   /// Every theme the app can be in, at a spread of accents including the ones
@@ -38,7 +38,7 @@ void main() {
   }
 
   /// A far wider sweep than the named accents above: every hue at five
-  /// lightnesses, plus black, white and mid grey.
+  /// lightnesses, plus black, white and mid gray.
   ///
   /// Five hand-picked accents were not enough. An audit over this grid found
   /// the scheme's OWN pairings failing on a third to a half of it — 45 of 180
@@ -94,7 +94,7 @@ void main() {
   }
 
   group('the helper itself', () {
-    test('black on white is 21:1 and a colour on itself is 1:1', () {
+    test('black on white is 21:1 and a color on itself is 1:1', () {
       expect(contrastRatio(Colors.black, Colors.white), closeTo(21, 0.01));
       expect(contrastRatio(Colors.red, Colors.red), closeTo(1, 0.001));
       // Order does not matter.
@@ -119,9 +119,9 @@ void main() {
           greaterThanOrEqualTo(kContrastBody));
     });
 
-    test('readableOn always returns something readable, for any colour', () {
+    test('readableOn always returns something readable, for any color', () {
       // The fallback is what makes this usable on a user-chosen accent: there
-      // is no colour it can be handed that leaves it without an answer.
+      // is no color it can be handed that leaves it without an answer.
       for (var r = 0; r < 256; r += 17) {
         for (var g = 0; g < 256; g += 17) {
           for (var b = 0; b < 256; b += 17) {
@@ -155,7 +155,7 @@ void main() {
         }
       });
 
-      test('the error colour on an ordinary surface - ${t.name}', () {
+      test('the error color on an ordinary surface - ${t.name}', () {
         expectReadable('error', s.error, s.surface, t.name);
       });
     }
@@ -200,8 +200,8 @@ void main() {
 
     test('the GENERATED schemes are not safe - which is why the pass exists',
         () {
-      // Not a complaint about Material: a scheme's on-colours are generated
-      // for its own generated palette, and this app hands it a colour a user
+      // Not a complaint about Material: a scheme's on-colors are generated
+      // for its own generated palette, and this app hands it a color a user
       // picked. Measured on the theme as its generator hands it over, before
       // legibleTheme has been near it — so the repair pass has to keep
       // proving it is repairing something.
@@ -352,7 +352,7 @@ void main() {
         }
       });
 
-      test('a legible tone is still the colour it started as - ${t.name}', () {
+      test('a legible tone is still the color it started as - ${t.name}', () {
         // The point of legibleTone over readableOn: red stays red. Measured
         // as hue, because "still red" is not something a ratio can say.
         final red = errorTextOn(s, s.surface);
@@ -360,7 +360,7 @@ void main() {
           (HSLColor.fromColor(red).hue - HSLColor.fromColor(s.error).hue)
               .abs(),
           lessThan(1.0),
-          reason: 'the warning colour must not drift off its own hue',
+          reason: 'the warning color must not drift off its own hue',
         );
       });
 
@@ -411,9 +411,9 @@ void main() {
 
       test('the project total, painted on the accent - ${t.name}', () {
         // _TotalChip's emphasis fill IS primaryContainer, so on the Classic
-        // theme it is whatever colour somebody picked out of a wheel. The
+        // theme it is whatever color somebody picked out of a wheel. The
         // figure used to be drawn in the page's ink, which went dark-on-dark
-        // the moment that colour was a dark one.
+        // the moment that color was a dark one.
         final bg = s.primaryContainer;
         final ink = readableOn(bg, prefer: [s.onPrimaryContainer, s.onSurface]);
         expectReadable('project total', ink, bg, t.name);
@@ -455,9 +455,9 @@ void main() {
         );
         // The document buttons at the other end of the strip — the theme, the
         // screenshot, Convert, the transfers and the exports — take the ink
-        // the row itself is measured in rather than the page's icon colour,
+        // the row itself is measured in rather than the page's icon color,
         // and the faded one they wear while disabled is measured too: a row
-        // of greyed-out buttons still has to be findable.
+        // of grayed-out buttons still has to be findable.
         final actionInk = readableOn(
           bg,
           prefer: [
@@ -514,7 +514,7 @@ void main() {
       });
 
       test('a failure snack bar - ${t.name}', () {
-        // The fill is chosen against the bar's own text colour, which is what
+        // The fill is chosen against the bar's own text color, which is what
         // makes this pass where a flat Colors.red did not.
         final ink = t.theme.snackBarTheme.contentTextStyle?.color ??
             s.onInverseSurface;
@@ -534,7 +534,7 @@ void main() {
       });
 
       test('the spares figures - ${t.name}', () {
-        // Small coloured text, and the colour is TERTIARY — derived from an
+        // Small colored text, and the color is TERTIARY — derived from an
         // accent somebody picked out of a wheel, with no promise about the
         // panels this app paints it on. Plain tertiary measured 2.2:1 on the
         // spares card with the Classic blue accent and 1.3:1 with cyan or
@@ -551,8 +551,8 @@ void main() {
       });
 
       test('the spares accent is still the spares accent - ${t.name}', () {
-        // The same bargain errorTextOn makes: legible, and still the colour it
-        // started as. A spares figure that turned grey would stop being the
+        // The same bargain errorTextOn makes: legible, and still the color it
+        // started as. A spares figure that turned gray would stop being the
         // spares figure.
         final bg = spareSectionFill(t.theme);
         expect(
@@ -560,15 +560,15 @@ void main() {
                   HSLColor.fromColor(s.tertiary).hue)
               .abs(),
           lessThan(1.0),
-          reason: 'the spares colour must not drift off its own hue',
+          reason: 'the spares color must not drift off its own hue',
         );
       });
 
       test('a chip label survives being pressed - ${t.name}', () {
         // A selected chip DROPS whatever fill it was handed and paints the
         // theme's own, with the theme's own label on it. The master list's
-        // warning chips carry a label coloured for their error fill, and that
-        // colour must not follow them onto the selected fill — it measured
+        // warning chips carry a label colored for their error fill, and that
+        // color must not follow them onto the selected fill — it measured
         // 3.7:1 on a light Classic blue and 1.7:1 on a dark amber when it did.
         //
         // Unselected: the app's own choice, on the fill the app set.
@@ -576,8 +576,8 @@ void main() {
             s.errorContainer, t.name);
 
         // And the theme's own, in both states, resolved the way the widget
-        // resolves it: the theme's label colour FOR THAT STATE where it names
-        // one - Auris hands over a state-aware colour - and the scheme role
+        // resolves it: the theme's label color FOR THAT STATE where it names
+        // one - Auris hands over a state-aware color - and the scheme role
         // where it does not. Checked against what a real chip renders before
         // it was written down here.
         final chip = t.theme.chipTheme;
@@ -622,8 +622,8 @@ void main() {
         );
       });
 
-      test('the status colours on the Raw JSON header - ${t.name}', () {
-        // Icon plus wording carry the state; the colour only reinforces it.
+      test('the status colors on the Raw JSON header - ${t.name}', () {
+        // Icon plus wording carry the state; the color only reinforces it.
         // It still has to be visible, at the 3:1 an icon needs.
         final bg = s.surface;
         expectReadable('success icon', successOn(bg, minRatio: kContrastLarge),
@@ -763,7 +763,7 @@ void main() {
   // ---------------------------------------------------------------------
   //  A FILL THE APP PAINTS ITSELF CARRIES INK THE APP CHOSE ITSELF
   // ---------------------------------------------------------------------
-  //  A Text with no colour on it takes the ambient body ink, which is chosen
+  //  A Text with no color on it takes the ambient body ink, which is chosen
   //  for the PAGE. Drop one inside a container filled with a scheme role and
   //  it is being measured against the wrong thing - and on Classic with a dark
   //  blue accent, secondaryContainer IS a dark blue while the page's ink is

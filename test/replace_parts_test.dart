@@ -66,7 +66,7 @@ void main() {
     );
 
   /// A rack with two vent plates in it, a box on the diagram nobody has
-  /// catalogued, and a config block for it.
+  /// catalogd, and a config block for it.
   AppStateProvider room() {
     final p = AppStateProvider(autoLoadSettings: false)
       ..roomConfig = {
@@ -334,7 +334,7 @@ void main() {
       expect(p.avRackItems.every((i) => i.rackUnits == 3), isTrue);
       expect(kept.where((k) => !k).length, greaterThan(0),
           reason: 'a part that no longer fits comes off its rail rather than '
-              'overlapping its neighbour');
+              'overlapping its neighbor');
       // Off the rail, still in the room — nothing is deleted behind anybody.
       expect(p.avRackItems.length, 2);
     });

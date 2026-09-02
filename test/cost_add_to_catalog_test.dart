@@ -132,7 +132,7 @@ void main() {
       find.widgetWithText(TextField, 'CAT-9300'),
       'CAT-9300',
     );
-    // The list price, in the box labelled for the room's currency.
+    // The list price, in the box labeled for the room's currency.
     await tester.enterText(
       find.byWidgetPredicate(
         (w) =>

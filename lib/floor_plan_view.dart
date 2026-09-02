@@ -77,16 +77,16 @@ List<FloorPlan> sheetsWorthDrawing(AppStateProvider provider) => provider
         s.hasImage || s.markers.isNotEmpty || s.annotations.isNotEmpty)
     .toList();
 
-/// Paper colours offered before the wheel. Papers, not paints: a sheet is
+/// Paper colors offered before the wheel. Papers, not paints: a sheet is
 /// something drawn on, and a saturated one makes every marker on it harder to
 /// read rather than easier.
-/// The colours a sheet can be painted, dark first.
+/// The colors a sheet can be painted, dark first.
 ///
 /// Every one of them is DECISIVELY dark or decisively light — nothing in the
 /// middle. The ink a sheet prints in is chosen from the paper (see
-/// [FloorPlan.paperIsDark]), so a mid-grey is the one paper where neither the
+/// [FloorPlan.paperIsDark]), so a mid-gray is the one paper where neither the
 /// light ink nor the dark ink has a contrast ratio worth having: the old slate
-/// and grey entries were exactly that, and a name plate on them was a plate
+/// and gray entries were exactly that, and a name plate on them was a plate
 /// somebody had to lean in to read. Each of these clears 4.5:1 against the ink
 /// it gets, which is the WCAG figure for body text — see the paper test.
 const List<Color> kPaperSwatches = [
@@ -127,7 +127,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   _PlanTool _tool = _PlanTool.none;
 
   /// What the notation tool draws, and in what. Sticky between shapes: a
-  /// drawing gets marked up in bursts of the same colour.
+  /// drawing gets marked up in bursts of the same color.
   PlanShape _shape = PlanShape.arrow;
   int _noteColor = kPlanAnnotationColors.first;
   double _noteStroke = 3;
@@ -167,7 +167,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   String _cableLayer = _kLayerAll;
 
   /// True while the sheet is being drawn the way it should PRINT — light
-  /// theme, no colour. Held for the one frame a black-and-white export
+  /// theme, no color. Held for the one frame a black-and-white export
   /// captures, then put back; see [printSkin] and [_exportPng].
   bool _printMode = false;
 
@@ -367,16 +367,16 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   ///
   /// [perLayer] adds one drawing per cable type after each sheet's own, which
   /// is how a cabling set is issued: the network contractor gets the network
-  /// drawing of each storey and nobody has to read around somebody else's
+  /// drawing of each story and nobody has to read around somebody else's
   /// runs. Without it each sheet is captured once, showing whatever the layer
   /// picker is set to.
   ///
   /// [monochrome] renders them the way they should print. The print skin is a
   /// WIDGET, not a filter over the bytes, so the drawing is re-laid-out in the
-  /// light theme before it is captured — a dark-mode capture converted to grey
+  /// light theme before it is captured — a dark-mode capture converted to gray
   /// is a black page with pale lines on it, which a printer renders as a black
   /// page. It is held for exactly as long as the walk takes and then put back,
-  /// so the tab the user is looking at does not change colour under them.
+  /// so the tab the user is looking at does not change color under them.
   Future<List<PlanDrawing>> _captureSheets({
     bool perLayer = false,
     bool monochrome = false,
@@ -498,7 +498,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   ///
   /// A room with one sheet writes one file, picked and named the way it always
   /// was. A room with several writes one per sheet into a folder, because a
-  /// drawing set is the set: handing over the storey that happened to be open
+  /// drawing set is the set: handing over the story that happened to be open
   /// is how the other one goes missing.
   Future<void> _exportPng(
     AppStateProvider provider, {
@@ -534,7 +534,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     }
     if (!mounted) return;
     // Only the one-sheet case comes through the preview. A room with several
-    // storeys writes the SET into a folder, and standing a dialog in front of
+    // stories writes the SET into a folder, and standing a dialog in front of
     // each sheet in turn would turn one press into five.
     await showCapturedPicture(
       context,
@@ -617,7 +617,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ),
             // One sheet per plan per cable type, which is how a cabling set is
             // issued: the network contractor gets the network drawing of each
-            // storey and nobody has to read around somebody else's runs. The
+            // story and nobody has to read around somebody else's runs. The
             // first one is already printed above, under the tables.
             for (final layer in layers.skip(1))
               drawingSheet(title, layer, generated),
@@ -866,7 +866,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ),
           for (final c in kPlanAnnotationColors)
             Tooltip(
-              message: 'Draw in this colour',
+              message: 'Draw in this color',
               child: InkWell(
                 onTap: () => apply(color: c),
                 child: Container(
@@ -948,7 +948,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   /// The sheet bar: one chip per plan, plus the ways to get another.
   ///
-  /// A room has more than one sheet as soon as it has more than one storey, a
+  /// A room has more than one sheet as soon as it has more than one story, a
   /// reflected ceiling plan beside the furniture plan, or a demolition sheet
   /// beside the new work. The model always held a LIST of plans; until now the
   /// page only ever opened the first one, so the second was unreachable.
@@ -1139,7 +1139,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   ///
   /// Per sheet rather than per room, like everything else a sheet owns: the
   /// blank layout sheet and an imported architectural export want different
-  /// backgrounds, and one shared colour would make the second unreadable to
+  /// backgrounds, and one shared color would make the second unreadable to
   /// fix the first.
   Future<void> _showPaperColorDialog(
     AppStateProvider provider,
@@ -1151,7 +1151,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         builder: (ctx, setLocal) {
           final sheet = provider.avFloorPlanById(plan.id) ?? plan;
           return AlertDialog(
-            title: Text('Colour for ${sheet.name}'),
+            title: Text('Color for ${sheet.name}'),
             content: SizedBox(
               width: 420,
               child: Column(
@@ -1164,14 +1164,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                             'is black ink on nothing, so a scan that brings no '
                             'background of its own wants one of the light '
                             'papers under it.'
-                        : 'This sheet has no drawing, so the colour IS the '
+                        : 'This sheet has no drawing, so the color IS the '
                             'sheet.',
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'Everything printed on the sheet - run labels, the key - '
-                    'takes its ink from the paper, so every colour here reads '
+                    'takes its ink from the paper, so every color here reads '
                     'either way.',
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
@@ -1213,7 +1213,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                             final picked = await showColorWheelDialog(
                               ctx,
                               initial: sheet.paper,
-                              title: 'Colour for ${sheet.name}',
+                              title: 'Color for ${sheet.name}',
                             );
                             if (picked != null) {
                               provider.setAvPlanPaperColor(sheet.id, picked);
@@ -1266,7 +1266,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
-              label: const Text('Sheet colour'),
+              label: const Text('Sheet color'),
               onPressed: () => _showPaperColorDialog(provider, plan),
             ),
           if (plan != null) ...[
@@ -1311,7 +1311,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               },
             ),
             // The legend that travels with the exported image. On by default:
-            // a sheet coded by icon, colour and dash pattern whose key is
+            // a sheet coded by icon, color and dash pattern whose key is
             // opt-in is a sheet that gets mailed out without one.
             FilterChip(
               avatar: const Icon(Icons.legend_toggle, size: 18),
@@ -1364,25 +1364,25 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               );
             },
           ),
-          // Every cable type's colour, the same dialog the Cabling tab
+          // Every cable type's color, the same dialog the Cabling tab
           // opens: the two are drawings of one room's cable, and a network
           // run blue on one and green on the other is two sheets nobody can
           // read together.
           OutlinedButton.icon(
             key: const ValueKey('plan_cable_colors'),
             icon: const Icon(Icons.palette_outlined, size: 18),
-            label: const Text('Cable colours'),
+            label: const Text('Cable colors'),
             onPressed: () => showCableColorsDialog(context, provider),
           ),
           // How the writing on this sheet is printed. On the toolbar rather
-          // than buried in a settings page: a plan is recoloured while looking
+          // than buried in a settings page: a plan is recolored while looking
           // at the plan, usually because the drawing underneath it is dark
           // exactly where the labels landed.
           if (plan != null)
             OutlinedButton.icon(
               key: const ValueKey('plan_label_colors'),
               icon: const Icon(Icons.format_color_text, size: 18),
-              label: const Text('Label colours'),
+              label: const Text('Label colors'),
               onPressed: () => _showLabelColorDialog(provider, plan),
             ),
           if (plan != null)
@@ -1404,7 +1404,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 return [
                   PopupMenuItem(value: 'one', child: Text(each)),
                   // The one that gets printed and marked up on a clipboard.
-                  // The runs carry a dash pattern as well as a colour
+                  // The runs carry a dash pattern as well as a color
                   // precisely so this stays readable.
                   PopupMenuItem(
                     value: 'bw',
@@ -1510,7 +1510,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           SizedBox(
             width: 480,
             child: Text(
-              'A blank sheet is plain paper in whatever colour the sheet is '
+              'A blank sheet is plain paper in whatever color the sheet is '
               'set to. Import a plan onto it later and everything already '
               'placed stays where it is.',
               textAlign: TextAlign.center,
@@ -1549,7 +1549,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     // line you see and the label beside it are dodging the same things.
     final obstacles = _planObstacles(provider, plan);
     // And once more for the key: the legend has to list the runs that are
-    // actually drawn, in the colour and dash pattern they are actually drawn
+    // actually drawn, in the color and dash pattern they are actually drawn
     // in, or it is a legend to a different sheet.
     final runs = _cableLayer == _kLayerOff
         ? const <_PlanRun>[]
@@ -1602,7 +1602,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         child: Stack(
           children: [
             // The paper: the image's own area plus whatever blank space has
-            // been added round it, in one colour so the margin cannot be told
+            // been added round it, in one color so the margin cannot be told
             // from the sheet in the exported PNG.
             Container(
               width: sheet.width,
@@ -1714,7 +1714,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   // --- the key --------------------------------------------------------------
 
   /// The legend, drawn ON the sheet: what the marker icons mean, which cable
-  /// each line is, what the callouts point at, and what the mark-up colours
+  /// each line is, what the callouts point at, and what the mark-up colors
   /// were used for.
   ///
   /// It lives inside the captured [RepaintBoundary] deliberately. A plan
@@ -1753,7 +1753,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       cables.putIfAbsent(run.label, () => run);
     }
 
-    // The mark-up colours in use, with what was written in them.
+    // The mark-up colors in use, with what was written in them.
     final notes = <int, List<String>>{};
     for (final a in plan.annotations) {
       notes.putIfAbsent(a.color, () => []);
@@ -2018,7 +2018,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// The bends [runId] is drawn with right now: what the sheet has stored,
   /// with the bend under the pointer moved to where the pointer has it.
   ///
-  /// A dragged bend is snapped square with its neighbours as it comes close to
+  /// A dragged bend is snapped square with its neighbors as it comes close to
   /// them, because cable in a building runs along walls and trays, and hitting
   /// an exact right angle by dragging a dot is a thing nobody can do.
   List<Offset> _bendsOf(
@@ -2033,12 +2033,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       return stored;
     }
     final next = List<Offset>.from(stored);
-    final neighbours = <Offset>[
+    final neighbors = <Offset>[
       if (_bendIndex == 0) from else next[_bendIndex - 1],
       if (_bendIndex == next.length - 1) to else next[_bendIndex + 1],
     ];
     next[_bendIndex] = pushOutOfRects(
-      snapToRightAngle(next[_bendIndex] + _bendDelta, neighbours),
+      snapToRightAngle(next[_bendIndex] + _bendDelta, neighbors),
       keepOut,
     );
     return next;
@@ -2134,7 +2134,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// the telecom room is not somewhere that can be marked on a plan of one
   /// teaching space, so the run used to be counted in the "not on this sheet"
   /// warning and drawn nowhere. A line that stops at the border reads as a
-  /// cable that stops at the border, so it leaves as a break symbol, labelled
+  /// cable that stops at the border, so it leaves as a break symbol, labeled
   /// with where it is going.
   List<_PlanRun> _offSheetRuns(
     AppStateProvider provider,
@@ -2272,11 +2272,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   bool _layerMatches(String cableType) =>
       _cableLayer == _kLayerAll || _cableLayer == cableType;
 
-  /// The colour keys every run of [cableType] is filed under.
+  /// The color keys every run of [cableType] is filed under.
   ///
   /// Plural because a cable type can be pulled under more than one category —
-  /// AV Cat 6a and network Cat 6a are two different pulls the key colours
-  /// apart — while this bar has ONE chip for "Cat 6a". Recolouring the chip
+  /// AV Cat 6a and network Cat 6a are two different pulls the key colors
+  /// apart — while this bar has ONE chip for "Cat 6a". Recoloring the chip
   /// means the layer being looked at, so it takes both.
   Set<String> _colorKeysFor(CablingSchematic drawing, String cableType) => {
     for (final b in drawing.bundles)
@@ -2291,7 +2291,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final picked = await showColorWheelDialog(
       context,
       initial: layer.color,
-      title: 'Colour for ${layer.type}',
+      title: 'Color for ${layer.type}',
     );
     if (picked == null) return;
     provider.setCablingTypeColor(
@@ -2332,7 +2332,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   : planLabelInk(style, fallback.ink),
               title: background
                   ? 'Background for ${kPlanTextKindLabels[kind]?.toLowerCase()}'
-                  : 'Text colour for '
+                  : 'Text color for '
                       '${kPlanTextKindLabels[kind]?.toLowerCase()}',
             );
             if (picked == null) return;
@@ -2385,7 +2385,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           }
 
           return AlertDialog(
-            title: const Text('Label colours on this sheet'),
+            title: const Text('Label colors on this sheet'),
             content: SizedBox(
               width: 470,
               child: Column(
@@ -2395,7 +2395,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   Text(
                     'An architectural plan is a line drawing, and text dropped '
                     'straight onto one lands on a wall. Every label is printed '
-                    'on a plate; this is what colour that plate and the words '
+                    'on a plate; this is what color that plate and the words '
                     'on it are, on ${sheet.name}.',
                     style: theme.textTheme.bodySmall,
                   ),
@@ -2423,7 +2423,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                           const SizedBox(width: 10),
                           // Painted the way it will actually print, so the
                           // decision is made on the thing rather than on two
-                          // squares of colour.
+                          // squares of color.
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 6,
@@ -2455,7 +2455,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                           swatch(kind, background: false),
                           IconButton(
                             icon: const Icon(Icons.restart_alt, size: 18),
-                            tooltip: 'Back to the standard colours',
+                            tooltip: 'Back to the standard colors',
                             onPressed: sheet.styleFor(kind).isDefault
                                 ? null
                                 : () {
@@ -2471,8 +2471,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                       ),
                     ),
                   Text(
-                    'Standard colours follow the light or dark drawing they '
-                    'are on. A colour set here is used on both.',
+                    'Standard colors follow the light or dark drawing they '
+                    'are on. A color set here is used on both.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.disabledColor,
                     ),
@@ -2500,7 +2500,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     required bool onDarkPaper,
   }) {
     // Against the PAPER, not the app theme: this is what the sheet prints, and
-    // the sheet is the same colour in either theme.
+    // the sheet is the same color in either theme.
     final dark = onDarkPaper;
     return switch (kind) {
       PlanTextKind.location => (
@@ -2525,7 +2525,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   };
 
   /// The cable types this sheet could show, in the order the drawing lists
-  /// them, each with the colour it is drawn in.
+  /// them, each with the color it is drawn in.
   List<({String type, Color color})> _cableLayers(
     AppStateProvider provider,
     FloorPlan? plan,
@@ -2550,7 +2550,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// sheet.
   ///
   /// One end is enough to draw something honest — the run leaves the page as a
-  /// squiggle labelled with where it is going — so those are no longer counted
+  /// squiggle labeled with where it is going — so those are no longer counted
   /// here. With neither end placed there is nowhere to start the line from,
   /// and a plan that invents where cable goes is worse than one that says how
   /// much it is leaving out.
@@ -2605,7 +2605,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ),
           ],
           for (final layer in layers)
-            // Right-click recolours the cable rather than the line: a drawing
+            // Right-click recolors the cable rather than the line: a drawing
             // set says "network is green", and saying it here beats clicking
             // every network run on the sheet and hoping none was missed.
             GestureDetector(
@@ -2615,7 +2615,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 key: ValueKey('plan_layer_${layer.type}'),
                 avatar: CircleAvatar(backgroundColor: layer.color, radius: 7),
                 label: Text(layer.type),
-                tooltip: 'Show only this cable · right-click to recolour it',
+                tooltip: 'Show only this cable · right-click to recolor it',
                 visualDensity: VisualDensity.compact,
                 selected: _cableLayer == layer.type,
                 onSelected: (_) => setState(() => _cableLayer = layer.type),
@@ -2627,7 +2627,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             if (_cableLayer == layer.type) ...[
               avRowIcon(
                 Icons.colorize,
-                'Colour for ${layer.type}',
+                'Color for ${layer.type}',
                 () => _pickCableTypeColor(provider, drawing, layer),
               ),
               if (provider.hasCablingTypeColor(
@@ -2635,7 +2635,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               ))
                 avRowIcon(
                   Icons.format_color_reset,
-                  'Back to the colour the key gives this cable',
+                  'Back to the color the key gives this cable',
                   () => provider.setCablingTypeColor(
                     _colorKeysFor(drawing, layer.type),
                     null,
@@ -2675,7 +2675,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// A drawing per trade is the whole point of the layers: the network
   /// contractor gets the network drawing and the AV contractor gets theirs,
   /// and neither has to read around the other's runs. Every sheet in the room,
-  /// because a set issued for one storey is not the set.
+  /// because a set issued for one story is not the set.
   Future<void> _exportLayers(AppStateProvider provider) async {
     final model = buildAvFlowModel(provider);
     final drawing = provider.cablingSchematic(model);
@@ -2877,7 +2877,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         .fold(0, (sum, n) => sum + n.ports.length);
     final devices = here.where((n) => !n.isJackField).length;
     const r = kLocationMarkerRadius;
-    // A fixed-width column centred on the marker's coordinates, so the DOT
+    // A fixed-width column centered on the marker's coordinates, so the DOT
     // lands on them whatever the name under it measures. Sized to the column
     // rather than the dot, a long name shunted the dot sideways and every
     // cable run then ended somewhere the eye could see it did not.
@@ -3084,8 +3084,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             width: r * 2,
             height: r * 2,
             decoration: BoxDecoration(
-              // The marker IS the plate its tag is printed on, so recolouring
-              // callout text recolours the disc.
+              // The marker IS the plate its tag is printed on, so recoloring
+              // callout text recolors the disc.
               color: planLabelBackground(
                 plan.styleFor(PlanTextKind.callout),
                 const Color(0xFFD84315),
@@ -3125,7 +3125,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         final plan = provider.activeFloorPlan;
         if (plan == null) return;
         // Selecting, not drawing: a shape is dragged out, and a tap is how you
-        // pick one up to recolour, relabel or delete it. Picking one up takes
+        // pick one up to recolor, relabel or delete it. Picking one up takes
         // the keyboard too, so Delete removes it.
         _selectNote(annotationAt(plan.annotations, at)?.id ?? '');
       case _PlanTool.none:
@@ -3982,9 +3982,9 @@ typedef _PlanRun = ({
   Color color,
   String label,
 
-  /// How the line is stroked, over and above its colour: runs sharing a pair
+  /// How the line is stroked, over and above its color: runs sharing a pair
   /// of markers each get their own dash pattern, because a fan of three
-  /// parallel lines is only readable while the colours can be told apart.
+  /// parallel lines is only readable while the colors can be told apart.
   RunLineStyle style,
 
   /// True when the run carries on past this sheet — to the IDF, or simply to
@@ -4003,8 +4003,8 @@ typedef _PlanRun = ({
   Rect? toDot,
 });
 
-/// Draws the cable runs over the plan, each in the colour the cabling drawing
-/// gives it and labelled with what it carries.
+/// Draws the cable runs over the plan, each in the color the cabling drawing
+/// gives it and labeled with what it carries.
 ///
 /// Two things a cabling sheet has to get right, and neither is the line
 /// itself:
@@ -4128,7 +4128,7 @@ class _PlanCablePainter extends CustomPainter {
     for (final row in caption.rows) {
       // The dash is the key: it is what ties "6x Cat 6a" to the line it names
       // when three run side by side — in that run's own pattern as well as its
-      // colour, so the tie survives a black-and-white print.
+      // color, so the tie survives a black-and-white print.
       paintRunSpecimen(
         canvas: canvas,
         from: Offset(left, y + row.text.height / 2),
@@ -4294,7 +4294,7 @@ Rect _freeCaptionBox(Size size, Offset wanted, List<Rect> taken) {
 }
 
 /// The short specimen of a run drawn beside its name in the key — the same
-/// colour, the same dash pattern, the same squiggle. Painted rather than built
+/// color, the same dash pattern, the same squiggle. Painted rather than built
 /// out of widgets so it goes through exactly the code the drawing does: a
 /// legend drawn a second way is a legend that eventually disagrees.
 class _RunSpecimenPainter extends CustomPainter {

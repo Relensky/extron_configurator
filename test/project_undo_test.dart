@@ -37,7 +37,7 @@ void main() {
 
   /// Ends the current undo step, the way closing a dialog or changing tab
   /// does. Without it a run of edits in one go is one step — which is the
-  /// intended behaviour, and not what most of these tests are about.
+  /// intended behavior, and not what most of these tests are about.
   void step(AppStateProvider p) => p.recordUndoPoint();
 
   group('a step goes back, and forward again', () {

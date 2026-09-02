@@ -356,7 +356,7 @@ class _HelpBookState extends State<HelpBook> {
               children: [
                 for (final k in topic.keywords)
                   // A press searches it, which is how somebody gets from one
-                  // topic to its neighbours without knowing what they are
+                  // topic to its neighbors without knowing what they are
                   // called.
                   ActionChip(
                     key: ValueKey('help_keyword_${topic.title}_$k'),
@@ -387,7 +387,7 @@ class HelpButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => IconButton(
     key: const ValueKey('open_help'),
-    // No colour of its own: it takes the ink of the bar it is on, like every
+    // No color of its own: it takes the ink of the bar it is on, like every
     // other button up there. It used to be painted the accent beside the gear,
     // which made the two of them the loudest things in a row they are not the
     // most important part of.

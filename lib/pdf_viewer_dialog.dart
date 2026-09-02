@@ -148,7 +148,7 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
   /// laptop keyboard — so the two presses that every other reader has are on
   /// the toolbar as buttons.
   ///
-  /// Zoom about the CENTRE of the view, which is the part being read: zooming
+  /// Zoom about the CENTER of the view, which is the part being read: zooming
   /// about the top-left corner walks whatever is on screen off the edge of it,
   /// and the next press then has to be undone by dragging.
   void _zoom({required bool inwards}) {
@@ -171,23 +171,23 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
     if (next == current) return;
 
     // Keep the middle of the viewport over the same point of the image: scale
-    // about the centre rather than about the matrix origin.
+    // about the center rather than about the matrix origin.
     final box = _captureKey.currentContext?.findRenderObject();
     final size = box is RenderBox ? box.size : Size.zero;
-    final centre = Offset(size.width / 2, size.height / 2);
+    final center = Offset(size.width / 2, size.height / 2);
     final factor = next / current;
     setState(() {
       _imageView.value = Matrix4.identity()
-        ..translateByDouble(centre.dx, centre.dy, 0, 1)
+        ..translateByDouble(center.dx, center.dy, 0, 1)
         ..scaleByDouble(factor, factor, 1, 1)
-        ..translateByDouble(-centre.dx, -centre.dy, 0, 1)
+        ..translateByDouble(-center.dx, -center.dy, 0, 1)
         ..multiply(_imageView.value);
     });
   }
 
   /// Whether this is a PDF, decided on the file name rather than on a sniff of
   /// the bytes: the extension is what every other part of this app routes on,
-  /// and a mislabelled file fails with a readable error either way.
+  /// and a mislabeled file fails with a readable error either way.
   bool get _isPdf => widget.filePath.toLowerCase().endsWith('.pdf');
 
   void _screenshot() {
@@ -339,7 +339,7 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
 
   /// A scanned or exported sheet. Pan and zoom rather than fit-to-window: a
   /// plan is read by going in close on one corner of it, and a drawing scaled
-  /// to a dialog is a grey rectangle.
+  /// to a dialog is a gray rectangle.
   Widget _image(BuildContext context) => InteractiveViewer(
         transformationController: _imageView,
         minScale: _imageMinZoom,

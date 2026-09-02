@@ -586,11 +586,11 @@ void main() {
 
     // The pen is still the selected tool, so the scroll views are refusing
     // drags - and the wheel still has to work.
-    final centre = tester.getCenter(
+    final center = tester.getCenter(
       find.byKey(const ValueKey('annotation_canvas')),
     );
     final pointer = TestPointer(1, PointerDeviceKind.mouse);
-    pointer.hover(centre);
+    pointer.hover(center);
     await tester.sendEventToBinding(
       pointer.scroll(const Offset(0, 60)),
     );

@@ -322,7 +322,7 @@ class _RoomMenu extends StatelessWidget {
             //
             // This button lives in the title bar, in front of New, Open and
             // Save, sharing whatever those leave over with the job's name. A
-            // room called 'Bessey Hall 101 Lecture Theatre' filled that slot
+            // room called 'Bessey Hall 101 Lecture Theater' filled that slot
             // by itself and pushed the rest of the row under the buttons to
             // its right. 'BSS 101' is what the room is called on every door,
             // drawing and work order in the building, it is seven characters,
@@ -389,7 +389,7 @@ class _RoomNames {
   ///
   /// WIDTH IS THE WHOLE REASON THIS EXISTS, so width is what picks between the
   /// two. On a real room the code wins by a mile - 'BSS 101' against 'Bessey
-  /// Hall 101 Lecture Theatre' - which is the case this button was made
+  /// Hall 101 Lecture Theater' - which is the case this button was made
   /// shorter for.
   ///
   /// It loses on the rooms where it is not really a code. A config still

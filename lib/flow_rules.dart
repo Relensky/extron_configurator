@@ -422,7 +422,7 @@ class FlowRules {
 
   /// The rules as they were when they were constants in av_flow_routing.dart.
   /// Changing anything here changes what a room draws with no rule file, so
-  /// this is the shipped behaviour and the "Reset to built-in" button both.
+  /// this is the shipped behavior and the "Reset to built-in" button both.
   factory FlowRules.builtIn() => FlowRules(
         sourceBoxes: const [
           FlowBoxRule(

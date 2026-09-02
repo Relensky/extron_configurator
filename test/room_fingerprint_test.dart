@@ -26,7 +26,7 @@ import 'package:extron_configurator/ui_schema.dart';
 ///
 ///  THE FINGERPRINT. `roomHasUnsavedChanges` encodes the whole room to answer
 ///  "is there a dot on the save button", and the toolbar asks it on every
-///  rebuild. It is memoised, dropped in `notifyListeners`. The risk a memo
+///  rebuild. It is memoized, dropped in `notifyListeners`. The risk a memo
 ///  carries here is not that it is slow but that it is STALE — a room that has
 ///  been edited reporting itself clean is somebody's work thrown away at the
 ///  next close-without-saving. So the cases below are all about a cache that

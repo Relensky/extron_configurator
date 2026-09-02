@@ -226,7 +226,7 @@ String formatCableLength(double feet) {
       : '${feet.toStringAsFixed(1)}ft';
 }
 
-/// The color a signal type is drawn in, honouring the room's palette.
+/// The color a signal type is drawn in, honoring the room's palette.
 ///
 /// [kSignalColors] is only the factory default. A room can recolor any type
 /// — see `avSignalColors` in app_state.dart — and when it does, EVERY cable,
@@ -1409,7 +1409,7 @@ class AvCable {
 /// [AvCable.label] is the run's ID — 'AV-01', the number printed on the
 /// sleeve — and the cable schedule counts the runs that have none, so this is
 /// deliberately NOT written into that field. It is what the canvas draws in
-/// its place, because an unlabelled line on a page of forty is a line nobody
+/// its place, because an unlabeled line on a page of forty is a line nobody
 /// can follow: the two ends are the one thing you want to read off it without
 /// tracing it back through the crossings.
 String defaultCableLabel(AvNode from, AvNode to) =>
@@ -2007,9 +2007,9 @@ Map<String, List<Offset>> fanOverlappingRuns(
       final horizontal = (a.dy - b.dy).abs() < 0.5;
       final vertical = (a.dx - b.dx).abs() < 0.5;
       if (horizontal == vertical) continue; // diagonal, or a zero-length hop
-      // Both neighbours have to be square to this leg. Sliding a leg moves
+      // Both neighbors have to be square to this leg. Sliding a leg moves
       // the two corners it shares, which only lengthens a perpendicular
-      // neighbour — but would tilt a parallel one, and a diagonal line on an
+      // neighbor — but would tilt a parallel one, and a diagonal line on an
       // orthogonal drawing reads as a mistake.
       if (!_squareTo(points[i - 1], points[i], horizontal) ||
           !_squareTo(points[i + 1], points[i + 2], horizontal)) {

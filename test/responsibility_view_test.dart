@@ -171,7 +171,7 @@ void main() {
       final item = p.addResponsibilityItem('Screens');
       p.updateResponsibilityItem(
         item.copyWith(
-          work: 'Install 120V motorised screens.',
+          work: 'Install 120V motorized screens.',
           notes: 'Sizes still TBD',
           productLink: 'https://www.extron.com/product/x',
         ),
@@ -180,7 +180,7 @@ void main() {
 
       final tip = headTip(tester, 'resp1');
       expect(tip.message, contains('Screens'));
-      expect(tip.message, contains('motorised'));
+      expect(tip.message, contains('motorized'));
       expect(tip.message, contains('Sizes still TBD'));
       expect(tip.message, contains('www.extron.com'));
     });
@@ -188,7 +188,7 @@ void main() {
     testWidgets('is a plain message, so it is never an empty white box',
         (tester) async {
       // Flutter paints the tooltip WHITE on a dark theme and picks its text
-      // colour to match. A rich message carrying a colour chosen here instead
+      // color to match. A rich message carrying a color chosen here instead
       // was light text on that white box - a tooltip that opened blank.
       final p = withProject();
       p.addResponsibilityItem('Screens');
@@ -308,10 +308,10 @@ void main() {
 
     expect(find.textContaining('with nobody named'), findsOneWidget);
     // Once on the list below the grid. The grid's own narrow cells say the
-    // short form of it, in the error colour, beside the tinted chips every
+    // short form of it, in the error color, beside the tinted chips every
     // named party gets.
     // Once for each unnamed party on the list below the grid. The grid's own
-    // narrow cells say the short form of it, in the error colour, beside the
+    // narrow cells say the short form of it, in the error color, beside the
     // tinted chip every named party gets.
     expect(find.textContaining('NOBODY YET'), findsNWidgets(2));
     expect(find.text('NOBODY'), findsNWidgets(2));

@@ -686,9 +686,9 @@ void main() {
       final before = tester.getTopLeft(name);
       final yearBefore = tester.getTopLeft(find.text('2014').first);
 
-      // FROM A POINT INSIDE THE GRID, not from its centre. The frame is
+      // FROM A POINT INSIDE THE GRID, not from its center. The frame is
       // deliberately taller than what is left of the window below the header
-      // - that is what "it scrolls in its own frame" means - so its centre can
+      // - that is what "it scrolls in its own frame" means - so its center can
       // sit below the bottom edge, and a drag aimed there lands on nothing.
       await tester.dragFrom(
         tester.getTopLeft(find.byType(PinnedGrid)) + const Offset(300, 60),
@@ -976,7 +976,7 @@ void main() {
           matching: find.byType(Tooltip),
         ),
       );
-      // The name, not just a colour and a figure. "Which boxes" is the first
+      // The name, not just a color and a figure. "Which boxes" is the first
       // thing anybody asks of a cell with money in it.
       expect(cell.message, contains('Projector 1'));
       expect(cell.message, contains('due 2024'));
@@ -1175,7 +1175,7 @@ void main() {
     expect(find.byKey(const ValueKey('lifecycle_item_PROJECTORDEVICE_1')),
         findsOneWidget);
     // In the row's own subtitle, which is a rich string - the step in words
-    // in its own colour, then the rest of the line.
+    // in its own color, then the rest of the line.
     expect(find.textContaining('Never replaced'), findsWidgets);
 
     // And back onto the plan from the same button.

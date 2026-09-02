@@ -131,7 +131,7 @@ void main() {
       expect(File(pdf).existsSync(), isTrue);
     });
 
-    test('re-saving the row does not re-relativise what is already stored', () {
+    test('re-saving the row does not re-relativize what is already stored', () {
       // The dialog hands back whatever it was opened with when nobody picked a
       // new file. Storing an already-relative path a second time would resolve
       // it against the working directory and produce a pointer at nothing.
@@ -276,7 +276,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // THE DOCUMENT IS THE BUTTON - named by its own file, because that is
-      // what somebody recognises.
+      // what somebody recognizes.
       expect(find.text('Q-88421.pdf'), findsWidgets);
       await tester.tap(find.byKey(const ValueKey('vendor_quote_detach')));
       await tester.pumpAndSettle();

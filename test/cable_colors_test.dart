@@ -10,7 +10,7 @@ import 'package:extron_configurator/room_locations.dart';
 
 /// The Schematic tab has had a one-dialog "Colors" button for as long as it has
 /// had lines. The two sheets the trades are actually handed had nothing of the
-/// kind: a colour could only be changed by selecting one run at a time, which
+/// kind: a color could only be changed by selecting one run at a time, which
 /// is the wrong shape for "make the network runs blue" and is how a drawing
 /// ends up with three shades of network on it.
 void main() {
@@ -52,11 +52,11 @@ void main() {
     // One row per type, however many runs carry it.
     expect(types.length, types.map((t) => t.type).toSet().length);
     for (final t in types) {
-      expect(t.keys, isNotEmpty, reason: 'a colour needs somewhere to go');
+      expect(t.keys, isNotEmpty, reason: 'a color needs somewhere to go');
     }
   });
 
-  testWidgets('picking a swatch recolours every run of that type',
+  testWidgets('picking a swatch recolors every run of that type',
       (tester) async {
     final p = room();
 
@@ -80,7 +80,7 @@ void main() {
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    expect(find.text('Cable colours'), findsOneWidget);
+    expect(find.text('Cable colors'), findsOneWidget);
     expect(find.text('Cat 6'), findsOneWidget);
 
     // The first swatch on the Cat 6 row.
@@ -97,11 +97,11 @@ void main() {
 
     // The tick lands on the swatch that was clicked straight away — the rows
     // are built off the drawing as it now is, not off a snapshot taken when
-    // the dialog opened, which used to leave the tick on the old colour until
+    // the dialog opened, which used to leave the tick on the old color until
     // the dialog was closed and opened again.
     expect(tester.widget<ColorSwatchButton>(swatch.first).selected, isTrue);
 
-    // Written as a TYPE colour, which is what every sheet reads.
+    // Written as a TYPE color, which is what every sheet reads.
     expect(p.avCabling.typeColors, isNotEmpty);
     final after = cablingTypesIn(p.cablingSchematic(buildAvFlowModel(p)));
     final cat6 = after.firstWhere((t) => t.type == 'Cat 6');

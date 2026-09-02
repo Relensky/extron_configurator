@@ -139,7 +139,7 @@ void main() {
     testWidgets('the same press twice still moves the tab', (tester) async {
       // A reader who followed the chip, wandered back to Vendors and pressed
       // it again must be taken there again - the request has not changed, and
-      // the tab honours changes. See [AppStateProvider.projectPaneRequestId].
+      // the tab honors changes. See [AppStateProvider.projectPaneRequestId].
       final (:p, :epson) = job();
       await openPane(tester, p, 'vendors');
       await tester.tap(find.byKey(ValueKey('vendor_package_parts_$epson')));

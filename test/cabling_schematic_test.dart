@@ -348,7 +348,7 @@ void main() {
       expect(one.from, isNot(two.from));
     });
 
-    test('a single run is not pushed off centre for no reason', () {
+    test('a single run is not pushed off center for no reason', () {
       final p = room(runs: 0);
       final a = p.addCablingBox(kind: CablingBoxKind.pullBox);
       final b = p.addCablingBox(kind: CablingBoxKind.pathway);
@@ -357,7 +357,7 @@ void main() {
     });
   });
 
-  group('colour: one per cable, not one per signal', () {
+  group('color: one per cable, not one per signal', () {
     /// A room whose two places are joined by network runs AND by HDBaseT and
     /// Dante runs — the two signals that both get filed as "AV cabling".
     AppStateProvider mixedRoom() {
@@ -415,7 +415,7 @@ void main() {
 
     test('two signals filed as the same cable are drawn as one cable', () {
       // HDBaseT and Dante are both "AV cabling" and both come off the same
-      // reel. Drawing them in two colours told whoever was pulling them they
+      // reel. Drawing them in two colors told whoever was pulling them they
       // were two different things.
       final drawing = drawingOf(mixedRoom());
       final av = drawing.bundles.where((b) => b.cableType == 'AV cabling');
@@ -423,7 +423,7 @@ void main() {
       expect(av.map((b) => b.color).toSet(), hasLength(1));
     });
 
-    test('a different category of the same cable is a different colour', () {
+    test('a different category of the same cable is a different color', () {
       // The example the rule exists for: AV Cat 6a and network Cat 6a are two
       // pulls, by two contractors, to two test standards.
       final p = mixedRoom();
@@ -442,7 +442,7 @@ void main() {
       expect(avAfter.color, isNot(netAfter.color));
     });
 
-    test('the same cable typed two ways is still one colour', () {
+    test('the same cable typed two ways is still one color', () {
       // "Cat6a" and "CAT 6A" are one line on a purchase order and one line on
       // the drawing.
       final p = mixedRoom();
@@ -461,14 +461,14 @@ void main() {
       );
     });
 
-    test('a run can be recoloured by hand, and put back', () {
+    test('a run can be recolored by hand, and put back', () {
       final p = room(runs: 2);
       final bundle = drawingOf(p).bundles.single;
       final fromKey = bundle.color;
       p.setCablingBundleColor(bundle.id, 0xFF00FF00);
       expect(drawingOf(p).bundles.single.color, 0xFF00FF00);
 
-      // Recolouring is how the sheet is DRAWN, not a disagreement with what
+      // Recoloring is how the sheet is DRAWN, not a disagreement with what
       // the room counted — so it does not badge the run as edited.
       expect(drawingOf(p).overridden, isEmpty);
 
@@ -476,7 +476,7 @@ void main() {
       expect(drawingOf(p).bundles.single.color, fromKey);
     });
 
-    test('the colour goes to disk with the other edits', () {
+    test('the color goes to disk with the other edits', () {
       final p = room(runs: 2);
       p.setCablingBundleColor(drawingOf(p).bundles.single.id, 0xFF123456);
 
@@ -497,7 +497,7 @@ void main() {
       expect(key.single.categoryMatters, isFalse);
     });
 
-    test('the key line and the runs it names carry the same colour', () {
+    test('the key line and the runs it names carry the same color', () {
       // Derived from the same bundles, which is the whole reason not to let
       // anybody maintain a legend by hand.
       final drawing = drawingOf(room(runs: 2));
@@ -549,8 +549,8 @@ void main() {
       );
     });
 
-    test('it is drawn in the control colour, not the signal palette', () {
-      // A control run landed on a data switch is the mistake this colour
+    test('it is drawn in the control color, not the signal palette', () {
+      // A control run landed on a data switch is the mistake this color
       // exists to prevent.
       expect(drawingOf(withScreenRun()).bundles.single.color,
           kCablingControlRunColor);
@@ -604,7 +604,7 @@ void main() {
 
     test('a label sits halfway along the run, not between its ends', () {
       // A run detouring around a rack has a straight-line middle that can be
-      // well off the line it is supposed to be labelling.
+      // well off the line it is supposed to be labeling.
       const dogleg = [Offset(0, 0), Offset(0, 100), Offset(100, 100)];
       expect(polylineMidpoint(dogleg), const Offset(0, 100));
       expect(

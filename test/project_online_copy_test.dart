@@ -310,7 +310,7 @@ void main() {
       );
 
       expect(result.written, ['Chico_campus.xlsx', 'Chico_campus.json']);
-      // The campus file is COPIED, not re-serialised: it is somebody's
+      // The campus file is COPIED, not re-serialized: it is somebody's
       // document and may have been hand-edited.
       expect(
         File(path.join(f, 'Chico_campus.json')).readAsStringSync(),

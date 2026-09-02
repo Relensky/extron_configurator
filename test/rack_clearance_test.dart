@@ -180,7 +180,7 @@ void main() {
       return (container.decoration as BoxDecoration?)?.color;
     }
 
-    testWidgets('the kept-clear rail is washed red and its neighbours are not',
+    testWidgets('the kept-clear rail is washed red and its neighbors are not',
         (tester) async {
       final (p, rack) = rackWith([device('AMP_1', units: 2, model: 'HOT AMP')]);
       p.avRackPlaceSharing(

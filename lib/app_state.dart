@@ -235,7 +235,7 @@ const Set<String> kComTypeDefaultNames = {
   'http',
   // The Extron SP bus (a NAVigator). Nothing to publish but the com_type
   // itself — the device is addressed by its spdevice alias — but the block
-  // has to be recognised or a driver that declares it looks like a typo.
+  // has to be recognized or a driver that declares it looks like a typo.
   'spi',
 };
 
@@ -261,7 +261,7 @@ const String kSchematicIdf = 'IDF';
 const String kSchematicTouchPanel = 'TOUCHPANEL';
 
 /// One remembered state of the control schematic: where every box sits, the
-/// lines drawn between them, what has been hidden, recoloured or added by
+/// lines drawn between them, what has been hidden, recolored or added by
 /// hand, and the two targets the drawing is built around.
 ///
 /// Named rather than written inline because it is now held in TWO stacks — one
@@ -341,7 +341,7 @@ class AppStateProvider extends ChangeNotifier {
   /// reading fourteen tab labels to find the device the flag was about. The
   /// lists know which device they mean; this is how they say so.
   ///
-  /// Session-only, and a REQUEST rather than a selection: the tab honours it
+  /// Session-only, and a REQUEST rather than a selection: the tab honors it
   /// when it next builds and the reader is free to move off it, which is why
   /// nothing clears it afterwards. A key this room does not have is ignored.
   String requestedDeviceKey = '';
@@ -372,7 +372,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Bumped on every request, so asking for the SAME pane twice still moves
   /// the tab. Without it, a reader who pressed a campus figure, wandered off to
   /// Parts and pressed another figure would be handed Parts again: the request
-  /// would not have changed, and the tab honours changes.
+  /// would not have changed, and the tab honors changes.
   int projectPaneRequestId = 0;
 
   /// What the Parts pane should be NARROWED TO when it opens, as the same
@@ -2777,7 +2777,7 @@ class AppStateProvider extends ChangeNotifier {
   ///
   /// Returns false when it had to come off its rail: a 1U blank replaced by a
   /// 3U shelf may not fit where the blank was, and a taller box silently
-  /// overlapping its neighbour is a rack elevation that lies. It stays in the
+  /// overlapping its neighbor is a rack elevation that lies. It stays in the
   /// room, un-racked, for somebody to place.
   bool swapAvRackItem(RackItem item, AvDeviceTemplate template) {
     final was = item.catalogModel.trim().isNotEmpty
@@ -2900,7 +2900,7 @@ class AppStateProvider extends ChangeNotifier {
       final item = avRackItems[i];
       // Either it names the entry, or it is a one-off that was typed in under
       // the entry's own name — the vent plate somebody placed before anybody
-      // catalogued it. Both are the same part to everyone who reads the rack.
+      // catalogd it. Both are the same part to everyone who reads the rack.
       if (!isOld(item.catalogModel) &&
           !(item.catalogModel.trim().isEmpty && isOld(item.label))) {
         continue;
@@ -3082,7 +3082,7 @@ class AppStateProvider extends ChangeNotifier {
     if (sheet == null) return;
     final index = avFloorPlans.indexWhere((p) => p.id == sheet.id);
     if (index < 0) return;
-    _pushAvUndo('Sheet colour', _plansScope);
+    _pushAvUndo('Sheet color', _plansScope);
     avFloorPlans[index] = sheet.copyWith(
       paperColor: color,
       clearPaperColor: color == null,
@@ -3195,7 +3195,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Sets the plate and ink one kind of text is printed in on [planId].
   ///
   /// A drawing decision like the key's position or a bend in a run, so it goes
-  /// through the plans' undo scope with them: recolouring every label on a
+  /// through the plans' undo scope with them: recoloring every label on a
   /// sheet and not being able to take it back is not a change anybody tries
   /// twice.
   void setAvPlanLabelStyle(
@@ -3210,7 +3210,7 @@ class AppStateProvider extends ChangeNotifier {
     _pushAvUndo(
       style.isDefault
           ? '${kPlanTextKindLabels[kind]} back to standard'
-          : 'Recolour ${kPlanTextKindLabels[kind]?.toLowerCase()}',
+          : 'Recolor ${kPlanTextKindLabels[kind]?.toLowerCase()}',
       _plansScope,
     );
     avFloorPlans[index] = sheet.withLabelStyle(kind, style);
@@ -3381,7 +3381,7 @@ class AppStateProvider extends ChangeNotifier {
   /// The sheet the Floor Plan tab is showing and the AV canvas draws behind
   /// itself.
   ///
-  /// A room has more than one sheet as soon as it has more than one storey, or
+  /// A room has more than one sheet as soon as it has more than one story, or
   /// a reflected ceiling plan next to the furniture plan, or a demolition
   /// sheet beside the new work. Falls back to the first, which is what a room
   /// with one sheet has always used.
@@ -3578,7 +3578,7 @@ class AppStateProvider extends ChangeNotifier {
     model: model,
     locations: avLocations,
     overrides: avCabling,
-    // The room's palette, so recolouring HDBaseT on the signal flow moves the
+    // The room's palette, so recoloring HDBaseT on the signal flow moves the
     // AV runs on the cabling sheet with it.
     palette: avSignalColors,
   );
@@ -3626,10 +3626,10 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Colours one run on the drawing. Null puts it back to the colour the room
-  /// gives that signal, which is the only way out of a recolour.
+  /// Colors one run on the drawing. Null puts it back to the color the room
+  /// gives that signal, which is the only way out of a recolor.
   void setCablingBundleColor(String id, int? argb) {
-    _pushAvUndo('Set cable colour', _cablingScope);
+    _pushAvUndo('Set cable color', _cablingScope);
     if (argb == null) {
       avCabling.colors.remove(id);
     } else {
@@ -3638,17 +3638,17 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Colours every run of one CABLE, on the drawing and on the floor plan
-  /// alike. Null puts the key's own colour back.
+  /// Colors every run of one CABLE, on the drawing and on the floor plan
+  /// alike. Null puts the key's own color back.
   ///
   /// [colorKeys] is what [cablingColorKey] returns for the runs concerned —
   /// plural because a cable type can be pulled under more than one category
-  /// ("Cat 6a" as AV and as network), and somebody recolouring the Cat 6a layer
+  /// ("Cat 6a" as AV and as network), and somebody recoloring the Cat 6a layer
   /// means the layer they are looking at, not one half of it.
   void setCablingTypeColor(Iterable<String> colorKeys, int? argb) {
     final keys = colorKeys.where((k) => k.isNotEmpty).toSet();
     if (keys.isEmpty) return;
-    _pushAvUndo('Set the colour for this cable', _cablingScope);
+    _pushAvUndo('Set the color for this cable', _cablingScope);
     for (final key in keys) {
       if (argb == null) {
         avCabling.typeColors.remove(key);
@@ -3659,11 +3659,11 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Hands every cable type back the colour the key gives it, in one go —
-  /// the way the signal flow's palette dialog resets its own colours.
+  /// Hands every cable type back the color the key gives it, in one go —
+  /// the way the signal flow's palette dialog resets its own colors.
   void resetCablingTypeColors() {
     if (avCabling.typeColors.isEmpty) return;
-    _pushAvUndo("Back to the key's colours", _cablingScope);
+    _pushAvUndo("Back to the key's colors", _cablingScope);
     avCabling.typeColors.clear();
     notifyListeners();
   }
@@ -3673,7 +3673,7 @@ class AppStateProvider extends ChangeNotifier {
   ///
   /// A nudge rather than a position, for the reason the floor plan stores one:
   /// the automatic spot follows the line, so a label moved out of the way of a
-  /// box stays out of the way of it when that box is dragged half a metre.
+  /// box stays out of the way of it when that box is dragged half a meter.
   void setCablingLabelOffset(String edgeKey, Offset by) {
     if (edgeKey.isEmpty) return;
     _pushAvUndo(
@@ -3692,13 +3692,13 @@ class AppStateProvider extends ChangeNotifier {
   /// Null puts it back in the middle.
   ///
   /// Cable comes into a floor box from one side, and four runs all pointing at
-  /// the centre of the same box say nothing about which knockout each of them
+  /// the center of the same box say nothing about which knockout each of them
   /// uses. See [CablingOverrides.endAnchors].
   void setCablingEndAnchor(String bundleId, bool atStart, Offset? fraction) {
     if (bundleId.isEmpty) return;
     final key = cablingEndKey(bundleId, atStart);
     _pushAvUndo(
-      fraction == null ? 'Centre a run on its box' : 'Move where a run lands',
+      fraction == null ? 'Center a run on its box' : 'Move where a run lands',
       _cablingScope,
     );
     if (fraction == null) {
@@ -3741,7 +3741,7 @@ class AppStateProvider extends ChangeNotifier {
     return count;
   }
 
-  /// True when some run of [colorKeys] carries a hand-picked colour, so the
+  /// True when some run of [colorKeys] carries a hand-picked color, so the
   /// view can offer the way back out of one.
   bool hasCablingTypeColor(Iterable<String> colorKeys) =>
       colorKeys.any(avCabling.typeColors.containsKey);
@@ -3754,7 +3754,7 @@ class AppStateProvider extends ChangeNotifier {
     String? toLabel,
   }) {
     // One key for both ends: they are two boxes on one row, and somebody
-    // tabbing from one to the other is still labelling the same run.
+    // tabbing from one to the other is still labeling the same run.
     _pushAvUndo('Label the end of a run', _cablingScope,
         coalesce: 'cabling:ends:$id');
     void set(Map<String, String> into, String? value) {
@@ -5101,7 +5101,7 @@ class AppStateProvider extends ChangeNotifier {
   ///
   /// The narrowest of the three rungs the plan reads - see
   /// [EquipmentLife.lifeYears]. Somebody looked at this projector, in this
-  /// lecture theatre, running eight hours a day, and said five rather than the
+  /// lecture theater, running eight hours a day, and said five rather than the
   /// eight the product gets in general.
   ///
   /// 0 CLEARS IT rather than meaning "replace it immediately": zero years is
@@ -7440,7 +7440,7 @@ class AppStateProvider extends ChangeNotifier {
     // the preview offers per change.
     // Kept for the driver-defaults review's "Original File" comparison, which
     // has to line a converted block up with the section it came from long
-    // after the provenance colouring has been read and forgotten.
+    // after the provenance coloring has been read and forgotten.
     lastSectionRenames = sectionRenames;
     computeConversionProvenance(sectionRenames, conflicts);
 
@@ -8216,7 +8216,7 @@ class AppStateProvider extends ChangeNotifier {
               : flowRules.source);
 
   /// (Re)reads the rule book. A room with no rule file draws exactly as it
-  /// always did — the built-ins ARE the shipped behaviour.
+  /// always did — the built-ins ARE the shipped behavior.
   Future<void> loadFlowRules() async {
     flowRules = await FlowRules.load(
         explicitPath:
@@ -10955,7 +10955,7 @@ class AppStateProvider extends ChangeNotifier {
 
   /// The last answer [priceProject] gave, or null when it has to work it out.
   ///
-  /// WHY MEMOISE AT ALL. Pricing a job is a pure function of the project, the
+  /// WHY MEMOIZE AT ALL. Pricing a job is a pure function of the project, the
   /// rooms and the catalog, and it is not cheap: forty rooms of twenty-five
   /// devices is about a thousand priced lines, merged onto one master list and
   /// tagged. The Project tab asks for it on EVERY build — and the tab rebuilds
@@ -11004,7 +11004,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Marks the project edited and tells the listeners.
   ///
   /// [repricing] is false for a change that CANNOT move a number on the
-  /// estimate, and it is the only way the memoised estimate survives an edit.
+  /// estimate, and it is the only way the memoized estimate survives an edit.
   /// The default is true — a change is assumed to matter until somebody has
   /// looked at it and decided otherwise, because being slow is a nuisance and
   /// being wrong about a quote is not.
@@ -11125,7 +11125,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Whether there is anything to go back to, or forward to, on the job.
   ///
   /// [UndoRecorder.pending] counts: an edit made a moment ago has not been
-  /// filed yet, and a Undo button that greyed out for a third of a second
+  /// filed yet, and a Undo button that grayed out for a third of a second
   /// after every change would read as broken.
   bool get canUndoProject => _projectHistory.canUndo || _projectUndo.pending;
   bool get canRedoProject => _projectHistory.canRedo;
@@ -11531,7 +11531,7 @@ class AppStateProvider extends ChangeNotifier {
   /// histories.
   ///
   /// [UndoRecorder.pending] counts, as it does everywhere else: an edit typed
-  /// into a form a moment ago has not been filed yet, and a button that greyed
+  /// into a form a moment ago has not been filed yet, and a button that grayed
   /// out for a third of a second after every keystroke would read as broken.
   /// It has no spine entry until it is filed, which is what the flush at the
   /// top of [undoRoom] is for.
@@ -12143,7 +12143,7 @@ class AppStateProvider extends ChangeNotifier {
   ///
   /// A FRACTION, clamped to nought..one. The box on the spares page types a
   /// percentage and divides; anything outside the range is a typo, and one
-  /// honoured would put a recommendation of two hundred spare wall plates on
+  /// honored would put a recommendation of two hundred spare wall plates on
   /// the sheet.
   ///
   /// Re-prices, because every row of the cover table is worked out from it.
@@ -12501,7 +12501,7 @@ class AppStateProvider extends ChangeNotifier {
   ///
   /// CHECKED FOR EXISTENCE HERE rather than at the button. A campus folder that
   /// was renamed leaves every job in it pointing at nothing, and the honest
-  /// behaviour then is the sheet of one - not an error about a file nobody
+  /// behavior then is the sheet of one - not an error about a file nobody
   /// asked to open. See [BuildingProject.campusFile].
   String get projectCampusFile {
     final resolved = project.resolvedCampusFile(currentProjectPath);
@@ -12943,7 +12943,7 @@ class AppStateProvider extends ChangeNotifier {
     }
     if (target != onlineFolder) setOnlineFolder(target);
 
-    // The campus file is copied as it is on disk rather than re-serialised:
+    // The campus file is copied as it is on disk rather than re-serialized:
     // it is somebody's document, it may have been hand-edited, and a copy is
     // a copy.
     String? campusText;
@@ -13649,9 +13649,9 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
-  /// Gives one party its colour, or takes it back to the derived one.
+  /// Gives one party its color, or takes it back to the derived one.
   ///
-  /// Logged like any other change to the matrix. A colour is not decoration on
+  /// Logged like any other change to the matrix. A color is not decoration on
   /// this document: it is how the sheet is read, it survives into the picture
   /// and the spreadsheet that get issued, and "who changed the contractor from
   /// orange to blue between the two issues" is a question somebody asks.
@@ -13664,8 +13664,8 @@ class AppStateProvider extends ChangeNotifier {
       itemName: named,
       field: 'Responsibility matrix',
       summary: color == null
-          ? 'colour back to automatic'
-          : 'colour set by hand',
+          ? 'color back to automatic'
+          : 'color set by hand',
     );
     _projectChanged(repricing: false);
   }
@@ -14145,7 +14145,7 @@ class AppStateProvider extends ChangeNotifier {
     final wasAttached = vendor.quoteFilePath.trim();
     final picked = filePath.trim();
     // Already-stored paths come back through here untouched; only a fresh
-    // absolute pick is relativised, because storePath on a relative path
+    // absolute pick is relativized, because storePath on a relative path
     // would resolve it against the wrong folder.
     final stored = picked.isEmpty || picked == wasAttached
         ? picked
@@ -14580,7 +14580,7 @@ class AppStateProvider extends ChangeNotifier {
 
   /// How many calendar exports this session has produced, incremented.
   ///
-  /// Goes into the ICS SEQUENCE field, which is how a calendar recognises a
+  /// Goes into the ICS SEQUENCE field, which is how a calendar recognizes a
   /// re-exported file as a REVISION of the events it already imported rather
   /// than as a second set of them. Without a rising number, moving a deadline
   /// and exporting again leaves the old dates sitting in somebody's calendar
@@ -14710,7 +14710,7 @@ class AppStateProvider extends ChangeNotifier {
   /// The last answer [_roomFingerprint] gave, or null when it has to work it
   /// out again.
   ///
-  /// WHY MEMOISE. [roomHasUnsavedChanges] is read by the SaveToolbar (see
+  /// WHY MEMOIZE. [roomHasUnsavedChanges] is read by the SaveToolbar (see
   /// save_actions.dart), which is in the title bar of every tab, so it is
   /// asked on EVERY rebuild —
   /// and a rebuild is what each of the two hundred [notifyListeners] calls in
@@ -14724,10 +14724,10 @@ class AppStateProvider extends ChangeNotifier {
   /// in ONE place, [notifyListeners], which every mutation already goes
   /// through in order to be visible on screen at all: a change that skipped it
   /// would not have reached the toolbar to be asked about either. It is the
-  /// same hook, for the same reason, as the memoised [_projectEstimate].
+  /// same hook, for the same reason, as the memoized [_projectEstimate].
   String? _cachedRoomFingerprint;
 
-  /// Drops the memoised fingerprint. Called from [notifyListeners].
+  /// Drops the memoized fingerprint. Called from [notifyListeners].
   void _forgetRoomFingerprint() => _cachedRoomFingerprint = null;
 
   String _roomFingerprint() {
@@ -14976,7 +14976,7 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Drops the memoised estimate on the way out of every mutation.
+  /// Drops the memoized estimate on the way out of every mutation.
   ///
   /// Overridden rather than hooked at each call site because there are two
   /// hundred of them: a cache that has to be invalidated by hand in two
@@ -15072,7 +15072,7 @@ class AppStateProvider extends ChangeNotifier {
     AvDeviceTemplate template,
   ) {
     // Deliberately a FRESH read. A plan is shown to somebody who is about to
-    // authorise writing to nine files, and showing it off a cache that could
+    // authorize writing to nine files, and showing it off a cache that could
     // be minutes old would be showing them a picture of a building that no
     // longer exists.
     _projectRooms.clear();

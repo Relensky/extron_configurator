@@ -32,13 +32,13 @@ import 'contrast.dart';
 /// The fill for a snack bar that reports a failure.
 ///
 /// `Colors.red` was doing this job, and it does not read: a snack bar's text
-/// colour comes from the theme (near-white on a light theme, near-black on a
+/// color comes from the theme (near-white on a light theme, near-black on a
 /// dark one), and plain red measures between 3.1:1 and 5.4:1 against those
 /// across this app's four themes — under the 4.5:1 that body text needs on
 /// three of them.
 ///
 /// So the FILL is chosen against the ink rather than fixed. Contrast is
-/// symmetric, so this asks the same question the text colours ask, the other
+/// symmetric, so this asks the same question the text colors ask, the other
 /// way round: which of the theme's error tones can this text be read on. The
 /// last resort is one of two Material error tones, because a snack bar that
 /// has given up on being red has given up on saying "this failed".

@@ -128,7 +128,7 @@ void main() {
       expect(mark('Today'), findsOneWidget);
       expect(mark('First order'), findsOneWidget);
       expect(mark('Delivery deadline'), findsOneWidget);
-      // The dates are written out, not only coloured: this tab is printed and
+      // The dates are written out, not only colored: this tab is printed and
       // photographed, and a rail read by hue alone says nothing in mono.
       expect(find.text('1 Dec 2026'), findsOneWidget);
     });

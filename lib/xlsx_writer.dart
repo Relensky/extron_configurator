@@ -121,11 +121,11 @@ class XlsxMoney {
 /// A cell whose FILL says whose it is.
 ///
 /// The responsibility matrix is read by WHOSE NAME IS ON THE LINE, and on
-/// screen every party carries its own colour so the contractor's rows can be
+/// screen every party carries its own color so the contractor's rows can be
 /// told from the owner's without reading a cell. Exported, that document was
 /// black text on white and the reader was back to reading every line.
 ///
-/// The colour is passed in already resolved rather than derived here: the app
+/// The color is passed in already resolved rather than derived here: the app
 /// has one place that decides what a name reads in - see `name_colors.dart` -
 /// and a spreadsheet that picked its own hues would be a second answer to the
 /// same question, disagreeing with the screen and with the picture export.
@@ -195,7 +195,7 @@ class XlsxChartSeries {
   final int column;
 
   /// 'RRGGBB'. Explicit rather than left to the theme: this writer produces no
-  /// theme part, and a series with no colour of its own comes out black.
+  /// theme part, and a series with no color of its own comes out black.
   final String colorHex;
 
   const XlsxChartSeries({
@@ -232,7 +232,7 @@ class XlsxChart {
   /// The value axis' number format, e.g. `"$"#,##0`.
   final String numberFormat;
 
-  /// What the axes are called. Null leaves the axis unlabelled.
+  /// What the axes are called. Null leaves the axis unlabeled.
   final String? valueAxisTitle;
   final String? categoryAxisTitle;
 
@@ -450,7 +450,7 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
   /// the row style ids) keep their meaning.
   int wrapStyle(int rowStyle) => firstWrapStyle + rowStyle;
 
-  // --- the party and vendor colours ---
+  // --- the party and vendor colors ---
   // One font and one fill per distinct pair in the book, so a name that
   // appears on nine rows and two sheets costs one style rather than eleven.
   final tints = <String>[];

@@ -42,13 +42,13 @@ import 'xlsx_writer.dart';
 ///  on every row and it is as wide as the window — and photographing an editor
 ///  produces a picture with delete buttons in it. The preview is the document.
 ///
-///  A COLOUR PER PARTY. The question this sheet is read for is whose job a line
+///  A COLOR PER PARTY. The question this sheet is read for is whose job a line
 ///  is, and the answer was black text in a narrow column on a grid thirty
-///  columns wide. Each party now carries its own colour — the same one wherever
+///  columns wide. Each party now carries its own color — the same one wherever
 ///  its name appears, from [tintForName] — so the contractor's share of the
 ///  sheet is visible without reading a single cell, and the lines nobody has
-///  been named on stay grey, because an unagreed line must never read as an
-///  agreed one. The name is still written in every cell: the colour is a second
+///  been named on stay gray, because an unagreed line must never read as an
+///  agreed one. The name is still written in every cell: the color is a second
 ///  way to read the sheet, never the only one.
 /// ============================================================================
 
@@ -230,7 +230,7 @@ class CutsheetLink extends StatelessWidget {
     // it is given, so the press is the row.
     //
     // The word rather than the file name: the column is 116 wide and
-    // 'NEC-P525UL.pdf' ellipsises to 'NEC-P…' in it, which says less than
+    // 'NEC-P525UL.pdf' ellipsizes to 'NEC-P…' in it, which says less than
     // 'PDF' does. The file name is on the tooltip and on the editor list
     // below, where there is room to read it.
     if (compact) {
@@ -353,9 +353,9 @@ class _Toolbar extends StatelessWidget {
                 color: theme.colorScheme.error,
               ),
             ),
-          // The key to the colours on the grid below, built from the parties
-          // actually named on this job - and the place they are SET. A colour
-          // is chosen by pressing the colour, which is the only control on
+          // The key to the colors on the grid below, built from the parties
+          // actually named on this job - and the place they are SET. A color
+          // is chosen by pressing the color, which is the only control on
           // this pane whose meaning is already on screen.
           if (items.isNotEmpty)
             NameTintKey(
@@ -380,13 +380,13 @@ class _Toolbar extends StatelessWidget {
 ///
 /// One list rather than two, because a party is one party: the contractor who
 /// installs the screens and furnishes the ceiling boxes has to be the same
-/// colour in both rows or the colour stops meaning anybody.
+/// color in both rows or the color stops meaning anybody.
 List<String> partiesOn(List<ResponsibilityItem> items) {
   final seen = <String>{};
   final out = <String>[];
   for (final item in items) {
     for (final party in [item.furnishedBy, item.installedBy]) {
-      final key = normalisedName(party);
+      final key = normalizedName(party);
       if (key.isEmpty || !seen.add(key)) continue;
       out.add(party.trim());
     }
@@ -395,30 +395,30 @@ List<String> partiesOn(List<ResponsibilityItem> items) {
 }
 
 // ---------------------------------------------------------------------------
-//  THE COLOUR A PARTY READS IN
+//  THE COLOR A PARTY READS IN
 // ---------------------------------------------------------------------------
-//  Every party already derives a stable colour from its own name, which is
+//  Every party already derives a stable color from its own name, which is
 //  what makes a matrix legible the moment it is started and before anybody has
-//  set anything up. What a derived colour cannot do is AGREE with anything
+//  set anything up. What a derived color cannot do is AGREE with anything
 //  outside this app - and this is the one document here that is issued into
 //  somebody else's stack of paper. The general contractor has been blue on
-//  every drawing in the submittal for a year; the campus colour-codes its
-//  trades; the last matrix that went out was coloured by hand in Excel. A hue
+//  every drawing in the submittal for a year; the campus color-codes its
+//  trades; the last matrix that went out was colored by hand in Excel. A hue
 //  nobody can change is a hue that argues with all three.
 //
-//  So the colour is assignable, exactly the way a vendor's is (see
+//  So the color is assignable, exactly the way a vendor's is (see
 //  [showVendorColorDialog]) - the same twelve swatches, the same way back to
 //  automatic - and it carries into the picture and the spreadsheet, because
 //  those are the copies anybody outside this room will ever see.
 
-/// The palette a party's colour is chosen from.
+/// The palette a party's color is chosen from.
 ///
-/// The same twelve the derived colours come out of, so a chosen colour and a
+/// The same twelve the derived colors come out of, so a chosen color and a
 /// derived one belong to one set rather than looking like two systems on one
-/// sheet. Any other colour is one press further on, through the wheel.
+/// sheet. Any other color is one press further on, through the wheel.
 const List<Color> kResponsibilityPalette = kNameTintWheel;
 
-/// Picks the colour [party] reads in, everywhere it appears.
+/// Picks the color [party] reads in, everywhere it appears.
 Future<void> showPartyColorDialog(BuildContext context, String party) async {
   final named = party.trim();
   if (named.isEmpty) return;
@@ -435,7 +435,7 @@ Future<void> showPartyColorDialog(BuildContext context, String party) async {
 
         return AlertDialog(
           key: const ValueKey('responsibility_party_color_dialog'),
-          title: Text('Colour for $named'),
+          title: Text('Color for $named'),
           content: SizedBox(
             width: 420,
             child: Column(
@@ -444,7 +444,7 @@ Future<void> showPartyColorDialog(BuildContext context, String party) async {
               children: [
                 Text(
                   'Every line $named furnishes or installs is marked in this '
-                  'colour - on the grid, in the picture that goes in the '
+                  'color - on the grid, in the picture that goes in the '
                   'submittal, and in the spreadsheet the contractor prices.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
@@ -471,10 +471,10 @@ Future<void> showPartyColorDialog(BuildContext context, String party) async {
                   ],
                 ),
                 const SizedBox(height: 10),
-                // A Wrap rather than a Row: two labelled buttons are wider
+                // A Wrap rather than a Row: two labeled buttons are wider
                 // than the dialog at anything above the default text size, and
                 // an Automatic button half off the edge is the way back to the
-                // derived colour that cannot be pressed.
+                // derived color that cannot be pressed.
                 Wrap(
                   spacing: 8,
                   runSpacing: 4,
@@ -483,12 +483,12 @@ Future<void> showPartyColorDialog(BuildContext context, String party) async {
                     OutlinedButton.icon(
                       key: const ValueKey('party_color_custom'),
                       icon: const Icon(Icons.colorize, size: 16),
-                      label: const Text('Any other colour'),
+                      label: const Text('Any other color'),
                       onPressed: () async {
                         final picked = await showColorWheelDialog(
                           ctx,
                           initial: shown,
-                          title: 'Colour for $named',
+                          title: 'Color for $named',
                         );
                         if (picked == null) return;
                         setLocal(
@@ -499,9 +499,9 @@ Future<void> showPartyColorDialog(BuildContext context, String party) async {
                         );
                       },
                     ),
-                    // Back to the colour the name gives it. Disabled while
+                    // Back to the color the name gives it. Disabled while
                     // nothing has been assigned, so the button also says
-                    // whether this party's colour was chosen or derived.
+                    // whether this party's color was chosen or derived.
                     TextButton.icon(
                       key: const ValueKey('party_color_auto'),
                       icon: const Icon(Icons.auto_awesome, size: 16),
@@ -549,7 +549,7 @@ Future<void> showPartyColorDialog(BuildContext context, String party) async {
 /// with intrinsic ones, because that is the only way two independent columns
 /// stay on the same line as each other. Every height here is shared by both.
 /// The five sizes the two halves of the matrix are both laid out on.
-/// How many lines a scope heading may run to before it ellipsises. Three was
+/// How many lines a scope heading may run to before it ellipsizes. Three was
 /// the old fixed row's worth; the row is measured now, so this is only the
 /// backstop that keeps one pathological name from owning the sheet.
 const int kScopeHeadLines = 5;
@@ -594,7 +594,7 @@ class _MatrixGrid extends StatefulWidget {
 ///    apart on a laptop, with nine identical rows between them. The band on
 ///    alternate rows helps and is not enough - it says "this is an odd row",
 ///    not "this is YOUR row". Hovering anything on a line now washes the whole
-///    line, frozen half included, in the accent colour: the eye tracks a
+///    line, frozen half included, in the accent color: the eye tracks a
 ///    moving highlight across a page in a way it cannot track a fixed stripe.
 ///
 ///    THE SHEET ZOOMS. It is the same document as the replacement plan - wider
@@ -630,7 +630,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
   ///
   /// These were fixed pixels, which on a display at 150% left a 20-pixel party
   /// row with a chip in it that no longer fitted and a 104-pixel column whose
-  /// scope name had been ellipsised down to two words. The base numbers are
+  /// scope name had been ellipsized down to two words. The base numbers are
   /// unchanged; what is new is that they grow with the type ([gridMetric]) and
   /// then with the reader's own zoom on top of it - the display scale is what
   /// the machine says this person needs, and the zoom is what THIS sheet needs
@@ -675,7 +675,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
   /// as it did.
   ///
   /// CAPPED, because one pathological name must not push the quantities off
-  /// the bottom of the window. Past the cap that one head ellipsises again -
+  /// the bottom of the window. Past the cap that one head ellipsizes again -
   /// and its tooltip, which carries the whole line, is still there.
   static double _scopeHeadHeight(
     BuildContext context, {
@@ -1168,7 +1168,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
                 ? const SizedBox.shrink()
                 : CutsheetLink(item: item, compact: true),
           ),
-        // WHOSE JOB IT IS, IN ITS OWN COLOUR. Two rows under every scope
+        // WHOSE JOB IT IS, IN ITS OWN COLOR. Two rows under every scope
         // name, and the pair of them is what the sheet is read for.
         _cell(
           height: m.partyRow,
@@ -1207,8 +1207,8 @@ class _MatrixGridState extends State<_MatrixGrid> {
     // the sheet itself used to be the one place it could not be read.
     //
     // A PLAIN MESSAGE, and never a styled one. Flutter's tooltip paints itself
-    // WHITE on a dark theme and dark grey on a light one, and picks its text
-    // colour to match; a colour chosen here instead was light text on the
+    // WHITE on a dark theme and dark gray on a light one, and picks its text
+    // color to match; a color chosen here instead was light text on the
     // white box - a tooltip that opened as an empty white rectangle. The
     // default is the only thing that is right on both themes.
     final described = Tooltip(
@@ -1310,10 +1310,10 @@ class _MatrixGridState extends State<_MatrixGrid> {
     child: child,
   );
 
-  /// The colour the rules are drawn in.
+  /// The color the rules are drawn in.
   ///
   /// [ColorScheme.outlineVariant] rather than [ThemeData.dividerColor]: the
-  /// divider colour is tuned for one line between two blocks of content, and a
+  /// divider color is tuned for one line between two blocks of content, and a
   /// grid of it on a dark theme measured as a grid that is not there.
   static Color _line(ThemeData theme) => theme.colorScheme.outlineVariant;
 
@@ -1321,8 +1321,8 @@ class _MatrixGridState extends State<_MatrixGrid> {
   /// otherwise the band on alternate rows.
   ///
   /// THE HIGHLIGHT IS THE ACCENT AND THE BAND IS NOT. A band has to stay a
-  /// guide - the colours that mean something on this sheet are the parties' -
-  /// so it is grey and faint. The highlight is a different KIND of mark: it is
+  /// guide - the colors that mean something on this sheet are the parties' -
+  /// so it is gray and faint. The highlight is a different KIND of mark: it is
   /// where the reader is, it lasts only as long as the pointer is there, and
   /// it has to be findable across two feet of grid, so it is tinted and
   /// several times stronger.
@@ -1406,9 +1406,9 @@ class _ColumnGrip extends StatelessWidget {
   }
 }
 
-/// One party's name on the grid, in that party's colour.
+/// One party's name on the grid, in that party's color.
 ///
-/// A cell nobody has been named in reads NOBODY in the error colour rather
+/// A cell nobody has been named in reads NOBODY in the error color rather
 /// than as a dash: a blank on this sheet is the exact thing it exists to
 /// catch, and the tinted chips around it would otherwise make an empty cell
 /// look like one more quiet agreement.
@@ -1440,11 +1440,11 @@ class _PartyCell extends StatelessWidget {
         ),
       );
     }
-    // The colour the JOB gave this party, where somebody gave it one. Read off
+    // The color the JOB gave this party, where somebody gave it one. Read off
     // the project here rather than passed down, because every cell on a sheet
-    // of thirty lines has to change the moment the colour does, and threading
+    // of thirty lines has to change the moment the color does, and threading
     // one map through four call sites is four chances for one of them to go on
-    // showing yesterday's colour.
+    // showing yesterday's color.
     final assigned = context.watch<AppStateProvider>().project.partyColor(
       party,
     );
@@ -1559,7 +1559,7 @@ class _ItemRow extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // The parties as chips, in their colours, so a row on the editor and
+          // The parties as chips, in their colors, so a row on the editor and
           // the same row on the grid above read as the same line.
           Wrap(
             spacing: 6,
@@ -1793,7 +1793,7 @@ class _ResponsibilityEditorDialogState
   /// insurance against the worst possible slip.
   ///
   /// The scope is IN the question. "Delete this line?" in a dialog that opened
-  /// over another dialog is a question nobody can answer without cancelling
+  /// over another dialog is a question nobody can answer without canceling
   /// out of it to look.
   Future<void> _delete() async {
     final provider = context.read<AppStateProvider>();
@@ -2085,7 +2085,7 @@ Future<void> _exportSpreadsheet(
   final sections = responsibilityMatrixSections(
     project.responsibility,
     roomNames: columns,
-    // The colours travel with the document. This copy is the one the
+    // The colors travel with the document. This copy is the one the
     // contractor prices from, and a party that is blue on the screen it was
     // agreed on and orange in the file that was sent is two parties as far as
     // the reader is concerned.
@@ -2166,15 +2166,15 @@ class _ResponsibilityImageDialogState
   final GlobalKey _boundary = GlobalKey();
   bool _saving = false;
 
-  /// Whether the picture keeps the party colours.
+  /// Whether the picture keeps the party colors.
   ///
-  /// ON, because the colours are half of how this particular document is read
+  /// ON, because the colors are half of how this particular document is read
   /// — whose job the line is, seen down a column rather than looked up cell by
   /// cell — and a picture of it that dropped them would be a worse copy than
   /// the screen it was taken from. The mono treatment every other drawing
   /// leaves this app in is still one press away, for the copy that is going to
   /// be photocopied.
-  bool _colour = true;
+  bool _color = true;
 
   /// The matrix as pixels, at the size it will actually be read at.
   ///
@@ -2292,9 +2292,9 @@ class _ResponsibilityImageDialogState
           child: RepaintBoundary(
             key: _boundary,
             // On white either way. The only question is whether the party
-            // colours survive - see [_colour].
+            // colors survive - see [_color].
             child: printSkin(
-              enabled: !_colour,
+              enabled: !_color,
               child: _MatrixTable(project: project, columns: columns),
             ),
           ),
@@ -2307,12 +2307,12 @@ class _ResponsibilityImageDialogState
           mainAxisSize: MainAxisSize.min,
           children: [
             Switch(
-              key: const ValueKey('responsibility_image_colour'),
-              value: _colour,
-              onChanged: (v) => setState(() => _colour = v),
+              key: const ValueKey('responsibility_image_color'),
+              value: _color,
+              onChanged: (v) => setState(() => _color = v),
             ),
             const SizedBox(width: 4),
-            const Text('Party colours'),
+            const Text('Party colors'),
           ],
         ),
         const SizedBox(width: 12),
@@ -2365,13 +2365,13 @@ class _MatrixTable extends StatelessWidget {
           child: Text(text, style: style),
         );
 
-    /// A party's cell: its colour behind its name, on the white the document
-    /// is printed on. Greyscaled with the rest of the table when the colours
+    /// A party's cell: its color behind its name, on the white the document
+    /// is printed on. Grayscaled with the rest of the table when the colors
     /// are switched off, which is why the name is still written in it.
-    // The colour this job gave the party, or the one its name derives when
+    // The color this job gave the party, or the one its name derives when
     // nobody has given it one - see [showPartyColorDialog]. The picture is the
-    // copy that goes in the submittal, so it has to be the colour that was
-    // agreed rather than the colour a name happens to hash to.
+    // copy that goes in the submittal, so it has to be the color that was
+    // agreed rather than the color a name happens to hash to.
     Color partyTint(String party) =>
         resolveTint(assigned: project.partyColor(party), name: party);
 
@@ -2425,7 +2425,7 @@ class _MatrixTable extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           // The key travels with the picture. A submittal reader has not seen
-          // the screen these colours were learned on.
+          // the screen these colors were learned on.
           Wrap(
             spacing: 8,
             runSpacing: 6,
@@ -2435,8 +2435,8 @@ class _MatrixTable extends StatelessWidget {
                   name: party,
                   background: Colors.white,
                   // Only what was CHOSEN is passed: a party nobody named a
-                  // colour for still has to be able to read as unsettled, and
-                  // a resolved colour handed in here would settle it.
+                  // color for still has to be able to read as unsettled, and
+                  // a resolved color handed in here would settle it.
                   color: () {
                     final assigned = project.partyColor(party);
                     return assigned == null ? null : Color(assigned);
@@ -2448,7 +2448,7 @@ class _MatrixTable extends StatelessWidget {
           Table(
             defaultVerticalAlignment: TableCellVerticalAlignment.top,
             // Darker than the hairline it was: this table is photographed
-            // for a submittal and photocopied from there, and a 0.6pt grey
+            // for a submittal and photocopied from there, and a 0.6pt gray
             // rule is the first thing a copier loses.
             border: TableBorder.all(color: Colors.black45, width: 0.8),
             columnWidths: {

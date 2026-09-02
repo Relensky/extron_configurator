@@ -17,14 +17,14 @@ import 'room_locations.dart';
 ///  be, and what it costs to stay ahead of them.
 ///
 ///  That question was answered on a spreadsheet — the Master RYG sheet — one
-///  row per room, one column per year, a coloured cell in each: green while the
+///  row per room, one column per year, a colored cell in each: green while the
 ///  room is young, amber as it approaches the end of its cycle, red the year it
 ///  is due, with the replacement figure written in the red cell. It works, and
 ///  it is maintained by hand from a room list somebody else keeps, so it drifts
 ///  from the rooms it describes the moment anything is swapped.
 ///
 ///  THE SAME SHEET, DERIVED. The dates live on the equipment itself
-///  ([AvNode.installedOn]), the rooms come from the project, and the colours
+///  ([AvNode.installedOn]), the rooms come from the project, and the colors
 ///  come out of the arithmetic below. Nothing is typed twice, and swapping a
 ///  projector moves that position's clock without touching the rest of the
 ///  room — see [AvNode.withSwapRecorded].
@@ -37,7 +37,7 @@ import 'room_locations.dart';
 ///                                it should appear on a budget request
 ///    * RED      year 9 onward  — past its life, running on borrowed time
 ///
-///  Generalised so a position on a different life bands the same way: amber for
+///  Generalized so a position on a different life bands the same way: amber for
 ///  the last three years of whatever life it was given, red past the end of it.
 ///
 ///  THE AMBER BAND IS GRADED, because three years of it are not one state. It
@@ -45,7 +45,7 @@ import 'room_locations.dart';
 ///  be quoted and orange the last year before it is due — and red goes deeper
 ///  once something is two years past its life and still in the room. Six steps,
 ///  in [EquipmentTiming]; the four words a document is written in are derived
-///  from them, so the colour and the label cannot come apart.
+///  from them, so the color and the label cannot come apart.
 ///  WHERE THAT LIFE COMES FROM IS THREE ANSWERS, most specific first — what
 ///  somebody said about this position, what the catalog says the product does
 ///  in general, and the blanket cycle for a product nobody has recorded one
@@ -68,7 +68,7 @@ import 'room_locations.dart';
 /// How long a piece of AV equipment is assumed to last when nobody has said
 /// otherwise.
 ///
-/// Eight years, which is the cycle the RYG sheet this is modelled on has been
+/// Eight years, which is the cycle the RYG sheet this is modeled on has been
 /// run on: green for five, amber for three, replace in the ninth.
 ///
 /// THE LAST RESORT, not the usual answer. A product with a figure in the
@@ -152,14 +152,14 @@ const String kEquipmentNeverLabel = 'Never replaced';
 
 /// Where one position sits in its life.
 enum EquipmentCondition {
-  /// No install date recorded. Not a judgement — a gap.
+  /// No install date recorded. Not a judgment — a gap.
   unknown,
 
   /// In service, with more than [kEquipmentWarningYears] left.
   good,
 
   /// Inside the planning window: due within [kEquipmentWarningYears].
-  ageing,
+  aging,
 
   /// Past the end of its life.
   overdue,
@@ -168,20 +168,20 @@ enum EquipmentCondition {
 const Map<EquipmentCondition, String> kEquipmentConditionLabels = {
   EquipmentCondition.unknown: 'No install date',
   EquipmentCondition.good: 'In service',
-  EquipmentCondition.ageing: 'Due soon',
+  EquipmentCondition.aging: 'Due soon',
   EquipmentCondition.overdue: 'Past its life',
 };
 
 /// The one-word form for a table column that has to stay narrow, and for the
-/// colour key on the sheet this is modelled on.
+/// color key on the sheet this is modeled on.
 const Map<EquipmentCondition, String> kEquipmentConditionCodes = {
   EquipmentCondition.unknown: '-',
   EquipmentCondition.good: 'Green',
-  EquipmentCondition.ageing: 'Amber',
+  EquipmentCondition.aging: 'Amber',
   EquipmentCondition.overdue: 'Red',
 };
 
-/// Worst first, so a room can be summarised by the state of its worst item and
+/// Worst first, so a room can be summarized by the state of its worst item and
 /// a list can be sorted by "what needs attention".
 ///
 /// UNKNOWN sits between amber and green rather than at either end: a room with
@@ -189,7 +189,7 @@ const Map<EquipmentCondition, String> kEquipmentConditionCodes = {
 /// rooms whose survey has not been done.
 const List<EquipmentCondition> kEquipmentConditionSeverity = [
   EquipmentCondition.overdue,
-  EquipmentCondition.ageing,
+  EquipmentCondition.aging,
   EquipmentCondition.unknown,
   EquipmentCondition.good,
 ];
@@ -208,19 +208,19 @@ EquipmentCondition worstCondition(EquipmentCondition a, EquipmentCondition b) =>
 ///
 /// WHY BOTH. The four conditions are what a document SAYS — 'Due soon', 'Past
 /// its life' — and they are the right words for a table and for a count. They
-/// are the wrong resolution for a colour, because 'due soon' covers the item
+/// are the wrong resolution for a color, because 'due soon' covers the item
 /// that has to be quoted this month and the one that has three budget cycles
 /// left, and painting those the same amber tells a reader looking at the sheet
 /// that they are the same problem.
 ///
 /// So the warning window is split three ways and the ramp runs the way the
-/// colours do: green while it is in service, YELLOW the year it enters the
+/// colors do: green while it is in service, YELLOW the year it enters the
 /// planning window, amber the year it should be quoted, orange the last year
 /// before it is due, red the day it is past, and a deeper red once it is two
 /// years past and nobody has done anything about it.
 ///
 /// [EquipmentCondition] is DERIVED from this rather than computed beside it,
-/// so the words and the colour cannot come apart.
+/// so the words and the color cannot come apart.
 enum EquipmentTiming {
   /// No install date recorded.
   unknown,
@@ -254,7 +254,7 @@ const Map<EquipmentTiming, String> kEquipmentTimingLabels = {
   EquipmentTiming.wellOverdue: 'Years past its life',
 };
 
-/// The colour each step reads as, for the key beside the sheet and for the
+/// The color each step reads as, for the key beside the sheet and for the
 /// mono copy somebody prints.
 const Map<EquipmentTiming, String> kEquipmentTimingCodes = {
   EquipmentTiming.unknown: '-',
@@ -292,7 +292,7 @@ EquipmentCondition conditionOfTiming(EquipmentTiming timing) =>
       EquipmentTiming.inService => EquipmentCondition.good,
       EquipmentTiming.watch ||
       EquipmentTiming.approaching ||
-      EquipmentTiming.imminent => EquipmentCondition.ageing,
+      EquipmentTiming.imminent => EquipmentCondition.aging,
       EquipmentTiming.overdue ||
       EquipmentTiming.wellOverdue => EquipmentCondition.overdue,
     };
@@ -330,7 +330,7 @@ EquipmentTiming timingFor({
   final window = equipmentWarningWindow(lifeYears);
   if (window <= 0 || remaining > window) return EquipmentTiming.inService;
 
-  // The window in three. On the eight-year cycle the sheet is modelled on
+  // The window in three. On the eight-year cycle the sheet is modeled on
   // that is one year per step: year six yellow, seven amber, eight orange.
   final step = window / 3;
   if (remaining <= step) return EquipmentTiming.imminent;
@@ -388,7 +388,7 @@ class EquipmentLife {
   ///
   /// THE CATALOG FIRST, THEN THE BASE CARD. A refresh plan is read years
   /// before the models are chosen and half the boxes on an old drawing are
-  /// positions nobody has ever catalogued, so pricing only what the catalog
+  /// positions nobody has ever catalogd, so pricing only what the catalog
   /// knows left the plan reporting most of a building as free. The category
   /// figure - what a camera costs, roughly - is the same rung the estimate
   /// falls back to, and it is a far better answer to "what will this refresh
@@ -445,7 +445,7 @@ class EquipmentLife {
   //  recomputed by every caller.
   //
   //  IT WAS A GETTER CHAIN, AND THE GRID PAID FOR IT. The building sheet asks
-  //  each room what it costs, what is due and what colour it is in every one
+  //  each room what it costs, what is due and what color it is in every one
   //  of a dozen year columns; each of those walked the room's items, and each
   //  item worked its due date out from scratch - two DateTime allocations,
   //  every time, several hundred times per cell. A twenty-four room job spent
@@ -484,7 +484,7 @@ class EquipmentLife {
   DateTime? _dueOn() {
     final from = installedOn;
     // Never on a cycle, so never due. Everything downstream of a due date —
-    // the years remaining, the step on the ramp, the colour — falls out of
+    // the years remaining, the step on the ramp, the color — falls out of
     // this one answer rather than each having to know about the sentinel.
     if (from == null || neverReplaced) return null;
     final year = from.year + lifeYears;
@@ -500,14 +500,14 @@ class EquipmentLife {
       ? null
       : dueOn!.difference(asOf).inDays / kDaysPerYear;
 
-  /// Where this position sits on the colour ramp — see [EquipmentTiming].
+  /// Where this position sits on the color ramp — see [EquipmentTiming].
   late final EquipmentTiming timing = timingFor(
     yearsRemaining: yearsRemaining,
     lifeYears: lifeYears,
   );
 
   /// The words for [timing]. Derived rather than computed alongside it, so a
-  /// row's colour and its label can never disagree.
+  /// row's color and its label can never disagree.
   late final EquipmentCondition condition = conditionOfTiming(timing);
 
   /// True when this position has been through at least one swap, so the room
@@ -569,7 +569,7 @@ class RoomLifecycle {
   /// [equipmentNeverReplaced].
   ///
   /// Carried rather than discarded, and kept OUT of [items] so that every
-  /// count, every colour and every figure on the plan excludes them without
+  /// count, every color and every figure on the plan excludes them without
   /// each of them having to remember to. The room still has these boxes, and
   /// the screen can still be asked to show them.
   final List<EquipmentLife> neverReplaced;
@@ -642,16 +642,16 @@ class RoomLifecycle {
   /// How many items are past their life or inside the planning window — the
   /// count a refresh is written for.
   int get toReplaceCount =>
-      countOf(EquipmentCondition.overdue) + countOf(EquipmentCondition.ageing);
+      countOf(EquipmentCondition.overdue) + countOf(EquipmentCondition.aging);
 
   /// What those items cost. [overdueCost] is the part of it that is already
   /// late; this is the whole ask.
   double get toReplaceCost =>
-      costOf(EquipmentCondition.overdue) + costOf(EquipmentCondition.ageing);
+      costOf(EquipmentCondition.overdue) + costOf(EquipmentCondition.aging);
 
   /// How many items are due soon but not yet late, and what they cost.
-  int get dueSoonCount => countOf(EquipmentCondition.ageing);
-  double get dueSoonCost => costOf(EquipmentCondition.ageing);
+  int get dueSoonCount => countOf(EquipmentCondition.aging);
+  double get dueSoonCost => costOf(EquipmentCondition.aging);
 
   /// The life driving [firstDueYear], so the year grid bands its columns on
   /// the same window the item itself is banded on. Falls back to the blanket
@@ -670,7 +670,7 @@ class RoomLifecycle {
   ///
   /// The room's own first due year is what the column counts down to, so a row
   /// runs green, yellow, amber, orange and then red across the sheet the way
-  /// the hand-coloured one did.
+  /// the hand-colored one did.
   EquipmentTiming timingIn(int year) {
     final installed = oldestInstall?.year;
     final due = firstDueYear;
@@ -772,7 +772,7 @@ class RoomLifecycle {
 /// Everything a room gets asked about its own items, worked out in one pass.
 ///
 /// A ROOM IS ASKED THE SAME QUESTIONS DOZENS OF TIMES. The year grid wants the
-/// cost due, the items due and the colour for each of a dozen year columns;
+/// cost due, the items due and the color for each of a dozen year columns;
 /// the summary strip wants a count and a figure for each of six bands; the
 /// room list wants the tranches. Every one of those walked the item list, and
 /// every item worked its own due date out from scratch on the way past.
@@ -899,7 +899,7 @@ class _RoomIndex {
   AvDeviceLibrary? library,
 }) {
   // WHAT WOULD ACTUALLY BE BOUGHT, which is the drawn model itself unless it
-  // has been retired in favour of something else.
+  // has been retired in favor of something else.
   final buying = template == null || library == null
       ? template
       : library.successorFor(template.model) ?? template;
@@ -1016,7 +1016,7 @@ RoomLifecycle buildRoomLifecycle({
       replacementModel: price.model,
     );
     // Off the cycle entirely, and out of everything derived from the list —
-    // the counts, the colours, the money and the year grid.
+    // the counts, the colors, the money and the year grid.
     (equipmentNeverReplaced(node) ? never : items).add(entry);
   }
 
@@ -1089,10 +1089,10 @@ class BuildingLifecycle {
 
   /// Everything past its life or inside the planning window, and its cost.
   int get toReplaceCount =>
-      countOf(EquipmentCondition.overdue) + countOf(EquipmentCondition.ageing);
+      countOf(EquipmentCondition.overdue) + countOf(EquipmentCondition.aging);
 
   double get toReplaceCost =>
-      costOf(EquipmentCondition.overdue) + costOf(EquipmentCondition.ageing);
+      costOf(EquipmentCondition.overdue) + costOf(EquipmentCondition.aging);
 
   double get overdueCost =>
       rooms.fold<double>(0, (sum, r) => sum + r.overdueCost);
@@ -1237,7 +1237,7 @@ BuildingLifecycle buildProjectLifecycle({
   );
 }
 
-/// The base-cost line a room with nothing itemised in it is priced from.
+/// The base-cost line a room with nothing itemized in it is priced from.
 ///
 /// A whole room is not a device, so it is not any of the card's device
 /// categories. This is its own line, added to the card the moment somebody
@@ -1251,7 +1251,7 @@ const String kRoomRefreshCategory = 'Room refresh';
 /// it is not is a list of boxes, so it carries ONE position standing for the
 /// whole room, named after the room itself. That keeps every count on the
 /// sheet honest — a manually added room is one thing falling due, not eleven
-/// invented ones — while the year columns, the colours and the money work
+/// invented ones — while the year columns, the colors and the money work
 /// exactly as they do for a drawn room.
 ///
 /// THE FIGURE IS AN ESTIMATE unless somebody typed it. With no cost on the
@@ -1495,7 +1495,7 @@ List<ReportSection> roomLifecycleSections(
             i.dueYear ?? '',
             kEquipmentConditionCodes[i.condition]!,
             // The finer step, so a printed sheet carries the same six-step
-            // ramp the screen paints — a mono copy of a colour-coded sheet
+            // ramp the screen paints — a mono copy of a color-coded sheet
             // that only says 'Amber' has lost the half of it that says which
             // of the three amber years it is in.
             kEquipmentTimingCodes[i.timing]!,
@@ -1588,7 +1588,7 @@ List<ReportSection> buildingLifecycleSections(
   ///
   /// The year it falls due carries the money, because that is the cell a
   /// budget is read out of. Every other year in service carries the service
-  /// year as a plain number — 1, 2, 3 — which is what the colours on the
+  /// year as a plain number — 1, 2, 3 — which is what the colors on the
   /// original sheet were counting.
   String cell(RoomLifecycle room, int year) {
     // The RUNNING total, the same figure the screen's room row carries: what

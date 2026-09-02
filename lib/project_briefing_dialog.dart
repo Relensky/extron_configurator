@@ -74,13 +74,13 @@ class _Overview extends StatelessWidget {
     final muted = theme.colorScheme.onSurfaceVariant;
     final o = overview;
 
-    Widget fact(IconData icon, String label, String value, {Color? colour}) =>
+    Widget fact(IconData icon, String label, String value, {Color? color}) =>
         Padding(
           padding: const EdgeInsets.only(bottom: 3),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 14, color: colour ?? muted),
+              Icon(icon, size: 14, color: color ?? muted),
               const SizedBox(width: 6),
               SizedBox(
                 width: 108,
@@ -93,8 +93,8 @@ class _Overview extends StatelessWidget {
                 child: Text(
                   value,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: colour,
-                    fontWeight: colour == null ? null : FontWeight.w600,
+                    color: color,
+                    fontWeight: color == null ? null : FontWeight.w600,
                   ),
                 ),
               ),
@@ -146,7 +146,7 @@ class _Overview extends StatelessWidget {
             ),
           // THE DRAWING SET. Part of what the job IS rather than what is
           // wrong with it - "is there a plan set at all" is asked before
-          // anybody goes looking for one. A broken link is coloured, because
+          // anybody goes looking for one. A broken link is colored, because
           // it is the half of this line that needs doing something about.
           if (o.plans > 0)
             fact(
@@ -156,7 +156,7 @@ class _Overview extends StatelessWidget {
                   ? '${o.plans}'
                   : '${o.plans}  ·  ${o.plansMissing} not where the project '
                       'says',
-              colour: o.plansMissing == 0
+              color: o.plansMissing == 0
                   ? null
                   : errorTextOn(theme.colorScheme, theme.cardColor),
             ),
@@ -634,12 +634,12 @@ class BriefingCalendar extends StatelessWidget {
               (d.difference(start).inDays / total * width).clamp(0.0, width);
 
           // Labels are laid out in date order, alternating above and below the
-          // line, and a label that would sit on top of its neighbour on both
+          // line, and a label that would sit on top of its neighbor on both
           // rows is dropped to a dot. The alternative — squeezing the type or
           // sliding the label off its own marker — is a calendar that points
           // at the wrong day.
           final placed =
-              <({BriefingMilestone m, double x, bool above, bool labelled})>[];
+              <({BriefingMilestone m, double x, bool above, bool labeled})>[];
           final lastRight = <bool, double>{true: -1e9, false: -1e9};
           var above = true;
           for (final m in milestones) {
@@ -656,11 +656,11 @@ class BriefingCalendar extends StatelessWidget {
               // No room on either side: the date keeps its dot and loses its
               // words. Dropping the marker itself would take a date off the
               // job; the tooltip still says what it is.
-              placed.add((m: m, x: x, above: above, labelled: false));
+              placed.add((m: m, x: x, above: above, labeled: false));
               continue;
             }
             lastRight[row] = left + _labelWidth;
-            placed.add((m: m, x: x, above: row, labelled: true));
+            placed.add((m: m, x: x, above: row, labeled: true));
             above = !row;
           }
 
@@ -670,7 +670,7 @@ class BriefingCalendar extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 // The months the job runs through, so a marker can be read
-                // against a real calendar rather than against its neighbours.
+                // against a real calendar rather than against its neighbors.
                 for (final month in _months(start, end))
                   Positioned(
                     left: xOf(month),
@@ -715,12 +715,12 @@ class BriefingCalendar extends StatelessWidget {
   /// One date: its dot, its stalk and (where there is room) its words.
   List<Widget> _marker(
     BuildContext context,
-    ({BriefingMilestone m, double x, bool above, bool labelled}) placed,
+    ({BriefingMilestone m, double x, bool above, bool labeled}) placed,
     double width,
   ) {
     final theme = Theme.of(context);
     final m = placed.m;
-    final colour = _colourFor(context, m);
+    final color = _colorFor(context, m);
     final today = m.kind == BriefingDateKind.today;
     final dot = today ? 11.0 : 9.0;
     final left = (placed.x - _labelWidth / 2).clamp(0.0, width - _labelWidth);
@@ -732,7 +732,7 @@ class BriefingCalendar extends StatelessWidget {
         Positioned(
           left: placed.x - 0.5,
           top: 14,
-          child: Container(height: _height - 34, width: 1, color: colour),
+          child: Container(height: _height - 34, width: 1, color: color),
         ),
       Positioned(
         left: placed.x - dot / 2,
@@ -745,7 +745,7 @@ class BriefingCalendar extends StatelessWidget {
             width: dot,
             height: dot,
             decoration: BoxDecoration(
-              color: colour,
+              color: color,
               shape: BoxShape.circle,
               border: Border.all(
                 color: theme.dialogTheme.backgroundColor ??
@@ -756,7 +756,7 @@ class BriefingCalendar extends StatelessWidget {
           ),
         ),
       ),
-      if (placed.labelled)
+      if (placed.labeled)
       Positioned(
         left: left,
         top: placed.above ? 6 : _axisY + 26,
@@ -770,7 +770,7 @@ class BriefingCalendar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: colour,
+                color: color,
                 fontSize: 11,
               ),
             ),
@@ -789,7 +789,7 @@ class BriefingCalendar extends StatelessWidget {
     ];
   }
 
-  Color _colourFor(BuildContext context, BriefingMilestone m) {
+  Color _colorFor(BuildContext context, BriefingMilestone m) {
     final theme = Theme.of(context);
     if (m.late) {
       return errorTextOn(

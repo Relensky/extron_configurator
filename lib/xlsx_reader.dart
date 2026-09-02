@@ -108,7 +108,7 @@ List<List<String>>? readXlsxSheet(Uint8List bytes, String name) =>
 /// every row under it comes back keyed by those names.
 ///
 /// The shape a round-trip sheet is read in. Keys are trimmed and lower-cased,
-/// so a column somebody has re-capitalised — or that a spreadsheet program has
+/// so a column somebody has re-capitalized — or that a spreadsheet program has
 /// tidied — still lands on the same field.
 ///
 /// EMPTY ROWS ARE DROPPED, because a spreadsheet is full of them: the blank

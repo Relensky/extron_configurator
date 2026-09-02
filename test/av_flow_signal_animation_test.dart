@@ -149,7 +149,7 @@ void main() {
     expect(animating(tester), isFalse);
   });
 
-  testWidgets('picking a run starts it travelling', (tester) async {
+  testWidgets('picking a run starts it traveling', (tester) async {
     final provider = seeded();
     await pumpTab(tester, provider);
     await tapTheRun(tester, provider);
@@ -189,7 +189,7 @@ void main() {
     // Settled rather than pumped once: pressing a chip starts a ripple and a
     // selection animation of its own, so a frame after the tap something IS
     // driving frames and it is not this. That the page settles at all is the
-    // assertion - a run still travelling would never let it.
+    // assertion - a run still traveling would never let it.
     await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
     await tester.pumpAndSettle();
     expect(animating(tester), isFalse);

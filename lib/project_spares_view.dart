@@ -40,11 +40,11 @@ import 'project_estimate.dart';
 ///  back.
 /// ============================================================================
 
-/// The colour the spares panels actually paint, rather than the one they ask
+/// The color the spares panels actually paint, rather than the one they ask
 /// for.
 ///
 /// Both of them fill with `surfaceContainerHighest` at HALF ALPHA, so what a
-/// reader's eye is measuring against is that colour blended over the page
+/// reader's eye is measuring against is that color blended over the page
 /// behind it — and every foreground on these panels has to be checked against
 /// the blend rather than against either ingredient. Checking against
 /// `theme.cardColor`, which is what the rest of the app's cards use, would be
@@ -547,7 +547,7 @@ class _ProjectSpareRow extends StatelessWidget {
                   color: unit > 0
                       ? null
                       // Measured against what this panel paints, not against
-                      // the card colour it is not using — see
+                      // the card color it is not using — see
                       // [spareSectionFill].
                       : errorTextOn(
                           theme.colorScheme,
@@ -752,7 +752,7 @@ class _RoomOwnSpareRow extends StatelessWidget {
 //  many more would meet it - see [BuildingProject.spareCoverTarget].
 //
 //  THE TARGET IS THE JOB'S, AND IT IS SET HERE. A lecture block with twelve
-//  identical rooms and a shelf of spares is not the same job as one theatre
+//  identical rooms and a shelf of spares is not the same job as one theater
 //  with one of everything in it, so the figure is typed on the page it is read
 //  on rather than compiled into the app. It opens at the suggestion, and a job
 //  nobody tells keeps that.

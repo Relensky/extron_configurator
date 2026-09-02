@@ -25,7 +25,7 @@ import 'screenshot_tools.dart';
 ///  whole. Two ways in, depending on whether anybody is looking:
 ///
 ///    * [showLifecycleSheetPicture] - a preview somebody confirms and saves,
-///      which is also where the choice of colour or greyscale is made.
+///      which is also where the choice of color or grayscale is made.
 ///    * [captureOffscreenSheet] - the same render with nobody watching, for
 ///      the spreadsheet to drop under its tables.
 /// ============================================================================
@@ -34,7 +34,7 @@ import 'screenshot_tools.dart';
 ///
 /// A replacement plan that covers every year an estate touches is a WIDE
 /// document - thirty years across and forty rooms down is normal - and doubling
-/// it for print can put it past what the rasteriser will hand back, which comes
+/// it for print can put it past what the rasterizer will hand back, which comes
 /// out as a capture that simply fails. Rather than trimming the document to fit
 /// the photograph, the photograph is taken at whatever density fits: a slightly
 /// softer picture of the whole plan beats a crisp one of two thirds of it.
@@ -63,9 +63,9 @@ double captureRatioFor(Size? size, {double preferred = 2.0}) {
 ///
 /// The shade is the one the estimate's tables already stripe with, so the two
 /// documents look like they came from the same office - and it is a tint of
-/// the text colour rather than a grey of its own, so it follows the theme and
+/// the text color rather than a gray of its own, so it follows the theme and
 /// comes through the mono treatment as a lighter band rather than as a flat
-/// grey plate.
+/// gray plate.
 class SheetBand extends StatelessWidget {
   final bool shaded;
   final Widget child;
@@ -154,7 +154,7 @@ Future<Uint8List?> captureOffscreenSheet(
 /// between them.
 ///
 /// Returns true when a file was written. False covers both halves of "no file"
-/// - a capture that failed, which says so, and a save somebody cancelled,
+/// - a capture that failed, which says so, and a save somebody canceled,
 /// which says nothing.
 Future<bool> saveSheetPicture(
   BuildContext context, {
@@ -202,7 +202,7 @@ Future<bool> saveSheetPicture(
 /// Shows [sheet] the way it will be PICTURED, and offers to save the picture.
 ///
 /// The preview is what gets photographed - not a smaller stand-in - so what
-/// somebody looked at is exactly what lands in the file, greyscale switch and
+/// somebody looked at is exactly what lands in the file, grayscale switch and
 /// all. The sheet is laid out at its FULL size either way, which is what lets
 /// the boundary be the whole sheet rather than the window over it; the fit
 /// switch only changes how that full sheet is drawn on the screen.
@@ -291,12 +291,12 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
 
   /// Whether the picture keeps the red-yellow-green.
   ///
-  /// ON, because on this particular sheet the colour IS the document: the
+  /// ON, because on this particular sheet the color IS the document: the
   /// whole thing replaces a spreadsheet whose meaning was carried in six
   /// pencils. The mono treatment is one press away for the copy that is going
   /// to be photocopied - and the cells carry their figures as well as their
-  /// fill, so a grey one still reads.
-  bool _colour = true;
+  /// fill, so a gray one still reads.
+  bool _color = true;
 
   /// Whether every line is opened out, or the sheet is one line per room.
   ///
@@ -313,9 +313,9 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
       await saveSheetPicture(
         context,
         boundary: _boundary,
-        // The mono copy is a different document from the colour one and is
+        // The mono copy is a different document from the color one and is
         // filed as such.
-        fileStem: '${widget.fileStem}${_colour ? '' : '_mono'}',
+        fileStem: '${widget.fileStem}${_color ? '' : '_mono'}',
         what: widget.what,
       );
     } finally {
@@ -366,7 +366,7 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
         context,
         bytes,
         defaultFileName:
-            '${widget.fileStem}${_colour ? '' : '_mono'}.png',
+            '${widget.fileStem}${_color ? '' : '_mono'}.png',
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -380,7 +380,7 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
   Widget get _plate => RepaintBoundary(
     key: _boundary,
     child: printSkin(
-      enabled: !_colour,
+      enabled: !_color,
       child: widget.sheetBuilder(_expanded),
     ),
   );
@@ -470,12 +470,12 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
             const Text('Whole sheet'),
             const SizedBox(width: 16),
             Switch(
-              key: const ValueKey('lifecycle_picture_colour'),
-              value: _colour,
-              onChanged: (v) => setState(() => _colour = v),
+              key: const ValueKey('lifecycle_picture_color'),
+              value: _color,
+              onChanged: (v) => setState(() => _color = v),
             ),
             const SizedBox(width: 4),
-            const Text('Plan colours'),
+            const Text('Plan colors'),
             const SizedBox(width: 16),
             // A switch rather than two buttons, like the two beside it: it
             // changes the preview, so what is saved is what was looked at.

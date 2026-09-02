@@ -50,7 +50,7 @@ void main() {
   // ---------------------------------------------------------------------------
   //  HOW WIDE THE PINNED COLUMN IS
   // ---------------------------------------------------------------------------
-  //  A name that is ellipsised is not a label. The column was a fixed width
+  //  A name that is ellipsized is not a label. The column was a fixed width
   //  chosen for a room number, and the campus sheet puts BUILDING names down
   //  it - 'Farm Agricultural Education Center' in 126 pixels is 'Farm Agri…',
   //  which names nothing and cannot be told from the building next to it.

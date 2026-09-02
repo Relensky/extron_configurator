@@ -33,10 +33,10 @@ import 'project_timeline_view.dart'
 ///
 ///  THE DATE IS OPTIONAL, and the list is built around that. Most notes never
 ///  get one, so an undated note never nags and never sorts to the top; the ones
-///  that carry a date carry a real one, and those sort first, colour as they
+///  that carry a date carry a real one, and those sort first, color as they
 ///  approach, and turn up in the briefing when a project is opened.
 ///
-///  NOTHING IS DELETED BY TICKING IT. Done items stay on the list, greyed, with
+///  NOTHING IS DELETED BY TICKING IT. Done items stay on the list, grayed, with
 ///  the date they were finished, because "when did we agree to move that
 ///  display" is a question that gets asked. Clearing them is one explicit
 ///  button.
@@ -77,7 +77,7 @@ List<Widget> todoSlivers(BuildContext context, ProjectEstimate estimate) {
   //
   // A note is filed against a room, and the room somebody means is the one on
   // the door. Falling through to the file name put "BSS_101_config" on the
-  // list, which is an artefact of how the room is stored and not a thing
+  // list, which is an artifact of how the room is stored and not a thing
   // anybody calls it. See [ProjectRoomCost.codeName].
   //
   // Built once here and handed to the picker, the menu and every row, so all
@@ -178,7 +178,7 @@ List<Widget> todoSlivers(BuildContext context, ProjectEstimate estimate) {
 class _SectionLabel extends StatelessWidget {
   final String text;
 
-  /// Reads in the error colour — used when the heading is carrying a count of
+  /// Reads in the error color — used when the heading is carrying a count of
   /// things that have gone past their date.
   final bool warn;
 

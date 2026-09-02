@@ -671,12 +671,12 @@ void main() {
   //  THE PROJECT FILE
   // -------------------------------------------------------------------------
 
-  group('the colour on a vendor', () {
+  group('the color on a vendor', () {
     test('is not written until somebody assigns one', () {
       const plain = ProjectVendor(id: 'v1', name: 'Extron Direct');
       expect(plain.color, isNull);
       expect(plain.toJson().containsKey('color'), isFalse);
-      // And a file written before colours existed reads as unassigned rather
+      // And a file written before colors existed reads as unassigned rather
       // than as black.
       expect(
         ProjectVendor.fromJson(const {'id': 'v1', 'name': 'Extron'}).color,
@@ -687,14 +687,14 @@ void main() {
     test('survives an edit to anything else, and can be taken back', () {
       const vendor = ProjectVendor(id: 'v1', name: 'One', color: 0xFF43A047);
       // copyWith leaves it alone: renaming a vendor must not silently
-      // recolour every part on its order.
+      // recolor every part on its order.
       expect(vendor.copyWith(name: 'Two').color, 0xFF43A047);
-      // Back to the derived colour is its own answer, because null on its own
+      // Back to the derived color is its own answer, because null on its own
       // cannot be told from "leave it".
       expect(vendor.copyWith(clearColor: true).color, isNull);
     });
 
-    test('a colour that is not a number is no assignment at all', () {
+    test('a color that is not a number is no assignment at all', () {
       expect(
         ProjectVendor.fromJson(const {
           'id': 'v1',
@@ -743,7 +743,7 @@ void main() {
       expect(back.rooms.single.notes, 'phase 2');
       expect(back.vendors.single.contact, 'orders@example.com');
       expect(back.vendors.single.categories, ['Transmitter']);
-      // The colour the buyer put on this order travels with the job: it is
+      // The color the buyer put on this order travels with the job: it is
       // how the parts list is read, and one that reset on save would have to
       // be re-chosen every time the file was opened.
       expect(back.vendors.single.color, 0xFF1E88E5);
@@ -795,7 +795,7 @@ void main() {
     });
 
     test('a room outside the project folder is stored absolute', () {
-      // Relativising it would produce a chain of "..", which breaks the moment
+      // Relativizing it would produce a chain of "..", which breaks the moment
       // the project file moves — the very thing relative paths are for.
       final projectFile = path.join(dir.path, 'here', 'job_project.json');
       final room = path.join(dir.path, 'elsewhere', 'a_config.json');

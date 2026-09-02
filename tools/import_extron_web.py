@@ -24,7 +24,7 @@ Same rule as import_price_list.py, and for the same reason: a part number that
 appears on two entries must not silently write one entry's price onto the
 other. A match counts only when the model name on the web page and the model
 name in the catalog agree — one being a prefix of the other, which is what
-happens when the catalog carries a colour or variant word ("NAV E 201 D White")
+happens when the catalog carries a color or variant word ("NAV E 201 D White")
 that the price table's model column does not. Everything else is left alone
 and listed in the report for a person to look at.
 

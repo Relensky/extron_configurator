@@ -79,7 +79,7 @@ number you will see:
 
 - **Pricing tier.** Every price in the app is published at two: list (MSRP) and
   the education / institutional price. Pick the one your department buys at.
-- **Theme and text size.** Entirely up to you. The app checks its own colours
+- **Theme and text size.** Entirely up to you. The app checks its own colors
   for readability whichever you choose.
 
 # Step 3: What you are actually looking at
@@ -270,7 +270,7 @@ The other way is to open `ui_schema.json` in a text editor, change the text, and
 press **Reload Schema** on the App Config tab. Both do the same thing.
 
 The same is true for the drawings: if the app puts the wrong receiver in a run
-or doesn't recognise a kind of source you use, that's a **rule**, and the **Flow
+or doesn't recognize a kind of source you use, that's a **rule**, and the **Flow
 Rules** tab is where you change it. It is not a phone call and a wait for the
 next build.
 

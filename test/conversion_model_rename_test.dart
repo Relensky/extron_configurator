@@ -84,7 +84,7 @@ void main() {
 
   test('the rename is scoped to the family it belongs to', () {
     // 'AV Bridge' means the recorder in a RECORDERDEVICE block. It is not a
-    // licence to rewrite the words wherever else they turn up.
+    // license to rewrite the words wherever else they turn up.
     final result = map.apply({
       'SYSTEM_SETUP': {'dev_cameras': '1'},
       'CAMERADEVICE_1': {'model': 'AV Bridge'},

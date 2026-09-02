@@ -19,7 +19,7 @@ import 'package:extron_configurator/ui_schema.dart';
 ///    "DTP transmitter — camera 1"   -> a camera, with a driver slot
 ///    "DTP transmitter — station 3"  -> a share station
 ///    "Control network switch"       -> a screen, because the screen family
-///                                      is labelled "Screens (Relays/Network)"
+///                                      is labeled "Screens (Relays/Network)"
 ///
 ///  Each of those is a passive box nothing talks to, handed a config block, an
 ///  address field and a line on the control schematic.

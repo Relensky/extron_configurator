@@ -668,7 +668,7 @@ const Map<PriceSource, String> kPriceSourceLabels = {
 /// Cabling lines are keyed `cable:<signal>` for the type's main line and
 /// `cable:<signal>@<model>` for each stock length it is broken down into. The
 /// estimate page reads the signal back out to put the type's spares box and
-/// its colour dot on the row.
+/// its color dot on the row.
 SignalType? cableSignalOfKey(String key) {
   if (!key.startsWith('cable:')) return null;
   final rest = key.substring('cable:'.length);
@@ -1026,7 +1026,7 @@ CostEstimate computeRoomCost({
     // 'Matrix', and a screen controller imported from the same page says
     // 'Architectural'. [BaseCostBook.priceFor] translates the families that
     // mean one thing; for the rest, what the device does IN THIS ROOM is a
-    // better answer than the aisle it was catalogued under — and it is the
+    // better answer than the aisle it was catalogd under — and it is the
     // answer this line would have got if the entry had carried no category at
     // all. Without this, a model the catalog knows but cannot price came out
     // WORSE than a model it has never heard of.
@@ -1231,7 +1231,7 @@ CostEstimate computeRoomCost({
   // hand-typed Extron line sitting under the drawn ones.
   //
   // A line with no maker sorts LAST rather than first: an empty string sorts
-  // above every letter, which would have put the boxes nobody has catalogued
+  // above every letter, which would have put the boxes nobody has catalogd
   // yet at the top of a quote sorted by who makes them.
   if (settings.equipmentSort == CostEquipmentSort.manufacturer) {
     equipment.sort(compareByManufacturer);
@@ -1517,7 +1517,7 @@ CostEstimate computeRoomCost({
   }
 
   // Other items go through the same ladder as everything else, so a line
-  // picked off the catalog (an AV/Misc entry, a licence, a mount) follows a
+  // picked off the catalog (an AV/Misc entry, a license, a mount) follows a
   // catalog price revision instead of freezing whatever was typed the day it
   // was added. A line typed by hand has no catalog model and lands on its own
   // unit price exactly as before.

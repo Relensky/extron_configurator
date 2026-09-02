@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:extron_configurator/run_painting.dart';
 
 /// Three things a drawing with more than one run on it has to do, and none of
-/// them is about colour: tell the runs apart when the sheet is printed in
+/// them is about color: tell the runs apart when the sheet is printed in
 /// black and white, say which line crosses which, and admit when a run leaves
 /// the page. This is the geometry behind all three.
 void main() {

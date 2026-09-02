@@ -18,7 +18,7 @@ import 'package:extron_configurator/room_sidecar.dart' show AvUndoScope;
 /// budget.
 ///
 /// The deltas are now local and the sheet alone listens. These tests pin the
-/// BEHAVIOUR that had to survive that change — a drag still moves the thing,
+/// BEHAVIOR that had to survive that change — a drag still moves the thing,
 /// still writes once on release, and still lands one undo entry — because a
 /// drag that is fast and no longer moves anything is not an improvement.
 void main() {
@@ -101,7 +101,7 @@ void main() {
     await pump(tester, p);
 
     final before = p.avFloorPlanById(r.sheetId)!.markerFor('LOC_1')!;
-    // The marker's own hit box: a fixed-width column centred on its dot.
+    // The marker's own hit box: a fixed-width column centered on its dot.
     final marker = find.ancestor(
       of: find.text('Lectern'),
       matching: find.byType(GestureDetector),
@@ -158,7 +158,7 @@ void main() {
   // repositioned under the cursor on the first update, and the harness stops
   // delivering to it. That is true of the code BEFORE this change as well,
   // measured the same way, so it is a limitation of driving this widget from a
-  // test rather than a behaviour that changed. The marker above exercises the
+  // test rather than a behavior that changed. The marker above exercises the
   // same mechanism — local delta, one write on release — through a target that
   // does stay put.
 }

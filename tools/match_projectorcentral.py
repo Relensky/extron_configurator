@@ -31,7 +31,7 @@ separate SKUs and are both on the site.
 Coverage is partial by nature: projectorcentral.com is US-focused, so the
 China-only Panasonic PT-SL*C / PT-FR*C series and some Epson EB- models have
 no page at all. Those land in --unmatched rather than being forced onto a
-near neighbour.
+near neighbor.
 """
 import argparse
 import collections
@@ -44,7 +44,7 @@ SITEMAP = "https://www.projectorcentral.com/sitemap-projectors.xml"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) "
       "Gecko/20100101 Firefox/128.0")
 
-# Letters these makers hang off a model for market, colour, and whether a lens
+# Letters these makers hang off a model for market, color, and whether a lens
 # is in the box. Letters only: see the note about digits above.
 SUFFIXES = ["", "u", "e", "ea", "b", "w", "c", "bu", "wu", "be", "we",
             "l", "lb", "lw", "lu", "ul", "ubl", "uwl", "lbu", "lwu",

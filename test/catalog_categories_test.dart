@@ -85,7 +85,7 @@ void main() {
       }
     });
 
-    test('and the app-behaviour ones are offered alongside them', () {
+    test('and the app-behavior ones are offered alongside them', () {
       // A picker that hides "Consumable" until a consumable exists is a picker
       // you cannot create the first consumable with.
       expect(kWellKnownCategories, containsAll(kTrackedCategories));

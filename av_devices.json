@@ -42617,7 +42617,7 @@
       "manufacturer": "Extron",
       "category": "Switcher",
       "rackUnits": 0,
-      "notes": "Two Input 4K/60 DTP3 Transmitter for USB-C & HDMI with Audio Embedding - Decorator-Style Wallplate. The colour-free name extr_switcher_DTP3_T_212_D_v1_0_0_0.py drives; the Black and White entries carry the part numbers and the price.",
+      "notes": "Two Input 4K/60 DTP3 Transmitter for USB-C & HDMI with Audio Embedding - Decorator-Style Wallplate. The color-free name extr_switcher_DTP3_T_212_D_v1_0_0_0.py drives; the Black and White entries carry the part numbers and the price.",
       "ports": [
         {
           "id": "hdmi_1",

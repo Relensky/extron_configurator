@@ -14,7 +14,7 @@ import 'package:extron_configurator/help_view.dart';
 ///  sections, where each feature lives, its keywords and its prose.
 ///
 ///  What is held here is the shape of the book (a topic with no "where" is a
-///  topic that cannot be acted on) and the behaviour of the search - which is
+///  topic that cannot be acted on) and the behavior of the search - which is
 ///  the only part of help anybody actually uses.
 void main() {
   group('the book is well formed', () {
@@ -244,7 +244,7 @@ void main() {
       expect(find.textContaining('Nothing matches'), findsWidgets);
     });
 
-    testWidgets('the initial query is honoured', (tester) async {
+    testWidgets('the initial query is honored', (tester) async {
       await open(tester, query: 'campus');
       expect(
         find.textContaining('match "campus"'),

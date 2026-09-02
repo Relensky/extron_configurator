@@ -327,7 +327,7 @@ ReportSection _cableSchedule(AvFlowModel model) {
 ///
 /// This is the sheet an order is written from, so it is arranged the way an
 /// order is: the AV cabling together, the network together, everything else
-/// after, each family totalled and then broken down by the signal it actually
+/// after, each family totaled and then broken down by the signal it actually
 /// carries and the lead length it is being bought in. A run with no length set
 /// is counted in a column of its own rather than folded into the shortest
 /// lead, because "we haven't decided" and "one foot" are different answers.
@@ -428,7 +428,7 @@ ReportSection cableCountSection(AvFlowModel model) {
 /// called 'Runs' that did that would look like an error.
 ///
 /// Each location totals under itself and the room totals at the foot, so the
-/// sheet reads the way the CHIL estimate it is modelled on reads: a block per
+/// sheet reads the way the CHIL estimate it is modeled on reads: a block per
 /// place, its own subtotal, and the building's figure at the bottom.
 ReportSection cableCountByLocationSection(AvFlowModel model) {
   final byId = model.nodesById;

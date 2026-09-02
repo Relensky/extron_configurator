@@ -130,7 +130,7 @@ void main() {
 
   test('prices came from a price list, and only where one matched', () {
     // MSRP is imported from a published EXTRON price list, matched on Extron
-    // part number (tools/import_price_list.py — its PART_RE only recognises
+    // part number (tools/import_price_list.py — its PART_RE only recognizes
     // the 60-1234-01 form). It is not read off the drawings and not guessed.
     //
     // So the rule is about the entries that importer could have touched:

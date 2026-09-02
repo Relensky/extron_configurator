@@ -82,7 +82,7 @@ Future<Uint8List?> captureBoundary(GlobalKey boundaryKey,
 /// up on a clipboard and faxed back, and none of that survives a drawing whose
 /// only distinction between six Cat 6a and five Cat 5e is that one line is
 /// blue. Forcing the light theme as well as dropping the color matters
-/// separately: a dark-mode capture converted to grey is a black page with pale
+/// separately: a dark-mode capture converted to gray is a black page with pale
 /// lines on it, which a printer renders as a black page.
 ///
 /// This is why the runs carry a dash pattern as well as a color — see
@@ -96,13 +96,13 @@ Widget printSkin({required bool enabled, required Widget child}) {
     // The drawings ask the theme whether they are in dark mode and pick their
     // label and backing-plate colors off the answer.
     data: ThemeData(brightness: Brightness.light, useMaterial3: true),
-    child: ColorFiltered(colorFilter: kGreyscaleFilter, child: child),
+    child: ColorFiltered(colorFilter: kGrayscaleFilter, child: child),
   );
 }
 
 /// Rec. 709 luminance — the same weighting a printer's own color conversion
 /// uses, so what comes out of the app matches what comes out of the printer.
-const ColorFilter kGreyscaleFilter = ColorFilter.matrix(<double>[
+const ColorFilter kGrayscaleFilter = ColorFilter.matrix(<double>[
   0.2126, 0.7152, 0.0722, 0, 0, //
   0.2126, 0.7152, 0.0722, 0, 0, //
   0.2126, 0.7152, 0.0722, 0, 0, //
@@ -1108,7 +1108,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                                     controller: _down,
                                     physics: physics,
                                     child: Container(
-                                      // Centred while it fits, hard against
+                                      // Centered while it fits, hard against
                                       // the top-left once it does not: nested
                                       // scroll views hand their child
                                       // unbounded space and would otherwise

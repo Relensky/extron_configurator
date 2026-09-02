@@ -10,9 +10,9 @@ import 'package:flutter/painting.dart';
 ///  so a run looks the same on both and a change is made once.
 ///
 ///  Three things a drawing with more than one run on it has to do, and none of
-///  them is about colour:
+///  them is about color:
 ///
-///    * TELL THE RUNS APART. Colour alone fails the moment the sheet is
+///    * TELL THE RUNS APART. Color alone fails the moment the sheet is
 ///      printed, photocopied or read by somebody who cannot distinguish red
 ///      from green — and it fails hardest exactly where it matters, on the
 ///      three parallel lines between the same two boxes. Each run on an edge
@@ -32,7 +32,7 @@ import 'package:flutter/painting.dart';
 //  LINE STYLES
 // ---------------------------------------------------------------------------
 
-/// How a run's line is stroked, over and above its colour.
+/// How a run's line is stroked, over and above its color.
 enum RunLineStyle { solid, dashed, dotted, dashDot, longDash }
 
 const Map<RunLineStyle, String> kRunLineStyleLabels = {
@@ -276,15 +276,15 @@ Path squigglePath(
   const stepsPerWave = 8;
   final steps = math.max(8, (total / wavelength * stepsPerWave).round());
   for (int s = 0; s <= steps; s++) {
-    final travelled = total * s / steps;
-    final at = _pointAt(route, travelled);
-    final dir = _directionAt(route, travelled);
+    final traveled = total * s / steps;
+    final at = _pointAt(route, traveled);
+    final dir = _directionAt(route, traveled);
     final normal = Offset(-dir.dy, dir.dx);
     // Flat at both ends, so the squiggle joins its box cleanly rather than
     // arriving at an angle.
     final ease = math.sin(math.pi * (s / steps)).clamp(0.0, 1.0);
     final wave =
-        math.sin(travelled / wavelength * 2 * math.pi) * amplitude * ease;
+        math.sin(traveled / wavelength * 2 * math.pi) * amplitude * ease;
     final p = at + normal * wave;
     if (s == 0) {
       path.moveTo(p.dx, p.dy);
@@ -358,7 +358,7 @@ void paintRun({
 }
 
 /// The short specimen of a run drawn beside its name in a key: the same
-/// colour, the same dash pattern, so the legend and the drawing cannot come
+/// color, the same dash pattern, so the legend and the drawing cannot come
 /// apart.
 void paintRunSpecimen({
   required Canvas canvas,

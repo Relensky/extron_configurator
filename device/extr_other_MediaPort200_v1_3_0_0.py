@@ -124,7 +124,7 @@ class DeviceClass:
             'ScreenSaverStatus': { 'Status': {}},
             'USBHostStatus': { 'Status': {}},
             'USBStreamingFormat': { 'Status': {}, 'AllowedValues': ['MJPEG 422 Full', 'MJPEG 420 Full']},
-            'USBTerminalType': { 'Status': {}, 'AllowedValues': ['Default', 'Echo Cancelling Speakerphone']},
+            'USBTerminalType': { 'Status': {}, 'AllowedValues': ['Default', 'Echo Canceling Speakerphone']},
             'VideoMute': {'Parameters':['Output'], 'Status': {}, 'AllowedValues': ['Mute Video to Black', 'Mute Sync and Video', 'Unmute Video/Sync']},
             'VideoSendStatus': { 'Status': {}},
             'VideoSignalPresence': { 'Status': {}},
@@ -1438,7 +1438,7 @@ class DeviceClass:
 
         ValueStateValues = {
             'Default' : '1', 
-            'Echo Cancelling Speakerphone' : '2'
+            'Echo Canceling Speakerphone' : '2'
         }
 
         if value in ValueStateValues:
@@ -1456,7 +1456,7 @@ class DeviceClass:
 
         ValueStateValues = {
             '1' : 'Default', 
-            '2' : 'Echo Cancelling Speakerphone'
+            '2' : 'Echo Canceling Speakerphone'
         }
 
         value = ValueStateValues[match.group(1).decode()]

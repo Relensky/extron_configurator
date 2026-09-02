@@ -332,7 +332,7 @@ void main() {
       );
       // THE COPY WAITS OUT THE DOUBLE-CLICK. The same target now opens the
       // room's Cost page on a double-click, so a single one cannot be acted on
-      // until the gesture recogniser knows a second is not coming.
+      // until the gesture recognizer knows a second is not coming.
       await tester.pump(kDoubleTapTimeout);
       await tester.pump();
 
@@ -865,11 +865,11 @@ void main() {
         // longer fit on one line, which is measured from the labels rather
         // than read off a threshold - so the width alone no longer says which
         // of the two the tap has to find.
-        final labelled = find.byKey(ValueKey('project_pane_${pane.key}'));
+        final labeled = find.byKey(ValueKey('project_pane_${pane.key}'));
         await tester.tap(
-          labelled.evaluate().isEmpty
+          labeled.evaluate().isEmpty
               ? find.byIcon(pane.icon).first
-              : labelled.first,
+              : labeled.first,
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: '${pane.key} at $width');
@@ -1036,11 +1036,11 @@ void main() {
 
   Future<void> openTimeline(WidgetTester tester, AppStateProvider p) async {
     await pump(tester, p);
-    final labelled = find.byKey(const ValueKey('project_pane_timeline'));
+    final labeled = find.byKey(const ValueKey('project_pane_timeline'));
     await tester.tap(
-      labelled.evaluate().isEmpty
+      labeled.evaluate().isEmpty
           ? find.byIcon(Icons.event_available).first
-          : labelled.first,
+          : labeled.first,
     );
     await tester.pumpAndSettle();
   }

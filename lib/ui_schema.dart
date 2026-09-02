@@ -418,7 +418,7 @@ class ConsistencyRule {
 /// The room already states this, twice over: every source it carries has an
 /// `input_*` key in SYSTEM_SETUP holding the switcher input it is wired to. A
 /// key with a value is a source the room has; a blank one is a source it does
-/// not. So the list of things a display could be pinned to is not a judgement
+/// not. So the list of things a display could be pinned to is not a judgment
 /// call, it is a read — which is the whole point, because typing 'doccam' into
 /// a room whose panel calls it 'doc_cam' produces a display that is never
 /// routed and nothing that says why.
@@ -495,7 +495,7 @@ class SourceInputRules {
       'DVD': 'input_dvd',
       'BR': 'input_blu_ray',
       'WL': 'input_wireless',
-      // One physical input, labelled USB or VGA by gui_usb_or_vga — the key
+      // One physical input, labeled USB or VGA by gui_usb_or_vga — the key
       // name stays input_usb either way, so both tokens claim it.
       'USB': 'input_usb',
       'VGA': 'input_usb',

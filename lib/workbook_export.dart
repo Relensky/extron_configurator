@@ -29,7 +29,7 @@ import 'room_workbook.dart';
 ///  TWO BOOKS, AND THE BUTTON ASKS WHICH. A session with a job open has two
 ///  documents somebody could mean by "the workbook" — this room, and the
 ///  building it is part of — and the button used to answer that question by
-///  itself, always in favour of the room. Which meant the project workbook was
+///  itself, always in favor of the room. Which meant the project workbook was
 ///  reachable only from the Project tab, and somebody standing on a drawing
 ///  who pressed Export got the wrong book without being told there was another
 ///  one. See [exportWorkbook].

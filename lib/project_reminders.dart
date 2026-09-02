@@ -23,7 +23,7 @@ import 'project_schedule.dart';
 ///  STABLE UIDS, so a re-export UPDATES the events already imported rather than
 ///  duplicating them. The uid is built from the project and the date, and the
 ///  sequence number rises with each export — which is exactly what a calendar
-///  needs to recognise the second file as a revision of the first. Without it,
+///  needs to recognize the second file as a revision of the first. Without it,
 ///  moving the deadline and re-exporting leaves the old dates sitting in the
 ///  calendar next to the new ones, which is worse than having neither.
 ///

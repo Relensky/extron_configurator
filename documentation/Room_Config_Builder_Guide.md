@@ -73,7 +73,7 @@ They run down the left-hand rail in roughly the order you use them.
 | **Lifecycle** | What this room already has, how old it is, and the year each position falls due. |
 | **Wizard** | The room's identity - building, room number, name - and how many of each device it has. |
 | **Devices** | One sub-tab per device: model, IP, connection type, module, and whatever else the schema says that family has. |
-| **System** | Everything else in `SYSTEM_SETUP`: switcher inputs and outputs, panel behaviour, outlet names. |
+| **System** | Everything else in `SYSTEM_SETUP`: switcher inputs and outputs, panel behavior, outlet names. |
 | **Raw JSON** | The whole config as text, for when you want to see or paste it. Apply writes it straight back to the working file. |
 | **Schematic** | The control topology: what the processor talks to, over what, drawn automatically. |
 | **AV Flow** | The signal flow: what plugs into what, also drawn automatically. |
@@ -278,7 +278,7 @@ reopening the room - and it's what a swap made on the Cost tab leaves behind.
 
 It stays quiet where it can't know: a device with no model yet, a driver that
 never declared which models it covers, and a model the driver does list under a
-different capitalisation.
+different capitalization.
 
 # The drawings
 
@@ -288,9 +288,9 @@ This one answers a single question: *what does the processor talk to, and how?*
 
 It draws itself from the config every time you open it. Network devices go to a
 Network IDF box and up to the processor; serial devices get a direct line
-labelled with their COM port; relay-controlled screens get a relay line; the
+labeled with their COM port; relay-controlled screens get a relay line; the
 touch panel is drawn as a window with one tab per GUI page. Each kind of
-connection has its own colour, and the legend under the drawing explains them.
+connection has its own color, and the legend under the drawing explains them.
 
 Things worth knowing:
 
@@ -318,7 +318,7 @@ including any you had hidden, and hand-added boxes removed. It asks first and
 tells you exactly what it will take with it, and one press of Undo brings it all
 back.
 
-Two things it deliberately keeps: your line **colours** (they have their own
+Two things it deliberately keeps: your line **colors** (they have their own
 *Reset all* on the Colors dialog) and the **192.x / touch panel landing**
 choices, because where the room's drops actually go is a fact somebody recorded,
 not drift. The one exception is a landing pointing at a hand-added box that's
@@ -418,7 +418,7 @@ Some ties can't be drawn, and the app would rather tell you than guess. Press
 *Draw the routing from config* and you get a line per tie: what the config said,
 what it resolved to, and - for the ones that didn't - why. Typical reasons:
 
-- *"No input on the switcher is labelled 7"* - the number doesn't match any
+- *"No input on the switcher is labeled 7"* - the number doesn't match any
   connector on that model. Usually the catalog entry needs its connectors
   correcting.
 - *"output_proj_2 - this room has 1 display, so there is no PROJECTORDEVICE_2"*
@@ -744,7 +744,7 @@ Four states, read off three dates:
 
 | State | What it means |
 |---|---|
-| **Not sent** | Nothing has gone out. No chip on the card - a row of grey "not sent" chips down a fresh list is noise about nothing. |
+| **Not sent** | Nothing has gone out. No chip on the card - a row of gray "not sent" chips down a fresh list is noise about nothing. |
 | **RFQ sent** | The request went out on a day you record. Waiting. |
 | **Quoted** | A price came back. |
 | **Ordered** | It went on a purchase order. The chip shows the PO number. |
@@ -872,7 +872,7 @@ newest first, each with what it bought and how much of that is marked arrived.
 
 Above the lists, the whole job is drawn on **one line**: today, the first order,
 every order date as a dot, each phase's on-site day, each vendor's quote request
-in that vendor's own colour, and the delivery deadline.
+in that vendor's own color, and the delivery deadline.
 
 Nothing on it is a new fact - every date is one of the cards below - which is
 exactly the point. A list has no distance in it: two dates a fortnight apart and
@@ -910,9 +910,9 @@ sheet is an agreement about who does what, below it the same columns are
 quantities per room, and the heavy rules top and bottom are there so nobody reads
 a count as a commitment.
 
-Each party carries its **own colour**, the same one wherever its name appears, so
+Each party carries its **own color**, the same one wherever its name appears, so
 one contractor's share of the sheet is visible without reading a cell. A line
-nobody has been named on reads **NOBODY** in the error colour - a blank is the
+nobody has been named on reads **NOBODY** in the error color - a blank is the
 exact thing this sheet exists to catch, and the tinted chips around it would
 otherwise make an empty cell look like one more quiet agreement.
 
@@ -923,7 +923,7 @@ tracks a moving highlight in a way it cannot track a fixed stripe.
 
 The scope headings size themselves to the names they actually carry, so a line
 called "Conduit, back boxes and pull strings for every floor-mounted
-connectivity point" is read rather than ellipsised. The sheet zooms and fits like
+connectivity point" is read rather than ellipsized. The sheet zooms and fits like
 the year grid, and columns are re-ordered by dragging the grip in the heading -
 the order is content on this document, because it is grouped the way the work is
 sequenced.
@@ -1356,7 +1356,7 @@ Each page opens with **where the thing is**, as a path through the app rather
 than a position on a screen, then what it does and why it works that way. The
 text is selectable, because half of what help gets used for is pasting a
 sentence into an email to whoever asked. The keyword chips at the foot of a page
-are a press each, which is how somebody gets from one feature to its neighbours
+are a press each, which is how somebody gets from one feature to its neighbors
 without knowing what they are called.
 
 It opens over whatever you were doing and closes again without losing it.
@@ -1380,7 +1380,7 @@ The other half is a set of decisions *your shop* has made:
   between them
 - the Toggle's DEVICE ports carry the DSP, the AV Bridge and the doc cam, in
   that order, and HOST 1 is the PC
-- an outlet labelled "Switch" is the matrix, not the USB switcher
+- an outlet labeled "Switch" is the matrix, not the USB switcher
 
 Every one of those used to be compiled into the program. Now they're rules in
 `av_flow_rules.json`, and the **Flow Rules** tab is where you read and change
@@ -1573,7 +1573,7 @@ instead of being reported as a tie.
 - **The drawing didn't change.** Press **Recreate from config** on the AV Flow
   tab. Rules apply to what gets drawn *next*; they don't rewrite leads already
   on the canvas.
-- **You want the old behaviour back.** *Reset to built-in* returns every family
+- **You want the old behavior back.** *Reset to built-in* returns every family
   to the shipped rules. Nothing is written until you press Save.
 
 # The Schema builder
@@ -1618,7 +1618,7 @@ The field editor holds everything a schema entry can say:
 | **Rendered as** | The control: `auto`, `text`, `int`, `double`, `bool`, `dropdown`, `combo`, `hidden`, `room_sources`, `module_states`. |
 | **Label** | What the field is called on the tab. |
 | **Description** | The text behind the info button. |
-| **Helper line** | Small grey text under the field. |
+| **Helper line** | Small gray text under the field. |
 | **Options** | For a dropdown: one per line, `value \| label`. The label is optional. |
 | **Keys this one field writes** | For a combo - one dropdown that sets several keys at once. |
 | **Command in the module** | For `module_states`: the entry in the driver's `self.Commands` whose states fill the dropdown. |
@@ -1725,7 +1725,7 @@ would rather look at the file - reviewing a change, or diffing two copies.
 ## The shape of the file
 
 One JSON object. `fields` is the only part it must have; everything else is
-optional, and a part you leave out keeps the app's built-in behaviour.
+optional, and a part you leave out keeps the app's built-in behavior.
 
 ```
 {
@@ -1751,7 +1751,7 @@ optional, and a part you leave out keeps the app's built-in behaviour.
   "type": "dropdown",
   "label": "Connection Type",
   "description": "Text behind the (i) info button.",
-  "helperText": "Small grey hint under the field.",
+  "helperText": "Small gray hint under the field.",
   "options": ["Serial", "SerialOverEthernet", "Network"],
   "hideWhen": ["dev_relay_power=No"],
   "labelWhen": { "gui_usb_or_vga=VGA": "VGA over USB" },
@@ -1764,7 +1764,7 @@ optional, and a part you leave out keeps the app's built-in behaviour.
 | `type` | Which control to draw. See the table below. |
 | `label` | The field's name on the tab. Falls back to the raw key. |
 | `description` | The info button's text. Falls back to the app's built-in dictionary. |
-| `helperText` | Grey hint under the field. |
+| `helperText` | Gray hint under the field. |
 | `options` | Dropdown or combo choices. |
 | `writes` | Combo only: the keys this one dropdown sets. |
 | `moduleCommand` | `module_states` only: which command's states to offer. |

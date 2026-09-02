@@ -99,7 +99,7 @@ void main() {
       await pumpTab(tester, provider);
 
       // The two pull boxes land in one column, so the run between them — and
-      // the pad that selects it — sits at the midpoint of their centres.
+      // the pad that selects it — sits at the midpoint of their centers.
       final origin = tester.getTopLeft(find.byType(InteractiveViewer));
       final from = provider.avCabling.extraBoxes.first.rect.center;
       final to = provider.avCabling.extraBoxes.last.rect.center;
@@ -163,13 +163,13 @@ void main() {
       expect(tester.takeException(), isNull);
       final drawing = provider.cablingSchematic(buildAvFlowModel(provider));
       expect(drawing.bundlesBetween(a.id, b.id), hasLength(2));
-      // Not the colour of the run it was added beside — two lines the same
-      // colour on one edge is the drawing saying they are the same cable.
+      // Not the color of the run it was added beside — two lines the same
+      // color on one edge is the drawing saying they are the same cable.
       final colors = drawing.bundlesBetween(a.id, b.id).map((x) => x.color);
       expect(colors.toSet(), hasLength(2));
     });
 
-    testWidgets('a run can be typed as Cat 5e and recoloured', (tester) async {
+    testWidgets('a run can be typed as Cat 5e and recolored', (tester) async {
       final provider = room();
       final a = provider.addCablingBox(kind: CablingBoxKind.pullBox);
       final b = provider.addCablingBox(kind: CablingBoxKind.pathway);

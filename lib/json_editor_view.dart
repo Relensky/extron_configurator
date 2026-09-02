@@ -230,11 +230,11 @@ class _JsonEditorViewState extends State<JsonEditorView> {
               // Where the text stands relative to the config, since there is
               // no longer a button to press for the answer.
               // THREE CHANNELS, not one. The icon says which state this is,
-              // the sentence says it in words, and the colour only reinforces
+              // the sentence says it in words, and the color only reinforces
               // them — so it reads the same to somebody who cannot tell the
               // green from the red.
               //
-              // The colours themselves are measured rather than named: plain
+              // The colors themselves are measured rather than named: plain
               // Colors.green is 2.8:1 on a light surface and Colors.orange is
               // 2.0:1, both under the 3:1 an icon needs to be seen at all.
               Builder(builder: (context) {

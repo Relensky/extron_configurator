@@ -184,7 +184,7 @@ class DocumentHistory {
 /// somebody wants: Undo should take back the word, not the letter.
 ///
 /// THE ABSENCE OF A TIMER IS DELIBERATE, not an accident of style. A timer
-/// would have to be cancelled by whoever disposes of the app state, and the
+/// would have to be canceled by whoever disposes of the app state, and the
 /// one that was not is a test that hangs and a process that will not exit. A
 /// clock reading owns nothing and needs no cleanup.
 ///

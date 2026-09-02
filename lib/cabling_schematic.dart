@@ -12,7 +12,7 @@ export 'run_painting.dart' show RunLineStyle, kRunLineStyleLabels;
 /// ============================================================================
 ///  The one-line drawing the trades are handed: boxes for the places in the
 ///  room, pull boxes for the junctions cable is routed THROUGH, and between
-///  them a bundle labelled with what runs and how much of it — "2x Cat 6a",
+///  them a bundle labeled with what runs and how much of it — "2x Cat 6a",
 ///  "6x Cat 5e" — ending at the pathway back to the telecom room.
 ///
 ///  It is DERIVED, then EDITED, and the split between those two matters:
@@ -241,7 +241,7 @@ class CablingBox {
   );
 }
 
-/// A labelled run of cable between two boxes.
+/// A labeled run of cable between two boxes.
 class CablingBundle {
   /// `bundle:<fromId>|<toId>|<type>` when derived, `run:<n>` when drawn.
   final String id;
@@ -265,13 +265,13 @@ class CablingBundle {
   /// what is in it beyond whatever they typed in [cableType].
   final SignalType? signal;
 
-  /// ARGB. The reference drawing reads by colour — the AV bundles in one, the
-  /// network in another — so the colour is part of the drawing, not decoration.
+  /// ARGB. The reference drawing reads by color — the AV bundles in one, the
+  /// network in another — so the color is part of the drawing, not decoration.
   ///
-  /// A derived run takes the room's colour for its signal, so the cabling sheet
-  /// and the signal flow describe the same run in the same colour without
+  /// A derived run takes the room's color for its signal, so the cabling sheet
+  /// and the signal flow describe the same run in the same color without
   /// anybody keeping two palettes in step. A hand-drawn one takes whatever it
-  /// was given, and either can be recoloured on the drawing.
+  /// was given, and either can be recolored on the drawing.
   final int color;
 
   /// What the run lands ON at each end, printed beside that end of the line.
@@ -337,7 +337,7 @@ class CablingBundle {
   /// The line UNDER [label] — 'HDBaseT / DTP' beneath '4x AV cabling'.
   ///
   /// Empty when the heading already names the signal, so a network run is not
-  /// labelled "Network" twice, and empty on a hand-drawn run, which is a count
+  /// labeled "Network" twice, and empty on a hand-drawn run, which is a count
   /// of something somebody named rather than a count of a signal.
   String get signalSubLabel {
     final s = signal;
@@ -419,16 +419,16 @@ class CablingOverrides {
 
   /// Bundle id -> ARGB picked for this run on the drawing.
   ///
-  /// Separate from [cableTypes] because recolouring is not a disagreement with
+  /// Separate from [cableTypes] because recoloring is not a disagreement with
   /// the room the way a typed count is — it is how the sheet is drawn, and the
   /// run is still whatever the signal flow says it is.
   final Map<String, int> colors;
 
   /// [cablingColorKey] -> ARGB picked for every run of that cable.
   ///
-  /// The colour a drawing set actually specifies is "network is blue", not
-  /// "this one line is blue": the key hands a colour to a CABLE, and the office
-  /// convention that overrides it is about the same thing. Recolouring per run
+  /// The color a drawing set actually specifies is "network is blue", not
+  /// "this one line is blue": the key hands a color to a CABLE, and the office
+  /// convention that overrides it is about the same thing. Recoloring per run
   /// ([colors]) is still there for the exception, and still wins — but it is
   /// the wrong tool for "our network runs are green", which used to mean
   /// clicking every network line on the sheet and hoping none was missed.
@@ -454,7 +454,7 @@ class CablingOverrides {
   ///
   /// A NUDGE rather than a position, for the reason the floor plan stores one:
   /// the automatic spot follows the line, so a label moved out of the way of a
-  /// box stays out of the way of it when that box is dragged half a metre. An
+  /// box stays out of the way of it when that box is dragged half a meter. An
   /// absolute coordinate would be left behind pointing at nothing.
   final Map<String, Offset> labelOffsets;
 
@@ -465,7 +465,7 @@ class CablingOverrides {
   /// A run lands in the middle of its box by default, which is right for a
   /// one-line drawing and wrong the moment somebody is describing real work:
   /// cable comes into a floor box from one side, and four runs that all point
-  /// at the centre of the same box say nothing about which knockout each of
+  /// at the center of the same box say nothing about which knockout each of
   /// them uses.
   ///
   /// A fraction rather than a point so it survives the box being dragged
@@ -572,7 +572,7 @@ class CablingOverrides {
   /// the room by calling this, and restoring a snapshot empties the live
   /// overrides before reading it back. A snapshot holding the live maps would
   /// be emptied along with them a moment before it was read, so undoing a
-  /// typed count, a renamed box or a recoloured run silently restored nothing.
+  /// typed count, a renamed box or a recolored run silently restored nothing.
   Map<String, dynamic> toJson() => {
     if (positions.isNotEmpty)
       'positions': {
@@ -751,7 +751,7 @@ class CablingSchematic {
         b,
   ];
 
-  /// How far off the centre line each run is drawn, by bundle id.
+  /// How far off the center line each run is drawn, by bundle id.
   ///
   /// Runs sharing an edge are fanned out either side of where a single run
   /// would sit, so a pair reads as two cables rather than one thick one. The
@@ -782,14 +782,14 @@ class CablingSchematic {
 
   /// How each run is stroked, by bundle id.
   ///
-  /// Keyed off the CABLE — the same identity the colour and the key line are
+  /// Keyed off the CABLE — the same identity the color and the key line are
   /// keyed off ([cablingColorKey]) — not off the run's position in a fan. That
   /// is what lets the key say "Cat 6a is the dashed one" and be right about
   /// every Cat 6a on the sheet, which is the whole job of a legend. Two runs of
   /// the same cable between the same two boxes look alike because they ARE
   /// alike; they are told apart by being fanned onto their own lanes.
   ///
-  /// The pattern exists because colour alone fails the moment the sheet is
+  /// The pattern exists because color alone fails the moment the sheet is
   /// printed in black and white, photocopied, or read by somebody who cannot
   /// distinguish red from green — which is most of the ways a cabling drawing
   /// is actually read.
@@ -809,7 +809,7 @@ class CablingSchematic {
       (boxById(bundle.fromBoxId)?.isOffSheet ?? false) ||
       (boxById(bundle.toBoxId)?.isOffSheet ?? false);
 
-  /// The key: one line per cable on the sheet, in the order the colours were
+  /// The key: one line per cable on the sheet, in the order the colors were
   /// handed out, with what it is and how much of it there is.
   ///
   /// Built off the same bundles the drawing paints, so a key line and the
@@ -863,7 +863,7 @@ class CablingSchematic {
     }
 
     // The dash pattern each cable is struck with, handed out beside the
-    // colours and read from the same map the drawing reads.
+    // colors and read from the same map the drawing reads.
     final styles = cablingKeyLineStyles(bundles);
 
     return [
@@ -925,7 +925,7 @@ String cablingEndKey(String bundleId, bool atStart) =>
 /// four of them still look like one bundle.
 const double kCablingLaneStep = 13;
 
-/// The point halfway ALONG [route], measured by distance travelled.
+/// The point halfway ALONG [route], measured by distance traveled.
 ///
 /// Not the midpoint of the two ends: a run that detours around a rack has a
 /// straight-line middle that can sit well off the line itself, and a label
@@ -940,14 +940,14 @@ Offset polylineMidpoint(List<Offset> route) {
   }
   if (total == 0) return route.first;
 
-  var travelled = 0.0;
+  var traveled = 0.0;
   for (int i = 0; i < route.length - 1; i++) {
     final leg = (route[i + 1] - route[i]).distance;
-    if (travelled + leg >= total / 2) {
-      final into = leg == 0 ? 0.0 : (total / 2 - travelled) / leg;
+    if (traveled + leg >= total / 2) {
+      final into = leg == 0 ? 0.0 : (total / 2 - traveled) / leg;
       return route[i] + (route[i + 1] - route[i]) * into;
     }
-    travelled += leg;
+    traveled += leg;
   }
   return route.last;
 }
@@ -972,7 +972,7 @@ Offset pointAlongRoute(List<Offset> route, double distance) {
 /// which way the line is going.
 ///
 /// Walking the route rather than stepping a fixed distance from the end is the
-/// whole point. A run starts at the CENTRE of its box, and the boxes are drawn
+/// whole point. A run starts at the CENTER of its box, and the boxes are drawn
 /// over the lines — so a label a fixed forty pixels in from the end of a run
 /// leaving a 180-pixel-wide location box is a label printed underneath that
 /// box, which is to say invisible. On the floor plan, where the marker is a
@@ -1012,8 +1012,8 @@ Offset pointAlongRoute(List<Offset> route, double distance) {
 /// or null when there was nothing to print — which is the normal case, since
 /// an end label is an addition somebody makes to the runs that need one.
 ///
-/// Shared by the cabling drawing and the floor plan so a run labelled "Patch
-/// panel A" is labelled the same way on both sheets. See [runEndAnchor] for
+/// Shared by the cabling drawing and the floor plan so a run labeled "Patch
+/// panel A" is labeled the same way on both sheets. See [runEndAnchor] for
 /// where the two anchor points come from.
 Rect? paintRunEndLabel({
   required Canvas canvas,
@@ -1055,8 +1055,8 @@ Rect? paintRunEndLabel({
       : Offset(-d.dy / length, d.dx / length) * 12;
   final wanted = at + along + across;
 
-  Rect boxAt(Offset centre) => Rect.fromCenter(
-    center: centre,
+  Rect boxAt(Offset center) => Rect.fromCenter(
+    center: center,
     width: painter.width + 8,
     height: painter.height + 4,
   );
@@ -1093,7 +1093,7 @@ Rect? paintRunEndLabel({
     Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
-      // Outlined in the run's own colour: three labels round one box are
+      // Outlined in the run's own color: three labels round one box are
       // otherwise three identical plates with no way to tell which cable each
       // belongs to.
       ..color = color,
@@ -1113,11 +1113,11 @@ const String kCablingScreenRunPrefix = 'screen:';
 /// contain, so splitting an id back apart is unambiguous.
 const String kCablingLegSeparator = '#';
 
-/// What a screen / shade control run is drawn in before anybody recolours it.
+/// What a screen / shade control run is drawn in before anybody recolors it.
 ///
 /// Deliberately nothing like the signal palette: a control run is not program
 /// signal, it is pulled by different people to a different spec, and a drawing
-/// that painted it the same colour as the AV would be inviting somebody to
+/// that painted it the same color as the AV would be inviting somebody to
 /// land it on a switch.
 const int kCablingControlRunColor = 0xFFFFA726;
 
@@ -1125,18 +1125,18 @@ const int kCablingControlRunColor = 0xFFFFA726;
 const String kCablingControlRunType = 'Control cable';
 
 // ---------------------------------------------------------------------------
-//  THE KEY: ONE COLOUR PER CABLE
+//  THE KEY: ONE COLOR PER CABLE
 // ---------------------------------------------------------------------------
 
 /// What a run is FILED under, over and above what cable it is.
 ///
-/// A drawing's colours have to answer one question — "which of these lines am
+/// A drawing's colors have to answer one question — "which of these lines am
 /// I pulling?" — and the answer is the CABLE, not the signal riding it. Two
 /// HDBaseT runs and two Dante runs down the same four Cat 6a are four lines of
-/// one cable, and drawing them in four colours told the person pulling them
+/// one cable, and drawing them in four colors told the person pulling them
 /// they were four different things.
 ///
-/// So colour keys off the cable type, with the category as the one permitted
+/// So color keys off the cable type, with the category as the one permitted
 /// tiebreak: AV Cat 6a and network Cat 6a really are two different pulls, by
 /// two different contractors, to two different test standards, and the sheet
 /// has to be able to say so.
@@ -1153,7 +1153,7 @@ String cablingCategoryOf(CablingBundle bundle) {
 
 /// The cable type as the key groups it — case-folded with the spaces taken
 /// out, so "Cat6a", "Cat 6a" and "CAT  6A" are ONE line of the key and one
-/// colour on the drawing rather than three of each.
+/// color on the drawing rather than three of each.
 ///
 /// The same three spellings are already the reason [kCablingCableTypes] exists
 /// as a shortcut menu: a schedule carrying all three is three lines of a
@@ -1162,20 +1162,20 @@ String cablingCategoryOf(CablingBundle bundle) {
 String cablingTypeKey(String cableType) =>
     cableType.toLowerCase().replaceAll(RegExp(r'\s+'), '');
 
-/// The identity a colour is assigned against: category and cable type.
+/// The identity a color is assigned against: category and cable type.
 String cablingColorKey(CablingBundle bundle) =>
     '${cablingCategoryOf(bundle)}|${cablingTypeKey(bundle.cableType)}';
 
-/// The colours the key runs through, in order.
+/// The colors the key runs through, in order.
 ///
 /// No orange in it: orange is spoken for by the control runs (see
-/// [kCablingControlRunColor]), and a network run the same colour as the screen
+/// [kCablingControlRunColor]), and a network run the same color as the screen
 /// switch run is the drawing telling somebody to land data on a motor.
 /// Picked to stay apart from each other at the weight a cable line is drawn
 /// and in both light and dark, which is a shorter list than it looks.
 const List<int> kCablingTypeColors = [
   0xFF3949AB, // indigo
-  0xFF546E7A, // blue grey
+  0xFF546E7A, // blue gray
   0xFF2E7D32, // green
   0xFF8E24AA, // purple
   0xFF00838F, // teal
@@ -1188,7 +1188,7 @@ const List<int> kCablingTypeColors = [
   0xFF455A64, // slate
 ];
 
-/// The shades the control runs get, amber first — the colour they have always
+/// The shades the control runs get, amber first — the color they have always
 /// been drawn in, and the one the rest of the palette keeps clear of.
 const List<int> kCablingControlColors = [
   kCablingControlRunColor,
@@ -1197,10 +1197,10 @@ const List<int> kCablingControlColors = [
   0xFFEF6C00,
 ];
 
-/// A colour per [cablingColorKey], assigned in the order the runs are drawn.
+/// A color per [cablingColorKey], assigned in the order the runs are drawn.
 ///
 /// First-appearance order rather than alphabetical so adding a cable type
-/// appends a colour instead of reshuffling every line already on the sheet.
+/// appends a color instead of reshuffling every line already on the sheet.
 /// The bundles arrive sorted by id, which is derived from the two ends and the
 /// signal, so the same room gives the same key every time it is opened.
 Map<String, int> cablingKeyColors(List<CablingBundle> bundles) {
@@ -1217,9 +1217,9 @@ Map<String, int> cablingKeyColors(List<CablingBundle> bundles) {
   return out;
 }
 
-/// A dash pattern per [cablingColorKey], handed out beside the colours.
+/// A dash pattern per [cablingColorKey], handed out beside the colors.
 ///
-/// The same identity the colour is assigned against, and for the same reason:
+/// The same identity the color is assigned against, and for the same reason:
 /// what a reader needs to tell apart is which CABLE a line is, and the pattern
 /// is the half of that answer which survives a black-and-white print, a
 /// photocopy, or a reader who cannot distinguish red from green. Two runs of
@@ -1345,9 +1345,9 @@ CablingSchematic buildCablingSchematic({
   required List<RoomLocation> locations,
   required CablingOverrides overrides,
 
-  /// The room's signal colours, so a derived run is drawn the colour the
+  /// The room's signal colors, so a derived run is drawn the color the
   /// signal flow already draws it. Omitted only where there is no room to ask
-  /// — the tests and the reports, which do not care what colour anything is.
+  /// — the tests and the reports, which do not care what color anything is.
   Map<SignalType, Color>? palette,
 }) {
   final nodeLocation = <String, String>{
@@ -1456,9 +1456,9 @@ CablingSchematic buildCablingSchematic({
         // sub-heading underneath.
         cableType: cableTypeLabel(e.value.signal),
         signal: e.value.signal,
-        // The room's own colour for that signal, so the AV runs and the
+        // The room's own color for that signal, so the AV runs and the
         // network runs read apart on the cabling sheet exactly the way they do
-        // on the signal flow. One line in one colour was the drawing saying
+        // on the signal flow. One line in one color was the drawing saying
         // every cable in the room was the same thing.
         color: signalColor(e.value.signal, palette).toARGB32(),
       ),
@@ -1475,7 +1475,7 @@ CablingSchematic buildCablingSchematic({
       for (int i = 0; i < s.legs.length; i++)
         CablingBundle(
           // The first leg keeps the id a two-end run has always had, so an
-          // override typed against it — a recolour, a retyped count — is not
+          // override typed against it — a recolor, a retyped count — is not
           // orphaned by somebody adding a pull box to the middle of the run.
           id: i == 0
               ? '$kCablingScreenRunPrefix${s.id}'
@@ -1558,13 +1558,13 @@ CablingSchematic buildCablingSchematic({
         applyBundle(b),
   ];
 
-  // --- the colours, last: one per cable, not one per signal ----------------
+  // --- the colors, last: one per cable, not one per signal ----------------
   //
   // After the type overrides, because retyping a run's cable is exactly how
-  // somebody says "this one is Cat 6a like those two" and the colour has to
-  // follow. A run recoloured BY HAND still wins — that is the drawing set's
-  // own convention overriding the app's, which is the one thing a colour rule
-  // must never take away. A colour chosen for the CABLE sits between the two:
+  // somebody says "this one is Cat 6a like those two" and the color has to
+  // follow. A run recolored BY HAND still wins — that is the drawing set's
+  // own convention overriding the app's, which is the one thing a color rule
+  // must never take away. A color chosen for the CABLE sits between the two:
   // it is the office convention for every run of that type, and the one line
   // somebody painted by hand is still the exception to it.
   final keyColors = cablingKeyColors(bundles);

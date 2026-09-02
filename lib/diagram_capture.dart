@@ -60,7 +60,7 @@ Future<Uint8List?> captureCurrentDiagram(
 ///  THE PLAN TAB'S SHEETS
 /// ---------------------------------------------------------------------------
 ///  Every other drawing tab holds exactly one drawing, so one canvas key is
-///  enough to fetch it. The plan tab does not: a room has a sheet per storey,
+///  enough to fetch it. The plan tab does not: a room has a sheet per story,
 ///  a reflected ceiling plan beside the furniture plan, a demolition sheet
 ///  beside the new work, and only the one being looked at is mounted.
 ///
@@ -119,7 +119,7 @@ Future<List<PlanDrawing>> capturePlanSheets({
 /// What a capture run produced. Null means that drawing could not be had —
 /// the tab does not exist in this room, or it had nothing on it.
 ///
-/// The plan is a LIST because the tab holds a sheet per storey. A single
+/// The plan is a LIST because the tab holds a sheet per story. A single
 /// `floorPlan` field is how documents ended up carrying whichever sheet
 /// happened to be open, so there is no longer one to reach for: a caller with
 /// room for only one picture takes the first and says so.
@@ -169,7 +169,7 @@ Future<DiagramImages> captureDiagramTabs(
 
   // EVERY DRAWING IS INDEPENDENTLY OPTIONAL.
   //
-  // [captureBoundary] already survives anything the rasteriser throws, but the
+  // [captureBoundary] already survives anything the rasterizer throws, but the
   // decisions AROUND it did not: whether a room has racks, whether it has plan
   // sheets, and what its cabling schematic comes to are all worked out from
   // the room's own data, and a room with a plan whose image file has moved or

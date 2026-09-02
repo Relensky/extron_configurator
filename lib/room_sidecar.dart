@@ -28,7 +28,7 @@ import 'package:path/path.dart' as path;
 /// One file of the room's document.
 enum RoomSidecarPart {
   /// The signal flow diagram — devices, their connectors, the cables between
-  /// them, and how the canvas is coloured. Keeps the historic file name, so
+  /// them, and how the canvas is colored. Keeps the historic file name, so
   /// this is also the file an older room's whole document is found in.
   flow,
 
@@ -97,7 +97,7 @@ const Map<RoomSidecarPart, List<String>> kRoomSidecarKeys = {
   RoomSidecarPart.racks: ['racks', 'rackItems', 'rackSlots'],
   // The locations travel with the plans: a callout is a marker on a sheet
   // pointing at one of them, and a plan whose places had gone would be a sheet
-  // of unlabelled dots.
+  // of unlabeled dots.
   RoomSidecarPart.floorPlans: ['floorPlans', 'locations'],
   RoomSidecarPart.cabling: ['screenSwitches', 'cablingSchematic'],
   RoomSidecarPart.cost: ['cost'],
@@ -117,7 +117,7 @@ Set<String> get kRoomSidecarOwnedKeys => {
 ///
 /// One per page that offers an Undo button. The estimate was absent for a long
 /// time because nothing on the Cost tab recorded an entry — and a scope no edit
-/// is ever filed under is a button that is always grey. It is here now, and
+/// is ever filed under is a button that is always gray. It is here now, and
 /// every method that touches [RoomCostSettings] files against it: a price typed
 /// over a catalog figure, a fee, a line added by hand, a whole quote re-sorted.
 /// Those are among the most retyped edits in the app and were the least
@@ -155,7 +155,7 @@ List<String> avUndoScopeKeys(AvUndoScope scope) =>
 const Map<RoomSidecarPart, String> _kReadme = {
   RoomSidecarPart.flow:
       'Signal flow for the Room Config Builder: the devices in this room with '
-          'their connectors, the cables between them, and the colours the '
+          'their connectors, the cables between them, and the colors the '
           'diagram is drawn in. The rest of the room is in the files beside '
           'this one.',
   RoomSidecarPart.racks:
@@ -196,7 +196,7 @@ Map<RoomSidecarPart, String> roomSidecarPaths(String configPath) => {
 /// Files the combined document breaks into.
 ///
 /// A key nobody owns stays with [RoomSidecarPart.flow] rather than being
-/// dropped: an unrecognised key is far more likely to be something a later
+/// dropped: an unrecognized key is far more likely to be something a later
 /// build added than something safe to throw away, and the flow file is the one
 /// a reader always looks at.
 Map<RoomSidecarPart, Map<String, dynamic>> splitRoomSidecar(

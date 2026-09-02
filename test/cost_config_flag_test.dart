@@ -534,7 +534,7 @@ void main() {
     testWidgets('can be marked not part of the config, like a drawn box can',
         (tester) async {
       // The report: a line ADDED on this page flew the orange flag with the
-      // one choice that fits it greyed out. An owner-furnished display is
+      // one choice that fits it grayed out. An owner-furnished display is
       // usually quoted before anybody draws it, and it is not a shelf spare.
       final p = room();
       final item = p.addAvCostExtraEquipment(

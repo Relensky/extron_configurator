@@ -137,7 +137,7 @@ Set<int> proseColumnsOf(ReportSection section) {
 ///
 /// A SENTENCE IS NOT A COLUMN. Wherever a column holds prose — what the work
 /// is, a note, a description that runs to a line and a half — it is lifted out
-/// of the grid and written under its row, merged across the sheet and labelled
+/// of the grid and written under its row, merged across the sheet and labeled
 /// with the heading it came from. The reason is what it does to everything
 /// ELSE on the row: a column sized to a hundred-character sentence is a column
 /// the two-character quantities beside it are stranded at the left-hand edge
@@ -221,7 +221,7 @@ XlsxSheet buildStackedReportSheet({
           pad([for (final c in kept) c < row.length ? row[c] : ''], band));
 
       // The sentences, each on its own line under the row it belongs to and
-      // labelled with the heading it came from — without the label a merged
+      // labeled with the heading it came from — without the label a merged
       // line of prose under a table is a line of prose from nowhere.
       for (final c in prose) {
         final text = (c < row.length ? row[c] : '')?.toString() ?? '';

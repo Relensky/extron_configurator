@@ -95,7 +95,7 @@ import 'search_match.dart';
 //      estimate prices the runs on the AV flow: one line per signal type, the
 //      quantity counted off the diagram, plus whatever spares are asked for.
 //    * AV / MISC is the catch-all for things a job is billed for that are not
-//      a box on a diagram and not one of the above: a mount, a licence, a
+//      a box on a diagram and not one of the above: a mount, a license, a
 //      subscription, a rental, a trip charge somebody quoted as a figure. They
 //      carry a price and nothing else, and the estimate's "Other items" card
 //      picks them off the catalog so a price agreed once is not retyped per
@@ -217,7 +217,7 @@ const List<String> kTrackedCategories = [
 ];
 
 /// True when [category] is one of the words the app itself understands —
-/// either a tracked device kind or one of the four it keys behaviour off.
+/// either a tracked device kind or one of the four it keys behavior off.
 bool isTrackedCategory(String category) {
   final needle = category.trim().toLowerCase();
   if (needle.isEmpty) return false;
@@ -302,7 +302,7 @@ const Map<String, String> kCatalogCategorySuggestions = {
 };
 
 /// The categories offered even when nothing is filed under them yet: the kinds
-/// the app tracks, then the rack parts, then the three it keys behaviour off.
+/// the app tracks, then the rack parts, then the three it keys behavior off.
 ///
 /// The rack kinds are listed individually ('Vent plate', 'Shelf', ...) because
 /// that is how the rack editor groups its parts list — "Rack hardware" as a
@@ -524,7 +524,7 @@ class AvDeviceTemplate {
   bool get isCable => category.trim() == kCategoryCable;
 
   /// True when this entry is a billable line rather than a piece of equipment
-  /// — a licence, a mount, a trip charge. It has a price and no connectors,
+  /// — a license, a mount, a trip charge. It has a price and no connectors,
   /// and never appears in a picker that puts something on a diagram.
   bool get isMiscItem => category.trim() == kCategoryMisc;
 
@@ -660,7 +660,7 @@ class AvDeviceTemplate {
   ///
   /// Text where a number belongs ('about 8 years'), a negative, or a figure so
   /// large it is plainly a typo all read as unrecorded rather than being
-  /// honoured — a product with a 600-year life would sit green on the
+  /// honored — a product with a 600-year life would sit green on the
   /// replacement plan for ever, which is the one direction this must not be
   /// wrong in.
   static int _lifeYearsFromJson(Object? raw) {
@@ -1086,7 +1086,7 @@ class AvDeviceLibrary {
 
   List<AvDeviceTemplate> get cables => active.where((t) => t.isCable).toList();
 
-  /// The billable lines that are not equipment — licences, mounts, trip
+  /// The billable lines that are not equipment — licenses, mounts, trip
   /// charges — by name, since the list is read as a rate card.
   List<AvDeviceTemplate> get miscItems {
     final list = active.where((t) => t.isMiscItem).toList()
@@ -1400,7 +1400,7 @@ class AvDeviceLibrary {
   }
 
   /// Brings every user entry's connectors back in step with its power input:
-  /// one inlet on a powered model, labelled for mains or PoE, none at all on a
+  /// one inlet on a powered model, labeled for mains or PoE, none at all on a
   /// passive one. Returns how many entries had to change.
   ///
   /// This runs on [save] rather than on [upsert] because the Device Editor

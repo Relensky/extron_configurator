@@ -125,7 +125,7 @@ def corroborates(model, description):
 
 def main():
     # Hand-rolled rather than argparse so the tool stays a single file with no
-    # imports beyond the standard library, like its neighbours here.
+    # imports beyond the standard library, like its neighbors here.
     argv = sys.argv[1:]
     args, opts, i = [], {}, 0
     while i < len(argv):

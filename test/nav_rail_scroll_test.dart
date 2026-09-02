@@ -63,7 +63,7 @@ void main() {
   }
 
   /// True when the rail is showing words. On a window too short for fifteen
-  /// labelled rows it falls back to icons with tooltips, and asking after the
+  /// labeled rows it falls back to icons with tooltips, and asking after the
   /// labels then is asking after something the rail deliberately does not have.
   bool railHasLabels(WidgetTester tester) =>
       tester.widget<NavRailRow>(find.byType(NavRailRow).first).fit.labels;
@@ -246,7 +246,7 @@ void main() {
   //  The selected row's band used to come from secondaryContainer in every
   //  theme. Classic derives its secondary from the accent, so that looked
   //  right. Auris does not — its slate is semantic and fixed whatever accent
-  //  is chosen — so picking teal or magenta recoloured the whole app EXCEPT
+  //  is chosen — so picking teal or magenta recolored the whole app EXCEPT
   //  the rail, which is the control somebody is looking at while they pick.
   // ---------------------------------------------------------------------------
 

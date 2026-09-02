@@ -276,7 +276,7 @@ const List<HelpTopic> kHelpTopics = [
         'key_map.json, and what was translated is shown rather than done '
         'quietly - the Conversion preview lists every key that changed name so '
         'you can see what the app did before saving over anything.\n\n'
-        'Keys the app does not recognise are KEPT, not dropped. A room can '
+        'Keys the app does not recognize are KEPT, not dropped. A room can '
         'carry settings this app has never heard of and still round-trip '
         'through it unharmed.',
   ),
@@ -375,7 +375,7 @@ const List<HelpTopic> kHelpTopics = [
         'routed by hand where the straight line is wrong.\n\n'
         'The schedule prices itself off the catalog: a made-up lead of the '
         'right length where the catalog has one, and bulk cable where it does '
-        'not. Cable colours are yours to set and travel with the drawing.',
+        'not. Cable colors are yours to set and travel with the drawing.',
   ),
 
   // ---------------------------------------------------------------------------
@@ -388,7 +388,7 @@ const List<HelpTopic> kHelpTopics = [
     keywords: ['estimate', 'quote', 'price', 'money', 'total', 'bid'],
     body:
         'What this room costs, built from the boxes on the drawing, the cable '
-        'schedule and the labour rates.\n\n'
+        'schedule and the labor rates.\n\n'
         'Every line says where its price came from: the catalog\'s figure for '
         'that model, a base cost card figure for its category, or a price '
         'typed on the line itself. A price the app had to guess at is marked '
@@ -421,10 +421,10 @@ const List<HelpTopic> kHelpTopics = [
         'costed at nothing.',
   ),
   HelpTopic(
-    title: 'Labour rates',
+    title: 'Labor rates',
     section: 'The money',
-    where: 'Cost tab → Labour rates',
-    keywords: ['labor', 'labour', 'hours', 'rate', 'install', 'engineer'],
+    where: 'Cost tab → Labor rates',
+    keywords: ['labor', 'labor', 'hours', 'rate', 'install', 'engineer'],
     body:
         'What an hour of each role costs, and how many hours the estimate '
         'assumes per kind of work. A role nobody has priced reports as '
@@ -692,10 +692,10 @@ const List<HelpTopic> kHelpTopics = [
     body:
         'Who furnishes and who installs each line of scope, room by room. The '
         'document that settles "we thought you were pulling that conduit".\n\n'
-        'Each party carries its own colour, the same one wherever its name '
+        'Each party carries its own color, the same one wherever its name '
         'appears, so one contractor\'s share of the sheet is visible without '
         'reading a cell. A line nobody has been named on reads NOBODY in the '
-        'error colour - a blank is the exact thing this sheet exists to '
+        'error color - a blank is the exact thing this sheet exists to '
         'catch.\n\n'
         'Hovering any cell lights the whole line right across the sheet, '
         'frozen room column included. The sheet zooms and fits, and each scope '
@@ -1023,7 +1023,7 @@ const List<HelpTopic> kHelpTopics = [
     keywords: ['undo', 'redo', 'ctrl z', 'mistake', 'history', 'revert'],
     body:
         'Sixty steps deep on every document the app edits - the room, the job, '
-        'the campus assembly, the catalog. Each step is labelled with what it '
+        'the campus assembly, the catalog. Each step is labeled with what it '
         'was, so what you are about to undo is something you can read rather '
         'than guess at.\n\n'
         'Typing is settled into one step rather than one per keystroke; '
@@ -1038,7 +1038,7 @@ const List<HelpTopic> kHelpTopics = [
       'theme',
       'dark',
       'light',
-      'colour',
+      'color',
       'color',
       'contrast',
       'accessibility',
@@ -1046,7 +1046,7 @@ const List<HelpTopic> kHelpTopics = [
       'legible',
     ],
     body:
-        'Themes and accents, with every colour on every screen checked against '
+        'Themes and accents, with every color on every screen checked against '
         'the surface it is actually drawn on rather than against the one the '
         'scheme assumes. That is why a chip on an error card and the same chip '
         'on a normal card are not always the same ink.\n\n'

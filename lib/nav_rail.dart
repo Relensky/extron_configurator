@@ -307,7 +307,7 @@ class _AppNavRailState extends State<AppNavRail> {
       if (fit.rowHeight * kNavTabs.length <= height) return fit;
     }
 
-    // THE WORDS COME OFF. Fifteen legible labelled rows need more height than
+    // THE WORDS COME OFF. Fifteen legible labeled rows need more height than
     // this window has, and the two ways of pretending otherwise are both
     // worse: type below the floor is a label nobody can read, and letting it
     // scroll hides a third of the rail behind a gesture nobody makes on a
@@ -429,7 +429,7 @@ class NavRailRow extends StatelessWidget {
     // The selected row paints that band behind itself, so its ink is chosen
     // against THAT rather than against the page. The M3 pair —
     // onSecondaryContainer on secondaryContainer — measures 2.7:1 on this
-    // app's Classic dark theme, and Classic's accent is a colour the user
+    // app's Classic dark theme, and Classic's accent is a color the user
     // picks out of a wheel, so no fixed pairing can be trusted here.
     final background = selected ? band : scheme.surface;
     final color = readableOn(

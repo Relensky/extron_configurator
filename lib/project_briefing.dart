@@ -91,7 +91,7 @@ class BriefingLine {
 /// One open job note, resolved for reading.
 ///
 /// Carries the room's NAME rather than its id — the briefing is a thing to
-/// read, and "room3" is not a room — and the two flags the list colours by.
+/// read, and "room3" is not a room — and the two flags the list colors by.
 class BriefingTodo {
   final String text;
 
@@ -764,7 +764,7 @@ BriefingOverview _overviewOf(
 /// mail app rewraps it.
 ///
 /// IT SAYS THE SAME THINGS THE DIALOG DOES, in the same order, including the
-/// pane that fixes each line. A copy that summarised harder than the screen
+/// pane that fixes each line. A copy that summarized harder than the screen
 /// would be a second, quieter briefing — and the moment the two disagree the
 /// written one is the one that gets believed, because it is the one in the
 /// email.

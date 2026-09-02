@@ -173,7 +173,7 @@ void main() {
       expect(lines.single.key, 'cable:hdmi');
     });
 
-    test('an uncatalogued type splits by length too, and says which', () {
+    test('an uncatalogd type splits by length too, and says which', () {
       // No catalog entry at all: the line is named for the signal, and the
       // length is the only thing telling the two rows apart — so it has to be
       // in the description as well as in the key.

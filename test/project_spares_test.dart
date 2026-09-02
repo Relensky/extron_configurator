@@ -265,7 +265,7 @@ void main() {
 
     test('a spare filed against a room no longer on the job still lists', () {
       // Money that quietly disappears off a quote is worse than money on it
-      // under a name nobody recognises.
+      // under a name nobody recognizes.
       final orphan = estimateOf([
         line(
           description: 'Display',
@@ -431,7 +431,7 @@ void main() {
   // -------------------------------------------------------------------------
   //  ONE SPARE, OR NONE. A part the job installs and holds nothing spare of is
   //  the row worth acting on; the second spare of a part that already has one
-  //  is a judgement nobody needs a table for.
+  //  is a judgment nobody needs a table for.
   //
   //  This replaced a percentage target the job had to be told before the table
   //  would flag anything - which asked for four spare wall plates on a job
@@ -573,7 +573,7 @@ void main() {
     });
 
     test('a target that is not a percentage is read as the suggestion', () {
-      // '200%' in a hand-edited file is a typo, and honouring it would put a
+      // '200%' in a hand-edited file is a typo, and honoring it would put a
       // recommendation of two hundred spare wall plates on the sheet.
       for (final bad in [200, -5, 'soon', null]) {
         final read = BuildingProject.fromJson({

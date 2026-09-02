@@ -260,7 +260,7 @@ void main() {
     await pump(tester, p);
 
     expect(tester.takeException(), isNull,
-        reason: 'a long name ellipsises rather than overflowing');
+        reason: 'a long name ellipsizes rather than overflowing');
 
     final banner = tester.getRect(find.byType(TopLevelBar));
     final lastOnBanner = tester.getRect(
@@ -467,7 +467,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 8));
   });
 
-  testWidgets('the strip is a different colour in each mode', (tester) async {
+  testWidgets('the strip is a different color in each mode', (tester) async {
     // Read without being looked at: the mistake this prevents - working on a
     // room believing it is on the job - is not one anybody makes on purpose.
     final p = fresh();
@@ -502,7 +502,7 @@ void main() {
     // picks the job out of that folder means to open the job. Being told it
     // is not a room config would be the app refusing to do the obvious thing.
 
-    test('a project is recognised by the name this app writes', () {
+    test('a project is recognized by the name this app writes', () {
       final file = path.join(dir.path, 'bessey$kProjectFileSuffix');
       File(file).writeAsStringSync('{}');
       expect(isProjectFile(file), isTrue);

@@ -298,7 +298,7 @@ void main() {
       expect(project.recentHistory.first.itemKey, 'part:b');
       expect(project.historyFor('part:a'), hasLength(2));
       expect(project.historyFor('part:a').first.field, 'Order');
-      // One person, however they capitalised their login.
+      // One person, however they capitalized their login.
       expect(project.historyUsers, ['alice', 'BOB']);
     });
 

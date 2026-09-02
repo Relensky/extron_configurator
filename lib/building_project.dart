@@ -1268,24 +1268,24 @@ class ProjectVendor {
   /// themselves that identifies it.
   bool get hasRules => manufacturers.isNotEmpty || categories.isNotEmpty;
 
-  /// The colour this vendor's parts are marked in, as an ARGB int, or null to
+  /// The color this vendor's parts are marked in, as an ARGB int, or null to
   /// let one be derived from the name.
   ///
-  /// WHY A COLOUR IS A PROPERTY OF THE VENDOR. A vendor IS an order: every
+  /// WHY A COLOR IS A PROPERTY OF THE VENDOR. A vendor IS an order: every
   /// part tagged to it goes on one purchase order, to one company, on one
   /// date. Reading a master list of two hundred parts and asking "which of
   /// these am I ordering from whom" is the question the list is opened for,
   /// and the answer was a name in a narrow column that had to be read row by
-  /// row. A colour answers it down the whole page at once.
+  /// row. A color answers it down the whole page at once.
   ///
-  /// ASSIGNABLE, because the buyer's own colours mean things this app cannot
+  /// ASSIGNABLE, because the buyer's own colors mean things this app cannot
   /// know — the vendor that is always late, the one the contract covers, the
-  /// order that has already been placed. Null is not "no colour": a vendor
-  /// nobody has assigned one still gets a stable colour off its name, so a
+  /// order that has already been placed. Null is not "no color": a vendor
+  /// nobody has assigned one still gets a stable color off its name, so a
   /// list is legible before anybody has set anything up.
   ///
   /// Stored as an int rather than a Color to keep this file free of Flutter,
-  /// the same way the cable colours are stored on a bundle.
+  /// the same way the cable colors are stored on a bundle.
   final int? color;
 
   /// The day the quote request went out. See [VendorRfqStage].
@@ -1362,7 +1362,7 @@ class ProjectVendor {
 
   /// [clearColor] rather than passing null, which cannot be told from "leave
   /// it alone" — and the two mean opposite things here: back to the derived
-  /// colour, or keep the one that was assigned.
+  /// color, or keep the one that was assigned.
   ProjectVendor copyWith({
     String? name,
     String? contact,
@@ -1466,7 +1466,7 @@ class ProjectVendor {
       manufacturers: list('manufacturers'),
       categories: list('categories'),
       // Anything that is not a number is no assignment at all, which reads as
-      // the derived colour rather than as black.
+      // the derived color rather than as black.
       color: raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? ''),
       rfqSentOn: parseIsoDate(json['rfqSentOn']),
       quotedOn: parseIsoDate(json['quotedOn']),
@@ -1601,8 +1601,8 @@ const Set<String> kViewablePlanExtensions = {
 /// the same year columns; what it does NOT do is claim to know what is in it.
 ///
 /// THE MONEY IS A BASE COST unless somebody types a figure. A room nobody has
-/// itemised is priced the way the rest of this app prices what it has not
-/// itemised — off the base-cost card, by category — and every figure derived
+/// itemized is priced the way the rest of this app prices what it has not
+/// itemized — off the base-cost card, by category — and every figure derived
 /// from it says it is an estimate. See [replacementCost] and [category].
 class ManualRoom {
   final String id;
@@ -1621,7 +1621,7 @@ class ManualRoom {
   final int lifeYears;
 
   /// What it costs to do the room again. 0 means "price it off the base-cost
-  /// card", which is what a room nobody has itemised gets.
+  /// card", which is what a room nobody has itemized gets.
   final double replacementCost;
 
   /// The base-cost line this room is priced from when [replacementCost] is 0 —
@@ -2079,11 +2079,11 @@ class BuildingProject {
   /// to agree with each other.
   final List<ResponsibilityItem> responsibility;
 
-  /// Party (normalised - see [responsibilityPartyKey]) -> the colour it reads
+  /// Party (normalized - see [responsibilityPartyKey]) -> the color it reads
   /// in, as an ARGB int, for the parties somebody has chosen one for.
   ///
-  /// WHY A PARTY'S COLOUR IS THE JOB'S TO SET. The matrix is read by whose
-  /// name is on the line, and every name already derives a stable colour from
+  /// WHY A PARTY'S COLOR IS THE JOB'S TO SET. The matrix is read by whose
+  /// name is on the line, and every name already derives a stable color from
   /// itself, which is enough to make a sheet legible before anybody sets
   /// anything up. It is not enough to make it match: this document goes out
   /// beside a contractor's own drawings, gets printed, and is argued from at a
@@ -2091,10 +2091,10 @@ class BuildingProject {
   /// every sheet for a year. A hue nobody can change is a hue that disagrees
   /// with the rest of the submittal.
   ///
-  /// Keyed by the NORMALISED name so 'CTS Chico' and 'cts  chico' are one
+  /// Keyed by the NORMALIZED name so 'CTS Chico' and 'cts  chico' are one
   /// party rather than two entries fighting over one column, and an int rather
   /// than a Color to keep this file free of Flutter - the same bargain the
-  /// vendor colours and the cable colours make.
+  /// vendor colors and the cable colors make.
   final Map<String, int> partyColors;
 
   /// Core component key (see [masterPartKey]) -> vendor id, for the parts
@@ -2192,7 +2192,7 @@ class BuildingProject {
   /// A fraction, not a percentage: 0.1 is ten per cent. Per JOB rather than
   /// per app, because it is a decision about this building - a lecture block
   /// with twelve identical rooms and a shelf of spares is not the same job as
-  /// one theatre with one of everything in it.
+  /// one theater with one of everything in it.
   ///
   /// IT IS A RECOMMENDATION AND NOT A RULE. Nothing is flagged for being under
   /// it; a part with NO spare at all is the only thing on the spares page
@@ -2728,16 +2728,16 @@ class BuildingProject {
   //  and the phases are — add, replace, remove — so the pane stays a form and
   //  the rules about ids stay here with the ids.
 
-  /// The colour [party] has been GIVEN, or null when it still reads in the one
+  /// The color [party] has been GIVEN, or null when it still reads in the one
   /// its name derives.
   int? partyColor(String party) => partyColors[responsibilityPartyKey(party)];
 
-  /// Gives [party] a colour, or takes it back to the derived one when [color]
+  /// Gives [party] a color, or takes it back to the derived one when [color]
   /// is null.
   ///
-  /// A party nobody named has no colour to set: the blank cell is the thing
+  /// A party nobody named has no color to set: the blank cell is the thing
   /// this document exists to catch, and letting somebody paint it a settled
-  /// colour would hide exactly the line that has to be chased.
+  /// color would hide exactly the line that has to be chased.
   void setPartyColor(String party, int? color) {
     final key = responsibilityPartyKey(party);
     if (key.isEmpty) return;
@@ -3508,7 +3508,7 @@ class BuildingProject {
   /// How a room path should be WRITTEN into a project saved at [projectPath]:
   /// relative when the room is under the project's folder, absolute otherwise.
   ///
-  /// The condition matters. Relativising a path that climbs out of the folder
+  /// The condition matters. Relativizing a path that climbs out of the folder
   /// produces `..\..\..\other_building\room_config.json`, which is both
   /// unreadable and fragile — it breaks the moment the project file moves,
   /// which is the exact thing relative paths were supposed to survive.
@@ -3530,7 +3530,7 @@ class BuildingProject {
   /// in it.
   ///
   /// THREE LEVELS AND NO MORE. Past that the two documents are not in one tree
-  /// in any sense somebody would recognise - they are two files that happen to
+  /// in any sense somebody would recognize - they are two files that happen to
   /// be on one disk - and a chain of `..` that long breaks on any move at all,
   /// which is the exact thing a relative path is for. Those store absolute,
   /// which still opens; it simply does not survive the folder being copied.
@@ -3658,8 +3658,8 @@ class BuildingProject {
           ResponsibilityItem.fromJson(Map<String, dynamic>.from(r)),
     ];
 
-    // A colour that is not a number is dropped rather than defaulted: a
-    // hand-edited file with a colour NAME typed into it should leave the party
+    // A color that is not a number is dropped rather than defaulted: a
+    // hand-edited file with a color NAME typed into it should leave the party
     // on the hue its name derives, which is legible, rather than on black.
     final partyColors = <String, int>{};
     final rawParty = json['partyColors'];
@@ -3832,7 +3832,7 @@ class BuildingProject {
       spares: spares,
       // A target that is not a number, or one outside nought to a hundred, is
       // read as the SUGGESTION rather than clamped: "we hold 200%" in a
-      // hand-edited file is a typo, and honouring it would put a
+      // hand-edited file is a typo, and honoring it would put a
       // recommendation of two hundred spare wall plates on the sheet.
       //
       // A file written by the version that first had a target opens with that

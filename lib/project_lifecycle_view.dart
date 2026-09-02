@@ -220,7 +220,7 @@ class _Summary extends StatelessWidget {
                     context,
                     building.countOf(EquipmentCondition.overdue) > 0
                         ? EquipmentCondition.overdue
-                        : EquipmentCondition.ageing,
+                        : EquipmentCondition.aging,
                   ),
                 ),
               if (building.overdueCost > 0)
@@ -435,7 +435,7 @@ class _PlanExportButtonsState extends State<_PlanExportButtons> {
 /// So this is the same sheet laid out flat: nothing scrolls, nothing is lazy,
 /// nothing is pinned because nothing moves. It carries its own heading and
 /// figures too, because a picture ends up in a document with no app around it
-/// and a grid of coloured cells with no title on it explains nothing.
+/// and a grid of colored cells with no title on it explains nothing.
 ///
 /// The CELLS are the same widgets the screen draws - see [_GridRow] and
 /// [_TimelineRow] - so the picture cannot come out saying something different
@@ -528,7 +528,7 @@ class LifecyclePlanSheet extends StatelessWidget {
                       context,
                       building.countOf(EquipmentCondition.overdue) > 0
                           ? EquipmentCondition.overdue
-                          : EquipmentCondition.ageing,
+                          : EquipmentCondition.aging,
                     ),
                   ),
                 if (building.overdueCost > 0)
@@ -811,19 +811,19 @@ typedef LifecycleGridLine = ({RoomLifecycle room, RoomDueGroup? group});
 /// with it. A cell that says '2031' against a room you can no longer see is a
 /// cell that says nothing.
 ///
-/// EVERY CELL SAYS WHAT IS IN IT ON HOVER. The colour says when, the figure
+/// EVERY CELL SAYS WHAT IS IN IT ON HOVER. The color says when, the figure
 /// says how much, and neither says WHICH BOXES - which is the first question
 /// anybody asks of a cell with 24,000 dollars in it. The tooltip names them.
 class LifecycleYearGrid extends StatefulWidget {
   final BuildingLifecycle building;
 
-  /// Whether to draw the colour key above the sheet.
+  /// Whether to draw the color key above the sheet.
   ///
   /// ONE KEY PER PAGE. Six shades across a row can only be read against a key,
   /// so the grid carries its own wherever it is the first thing on the page -
   /// which it is on the Project tab. On the room's own Lifecycle tab it is
   /// not: the summary strip above it already ends in the same key, under the
-  /// same six colours, and printing it twice on one page says that the two are
+  /// same six colors, and printing it twice on one page says that the two are
   /// different keys for two different things.
   final bool showKey;
 
@@ -1131,7 +1131,7 @@ class _LifecycleYearGridState extends State<LifecycleYearGrid> {
 /// A bare [GestureDetector] rather than an InkWell: this sits inside a grid
 /// that scrolls both ways, and a ripple that fires every time somebody flicks
 /// the sheet sideways is a sheet that flashes at them. The tap loses the arena
-/// to a drag on its own, which is exactly the behaviour wanted - a scroll is
+/// to a drag on its own, which is exactly the behavior wanted - a scroll is
 /// not a click.
 class _PlayRow extends StatelessWidget {
   final RoomLifecycle room;
@@ -1157,7 +1157,7 @@ class _PlayRow extends StatelessWidget {
 
 /// WHAT IS IN A CELL, IN WORDS.
 ///
-/// The colour says when and the figure says how much; neither says which
+/// The color says when and the figure says how much; neither says which
 /// boxes, and "which boxes" is the first thing anybody asks of a cell with
 /// 24,000 dollars in it. Naming them is also what makes the sheet checkable —
 /// a total nobody can break down is a total nobody argues with, which is worse
@@ -1365,7 +1365,7 @@ class _GridRow extends StatelessWidget {
 
     // THE ROW WARMS UP ACROSS THE SHEET. Green while the room is young, yellow
     // the year it enters the planning window, amber, orange, then red the year
-    // it falls due — which is the thing the hand-coloured sheet did with six
+    // it falls due — which is the thing the hand-colored sheet did with six
     // pencils and the thing a single amber band could not say.
     final timing = room.timingIn(year);
     final due = room.dueIn(year);
@@ -1707,7 +1707,7 @@ class _RoomRow extends StatelessWidget {
 
 /// One of a room's replacement dates, as a figure to put in that year.
 ///
-/// THE YEAR AND THE MONEY, TOGETHER, IN THE COLOUR OF HOW SOON. A budget
+/// THE YEAR AND THE MONEY, TOGETHER, IN THE COLOR OF HOW SOON. A budget
 /// request is written a year at a time, and a room that reads "18,000 to
 /// refresh" answers a question nobody asked - the money does not all land at
 /// once. This is the same tranche the grid draws as a run, said as a figure.
@@ -2065,14 +2065,14 @@ class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
     double xOf(num year) =>
         _kPlotPadLeft + ((year - _first) / span).clamp(0.0, 1.0) * plotWidth;
 
-    // The longest life in the room drives the warm-up, so the colour ramp on
+    // The longest life in the room drives the warm-up, so the color ramp on
     // this line means the same thing it means on the room's row.
     var life = kDefaultEquipmentLifeYears;
     for (final g in groups) {
       if (g.lifeYears > life) life = g.lifeYears;
     }
 
-    // ONE COLOURED SEGMENT PER YEAR, worked out here rather than in the
+    // ONE COLORED SEGMENT PER YEAR, worked out here rather than in the
     // painter: the ramp is a theme question and a painter has no context to
     // ask one with.
     final segments = <({double from, double to, Color color})>[
@@ -2323,7 +2323,7 @@ class _RefreshTotal extends StatelessWidget {
 
     return Positioned(
       left: left,
-      // Centred on the line, so it reads as the label on the end of it.
+      // Centered on the line, so it reads as the label on the end of it.
       top: _kLineY - 34,
       width: _kPlotPadRight - 22,
       child: AnimatedOpacity(
@@ -2427,7 +2427,7 @@ class _TotalFootnote extends StatelessWidget {
 /// The axis, the line as far as it has been drawn, and a stem up to every
 /// callout already on screen.
 class _PlanPainter extends CustomPainter {
-  /// One year of the line each, already in the colour that year reads in.
+  /// One year of the line each, already in the color that year reads in.
   final List<({double from, double to, Color color})> segments;
 
   /// Where the playhead has got to, and where the line starts.

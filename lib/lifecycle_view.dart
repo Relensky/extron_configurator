@@ -30,9 +30,9 @@ import 'stepped_date_picker.dart';
 ///  press each — walking a room and typing eleven dates into eleven separate
 ///  device dialogs is the version of this feature nobody would ever finish.
 ///
-///  THE COLOURS ARE THE RYG SHEET'S COLOURS, and they are backed by text on
-///  every row. A red/amber/green chip that is only a colour is a chip that says
-///  nothing to somebody printing in mono or reading with a colour deficiency,
+///  THE COLORS ARE THE RYG SHEET'S COLORS, and they are backed by text on
+///  every row. A red/amber/green chip that is only a color is a chip that says
+///  nothing to somebody printing in mono or reading with a color deficiency,
 ///  and this is a document that gets printed.
 /// ============================================================================
 
@@ -733,7 +733,7 @@ class _RoomInstallDateDialogState extends State<_RoomInstallDateDialog> {
   }
 }
 
-/// THE RAMP, AS COLOUR.
+/// THE RAMP, AS COLOR.
 ///
 /// Green, yellow, amber, orange, red, deeper red — the six steps of
 /// [EquipmentTiming], which is the whole point of grading the warning band: a
@@ -742,10 +742,10 @@ class _RoomInstallDateDialogState extends State<_RoomInstallDateDialog> {
 /// problem.
 ///
 /// FIXED HUES, NOT SCHEME ROLES. These mean what a traffic light means, and
-/// this app's accent is a colour somebody picked out of a wheel — a warning
+/// this app's accent is a color somebody picked out of a wheel — a warning
 /// band that turned violet with the theme would stop being a warning band and
 /// would stop matching the key beside it and the sheet it is printed on. Only
-/// "past its life" defers to the scheme, whose error colour is red on every
+/// "past its life" defers to the scheme, whose error color is red on every
 /// theme here, so the sheet's red and the app's red are one red.
 const Map<EquipmentTiming, Color> kEquipmentTimingHues = {
   EquipmentTiming.inService: Color(0xFF2E9E4F),
@@ -756,7 +756,7 @@ const Map<EquipmentTiming, Color> kEquipmentTimingHues = {
   EquipmentTiming.wellOverdue: Color(0xFFA31515),
 };
 
-/// The colour one step of the ramp reads in, as TEXT or as an icon.
+/// The color one step of the ramp reads in, as TEXT or as an icon.
 ///
 /// Moved along its own lightness until it clears [kContrastStrong] on the
 /// surface it is painted on — so yellow on a white card is a darkened yellow
@@ -779,7 +779,7 @@ Color equipmentTimingColor(BuildContext context, EquipmentTiming timing) {
 /// of a row, a swatch in the key.
 ///
 /// The raw hue at low alpha rather than [equipmentTimingColor]: a fill carries
-/// no text of its own, so it keeps the pure colour the key names, and the
+/// no text of its own, so it keeps the pure color the key names, and the
 /// legible tone goes on top of it.
 Color equipmentTimingFill(
   BuildContext context,
@@ -811,12 +811,12 @@ IconData equipmentTimingIcon(EquipmentTiming timing) => switch (timing) {
 EquipmentTiming timingOfCondition(EquipmentCondition condition) =>
     switch (condition) {
       EquipmentCondition.overdue => EquipmentTiming.overdue,
-      EquipmentCondition.ageing => EquipmentTiming.approaching,
+      EquipmentCondition.aging => EquipmentTiming.approaching,
       EquipmentCondition.good => EquipmentTiming.inService,
       EquipmentCondition.unknown => EquipmentTiming.unknown,
     };
 
-/// The colour one condition reads in.
+/// The color one condition reads in.
 ///
 /// Kept in one place because the chip on a row, the band in the header and the
 /// project's own roll-up all have to agree — three shades of "past its life"
@@ -832,9 +832,9 @@ IconData equipmentConditionIcon(EquipmentCondition condition) =>
 /// The key to the ramp, which is what makes six shades readable as anything
 /// other than decoration.
 ///
-/// Every step is a swatch AND a word, because a colour on its own says nothing
-/// to somebody printing in mono or reading with a colour deficiency — the same
-/// bargain every coloured thing on this screen makes.
+/// Every step is a swatch AND a word, because a color on its own says nothing
+/// to somebody printing in mono or reading with a color deficiency — the same
+/// bargain every colored thing on this screen makes.
 class EquipmentTimingKey extends StatelessWidget {
   const EquipmentTimingKey({super.key});
 
@@ -958,7 +958,7 @@ class LifecycleEverythingChunk extends StatelessWidget {
           const SizedBox(width: 14),
           // The heading set over two short lines rather than one long one, so
           // the block is no taller than the chips it stands beside. A strip
-          // item that is half again as tall as its neighbours is a strip that
+          // item that is half again as tall as its neighbors is a strip that
           // gains a whole extra row on any window narrow enough to wrap it.
           SizedBox(
             width: 132,
@@ -998,7 +998,7 @@ class LifecycleEverythingChunk extends StatelessWidget {
   }
 }
 
-/// One labelled figure inside [LifecycleEverythingChunk].
+/// One labeled figure inside [LifecycleEverythingChunk].
 class _EverythingFigure extends StatelessWidget {
   final String label;
   final String value;
@@ -1098,7 +1098,7 @@ class _Summary extends StatelessWidget {
                     context,
                     overdue
                         ? EquipmentCondition.overdue
-                        : EquipmentCondition.ageing,
+                        : EquipmentCondition.aging,
                   ),
                 ),
               for (final c in kEquipmentConditionSeverity)
@@ -1143,14 +1143,14 @@ class _Summary extends StatelessWidget {
   }
 }
 
-/// The room as one bar: a slice per band, coloured by where it sits on the
+/// The room as one bar: a slice per band, colored by where it sits on the
 /// ramp, worst first.
 ///
 /// BANDS, NOT A GRADIENT. Each slice is a real set of items and says how many
 /// and how much when it is hovered, so the bar is a picture of the list under
 /// it rather than an impression of one. The line of words below it says the
 /// same thing for the print and for anybody who would rather read it than
-/// hover it — which is the same bargain the colours themselves make.
+/// hover it — which is the same bargain the colors themselves make.
 class _TimingBar extends StatelessWidget {
   final RoomLifecycle room;
   final String currency;
@@ -1309,7 +1309,7 @@ class _ItemRow extends StatelessWidget {
 
     // The row's controls, built once and then placed by how much room there
     // is. A price, the date - the one fact this screen exists to collect - and
-    // the two judgements about the position itself.
+    // the two judgments about the position itself.
     final controls = <Widget>[
       if (item.replacementCost > 0)
         Padding(
@@ -1409,7 +1409,7 @@ class _ItemRow extends StatelessWidget {
               .read<AppStateProvider>()
               .setAvNodeInstalledOn(item.node.id, null),
         ),
-      // ON OR OFF THE CYCLE, on the row itself. It is a judgement about one
+      // ON OR OFF THE CYCLE, on the row itself. It is a judgment about one
       // position - this bracket, this pole - made while looking at the list it
       // is cluttering, and a screen somewhere else to make it in is a screen
       // nobody goes to.
@@ -1446,8 +1446,8 @@ class _ItemRow extends StatelessWidget {
     final subtitle = Text.rich(
       TextSpan(
         children: [
-          // The step in words, in its own colour, at the front of the line:
-          // the colour says which of the six it is at a glance and the word
+          // The step in words, in its own color, at the front of the line:
+          // the color says which of the six it is at a glance and the word
           // says it to a mono print and to a reader who cannot tell the amber
           // from the orange.
           TextSpan(
@@ -1468,7 +1468,7 @@ class _ItemRow extends StatelessWidget {
     return Container(
       // The row's own band, down the edge a list is scanned along. The wash
       // behind it is faint enough that the text on top of it is the text
-      // everywhere else on this screen; the edge is where the colour is.
+      // everywhere else on this screen; the edge is where the color is.
       decoration: BoxDecoration(
         color: never
             ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.05)

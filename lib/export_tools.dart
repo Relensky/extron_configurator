@@ -99,7 +99,7 @@ Future<ProjectExport> saveProjectFolder({
   Uint8List? avFlowPng,
   Uint8List? rackPng,
   /// Every plan sheet in the room, one PNG each. A folder that carries the
-  /// storey that happened to be open is a folder somebody has to come back
+  /// story that happened to be open is a folder somebody has to come back
   /// for.
   List<({String name, String caption, Uint8List bytes})> floorPlanSheets =
       const [],

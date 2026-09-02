@@ -64,9 +64,9 @@ void main() {
 
   /// The fill painted by [container], or null when it has none.
   ///
-  /// Read off the box the cell actually draws rather than off a colour this
+  /// Read off the box the cell actually draws rather than off a color this
   /// test computes: the point is that the two halves of the sheet agree, and a
-  /// test that recomputed the colour would agree with itself whatever they did.
+  /// test that recomputed the color would agree with itself whatever they did.
   Color? fillOfBox(WidgetTester tester, Finder container) {
     final decoration = tester.widget<Container>(container).decoration;
     return decoration is BoxDecoration ? decoration.color : null;

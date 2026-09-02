@@ -56,7 +56,7 @@ import 'vendor_rfq_view.dart';
 ///
 /// Everything here comes off the SAME lifecycle the plan is drawn from - see
 /// [buildProjectLifecycle] - so the year a room is listed under here and the
-/// year its cell is coloured in there can never disagree.
+/// year its cell is colored in there can never disagree.
 List<Widget> _lifecycleSlivers(
   BuildContext context,
   ProjectEstimate estimate,
@@ -379,7 +379,7 @@ Future<PickedDate?> showProjectDatePicker(
     // `DateTime(y)` is the 1st of January, so a range ending at
     // `DateTime(now.year + 10)` offered a final year in which exactly one day
     // — New Year's Day — could be picked, and eleven months that the grid
-    // greyed out with no explanation. A picker whose last year refuses almost
+    // grayed out with no explanation. A picker whose last year refuses almost
     // every cell in it reads as a picker that has stopped working.
     lastDate: DateTime(now.year + 10, 12, 31),
     helpText: title,
@@ -416,7 +416,7 @@ class ClearDateButton extends StatelessWidget {
   );
 }
 
-/// The colour a status reads in. Kept in one place because the chip, the row
+/// The color a status reads in. Kept in one place because the chip, the row
 /// and the timeline all have to agree — three shades of "late" would read as
 /// three different states.
 Color orderStatusColor(BuildContext context, OrderStatus status) {
@@ -430,7 +430,7 @@ Color orderStatusColor(BuildContext context, OrderStatus status) {
     case OrderStatus.dueSoon:
       return theme.colorScheme.tertiary;
     case OrderStatus.onTrack:
-    // Bought and on its way: the same settled colour as a part with time in
+    // Bought and on its way: the same settled color as a part with time in
     // hand, because from here neither needs anybody to do anything.
     case OrderStatus.ordered:
     case OrderStatus.received:
@@ -734,7 +734,7 @@ class _QuoteRequestCard extends StatelessWidget {
     return Card(
       key: ValueKey('timeline_rfq_${vendor.id}'),
       margin: const EdgeInsets.only(bottom: 8),
-      // The card wears the vendor's colour, the same one its parts carry on
+      // The card wears the vendor's color, the same one its parts carry on
       // the master list and its order carries below - so the three lists are
       // visibly the same four vendors rather than three to cross-reference by
       // name.
@@ -860,7 +860,7 @@ typedef _PlacedOrder = ({
   /// typed on the PO.
   String vendorName,
 
-  /// The vendor's colour, so the row is marked the same way its parts are on
+  /// The vendor's color, so the row is marked the same way its parts are on
   /// the master list. Null when the PO went somewhere that is not one of the
   /// job's vendors.
   Color? tint,
@@ -957,7 +957,7 @@ class _PlacedOrderCard extends StatelessWidget {
     return Card(
       key: ValueKey('timeline_order_${po.id}'),
       margin: const EdgeInsets.only(bottom: 8),
-      // The card wears the vendor's colour, the same one its parts carry on
+      // The card wears the vendor's color, the same one its parts carry on
       // the master list - so this block and that list are visibly the same
       // four orders rather than two lists to cross-reference by name.
       shape: tint == null
@@ -1465,7 +1465,7 @@ class _DeliveredHere extends StatelessWidget {
   }
 }
 
-/// A labelled date, picked or cleared.
+/// A labeled date, picked or cleared.
 class _DateButton extends StatelessWidget {
   final String label;
   final DateTime? value;
@@ -1944,7 +1944,7 @@ class _TrackCard extends StatelessWidget {
                 Icons.inventory_2_outlined,
                 '${parts.length} part${parts.length == 1 ? '' : 's'}'
                 '${late > 0 ? '  ·  $late late' : ''}',
-                colour: warn ? ink : null,
+                color: warn ? ink : null,
               ),
             ],
           ),
@@ -1953,7 +1953,7 @@ class _TrackCard extends StatelessWidget {
     );
   }
 
-  Widget _line(ThemeData theme, IconData icon, String text, {Color? colour}) =>
+  Widget _line(ThemeData theme, IconData icon, String text, {Color? color}) =>
       Padding(
         padding: const EdgeInsets.only(top: 2),
         child: Row(
@@ -1961,14 +1961,14 @@ class _TrackCard extends StatelessWidget {
             Icon(
               icon,
               size: 12,
-              color: colour ?? theme.colorScheme.onSurfaceVariant,
+              color: color ?? theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
                 text,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: colour ?? theme.colorScheme.onSurfaceVariant,
+                  color: color ?? theme.colorScheme.onSurfaceVariant,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -2076,7 +2076,7 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
 
   /// Where the middle of the frame is, as a fraction of the whole rail. What a
   /// zoom is anchored on.
-  double _centreFraction() {
+  double _centerFraction() {
     if (!_scroll.hasClients) return 0;
     final view = _scroll.position.viewportDimension;
     final whole = view + _scroll.position.maxScrollExtent;
@@ -2085,7 +2085,7 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
   }
 
   /// Puts [fraction] of the rail back under the middle of the frame.
-  void _centreOn(double fraction) {
+  void _centerOn(double fraction) {
     if (!_scroll.hasClients) return;
     final view = _scroll.position.viewportDimension;
     final whole = view + _scroll.position.maxScrollExtent;
@@ -2097,10 +2097,10 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
   void _setZoom(double zoom) {
     // Read BEFORE the rail changes width, put back AFTER it has been laid out
     // at the new one.
-    final centre = _centreFraction();
+    final center = _centerFraction();
     setState(() => _zoom = zoom);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _centreOn(centre);
+      if (mounted) _centerOn(center);
     });
   }
 
@@ -2114,7 +2114,7 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
 
   /// The dates worth a label. Order days are on the rail as dots - there can
   /// be thirty of them and a name on each is a graph nobody can read - so what
-  /// gets named is the handful somebody actually diarises.
+  /// gets named is the handful somebody actually diarizes.
   List<_DateMark> _marks(BuildContext context) {
     final theme = Theme.of(context);
     final out = <_DateMark>[
@@ -2125,7 +2125,7 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
       ),
     ];
 
-    // The day the job starts, as opposed to the day it is due. Coloured by
+    // The day the job starts, as opposed to the day it is due. Colored by
     // what that order actually is: a first order already behind is the whole
     // reading, and a rail that drew it in the same ink as the rest would bury
     // it.
@@ -2191,8 +2191,8 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
     // Every date in a vendor's history on the rail would be three cards per
     // vendor saying what one card says.
     //
-    // IN THE VENDOR'S OWN COLOUR, the one its parts carry on the master list
-    // and its order carries below. The callout draws the colour as a fill at
+    // IN THE VENDOR'S OWN COLOR, the one its parts carry on the master list
+    // and its order carries below. The callout draws the color as a fill at
     // 12% behind text in onSurface, so it is a second way to read the rail and
     // never the only one - the words say which vendor it is too.
     for (final vendor in project.vendors) {
@@ -2533,7 +2533,7 @@ class _DateCallout extends StatelessWidget {
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(4),
-          // The colour is a second way to read the rail, never the only one -
+          // The color is a second way to read the rail, never the only one -
           // this tab gets printed and photographed. The words say it too.
           border: Border(left: BorderSide(color: color, width: 2.5)),
         ),
@@ -2573,7 +2573,7 @@ class _DateGraphPainter extends CustomPainter {
   final double startX, endX, todayX;
   final Color axis, gone, today, ground;
 
-  /// One per order date, in the colour the worst part on that day reads in.
+  /// One per order date, in the color the worst part on that day reads in.
   final List<({double x, Color color})> dots;
 
   /// Up from the rail to the bottom of each callout.
@@ -2779,7 +2779,7 @@ class _OrderDayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // The worst status on the day decides the day's colour: a date with one
+    // The worst status on the day decides the day's color: a date with one
     // part already late is a late date, however healthy the other ten are.
     final status = day.parts
         .map((p) => p.status)
@@ -3439,7 +3439,7 @@ class _BulkPartScheduleDialogState extends State<_BulkPartScheduleDialog> {
 
     /// One armed field: the box that turns it on, and the control it turns on.
     ///
-    /// Greyed rather than hidden, so the dialog does not resize itself under
+    /// Grayed rather than hidden, so the dialog does not resize itself under
     /// the pointer every time a box is ticked - and so somebody can see what
     /// the other two fields WOULD do before deciding to use them.
     Widget field({
@@ -3658,7 +3658,7 @@ class _BulkPartScheduleDialogState extends State<_BulkPartScheduleDialog> {
   /// The first few by name, then a count.
   ///
   /// NAMED RATHER THAN COUNTED. "19 parts" is a number somebody has to trust;
-  /// four names and "and 15 more" is a selection they can recognise as the one
+  /// four names and "and 15 more" is a selection they can recognize as the one
   /// they meant to make.
   String get _named {
     const shown = 4;

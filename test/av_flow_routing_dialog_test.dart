@@ -99,7 +99,7 @@ void main() {
     expect(find.textContaining('input_pc = 1'), findsOneWidget);
   });
 
-  testWidgets('cancelling draws nothing', (tester) async {
+  testWidgets('canceling draws nothing', (tester) async {
     final p = room();
     final cablesBefore = p.avCables.length;
     final nodesBefore = p.avNodes.length;

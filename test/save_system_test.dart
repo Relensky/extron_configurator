@@ -768,7 +768,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // BOTH are documents somebody means by "the workbook", and the button
-      // used to answer that question by itself, always in favour of the room.
+      // used to answer that question by itself, always in favor of the room.
       expect(
         find.byKey(const ValueKey('workbook_scope_dialog')),
         findsOneWidget,

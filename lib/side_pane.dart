@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 ///  location list on the right — and every one of those columns was a fixed
 ///  width nobody could argue with. On a laptop that is most of the window
 ///  spent on a list of names; on a 34" panel it is a 320-pixel strip beside a
-///  metre of empty canvas.
+///  meter of empty canvas.
 ///
 ///  This is the one widget both sides use, so a pane behaves the same wherever
 ///  it turns up:

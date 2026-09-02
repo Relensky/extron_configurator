@@ -9,12 +9,12 @@ import 'cabling_schematic.dart';
 import 'color_wheel_picker.dart';
 
 /// ============================================================================
-///  WHAT COLOUR EACH CABLE IS
+///  WHAT COLOR EACH CABLE IS
 /// ============================================================================
 ///  The Schematic tab has had a "Colors" button on its toolbar for as long as
 ///  it has had lines: one dialog, every kind of link, set them and be done.
 ///  The two sheets the trades are actually handed — the Cabling drawing and
-///  the Floor Plan — had no such thing. A colour could only be changed by
+///  the Floor Plan — had no such thing. A color could only be changed by
 ///  selecting one run and using the swatches in the selection bar, which is
 ///  the wrong shape for the job: "make all the network runs blue" is a
 ///  decision about a cable TYPE, not about the run somebody happens to have
@@ -22,7 +22,7 @@ import 'color_wheel_picker.dart';
 ///  of network on it.
 ///
 ///  So both pages get the same button, and it writes what the drawing reads:
-///  a colour per cable type ([AppStateProvider.setCablingTypeColor]), which
+///  a color per cable type ([AppStateProvider.setCablingTypeColor]), which
 ///  every run of that type on every sheet then follows.
 ///
 ///  Laid out like the signal flow's "Signal colors" dialog, down to the swatch
@@ -30,12 +30,12 @@ import 'color_wheel_picker.dart';
 ///  sheet should not be a different-looking dialog.
 /// ============================================================================
 
-/// The cable types on [drawing], each with the colour its runs are drawn in
-/// and the keys a colour has to be written under.
+/// The cable types on [drawing], each with the color its runs are drawn in
+/// and the keys a color has to be written under.
 ///
 /// Plural keys because one cable type can be pulled under more than one
-/// category — AV Cat 6a and network Cat 6a are different pulls the key colours
-/// apart — while a person setting colours is thinking about "Cat 6a".
+/// category — AV Cat 6a and network Cat 6a are different pulls the key colors
+/// apart — while a person setting colors is thinking about "Cat 6a".
 List<({String type, Color color, Set<String> keys})> cablingTypesIn(
   CablingSchematic drawing,
 ) {
@@ -53,17 +53,17 @@ List<({String type, Color color, Set<String> keys})> cablingTypesIn(
   ];
 }
 
-/// Sets the colour of every cable type in the room.
+/// Sets the color of every cable type in the room.
 ///
 /// Shared by the Cabling and Floor Plan tabs so the button does the same thing
-/// on both, and so a colour set on one sheet is the colour on the other — they
+/// on both, and so a color set on one sheet is the color on the other — they
 /// are two drawings of one room's cable, and a network run that is blue on the
 /// plan and green on the cabling sheet is two drawings nobody can read
 /// together.
 ///
 /// The drawing is re-derived on every rebuild rather than handed in once when
 /// the dialog opens. A snapshot went stale the moment a swatch was picked: the
-/// tick stayed on the old colour until the dialog was closed and opened again,
+/// tick stayed on the old color until the dialog was closed and opened again,
 /// even though the sheet underneath had already changed. Rebuilding is what
 /// the signal-flow palette does, and it is why that one moves as it is
 /// clicked.
@@ -81,7 +81,7 @@ Future<void> showCableColorsDialog(
         );
 
         return AlertDialog(
-          title: const Text('Cable colours'),
+          title: const Text('Cable colors'),
           content: SizedBox(
             width: 520,
             height: types.isEmpty
@@ -97,9 +97,9 @@ Future<void> showCableColorsDialog(
                 : ListView(
                     children: [
                       Text(
-                        'One colour per cable type, used by every run of it on '
+                        'One color per cable type, used by every run of it on '
                         'the cabling sheet and the floor plan. A run with a '
-                        'colour of its own keeps it.',
+                        'color of its own keeps it.',
                         style: theme.textTheme.bodySmall,
                       ),
                       const SizedBox(height: 8),
@@ -144,13 +144,13 @@ Future<void> showCableColorsDialog(
                               ),
                               IconButton(
                                 icon: const Icon(Icons.colorize, size: 16),
-                                tooltip: 'Pick a custom colour',
+                                tooltip: 'Pick a custom color',
                                 visualDensity: VisualDensity.compact,
                                 onPressed: () async {
                                   final picked = await showColorWheelDialog(
                                     ctx,
                                     initial: t.color,
-                                    title: 'Colour for ${t.type}',
+                                    title: 'Color for ${t.type}',
                                   );
                                   if (picked == null) return;
                                   setLocal(
@@ -163,7 +163,7 @@ Future<void> showCableColorsDialog(
                               ),
                               IconButton(
                                 icon: const Icon(Icons.restart_alt, size: 16),
-                                tooltip: 'Back to the colour the key gives '
+                                tooltip: 'Back to the color the key gives '
                                     'this cable',
                                 visualDensity: VisualDensity.compact,
                                 onPressed: provider.hasCablingTypeColor(t.keys)

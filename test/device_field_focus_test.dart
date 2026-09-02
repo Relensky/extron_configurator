@@ -72,7 +72,7 @@ void main() {
 
     // Sorted in with the real keys rather than parked in a group after them:
     // 'baud' comes before 'keep_alive_qualifier', which is offered the same
-    // way and would otherwise be its neighbour at the bottom of the form.
+    // way and would otherwise be its neighbor at the bottom of the form.
     expect(
       topOf(tester, baud),
       lessThan(

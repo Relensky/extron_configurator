@@ -10,7 +10,7 @@ carry alpha, the maskable web icons inset to the safe zone.
 
 THE DRAWING. A construction helmet over a gear, arranged so the whole thing
 reads as a face: the helmet is the head, the gear is a beard around the jaw,
-and the gear's inner arc is the smile. Three flat colours and one charcoal
+and the gear's inner arc is the smile. Three flat colors and one charcoal
 outline weight, matching the icon this replaced, plus one the outline does not
 use: the face it sits on and the helmet's slots are WHITE, so they stay white
 on a dark ground instead of showing it through. Nothing is knocked out to
@@ -18,8 +18,8 @@ transparent any more except the ground around the artwork itself.
 
 The eyes and smile are drawn as two nodes joined by a link, so the face
 doubles as a signal running between two points — but in the same charcoal as
-every outline here, NOT in a colour of their own. That is deliberate and has
-been tried both ways: given its own colour the face is the first thing the eye
+every outline here, NOT in a color of their own. That is deliberate and has
+been tried both ways: given its own color the face is the first thing the eye
 lands on, and this is a helmet-and-gear mark with a face in it rather than a
 face wearing a helmet. Charcoal keeps it quiet.
 
@@ -41,7 +41,7 @@ Depth comes from three kinds of pass and nothing else:
     the gear and the face.
 
 Shading is warm on the orange and cool on the blue and the white. One neutral
-grey over both goes muddy on the orange, which is the only colour here
+grey over both goes muddy on the orange, which is the only color here
 saturated enough to notice.
 
 THE SPACE. The mark is drawn wide: the gear and the face are flattened
@@ -54,7 +54,7 @@ edges of the square (fill_canvas). Both exist for the same reason: at 16 and
 straight off the vents, the brim slot and the gear teeth.
 
 Everything is drawn at SUPERSAMPLE times the final size and reduced with
-LANCZOS. There is no vector rasteriser in this project's toolchain, and that
+LANCZOS. There is no vector rasterizer in this project's toolchain, and that
 is what keeps the gear teeth and the helmet's dome clean at 1024 without one.
 """
 
@@ -69,7 +69,7 @@ WHITE = (255, 255, 255, 255)
 NOTHING = (0, 0, 0, 0)
 
 # What the shading passes lay down. Not blacks: these are composited normally
-# rather than multiplied, so the colour laid down is the colour a surface tends
+# rather than multiplied, so the color laid down is the color a surface tends
 # towards as it darkens. Warm keeps the orange orange on the way down.
 SHADE_WARM = (146, 68, 0)
 SHADE_COOL = (18, 42, 74)
@@ -97,7 +97,7 @@ def px(v):
 
 
 # Every curve here takes a SEPARATE x and y radius, and its angle is the
-# ellipse's parameter rather than the angle you would measure at the centre.
+# ellipse's parameter rather than the angle you would measure at the center.
 # Nothing below needs the difference: a flattened gear is a round one scaled,
 # and scaling is what keeps all twelve of its teeth the same shape.
 
@@ -154,14 +154,14 @@ def crescent(cx, cy, rx_out, ry_out, rx_in, ry_in, deg0, deg1):
     ) + arc_points(cx, cy, rx_in, ry_in, deg1, deg0, steps=64)
 
 
-def stroke_closed(d, pts, colour, width):
+def stroke_closed(d, pts, color, width):
     """[pts] outlined as ONE closed, joined stroke.
 
     polygon(outline=..., width=...) strokes each edge on its own and INSET,
     which is fine on a rectangle and wrong on a gear: every tooth corner is a
     joint, PIL leaves the joints unfilled, and the seventy-odd of them around
     the teeth come out as notches — the outline breaks up into dashes long
-    before the icon reaches its smallest size. Stroked here instead, centred on
+    before the icon reaches its smallest size. Stroked here instead, centered on
     the path rather than inside it, so the weight asked for is the weight that
     lands, the whole way round.
 
@@ -173,10 +173,10 @@ def stroke_closed(d, pts, colour, width):
     the vertex is covered, and that is where a joint crack has to be.
     """
     pts = list(pts) + [pts[0]]
-    d.line(pts, fill=colour, width=width)
+    d.line(pts, fill=color, width=width)
     r = width / 2.0
     for x, y in pts:
-        d.ellipse([x - r, y - r, x + r, y + r], fill=colour)
+        d.ellipse([x - r, y - r, x + r, y + r], fill=color)
 
 
 def fill_canvas(img, margin):
@@ -189,7 +189,7 @@ def fill_canvas(img, margin):
     and the gear teeth are what go first. So the finished artwork is measured,
     not trusted: cropped to its own ink and blown back up to the full square.
 
-    Uniform scale, centred. The aspect ratio is the drawing's, not the
+    Uniform scale, centered. The aspect ratio is the drawing's, not the
     canvas's — squashing the mark to fill both axes is a different request
     from filling the space, and looks it.
     """
@@ -264,12 +264,12 @@ def clip(*masks):
     return out
 
 
-def lay(img, colour, alpha):
-    """Composite flat [colour] over [img] at the per-pixel opacity [alpha].
+def lay(img, color, alpha):
+    """Composite flat [color] over [img] at the per-pixel opacity [alpha].
 
     In place, so the ImageDraw already bound to [img] stays valid across it.
     """
-    layer = Image.new("RGBA", (S, S), (*colour, 255))
+    layer = Image.new("RGBA", (S, S), (*color, 255))
     layer.putalpha(alpha)
     img.alpha_composite(layer)
 
@@ -295,7 +295,7 @@ def build():
     rx_root, ry_root = px(312), px(241)
     rx_hole, ry_hole = px(220), px(170)
 
-    # The face sits ABOVE the gear's own centre, which is what turns a ring
+    # The face sits ABOVE the gear's own center, which is what turns a ring
     # into a beard: the blue is left thick under the chin and thin at the
     # temples, the way a beard sits on a face. Concentric, it read as a washer
     # with a face in it. The drop is smaller than it was only because the gear
@@ -368,7 +368,7 @@ def build():
     d.ellipse(face_box, fill=WHITE)
 
     # The eyes are the nodes and the smile is the link, and they are one
-    # figure rather than three: the link's ends stop AT the node centres, not
+    # figure rather than three: the link's ends stop AT the node centers, not
     # short of them, so the pair reads as two points with a signal running
     # between them, and only then as a face. Drawn apart — which is what the
     # eyes and smile were before — it was a mouth that happened to sit under
@@ -381,7 +381,7 @@ def build():
     # Solid, no outline: at 32 px an outlined node fills in and turns into a
     # blob. Charcoal, the same ink as every edge in the drawing, so the face
     # reads as part of the line work rather than as the mark's subject — see
-    # the note at the top before giving it a colour of its own again.
+    # the note at the top before giving it a color of its own again.
     #
     # The one cost: charcoal on charcoal means that below about 24 px the link
     # closes up with the gear's inner outline just under it. The fat nodes are
@@ -487,7 +487,7 @@ def build():
     d.rounded_rectangle(ridge_box, radius=ridge_r, outline=CHARCOAL, width=w)
 
     # The two vents either side of the ridge. Filled white rather than erased
-    # through: knocked out they are the ground's colour, which is white on the
+    # through: knocked out they are the ground's color, which is white on the
     # web and in Explorer but the wallpaper on a desktop and black in a dark
     # title bar, and the helmet loses its slots wherever that ground is dark.
     # Shaded from the top, so they read as cut into the crown rather than

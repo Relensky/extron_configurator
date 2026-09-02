@@ -15,7 +15,7 @@ import 'package:extron_configurator/schematic_view.dart';
 /// the reader was left to infer them from a line disappearing off the box.
 ///
 /// A hand-added box fills that in. It is deliberately NOT a controlled device:
-/// dashed rather than solid, in its own grey rather than a connection colour,
+/// dashed rather than solid, in its own gray rather than a connection color,
 /// and reported under its own heading rather than as a device with eight blank
 /// columns where its IP and protocol would go.
 void main() {

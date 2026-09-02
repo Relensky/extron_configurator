@@ -9,12 +9,12 @@ import 'package:extron_configurator/responsibility_matrix.dart';
 import 'package:extron_configurator/report_tools.dart';
 import 'package:extron_configurator/xlsx_writer.dart';
 
-/// A COLOUR PER PARTY, ALL THE WAY OUT TO THE FILE.
+/// A COLOR PER PARTY, ALL THE WAY OUT TO THE FILE.
 ///
 /// The matrix is read by whose name is on the line. On screen every party
-/// carries its own colour; the copy that goes to the contractor was black on
+/// carries its own color; the copy that goes to the contractor was black on
 /// white, which sent the reader back to reading every cell. These check that
-/// the colours survive the export - and that they are the SAME colours, since
+/// the colors survive the export - and that they are the SAME colors, since
 /// a spreadsheet that picked its own would disagree with the screen it was
 /// exported from.
 void main() {
@@ -25,7 +25,7 @@ void main() {
   }
 
   group('a tinted cell', () {
-    test('writes one fill, one font and one style per distinct colour', () {
+    test('writes one fill, one font and one style per distinct color', () {
       final bytes = buildXlsx([
         XlsxSheet(
           name: 'Responsibility',
@@ -126,7 +126,7 @@ void main() {
           roomNames: project.responsibilityRoomColumns(),
         ).firstWhere((s) => s.title == 'Roles and Responsibilities');
 
-    test('every party carries the colour it reads in on screen', () {
+    test('every party carries the color it reads in on screen', () {
       final project = job();
       project.addResponsibilityItem(
         'Screens',
@@ -139,29 +139,29 @@ void main() {
       final installed = row[2] as XlsxTint;
 
       // The SAME source the screen and the picture use. A second answer to
-      // "what colour is the contractor" is a document that disagrees with the
+      // "what color is the contractor" is a document that disagrees with the
       // app it came out of.
       expect(furnished.fillHex, nameSheetTint('Owner').fill);
       expect(furnished.inkHex, nameSheetTint('Owner').ink);
       expect(installed.fillHex, nameSheetTint('Contractor').fill);
-      // ...and two different parties are two different colours.
+      // ...and two different parties are two different colors.
       expect(furnished.fillHex, isNot(installed.fillHex));
     });
 
-    test('the same party is the same colour on every line', () {
+    test('the same party is the same color on every line', () {
       final project = job();
       project.addResponsibilityItem('Screens', furnishedBy: 'CTS Chico');
       project.addResponsibilityItem('Speakers', furnishedBy: 'cts  chico');
 
       final rows = gridOf(project).rows;
-      // Case and spacing are not two parties - see [normalisedName].
+      // Case and spacing are not two parties - see [normalizedName].
       expect(
         (rows[0][1] as XlsxTint).fillHex,
         (rows[1][1] as XlsxTint).fillHex,
       );
     });
 
-    test('a party nobody has named is red, not one more quiet grey', () {
+    test('a party nobody has named is red, not one more quiet gray', () {
       final project = job();
       project.addResponsibilityItem('Screens', furnishedBy: 'Owner');
 
@@ -169,7 +169,7 @@ void main() {
       final installed = row[2] as XlsxTint;
 
       // 'N/A' on the install column is a real answer - a desk monitor is hung
-      // by nobody - and a blank is not. In the same grey, the one that needs
+      // by nobody - and a blank is not. In the same gray, the one that needs
       // chasing hides among the ones that do not.
       expect(installed.text, 'NOBODY');
       expect(installed.fillHex, kResponsibilityMissingFill);
@@ -180,7 +180,7 @@ void main() {
       );
     });
 
-    test('the totals row is not a party and carries no colour', () {
+    test('the totals row is not a party and carries no color', () {
       final project = job();
       project.addResponsibilityItem(
         'Screens',

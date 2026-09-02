@@ -17,8 +17,8 @@ import 'xlsx_writer.dart';
 ///  So it leaves in two shapes, and both of them come off the SAME
 ///  [BuildingLifecycle] / [CampusLifecycle] the screen is drawn from:
 ///
-///    * A PICTURE, which is the sheet exactly as it is read, colours and all.
-///    * A SPREADSHEET, which is the sheet as a thing that can be totalled,
+///    * A PICTURE, which is the sheet exactly as it is read, colors and all.
+///    * A SPREADSHEET, which is the sheet as a thing that can be totaled,
 ///      filtered and re-sorted, with a REAL Excel chart of the money against
 ///      the years bound to the cells beside it.
 ///
@@ -46,7 +46,7 @@ const String kCampusPlanSheet = 'Campus Plan';
 /// report moves every time a section above it grows a row.
 const String kLifecycleYearSheet = 'Refresh by Year';
 
-/// One bar's colour, per building on a campus chart. Chosen to stay apart from
+/// One bar's color, per building on a campus chart. Chosen to stay apart from
 /// each other in print and when one of them is behind a projector.
 const List<String> kLifecycleSeriesColors = [
   '1F4E79',

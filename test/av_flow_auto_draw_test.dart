@@ -659,7 +659,7 @@ void main() {
     test('a second pass leaves both where they are', () {
       final p = withRecorder('AV Bridge 2x1');
       autoDrawRoutingFromConfig(p);
-      // Even forced past the fingerprint, the plan has to recognise its own
+      // Even forced past the fingerprint, the plan has to recognize its own
       // cables rather than walk along the box's inputs drawing a fresh lead.
       p.avRoutedFingerprint = '';
       autoDrawRoutingFromConfig(p);

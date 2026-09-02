@@ -12,7 +12,7 @@
     "               both the editor and the device report - e.g. input_usb reads",
     "               'VGA' when gui_usb_or_vga is VGA.",
     "  description: Text behind the (i) info button.",
-    "  helperText:  Small grey hint line under the field.",
+    "  helperText:  Small gray hint line under the field.",
     "  type:        auto | text | int | double | bool | dropdown | combo | hidden |",
     "               room_sources | module_states | source_map.",
     "               'auto' (default) infers from the JSON value type.",
@@ -763,7 +763,7 @@
           "pro",
           "xi"
         ],
-        "description": "Which ControlScript build the processor runs: 'pro' for an IPCP Pro, 'xi' for an Xi. Every converted room gets 'pro' - switch it here when the room is on Xi hardware, since the processor reads this to pick the right runtime behaviour."
+        "description": "Which ControlScript build the processor runs: 'pro' for an IPCP Pro, 'xi' for an Xi. Every converted room gets 'pro' - switch it here when the room is on Xi hardware, since the processor reads this to pick the right runtime behavior."
       },
       "traceback_allowed": {
         "type": "bool",
@@ -1129,7 +1129,7 @@
     },
     "input_station_*_laptop": {
       "helperText": "The station's OWN laptop encoder input - blank means it has none",
-      "description": "Encoder input carrying the laptop plugged in AT station n. A station without one can never be switched to 'HDMI' on the share page and its signal lamp stays dark, which is the correct behaviour for a station with no plate - so leave it blank rather than pointing it at something else.",
+      "description": "Encoder input carrying the laptop plugged in AT station n. A station without one can never be switched to 'HDMI' on the share page and its signal lamp stays dark, which is the correct behavior for a station with no plate - so leave it blank rather than pointing it at something else.",
       "__comment": "Listed after input_station_* so the more specific pattern wins (patterns match in reverse file order)."
     },
     "output_station_*": {

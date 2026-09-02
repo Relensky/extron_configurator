@@ -658,7 +658,7 @@ class _AvRackViewState extends State<AvRackView> {
   }
 
   /// Whether [nodeId] would fit here — drives the hover tint and the refusal,
-  /// so the rack never lights up green for a drop it won't honour.
+  /// so the rack never lights up green for a drop it won't honor.
   bool _canDrop(
     AppStateProvider provider,
     String nodeId,
@@ -737,7 +737,7 @@ class _AvRackViewState extends State<AvRackView> {
             border: Border.all(color: theme.colorScheme.primary, width: 2),
           ),
           // MEASURED AGAINST THE FILL THIS CHIP PAINTS, not inherited from the
-          // page. Both of these carried no colour at all, so they took the
+          // page. Both of these carried no color at all, so they took the
           // ambient body ink - which is chosen for the PAGE. On Classic with a
           // dark blue accent primaryContainer is itself a dark blue, and the
           // page's ink is near-black: 1.1:1, a label that is simply not there.
@@ -819,7 +819,7 @@ class _AvRackViewState extends State<AvRackView> {
     final double blockWidth = kRackInnerWidth / slice.columns;
     final double left = kRailWidth + kRackInnerWidth * slice.start;
 
-    // Standing on a rail its neighbour asked to be left empty. The warning is
+    // Standing on a rail its neighbor asked to be left empty. The warning is
     // its OWN clearance ignored as readily as anyone else's — a box with a
     // rail to keep clear below it, dropped straight on top of another, is the
     // same mistake seen from the other end.

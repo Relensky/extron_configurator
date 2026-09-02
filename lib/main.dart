@@ -126,7 +126,7 @@ class RoomConfigApp extends StatelessWidget {
   /// element color ('' = Auto, let the theme derive it).
   ///
   /// Whatever comes back is put through [legibleTheme] before it is used.
-  /// Both families are generated around a colour somebody picked out of a
+  /// Both families are generated around a color somebody picked out of a
   /// wheel and neither measures the result — see legible_theme.dart for what
   /// that costs and which pairings it repairs.
   static ThemeData themeFor(String style, bool isDark, String classicColor,
@@ -810,7 +810,7 @@ class _MainDashboardState extends State<MainDashboard> {
           child: const Icon(Icons.compare_arrows),
         ),
         // The button itself stays live for the whole session: the log is
-        // worth being able to reread, and greying it out the moment it was
+        // worth being able to reread, and graying it out the moment it was
         // acknowledged would take that away to hide a number.
         tooltip: switch ((
           provider.lastLoadHadChanges,
@@ -936,7 +936,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
     // The bar the gear's SELECTED accent is painted on, so it can be measured
     // against that fill rather than assumed to read on it. On the Classic
-    // theme the app bar is the accent, which is a colour somebody picks out of
+    // theme the app bar is the accent, which is a color somebody picks out of
     // a wheel. Every other button on the row takes the bar's own ink, so this
     // is the only thing that needs the check.
     final appBarFill =
@@ -982,14 +982,14 @@ class _MainDashboardState extends State<MainDashboard> {
                     // The gear used to be painted the accent while App Config was
                     // closed, which drew an eye to it over New, Open and Save — and it
                     // is not more important than any of them. So it takes the bar's
-                    // own ink like its neighbours, and stands out only while you are
-                    // actually standing on App Config, where the colour says which tab
+                    // own ink like its neighbors, and stands out only while you are
+                    // actually standing on App Config, where the color says which tab
                     // is open rather than advertising a way in.
                     //
                     // legibleTone rather than readableOn for that selected accent:
                     // readableOn hands back the bar's own ink on any theme whose app
                     // bar IS the accent — Classic is one — which would paint the two
-                    // states the same colour and leave them indistinguishable.
+                    // states the same color and leave them indistinguishable.
                     // legibleTone keeps the accent's HUE and moves its lightness until
                     // it reads on the bar, so there is always a difference to see.
                     IconButton(
@@ -1054,7 +1054,7 @@ class _MainDashboardState extends State<MainDashboard> {
           //
           // ONE "NEW", WITH THE TWO THINGS THERE ARE TO START UNDER IT. A job
           // is a building and a room is a file, and both begin here — but as
-          // two adjacent icons they were two unlabelled pictures that both
+          // two adjacent icons they were two unlabeled pictures that both
           // meant "new", which is a choice somebody makes by hovering. A menu
           // names them: the project first, because that is the order the work
           // happens in — the building comes before the room, and somebody who
@@ -1865,18 +1865,18 @@ class TopLevelBar extends StatelessWidget {
     final hasProject = state.hasProject;
     final hasRoom = state.hasRoom;
 
-    // THE STRIP IS A DIFFERENT COLOUR IN EACH MODE.
+    // THE STRIP IS A DIFFERENT COLOR IN EACH MODE.
     //
     // Room and project are the two states this app is ever in, and until now
     // the only thing that said which was a button somebody had to read. A
     // tint is read without being looked at - it is the same trick as a
-    // terminal that changes colour when you are root, and it is worth more
+    // terminal that changes color when you are root, and it is worth more
     // than the label, because the mistake it prevents (working on a room
     // believing it is on the job, or the other way round) is one nobody makes
     // deliberately.
     //
-    // Blended rather than picked: the accent is a colour somebody chose out of
-    // a wheel, so a tint of it is a hint of THIS theme rather than a colour
+    // Blended rather than picked: the accent is a color somebody chose out of
+    // a wheel, so a tint of it is a hint of THIS theme rather than a color
     // that could clash with it. Everything painted on it is measured against
     // whichever fill is in use - see the ink below.
     final bannerFill = hasProject
@@ -2016,20 +2016,20 @@ class TopLevelBar extends StatelessWidget {
               const SizedBox(width: 12),
             ],
             // Which job, and whether it is on disk. Flexible so a long job name
-            // ellipsises instead of pushing the gear off the end.
+            // ellipsizes instead of pushing the gear off the end.
             //
             // Measured against the banner's own fill rather than taking the
-            // page's ink: this strip is a container colour, and in the Classic
-            // theme container colours are tinted from an accent somebody picks
+            // page's ink: this strip is a container color, and in the Classic
+            // theme container colors are tinted from an accent somebody picks
             // out of a wheel. The "unsaved" red gets the same check — the error
-            // colour is the one that fails first on a dark accent.
+            // color is the one that fails first on a dark accent.
             // Expanded, not Flexible-plus-Spacer. Both are flex:1, so the two
             // of them SPLIT the free width — and because a Flexible is loose,
             // the half the short job name did not use was left over at the end
             // of the row, which is to say to the RIGHT of the gear. That is
             // how a corner button ends up sitting in the middle of the window.
             // One tight child that eats everything going puts it back in the
-            // corner, and the name still ellipsises when it is long.
+            // corner, and the name still ellipsizes when it is long.
             Expanded(
               child: Text(
                 // The name of whatever this strip is about - see
@@ -2057,8 +2057,8 @@ class TopLevelBar extends StatelessWidget {
             // THE DOCUMENT'S BUTTONS, MEASURED AGAINST THE STRIP THEY SIT ON.
             //
             // Same reasoning as [_BannerClose] and the job name above it: this
-            // row is a CONTAINER colour, and in the Classic theme container
-            // colours are tinted from an accent somebody picks out of a wheel.
+            // row is a CONTAINER color, and in the Classic theme container
+            // colors are tinted from an accent somebody picks out of a wheel.
             // Taking the page's own icon ink meant these were the one block on
             // the banner nobody had checked — a tinted fill can leave
             // onSurfaceVariant at 2:1 on the strip, which is a row of icons
@@ -2067,12 +2067,12 @@ class TopLevelBar extends StatelessWidget {
             // Two wrappers because the group is not all one widget: the icon
             // buttons take the ink through [IconButtonTheme], and the export
             // menu's icon reads [IconTheme] directly. Both are handed the same
-            // colour, so which one wins does not matter.
+            // color, so which one wins does not matter.
             //
             // The disabled entry is that ink faded rather than the theme's own
-            // disabled grey, for the same reason: Convert and the exports
-            // spend most of a session greyed out, and "greyed out" should mean
-            // a fainter version of the row's ink and not a colour picked
+            // disabled gray, for the same reason: Convert and the exports
+            // spend most of a session grayed out, and "grayed out" should mean
+            // a fainter version of the row's ink and not a color picked
             // against a surface this row is not.
             IconButtonTheme(
               data: IconButtonThemeData(
@@ -2128,8 +2128,8 @@ class _BannerClose extends StatelessWidget {
       iconSize: 18,
       visualDensity: VisualDensity.compact,
       tooltip: tooltip,
-      // The strip is a container colour, and in the Classic theme container
-      // colours are tinted from an accent somebody picks out of a wheel.
+      // The strip is a container color, and in the Classic theme container
+      // colors are tinted from an accent somebody picks out of a wheel.
       color: readableOn(
         fill,
         prefer: [
@@ -2205,14 +2205,14 @@ String _roomFileName(AppStateProvider provider) {
 
 /// The banner's fill while the session is on a ROOM rather than a job.
 ///
-/// A tint of the theme's own tertiary over the strip's ordinary colour, at an
+/// A tint of the theme's own tertiary over the strip's ordinary color, at an
 /// alpha low enough to stay a background and high enough to be seen without
 /// being looked for. Tertiary because it is the role this app already uses for
 /// "a fact about this document" and the one least likely to be read as a
 /// warning.
 ///
 /// Its own function so the contrast test can measure what the banner paints
-/// rather than a colour written down twice.
+/// rather than a color written down twice.
 Color roomModeBannerFill(ThemeData theme) => Color.alphaBlend(
       theme.colorScheme.tertiary.withValues(alpha: 0.14),
       theme.colorScheme.surfaceContainerHighest,
@@ -2986,7 +2986,7 @@ class AppSettingsView extends StatelessWidget {
         // Recovery copies on a timer. Read the header comment on
         // AppStateProvider.writeAutosaveSnapshot for why this never writes
         // over the user's own files: an autosave that saved would make "close
-        // without saving" impossible to honour, and would make the warning on
+        // without saving" impossible to honor, and would make the warning on
         // exit a lie.
         Text('Autosave', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),

@@ -678,7 +678,7 @@ RoomPreset _basicClassroom() {
     // camera's own socket is HDMI, so that means a transmitter beside it.
     //
     // Named for the position rather than "camera": familyForNode reads an
-    // unmodelled box's label as words, and that word would make each of these
+    // unmodeled box's label as words, and that word would make each of these
     // a CAMERADEVICE block with a driver slot of its own.
     _device(
       'AVNODE_9',
@@ -1725,7 +1725,7 @@ RoomPreset _activeLearningSpace() {
     // so the switch is still a real purchase and a real rack unit.
     _device(
       'AVNODE_6',
-      // NOT "network switch": familyForNode reads an unmodelled box's label
+      // NOT "network switch": familyForNode reads an unmodeled box's label
       // as words, and the screen family's own label is "Screens
       // (Relays/Network)", so the word network files this under Screens.
       'Control LAN switch',
@@ -1769,7 +1769,7 @@ RoomPreset _activeLearningSpace() {
       _device(
         'AVNODE_${20 + i}',
         // Numbered for the student table it feeds. NOT "station $i": an
-        // unmodelled box is filed by the words in its label, and the word
+        // unmodeled box is filed by the words in its label, and the word
         // station would make each of these a STATIONDEVICE block.
         'DTP transmitter $i',
         _rackLocation.id,

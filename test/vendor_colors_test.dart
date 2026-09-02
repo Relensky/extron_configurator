@@ -13,12 +13,12 @@ import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/name_colors.dart';
 import 'package:extron_configurator/project_view.dart';
 
-/// A COLOUR PER ORDER, on the project's Equipment list.
+/// A COLOR PER ORDER, on the project's Equipment list.
 ///
 /// A vendor is an order: everything tagged to it goes to one company on one
 /// purchase order. The failure this guards is a master list of two hundred
 /// parts that can only be read one row at a time to answer "which of these am
-/// I buying from whom" — and a colour somebody chose for that order quietly
+/// I buying from whom" — and a color somebody chose for that order quietly
 /// reverting to a derived one.
 void main() {
   late Directory dir;
@@ -82,16 +82,16 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  group('what colour an order is', () {
-    test('a vendor nobody has coloured still has one', () {
+  group('what color an order is', () {
+    test('a vendor nobody has colored still has one', () {
       // Derived from the name, so a list is legible before anybody has set
-      // anything up — and the same vendor is the same colour every time.
+      // anything up — and the same vendor is the same color every time.
       const vendor = ProjectVendor(id: 'v1', name: 'Extron Direct');
       expect(projectVendorColor(vendor), tintForName('Extron Direct'));
       expect(projectVendorColor(vendor), isNot(kNameTintUnsettled));
     });
 
-    test('an assigned colour beats the derived one', () {
+    test('an assigned color beats the derived one', () {
       const vendor = ProjectVendor(
         id: 'v1',
         name: 'Extron Direct',
@@ -101,15 +101,15 @@ void main() {
     });
 
     test('an untagged part is not an order, and reads as one that is not', () {
-      // Grey rather than a colour of its own: an untagged part is the thing
-      // the list is meant to catch, and a cheerful colour would file it with
+      // Gray rather than a color of its own: an untagged part is the thing
+      // the list is meant to catch, and a cheerful color would file it with
       // the decided ones.
       expect(projectVendorColor(null), kNameTintUnsettled);
     });
   });
 
   group('assigning one', () {
-    testWidgets('the swatch on a vendor sets the colour, and Automatic takes '
+    testWidgets('the swatch on a vendor sets the color, and Automatic takes '
         'it back', (tester) async {
       final p = withJob();
       final vendor = p.addProjectVendor(name: 'Extron Direct');
@@ -133,8 +133,8 @@ void main() {
           p.project.vendors.firstWhere((v) => v.id == vendor.id);
       expect(mine().color, chosen.toARGB32());
 
-      // Back to the derived colour, which is a different answer from "no
-      // colour at all".
+      // Back to the derived color, which is a different answer from "no
+      // color at all".
       await tester.tap(find.byKey(const ValueKey('vendor_color_auto')));
       await tester.pumpAndSettle();
       expect(mine().color, isNull);
@@ -144,7 +144,7 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('a renamed vendor keeps the colour somebody chose', (
+    testWidgets('a renamed vendor keeps the color somebody chose', (
       tester,
     ) async {
       final p = withJob();

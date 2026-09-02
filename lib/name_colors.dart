@@ -4,7 +4,7 @@ import 'building_project.dart' show ProjectVendor;
 import 'contrast.dart';
 
 /// ============================================================================
-///  A COLOUR PER NAME
+///  A COLOR PER NAME
 /// ============================================================================
 ///  Two sheets in this app are read by WHOSE NAME IS ON THE LINE rather than by
 ///  what the line says: the responsibility matrix, where the question is who
@@ -13,26 +13,26 @@ import 'contrast.dart';
 ///  were black text on white — so telling the contractor's rows from the
 ///  owner's, or Extron's lines from Shure's, meant reading every cell.
 ///
-///  A COLOUR DOES THAT WORK, as long as it is the same colour every time. That
-///  is the whole contract here: one name, one colour, on the screen, on the
+///  A COLOR DOES THAT WORK, as long as it is the same color every time. That
+///  is the whole contract here: one name, one color, on the screen, on the
 ///  picture that goes in the submittal, and again tomorrow. So the hue comes
 ///  out of the NAME rather than out of the order the rows happen to be in — a
-///  palette handed out by position would recolour the whole sheet the moment
+///  palette handed out by position would recolor the whole sheet the moment
 ///  somebody sorted it or deleted a line.
 ///
-///  DERIVED, NOT RANDOM. [_hashOf] is FNV-1a over the normalised name, which
+///  DERIVED, NOT RANDOM. [_hashOf] is FNV-1a over the normalized name, which
 ///  is deterministic across runs and platforms — unlike [Object.hashCode],
 ///  which is free to differ between one launch and the next and would make the
-///  matrix a different colour every morning.
+///  matrix a different color every morning.
 ///
 ///  THE PARTIES EVERYBODY NAMES ARE ANCHORED. Owner, contractor, integrator and
 ///  vendor come up on nearly every job, and they are the four the reader learns
 ///  first, so they are pinned to fixed hues rather than left to the hash. The
-///  answers that mean "nobody yet" — N/A, TBD, blank — are deliberately grey:
+///  answers that mean "nobody yet" — N/A, TBD, blank — are deliberately gray:
 ///  an unagreed line must not read as a decided one.
 ///
 ///  IT IS NEVER THE ONLY SIGNAL. Every place these are used keeps the name in
-///  the cell beside the colour, because this app's documents get printed in
+///  the cell beside the color, because this app's documents get printed in
 ///  mono and read by people who cannot tell the teal from the green.
 /// ============================================================================
 
@@ -42,7 +42,7 @@ import 'contrast.dart';
 /// darkened onto a white card or lightened onto a dark one by [legibleTone].
 /// Adjacent entries are deliberately far apart on the wheel, so two vendors
 /// that land next to each other in the list do not land next to each other in
-/// colour.
+/// color.
 const List<Color> kNameTintWheel = [
   Color(0xFF1E88E5), // blue
   Color(0xFFEF6C00), // orange
@@ -58,11 +58,11 @@ const List<Color> kNameTintWheel = [
   Color(0xFF5E35B1), // deep purple
 ];
 
-/// The colour for a name that says nobody has decided yet.
+/// The color for a name that says nobody has decided yet.
 const Color kNameTintUnsettled = Color(0xFF757575);
 
 /// The parties that come up on nearly every job, pinned so the reader only
-/// learns them once. The keys are normalised — see [normalisedName].
+/// learns them once. The keys are normalized — see [normalizedName].
 const Map<String, Color> kAnchoredNameTints = {
   'owner': Color(0xFF1E88E5),
   'contractor': Color(0xFFEF6C00),
@@ -75,8 +75,8 @@ const Map<String, Color> kAnchoredNameTints = {
 };
 
 /// A name reduced to what it MEANS: case and spacing thrown away, so 'CTS
-/// Chico' and 'cts  chico' are one party rather than two colours.
-String normalisedName(String name) =>
+/// Chico' and 'cts  chico' are one party rather than two colors.
+String normalizedName(String name) =>
     name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
 /// FNV-1a, 32 bit. Stable across runs, platforms and Dart versions, which
@@ -93,48 +93,48 @@ int _hashOf(String value) {
 /// The hue [name] always reads in.
 ///
 /// An empty name is [kNameTintUnsettled]: a blank party on the matrix is the
-/// thing that document exists to catch, and giving it a cheerful colour of its
+/// thing that document exists to catch, and giving it a cheerful color of its
 /// own would hide it among the agreed lines.
 Color tintForName(String name) {
-  final key = normalisedName(name);
+  final key = normalizedName(name);
   if (key.isEmpty) return kNameTintUnsettled;
   final anchored = kAnchoredNameTints[key];
   if (anchored != null) return anchored;
   return kNameTintWheel[_hashOf(key) % kNameTintWheel.length];
 }
 
-/// The colour something reads in, honouring a colour somebody ASSIGNED it.
+/// The color something reads in, honoring a color somebody ASSIGNED it.
 ///
-/// The derived colour is a starting point, not a verdict. A buyer's own
-/// colours mean things this app cannot work out — the order that is already
+/// The derived color is a starting point, not a verdict. A buyer's own
+/// colors mean things this app cannot work out — the order that is already
 /// placed, the vendor the contract covers, the one that is always late — so
-/// wherever a colour can be assigned, [assigned] wins and the hash is what a
-/// thing reads in until somebody says otherwise. Null is not "no colour": it
+/// wherever a color can be assigned, [assigned] wins and the hash is what a
+/// thing reads in until somebody says otherwise. Null is not "no color": it
 /// is "nobody has chosen", which is why a list is legible before anything has
 /// been set up.
 Color resolveTint({int? assigned, required String name}) =>
     assigned == null ? tintForName(name) : Color(assigned);
 
-/// A fill behind text, from a colour that has already been resolved.
+/// A fill behind text, from a color that has already been resolved.
 Color tintFill(Color tint, {double alpha = 0.16}) =>
     tint.withValues(alpha: alpha);
 
-/// A resolved colour as TEXT on [background] — see [legibleTone].
+/// A resolved color as TEXT on [background] — see [legibleTone].
 Color tintText(Color tint, Color background) => legibleTone(tint, background);
 
 /// True when [name] is one of the answers that means nothing has been settled.
 bool nameIsUnsettled(String name) {
-  final key = normalisedName(name);
+  final key = normalizedName(name);
   return key.isEmpty || kAnchoredNameTints[key] == kNameTintUnsettled;
 }
 
-/// [name]'s colour as TEXT on [background], moved along its own lightness
-/// until it can be read there. Keeps the hue, so the colour still identifies
+/// [name]'s color as TEXT on [background], moved along its own lightness
+/// until it can be read there. Keeps the hue, so the color still identifies
 /// the party — see [legibleTone].
 Color nameTextColor(String name, Color background) =>
     legibleTone(tintForName(name), background);
 
-/// [name]'s colour as a FILL behind text — a chip, a cell, a band down the
+/// [name]'s color as a FILL behind text — a chip, a cell, a band down the
 /// side of a row.
 ///
 /// Low alpha by default: this is a wash that the reader's eye groups by, not a
@@ -142,23 +142,23 @@ Color nameTextColor(String name, Color background) =>
 Color nameFill(String name, {double alpha = 0.16}) =>
     tintForName(name).withValues(alpha: alpha);
 
-/// [name]'s colour as a spreadsheet cell would print it: a pale wash and an
+/// [name]'s color as a spreadsheet cell would print it: a pale wash and an
 /// ink dark enough to read on it, both as 'RRGGBB'.
 ///
 /// ON WHITE, ALWAYS. A spreadsheet has no theme and no dark mode - it is a
 /// white page, and the tone that reads on this app's dark surfaces would be a
-/// pale grey nobody can read there. Same hue, printed for paper.
+/// pale gray nobody can read there. Same hue, printed for paper.
 ///
 /// The wash is the same weight the screen uses ([nameFill]), composited onto
 /// white here because an Excel fill has no alpha to composite with.
-/// [assigned] is the colour somebody CHOSE for this name, when they have -
+/// [assigned] is the color somebody CHOSE for this name, when they have -
 /// see [resolveTint]. Passed through here rather than resolved by the caller
 /// so the spreadsheet, the screen and the picture all reach the same answer
 /// from the same two facts.
 ({String fill, String ink}) nameSheetTint(String name, {int? assigned}) =>
     sheetTintOf(resolveTint(assigned: assigned, name: name));
 
-/// A colour that has ALREADY been resolved, printed for paper: a pale wash and
+/// A color that has ALREADY been resolved, printed for paper: a pale wash and
 /// an ink dark enough to read on it, both as 'RRGGBB'.
 ({String fill, String ink}) sheetTintOf(Color tint) {
   final fill = Color.lerp(Colors.white, tint, 0.16) ?? Colors.white;
@@ -168,11 +168,11 @@ Color nameFill(String name, {double alpha = 0.16}) =>
   );
 }
 
-/// 'RRGGBB', which is what an Office Open XML colour wants after its FF.
+/// 'RRGGBB', which is what an Office Open XML color wants after its FF.
 String _hex(Color color) =>
     (color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
 
-/// The chip a party or a vendor is named in: its colour, its name, and nothing
+/// The chip a party or a vendor is named in: its color, its name, and nothing
 /// else.
 ///
 /// One widget so the matrix, its picture and the equipment list cannot drift
@@ -180,8 +180,8 @@ String _hex(Color color) =>
 class NameTintChip extends StatelessWidget {
   final String name;
 
-  /// The colour to use instead of the one [name] derives, for a thing whose
-  /// colour somebody has assigned — see [resolveTint].
+  /// The color to use instead of the one [name] derives, for a thing whose
+  /// color somebody has assigned — see [resolveTint].
   final Color? color;
 
   /// What to show when the name is blank. The matrix says NOBODY YET out loud
@@ -189,7 +189,7 @@ class NameTintChip extends StatelessWidget {
   final String emptyLabel;
 
   /// Set on a light document that is going to be printed, where the theme's
-  /// card colour is not what the chip is actually sitting on.
+  /// card color is not what the chip is actually sitting on.
   final Color? background;
 
   final double fontSize;
@@ -232,7 +232,7 @@ class NameTintChip extends StatelessWidget {
   }
 }
 
-/// A colour on its own, where there is no room for a chip: in front of a name
+/// A color on its own, where there is no room for a chip: in front of a name
 /// on a menu, on a filter, at the head of a row.
 ///
 /// Never alone. Every one of these sits beside the name it stands for — the
@@ -258,7 +258,7 @@ class NameTintDot extends StatelessWidget {
   );
 }
 
-/// The key to whatever colours are actually on the sheet.
+/// The key to whatever colors are actually on the sheet.
 ///
 /// Built from the names in use rather than from the palette, because a legend
 /// listing twelve hues nine of which are not on this job is a legend nobody
@@ -267,8 +267,8 @@ class NameTintKey extends StatelessWidget {
   final Iterable<String> names;
   final String? title;
 
-  /// The colour a name has been GIVEN, where somebody has given it one. Null
-  /// (or a null answer) leaves the name on the colour it derives - see
+  /// The color a name has been GIVEN, where somebody has given it one. Null
+  /// (or a null answer) leaves the name on the color it derives - see
   /// [resolveTint].
   final Color? Function(String name)? colorOf;
 
@@ -295,7 +295,7 @@ class NameTintKey extends StatelessWidget {
     final seen = <String>{};
     final shown = <String>[];
     for (final name in names) {
-      final key = normalisedName(name);
+      final key = normalizedName(name);
       if (key.isEmpty || !seen.add(key)) continue;
       shown.add(name.trim());
     }
@@ -319,13 +319,13 @@ class NameTintKey extends StatelessWidget {
             NameTintChip(name: name, color: colorOf?.call(name))
           else
             // The whole chip is the target, not an icon beside it: the chip IS
-            // the colour, and the thing somebody wants to press to change a
-            // colour is the colour they can see.
+            // the color, and the thing somebody wants to press to change a
+            // color is the color they can see.
             Tooltip(
-              message: 'Choose the colour $name reads in, here and on '
+              message: 'Choose the color $name reads in, here and on '
                   'everything issued from here',
               child: InkWell(
-                key: ValueKey('${keyPrefix}_${normalisedName(name)}'),
+                key: ValueKey('${keyPrefix}_${normalizedName(name)}'),
                 borderRadius: BorderRadius.circular(4),
                 onTap: () => onTap!(name),
                 child: NameTintChip(name: name, color: colorOf?.call(name)),
@@ -336,18 +336,18 @@ class NameTintKey extends StatelessWidget {
   }
 }
 
-/// THE COLOUR A VENDOR'S PARTS ARE MARKED IN.
+/// THE COLOR A VENDOR'S PARTS ARE MARKED IN.
 ///
 /// A vendor is an ORDER: everything tagged to it goes to one company on one
 /// purchase order. "Which of these two hundred parts am I buying from whom" is
 /// the question the master list is opened for, and until now the answer was a
-/// name in a narrow column that had to be read a row at a time. A colour
+/// name in a narrow column that had to be read a row at a time. A color
 /// answers it down the whole page at once.
 ///
 /// Assigned first ([ProjectVendor.color]), derived from the name otherwise, so
-/// the list is legible on a job where nobody has set a colour. An untagged
-/// part has no vendor and takes the unsettled grey — it is not an order yet,
-/// and giving it a colour of its own would make it look like one.
+/// the list is legible on a job where nobody has set a color. An untagged
+/// part has no vendor and takes the unsettled gray — it is not an order yet,
+/// and giving it a color of its own would make it look like one.
 Color projectVendorColor(ProjectVendor? vendor) => vendor == null
     ? kNameTintUnsettled
     : resolveTint(assigned: vendor.color, name: vendor.name);

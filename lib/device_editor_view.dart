@@ -90,7 +90,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   ///
   /// The box commits on Enter or focus loss and owns its own text, so a name
   /// the rename REFUSED — it clashes, or the question about the open room was
-  /// cancelled — sat in the field looking applied while the entry kept its old
+  /// canceled — sat in the field looking applied while the entry kept its old
   /// name. Changing the field's id is what makes it re-read the entry.
   int _modelFieldRevision = 0;
 
@@ -436,7 +436,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               // 'Fox Systems', 'XTP Systems', 'Scalers Switchers' - reads
               // perfectly well in the column and prices at nothing, because
               // nothing in the app maps those words onto a room's config
-              // section. See [kTrackedCategories]. Labelled with the count so
+              // section. See [kTrackedCategories]. Labeled with the count so
               // it says how much of the catalog is in that state, and shown
               // in the ordinary style rather than in red: an untracked
               // category is untidy, not broken.
@@ -454,7 +454,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               // two model names are two half-filled entries that drift apart,
               // and the part number is the only thing that says they are the
               // same product. Shown only when there is something to fix, in
-              // the error colour, because a catalog that is clean should not
+              // the error color, because a catalog that is clean should not
               // carry a permanent warning about it.
               if (duplicates.isNotEmpty)
                 OutlinedButton.icon(
@@ -1583,7 +1583,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               const SizedBox(height: 8),
               Text(
                 costItem
-                    ? 'A billable line rather than a box - a licence, a '
+                    ? 'A billable line rather than a box - a license, a '
                           'mount, a rental, a trip charge. Filed under '
                           '"$kCategoryMisc" with a price and no connectors, '
                           'and offered on the estimate\'s Other items.'
@@ -1618,7 +1618,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
       return;
     }
     if (costItem) {
-      // No inlet and no connectors: a licence does not draw power, and giving
+      // No inlet and no connectors: a license does not draw power, and giving
       // it a mains plug would put it in the rack load and the power report.
       setState(
         () => _apply(
@@ -2042,7 +2042,7 @@ PopupMenuItem<String> _categoryHeading(BuildContext context, String text) {
 ///  because it holds DSPs, amplifiers, microphones and loudspeakers, and an
 ///  app that guessed there would retag a $90 microphone as a $4,000 processor
 ///  with nothing on screen to say so. The three example models on every row are
-///  there for exactly that judgement — they are what tells a reader at a glance
+///  there for exactly that judgment — they are what tells a reader at a glance
 ///  whether a family is one kind of box or four.
 ///
 ///  NOTHING IS APPLIED UNTIL "Refile" IS PRESSED, and nothing is written to
@@ -2519,7 +2519,7 @@ class _MergeDialogState extends State<_MergeDialog> {
 ///
 /// Merging is deliberately not automatic. Which name survives decides what
 /// every existing room resolves against, and which side of a disagreement to
-/// keep is a judgement — the price on one entry may be the current one or the
+/// keep is a judgment — the price on one entry may be the current one or the
 /// stale one, and only the person looking at it knows. So: pick the entry to
 /// keep, tick what to take from the others, and the others go.
 class _DuplicatePartsDialog extends StatefulWidget {

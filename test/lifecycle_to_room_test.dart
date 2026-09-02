@@ -246,7 +246,7 @@ void main() {
   });
 
   test('a half-finished conversion leaves the estimate on the plan', () {
-    // Every way the build can stop - cancelled, no template, save dialog
+    // Every way the build can stop - canceled, no template, save dialog
     // closed - has to leave the plan as it was. The estimate is the only
     // record of that room.
     final dir = Directory.systemTemp.createTempSync('rcb_convert');

@@ -175,7 +175,7 @@ void main() {
     tester,
   ) async {
     // One end placed is enough to draw something honest: the run heads off the
-    // edge as a squiggle labelled with where it is going, which is what a pull
+    // edge as a squiggle labeled with where it is going, which is what a pull
     // to the IDF actually does. It is therefore NOT one of the runs the bar
     // reports as missing — a plan that quietly leaves out half the pulls is
     // worse than one that says how many it left out, but a plan that says it
@@ -262,7 +262,7 @@ void main() {
 
       expect(plate.width - words.width, greaterThan(kLocationZoneBadgeWidth));
       expect(plate.height, greaterThanOrEqualTo(kLocationZoneIconSize));
-      // And it is still centred on the dot, badge and all.
+      // And it is still centered on the dot, badge and all.
       expect(plate.center.dx, closeTo(300, 0.01));
     });
 

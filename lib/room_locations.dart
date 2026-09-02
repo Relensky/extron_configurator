@@ -712,7 +712,7 @@ class PlanAnnotation {
   /// Printed with the shape: beside a line, inside a box, on its own for text.
   final String text;
 
-  /// ARGB. Stored per annotation because a drawing marks scope in one colour
+  /// ARGB. Stored per annotation because a drawing marks scope in one color
   /// and cable routes in another, and one palette for the sheet would make
   /// that impossible to say.
   final int color;
@@ -800,9 +800,9 @@ class PlanAnnotation {
   );
 }
 
-/// The colours the notation toolbar offers. Not a full picker: a drawing set
-/// reads better for having five colours used consistently than for having any
-/// colour used once.
+/// The colors the notation toolbar offers. Not a full picker: a drawing set
+/// reads better for having five colors used consistently than for having any
+/// color used once.
 const List<int> kPlanAnnotationColors = [
   0xFFE53935, // red — the default, and what a markup is expected to be
   0xFF1E88E5, // blue
@@ -817,7 +817,7 @@ const List<int> kPlanAnnotationColors = [
 // ---------------------------------------------------------------------------
 
 /// The three kinds of writing a plan sheet carries, each with its own plate
-/// colour and ink.
+/// color and ink.
 ///
 /// They are separate because they are read at different moments by different
 /// people: the trades read the LOCATION names, the drawing set's reader
@@ -834,9 +834,9 @@ const Map<PlanTextKind, String> kPlanTextKindLabels = {
 
 /// What one kind of text on a sheet is printed in.
 ///
-/// Both colours are ARGB, and 0 means "whatever the sheet has always used" —
+/// Both colors are ARGB, and 0 means "whatever the sheet has always used" —
 /// the plate the app picks for the theme it is drawn in. Kept as a sentinel
-/// rather than as the built-in value so a sheet that has never been recoloured
+/// rather than as the built-in value so a sheet that has never been recolored
 /// still follows the light/dark drawing it sits on, and so a later change to
 /// the defaults reaches every drawing nobody has overridden.
 class PlanLabelStyle {
@@ -869,9 +869,9 @@ class PlanLabelStyle {
   );
 }
 
-/// The plate colour to paint [style] with, or [fallback] when this sheet has
-/// never been recoloured. Every place that draws text on a plan goes through
-/// these two, so a sheet cannot end up recoloured in one drawing pass and not
+/// The plate color to paint [style] with, or [fallback] when this sheet has
+/// never been recolored. Every place that draws text on a plan goes through
+/// these two, so a sheet cannot end up recolored in one drawing pass and not
 /// in the next.
 Color planLabelBackground(PlanLabelStyle style, Color fallback) =>
     style.background == 0 ? fallback : Color(style.background);
@@ -886,7 +886,7 @@ Color planLabelInk(PlanLabelStyle style, Color fallback) =>
 /// plan travels with it as one more file, and a 4 MB architectural export
 /// stays out of a JSON sidecar that is otherwise hand-readable and diffable.
 /// [imageFile] is resolved against the folder the config lives in.
-/// A stored `RRGGBB` paper colour, or null for "follow the theme".
+/// A stored `RRGGBB` paper color, or null for "follow the theme".
 Color? _paperFromJson(dynamic raw) {
   final text = raw?.toString().trim() ?? '';
   if (text.isEmpty) return null;
@@ -900,7 +900,7 @@ class FloorPlan {
   final String name;
 
   /// File name of the image, relative to the config's folder. An absolute
-  /// path is honoured too, for a plan somebody wants to keep on a share.
+  /// path is honored too, for a plan somebody wants to keep on a share.
   final String imageFile;
 
   /// Natural size of the image in pixels, recorded when it was imported so
@@ -971,7 +971,7 @@ class FloorPlan {
   ///
   /// A NUDGE rather than a position: the automatic spot follows the line, so a
   /// label that was moved out of the way of a door swing stays out of the way
-  /// of it when the marker it belongs to is dragged half a metre. An absolute
+  /// of it when the marker it belongs to is dragged half a meter. An absolute
   /// coordinate would be left behind pointing at nothing.
   ///
   /// Per sheet, like everything else drawn on one.
@@ -1010,7 +1010,7 @@ class FloorPlan {
   /// True when somebody has taken the key OFF this sheet.
   ///
   /// Stored the way round that makes the default "shown": a drawing whose
-  /// lines are coded by colour, dash pattern and marker shape, and whose key is
+  /// lines are coded by color, dash pattern and marker shape, and whose key is
   /// opt-in, is a drawing that gets issued without one.
   final bool keyHidden;
 
@@ -1038,7 +1038,7 @@ class FloorPlan {
       labelStyles[kind] ?? PlanLabelStyle.unset;
 
   /// This sheet with [kind] printed in [style]. A default style is dropped
-  /// rather than stored, so a sheet put back to the standard colours saves as
+  /// rather than stored, so a sheet put back to the standard colors saves as
   /// one that was never touched.
   FloorPlan withLabelStyle(PlanTextKind kind, PlanLabelStyle style) => copyWith(
     labelStyles: {
@@ -1082,7 +1082,7 @@ class FloorPlan {
   Color get paper => paperColor ?? kPaperDefault;
 
   /// True when the paper is dark enough that what is drawn on it has to be
-  /// light. The threshold is below mid-grey on purpose: a paper somebody has
+  /// light. The threshold is below mid-gray on purpose: a paper somebody has
   /// to squint at either way is a paper the swatches do not offer — see
   /// `kPaperSwatches`.
   bool get paperIsDark => paper.computeLuminance() < 0.45;
@@ -1146,7 +1146,7 @@ class FloorPlan {
     imageSize: imageSize ?? this.imageSize,
     opacity: opacity ?? this.opacity,
     // clearPaperColor because passing null cannot be told apart from "leave
-    // it alone" — the same reason the cable's colour override needs one.
+    // it alone" — the same reason the cable's color override needs one.
     paperColor: clearPaperColor ? null : (paperColor ?? this.paperColor),
     pixelsPerFoot: pixelsPerFoot ?? this.pixelsPerFoot,
     callouts: callouts ?? this.callouts,
@@ -1343,7 +1343,7 @@ const double kLocationZoneIconGap = 3;
 const double kLocationZoneBadgeWidth =
     kLocationZoneIconSize + kLocationZoneIconGap;
 
-/// Just the dot, centred on [pos].
+/// Just the dot, centered on [pos].
 Rect locationDotBounds(Offset pos) => Rect.fromCenter(
   center: pos,
   width: kLocationMarkerRadius * 2,
@@ -1385,7 +1385,7 @@ Rect? locationLabelBounds(Offset pos, String name) {
   );
 }
 
-/// The whole box a location marker occupies on a plan: the dot, centred on
+/// The whole box a location marker occupies on a plan: the dot, centered on
 /// [pos], with [name] printed on a plate under it.
 ///
 /// Shared with the code that ROUTES cable runs, which is the point of it being

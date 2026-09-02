@@ -12,14 +12,14 @@ import 'package:extron_configurator/room_locations.dart';
 /// Steering a run by hand had two faults that felt like one. The handles lost
 /// the drag after a single move — the route reshapes as it is dragged, which
 /// changed how many handles there are, and an unkeyed one was matched against
-/// its neighbour and thrown away mid-gesture — and every pointer event wrote
+/// its neighbor and thrown away mid-gesture — and every pointer event wrote
 /// through the provider, re-routing every run on the sheet to draw one frame.
 ///
 /// And the thing a drawing actually wants, a square corner, could only be
 /// reached by dragging a dot until it happened to line up.
 void main() {
   group('the geometry', () {
-    test('a bend near square with its neighbour is pulled square', () {
+    test('a bend near square with its neighbor is pulled square', () {
       // Within the snap distance: this is the corner somebody is aiming at.
       expect(
         snapToRightAngle(const Offset(104, 61), const [
@@ -169,7 +169,7 @@ void main() {
       expect(moved.dy - placed.dy, greaterThan(70));
     });
 
-    testWidgets('where a run lands on its box can be moved and centred again',
+    testWidgets('where a run lands on its box can be moved and centered again',
         (tester) async {
       final p = room();
       final id = await selectRun(tester, p);

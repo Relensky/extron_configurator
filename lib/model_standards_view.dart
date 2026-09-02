@@ -449,7 +449,7 @@ class _StandardCardState extends State<_StandardCard> {
           const SizedBox(height: 2),
           Text(
             // THE GAP IS THE READING. Over is a problem and under is not, and
-            // the sentence says which without relying on a sign or a colour.
+            // the sentence says which without relying on a sign or a color.
             !over && !under
                 ? 'Exactly what the plan already budgets.'
                 : over

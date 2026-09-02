@@ -257,7 +257,7 @@ void main() {
       expect(a, b);
     });
 
-    test('a box nudged off a neighbour stays on the grid', () {
+    test('a box nudged off a neighbor stays on the grid', () {
       // The drop is snapped, then slid clear — and the slide steps in whole
       // squares, so the landing spot is still square with everything else.
       final desired = snapToGrid(const Offset(300, 300), enabled: true);

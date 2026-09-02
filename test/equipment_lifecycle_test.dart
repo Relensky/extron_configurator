@@ -76,7 +76,7 @@ void main() {
         final item = lifeOf(box('a', installedOn: DateTime(year, 6, 1)));
         expect(
           item.condition,
-          EquipmentCondition.ageing,
+          EquipmentCondition.aging,
           reason: 'installed $year should be amber in 2026',
         );
       }
@@ -120,7 +120,7 @@ void main() {
       );
       expect(short.lifeYears, 5);
       expect(short.dueYear, 2027);
-      expect(short.condition, EquipmentCondition.ageing);
+      expect(short.condition, EquipmentCondition.aging);
     });
 
     test('a very short life still gets a green year', () {
@@ -157,7 +157,7 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('the ramp inside the amber band', () {
-    test('the three warning years are three different colours', () {
+    test('the three warning years are three different colors', () {
       // An eight-year cycle read in 2026: year six is yellow, seven amber,
       // eight orange. One amber for all three is what this replaces.
       final steps = {
@@ -172,9 +172,9 @@ void main() {
           expected,
           reason: 'installed $year should read as ${expected.name} in 2026',
         );
-        // The words never come apart from the colour: all three are still
+        // The words never come apart from the color: all three are still
         // 'due soon' on any sheet that only has the four bands.
-        expect(item.condition, EquipmentCondition.ageing);
+        expect(item.condition, EquipmentCondition.aging);
       });
     });
 
@@ -334,8 +334,8 @@ void main() {
       ]);
       expect(room.countOf(EquipmentCondition.overdue), 1);
       expect(room.costOf(EquipmentCondition.overdue), 4000);
-      expect(room.countOf(EquipmentCondition.ageing), 1);
-      expect(room.costOf(EquipmentCondition.ageing), 4000);
+      expect(room.countOf(EquipmentCondition.aging), 1);
+      expect(room.costOf(EquipmentCondition.aging), 4000);
       // The one figure a refresh is asked for: past its life plus the window.
       expect(room.toReplaceCount, 2);
       expect(room.toReplaceCost, 8000);
@@ -436,7 +436,7 @@ void main() {
   //  WHAT REPLACING IT COSTS
   // -------------------------------------------------------------------------
   //  A refresh plan is read years before the models are chosen, and half the
-  //  boxes on an old drawing are positions nobody ever catalogued. Pricing
+  //  boxes on an old drawing are positions nobody ever catalogd. Pricing
   //  only what the catalog knows left the plan reporting most of a building as
   //  free, which is the one direction a budget must not be wrong in.
 
@@ -683,7 +683,7 @@ void main() {
 
     test('a figure that is not a sane number of years reads as unrecorded', () {
       // Text where a number belongs, a negative, and a plain typo. All of them
-      // would sit green on the plan for ever if honoured.
+      // would sit green on the plan for ever if honored.
       for (final raw in <Object>['about 8 years', -4, 0, 600]) {
         final round = AvDeviceTemplate.fromJson({
           'model': 'PROJ-1',

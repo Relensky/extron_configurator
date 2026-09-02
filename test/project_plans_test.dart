@@ -110,10 +110,10 @@ void main() {
       expect(pdf.isPdf, isTrue);
       expect(pdf.isViewable, isTrue);
 
-      const labelled =
+      const labeled =
           ProjectPlan(id: 'plan2', filePath: 'A-102.PDF', label: 'Level 2 RCP');
-      expect(labelled.displayName, 'Level 2 RCP');
-      expect(labelled.isPdf, isTrue, reason: 'the extension is case blind');
+      expect(labeled.displayName, 'Level 2 RCP');
+      expect(labeled.isPdf, isTrue, reason: 'the extension is case blind');
 
       const image = ProjectPlan(id: 'plan3', filePath: 'scan.PNG');
       expect(image.isPdf, isFalse);

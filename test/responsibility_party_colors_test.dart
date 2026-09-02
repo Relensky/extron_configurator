@@ -12,9 +12,9 @@ import 'package:extron_configurator/project_view.dart';
 import 'package:extron_configurator/responsibility_matrix.dart';
 import 'package:extron_configurator/xlsx_writer.dart';
 
-/// The colour each party on the matrix reads in, when somebody chooses it.
+/// The color each party on the matrix reads in, when somebody chooses it.
 ///
-/// The failure this guards is a colour that only exists on screen. This
+/// The failure this guards is a color that only exists on screen. This
 /// document is issued - as a picture into a submittal and as a spreadsheet the
 /// contractor prices from - and a party that is blue on the pane it was agreed
 /// on and orange in the file that was sent is two parties as far as the person
@@ -43,7 +43,7 @@ void main() {
     partyColors: project.partyColors,
   ).firstWhere((s) => s.title == 'Roles and Responsibilities').rows.first;
 
-  group('a party keeps the colour it was given', () {
+  group('a party keeps the color it was given', () {
     test('into the spreadsheet', () {
       final project = job();
       // Not the hue 'Owner' derives: the point of choosing one is that the
@@ -54,7 +54,7 @@ void main() {
       final furnished = gridRow(project)[1] as XlsxTint;
       expect(furnished.fillHex, sheetTintOf(chosen).fill);
       expect(furnished.inkHex, sheetTintOf(chosen).ink);
-      // The party nobody re-coloured is untouched.
+      // The party nobody re-colored is untouched.
       final installed = gridRow(project)[2] as XlsxTint;
       expect(installed.fillHex, nameSheetTint('Contractor').fill);
     });
@@ -70,7 +70,7 @@ void main() {
     });
 
     // Case and spacing are not two parties anywhere else on this sheet, and a
-    // colour filed under a second spelling is a colour that goes missing the
+    // color filed under a second spelling is a color that goes missing the
     // next time somebody types the name with two spaces in it.
     test('however the name is typed', () {
       final project = job();
@@ -94,7 +94,7 @@ void main() {
     });
 
     // A blank party is the thing this document exists to catch. Painting it a
-    // settled colour would hide the one line somebody has to chase.
+    // settled color would hide the one line somebody has to chase.
     test('but a party nobody has named cannot be given one', () {
       final project = job();
       project.setPartyColor('   ', const Color(0xFF43A047).toARGB32());
@@ -142,13 +142,13 @@ void main() {
       return p;
     }
 
-    testWidgets('sets a party colour from the key above the grid', (
+    testWidgets('sets a party color from the key above the grid', (
       tester,
     ) async {
       final p = await pumpPane(tester);
 
-      // The chip in the key IS the control: a colour is changed by pressing
-      // the colour.
+      // The chip in the key IS the control: a color is changed by pressing
+      // the color.
       await tester.tap(find.byKey(const ValueKey('responsibility_party_owner')));
       await tester.pumpAndSettle();
       expect(

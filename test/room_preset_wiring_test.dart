@@ -8,7 +8,7 @@ import 'package:extron_configurator/room_presets.dart';
 
 /// The shipped room types are DRAWINGS, and a drawing with a cable landing on a
 /// connector that isn't there is worse than no drawing: it looks finished. The
-/// four presets are modelled on builds that exist, with real models on them,
+/// four presets are modeled on builds that exist, with real models on them,
 /// which buys three things that have to actually hold:
 ///
 ///   * every cable ends on a port that exists, at both ends;

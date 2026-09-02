@@ -148,7 +148,7 @@ void main() {
     final cell = find.byKey(ValueKey(keys.first));
     expect(tester.widget<GestureDetector>(cell).onTap, isNull);
     await tester.tap(cell);
-    // Past the double-tap window, so the recogniser gives up rather than
+    // Past the double-tap window, so the recognizer gives up rather than
     // leaving its timer running past the end of the test.
     await tester.pump(const Duration(milliseconds: 400));
     expect(opened, isEmpty);
@@ -197,7 +197,7 @@ void main() {
       expect(find.textContaining('Rooms are references'), findsNothing);
 
       // ASKING TWICE STILL WORKS. The reader is free to move off the pane, and
-      // a request honoured once must not then be ignored forever - see
+      // a request honored once must not then be ignored forever - see
       // [AppStateProvider.projectPaneRequestId].
       // By its key: the pane switcher keys whichever half is on screen, and
       // 'Rooms' is also a column heading on the list underneath.

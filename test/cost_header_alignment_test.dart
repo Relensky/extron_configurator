@@ -209,7 +209,7 @@ void main() {
 
   testWidgets('every caption on a row shares one bottom rule', (tester) async {
     // A narrow column wraps its caption — "Unit price" over 130 pixels is two
-    // lines, "Qty" over 60 is one — and a Row centres what it is given, so the
+    // lines, "Qty" over 60 is one — and a Row centers what it is given, so the
     // tall ones used to ride 8 pixels higher than the short ones and the whole
     // caption row read as crooked. They sit in fixed-height cells now, text
     // against the bottom, which is the rule the divider under them draws.

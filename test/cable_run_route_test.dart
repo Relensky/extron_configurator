@@ -143,7 +143,7 @@ void main() {
     });
 
     test('the first leg keeps the id a two-end run always had', () {
-      // So an override typed against the run — a recolour, a retyped count —
+      // So an override typed against the run — a recolor, a retyped count —
       // is not orphaned by somebody adding a pull box to the middle of it.
       final p = room();
       final run = p.addAvScreenSwitch(
@@ -165,7 +165,7 @@ void main() {
       expect(ids.length, 2);
     });
 
-    test('every leg is labelled with the same cable number', () {
+    test('every leg is labeled with the same cable number', () {
       final p = room();
       p.addAvScreenSwitch(
         const ScreenSwitch(
@@ -250,7 +250,7 @@ void main() {
     });
 
     test('each CABLE gets a pattern, so the key can name it', () {
-      // Colour alone fails the moment the sheet is printed in black and white.
+      // Color alone fails the moment the sheet is printed in black and white.
       // The pattern is keyed off the cable rather than the run's position in a
       // fan, so "Cat 6a is the dashed one" is true of every Cat 6a on the
       // sheet — which is the whole job of a legend.

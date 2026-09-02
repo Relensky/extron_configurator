@@ -218,7 +218,7 @@ def ports_from(xml, page_width):
         if best is None:
             continue
         # The port number sits on the label's own line, just outside it.
-        # Matching against the TYPE's line instead picks up the neighbouring
+        # Matching against the TYPE's line instead picks up the neighboring
         # connector's number, which is how one drawing produced two "HDMI 005".
         num = ''
         ngap = 0.30

@@ -96,7 +96,7 @@ void main() {
       expect(h.depthAhead, kUndoDepth, reason: 'and all sixty are ahead now');
     });
 
-    test('a shallower history can be asked for, and is honoured', () {
+    test('a shallower history can be asked for, and is honored', () {
       final h = DocumentHistory(depth: 3)..begin('s0');
       for (var i = 1; i <= 10; i++) {
         h.record('step $i', 's$i');
@@ -162,7 +162,7 @@ void main() {
 
     test('nothing is lost by not having waited', () {
       // The tail of a burst is not filed until something asks. Every reader
-      // flushes first, which is what makes the delay an optimisation rather
+      // flushes first, which is what makes the delay an optimization rather
       // than a source of truth.
       final r = rig();
       r.doc[0] = 'b';

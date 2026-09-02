@@ -72,7 +72,7 @@ IOS_BACKDROP = (255, 255, 255)
 def load(source: Path) -> Image.Image:
     if source.suffix.lower() in {".ai", ".eps", ".ps"}:
         raise SystemExit(
-            f"{source} is PostScript, which needs Ghostscript to rasterise.\n"
+            f"{source} is PostScript, which needs Ghostscript to rasterize.\n"
             "Export a PNG from Illustrator (1024x1024, transparent) and pass "
             "that instead."
         )
@@ -87,7 +87,7 @@ def load(source: Path) -> Image.Image:
 
 
 def square(img: Image.Image) -> Image.Image:
-    """Centre the artwork on a transparent square.
+    """Center the artwork on a transparent square.
 
     Padded rather than stretched: an icon that is 4% taller than it is wide is
     a logo somebody drew that way, and the squash is more noticeable at 16

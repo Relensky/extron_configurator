@@ -49,7 +49,7 @@ void main() {
 
   group('the DMP expansion bus', () {
     // The two ends as the catalog actually spells them: the matrix calls its
-    // socket `network`, the DSP calls its own `dante`, and both are labelled
+    // socket `network`, the DSP calls its own `dante`, and both are labeled
     // DMP EXP.
     final matrix = AvNode(
       id: 'SWITCHERDEVICE_1',
@@ -428,7 +428,7 @@ void main() {
       expect(after.fromPortId, 'out1');
     });
 
-    testWidgets('cancelling the dialog moves nothing', (tester) async {
+    testWidgets('canceling the dialog moves nothing', (tester) async {
       final p = room();
       await openCableDialog(tester, p);
 

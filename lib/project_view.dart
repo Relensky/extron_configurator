@@ -104,14 +104,14 @@ enum _ProjectPane {
   const _ProjectPane(this.label, this.icon);
 }
 
-/// The palette offered when a colour is assigned by hand.
+/// The palette offered when a color is assigned by hand.
 ///
-/// The same twelve the derived colours come out of, so an assigned colour and
+/// The same twelve the derived colors come out of, so an assigned color and
 /// a derived one belong to one set rather than looking like two systems on one
-/// page. Any other colour is one press further on, through the wheel.
+/// page. Any other color is one press further on, through the wheel.
 const List<Color> kVendorPalette = kNameTintWheel;
 
-/// Assigns [vendor] a colour, or takes it back to the derived one.
+/// Assigns [vendor] a color, or takes it back to the derived one.
 ///
 /// A dialog rather than an inline row of swatches: the vendor list is a list
 /// of ORDERS in priority order, and twelve swatches on every row would bury
@@ -138,8 +138,8 @@ Future<void> showVendorColorDialog(
           key: const ValueKey('vendor_color_dialog'),
           title: Text(
             current.name.trim().isEmpty
-                ? 'Colour for this vendor'
-                : 'Colour for ${current.name}',
+                ? 'Color for this vendor'
+                : 'Color for ${current.name}',
           ),
           content: SizedBox(
             width: 420,
@@ -148,7 +148,7 @@ Future<void> showVendorColorDialog(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Every part this vendor is quoting is marked in this colour '
+                  'Every part this vendor is quoting is marked in this color '
                   'on the equipment list, so one order can be read down the '
                   'page at a glance.',
                   style: Theme.of(ctx).textTheme.bodySmall,
@@ -180,12 +180,12 @@ Future<void> showVendorColorDialog(
                     OutlinedButton.icon(
                       key: const ValueKey('vendor_color_custom'),
                       icon: const Icon(Icons.colorize, size: 16),
-                      label: const Text('Any other colour'),
+                      label: const Text('Any other color'),
                       onPressed: () async {
                         final picked = await showColorWheelDialog(
                           ctx,
                           initial: shown,
-                          title: 'Colour for ${current.name}',
+                          title: 'Color for ${current.name}',
                         );
                         if (picked == null) return;
                         setLocal(
@@ -196,9 +196,9 @@ Future<void> showVendorColorDialog(
                       },
                     ),
                     const SizedBox(width: 8),
-                    // Back to the colour the name gives it. Disabled while
+                    // Back to the color the name gives it. Disabled while
                     // nothing has been assigned, so the button says whether
-                    // this vendor's colour was chosen or derived.
+                    // this vendor's color was chosen or derived.
                     TextButton.icon(
                       key: const ValueKey('vendor_color_auto'),
                       icon: const Icon(Icons.auto_awesome, size: 16),
@@ -241,7 +241,7 @@ Future<void> showVendorColorDialog(
 /// carrying a second copy of the number that drifts from this one.
 ///
 /// IT IS A WIDTH IN TYPE, NOT IN PIXELS. Everything it measures - two prose
-/// fields, nine labelled panes - is text, so the threshold is put through
+/// fields, nine labeled panes - is text, so the threshold is put through
 /// [gridMetric] at the point of use: on a display at 150% the labels are half
 /// again as wide and the window that could hold them is half again as wide
 /// too. Before that, a 1400-pixel window at 150% counted as roomy and the pane
@@ -413,7 +413,7 @@ class _ProjectViewState extends State<ProjectView> {
   /// Compared rather than cleared: clearing it would be a write to the provider
   /// from inside a build, and leaving it unread would snap the tab back to the
   /// requested pane on every rebuild, which is a reader who cannot move off it.
-  int _honouredPaneRequest = 0;
+  int _honoredPaneRequest = 0;
 
   @override
   void didChangeDependencies() {
@@ -421,8 +421,8 @@ class _ProjectViewState extends State<ProjectView> {
     // Called whenever the provider notifies, because build() watches it. Safe
     // to set _pane here without setState: this runs immediately before build.
     final provider = context.read<AppStateProvider>();
-    if (provider.projectPaneRequestId == _honouredPaneRequest) return;
-    _honouredPaneRequest = provider.projectPaneRequestId;
+    if (provider.projectPaneRequestId == _honoredPaneRequest) return;
+    _honoredPaneRequest = provider.projectPaneRequestId;
     final wanted = provider.requestedProjectPane;
     for (final pane in _ProjectPane.values) {
       if (pane.name == wanted) {
@@ -943,7 +943,7 @@ class _ProjectViewState extends State<ProjectView> {
                             : null,
                       ),
                       // The label goes when the window cannot hold all of
-                      // them. Eight labelled segments are wider than a narrow
+                      // them. Eight labeled segments are wider than a narrow
                       // window on their own, and a switcher that overflows is
                       // a pane nobody can reach — the icons are the same eight
                       // targets, in the same order, with the name on a
@@ -975,7 +975,7 @@ class _ProjectViewState extends State<ProjectView> {
                 onSelectionChanged: (s) => _showPane(s.first),
                 // With the labels gone the icon IS the pane, so the selected
                 // one must keep it. The default swaps in a tick, which on a
-                // labelled switcher marks the choice and on this one erases
+                // labeled switcher marks the choice and on this one erases
                 // the only thing naming it.
                 showSelectedIcon: !paneCompact,
               ),
@@ -987,10 +987,10 @@ class _ProjectViewState extends State<ProjectView> {
     });
   }
 
-  /// One file or export action, labelled while there is room for the label.
+  /// One file or export action, labeled while there is room for the label.
   ///
   /// COMPACT IS ICON-ONLY, not a smaller label and not an overflow menu. Eight
-  /// labelled buttons need most of a wide window; on a narrow one they wrapped
+  /// labeled buttons need most of a wide window; on a narrow one they wrapped
   /// onto a third line and pushed the last of them past the edge, which is how
   /// Quote requests became a button nobody could press. As icons all eight
   /// stay on one line, in the same order, in the same place — and the label
@@ -1309,7 +1309,7 @@ Future<void> showPartPriceDialog(
   );
 }
 
-// A labelled figure in the header strip.
+// A labeled figure in the header strip.
 class _TotalChip extends StatelessWidget {
   final String label;
   final String value;
@@ -1330,8 +1330,8 @@ class _TotalChip extends StatelessWidget {
     // the page's ink.
     //
     // The emphasis chip fills with primaryContainer — which in the Classic
-    // theme is derived from a colour somebody picks out of a wheel. The label
-    // and the figure were being drawn in the text theme's default colour,
+    // theme is derived from a color somebody picks out of a wheel. The label
+    // and the figure were being drawn in the text theme's default color,
     // which is chosen for the PAGE behind them, not for this fill: pick a dark
     // accent and the one number the tab exists for went dark-on-dark. Measured
     // against the fill it is actually going on, so a dark accent gets white
@@ -2053,11 +2053,11 @@ class _RoomRowState extends State<_RoomRow> {
 
   /// One figure on the row, with the ink the ROW measured for its own fill.
   ///
-  /// The colours are passed in rather than read off the theme because this
+  /// The colors are passed in rather than read off the theme because this
   /// cell is painted on four different backgrounds — the page, a dimmed
   /// surface, the accent when the room is open, and the error fill when it
   /// could not be read. Taking the text theme's default meant the open room's
-  /// figures were drawn in a colour chosen for the PAGE: on a dark accent,
+  /// figures were drawn in a color chosen for the PAGE: on a dark accent,
   /// dark on dark, and the numbers on the row somebody is working in were the
   /// ones that disappeared.
   Widget _cell(
@@ -2646,7 +2646,7 @@ List<Widget> partsSlivers(
     String value, {
     bool warn = false,
 
-    /// The vendor this chip narrows to, so the chip carries the same colour
+    /// The vendor this chip narrows to, so the chip carries the same color
     /// its rows are marked in. Null on the chips that are not about a vendor.
     Color? tint,
   }) {
@@ -2658,9 +2658,9 @@ List<Widget> partsSlivers(
         label,
         // ONLY WHILE IT IS UNSELECTED does this chip paint a fill of its own.
         // Pressed, it drops the error fill and takes the theme's - so a label
-        // coloured for the error fill would be carried onto one it was never
+        // colored for the error fill would be carried onto one it was never
         // measured against (3.7:1 on a light Classic blue). The selected
-        // colours are the theme's own, and legible_theme.dart is what makes
+        // colors are the theme's own, and legible_theme.dart is what makes
         // that a promise rather than a hope.
         style: warn && !selected
             ? TextStyle(
@@ -3426,7 +3426,7 @@ class _PartRow extends StatelessWidget {
       kMasterPartKindLabels[line.kind]!,
     ].join('  ·  ');
 
-    // WHO ASKED FOR THE SPARES. Named rather than totalled, for the same
+    // WHO ASKED FOR THE SPARES. Named rather than totaled, for the same
     // reason the undriven list below is: "4 spare" is a figure to go and
     // investigate, "BSS 103 x3, ENG 210 x1" is an answer. Shown on every
     // spared row rather than only while the list is filtered, because the
@@ -3465,11 +3465,11 @@ class _PartRow extends StatelessWidget {
           .map((e) => e.key),
     );
 
-    // WHICH ORDER THIS PART IS ON, as a colour. The vendor's own — assigned
+    // WHICH ORDER THIS PART IS ON, as a color. The vendor's own — assigned
     // on the Vendors pane or derived from its name — washed behind the row and
     // drawn round it, so a master list of two hundred parts can be read as the
     // four orders it actually is. The vendor is still named in the column on
-    // the right: the colour groups the page, the name says who.
+    // the right: the color groups the page, the name says who.
     final tint = projectVendorColor(line.vendor);
     final tagged = line.vendor != null;
 
@@ -3479,13 +3479,13 @@ class _PartRow extends StatelessWidget {
       // measured against, and a translucent one would put the row's ink on
       // whatever happens to be behind the list.
       // A TICKED ROW IS A DIFFERENT PAPER, not a different edge: the vendor
-      // colour already owns this row's border, and a selection drawn there
+      // color already owns this row's border, and a selection drawn there
       // would be competing with the thing the border is for.
       //
-      // A WASH, at the same weight the vendor tint uses. Every colour inside
+      // A WASH, at the same weight the vendor tint uses. Every color inside
       // this row is measured against [ThemeData.cardColor] - see the
       // accentTextOn and errorTextOn calls below - and a selection that
-      // repainted the card in a container colour would carry that ink onto a
+      // repainted the card in a container color would carry that ink onto a
       // background it was never checked against. Blended in the same order it
       // is read: paper, then vendor, then selection.
       color: () {
@@ -4581,9 +4581,9 @@ class _VendorPicker extends StatelessWidget {
               ),
             ),
           ),
-          // The dot in front of the name is the same colour the row is washed
+          // The dot in front of the name is the same color the row is washed
           // in, which is what ties the two together: picking a vendor here is
-          // what recolours the row.
+          // what recolors the row.
           for (final v in vendors)
             DropdownMenuItem(
               value: v.id,
@@ -4647,7 +4647,7 @@ class _VendorPicker extends StatelessWidget {
 //  number to the equipment it bought, and the thing nobody could produce
 //  before.
 //
-//  The colours, the icon, the one-line sentence, the chip and the way a quote
+//  The colors, the icon, the one-line sentence, the chip and the way a quote
 //  document is opened live in vendor_rfq_view.dart, because the TIMELINE says
 //  the same things about the same vendors and two copies would drift apart.
 
@@ -5439,7 +5439,7 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
   // [_RulePickerDialog].
   final projectCategories = projectCategoryChoices(estimate);
   final projectManufacturers = projectManufacturerChoices(estimate);
-  // Against the card's own error fill. The theme's title colour is chosen for
+  // Against the card's own error fill. The theme's title color is chosen for
   // a surface, and onErrorContainer is only the scheme's PREFERENCE — it fails
   // WCAG on 45 of this app's 180 theme/accent combinations.
   final conflictInk =
@@ -5487,7 +5487,7 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
                 children: [
                   Text(
                     'Overlapping rules',
-                    // Against the card's own fill. The theme's title colour is
+                    // Against the card's own fill. The theme's title color is
                     // chosen for a surface, and on an error container it is
                     // the wrong side of readable.
                     style: theme.textTheme.titleSmall?.copyWith(
@@ -5624,7 +5624,7 @@ class _VendorCardState extends State<_VendorCard> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      // The card wears the order's colour, so the vendor list and the parts
+      // The card wears the order's color, so the vendor list and the parts
       // list are visibly the same four orders rather than two lists that have
       // to be cross-referenced by name.
       shape: RoundedRectangleBorder(
@@ -5669,8 +5669,8 @@ class _VendorCardState extends State<_VendorCard> {
                 ),
                 Tooltip(
                   message: vendor.color == null
-                      ? 'Colour: from the name. Press to choose one.'
-                      : 'Colour: chosen. Press to change it.',
+                      ? 'Color: from the name. Press to choose one.'
+                      : 'Color: chosen. Press to change it.',
                   child: InkWell(
                     key: ValueKey('vendor_color_${vendor.id}'),
                     borderRadius: BorderRadius.circular(6),
@@ -5688,8 +5688,8 @@ class _VendorCardState extends State<_VendorCard> {
                             width: 0.5,
                           ),
                         ),
-                        // An assigned colour says so. Without it there is no
-                        // way to tell the colour somebody chose from the one
+                        // An assigned color says so. Without it there is no
+                        // way to tell the color somebody chose from the one
                         // the name happened to give — and the difference
                         // matters the moment a vendor is renamed.
                         child: vendor.color == null

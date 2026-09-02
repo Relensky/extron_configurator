@@ -81,7 +81,7 @@ class DeviceClass:
 
         # Default outlet count, applied before the model lookup below.
         # Every Set/Update in this driver bounds-checks the outlet number
-        # against this, so without a default an unrecognised model string
+        # against this, so without a default an unrecognized model string
         # raises AttributeError inside UpdatePowerOutlet before it can send
         # 'olStatus all'. ConnectionHandler.Update swallows that exception and
         # only writes it to the ProgramLog, so the outlet buttons sit there

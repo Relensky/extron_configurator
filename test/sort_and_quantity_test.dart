@@ -170,10 +170,10 @@ void main() {
       // cannot buy minus one.
       // By its tooltip rather than by finding it: an IconButton wraps ITSELF
       // round the tooltip, so the tooltip is not something to search under.
-      IconButton buttonLabelled(String tooltip) => tester
+      IconButton buttonLabeled(String tooltip) => tester
           .widgetList<IconButton>(find.byType(IconButton))
           .firstWhere((b) => b.tooltip == tooltip);
-      expect(buttonLabelled('One fewer Display').onPressed, isNull);
+      expect(buttonLabeled('One fewer Display').onPressed, isNull);
 
       await tester.tap(plus);
       await tester.pumpAndSettle();

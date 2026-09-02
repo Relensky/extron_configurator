@@ -1,6 +1,6 @@
 import 'package:path/path.dart' as path;
 
-import 'name_colors.dart' show nameSheetTint, normalisedName;
+import 'name_colors.dart' show nameSheetTint, normalizedName;
 import 'report_tools.dart';
 import 'xlsx_writer.dart' show XlsxTint;
 
@@ -59,14 +59,14 @@ const List<String> kResponsibilityParties = [
   'TBD',
 ];
 
-/// A party reduced to what it MEANS, which is what a colour is filed under.
+/// A party reduced to what it MEANS, which is what a color is filed under.
 ///
-/// One place rather than a call to [normalisedName] at every site, because the
-/// key a colour is STORED under and the key it is LOOKED UP by have to be the
+/// One place rather than a call to [normalizedName] at every site, because the
+/// key a color is STORED under and the key it is LOOKED UP by have to be the
 /// same function forever - a project file outlives any one screen, and a
-/// second answer to "what is this party called" is a colour that goes missing
+/// second answer to "what is this party called" is a color that goes missing
 /// the next time the job is opened.
-String responsibilityPartyKey(String party) => normalisedName(party);
+String responsibilityPartyKey(String party) => normalizedName(party);
 
 /// One line of the matrix: a piece of scope, whose it is, and how much of it
 /// each room needs.
@@ -216,7 +216,7 @@ class ResponsibilityItem {
         final n = v is num ? v.toDouble() : double.tryParse(v.toString());
         // A quantity that is not a number is dropped rather than read as
         // zero: "2 per room" typed into a count is somebody's note, and
-        // honouring it as 0 would quietly take the line off the bid.
+        // honoring it as 0 would quietly take the line off the bid.
         if (n != null && n > 0) qty[k.toString()] = n;
       });
     }
@@ -319,24 +319,24 @@ const List<({String scope, String furnishedBy, String installedBy, String work})
 //  THE SHEET
 // ---------------------------------------------------------------------------
 
-/// A party's name in the colour it reads in everywhere else.
+/// A party's name in the color it reads in everywhere else.
 ///
-/// WHY THE SPREADSHEET GETS THE COLOURS TOO. This matrix is read by whose name
+/// WHY THE SPREADSHEET GETS THE COLORS TOO. This matrix is read by whose name
 /// is on the line - the whole reason the screen tints every party - and the
 /// exported copy is the one that goes to the contractor, gets printed, and is
 /// argued from at the pre-installation meeting. Black on white there sent the
-/// reader back to reading every cell, which is the job the colour was doing.
+/// reader back to reading every cell, which is the job the color was doing.
 ///
 /// The hue comes from the SAME [nameSheetTint] the screen and the picture use,
-/// so 'CTS Chico' is the same colour in the app, in the PNG and in the .xlsx.
-/// A blank party is deliberately grey and says so out loud: an unagreed line
+/// so 'CTS Chico' is the same color in the app, in the PNG and in the .xlsx.
+/// A blank party is deliberately gray and says so out loud: an unagreed line
 /// must not read as a decided one.
 /// [missingLabel] is what an unnamed party reads as. The grid's columns are
 /// narrow and take the short form the screen uses; the table underneath has
 /// room for the one that says it is not finished yet.
-/// [color] is the colour the JOB has given this party, as an ARGB int, or null
+/// [color] is the color the JOB has given this party, as an ARGB int, or null
 /// to leave it on the one its name derives. The spreadsheet has to be told:
-/// its whole claim is that a party is the same colour here as on the screen it
+/// its whole claim is that a party is the same color here as on the screen it
 /// was agreed on, and a sheet that quietly re-derived the hue would be a
 /// second opinion about it.
 XlsxTint responsibilityPartyCell(
@@ -345,9 +345,9 @@ XlsxTint responsibilityPartyCell(
   int? color,
 }) {
   if (party.trim().isEmpty) {
-    // NOT the neutral grey the other unsettled answers get. 'N/A' on the
+    // NOT the neutral gray the other unsettled answers get. 'N/A' on the
     // install column is a real answer - the PC monitors sit on a desk and
-    // nobody hangs them - and a blank is not. Printed in the same grey, the
+    // nobody hangs them - and a blank is not. Printed in the same gray, the
     // one that needs chasing hides among the ones that do not.
     return XlsxTint(
       text: missingLabel,
@@ -360,7 +360,7 @@ XlsxTint responsibilityPartyCell(
 }
 
 /// The wash and ink a party nobody has named prints in: a pale red and a dark
-/// one, the spreadsheet's version of the error colour the screen uses.
+/// one, the spreadsheet's version of the error color the screen uses.
 const String kResponsibilityMissingFill = 'FBE4E4';
 const String kResponsibilityMissingInk = 'A21C1C';
 
@@ -384,10 +384,10 @@ String formatResponsibilityQty(double qty) {
 /// glance and has to stay narrow enough to, and the prose — what the work is,
 /// where the product is, what is still open — is what gets read one line at a
 /// time. A single table carrying both is a table where neither is legible.
-/// [partyColors] is the job's own colour per party, keyed by
+/// [partyColors] is the job's own color per party, keyed by
 /// [responsibilityPartyKey] - see [BuildingProject.partyColors]. Empty leaves
-/// every party on the colour its name derives, which is what a job nobody has
-/// set a colour on looks like.
+/// every party on the color its name derives, which is what a job nobody has
+/// set a color on looks like.
 List<ReportSection> responsibilityMatrixSections(
   List<ResponsibilityItem> items, {
   required List<({String id, String name})> roomNames,

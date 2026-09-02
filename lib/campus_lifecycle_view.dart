@@ -1074,7 +1074,7 @@ class _CampusHeadline extends StatelessWidget {
                   context,
                   campus.overdueCost > 0
                       ? EquipmentCondition.overdue
-                      : EquipmentCondition.ageing,
+                      : EquipmentCondition.aging,
                 ),
               ),
             if (campus.overdueCost > 0)
@@ -1442,7 +1442,7 @@ class _CampusYearGridState extends State<CampusYearGrid> {
 
 /// One building's money in one year.
 ///
-/// Coloured on the same ramp the building sheets use, read against TODAY: a
+/// Colored on the same ramp the building sheets use, read against TODAY: a
 /// year already gone is red because that money is late, and a year twenty
 /// years out is green because it is somebody else's problem yet.
 class _MoneyCell extends StatelessWidget {
@@ -1673,7 +1673,7 @@ class CampusPlanSheet extends StatelessWidget {
                       context,
                       campus.overdueCost > 0
                           ? EquipmentCondition.overdue
-                          : EquipmentCondition.ageing,
+                          : EquipmentCondition.aging,
                     ),
                   ),
                 if (campus.overdueCost > 0)

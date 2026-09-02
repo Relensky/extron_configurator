@@ -238,7 +238,7 @@ void main() {
     test('a snapshot is detached from the live document', () {
       // The bug this guards: a snapshot that held the overrides' LIVE maps was
       // emptied along with them by the restore that was about to read it, so
-      // undoing a typed count, a renamed box or a recoloured run put back
+      // undoing a typed count, a renamed box or a recolored run put back
       // nothing at all. Every map a toJson hands out has to be a copy.
       final p = room();
       final box = p.addCablingBox(kind: CablingBoxKind.pullBox);

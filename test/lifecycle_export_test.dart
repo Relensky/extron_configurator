@@ -117,7 +117,7 @@ void main() {
       expect(chart, contains('<c:v>3000.0</c:v>'));
     });
 
-    test('one series per column, in the colours it was given', () {
+    test('one series per column, in the colors it was given', () {
       final chart = partOf(buildXlsx([moneyByYear()]), 'xl/charts/chart1.xml');
 
       expect('<c:ser>'.allMatches(chart).length, 2);

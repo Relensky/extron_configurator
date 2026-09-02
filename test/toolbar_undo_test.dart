@@ -111,7 +111,7 @@ void main() {
       final row = p.addProjectDelivery(itemName: 'Wall plate', qty: 18);
       // The boundary a dialog closing or a tab changing puts in. Without one,
       // adding the delivery and editing it are a single step - which is the
-      // intended behaviour, and not what this test is about.
+      // intended behavior, and not what this test is about.
       p.recordUndoPoint();
       p.updateProjectDelivery(row.copyWith(qty: 12), summary: 'edited - qty');
       await tester.pumpAndSettle();

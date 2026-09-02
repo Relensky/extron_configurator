@@ -2210,7 +2210,7 @@ class _PoField extends StatelessWidget {
   }
 }
 
-/// A labelled date on a dialog, with the × that takes it back off.
+/// A labeled date on a dialog, with the × that takes it back off.
 class _DateField extends StatelessWidget {
   final String label;
   final DateTime? value;
@@ -2400,7 +2400,7 @@ class PoFileButtons extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         // THE DOCUMENT IS THE BUTTON. Named by its own file, because that is
-        // what somebody recognises - 'PO-1188 signed.pdf' says more about
+        // what somebody recognizes - 'PO-1188 signed.pdf' says more about
         // whether this is the right paper than the word "order" ever will.
         OutlinedButton.icon(
           key: ValueKey('po_open_file_${po.id}'),

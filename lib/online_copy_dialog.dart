@@ -54,7 +54,7 @@ import 'online_roundtrip.dart';
 
 /// The folder everything publishes into, asking for one if the app has none.
 ///
-/// Returns '' when the question was cancelled, which is a complete answer:
+/// Returns '' when the question was canceled, which is a complete answer:
 /// nothing is published and nothing is said.
 Future<String> ensureOnlineFolder(
   BuildContext context,

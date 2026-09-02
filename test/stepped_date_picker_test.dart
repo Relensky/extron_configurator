@@ -203,7 +203,7 @@ void main() {
         (tester) async {
       // `DateTime(y)` is the 1st of January, so a range that ends there has a
       // final year holding exactly one day. Offering it puts somebody on a
-      // month grid with eleven months greyed out and no reason given, which is
+      // month grid with eleven months grayed out and no reason given, which is
       // the state that makes a picker feel broken.
       await open(
         tester,

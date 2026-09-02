@@ -74,8 +74,8 @@ class PrintableCheckbox extends StatelessWidget {
     if (PrintMode.of(context)) {
       return Text(
         value ? 'Yes' : 'No',
-        // Centred, because a checkbox is: on the estimate this sits in a
-        // fixed-width cell under a centred "Taxable", and a word hard against
+        // Centered, because a checkbox is: on the estimate this sits in a
+        // fixed-width cell under a centered "Taxable", and a word hard against
         // the left of it reads as belonging to the column before. Beside a
         // label — the fee rows — the Text is only as wide as the word, so
         // this changes nothing there.

@@ -138,7 +138,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('lifecycle_picture')));
     await tester.pumpAndSettle();
 
-    // A grid of coloured cells with no title and no totals on it explains
+    // A grid of colored cells with no title and no totals on it explains
     // nothing once it is in a document with no app around it.
     final sheet = find.byType(LifecyclePlanSheet);
     expect(

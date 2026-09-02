@@ -22,12 +22,12 @@ import 'package:extron_configurator/room_locations.dart';
 ///  depend on how the person exporting it liked their app. So the default is
 ///  BLACK, the same black either way, and a sheet that wants a light mat under
 ///  a scan says so per sheet — the layout sheet and an imported export want
-///  different backgrounds, and one shared colour would make the second
+///  different backgrounds, and one shared color would make the second
 ///  unreadable to fix the first.
 ///
 ///  What makes that safe is that the ink follows the PAPER: everything printed
 ///  on the sheet asks [FloorPlan.paperIsDark] rather than the theme, so no
-///  colour offered here is one the labels disappear on.
+///  color offered here is one the labels disappear on.
 /// ============================================================================
 void main() {
   group('the default', () {
@@ -80,8 +80,8 @@ void main() {
     });
   });
 
-  group('the colours on offer', () {
-    /// WCAG contrast between two opaque colours: (L1 + 0.05) / (L2 + 0.05).
+  group('the colors on offer', () {
+    /// WCAG contrast between two opaque colors: (L1 + 0.05) / (L2 + 0.05).
     double contrast(Color a, Color b) {
       final la = a.computeLuminance(), lb = b.computeLuminance();
       final hi = la > lb ? la : lb;
@@ -112,7 +112,7 @@ void main() {
     });
 
     test('none of them is a mid-tone', () {
-      // The old palette had a slate and a grey in it. Neither ink reads well
+      // The old palette had a slate and a gray in it. Neither ink reads well
       // on those, and which one the sheet picks comes down to a threshold
       // nobody can see — so they are not offered.
       for (final paper in kPaperSwatches) {
@@ -149,7 +149,7 @@ void main() {
       return p;
     }
 
-    test('writes the colour onto that sheet', () {
+    test('writes the color onto that sheet', () {
       final p = room();
       final id = p.avFloorPlans.single.id;
       p.setAvPlanPaperColor(id, const Color(0xFFCFD4DA));
@@ -162,7 +162,7 @@ void main() {
       p.setAvPlanPaperColor(id, const Color(0xFFCFD4DA));
       p.setAvPlanPaperColor(id, null);
       // Null has to mean "clear it", not "leave it alone" — the same trap the
-      // cable colour override has.
+      // cable color override has.
       expect(p.avFloorPlans.single.paperColor, isNull);
       expect(p.avFloorPlans.single.paper, FloorPlan.kPaperDefault);
     });
