@@ -2181,12 +2181,12 @@ typedef _DateMark = ({DateTime date, String label, Color color});
 const double _kMarkWidth = 128;
 const double _kMarkHeight = 44;
 
-/// FOUR RATHER THAN THREE, since the vendors' quote requests came onto the
-/// rail. On a six-vendor job the RFQ dates cluster - they all went out the
-/// same week - and three lanes put two of them on top of each other. Zooming
-/// in is the real answer to a cluster; a fourth lane is what keeps the fitted
-/// view honest until somebody does.
-const int _kMarkLanes = 4;
+/// AS MANY LANES AS THE DATES NEED. A fixed ceiling meant that on a
+/// six-vendor job, where the RFQ dates cluster in one week, the cards past the
+/// last lane were printed over the ones already there - and two dates on the
+/// SAME day always were, since no lane is ever clear of one. The rail grows
+/// downwards instead: every callout gets a lane to itself, and the card is
+/// taller by however many that took.
 const double _kMarkGap = 6;
 
 /// How much rail one month label needs to itself before the months thin out.
@@ -2566,25 +2566,21 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
     // apart stack instead of printing over each other. Lane 0 ends up nearest
     // the rail, which is where the commonest case - a rail that needs one lane
     // - should be.
-    final used = List<double>.filled(_kMarkLanes, -1e9);
+    //
+    // NOTHING OVERLAPS. When every lane so far is still occupied - a cluster
+    // of RFQs in one week, or several dates on the same day - a new lane is
+    // opened rather than a card dropped on top of another, and the plot is
+    // that much taller.
+    final used = <double>[];
     final placed = <({_DateMark mark, double left, int lane})>[];
     for (final mark in marks) {
       final left = (xOf(mark.date) - markWidth / 2)
           .clamp(0.0, (width - markWidth).clamp(0.0, width));
-      // Every lane still occupied: the card goes in whichever clears soonest,
-      // which is the least bad overlap on offer.
-      var slot = 0;
-      var fallback = 0;
-      var clear = false;
-      for (var i = 0; i < _kMarkLanes; i++) {
-        if (used[i] < left - _kMarkGap) {
-          slot = i;
-          clear = true;
-          break;
-        }
-        if (used[i] < used[fallback]) fallback = i;
+      var slot = used.indexWhere((end) => end < left - _kMarkGap);
+      if (slot < 0) {
+        slot = used.length;
+        used.add(0);
       }
-      if (!clear) slot = fallback;
       used[slot] = left + markWidth;
       placed.add((mark: mark, left: left, lane: slot));
     }

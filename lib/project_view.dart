@@ -1080,7 +1080,7 @@ class _ProjectViewState extends State<ProjectView> {
       fieldId: 'project_name_${provider.currentProjectPath}',
       initial: provider.project.name,
       label: 'Project',
-      hint: 'Bessey Hall AV refresh',
+      hint: 'Meriam Library AV refresh',
       onChanged: (v) => provider.setProjectField(name: v),
     );
     final building = LiveTextField(

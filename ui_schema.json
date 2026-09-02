@@ -1323,10 +1323,10 @@
       "description": "How many wireless presentation devices (ShareLink, VIA) the room has. Sets how many WIRELESSDEVICE_n blocks exist; the wireless source button also needs input_wireless set."
     },
     "gve_bldg": {
-      "description": "Building CODE for GVE (e.g. 'BSS' for Behavioral and Social Science), from buildings.json. The Setup Wizard stores the code here and generates gui_full_room_name from the full building name."
+      "description": "Building CODE for GVE (e.g. 'MLIB' for Meriam Library), from buildings.json. The Setup Wizard stores the code here and generates gui_full_room_name from the full building name."
     },
     "gve_room": {
-      "description": "Room number as GVE knows it (e.g. '103'). Paired with gve_bldg it identifies the room to GVE, and the two together name the backup files this app writes (BSS103_old_config.json)."
+      "description": "Room number as GVE knows it (e.g. '031'). Paired with gve_bldg it identifies the room to GVE, and the two together name the backup files this app writes (MLIB031_old_config.json)."
     },
     "gve_id_processor": {
       "description": "GVE device ID for the processor itself, copied from GVE after the room is created there. Carried in the config as the room's inventory record - device connection statuses are reported under each device block's own gve_id."
@@ -1620,7 +1620,7 @@
       "__comment": "One wildcard entry covers gui_preset_name_inst_1 through _4."
     },
     "gui_full_room_name": {
-      "description": "Room name printed across the panel's pages, e.g. 'Butte Hall 103'. Free text for people in the room to read - the Setup Wizard fills it in from the building name and room number, unlike gve_bldg/gve_room which are the codes GVE matches on."
+      "description": "Room name printed across the panel's pages, e.g. 'Meriam Library 031'. Free text for people in the room to read - the Setup Wizard fills it in from the building name and room number, unlike gve_bldg/gve_room which are the codes GVE matches on."
     },
     "mic_max_volume": {
       "description": "Loudest the microphone slider can reach, in dB as the DSP/switcher reads it (processor default 0). With mic_min_volume it defines the range the panel's mic slider maps onto - so 0 to -10 means a full slider is 0 dB and the bottom is -10 dB, not 'off'.",

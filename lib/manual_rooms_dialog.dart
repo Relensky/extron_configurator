@@ -395,7 +395,7 @@ class _ManualRoomFormState extends State<ManualRoomForm> {
                 autofocus: true,
                 decoration: const InputDecoration(
                   labelText: 'Room',
-                  hintText: 'e.g. BSS 214',
+                  hintText: 'e.g. MLIB 031',
                 ),
               ),
               const SizedBox(height: 12),

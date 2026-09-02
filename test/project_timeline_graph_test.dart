@@ -186,6 +186,80 @@ void main() {
       expect(along, closeTo(0.25, 0.06));
     });
 
+    // NOTHING ON THE RAIL SITS ON TOP OF ANYTHING ELSE. Six phases handed over
+    // on the same day are six callouts at the same point on the rail, and a
+    // fixed number of lanes meant the ones past the last lane were printed
+    // over the cards already there - the dates that cluster being exactly the
+    // dates somebody opened the graph to tell apart.
+    testWidgets('stacks same-day dates instead of printing them over each '
+        'other', (tester) async {
+      final same = DateTime(2026, 6, 1);
+      await pump(
+        tester,
+        job(
+          deadline: DateTime(2026, 12, 1),
+          leadTimes: const {'Rack switcher': 30},
+          tracks: [
+            for (var i = 1; i <= 6; i++)
+              ProjectTrack(id: 'trk$i', name: 'Phase $i', deadline: same),
+          ],
+        ),
+      );
+
+      final rects = <Rect>[
+        for (var i = 1; i <= 6; i++) tester.getRect(mark('Phase $i on site')),
+        tester.getRect(mark('Today')),
+        tester.getRect(mark('Delivery deadline')),
+      ];
+      for (var a = 0; a < rects.length; a++) {
+        for (var b = a + 1; b < rects.length; b++) {
+          expect(
+            rects[a].overlaps(rects[b]),
+            isFalse,
+            reason: 'callout $a is drawn over callout $b',
+          );
+        }
+      }
+    });
+
+    // The rail grows DOWNWARDS to fit them: the lanes stack above the line, so
+    // a job whose dates all land together is a taller graph rather than a
+    // tidier one.
+    testWidgets('grows taller for the lanes the dates need', (tester) async {
+      Future<double> calloutSpan(List<ProjectTrack> tracks) async {
+        await pump(
+          tester,
+          job(
+            deadline: DateTime(2026, 12, 1),
+            leadTimes: const {'Rack switcher': 30},
+            tracks: tracks,
+          ),
+        );
+        final rects = <Rect>[
+          tester.getRect(mark('Today')),
+          tester.getRect(mark('Delivery deadline')),
+          for (final t in tracks) tester.getRect(mark('${t.name} on site')),
+        ];
+        final top = rects.map((r) => r.top).reduce((a, b) => a < b ? a : b);
+        final bottom = rects
+            .map((r) => r.bottom)
+            .reduce((a, b) => a > b ? a : b);
+        return bottom - top;
+      }
+
+      final plain = await calloutSpan(const []);
+      final crowded = await calloutSpan([
+        for (var i = 1; i <= 6; i++)
+          ProjectTrack(
+            id: 'trk$i',
+            name: 'Phase $i',
+            deadline: DateTime(2026, 6, 1),
+          ),
+      ]);
+      // Six more cards, none of them beside another: six more lanes of rail.
+      expect(crowded, greaterThan(plain * 2));
+    });
+
     testWidgets('draws nothing when the job has only one date', (tester) async {
       await pump(tester, job());
       expect(find.byKey(const ValueKey('timeline_date_graph')), findsNothing);

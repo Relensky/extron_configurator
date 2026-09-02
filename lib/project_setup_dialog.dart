@@ -381,7 +381,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                       autofocus: true,
                       decoration: const InputDecoration(
                         labelText: 'Project name',
-                        hintText: 'Holt Hall Refresh',
+                        hintText: 'Meriam Library Refresh',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -394,7 +394,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                       controller: _building,
                       decoration: const InputDecoration(
                         labelText: 'Building',
-                        hintText: 'BSS',
+                        hintText: 'MLIB',
                         border: OutlineInputBorder(),
                       ),
                     ),

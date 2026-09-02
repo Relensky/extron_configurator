@@ -1269,7 +1269,7 @@ class _WhereRow extends StatelessWidget {
           context,
           title: 'Into storage',
           label: 'Where is it being held?',
-          hint: 'Bessey basement, rack 3',
+          hint: 'MLIB 031, rack 3',
           initial: row.location,
           suggestions: provider.project.deliveryLocations,
         );
@@ -2155,7 +2155,7 @@ class _LocationField extends StatelessWidget {
         // that tells them the shape of the answer.
         hintText: stored
             ? 'MLIB 031'
-            : 'Bessey loading dock, Central Stores, 1 Campus Drive',
+            : 'MLIB loading dock, Central Stores, 1 Campus Drive',
         helperText: 'Any address or place - type one that is not on the list.',
         border: const OutlineInputBorder(),
         isDense: true,
