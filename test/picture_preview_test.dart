@@ -342,14 +342,11 @@ void main() {
         ),
       );
 
-  /// A point on the picture with nothing drawn on it - its far corner, away
-  /// from the marks these tests put near the top-left.
+  /// A point on the picture with nothing drawn on it - its far corner.
   ///
-  /// Measured off the canvas as laid out rather than written down as a fixed
-  /// offset: how much of the window the picture gets depends on how many
-  /// lines the toolbar has wrapped onto, and a fixed offset that lands
-  /// OUTSIDE the canvas is a click that never reaches it - which reads in a
-  /// test as a mark that refused to be dropped.
+  /// Measured off the canvas rather than hardcoded: how much of the window
+  /// the picture gets depends on how many lines the toolbar wrapped onto, and
+  /// a click landing outside the canvas never reaches it.
   Offset bareCanvas(WidgetTester tester) =>
       tester.getRect(find.byKey(const ValueKey('annotation_canvas')))
           .bottomRight -
@@ -432,11 +429,8 @@ void main() {
         ),
       );
 
-  /// Every control on the toolbar, by the finder that reaches it.
-  ///
-  /// The colors are counted rather than named: they are drawn containers
-  /// with no text or tooltip on them, so what is checked is that all eight
-  /// are laid out and hittable.
+  /// Every control on the toolbar that a tooltip can reach. The colors have
+  /// none, so they are counted instead.
   const List<String> toolbarTooltips = [
     'Pen',
     'Highlighter',
@@ -451,12 +445,9 @@ void main() {
     'Close without saving',
   ];
 
-  /// THE BAR WRAPS RATHER THAN CUTS. The editor is opened over whatever it is
-  /// annotating, so it gets shrunk - and a color or a Save button that has
-  /// gone off the edge, behind an overflow stripe or into a sideways
-  /// scroller, is one nobody can press and most will not know is there. At
-  /// every width the bar is allowed to get taller instead, and everything
-  /// stays on screen.
+  /// THE BAR WRAPS RATHER THAN CUTS. A color or a Save button off the edge -
+  /// behind an overflow stripe or in a sideways scroller - is one nobody can
+  /// press. The bar gets taller instead.
   for (final Size window in [
     const Size(1200, 700),
     const Size(700, 500),
@@ -496,9 +487,8 @@ void main() {
 
   testWidgets('the narrow toolbar leaves the picture room to be drawn on',
       (tester) async {
-    // Wrapping costs height, and the canvas pays for it - but it is the
-    // canvas the editor exists for, so it has to keep a usable share of a
-    // small window rather than being squeezed to a sliver by the bar.
+    // Wrapping costs height and the canvas pays for it, but the canvas is
+    // what the editor exists for - it keeps a usable share of a small window.
     await openEditor(tester, window: const Size(460, 620));
     expect(canvasSize(tester).height, greaterThan(200));
   });

@@ -782,29 +782,12 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                 : Colors.grey[200],
             borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
           ),
-          // NOTHING FALLS OFF THE EDGE; THE BAR GETS TALLER INSTEAD.
-          //
-          // This bar was a plain Row of everything, and it had no slack left:
-          // narrow the window and Save and Close went off the right-hand edge
-          // behind a yellow-and-black overflow bar, where they could not be
-          // pressed. Giving the tools a horizontal scroller fixed the buttons
-          // and cost the colors instead - a palette somebody has to drag
-          // sideways to see is a palette they do not know is there, and the
-          // color they want is the one that scrolled away.
-          //
-          // A screenshot editor is shrunk all the time, because it is opened
-          // over whatever it is annotating. So the bar wraps: it is a [Wrap]
-          // of GROUPS, each an unbreakable Row, and a group that will not fit
-          // beside the one before it drops to the next line. Two lines at a
-          // typical dialog width, three when it is really squeezed, one when
-          // there is room - and every tool, color and button stays on screen
-          // and stays pressable at all of them.
-          //
-          // Keep the groups small. The widest one sets the narrowest window
-          // this bar survives, which is why the drawing tools and the two
-          // that move things about are separate groups rather than one row of
-          // seven, and why the ways out sit together at the end where they
-          // are looked for.
+          // THE BAR WRAPS RATHER THAN CUTS. The editor opens over whatever
+          // it is annotating, so it gets shrunk. Each group below is an
+          // unbreakable Row; one that will not fit drops to the next line, so
+          // every tool, color and button stays on screen and pressable at any
+          // width. The widest group sets the narrowest window this bar
+          // survives - keep them small.
           child: Wrap(
             spacing: 8,
             runSpacing: 4,
@@ -833,30 +816,26 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                       'Text (click to place)'),
                 ],
               ),
-              // The two that draw nothing and move things instead.
+              // The two that draw nothing: the pointer picks a mark up to
+              // move, recolor or retype it (see [_selected]), the hand moves
+              // the picture itself (see [_dragPicture]).
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // THE POINTER. Nothing here is final until Save, and this
-                  // is how that is reached: click a mark to pick it up, drag
-                  // to move it, double-click a label to retype it. See
-                  // [_selected].
                   _toolButton(AnnotationTool.select, Icons.near_me_outlined,
                       'Select - move, recolor or retype a mark'),
-                  // THE HAND. Moves the picture under the pointer, itself -
-                  // see [_dragPicture] for why it cannot leave that to the
-                  // scroll views.
                   _toolButton(AnnotationTool.pan, Icons.pan_tool_outlined,
                       'Move the picture'),
                 ],
               ),
-              // THE WHOLE PALETTE, ALWAYS. It is one group so the eight
-              // colors are never split across two lines, which would read as
-              // two palettes.
+              // One group, so the eight colors never split across two lines
+              // and read as two palettes.
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: _palette.map(_colorSwatch).toList(),
               ),
+              // Stroke width, and Clear all - destructive, so it sits with the
+              // tools rather than beside Save.
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -874,10 +853,6 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                       }),
                     ),
                   ),
-                  // STARTING OVER LIVES WITH THE TOOLS, not with the ways
-                  // out: it is destructive, and it does not belong next to
-                  // the button somebody is aiming for when they want to
-                  // finish.
                   IconButton(
                     key: const ValueKey('annotation_clear'),
                     icon: const Icon(Icons.delete_outline, size: 20),
@@ -892,11 +867,11 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                   ),
                 ],
               ),
-              // BACK AND FORWARD, AND THE ONE MARK IN HAND. Undo is what
-              // somebody grabs the instant a stroke goes wrong, and Redo
-              // earns its place beside it for the same reason the rest of the
-              // app has one - an undo that cannot be reconsidered is an undo
-              // people are wary of pressing.
+              // Undo is grabbed the instant a stroke goes wrong; Redo because
+              // an undo that cannot be reconsidered is one people are wary of
+              // pressing. Edit text lights only for a label - double-clicking
+              // does the same, but a gesture is not an affordance. Delete
+              // takes the one mark in hand, which is what Undo cannot reach.
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -917,12 +892,6 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                     onPressed:
                         _undoneAnnotations.isEmpty ? null : _redoAnnotation,
                   ),
-                  // RETYPING, SAID OUT LOUD. Double-clicking the label does
-                  // the same thing and is quicker, but a gesture is not an
-                  // affordance: somebody who has just clicked a label and can
-                  // see it is held needs to be told that its words can be
-                  // changed. Lit only for a label, because it is the only
-                  // mark that has any.
                   IconButton(
                     key: const ValueKey('annotation_edit_text'),
                     icon: const Icon(Icons.edit_note, size: 20),
@@ -931,10 +900,6 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                         ? () => _editSelectedText()
                         : null,
                   ),
-                  // The one mark in hand, thrown away without touching the
-                  // others - the counterpart of the pointer tool, and what
-                  // the Delete key does. Undo only ever reaches the LAST
-                  // mark, which is no use for the label three arrows ago.
                   IconButton(
                     key: const ValueKey('annotation_delete_selected'),
                     icon: const Icon(Icons.backspace_outlined, size: 18),
@@ -943,8 +908,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                   ),
                 ],
               ),
-              // THE WAYS OUT, TOGETHER AND LAST. Whichever line they land on,
-              // they land on it as a set, in the order somebody reads them.
+              // The ways out, together and last.
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
