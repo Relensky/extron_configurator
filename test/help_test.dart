@@ -36,6 +36,75 @@ void main() {
       }
     });
 
+    test('every topic opens in words a non-technical reader already has', () {
+      // WHO THE FIRST SENTENCE IS FOR. Most of this book is written for the
+      // person doing the work and is dense on purpose. That is the wrong
+      // prose for the department head handed the app to look at one number,
+      // and for the new starter on their second day - so every topic opens
+      // with a plain line, and this is what keeps it plain.
+      for (final topic in kHelpTopics) {
+        expect(
+          topic.plain.trim(),
+          isNotEmpty,
+          reason: '"${topic.title}" opens straight into the detail',
+        );
+        expect(
+          topic.plain.trim().length,
+          lessThan(280),
+          reason: '"${topic.title}" opens with a paragraph, not a sentence or '
+              'two - the point of it is that it can be read at a glance',
+        );
+        expect(
+          topic.plain.trim().length,
+          greaterThan(40),
+          reason: '"${topic.title}" opens with a label rather than an answer',
+        );
+        // A summary that needs the rest of the book is not a way in.
+        expect(
+          topic.plain.toLowerCase(),
+          isNot(contains('see "')),
+          reason: '"${topic.title}" sends the reader somewhere else before it '
+              'has told them anything',
+        );
+      }
+    });
+
+    test('the plain line does not lean on the words it is there to avoid', () {
+      // The house vocabulary. Every one of these is a perfectly good word
+      // FURTHER DOWN the page, where there is room to have introduced it; in
+      // the opening line it is the jargon that sent somebody to help in the
+      // first place.
+      const houseWords = [
+        'config',
+        'gve',
+        'ryg',
+        'schema',
+        'preset',
+        'sidecar',
+        'jack field',
+        'rollup',
+        'base cost',
+        'line item',
+        'tier',
+        'catalog entry',
+      ];
+      for (final topic in kHelpTopics) {
+        final opening = topic.plain.toLowerCase();
+        // A topic ABOUT one of these has to be allowed to name it - the title
+        // is where that permission comes from.
+        final titled = topic.title.toLowerCase();
+        for (final word in houseWords) {
+          if (titled.contains(word)) continue;
+          expect(
+            opening.contains(word),
+            isFalse,
+            reason: '"${topic.title}" opens with "$word", which is the jargon '
+                'somebody came to help to have explained',
+          );
+        }
+      }
+    });
+
     test('no two topics share a title', () {
       // The reader is held by TITLE, and the haystack is cached by it.
       final seen = <String>{};
@@ -167,7 +236,18 @@ void main() {
         find.textContaining('${kHelpTopics.length} features'),
         findsOneWidget,
       );
-      // Grouped under section headings while nothing is typed.
+      // Grouped under section headings while nothing is typed. Scrolled to
+      // rather than assumed on screen: the book grows, and a test that
+      // pinned a heading to the opening viewport would fail the next time
+      // somebody wrote a topic rather than the next time grouping broke.
+      await tester.scrollUntilVisible(
+        find.text('THE JOB'),
+        200,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('help_topics')),
+          matching: find.byType(Scrollable),
+        ),
+      );
       expect(find.text('THE JOB'), findsOneWidget);
     });
 

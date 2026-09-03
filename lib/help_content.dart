@@ -44,6 +44,29 @@ class HelpTopic {
   /// of the things that are pressed.
   final String where;
 
+  /// THE ANSWER IN ONE BREATH, in words somebody who does not build AV
+  /// systems already uses.
+  ///
+  /// ============================================================================
+  ///  WHO THE FIRST SENTENCE IS FOR
+  /// ============================================================================
+  ///  Most of this book is written for the person doing the work, and it is
+  ///  dense on purpose: it says why a thing behaves the way it does, because
+  ///  that is what stops somebody working around it. That is the right prose
+  ///  for a technician and the wrong prose for the department head who has
+  ///  been handed the app to look at one number, and for the new starter on
+  ///  their second day.
+  ///
+  ///  So every topic opens with a plain sentence or two: what this is, and why
+  ///  anybody would touch it. No jargon that the sentence does not itself
+  ///  explain, no model numbers, no reference to another topic. Somebody who
+  ///  reads only this should come away able to say what the feature is FOR.
+  ///
+  ///  The detail is still underneath and still unabridged. This is a way in,
+  ///  not a replacement - a summary that quietly replaced the reasoning would
+  ///  cost the reader who needs the reasoning.
+  final String plain;
+
   /// What it does, why it works that way, and what it does NOT do. Written as
   /// prose paragraphs separated by blank lines.
   final String body;
@@ -55,6 +78,7 @@ class HelpTopic {
     required this.title,
     required this.section,
     required this.where,
+    required this.plain,
     required this.body,
     this.keywords = const [],
   });
@@ -68,7 +92,14 @@ class HelpTopic {
   /// fifty joined strings per keystroke is the thing being avoided here.
   String get haystack => _haystacks.putIfAbsent(
     title,
-    () => [title, section, where, body, ...keywords].join(' ').toLowerCase(),
+    () => [
+      title,
+      section,
+      where,
+      plain,
+      body,
+      ...keywords,
+    ].join(' ').toLowerCase(),
   );
 }
 
@@ -188,6 +219,11 @@ const List<HelpTopic> kHelpTopics = [
     title: 'What this app is for',
     section: 'Start here',
     where: 'Everywhere',
+    plain:
+        'It designs the audio-visual system in a room: what equipment goes '
+        'in, how it is wired, what it costs, and when it will need '
+        'replacing. One room, a whole building, or every building on '
+        'campus.',
     keywords: ['overview', 'intro', 'getting started', 'what is this'],
     body:
         'You describe a room once - what is in it, what plugs into what, when '
@@ -207,6 +243,11 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Where the app keeps your rules',
     section: 'Start here',
     where: 'App Config tab, and the Schema, Flow Rules and Catalog tabs',
+    plain:
+        'Prices, labor rates, supplier names and the equipment list live in '
+        'shared files rather than inside each job, so everybody works off '
+        'the same numbers. Point them at a shared drive once and the team '
+        'stays in step.',
     keywords: [
       'json',
       'settings',
@@ -243,6 +284,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Pricing tier - list or education',
     section: 'Start here',
     where: 'App Config tab → Pricing',
+    plain:
+        'Switches every price in the app between the manufacturer list '
+        'price and the discounted education price. Pick the one your '
+        'institution actually pays and every estimate follows.',
     keywords: ['msrp', 'list price', 'education', 'edu', 'tier', 'discount'],
     body:
         'Every price in this app is published at two tiers: MSRP (list) and '
@@ -262,6 +307,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Building a room from a preset',
     section: 'The room',
     where: 'Wizard tab',
+    plain:
+        'Most rooms are the same handful of designs over and over. Pick the '
+        'type of room you are building and the app fills in the usual '
+        'equipment, wiring and labelling, ready for you to adjust.',
     keywords: ['new room', 'preset', 'template', 'start', 'wizard'],
     body:
         'The wizard walks the settings a room actually needs, in the order '
@@ -276,6 +325,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Opening and converting an older config',
     section: 'The room',
     where: 'Open, from the title bar',
+    plain:
+        'Opens a room file made by an older version of the app and brings '
+        'it up to date. Nothing is thrown away, and you see what changed '
+        'before you keep it.',
     keywords: ['load', 'legacy', 'key map', 'migrate', 'convert', 'old file'],
     body:
         'A config written against an older key set is translated on load using '
@@ -290,6 +343,11 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Devices in a room, and their drivers',
     section: 'The room',
     where: 'Devices tab',
+    plain:
+        'Every piece of equipment in the room, and the small piece of '
+        'software the control system needs in order to talk to it. '
+        'Equipment with no driver is flagged, because it will not work '
+        'until somebody supplies one.',
     keywords: ['driver', 'module', 'python', 'control', 'model'],
     body:
         'Each device in the room has a model and, where something drives it, a '
@@ -302,9 +360,52 @@ const List<HelpTopic> kHelpTopics = [
         'about a thing that can never be fixed.',
   ),
   HelpTopic(
+    title: 'Building the control side from the drawing',
+    section: 'The room',
+    where: 'Cost tab, the System tab placeholder, and the missing-modules '
+        'banner',
+    plain:
+        'A room is usually drawn and priced long before anybody sets up the '
+        'control system, which used to mean typing every piece of equipment '
+        'in a second time. This does it off the drawing instead, in one '
+        'press.',
+    keywords: [
+      'control side',
+      'build control',
+      'control blocks',
+      'prefill',
+      'missing modules',
+      'second time',
+      'retype',
+    ],
+    body:
+        'Somebody walks the space, lists the gear, draws a rack and puts a '
+        'number on it. That leaves a full diagram and a priced estimate and '
+        'no control setup at all - so building the control side has meant '
+        'entering every device again by hand.\n\n'
+        'This creates one control block per device on the drawing, in the '
+        'right family, with the same defaults the Setup Wizard writes, and '
+        'named in order per family - "Projector 1", "Projector 2" - rather '
+        'than from whatever was typed on the canvas. The box on the drawing '
+        'and the block become one device, and the cables come with it.\n\n'
+        'EVERYTHING IS SHOWN BEFORE ANYTHING IS WRITTEN, with two things '
+        'called out: equipment no driver claims, which is created with the '
+        'driver left blank rather than guessed, so it stays on every '
+        'missing-driver list until somebody answers it; and equipment that '
+        'fits no device family, which usually means a speaker or a wall plate '
+        'that never had a control block - though a projector on that list '
+        'means its catalog category is what needs fixing.\n\n'
+        'Nothing is destructive. Blocks that already exist are left alone, '
+        'and the counts per family are raised rather than reset.',
+  ),
+  HelpTopic(
     title: 'Pushing a config to the processor',
     section: 'The room',
     where: 'Title bar → Send',
+    plain:
+        'Sends the finished settings over the network to the control '
+        'processor in the room. This is the step that makes the design '
+        'real.',
     keywords: ['sftp', 'upload', 'deploy', 'processor', 'push', 'send'],
     body:
         'The finished config.json goes to the processor over SFTP. The app '
@@ -319,6 +420,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Control schematic',
     section: 'The drawings',
     where: 'Schematic tab',
+    plain:
+        'A picture of what controls what: which processor talks to which '
+        'piece of equipment, and over what sort of connection. It is the '
+        'drawing you hand to whoever has to fix the room later.',
     keywords: ['control', 'diagram', 'processor', 'topology'],
     body:
         'What talks to the processor and how - IP, serial, relay, IR. Drawn '
@@ -331,6 +436,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'AV signal flow',
     section: 'The drawings',
     where: 'AV Flow tab',
+    plain:
+        'A diagram of how picture and sound travel through the room, from '
+        'the laptop or camera to the screens and speakers. Drag the boxes '
+        'around and draw the connections between them.',
     keywords: ['signal', 'flow', 'hdmi', 'switcher', 'routing', 'diagram'],
     body:
         'What plugs into what, drawn from the switcher input and output '
@@ -348,6 +457,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Rack elevations',
     section: 'The drawings',
     where: 'Racks tab',
+    plain:
+        'A front-on drawing of the equipment rack showing what sits on '
+        'which shelf. It also warns you when things will not fit or will '
+        'run too hot.',
     keywords: ['rack', 'ru', 'elevation', 'shelf', 'blank', 'vent'],
     body:
         'Every racked box on its rails, at the height the catalog says it is. '
@@ -363,6 +476,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Floor plan',
     section: 'The drawings',
     where: 'Floor Plan tab',
+    plain:
+        'Marks where things physically are in the room: screens, speakers, '
+        'wall plates, the rack. Drop them onto the architect drawing, or '
+        'onto a blank sheet if there is not one yet.',
     keywords: ['plan', 'layout', 'location', 'room drawing', 'annotate'],
     body:
         'A picture of the room with the equipment placed on it. Locations '
@@ -374,6 +491,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Cabling and the cable schedule',
     section: 'The drawings',
     where: 'Cabling tab',
+    plain:
+        'Every cable the room needs, how long it is, and where each end '
+        'goes. It comes out as a list an installer can pull and label from.',
     keywords: ['cable', 'schedule', 'run', 'length', 'pull', 'conduit'],
     body:
         'Every run on the AV flow, with the type it carries and the length it '
@@ -391,6 +511,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'The cost estimate',
     section: 'The money',
     where: 'Cost tab',
+    plain:
+        'What one room comes to: equipment, labor, fees and tax. Change a '
+        'price or a quantity and the total follows.',
     keywords: ['estimate', 'quote', 'price', 'money', 'total', 'bid'],
     body:
         'What this room costs, built from the boxes on the drawing, the cable '
@@ -406,6 +529,11 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Base costs - the category rate card',
     section: 'The money',
     where: 'Cost tab → Base costs',
+    plain:
+        'A typical price for each kind of equipment, used when a room has, '
+        'say, a projector on the drawing but nobody has chosen which '
+        'projector yet. It means an early budget still has a real number in '
+        'it.',
     keywords: [
       'base cost',
       'rate card',
@@ -430,6 +558,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Labor rates',
     section: 'The money',
     where: 'Cost tab → Labor rates',
+    plain:
+        'What an hour of each trade costs, set once and used by every job. '
+        'Change a rate here and every estimate in the app follows.',
     keywords: ['labor', 'labor', 'hours', 'rate', 'install', 'engineer'],
     body:
         'What an hour of each role costs, and how many hours the estimate '
@@ -440,6 +571,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Spares',
     section: 'The money',
     where: 'Cost tab → Spares',
+    plain:
+        'Extra units bought alongside the job, so a failure in two years '
+        'does not mean the room waits weeks for a replacement. They are '
+        'priced separately so the spend is visible rather than buried.',
     keywords: ['spare', 'attic stock', 'extra', 'shelf'],
     body:
         'Parts bought for the shelf rather than for a position on the drawing. '
@@ -451,6 +586,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Swapping a unit for another',
     section: 'The money',
     where: 'Cost tab → the swap control on a line',
+    plain:
+        'Quote a different product on a line without redrawing the room. '
+        'For the like-for-like substitution you make when the first choice '
+        'is unavailable or too expensive.',
     keywords: ['swap', 'substitute', 'change model', 'alternative'],
     body:
         'Quote a different part on a line without redrawing the room. The swap '
@@ -467,6 +606,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'What a project is',
     section: 'The job',
     where: 'Project tab',
+    plain:
+        'A job: one building, its rooms, its budget, and everything that '
+        'has to be bought and delivered for it. Rooms are linked in rather '
+        'than copied, so editing a room updates the job as well.',
     keywords: ['project', 'building', 'job', 'rollup'],
     body:
         'A building, quoted as one job: a list of rooms, everything they need '
@@ -480,6 +623,11 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Rooms on a job',
     section: 'The job',
     where: 'Project tab → Rooms',
+    plain:
+        'Which rooms are on this job and what each one costs. Rooms nobody '
+        'has designed yet can still be listed with a name, a date and a '
+        'rough figure, so the budget covers the whole building rather than '
+        'the part of it somebody has drawn.',
     keywords: ['rooms', 'add room', 'alternate', 'included', 'line item'],
     body:
         'Which configs are on the job and what each comes to. A room can be '
@@ -494,6 +642,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'The master parts list',
     section: 'The job',
     where: 'Project tab → Equipment',
+    plain:
+        'Everything the whole job has to buy, in one list, with the same '
+        'part in three rooms added up into one line. This is what goes out '
+        'to suppliers.',
     keywords: [
       'parts',
       'master list',
@@ -521,6 +673,11 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Packages and the rules that fill them',
     section: 'The job',
     where: 'Project tab → Packages',
+    plain:
+        'Splits the shopping list into batches that go to different '
+        'suppliers, screens from one and cabling from another. Rules decide '
+        'which parts land in which batch, so you are not sorting hundreds '
+        'of lines by hand.',
     keywords: [
       'package',
       'lot',
@@ -555,6 +712,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Vendors - the companies you ask',
     section: 'The job',
     where: 'Project tab → Packages, below the packages',
+    plain:
+        'The suppliers on this job. Each one can be invited to quote on one '
+        'or more of the batches above.',
     keywords: [
       'vendor',
       'supplier',
@@ -583,6 +743,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Sending one package to several vendors',
     section: 'The job',
     where: 'Project tab → Packages → Invite a vendor',
+    plain:
+        'Sends the same request for a price to several suppliers at once, '
+        'so what comes back can be compared like for like.',
     keywords: [
       'rfq',
       'quote request',
@@ -618,6 +781,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Comparing the quotes that come back',
     section: 'The job',
     where: 'Project tab → Packages, and the Timeline',
+    plain:
+        'Puts the quotes side by side, line by line, so you can see who is '
+        'cheaper on what, and where a quote has quietly left something out.',
     keywords: [
       'quote',
       'compare',
@@ -662,6 +828,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Awarding a package',
     section: 'The job',
     where: 'Project tab → Packages → Award...',
+    plain:
+        'Records which supplier won a batch. From that moment every part in '
+        'it says who is supplying it.',
     keywords: [
       'award',
       'order',
@@ -700,6 +869,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Purchase orders and the delivery log',
     section: 'The job',
     where: 'Project tab → Deliveries',
+    plain:
+        'Tracks what has been ordered, what has actually turned up, and '
+        'where it is being kept until it goes into the room.',
     keywords: [
       'po',
       'purchase order',
@@ -738,6 +910,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Saved delivery locations',
     section: 'The job',
     where: 'App Config tab -> Delivery locations, and every delivery log',
+    plain:
+        'The loading docks and store rooms you receive equipment at, typed '
+        'in once and then picked from a list. It stops one store room being '
+        'spelled four different ways across a year of deliveries.',
     keywords: [
       'delivery location',
       'storage',
@@ -774,6 +950,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'The default vendor list',
     section: 'The job',
     where: 'App Config tab -> Default vendors, and Project tab -> Packages',
+    plain:
+        'Your usual suppliers, kept in one place, so every new job starts '
+        'with them already listed instead of being typed in again.',
     keywords: [
       'vendor',
       'supplier',
@@ -796,8 +975,13 @@ const List<HelpTopic> kHelpTopics = [
         'everybody starts from one directory, which is what stops the same '
         'supplier being spelled three ways across three quote comparisons.\n\n'
         'A NEW JOB ARRIVES WITH THEM on its Packages tab. A job started before '
-        'a company was added can take it from the button beside Add vendor on '
-        'the same tab, which only ever offers what the job has not got.\n\n'
+        'a company was added can take it from "Add saved vendors" beside Add '
+        'vendor on the same tab, which only ever offers what the job has not '
+        'got. It opens the list and you TICK the ones you want: a shop with '
+        'nineteen suppliers on the share is not asking eleven of them to '
+        'quote a two-room refresh, and adding all of them so nine can be '
+        'deleted is not a shortcut. "Tick all" is there for the job that has '
+        'never been seeded.\n\n'
         'What lands on a job is a COPY. Renaming a vendor there, or dropping '
         'the ones this job is not using, changes nothing on the share - and '
         'changing the share does not rewrite a job that has already been '
@@ -807,6 +991,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'The delivery timeline',
     section: 'The job',
     where: 'Project tab → Timeline',
+    plain:
+        'A calendar view of when equipment is due to arrive and when the '
+        'work is booked, so a clash shows up before it becomes a problem on '
+        'site.',
     keywords: [
       'timeline',
       'schedule',
@@ -837,6 +1025,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Zooming the date rail',
     section: 'The job',
     where: 'Project tab → Timeline → the arrows on THE DATES card',
+    plain:
+        'Changes how much time the timeline shows at once, from a few weeks '
+        'to the whole job.',
     keywords: ['zoom', 'fit', 'multi year', 'rail', 'graph', 'scroll'],
     body:
         'Fitted, the rail shows the whole job. On a three-year refresh that is '
@@ -854,6 +1045,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Phases and tracks',
     section: 'The job',
     where: 'Project tab → Timeline → the phase strip',
+    plain:
+        'Splits a long job into stages, and into strands of work that run '
+        'alongside each other, so the timeline reads as a plan rather than '
+        'as one very long bar.',
     keywords: ['phase', 'track', 'infrastructure', 'sequence', 'stage'],
     body:
         'A job is rarely one delivery. Infrastructure goes in while the walls '
@@ -867,6 +1062,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'The responsibility matrix',
     section: 'The job',
     where: 'Project tab → Responsibility',
+    plain:
+        'Who is doing what: which parts your team supplies and installs, '
+        'and which the contractor or the department handles. It settles on '
+        'paper the arguments that otherwise happen on site.',
     keywords: [
       'responsibility',
       'matrix',
@@ -895,6 +1094,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'To-dos, notes and reminders on a job',
     section: 'The job',
     where: 'Project tab → To-do and Notes',
+    plain:
+        'Loose ends recorded against the job itself rather than in somebody '
+        'notebook, so they survive that person being on leave.',
     keywords: ['todo', 'to do', 'note', 'reminder', 'ics', 'calendar', 'task'],
     body:
         'Open questions and decisions recorded against the job. Notes are '
@@ -909,6 +1111,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Project history',
     section: 'The job',
     where: 'Project tab → History',
+    plain:
+        'A log of what was changed on this job, when, and under whose '
+        'login.',
     keywords: ['history', 'audit', 'log', 'who changed', 'undo', 'provenance'],
     body:
         'Every edit to the job, under the thing it was about. "This says '
@@ -924,6 +1129,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'How old the gear is, and when it falls due',
     section: 'The refresh plan',
     where: 'Lifecycle tab, and Project tab → Lifecycle',
+    plain:
+        'How old everything in a room is, and the year it will need '
+        'replacing, colored green through amber to red. This is the picture '
+        'a refresh budget gets written from.',
     keywords: [
       'lifecycle',
       'refresh',
@@ -954,6 +1163,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'What a replacement costs',
     section: 'The refresh plan',
     where: 'Lifecycle tab',
+    plain:
+        'What it would cost to replace a piece of equipment today. Where '
+        'the exact product is no longer sold, the figure used is the price '
+        'of whatever replaced it.',
     keywords: [
       'replacement cost',
       'budget',
@@ -982,6 +1195,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Setting a replacement model on a retired product',
     section: 'The refresh plan',
     where: 'Catalog tab → tick Retired → Replaced by...',
+    plain:
+        'When a product stops being sold, record what replaces it. Every '
+        'room still holding the old one is then costed at a price you can '
+        'actually buy at.',
     keywords: [
       'replaced by',
       'successor',
@@ -1006,9 +1223,149 @@ const List<HelpTopic> kHelpTopics = [
         'price it was trying to get away from.',
   ),
   HelpTopic(
+    title: 'What is in a room nobody has drawn',
+    section: 'The refresh plan',
+    where: 'Project tab -> Rooms or Lifecycle -> the box icon on a line item',
+    plain:
+        'For rooms nobody has designed in the app, this shows what is '
+        'actually installed today, read off the control systems that run '
+        'them. You can correct it by hand wherever the reading is wrong.',
+    keywords: [
+      'survey',
+      'inventory',
+      'what is in',
+      'gve',
+      'line item',
+      'installed',
+      'equipment',
+      'poll',
+    ],
+    body:
+        'A line item is a date, a life and a figure, and the first question '
+        'anybody asks about a red row is the one it could not answer: what is '
+        'actually in there? The room type in its notes - "2 Projector" - is '
+        'what the estate sheet PRICED it against, which is a different '
+        'sentence from what a technician would find on the wall.\n\n'
+        'A survey of the control systems answers it. The row says what the '
+        'room is made of - "in the room: 2 Projector, 1 Switcher, 1 Camera" - '
+        'and the box icon opens the models, with what each would cost to buy '
+        'today. Prices go down the same ladder a drawn room boxes do: the '
+        'catalog price for the model, following a retired part to whatever '
+        'replaced it; then the base cost card typical figure for what the box '
+        'does, marked est.; then nothing at all, and the room says how many '
+        'lines it could not price rather than counting them as free.\n\n'
+        'TWO FIGURES, AND THEY ARE NOT THE SAME FIGURE. The survey total is '
+        'what the boxes currently on the wall cost to buy - no labor, no '
+        'cabling. The plan cost is a REFRESH: a new room, gear, cabling, '
+        'mounting and labor. The report shows both and says which is which, '
+        'and the difference between them is not labor.\n\n'
+        'THE SURVEY DOES NOT AGE. It records models, not install dates, so a '
+        'line item with eleven surveyed boxes is still ONE thing falling due '
+        'on the year grid, at the estate own figure. It is an inventory '
+        'behind a number, not a parts list anybody can re-total.\n\n'
+        'IT IS EDITABLE, because a poll is a machine reading of a room and a '
+        'machine gets rooms wrong. Correct a model, what it does, or how many '
+        'there are, and Save. The correction is written to the job history, '
+        'so if a later import overwrites it the overwrite is visible rather '
+        'than silent.',
+  ),
+  HelpTopic(
+    title: 'Turning line items into rooms',
+    section: 'The refresh plan',
+    where: 'Project tab -> Rooms -> the icons on a line item, and "Attach '
+        'rooms already drawn"',
+    plain:
+        'A room that is only a rough estimate becomes a properly designed '
+        'room here, either built fresh from a room type or linked to a '
+        'design somebody has already drawn.',
+    keywords: [
+      'line item',
+      'build room',
+      'swap',
+      'attach',
+      'drawn',
+      'estimate',
+      'replace',
+      'config',
+    ],
+    body:
+        'A refresh plan starts as four hundred estimates and becomes, one room '
+        'at a time over three years, four hundred drawn rooms. Two ways '
+        'across, both on the line.\n\n'
+        'BUILD A ROOM FROM THE LINE, for the room nobody has drawn yet - which '
+        'on a refresh plan is nearly all of them. The room type the line was '
+        'priced against is already known, so the new-room dialog opens on that '
+        'preset instead of on a list of twenty-seven. Once the room is drawn, '
+        'the survey is offered on top of it: the type keeps the drawing, the '
+        'cabling and the jack numbering, and the survey supplies the MODELS. '
+        'Matched by what a box does, never by name or position. A surveyed box '
+        'with no position on that room type is reported and NOT added - an '
+        'unwired box on a diagram is worse than one that is not there - and a '
+        'position the poll never saw keeps the type model, because a poll '
+        'cannot see a screen.\n\n'
+        'ATTACH THE ROOMS ALREADY DRAWN, for the folder of configs that exists '
+        'eighteen months in. It scans the job folder and matches each config '
+        'to a line on the ROOM CODE THE CONFIG STATES - not its file name, '
+        'which is the one fact about a file nobody maintains - then shows the '
+        'list before swapping any of them. Two files claiming one room are '
+        'reported and skipped rather than guessed between: picking either ends '
+        'with a budget pointing at somebody working copy. Swap on the line is '
+        'still there for the one you know.\n\n'
+        'EITHER WAY THE ESTIMATE ONLY LEAVES THE PLAN IF THE ROOM WENT ON. A '
+        'line item is the only record of its room, and losing it to a '
+        'half-finished conversion would take the room off the budget '
+        'altogether.',
+  ),
+  HelpTopic(
+    title: 'What the estate is priced on',
+    section: 'The refresh plan',
+    where: 'Catalog tab -> Priced on...',
+    plain:
+        'The typical price used for each kind of equipment, and the actual '
+        'product each of those prices is based on. Worth checking once a '
+        'year so the budget is not built on something you can no longer '
+        'buy.',
+    keywords: [
+      'base cost',
+      'benchmark',
+      'standard model',
+      'priced on',
+      'stale',
+      'retired',
+      'budget year',
+      'catalog',
+    ],
+    body:
+        'Every figure the project and campus reports fall back to comes off '
+        'one line of the base cost card, and each of those lines can name the '
+        'MODEL it was benchmarked on and the day it was set. That is what '
+        'turns "about 4,200" into a number a finance office can argue '
+        'with.\n\n'
+        'Setting one category at a time off the campus report is right when '
+        'somebody is reading that report and has an opinion about projectors. '
+        'This is the other shape of the same question, and the shape it '
+        'usually has: the start of a budget year, a price list just imported, '
+        'eighteen categories, and one thing to find out - is anything here '
+        'still benchmarked on a product we cannot buy? The button carries the '
+        'count of lines worth looking at.\n\n'
+        'WHAT IT PROPOSES IS NOT A GUESS. A benchmark the catalog has retired '
+        'follows its own successor. A line with nothing set takes the dearest '
+        'current model in its category - dearest rather than cheapest, because '
+        'a base cost is what a room done properly comes to, and benchmarking '
+        'an estate on the cheapest thing in the aisle is how a budget comes in '
+        'short in the one direction nobody checks.\n\n'
+        'A LINE ALREADY ON A CURRENT MODEL IS LEFT ALONE. Re-pricing it '
+        'because a price list moved is a decision, and it stays one: press the '
+        'line and pick. Every proposal is shown before any of it is written, '
+        'because setting eighteen categories re-prices four hundred rooms.',
+  ),
+  HelpTopic(
     title: 'The year grid',
     section: 'The refresh plan',
     where: 'Project tab → Lifecycle, and the campus report',
+    plain:
+        'A row per room and a column per year, showing what falls due when '
+        'and how much to put in each budget year.',
     keywords: ['year', 'grid', 'budget year', 'plan', 'forecast', 'capital'],
     body:
         'A room per row, a year per column, and what falls due in each. This '
@@ -1027,6 +1384,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'The campus report',
     section: 'The estate',
     where: 'Campus, from the title bar',
+    plain:
+        'Every building replacement plan added together, so the whole '
+        'estate spend can be seen and argued over in one place.',
     keywords: [
       'campus',
       'estate',
@@ -1048,6 +1408,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Current models - what we would buy this year',
     section: 'The estate',
     where: 'Campus → Current models',
+    plain:
+        'For each kind of equipment, how many the estate holds and what it '
+        'would cost to replace them all with this year model. Choosing one '
+        'sets the price the whole plan is built on.',
     keywords: [
       'current models',
       'standard',
@@ -1087,6 +1451,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Exports - spreadsheets, pictures and workbooks',
     section: 'Getting work out',
     where: 'The Hand over / Export control on each tab',
+    plain:
+        'Gets the work out of the app: a spreadsheet somebody can edit and '
+        'total, or a picture they can paste into a report.',
     keywords: [
       'export',
       'xlsx',
@@ -1117,6 +1484,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Quote request packs',
     section: 'Getting work out',
     where: 'Project tab → Packages → export',
+    plain:
+        'A tidy bundle to send a supplier: what you want priced, with the '
+        'drawings and notes they need in order to price it.',
     keywords: ['rfq', 'quote request', 'send to vendor', 'pack', 'xlsx'],
     body:
         'One spreadsheet per BIDDER, holding exactly the parts that package\'s '
@@ -1134,6 +1504,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Online copy',
     section: 'Getting work out',
     where: 'The Hand over control → Online copy',
+    plain:
+        'Keeps a copy of a room or a job somewhere shared, so somebody else '
+        'can pick it up or carry on with it.',
     keywords: ['online', 'share', 'link', 'publish', 'web'],
     body:
         'Publishes a read-only copy of a report for somebody who does not have '
@@ -1148,6 +1521,10 @@ const List<HelpTopic> kHelpTopics = [
     title: 'The device catalog',
     section: 'The machinery',
     where: 'Catalog tab',
+    plain:
+        'The list of every product the app knows about: what sockets it '
+        'has, how much rack space it takes, what power it draws and what it '
+        'costs.',
     keywords: [
       'catalog',
       'library',
@@ -1172,6 +1549,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'The flow rules builder',
     section: 'The machinery',
     where: 'Flow Rules tab',
+    plain:
+        'Sets the habits the app follows when it wires a room for you: '
+        'which source goes where, and what a typical room includes.',
     keywords: [
       'flow rules',
       'av_flow_rules',
@@ -1195,6 +1575,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'The schema editor',
     section: 'The machinery',
     where: 'Schema tab',
+    plain:
+        'Edits the questions the setup wizard asks and the settings a room '
+        'is allowed to hold. For whoever maintains the app own vocabulary.',
     keywords: [
       'schema',
       'ui_schema',
@@ -1212,9 +1595,46 @@ const List<HelpTopic> kHelpTopics = [
         'where that is fixed.',
   ),
   HelpTopic(
+    title: 'Product manuals, in the app',
+    section: 'The machinery',
+    where: 'Anywhere a document is attached: Devices, Deliveries, Plans, '
+        'Responsibilities and the quote pages',
+    plain:
+        'Opens a PDF - a product manual, a quote, a delivery note, an '
+        'architect drawing - in a window inside the app, so looking something '
+        'up does not mean leaving what you were doing.',
+    keywords: [
+      'pdf',
+      'manual',
+      'datasheet',
+      'document',
+      'viewer',
+      'attachment',
+      'drawing',
+      'quote',
+    ],
+    body:
+        'Documents are attached to the thing they belong to rather than kept '
+        'in a folder somebody has to know about: the manual against the '
+        'device, the acknowledgement against the purchase order, the '
+        'architect sheet against the building.\n\n'
+        'What the app can draw itself - PDFs and the ordinary image formats - '
+        'opens in a window here, with the page you were on remembered. '
+        'Anything else is handed to the machine own opener, because a viewer '
+        'that half-renders a drawing is worse than the program that was '
+        'written to.\n\n'
+        'The file is a REFERENCE, not a copy. It stays where it is on disk, '
+        'so a manual replaced with a newer revision is newer everywhere it is '
+        'attached, and moving the folder it lives in is what breaks the link '
+        'rather than editing the document.',
+  ),
+  HelpTopic(
     title: 'Undo and redo',
     section: 'The machinery',
     where: 'The toolbar, on every document',
+    plain:
+        'Takes back the last thing you did, and puts it back again if you '
+        'change your mind.',
     keywords: ['undo', 'redo', 'ctrl z', 'mistake', 'history', 'revert'],
     body:
         'Sixty steps deep on every document the app edits - the room, the job, '
@@ -1229,6 +1649,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Theme, contrast and print mode',
     section: 'The machinery',
     where: 'App Config tab → Appearance',
+    plain:
+        'Light or dark, higher contrast for a bright room, and a plain mode '
+        'that survives being printed or put through a projector.',
     keywords: [
       'theme',
       'dark',
@@ -1252,6 +1675,9 @@ const List<HelpTopic> kHelpTopics = [
     title: 'Recovery and autosave',
     section: 'The machinery',
     where: 'Automatic, with a prompt on next launch',
+    plain:
+        'The app keeps a live working copy as you go, so a crash or a power '
+        'cut does not cost you the afternoon.',
     keywords: ['autosave', 'recover', 'crash', 'backup', 'lost work'],
     body:
         'Work in progress is saved beside the document as you go. If the app '

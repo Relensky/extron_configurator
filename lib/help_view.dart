@@ -265,7 +265,7 @@ class _HelpBookState extends State<HelpBook> {
       );
     }
 
-    return ListView(children: rows);
+    return ListView(key: const ValueKey('help_topics'), children: rows);
   }
 
   /// The topic being read.
@@ -307,6 +307,19 @@ class _HelpBookState extends State<HelpBook> {
             style: theme.textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
+          // THE ANSWER IN ONE BREATH, before anything else on the page and in
+          // a size that says it is meant to be read rather than skipped. Most
+          // of this book is written for the person doing the work; this line
+          // is for the one who has been handed the app to look at one number.
+          // See [HelpTopic.plain].
+          SelectableText(
+            topic.plain,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w400,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
           // WHERE IT IS. The first thing somebody wants off a help page is how
           // to get to the thing, and a page that opens with three paragraphs
           // of rationale has buried it.
