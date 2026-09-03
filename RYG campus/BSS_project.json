@@ -13,7 +13,74 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 86853.75,
-            "notes": "!3 Projector 3 Cam Multimic  ·  RYG estimate for !3 Projector 3 Cam Multimic"
+            "notes": "!3 Projector 3 Cam Multimic  ·  RYG estimate for !3 Projector 3 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 4K",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "MRX7-D",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson PowerLite L730U",
+                    "category": "Projector",
+                    "quantity": 3
+                },
+                {
+                    "model": "TR333",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AVer PTZ330UV2",
+                    "category": "Camera",
+                    "quantity": 2
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 3
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual2",
@@ -21,7 +88,59 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "conference  ·  1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "conference  ·  1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 360Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1804 DO",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual3",
@@ -29,7 +148,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual4",
@@ -37,7 +218,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "AVer PTZ330UV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR333V2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual5",
@@ -45,7 +288,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7901B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual6",
@@ -53,7 +358,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual7",
@@ -61,7 +428,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual8",
@@ -69,7 +498,64 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 37568.89,
-            "notes": "2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic"
+            "notes": "2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7901B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "E868",
+                    "category": "Display",
+                    "quantity": 2
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual9",
@@ -77,7 +563,34 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "ME651",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual10",
@@ -85,7 +598,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 2
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual11",
@@ -93,7 +668,34 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "ME651",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual12",
@@ -101,7 +703,34 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "DTP CrossPoint 84 IPCP MA",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "ME651",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual13",
@@ -109,7 +738,74 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 127349.0,
-            "notes": "!7 Disp 2 Proj 2 Cam Multimic  ·  RYG estimate for !7 Disp 2 Proj 2 Cam Multimic"
+            "notes": "!7 Disp 2 Proj 2 Cam Multimic  ·  RYG estimate for !7 Disp 2 Proj 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 555Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 4K",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AVer PTZ330UV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 2
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "TT-7521Q",
+                    "category": "Display",
+                    "quantity": 7
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual14",
@@ -117,7 +813,74 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 45216.39,
-            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  ·  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  ·  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 108 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 2
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 2
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual15",
@@ -125,7 +888,74 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 45216.39,
-            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  ·  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  ·  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 108 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 2
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual16",
@@ -133,7 +963,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual17",
@@ -141,7 +1033,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "TR311HN",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual18",
@@ -149,7 +1103,74 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 45216.39,
-            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  ·  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  ·  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 108 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 2
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual19",
@@ -157,7 +1178,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual20",
@@ -165,7 +1248,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IN1804 DO",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual21",
@@ -173,7 +1318,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual22",
@@ -181,7 +1388,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual23",
@@ -189,7 +1458,29 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
+            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex",
+            "equipment": [
+                {
+                    "model": "VIA GO2",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual24",
@@ -197,7 +1488,64 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 360Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1804 DO",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "PowerLite 800F",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual25",
@@ -205,7 +1553,64 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 37568.89,
-            "notes": "2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic"
+            "notes": "2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "E868",
+                    "category": "Display",
+                    "quantity": 2
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual26",
@@ -213,7 +1618,54 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 37568.89,
-            "notes": "conference  ·  2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic"
+            "notes": "conference  ·  2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 360Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1804",
+                    "category": "Switcher",
+                    "quantity": 2
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "E868",
+                    "category": "Display",
+                    "quantity": 2
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual27",
@@ -221,7 +1673,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "PT-FW430U",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "TR311HN",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR333V2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 2
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual28",
@@ -229,7 +1743,34 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
+            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex",
+            "equipment": [
+                {
+                    "model": "IPCP Pro S1 xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual29",
@@ -237,7 +1778,34 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "IPCP Pro S1 xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual30",
@@ -245,7 +1813,59 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 360Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1804",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual31",
@@ -253,7 +1873,59 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 37568.89,
-            "notes": "conference  ·  2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic"
+            "notes": "conference  ·  2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 360Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1804",
+                    "category": "Switcher",
+                    "quantity": 2
+                },
+                {
+                    "model": "SW4 HD 4K PLUS",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "E868",
+                    "category": "Display",
+                    "quantity": 2
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual32",
@@ -261,7 +1933,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual33",
@@ -269,7 +2003,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual34",
@@ -277,7 +2073,59 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 37568.89,
-            "notes": "2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic"
+            "notes": "2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "E868",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual35",
@@ -285,7 +2133,64 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 48832.57,
-            "notes": "!suraudio 1 Proj 2 Cam Multimic  ·  RYG estimate for !suraudio 1 Proj 2 Cam Multimic"
+            "notes": "!suraudio 1 Proj 2 Cam Multimic  ·  RYG estimate for !suraudio 1 Proj 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual36",
@@ -293,7 +2198,69 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 84 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7901B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual37",
@@ -301,7 +2268,34 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "IPCP Pro S1 xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual38",
@@ -309,7 +2303,34 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "TR311",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual39",
@@ -317,7 +2338,84 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron DTP CrossPoint 108 4K IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson EB-L630U",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "4P-B65EJ2U",
+                    "category": "Display",
+                    "quantity": 2
+                },
+                {
+                    "model": "E758",
+                    "category": "Display",
+                    "quantity": 2
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 2
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "NBP 100",
+                    "category": "Control Systems",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual40",

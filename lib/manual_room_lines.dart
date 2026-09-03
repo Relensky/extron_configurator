@@ -10,6 +10,8 @@ import 'building_project.dart' show ManualRoom;
 import 'contrast.dart' show errorTextOn;
 import 'cost_estimate.dart' show formatMoney;
 import 'equipment_lifecycle.dart' show kRoomRefreshCategory;
+import 'manual_room_equipment.dart' show manualRoomEquipmentSummary;
+import 'manual_room_equipment_dialog.dart' show showManualRoomEquipment;
 import 'manual_rooms_dialog.dart' show showManualRoomForm;
 import 'project_schedule.dart' show formatScheduleDate;
 import 'save_actions.dart' show buildRoomFromLineItem;
@@ -158,6 +160,11 @@ Future<void> swapManualRoomLine(BuildContext context, ManualRoom room) async {
 /// The cost says whether it is a typed figure or one off the base-cost card,
 /// because a card figure read as a quote is how a budget goes wrong quietly —
 /// the same bargain every other estimated figure in this app makes.
+///
+/// AND WHAT IS IN THERE, when somebody has surveyed it — see
+/// [ManualRoom.equipment]. Rolled up by what the boxes DO rather than listed
+/// by model, because eleven model numbers on a summary line is not a summary;
+/// '2 Projector, 1 Switcher, 1 Camera' is the sentence a reader wanted.
 String manualRoomLineFacts(
   BuildContext context,
   ManualRoom room, {
@@ -185,12 +192,13 @@ String manualRoomLineFacts(
       '${formatMoney(base, currency)} est.'
     else
       'not priced',
+    if (room.equipment.isNotEmpty) manualRoomEquipmentSummary(room),
     if (room.notes.trim().isNotEmpty) room.notes.trim(),
   ].join('  ·  ');
 }
 
-/// The three things that can be done to a line item, as icon buttons: edit it,
-/// swap the real room in for it, take it off the plan.
+/// The things that can be done to a line item, as icon buttons: look in it,
+/// edit it, build or swap the real room in for it, take it off the plan.
 ///
 /// One widget rather than three copies, because the line appears in two places
 /// on the Project tab — the room list and the replacement plan — and a swap
@@ -212,6 +220,22 @@ class ManualRoomLineActions extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
+      // WHAT IS IN THERE. First, and only on the rows that have been
+      // surveyed: on a plan the question comes before every one of the
+      // actions, and an inventory button on a room nobody has looked in
+      // would open an empty box to say so.
+      if (room.equipment.isNotEmpty)
+        IconButton(
+          key: ValueKey('line_item_equipment_${room.id}'),
+          tooltip: 'What is in ${room.name} '
+              '(${room.installedCount} surveyed)',
+          icon: Icon(Icons.inventory_2_outlined, size: iconSize),
+          onPressed: () => showManualRoomEquipment(
+            context,
+            room,
+            currency: context.read<AppStateProvider>().project.currency,
+          ),
+        ),
       IconButton(
         key: ValueKey('line_item_edit_${room.id}'),
         tooltip: 'Change the date, the years in service or the cost',

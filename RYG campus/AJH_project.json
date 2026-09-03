@@ -13,7 +13,24 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LAB-Laboratory  ·  capacity 30  ·  BSS  ·  PSYCH  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "LAB-Laboratory  ·  capacity 30  ·  BSS  ·  PSYCH  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 xi SA",
+                    "category": "Switcher",
+                    "quantity": 2
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual2",
@@ -21,7 +38,34 @@
             "installedOn": "2023-07-01",
             "lifeYears": 8,
             "replacementCost": 40000.0,
-            "notes": "Special Space Education  ·  capacity 4  ·  Child Dev Lab  ·  figure typed on the master sheet"
+            "notes": "Special Space Education  ·  capacity 4  ·  Child Dev Lab  ·  figure typed on the master sheet",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 255Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 128 Plus AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "NEC E438",
+                    "category": "Display",
+                    "quantity": 3
+                },
+                {
+                    "model": "APC AP7901B",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual3",
@@ -52,7 +96,34 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  ·  capacity 28  ·  BSS  ·  PSYC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 28  ·  BSS  ·  PSYC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-FW430",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual7",
@@ -60,7 +131,34 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  ·  capacity 32  ·  BSS  ·  PSYC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 32  ·  BSS  ·  PSYC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-FW430",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         }
     ],
     "vendors": [],

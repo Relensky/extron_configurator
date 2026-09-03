@@ -13,7 +13,59 @@
             "installedOn": "2023-07-01",
             "lifeYears": 8,
             "replacementCost": 67516.5,
-            "notes": "conference  ·  4 Projector 2 Cam Multimic  ·  RYG estimate for 4 Projector 2 Cam Multimic"
+            "notes": "conference  ·  4 Projector 2 Cam Multimic  ·  RYG estimate for 4 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025M",
+                    "category": "Touch panel",
+                    "quantity": 2
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson PowerLite 750F",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Sony VPL-FHZ85",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "Aver PTR323NV2",
+                    "category": "Camera",
+                    "quantity": 2
+                },
+                {
+                    "model": "Extron SMP 351",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual2",
@@ -21,7 +73,49 @@
             "installedOn": "2023-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
+            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1808 IPCP MA 70",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "AVer CAM550",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "NEC C750Q",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "NEC C860Q",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         }
     ],
     "vendors": [],

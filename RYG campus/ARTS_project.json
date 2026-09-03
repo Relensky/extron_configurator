@@ -13,7 +13,38 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 22242.21,
-            "notes": "LEC-lecture  ·  capacity 44  ·  HFA  ·  CORH  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 44  ·  HFA  ·  CORH  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350M",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 720M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson DC11",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HN",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual2",
@@ -21,7 +52,38 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 22242.21,
-            "notes": "LEC-lecture  ·  capacity 44  ·  HFA  ·  HIST  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 44  ·  HFA  ·  HIST  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "DTP CrossPoint 84 IPCP SA",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 720M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson DC11",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HN",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual3",
@@ -29,7 +91,34 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 22242.21,
-            "notes": "LEC-lecture  ·  capacity 44  ·  HFA  ·  PHIL  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 44  ·  HFA  ·  PHIL  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 720M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual4",
@@ -37,7 +126,44 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "Dance  ·  capacity 112  ·  HFA  ·  MUTA  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "Dance  ·  capacity 112  ·  HFA  ·  MUTA  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 255Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1806",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-EZ770Z",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7900B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "ShareLink Pro 2000",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "DL3B",
+                    "category": "Screen",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual5",
@@ -45,7 +171,44 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 37869.33,
-            "notes": "LEC-Lecture  ·  capacity 112  ·  HFA  ·  4 projector 1 Cam 1 Mic  ·  RYG estimate for 4 Projector 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 112  ·  HFA  ·  4 projector 1 Cam 1 Mic  ·  RYG estimate for 4 Projector 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 550",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 86 4K",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-EZ770Z",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "VPL-PHZ60",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Kramer VIA Connect PRO",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual6",
@@ -53,7 +216,39 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 31729.48,
-            "notes": "LEC-Lecture  ·  capacity 112  ·  HFA  ·  4 projector  ·  RYG estimate for 4 Projector"
+            "notes": "LEC-Lecture  ·  capacity 112  ·  HFA  ·  4 projector  ·  RYG estimate for 4 Projector",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 550",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 720M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 86 4K",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-EZ770Z",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "VPL-PHZ60",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "Kramer VIA Connect PRO",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual7",
@@ -61,7 +256,59 @@
             "installedOn": "2026-07-01",
             "lifeYears": 8,
             "replacementCost": 40267.36,
-            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic"
+            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 360Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M NC",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "SW2 HD 4K PLUS",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP3 IN2004 DI/DO",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-FRZ60",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR211",
+                    "category": "Camera",
+                    "quantity": 2
+                },
+                {
+                    "model": "AP7900B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "ShareLink Pro 2000",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual8",
@@ -69,7 +316,59 @@
             "installedOn": "2026-07-01",
             "lifeYears": 8,
             "replacementCost": 40267.36,
-            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic"
+            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 360Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M NC",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP3 IN2004 DI/DO",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "SW2 HD 4K PLUS",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-FRZ60",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR211",
+                    "category": "Camera",
+                    "quantity": 2
+                },
+                {
+                    "model": "AP7900B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "ShareLink Pro 2000",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual9",
@@ -77,7 +376,29 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 15820.49,
-            "notes": "Resource Ctr.  ·  capacity 32  ·  HFA  ·  ENGL  ·  2 Display  ·  RYG estimate for 2 Display"
+            "notes": "Resource Ctr.  ·  capacity 32  ·  HFA  ·  ENGL  ·  2 Display  ·  RYG estimate for 2 Display",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350M",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 720M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual10",
@@ -85,7 +406,34 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 22242.21,
-            "notes": "LEC-lecture  ·  capacity 32  ·  HFA  ·  ENGL  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 32  ·  HFA  ·  ENGL  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350M",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual11",
@@ -93,7 +441,64 @@
             "installedOn": "2026-07-01",
             "lifeYears": 8,
             "replacementCost": 34894.45,
-            "notes": "LAB-Laboratory  ·  capacity 26  ·  HFA  ·  ART  ·  1 Proj 1 Display 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 1 Display 2 Cam 2 Mic"
+            "notes": "LAB-Laboratory  ·  capacity 26  ·  HFA  ·  ART  ·  1 Proj 1 Display 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 1 Display 2 Cam 2 Mic",
+            "equipment": [
+                {
+                    "model": "VPL-PHZ60",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP2 CrossPoint 82 IPCP Q SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-VMZ72",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR211",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7900B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "C861Q",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "ShareLink Pro 2000",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual12",
@@ -101,7 +506,28 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "LAB-Laboratory  ·  capacity 24  ·  HFA  ·  ART  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
+            "notes": "LAB-Laboratory  ·  capacity 24  ·  HFA  ·  ART  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 xi SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson DC11",
+                    "quantity": 1
+                },
+                {
+                    "model": "Sharp LC-80LE661U",
+                    "category": "Display",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual13",
@@ -109,7 +535,29 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 250",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 320C",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP T USW 333",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Sharp LC-80LE661U",
+                    "category": "Display",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual14",
@@ -117,7 +565,29 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP T USW 333",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Sharp LC-80LE661U",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual15",
@@ -125,7 +595,28 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "SW4 HD 4K",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Sharp LC-80LE661U",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron Universal Device Driver, Unidirectional RS232 and TCP",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual16",
@@ -133,7 +624,24 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "SW4 HD 4K",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Sharp LC-80LE661U",
+                    "category": "Display",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual17",
@@ -157,7 +665,29 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 15820.49,
-            "notes": "LEC-lecture  ·  capacity 32  ·  HFA  ·  ENGL  ·  2 Display  ·  RYG estimate for 2 Display"
+            "notes": "LEC-lecture  ·  capacity 32  ·  HFA  ·  ENGL  ·  2 Display  ·  RYG estimate for 2 Display",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350M",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual20",
@@ -165,7 +695,34 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 22242.21,
-            "notes": "LEC-lecture  ·  capacity 32  ·  HFA  ·  ILLC  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 32  ·  HFA  ·  ILLC  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350M",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 720M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HN",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual21",
@@ -173,7 +730,39 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 22242.21,
-            "notes": "LAB-Laboratory  ·  capacity 32  ·  HFA  ·  ILLC  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic"
+            "notes": "LAB-Laboratory  ·  capacity 32  ·  HFA  ·  ILLC  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350M",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 720M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AW-HE40HKP",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         }
     ],
     "vendors": [],

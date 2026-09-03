@@ -29,7 +29,29 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LAB-Laboratory  ·  capacity 24  ·  HFA  ·  MUTA  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "LAB-Laboratory  ·  capacity 24  ·  HFA  ·  MUTA  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA HDBT",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Ultra 8",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual4",
@@ -37,7 +59,34 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-lecture  ·  capacity 49  ·  HFA  ·  MUTA  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 49  ·  HFA  ·  MUTA  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual5",
@@ -45,7 +94,28 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "Auditorium  ·  capacity 210  ·  HFA  ·  MUTA  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "Auditorium  ·  capacity 210  ·  HFA  ·  MUTA  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Panasonic PT-RW630W",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Panasonic AGVP310",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual6",
@@ -53,7 +123,43 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "Auditorium  ·  capacity 463  ·  HFA  ·  MUTA  ·  1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
+            "notes": "Auditorium  ·  capacity 463  ·  HFA  ·  MUTA  ·  1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 2
+                },
+                {
+                    "model": "Extron IN1608",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "VPL-FHZ700L",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "AVer TR333V2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toshiba D-VR610",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual7",
@@ -61,7 +167,34 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  ·  capacity 76  ·  All School  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 76  ·  All School  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual8",
@@ -69,7 +202,24 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LEC-lecture  ·  capacity 49  ·  HFA  ·  MUTA  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "LEC-lecture  ·  capacity 49  ·  HFA  ·  MUTA  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual9",

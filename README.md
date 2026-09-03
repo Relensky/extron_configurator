@@ -475,6 +475,45 @@ the replacement figure in the year it falls due. A room reads as its **worst**
 item - not its average, because a room with one dead projector and nine new
 speakers is a room that does not work.
 
+### What is in a room nobody has drawn
+
+Most of an estate has never been through this app. Those rooms are on the plan
+as **line items** - a name, a date, how many years it is good for and what it
+costs to do again, imported off the estate's master refresh sheet - and until
+now that was every fact the plan had about them. The room type in the notes
+("2 Projector") is what the sheet **priced** the room against, which is not the
+same sentence as what a technician would find on the wall.
+
+The control systems can be **surveyed**, and the survey goes onto the line:
+
+```bash
+python tools/import_gve_equipment.py path/to/GveSystemData.json "RYG campus"
+```
+
+The line item then says what is in the room, rolled up by what the boxes do -
+`in the room: 2 Projector, 1 Switcher, 1 Camera` - and the **inventory button**
+on the row opens the models, with what each would cost to buy today. Prices go
+down the same ladder a drawn room's boxes do: the catalog price for the model,
+following a retired part to whatever replaced it; then the base-cost card's
+typical figure for what the box does, marked `est.`; then nothing at all, and
+the room says how many lines it could not price rather than counting them as
+free.
+
+Two figures, and they are **not** the same figure. The survey's total is what
+the boxes currently on the wall cost to buy - no labor, no cabling, and a good
+part of it priced off the card because the catalog stopped carrying an
+eight-year-old projector. The plan's cost is a **refresh**: a new room, gear,
+cabling, mounting and labor. The dialog shows both and says which is which, and
+the plan keeps counting the refresh figure.
+
+The survey does not age. It records models, not install dates, so a line item
+with eleven surveyed boxes is still **one** thing falling due on the year grid,
+at the estate's own figure. It is an inventory behind a number, not a parts
+list somebody can re-total.
+
+Rooms the poll has never seen keep their figure and simply show no survey; a
+room the poll knows only as half of a divisible hall says so in its notes.
+
 ## Building projects (the `Project` tab)
 
 A room is one config. A **job** is usually a building - eight classrooms, two

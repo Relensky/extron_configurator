@@ -21,7 +21,34 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-lecture  ·  capacity 30  ·  HFA  ·  ILLC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 30  ·  HFA  ·  ILLC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-FW430U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual3",
@@ -29,7 +56,34 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  ·  capacity 30  ·  ECC  ·  CIVL  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 30  ·  ECC  ·  CIVL  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-FW430U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual4",
@@ -37,7 +91,34 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  ·  capacity 32  ·  ECC  ·  EECE  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 32  ·  ECC  ·  EECE  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-FW430U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual5",
@@ -45,7 +126,44 @@
             "installedOn": "2022-07-01",
             "lifeYears": 8,
             "replacementCost": 40267.36,
-            "notes": "LEC-Lecture  ·  capacity 68  ·  All School  ·  1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic"
+            "notes": "LEC-Lecture  ·  capacity 68  ·  All School  ·  1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1808 IPCP SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "VPL-PHZ60",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual6",
@@ -53,7 +171,49 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "LEC-Lecture  ·  capacity ??  ·  ECC  ·  figure typed on the master sheet"
+            "notes": "LEC-Lecture  ·  capacity ??  ·  ECC  ·  figure typed on the master sheet",
+            "equipment": [
+                {
+                    "model": "IPL Pro S3",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 108 4K",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 xi",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PowerLite L510U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "20X-SDI-G2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "NEC E557Q",
+                    "category": "Display",
+                    "quantity": 7
+                },
+                {
+                    "model": "Kramer VIA Connect PRO",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual7",
@@ -61,7 +221,34 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  ·  capacity 30  ·  All School  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 30  ·  All School  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual8",
@@ -69,7 +256,34 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  ·  capacity 31  ·  All School  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 31  ·  All School  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual9",
@@ -77,7 +291,24 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LAB-Laboratory  ·  capacity 24  ·  ECC  ·  CSCI, EECE  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "LAB-Laboratory  ·  capacity 24  ·  ECC  ·  CSCI, EECE  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA HDBT",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual10",
@@ -85,7 +316,44 @@
             "installedOn": "2019-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  ·  capacity 75  ·  All School  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 75  ·  All School  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PowerLite L510U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HN",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "MediaPort 200",
+                    "category": "USB interface",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual11",
@@ -93,7 +361,44 @@
             "installedOn": "2022-07-01",
             "lifeYears": 8,
             "replacementCost": 40267.36,
-            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic"
+            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1808 IPCP MA 70",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-VMZ50U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron SMP 351",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual12",
@@ -101,7 +406,49 @@
             "installedOn": "2022-07-01",
             "lifeYears": 8,
             "replacementCost": 40267.36,
-            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic"
+            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 xi SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson BrightLink 536Wi",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "MediaPort 200",
+                    "category": "USB interface",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual13",
@@ -109,7 +456,54 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "LEC-Lecture  ·  capacity ??  ·  ECC  ·  figure typed on the master sheet"
+            "notes": "LEC-Lecture  ·  capacity ??  ·  ECC  ·  figure typed on the master sheet",
+            "equipment": [
+                {
+                    "model": "IN1808",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "Sharp PN-C605B",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 xi SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP T USW 333",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "20X-SDI-G2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "4T-B60CJ1U",
+                    "category": "Display",
+                    "quantity": 5
+                },
+                {
+                    "model": "PN-LE601",
+                    "category": "Display",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual14",
@@ -117,7 +511,54 @@
             "installedOn": "2022-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-VMZ50U",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT30X-NDI-WH",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "AP7921B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron SMP 351",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual15",
@@ -125,7 +566,59 @@
             "installedOn": "2022-07-01",
             "lifeYears": 8,
             "replacementCost": 40267.36,
-            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic"
+            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350M",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-VMW50U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT30X-NDI-WH",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron SMP 351",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "NEC M431",
+                    "category": "Display",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual16",
@@ -133,7 +626,24 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 24434.6,
-            "notes": "LAB-Laboratory  ·  capacity 27  ·  ECC  ·  MMEM  ·  2 Projector  ·  RYG estimate for 2 Projector"
+            "notes": "LAB-Laboratory  ·  capacity 27  ·  ECC  ·  MMEM  ·  2 Projector  ·  RYG estimate for 2 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA HDBT",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 2
+                }
+            ]
         }
     ],
     "vendors": [],

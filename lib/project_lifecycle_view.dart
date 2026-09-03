@@ -11,6 +11,7 @@ import 'campus_lifecycle_view.dart' show showCampusLifecycle;
 import 'equipment_lifecycle.dart';
 import 'lifecycle_export.dart';
 import 'lifecycle_picture.dart';
+import 'manual_room_equipment.dart' show manualRoomEquipmentSummary;
 import 'manual_room_lines.dart';
 import 'lifecycle_view.dart'
     show
@@ -1599,9 +1600,14 @@ class _RoomRow extends StatelessWidget {
 
     final facts = [
       // A line item is ONE thing falling due, not a box count somebody could
-      // read as a parts list, so it says what it is instead.
+      // read as a parts list, so it says what it is instead — and then, when
+      // somebody has surveyed the room, what is in there. Two separate
+      // sentences on purpose: the survey is an inventory and the one thing
+      // falling due is still the line. See [ManualRoom.equipment].
       if (line != null)
-        'line item'
+        line.equipment.isEmpty
+            ? 'line item'
+            : 'line item  ·  ${manualRoomEquipmentSummary(line)}'
       else
         '${room.items.length} item${room.items.length == 1 ? '' : 's'}',
       room.oldestInstall == null

@@ -21,7 +21,49 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 40000.0,
-            "notes": "figure typed on the master sheet"
+            "notes": "figure typed on the master sheet",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 550",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1220TG",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Canon CR-N300",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "NEC E557Q",
+                    "category": "Display",
+                    "quantity": 2
+                },
+                {
+                    "model": "Extron SMP 352 3G-SDI",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual3",
@@ -60,7 +102,24 @@
             "installedOn": "2021-07-01",
             "lifeYears": 8,
             "replacementCost": 24434.6,
-            "notes": "LAB-Laboratory  ·  capacity 36  ·  Library  ·  2 Projector  ·  RYG estimate for 2 Projector"
+            "notes": "LAB-Laboratory  ·  capacity 36  ·  Library  ·  2 Projector  ·  RYG estimate for 2 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1606",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-VMZ50",
+                    "category": "Projector",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual8",
@@ -68,7 +127,29 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "conference  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "conference  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1604 HD",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "EVI-D100",
+                    "category": "Camera",
+                    "quantity": 2
+                },
+                {
+                    "model": "LC-80LE650U",
+                    "category": "Display",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual9",
@@ -76,7 +157,24 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "conference  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "conference  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "MLS 608 D",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-CW230",
+                    "category": "Projector",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual10",
@@ -84,7 +182,14 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "conference  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "conference  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual11",

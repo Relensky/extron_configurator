@@ -94,3 +94,46 @@ Retirement comes off the page's **Status**: `Discontinued <month>` sets
 import only ever *sets* that flag — something retired by hand stays retired,
 because the reason may be local (off contract, not stocked) rather than the
 manufacturer's.
+
+## What is in the rooms nobody has drawn
+
+The refresh plan carries most of the estate as **line items**: a room name, a
+date, a life and a figure off the master sheet, with no config file behind
+them. That is enough to budget a room and not enough to say what is in it — the
+room type on the line ("2 Projector") is what the sheet priced it against, not
+an inventory.
+
+The GVE control system has been polled for every room it manages, and that poll
+is one. `import_gve_equipment.py` joins the two:
+
+```bash
+python tools/import_gve_equipment.py path/to/GveSystemData.json "RYG campus"
+python tools/import_gve_equipment.py path/to/GveSystemData.json --dry-run
+```
+
+It writes an `equipment` list onto each line item — model, what the box does,
+how many — and prints what it could and could not join. It is **idempotent**:
+re-running replaces each list rather than appending, and a room that has left
+the poll loses its stale one.
+
+**It never touches `replacementCost`.** That figure is a refresh — new gear,
+cabling, labor — and the survey is what is installed today, most of it a decade
+old. The app shows both and says which is which.
+
+**Prices are not written.** Each line carries the model and the ROLE it plays,
+in the base-cost card's own words, and the app prices the model off the catalog
+first and the role off the card second — so a change of pricing tier or a
+corrected card reaches these rooms with no re-import. A role the card has no
+honest line for (a document camera, a VCR) is left blank and reports as
+unpriced rather than costed at a category it merely resembles.
+
+**Room names are matched exactly**, with three documented exceptions: a poll
+that names a divisible hall for both halves (`FAEC 111 117`), a plan name
+that slashes a pair (`SCI 126a/b`), and a lettered half the poll knows only by
+its base number (`CLSA 100A` against `CLSA 100`). Each of those writes the poll
+it read into the line's notes, marked shared, so nobody adds the halves
+together.
+
+`test/manual_room_equipment_test.dart` reads the result back: every line parses,
+every surveyed box has a model and a positive quantity, and a line item with
+eleven surveyed boxes is still one thing falling due on the plan.

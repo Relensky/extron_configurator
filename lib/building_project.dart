@@ -1920,6 +1920,74 @@ const Set<String> kViewablePlanExtensions = {
 //  ROOMS IN THE PROJECT
 // ---------------------------------------------------------------------------
 
+/// ONE KIND OF BOX SOMEBODY FOUND IN A ROOM THAT HAS NO DRAWING.
+///
+/// A line item is a date, a life and a figure — see [ManualRoom] — and the
+/// first question anybody asks about the red ones is the one it could not
+/// answer: what is actually in there? The room type in its notes ('2
+/// Projector') is what the estate's sheet PRICED it against, which is a
+/// different sentence from what a technician would find on the wall.
+///
+/// A survey of the control system that runs the room answers it. That is not a
+/// drawing and never will be — nothing here has a position, a port or a cable,
+/// and none of it can be wired — but it is a real inventory, by model, and it
+/// is what turns a figure into something a reader can check.
+///
+/// WHAT IT IS WORTH IS NOT STORED. Every price in this app moves: the pricing
+/// tier is a setting, the base-cost card is edited, a retired model gets a
+/// successor. A figure frozen into the survey at import time would be the one
+/// number on the plan that none of that reaches. So a line carries what the
+/// box IS and what it DOES, and the money is worked out on the way to the
+/// screen — the same ladder a drawn room's boxes go down. See
+/// [manualRoomItemPrice].
+class ManualRoomItem {
+  /// What is in the room, as the survey found it — 'PT-VMZ62BU8'.
+  ///
+  /// Spelled the catalog's way when the catalog knows the model, so it can be
+  /// priced without matching prose twice. A model the catalog has never heard
+  /// of keeps the survey's own spelling, because a nine-year-old projector is
+  /// still the answer to what is in there.
+  final String model;
+
+  /// What it DOES, in the base-cost card's words — 'Projector'.
+  ///
+  /// The half of the line that survives the catalog not knowing the model,
+  /// which on an estate this old is most of it. Empty is a real answer: a
+  /// document camera is not any category on the card, and a room with one
+  /// reports it as unpriced rather than costed at something it resembles.
+  final String category;
+
+  /// How many of them. Two identical projectors are one line of two, not two
+  /// lines a reader has to notice are the same.
+  final int quantity;
+
+  const ManualRoomItem({
+    required this.model,
+    this.category = '',
+    this.quantity = 1,
+  });
+
+  ManualRoomItem copyWith({String? model, String? category, int? quantity}) =>
+      ManualRoomItem(
+        model: model ?? this.model,
+        category: category ?? this.category,
+        quantity: quantity ?? this.quantity,
+      );
+
+  Map<String, dynamic> toJson() => {
+    'model': model,
+    if (category.trim().isNotEmpty) 'category': category.trim(),
+    if (quantity != 1) 'quantity': quantity,
+  };
+
+  static ManualRoomItem fromJson(Map<String, dynamic> json) => ManualRoomItem(
+    model: json['model']?.toString() ?? '',
+    category: json['category']?.toString() ?? '',
+    // A survey line with no count is one box, not none.
+    quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+  );
+}
+
 /// A ROOM ON THE PLAN THAT HAS NO CONFIG.
 ///
 /// Most of an estate has never been through this app. The rooms that have are
@@ -1934,12 +2002,16 @@ const Set<String> kViewablePlanExtensions = {
 /// So a room can be typed in: a name, when it was last done, how long it is
 /// expected to last, and what it costs to do again. No config, no diagram, no
 /// parts list. It ages on exactly the same cycle as a drawn room and lands in
-/// the same year columns; what it does NOT do is claim to know what is in it.
+/// the same year columns.
 ///
 /// THE MONEY IS A BASE COST unless somebody types a figure. A room nobody has
 /// itemized is priced the way the rest of this app prices what it has not
 /// itemized — off the base-cost card, by category — and every figure derived
 /// from it says it is an estimate. See [replacementCost] and [category].
+///
+/// IT CAN STILL SAY WHAT IS IN THERE. Not from a drawing, which is the thing
+/// it does not have, but from a survey of the control system that runs the
+/// room. See [equipment].
 class ManualRoom {
   final String id;
 
@@ -1968,6 +2040,23 @@ class ManualRoom {
 
   final String notes;
 
+  /// WHAT A SURVEY FOUND IN THE ROOM, or empty for a room nobody has looked
+  /// in. See [ManualRoomItem].
+  ///
+  /// NOT A PARTS LIST FOR THE REFRESH, and the difference matters enough to
+  /// say twice. [replacementCost] is what it costs to do the room AGAIN — new
+  /// gear, cabling, mounting, labor, off the estate's own sheet. This is what
+  /// is in there NOW, most of it bought a decade ago. Pricing this list and
+  /// calling it the refresh would swap a figure somebody costed for one nobody
+  /// did, so the plan keeps counting [replacementCost] and shows the survey
+  /// beside it.
+  ///
+  /// It does not age. The survey records models, not install dates, and a room
+  /// where eleven boxes all inherited the room's own date would report eleven
+  /// things falling due where there is one line item falling due. See
+  /// [buildManualRoomLifecycle].
+  final List<ManualRoomItem> equipment;
+
   const ManualRoom({
     required this.id,
     required this.name,
@@ -1976,7 +2065,12 @@ class ManualRoom {
     this.replacementCost = 0,
     this.category = '',
     this.notes = '',
+    this.equipment = const [],
   });
+
+  /// How many boxes the survey found, counting a quantity of two as two.
+  int get installedCount =>
+      equipment.fold(0, (sum, item) => sum + item.quantity);
 
   ManualRoom copyWith({
     String? name,
@@ -1986,6 +2080,7 @@ class ManualRoom {
     double? replacementCost,
     String? category,
     String? notes,
+    List<ManualRoomItem>? equipment,
   }) => ManualRoom(
     id: id,
     name: name ?? this.name,
@@ -1995,6 +2090,7 @@ class ManualRoom {
     replacementCost: replacementCost ?? this.replacementCost,
     category: category ?? this.category,
     notes: notes ?? this.notes,
+    equipment: equipment ?? this.equipment,
   );
 
   Map<String, dynamic> toJson() => {
@@ -2005,6 +2101,8 @@ class ManualRoom {
     if (replacementCost > 0) 'replacementCost': replacementCost,
     if (category.trim().isNotEmpty) 'category': category.trim(),
     if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+    if (equipment.isNotEmpty)
+      'equipment': [for (final item in equipment) item.toJson()],
   };
 
   /// The room TYPE this estimate was priced against, off the master refresh
@@ -2032,6 +2130,10 @@ class ManualRoom {
     replacementCost: (json['replacementCost'] as num?)?.toDouble() ?? 0,
     category: json['category']?.toString() ?? '',
     notes: json['notes']?.toString() ?? '',
+    equipment: [
+      for (final item in (json['equipment'] as List<dynamic>? ?? const []))
+        if (item is Map<String, dynamic>) ManualRoomItem.fromJson(item),
+    ],
   );
 }
 

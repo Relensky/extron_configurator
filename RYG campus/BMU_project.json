@@ -13,7 +13,34 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 24434.6,
-            "notes": "2 Projector  ·  RYG estimate for 2 Projector"
+            "notes": "2 Projector  ·  RYG estimate for 2 Projector",
+            "equipment": [
+                {
+                    "model": "IPL 250",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP 700MV",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1606",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 64",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-FRZ60WU",
+                    "category": "Projector",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual2",
@@ -21,7 +48,24 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "MLS 608 D",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "VPL-PHZ61",
+                    "category": "Projector",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual3",
@@ -29,7 +73,49 @@
             "installedOn": "2023-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350 xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 4K",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "VPL-PHZ60",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR333",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "4P-B75EJ2U",
+                    "category": "Display",
+                    "quantity": 1
+                }
+            ]
         }
     ],
     "vendors": [],

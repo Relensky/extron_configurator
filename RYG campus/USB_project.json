@@ -21,7 +21,44 @@
             "installedOn": "2025-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
+            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 255Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1804 DI",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "FW-85EZ20L",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "ShareLink Pro 1100",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual3",
@@ -29,7 +66,44 @@
             "installedOn": "2025-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
+            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 255Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1804 DI/DO",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "ShareLink Pro 1100",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "FW-85EZ20L",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual4",
@@ -37,7 +111,44 @@
             "installedOn": "2025-07-01",
             "lifeYears": 8,
             "replacementCost": 22242.21,
-            "notes": "conference  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic"
+            "notes": "conference  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 2
+                },
+                {
+                    "model": "IN1808 IPCP SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "ShareLink Pro 1100",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "FW-85EZ20L",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "TT-8623C",
+                    "category": "Display",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual5",
@@ -45,7 +156,44 @@
             "installedOn": "2025-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
+            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 255Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1804 DI",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "FW-85EZ20L",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "ShareLink Pro 2000",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual6",
@@ -53,7 +201,44 @@
             "installedOn": "2025-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
+            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 255Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1804 DI",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Toggle",
+                    "category": "USB",
+                    "quantity": 1
+                },
+                {
+                    "model": "FW-85EZ20L",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "ShareLink Pro 1100",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         }
     ],
     "vendors": [],

@@ -29,7 +29,54 @@
             "installedOn": "2023-07-01",
             "lifeYears": 8,
             "replacementCost": 40267.36,
-            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic"
+            "notes": "1 Proj 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 2 Cam 2 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 xi IPCP Q MA 70",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "VPL-PHZ50",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311HWV2",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                }
+            ]
         }
     ],
     "vendors": [],

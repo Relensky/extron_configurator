@@ -7,6 +7,7 @@ import 'base_costs.dart';
 import 'building_project.dart';
 import 'cost_estimate.dart' show formatMoney;
 import 'equipment_lifecycle.dart' show kRoomRefreshCategory;
+import 'manual_room_equipment.dart' show manualRoomEquipmentSummary;
 import 'project_schedule.dart' show formatScheduleDate;
 import 'stepped_date_picker.dart';
 
@@ -197,6 +198,11 @@ class _ManualRoomsDialogState extends State<_ManualRoomsDialog> {
                         ? '${room.lifeYears} yr cycle'
                         : 'standard cycle',
                     cost,
+                    // What a survey found in there, when there has been one -
+                    // the same phrase the job's own list and the plan row
+                    // carry, so a room reads the same through every door.
+                    if (room.equipment.isNotEmpty)
+                      manualRoomEquipmentSummary(room),
                     if (room.notes.trim().isNotEmpty) room.notes.trim(),
                   ].join('  ·  '),
                   maxLines: 2,
@@ -302,7 +308,9 @@ class _ManualRoomsDialogState extends State<_ManualRoomsDialog> {
 /// used.
 ///
 /// Returns null when it is canceled. The returned room carries [id] through
-/// unchanged, so an edit comes back as the SAME room rather than as a new one.
+/// unchanged, so an edit comes back as the SAME room rather than as a new one —
+/// and carries [ManualRoom.equipment] through for the same reason, because a
+/// form that edits four fields must not be the thing that empties a fifth.
 Future<ManualRoom?> showManualRoomForm(
   BuildContext context, {
   ManualRoom? existing,
@@ -521,6 +529,11 @@ class _ManualRoomFormState extends State<ManualRoomForm> {
                     replacementCost: double.tryParse(_cost.text.trim()) ?? 0,
                     category: _category,
                     notes: _notes.text.trim(),
+                    // WHAT THIS FORM DOES NOT EDIT, IT MUST NOT DELETE. The
+                    // survey is a record of what somebody found in the room -
+                    // see [ManualRoom.equipment] - and correcting a date on a
+                    // budget screen is not a statement that the room is empty.
+                    equipment: widget.existing?.equipment ?? const [],
                   ),
                 ),
           child: Text(widget.existing == null ? 'Add' : 'Save'),

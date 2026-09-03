@@ -13,7 +13,94 @@
             "installedOn": "2025-07-01",
             "lifeYears": 8,
             "replacementCost": 256212.47,
-            "notes": "figure typed on the master sheet"
+            "notes": "figure typed on the master sheet  ·  GVE survey FAEC 111 117 (shared)",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 555Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025T NC",
+                    "category": "Touch panel",
+                    "quantity": 4
+                },
+                {
+                    "model": "TLP Pro 725T NC",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "UCS 303",
+                    "category": "Switcher",
+                    "quantity": 4
+                },
+                {
+                    "model": "MXWAPXD2",
+                    "category": "DSP",
+                    "quantity": 4
+                },
+                {
+                    "model": "MRX7-D",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "PowerLite L790U",
+                    "category": "Projector",
+                    "quantity": 3
+                },
+                {
+                    "model": "Epson PowerLite L200X",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 5
+                },
+                {
+                    "model": "TR211",
+                    "category": "Camera",
+                    "quantity": 4
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 4
+                },
+                {
+                    "model": "AP7900B",
+                    "category": "Power controller",
+                    "quantity": 4
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 4
+                },
+                {
+                    "model": "ShareLink Pro 2000",
+                    "category": "Wireless presentation",
+                    "quantity": 5
+                },
+                {
+                    "model": "E868",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "ECM S10",
+                    "category": "Control Systems",
+                    "quantity": 4
+                }
+            ]
         },
         {
             "id": "manual2",
@@ -41,7 +128,94 @@
             "name": "FAEC 117",
             "installedOn": "2025-07-01",
             "lifeYears": 8,
-            "notes": "conference  ·  no estimate on the master sheet"
+            "notes": "conference  ·  no estimate on the master sheet  ·  GVE survey FAEC 111 117 (shared)",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 555Q xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025T NC",
+                    "category": "Touch panel",
+                    "quantity": 4
+                },
+                {
+                    "model": "TLP Pro 725T NC",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "UCS 303",
+                    "category": "Switcher",
+                    "quantity": 4
+                },
+                {
+                    "model": "MXWAPXD2",
+                    "category": "DSP",
+                    "quantity": 4
+                },
+                {
+                    "model": "MRX7-D",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "PowerLite L790U",
+                    "category": "Projector",
+                    "quantity": 3
+                },
+                {
+                    "model": "Epson PowerLite L200X",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Cam570",
+                    "category": "Camera",
+                    "quantity": 5
+                },
+                {
+                    "model": "TR211",
+                    "category": "Camera",
+                    "quantity": 4
+                },
+                {
+                    "model": "Controller",
+                    "category": "Screen",
+                    "quantity": 4
+                },
+                {
+                    "model": "AP7900B",
+                    "category": "Power controller",
+                    "quantity": 4
+                },
+                {
+                    "model": "AV Bridge",
+                    "category": "Recorder / streamer",
+                    "quantity": 4
+                },
+                {
+                    "model": "ShareLink Pro 2000",
+                    "category": "Wireless presentation",
+                    "quantity": 5
+                },
+                {
+                    "model": "E868",
+                    "category": "Display",
+                    "quantity": 1
+                },
+                {
+                    "model": "IPL T PCS4",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "ECM S10",
+                    "category": "Control Systems",
+                    "quantity": 4
+                }
+            ]
         }
     ],
     "vendors": [],

@@ -21,7 +21,28 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LEC-Lecture  ·  capacity 192  ·  All School  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "LEC-Lecture  ·  capacity 192  ·  All School  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "VPL-FHZ700L",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Panasonic DMP-BD60A",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual3",
@@ -29,7 +50,59 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 34894.45,
-            "notes": "LEC-Lecture  ·  capacity 166  ·  All School  ·  1 Proj 1 Display 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 1 Display 2 Cam 2 Mic"
+            "notes": "LEC-Lecture  ·  capacity 166  ·  All School  ·  1 Proj 1 Display 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 1 Display 2 Cam 2 Mic",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 355MQ xi",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "INF8600",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 4K IPCP SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson PowerLite L730U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "PTZ310W",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO2",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron SMP 351",
+                    "category": "Recorder / streamer",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual4",
@@ -37,7 +110,39 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LEC-Lecture  ·  capacity 65  ·  All School  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "LEC-Lecture  ·  capacity 65  ·  All School  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "PowerLite L610U",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725T",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP MA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "VPL-FHZ700L",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "VIA GO",
+                    "category": "Wireless presentation",
+                    "quantity": 1
+                },
+                {
+                    "model": "APC AP7920B",
+                    "category": "Power controller",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual5",
@@ -45,7 +150,28 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LAB-Laboratory  ·  capacity 24  ·  HFA  ·  ART  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "LAB-Laboratory  ·  capacity 24  ·  HFA  ·  ART  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA HDBT",
+                    "category": "Switcher",
+                    "quantity": 2
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "PANASONIC AG-2560",
+                    "quantity": 1
+                }
+            ]
         }
     ],
     "vendors": [],

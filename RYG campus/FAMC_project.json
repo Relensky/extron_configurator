@@ -13,7 +13,29 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "capacity 36  ·  AGR  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "capacity 36  ·  AGR  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 xi SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual2",
@@ -21,7 +43,34 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "capacity 24  ·  AGR  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "capacity 24  ·  AGR  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 xi SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-VMZ50U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual3",
@@ -29,7 +78,34 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "capacity 36  ·  AGR  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "capacity 36  ·  AGR  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 xi SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PowerLite L510U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual4",
@@ -44,7 +120,28 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LEC-lecture  ·  capacity 36  ·  AGR  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "LEC-lecture  ·  capacity 36  ·  AGR  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-FW430U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "DC11",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual6",
@@ -52,7 +149,28 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LEC-Lecture  ·  capacity 36  ·  AGR  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "LEC-Lecture  ·  capacity 36  ·  AGR  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-FW430U",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "DC11",
+                    "quantity": 1
+                }
+            ]
         }
     ],
     "vendors": [],

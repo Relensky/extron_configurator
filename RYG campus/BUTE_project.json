@@ -13,7 +13,14 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual2",
@@ -21,7 +28,14 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual3",
@@ -29,7 +43,14 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual4",
@@ -37,7 +58,14 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual5",
@@ -45,7 +73,14 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual6",
@@ -61,7 +96,14 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual8",
@@ -69,14 +111,28 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual9",
             "name": "BUTE 205",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector  ·  last update unknown on the master sheet"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector  ·  last update unknown on the master sheet",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual10",
@@ -91,7 +147,14 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "figure typed on the master sheet"
+            "notes": "figure typed on the master sheet",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual12",
@@ -99,7 +162,14 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual13",
@@ -107,7 +177,14 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual14",
@@ -115,7 +192,14 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual15",
@@ -123,7 +207,14 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual16",
@@ -131,7 +222,14 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual17",
@@ -139,7 +237,14 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual18",
@@ -147,7 +252,14 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual19",
@@ -155,7 +267,14 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual20",
@@ -163,7 +282,14 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual21",
@@ -171,7 +297,14 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "DTP CrossPoint 84 IPCP SA",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual22",
@@ -179,7 +312,14 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual23",
@@ -187,7 +327,14 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual24",
@@ -195,7 +342,14 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual25",
@@ -203,7 +357,14 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual26",
@@ -211,7 +372,14 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual27",
@@ -219,14 +387,28 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual28",
             "name": "BUTE 503",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  ·  RYG estimate for 1 Projector  ·  last update unknown on the master sheet"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector  ·  last update unknown on the master sheet",
+            "equipment": [
+                {
+                    "model": "MLC 226 IP",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual29",
@@ -234,7 +416,14 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam",
+            "equipment": [
+                {
+                    "model": "IPL Pro S6",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual30",
@@ -242,7 +431,14 @@
             "installedOn": "2011-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "conference  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "conference  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "LC-90LE657U",
+                    "category": "Control processor",
+                    "quantity": 1
+                }
+            ]
         }
     ],
     "vendors": [],

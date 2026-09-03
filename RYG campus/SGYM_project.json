@@ -13,7 +13,33 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LEC-Lecture  ·  capacity 49  ·  CME  ·  KINE  ·  1 Projector  ·  RYG estimate for 1 Projector"
+            "notes": "LEC-Lecture  ·  capacity 49  ·  CME  ·  KINE  ·  1 Projector  ·  RYG estimate for 1 Projector",
+            "equipment": [
+                {
+                    "model": "MLC Plus 200",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "IN1608 SA HDBT",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "PT-RZ570WU",
+                    "category": "Projector",
+                    "quantity": 1
+                },
+                {
+                    "model": "Ultra 8",
+                    "category": "Camera",
+                    "quantity": 1
+                },
+                {
+                    "model": "JVC HR-XVC16B",
+                    "quantity": 1
+                }
+            ]
         }
     ],
     "vendors": [],

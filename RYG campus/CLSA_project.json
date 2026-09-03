@@ -13,14 +13,116 @@
             "installedOn": "2019-07-01",
             "lifeYears": 8,
             "replacementCost": 157940.36,
-            "notes": "conference  ·  figure typed on the master sheet"
+            "notes": "conference  ·  figure typed on the master sheet  ·  GVE survey CLSA 100 (shared)",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 555",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025M",
+                    "category": "Touch panel",
+                    "quantity": 2
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 4K",
+                    "category": "Switcher",
+                    "quantity": 2
+                },
+                {
+                    "model": "DTP CrossPoint 108 4K",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 128 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson Pro L1300U",
+                    "category": "Projector",
+                    "quantity": 4
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 4
+                },
+                {
+                    "model": "Sony UBP-X1000ES",
+                    "quantity": 2
+                },
+                {
+                    "model": "Kramer VIA Connect PRO",
+                    "category": "Wireless presentation",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual2",
             "name": "CLSA 100B",
             "installedOn": "2019-07-01",
             "lifeYears": 8,
-            "notes": "conference  ·  no estimate on the master sheet"
+            "notes": "conference  ·  no estimate on the master sheet  ·  GVE survey CLSA 100 (shared)",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 555",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 1025M",
+                    "category": "Touch panel",
+                    "quantity": 2
+                },
+                {
+                    "model": "TLP Pro 525M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 4K",
+                    "category": "Switcher",
+                    "quantity": 2
+                },
+                {
+                    "model": "DTP CrossPoint 108 4K",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "DMP 128 Plus C AT",
+                    "category": "DSP",
+                    "quantity": 1
+                },
+                {
+                    "model": "Epson Pro L1300U",
+                    "category": "Projector",
+                    "quantity": 4
+                },
+                {
+                    "model": "TR311",
+                    "category": "Camera",
+                    "quantity": 4
+                },
+                {
+                    "model": "Sony UBP-X1000ES",
+                    "quantity": 2
+                },
+                {
+                    "model": "Kramer VIA Connect PRO",
+                    "category": "Wireless presentation",
+                    "quantity": 2
+                }
+            ]
         },
         {
             "id": "manual3",

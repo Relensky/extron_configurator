@@ -13,7 +13,33 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 24434.6,
-            "notes": "LEC-Lecture  ·  capacity 44  ·  CME  ·  KINE  ·  2 Projector  ·  RYG estimate for 2 Projector"
+            "notes": "LEC-Lecture  ·  capacity 44  ·  CME  ·  KINE  ·  2 Projector  ·  RYG estimate for 2 Projector",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350M",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 720M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Casio XJ-UT310WN",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "Epson DC11",
+                    "quantity": 1
+                }
+            ]
         },
         {
             "id": "manual2",
@@ -37,7 +63,38 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 24434.6,
-            "notes": "LEC-Lecture  ·  capacity 36  ·  CME  ·  KINE  ·  2 Projector  ·  RYG estimate for 2 Projector"
+            "notes": "LEC-Lecture  ·  capacity 36  ·  CME  ·  KINE  ·  2 Projector  ·  RYG estimate for 2 Projector",
+            "equipment": [
+                {
+                    "model": "IPCP Pro 350M",
+                    "category": "Control processor",
+                    "quantity": 1
+                },
+                {
+                    "model": "TLP Pro 725M",
+                    "category": "Touch panel",
+                    "quantity": 1
+                },
+                {
+                    "model": "DTP CrossPoint 84 IPCP SA",
+                    "category": "Switcher",
+                    "quantity": 1
+                },
+                {
+                    "model": "Casio XJ-UT310WN",
+                    "category": "Projector",
+                    "quantity": 2
+                },
+                {
+                    "model": "Epson DC11",
+                    "quantity": 1
+                },
+                {
+                    "model": "Extron Universal Display Driver, Bidirectional",
+                    "category": "Display",
+                    "quantity": 1
+                }
+            ]
         }
     ],
     "vendors": [],
