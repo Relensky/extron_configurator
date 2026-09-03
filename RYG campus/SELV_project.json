@@ -62,7 +62,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 }
             ]

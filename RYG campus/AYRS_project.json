@@ -64,7 +64,7 @@
                 },
                 {
                     "model": "INF8600",
-                    "category": "Touch panel",
+                    "category": "Display",
                     "quantity": 1
                 },
                 {
@@ -113,7 +113,7 @@
             "notes": "LEC-Lecture  ·  capacity 65  ·  All School  ·  1 Projector  ·  RYG estimate for 1 Projector",
             "equipment": [
                 {
-                    "model": "PowerLite L610U",
+                    "model": "IPCP Pro 350M",
                     "category": "Control processor",
                     "quantity": 1
                 },

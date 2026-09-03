@@ -187,7 +187,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -262,7 +262,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -342,7 +342,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -417,7 +417,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 }
             ]
@@ -487,7 +487,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 }
             ]
@@ -552,7 +552,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 }
             ]
@@ -566,7 +566,7 @@
             "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
             "equipment": [
                 {
-                    "model": "LC-90LE657U",
+                    "model": "IPCP Pro S1 xi",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -647,7 +647,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -671,7 +671,7 @@
             "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
             "equipment": [
                 {
-                    "model": "LC-90LE657U",
+                    "model": "IPCP Pro S1 xi",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -706,7 +706,7 @@
             "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
             "equipment": [
                 {
-                    "model": "DTP CrossPoint 84 IPCP MA",
+                    "model": "IPCP Pro S1 xi",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -802,7 +802,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 }
             ]
@@ -872,7 +872,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -947,7 +947,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -1007,7 +1007,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -1087,7 +1087,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -1152,7 +1152,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -1222,7 +1222,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -1251,7 +1251,7 @@
             "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic",
             "equipment": [
                 {
-                    "model": "IN1804 DO",
+                    "model": "IPCP Pro 355MQ xi",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -1302,7 +1302,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -1372,7 +1372,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -1432,7 +1432,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -1461,7 +1461,7 @@
             "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex",
             "equipment": [
                 {
-                    "model": "VIA GO2",
+                    "model": "IPCP Pro S1 xi",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -1532,7 +1532,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -1607,7 +1607,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 }
             ]
@@ -1676,7 +1676,7 @@
             "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic",
             "equipment": [
                 {
-                    "model": "PT-FW430U",
+                    "model": "IPCP Pro 355MQ xi",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -1732,7 +1732,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 }
             ]
@@ -1857,7 +1857,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -1982,7 +1982,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -2057,7 +2057,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -2117,7 +2117,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -2187,7 +2187,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 }
             ]
@@ -2252,7 +2252,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -2306,7 +2306,7 @@
             "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display",
             "equipment": [
                 {
-                    "model": "TR311",
+                    "model": "IPCP Pro S1 xi",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -2397,7 +2397,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {

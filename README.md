@@ -208,6 +208,32 @@ still missing instead of totalling a blank as free and cold.
 Nothing is written to disk until **Save catalog** - a mistyped price never
 reaches a shared drive on its own.
 
+### What the estate is priced on
+
+Every figure the project and campus reports fall back to comes off one line of
+the base-cost card, and each of those lines can name the **model it was
+benchmarked on** and the day it was set - which is what turns "about 4,200"
+into a number a finance office can argue with.
+
+**Priced on...** on the Catalog tab reads the whole card against the catalog at
+once, which is the shape the question actually has: the start of a budget year,
+a price list just imported, eighteen categories, and one question - is anything
+here still benchmarked on a product we cannot buy? The button carries the count
+of lines worth looking at.
+
+What it proposes is not a guess. A benchmark the catalog has **retired** follows
+its own successor chain. A line with **nothing set** takes the dearest current
+model in its category - dearest rather than cheapest, because a base cost is
+what a room done properly comes to and benchmarking an estate on the cheapest
+thing in the aisle is how a budget comes in short in the one direction nobody
+checks. A line **already on a current model is left alone**: re-pricing it
+because a price list moved is a decision, and it stays one.
+
+Every proposal is shown before any of it is written, because setting eighteen
+categories re-prices four hundred rooms. Setting one category at a time from
+the campus report still works and is the right door when somebody is reading
+that report and has an opinion about projectors.
+
 ### Merging another engineer's catalog
 
 Two people keep two copies of this file: one has priced the switchers, the
@@ -513,6 +539,34 @@ list somebody can re-total.
 
 Rooms the poll has never seen keep their figure and simply show no survey; a
 room the poll knows only as half of a divisible hall says so in its notes.
+
+**The report is editable.** A poll is a machine's reading of a room and a
+machine gets rooms wrong. Correct a model, a role or a count on the report and
+Save; a hand correction is written to the job's history so that if a later
+import overwrites it, the overwrite is visible. Re-running the import is still
+the right answer when the *poll* is wrong; typing here is the right answer when
+the *room* is right and the poll will never know.
+
+### Turning line items into rooms
+
+Two directions, both off the plan's line-item list.
+
+**Build a room from a line.** The room type on the line is what the estate's
+sheet priced it against, so the new-room dialog opens on that preset - and once
+the room is drawn, the survey is offered on top of it. The type keeps the
+drawing, the cabling and the jack numbering; the survey supplies the **models**.
+Matched by what a box *does*, never by name or position. A surveyed box with no
+position on that room type is reported and **not** added, because an unwired box
+on a diagram is worse than one that is not there; a position the poll never saw
+keeps the type's model, because a poll cannot see a screen.
+
+**Attach the rooms already drawn.** Eighteen months into a refresh, half the
+plan has a config sitting in the campus folder. **Attach rooms already drawn**
+scans the job's folder, matches each config to a line item on the **room code
+the config states** - not its file name, which is the one fact about a file
+nobody maintains - and shows the list before swapping any of them. Two files
+claiming one room are reported and skipped rather than guessed between: picking
+either ends with a budget pointing at somebody's working copy.
 
 ## Building projects (the `Project` tab)
 

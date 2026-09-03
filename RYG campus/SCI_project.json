@@ -80,7 +80,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 1
                 },
                 {
@@ -140,7 +140,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 1
                 },
                 {
@@ -260,7 +260,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 1
                 },
                 {
@@ -333,7 +333,7 @@
             "notes": "LAB-Laboratory  ·  NSC  ·  1 Projector  ·  RYG estimate for 1 Projector",
             "equipment": [
                 {
-                    "model": "Pro G7400U",
+                    "model": "IPCP Pro 355M",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -443,7 +443,7 @@
             "notes": "LAB-Laboratory  ·  NSC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic",
             "equipment": [
                 {
-                    "model": "Ultra 8",
+                    "model": "IPCP Pro 355M",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -952,7 +952,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 1
                 },
                 {
@@ -1067,7 +1067,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 1
                 },
                 {
@@ -1229,7 +1229,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 1
                 },
                 {
@@ -1284,7 +1284,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 1
                 },
                 {
@@ -1532,7 +1532,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 1
                 },
                 {
@@ -2059,7 +2059,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 1
                 },
                 {
@@ -2114,7 +2114,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 7
                 },
                 {
@@ -2220,7 +2220,7 @@
                 },
                 {
                     "model": "SCB-100",
-                    "category": "Control processor",
+                    "category": "Screen",
                     "quantity": 7
                 },
                 {

@@ -19,6 +19,8 @@ import 'device_merge.dart';
 import 'equipment_lifecycle.dart' show kDefaultEquipmentLifeYears;
 import 'live_text_field.dart';
 import 'side_pane.dart';
+import 'catalog_standards.dart';
+import 'catalog_standards_dialog.dart' show showCatalogStandards;
 
 /// ============================================================================
 ///  DEVICE EDITOR TAB
@@ -373,6 +375,15 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     final untracked = library.categoryCounts
         .where((c) => !isTrackedCategory(c.category))
         .length;
+    // How many lines of the base-cost card are benchmarked on nothing, or on a
+    // product the catalog no longer carries. Counted here for the same reason:
+    // the label and the dialog read one list.
+    final standardsAsOf = DateTime.now();
+    final wantsStandards = readCategoryStandards(
+      card: provider.baseCosts,
+      library: library,
+      asOf: standardsAsOf,
+    ).where((r) => standardNeedsLooking(r, standardsAsOf)).length;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
@@ -449,6 +460,24 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                       : 'Tidy categories ($untracked)...',
                 ),
                 onPressed: () => _tidyCategories(provider),
+              ),
+              // WHAT THE ESTATE IS PRICED ON. Every figure the project and
+              // campus reports fall back to comes off one line of the
+              // base-cost card, and each of those lines names the model it was
+              // benchmarked on. The question "is anything on that card still
+              // benchmarked on a product we cannot buy" is a question about
+              // the CATALOG, so it is asked here rather than one category at a
+              // time off a report. Labeled with the count that makes it worth
+              // pressing. See [showCatalogStandards].
+              OutlinedButton.icon(
+                key: const ValueKey('catalog_standards'),
+                icon: const Icon(Icons.price_change_outlined, size: 18),
+                label: Text(
+                  wantsStandards == 0
+                      ? 'Priced on...'
+                      : 'Priced on ($wantsStandards)...',
+                ),
+                onPressed: () => showCatalogStandards(context),
               ),
               // ONE PART NUMBER, ONE ENTRY. Two imports of the same box under
               // two model names are two half-filled entries that drift apart,

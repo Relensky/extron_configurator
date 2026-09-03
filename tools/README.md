@@ -127,6 +127,17 @@ corrected card reaches these rooms with no re-import. A role the card has no
 honest line for (a document camera, a VCR) is left blank and reports as
 unpriced rather than costed at a category it merely resembles.
 
+**Every re-run reports what it changed.** Two sections at the end: the places
+the MODEL overruled the device type the poll filed a box under, and every line
+that differs from what is already on the plan. The poll files twenty-three
+Da-Lite screen controllers as 'Controller', which would price a relay box at a
+control processor's figure and put a processor in twenty-three rooms that have
+not got one; where the catalog identifies the model and files it under a
+category that names a role, the catalog wins and the disagreement is printed.
+Catalog categories that are product FAMILIES - 'Control Systems', 'DTP
+Systems' - never overrule a device type, because they say what aisle a part
+was imported from rather than what it does.
+
 **Room names are matched exactly**, with three documented exceptions: a poll
 that names a divisible hall for both halves (`FAEC 111 117`), a plan name
 that slashes a pair (`SCI 126a/b`), and a lettered half the poll knows only by

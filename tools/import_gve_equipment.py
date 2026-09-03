@@ -86,6 +86,52 @@ ROLE_BY_MODEL = (
     (re.compile(r'^ipl t pcs', re.I), 'Power controller'),
 )
 
+# ---------------------------------------------------------------------------
+#  THE CATALOG CATEGORIES THAT NAME A ROLE OUTRIGHT
+# ---------------------------------------------------------------------------
+#  The survey's device type is normally the role: it is what the system that
+#  controls the room says the box is for. But the poll files things under a
+#  type that is plainly wrong often enough to matter - twenty-three Da-Lite
+#  screen controllers come back as 'Controller', which prices a relay box at a
+#  control processor's figure and puts a processor in twenty-three rooms that
+#  have not got one.
+#
+#  Where the CATALOG identifies the model and files it under a category that is
+#  a role rather than a product family, the catalog wins and the disagreement
+#  is reported. A model is a fact about the box; a device type is a field
+#  somebody filled in.
+#
+#  Only these categories qualify. The families deliberately left out - 'Control
+#  Systems' (processors AND touch panels), 'DTP Systems' (transmitters AND
+#  matrices), 'XTP Systems', 'Audio', 'Streaming', 'Architectural', 'Fox
+#  Systems', 'AV / Misc' - say what aisle a part was imported from, not what it
+#  does, and would overrule a correct device type with a shrug. The words are
+#  the base-cost card's own; see kCategoryAliases in lib/base_costs.dart, which
+#  is where the two-way ones are translated.
+ROLE_CATALOG_CATEGORIES = {
+    'camera': 'Camera',
+    'display': 'Display',
+    'dsp': 'DSP',
+    'matrix': 'Switcher',
+    'power controller': 'Power controller',
+    'projector': 'Projector',
+    'recorder / streamer': 'Recorder / streamer',
+    'screen': 'Screen',
+    'switcher': 'Switcher',
+    'usb': 'USB interface',
+    'usb interface': 'USB interface',
+    'wireless presentation': 'Wireless presentation',
+}
+
+
+def catalog_role(entry):
+    """The role the catalog gives this model, or '' when it names only a family."""
+    if not entry:
+        return ''
+    return ROLE_CATALOG_CATEGORIES.get(
+        (entry.get('category') or '').strip().lower(), ''
+    )
+
 
 def norm(text):
     """Model and part numbers compared the way people mean them."""
@@ -110,32 +156,53 @@ def load_catalog(path):
     return by_model, by_part
 
 
+def polled_model(device):
+    """The model the poll actually ASSERTS, or '' when it asserts none.
+
+    `ModelName` is the device's own reported model and is trusted outright.
+    `ResolvedModelName` is the poll's own GUESS at matching that device
+    against its library, and it is wrong often enough to be dangerous: an
+    IPCP Pro S1 xi control processor comes back resolved as a Kramer VIA, an
+    IPCP Pro 355MQ xi as a Panasonic projector. Eighteen of the estate's
+    control processors resolve to something they are visibly not.
+
+    So the guess is used only where there is nothing to be wrong about -
+    where the device reported no model of its own, which is most of the
+    displays and projectors and every one of them is right. One field wins
+    outright rather than the two being raced against the catalog, because
+    racing them is exactly how a processor became a VIA: the real model was
+    not in the catalog, the wrong guess was, and the wrong one won.
+    """
+    own = (device.get('ModelName') or '').strip()
+    if own:
+        return own
+    return (device.get('ResolvedModelName') or '').strip()
+
+
 def catalog_match(device, by_model, by_part):
     """The catalog entry for a surveyed device, or None.
 
     THE PART NUMBER FIRST, because it is the one field that cannot be spelled
-    two ways. Then the model as the poll reports it, then the model with the
+    two ways. Then the model the poll asserts, then that model with the
     manufacturer stripped off the front - GVE writes 'Sharp LC-80LE661U' and
     the catalog writes 'LC-80LE661U', and they are the same box.
 
-    ResolvedModelName is tried LAST and only when nothing else answers: the
-    poll resolves some devices against the wrong entry outright (an IPCP Pro
-    350M comes back resolved as a document camera), so it is a hint, not a
-    fact.
+    NO MATCH IS A FINE ANSWER. A model the catalog has never carried is still
+    the right model; it just gets priced off the base-cost card by role
+    instead of off a catalog price. See [role_of].
     """
     part = norm(device.get('PartNumber'))
     if part and part in by_part:
         return by_part[part]
-    for field in ('ModelName', 'ResolvedModelName'):
-        raw = (device.get(field) or '').strip()
-        if not raw:
-            continue
-        if norm(raw) in by_model:
-            return by_model[norm(raw)]
-        words = raw.split()
-        for cut in (1, 2):
-            if len(words) > cut and norm(' '.join(words[cut:])) in by_model:
-                return by_model[norm(' '.join(words[cut:]))]
+    raw = polled_model(device)
+    if not raw:
+        return None
+    if norm(raw) in by_model:
+        return by_model[norm(raw)]
+    words = raw.split()
+    for cut in (1, 2):
+        if len(words) > cut and norm(' '.join(words[cut:])) in by_model:
+            return by_model[norm(' '.join(words[cut:]))]
     return None
 
 
@@ -149,10 +216,9 @@ def installed_model(device, entry):
     """
     if entry:
         return entry['model']
-    for field in ('ModelName', 'ResolvedModelName'):
-        raw = (device.get(field) or '').strip()
-        if raw:
-            return raw
+    raw = polled_model(device)
+    if raw:
+        return raw
     # A device with no model at all is still a device in the room. Its polled
     # name is a person's label for it ('IPCP Pro 350 Arts105') and reads far
     # better than a blank.
@@ -160,29 +226,47 @@ def installed_model(device, entry):
 
 
 def role_of(device, entry):
-    """What the device DOES, for the base-cost card.
+    """What the device DOES, for the base-cost card: (role, conflict).
 
-    The survey's device type first: it is the role, stated by the system that
-    controls the room. The catalog's category is the fallback, and it is only a
-    fallback because half of it is a product FAMILY rather than a role - 'DTP
-    Systems' holds transmitters next to matrix switchers, and 'Control Systems'
-    holds processors next to touch panels.
+    The survey's device type is normally the answer: it is the role, stated by
+    the system that controls the room.
+
+    THE MODEL OVERRULES IT when the two disagree and the catalog is sure. A
+    model is a fact about the box; a device type is a field somebody filled
+    in, and the poll files twenty-three Da-Lite screen controllers under
+    'Controller'. Where the catalog identifies the model and files it under a
+    category that names a ROLE - see [ROLE_CATALOG_CATEGORIES] - the catalog
+    wins and the disagreement comes back in `conflict` so every one of them is
+    printed rather than quietly applied.
+
+    Where the catalog names only a FAMILY it is the fallback and not the
+    referee, because 'DTP Systems' holds transmitters next to matrix switchers
+    and 'Control Systems' holds processors next to touch panels. Overruling a
+    correct device type with one of those would be a shrug, at scale.
+
+    `conflict` is (surveyed role, catalog role) or None.
     """
     device_type = (device.get('DeviceType') or '').strip()
-    mapped = ROLE_BY_DEVICE_TYPE.get(device_type, '')
-    if mapped:
-        return mapped
+    surveyed = ROLE_BY_DEVICE_TYPE.get(device_type, '')
+    from_catalog = catalog_role(entry)
+
+    if surveyed:
+        if from_catalog and from_catalog != surveyed:
+            return from_catalog, (surveyed, from_catalog)
+        return surveyed, None
+
     if device_type in ROLE_BY_DEVICE_TYPE:
-        # A type the card has no line for. A handful of well-known families
-        # still answer for themselves.
+        # A type the card has no line for. The catalog answers for it when it
+        # can, and a handful of well-known families answer for themselves.
+        if from_catalog:
+            return from_catalog, None
         for pattern, role in ROLE_BY_MODEL:
-            for field in ('ModelName', 'ResolvedModelName', 'DeviceName'):
-                raw = (device.get(field) or '').strip()
-                if raw and pattern.search(raw):
-                    return role
+            for raw in (polled_model(device), device.get('DeviceName') or ''):
+                if raw.strip() and pattern.search(raw):
+                    return role, None
     if entry and entry.get('category'):
-        return entry['category']
-    return ''
+        return entry['category'], None
+    return '', None
 
 
 # ---------------------------------------------------------------------------
@@ -233,13 +317,17 @@ def find_room(name, exact, alias):
 # ---------------------------------------------------------------------------
 #  ONE ROOM'S LIST
 # ---------------------------------------------------------------------------
-def equipment_for(room, by_model, by_part):
+def equipment_for(room, by_model, by_part, conflicts=None):
     """The surveyed room as line-item equipment: model, role, how many.
 
     Rolled up by model, because a room with two identical projectors is a
     quantity of two and not two rows a reader has to notice are the same. The
     order is the order the poll returned, which puts the controller and the
     switcher at the top - the way somebody reading a rack would list it.
+
+    Every place the model overruled the survey's device type is appended to
+    [conflicts], so a re-import can print the lot instead of correcting
+    twenty-three rooms without saying so.
     """
     order, rolled = [], {}
     for device in room.get('Devices', []):
@@ -249,7 +337,9 @@ def equipment_for(room, by_model, by_part):
         model = installed_model(device, entry)
         if not model:
             continue
-        role = role_of(device, entry)
+        role, conflict = role_of(device, entry)
+        if conflict is not None and conflicts is not None:
+            conflicts.append((room.get('RoomName'), model, conflict[0], conflict[1]))
         key = (norm(model), role)
         if key not in rolled:
             rolled[key] = {'model': model, 'category': role, 'quantity': 0}
@@ -285,6 +375,46 @@ def note_with_survey(notes, gve_name, how):
     return f'{text}  ·  {tail}' if text else tail
 
 
+def what_changed(room_name, before, after):
+    """What this run says that the plan does not already say.
+
+    A re-import is usually a no-op, and the times it is not are the times
+    somebody needs to look: a poll that has been corrected, a catalog entry
+    that has been added, a room that has been rebuilt. Every difference is
+    reported as a line rather than left in a diff nobody runs.
+
+    Matched by ROLE, not by position, so one box changing model does not read
+    as the whole room having been replaced.
+    """
+    def index(items):
+        out = {}
+        for item in items or []:
+            key = (item.get('category') or '', norm(item.get('model')))
+            out[key] = item
+        return out
+
+    was, now = index(before), index(after)
+    if was == now:
+        return []
+
+    def say(item):
+        role = item.get('category') or 'no role'
+        count = item.get('quantity', 1)
+        tail = f' x{count}' if count != 1 else ''
+        return f"{item.get('model')}{tail} ({role})"
+
+    lines = []
+    for key in was:
+        if key not in now:
+            lines.append((room_name, say(was[key]), 'gone'))
+        elif was[key].get('quantity', 1) != now[key].get('quantity', 1):
+            lines.append((room_name, say(was[key]), say(now[key])))
+    for key in now:
+        if key not in was:
+            lines.append((room_name, 'nothing', say(now[key])))
+    return lines
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('gve', help='GveSystemData.json from the extron_debugger poll')
@@ -308,6 +438,11 @@ def main(argv):
     misses = []
     by_role = collections.Counter()
     no_catalog = collections.Counter()
+    # Where the model overruled the poll's device type, and where this run
+    # disagrees with what is already on the plan. Both are printed: a re-import
+    # that silently corrects twenty-three rooms is a re-import nobody can check.
+    conflicts = []
+    corrections = []
 
     for name in files:
         path = os.path.join(args.plan, name)
@@ -328,7 +463,10 @@ def main(argv):
                     changed = True
                 continue
             matched += 1
-            items = equipment_for(room, by_model, by_part)
+            items = equipment_for(room, by_model, by_part, conflicts)
+            corrections.extend(
+                what_changed(line.get('name'), line.get('equipment'), items)
+            )
             devices += sum(i['quantity'] for i in items)
             for item in items:
                 role = item.get('category', '')
@@ -363,6 +501,23 @@ def main(argv):
           f'({sum(no_catalog.values())} boxes) - priced off the card by role')
     for model, count in no_catalog.most_common(20):
         print(f'  {count:>5}  {model}')
+    if conflicts:
+        print()
+        print(f'The model overruled the device type the poll filed it under, '
+              f'in {len(conflicts)} place(s):')
+        rolled = collections.Counter(
+            (model, was, now) for _room, model, was, now in conflicts
+        )
+        for (model, was, now), count in rolled.most_common():
+            print(f'  {count:>5}  {model}: filed as {was}, priced as {now}')
+
+    if corrections:
+        print()
+        print(f'CHANGED against what was already on the plan '
+              f'({len(corrections)} line(s)):')
+        for room_name, before, after in corrections:
+            print(f'  {room_name}: {before}  ->  {after}')
+
     if misses:
         print()
         print(f'No surveyed room for: {", ".join(sorted(misses))}')

@@ -12602,6 +12602,40 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  /// Replaces what a line item says is INSTALLED in its room.
+  ///
+  /// Its own entry point rather than a trip through
+  /// [updateProjectManualRoom], because the survey is not one of the four
+  /// fields that dialog edits and the history line wanted is a different
+  /// sentence: "the survey went from eleven boxes to twelve" is what somebody
+  /// looking for a hand correction is looking for.
+  ///
+  /// A HAND CORRECTION IS A DECISION AND IS LOGGED AS ONE. The list is
+  /// otherwise written by the importer, which replaces it wholesale on every
+  /// run; without a record, a correction that gets overwritten next month is
+  /// a correction nobody can prove was ever made. See
+  /// tools/import_gve_equipment.py, which prints every line it changes.
+  void updateProjectManualRoomEquipment(
+    String id,
+    List<ManualRoomItem> equipment,
+  ) {
+    final at = project.manualRooms.indexWhere((r) => r.id == id);
+    if (at < 0) return;
+    final before = project.manualRooms[at];
+    final was = before.installedCount;
+    project.updateManualRoom(before.copyWith(equipment: equipment));
+    final now = project.manualRooms[at].installedCount;
+    _logProjectEdit(
+      itemKey: 'manual:$id',
+      itemName: before.name,
+      field: 'What is in the room',
+      summary: was == now
+          ? 'corrected by hand, still $now item${now == 1 ? '' : 's'}'
+          : 'corrected by hand, $was item${was == 1 ? '' : 's'} to $now',
+    );
+    _projectChanged();
+  }
+
   /// Takes a line off the plan, and hands it BACK so the caller can offer an
   /// undo. Null when there was no such line.
   ///

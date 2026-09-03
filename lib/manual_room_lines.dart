@@ -14,7 +14,7 @@ import 'manual_room_equipment.dart' show manualRoomEquipmentSummary;
 import 'manual_room_equipment_dialog.dart' show showManualRoomEquipment;
 import 'manual_rooms_dialog.dart' show showManualRoomForm;
 import 'project_schedule.dart' show formatScheduleDate;
-import 'save_actions.dart' show buildRoomFromLineItem;
+import 'save_actions.dart' show attachDrawnRooms, buildRoomFromLineItem;
 
 /// ============================================================================
 ///  THE PLAN AS LINE ITEMS
@@ -368,11 +368,30 @@ class ManualRoomLinesHeading extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'LINE ITEMS: $count room${count == 1 ? '' : 's'} with no config',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'LINE ITEMS: $count room${count == 1 ? '' : 's'} with no config',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            // THE PLAN CATCHING UP WITH THE WORK. Eighteen months in, half
+            // these lines have a room drawn for them and every one of those
+            // swaps was a file picker. See [attachDrawnRooms].
+            OutlinedButton.icon(
+              key: const ValueKey('line_item_attach_drawn'),
+              onPressed: () => attachDrawnRooms(
+                context,
+                context.read<AppStateProvider>(),
+              ),
+              icon: const Icon(Icons.playlist_add_check_circle_outlined,
+                  size: 18),
+              label: const Text('Attach rooms already drawn...'),
+            ),
+          ],
         ),
         const SizedBox(height: 2),
         Text(

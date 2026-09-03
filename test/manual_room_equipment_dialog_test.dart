@@ -142,7 +142,9 @@ void main() {
     );
     expect(find.text(r'$7,200.00'), findsOneWidget);
     expect(find.textContaining('4 items installed, 1 not priced'), findsOneWidget);
-    expect(find.text('not priced'), findsOneWidget);
+    // The blank option on every role picker says 'not priced' too, so the
+    // one that matters is the money cell on the row that has no figure.
+    expect(find.text('not priced'), findsWidgets);
 
     // A card figure marked as one, and the model it was benchmarked on.
     expect(find.textContaining('est.'), findsWidgets);
@@ -200,6 +202,107 @@ void main() {
     final after = provider.project.manualRooms.single;
     expect(after.replacementCost, 31000);
     expect(after.installedCount, 4, reason: 'the survey came through untouched');
+  });
+
+  testWidgets('a wrong model can be corrected on the report', (tester) async {
+    // The poll files screen controllers as control processors and reports gear
+    // that has since been swapped out. Somebody who has stood in the room
+    // knows better, and this is where they say so.
+    final provider = providerWith();
+    final seeded = provider.addProjectManualRoom(
+      name: 'AGYM 129',
+      replacementCost: 24434.6,
+    );
+    provider.updateProjectManualRoom(
+      seeded.copyWith(equipment: surveyed.equipment),
+    );
+
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: ManualRoomEquipmentDialog(
+              room: provider.project.manualRooms.single,
+              currency: r'$',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Nothing to save until something is said.
+    final save = find.byKey(const ValueKey('manual_room_equipment_save'));
+    expect(tester.widget<FilledButton>(save).onPressed, isNull);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('manual_room_equipment_model_1')),
+      'PT-VMZ62BU8',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('manual_room_equipment_qty_1')),
+      '3',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    final after = provider.project.manualRooms.single;
+    expect(after.equipment[1].model, 'PT-VMZ62BU8');
+    expect(after.equipment[1].quantity, 3);
+    expect(
+      after.equipment.first.model,
+      'IPCP Pro 350M',
+      reason: 'the rows nobody touched are untouched',
+    );
+    // A hand correction is a decision, and the log says so.
+    expect(
+      provider.project.history.any(
+        (e) => e.field == 'What is in the room',
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('closing without saving leaves the plan alone', (tester) async {
+    final provider = providerWith();
+    final seeded = provider.addProjectManualRoom(name: 'AGYM 129');
+    provider.updateProjectManualRoom(
+      seeded.copyWith(equipment: surveyed.equipment),
+    );
+
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: ManualRoomEquipmentDialog(
+              room: provider.project.manualRooms.single,
+              currency: r'$',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('manual_room_equipment_remove_0')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('manual_room_equipment_close')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(provider.project.manualRooms.single.equipment, hasLength(3));
   });
 
   testWidgets('a room nobody has surveyed says so rather than showing nothing', (

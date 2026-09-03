@@ -9,10 +9,14 @@ import 'package:provider/provider.dart';
 import 'app_logger.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'av_flow_view.dart' show buildAvFlowModel;
+import 'av_flow_swap_dialogs.dart' show applyModelSwap;
 import 'contrast.dart';
 import 'control_prefill.dart' show buildControlSideForPreset;
 import 'new_room_dialog.dart';
 import 'online_copy_dialog.dart' show offerHeldOnlineEdits;
+import 'manual_room_attach.dart';
+import 'manual_room_survey_apply.dart';
 import 'project_room_picker.dart' show confirmLeavingRoom;
 import 'building_project.dart';
 import 'diagram_capture.dart';
@@ -665,6 +669,14 @@ Future<bool> buildRoomFromLineItem(
     return false;
   }
   if (!context.mounted) return false;
+
+  // THE TYPE GIVES THE DRAWING, THE SURVEY GIVES THE MODELS. The preset has
+  // just put a room type's projectors, switcher and panel on the canvas, wired
+  // the way that type is wired; what actually went in in 2015 is on the line
+  // item. Offered rather than done, because the room type is sometimes the
+  // right answer - a refresh being drawn as it WILL be, not as it is.
+  final applied = await offerSurveyOntoRoom(context, provider, line);
+  if (!context.mounted) return false;
   final messenger = ScaffoldMessenger.of(context);
 
   // The code on the door, off the line item's own name. Written before the
@@ -711,11 +723,119 @@ Future<bool> buildRoomFromLineItem(
       content: Text(
         '${line.name} is a room now'
         '${choice.preset == null ? '' : ', built from ${choice.preset!.name}'}'
+        '${applied == 0 ? '' : ', with $applied surveyed model'
+            '${applied == 1 ? '' : 's'} on it'}'
         '. Its estimate is off the plan and it is priced from its own parts.',
       ),
     ),
   );
   return true;
+}
+
+/// Offers to put a line item's survey onto the room that has just been drawn
+/// from its type. Returns how many positions took a surveyed model.
+///
+/// ASKED, NOT ASSUMED, and asked with the arithmetic already done: the reader
+/// is told how many positions change, how many surveyed boxes have nowhere to
+/// go on this room type, and how many positions the poll never saw. A prompt
+/// that says "apply the survey?" and nothing else is a prompt answered by
+/// guessing.
+Future<int> offerSurveyOntoRoom(
+  BuildContext context,
+  AppStateProvider provider,
+  ManualRoom line,
+) async {
+  if (line.equipment.isEmpty) return 0;
+  final plan = planSurveyOntoRoom(
+    survey: line.equipment,
+    model: buildAvFlowModel(provider),
+    library: provider.avDeviceLibrary,
+  );
+  if (plan.placements.isEmpty) return 0;
+
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      key: const ValueKey('survey_onto_room_dialog'),
+      title: Text('Put what is in ${line.name} onto the room?'),
+      content: SizedBox(
+        width: 560,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'The room type gave this room its drawing, its cabling and its '
+              'jack numbering. The survey knows what actually went in.',
+              style: Theme.of(ctx).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            for (final p in plan.placements)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  '${p.onto.label}: ${p.onto.model.isEmpty ? 'no model' : p.onto.model}'
+                  '  ->  ${p.item.model}'
+                  '${p.template == null ? '  (not in the catalog - name only)' : ''}',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+              ),
+            if (plan.leftOver.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                'No position on this room type for: '
+                '${plan.leftOver.join(', ')}. Nothing is added to the drawing '
+                'for these - an unwired box on a diagram is worse than a box '
+                'that is not there.',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+            ],
+            if (plan.untouched.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                'The survey never mentioned ${plan.untouched.join(', ')}. '
+                'They keep the room type model - a poll cannot see a screen.',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('survey_onto_room_skip'),
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Keep the room type models'),
+        ),
+        FilledButton(
+          key: const ValueKey('survey_onto_room_apply'),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Use what is in the room'),
+        ),
+      ],
+    ),
+  );
+  if (go != true) return 0;
+
+  var done = 0;
+  for (final p in plan.placements) {
+    final template = p.template;
+    if (template != null) {
+      // The full swap: ports remapped, power inlet carried, the unit coming
+      // out filed in the position age record. One undo for the lot.
+      applyModelSwap(provider, p.onto, template, recordUndo: done == 0);
+    } else {
+      // A model the catalog has never carried. The NAME is still the answer to
+      // what is in the room; the ports, the wattage and the rack height stay
+      // the room type's, because a number nobody has is worse than the type's.
+      provider.updateAvNode(
+        p.onto.copyWith(model: p.item.model),
+        recordUndo: done == 0,
+      );
+    }
+    done++;
+  }
+  return done;
 }
 
 /// Puts the job away. Returns true when it was actually closed.
@@ -1512,4 +1632,140 @@ class _MenuLine extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Attaches every line item that somebody has since DRAWN, in one pass.
+///
+/// The other half of building a room from a line - see [buildRoomFromLineItem].
+/// That one is for the room that does not exist yet; this is for the folder of
+/// rooms that already do, which is what a plan looks like eighteen months in.
+///
+/// SHOWN BEFORE IT IS DONE. Each swap takes a line off the plan and puts a
+/// config on the job, and a line item is the only record of its room. Eleven
+/// of those applied on one press, unseen, is not a button anybody should
+/// trust; the list is the point.
+Future<int> attachDrawnRooms(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  final lines = provider.project.manualRooms;
+  if (lines.isEmpty) return 0;
+
+  // The folder the job is in, because that is where a campus keeps its rooms.
+  // Asked rather than assumed when the job has not been saved anywhere yet.
+  var folder = provider.currentProjectPath.trim().isEmpty
+      ? ''
+      : path.dirname(provider.currentProjectPath);
+  if (folder.isEmpty) {
+    folder = await FilePicker.getDirectoryPath(
+          dialogTitle: 'Where are the room configs?',
+        ) ??
+        '';
+  }
+  if (folder.isEmpty || !context.mounted) return 0;
+
+  final plan = planRoomAttachments(
+    lines: lines,
+    drawn: findDrawnRooms(Directory(folder)),
+  );
+  if (!context.mounted) return 0;
+
+  final messenger = ScaffoldMessenger.of(context);
+  if (plan.matches.isEmpty) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(content: Text('${describeAttachPlan(plan)}.')),
+    );
+    return 0;
+  }
+
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      key: const ValueKey('attach_drawn_rooms_dialog'),
+      title: const Text('Rooms that have been drawn'),
+      content: SizedBox(
+        width: 620,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Each of these takes an estimate off the plan and puts the real '
+              'room on the job in its place, priced from its own parts.',
+              style: Theme.of(ctx).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final m in plan.matches)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          '${m.line.name}  ->  ${path.basename(m.configPath)}',
+                          style: Theme.of(ctx).textTheme.bodySmall,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            if (plan.ambiguous.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Claimed by more than one file, so left alone: '
+                '${plan.ambiguous.join('; ')}. Use Swap on the line to pick '
+                'the one you mean.',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('attach_drawn_rooms_cancel'),
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('attach_drawn_rooms_ok'),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text(
+            plan.matches.length == 1
+                ? 'Attach 1 room'
+                : 'Attach ${plan.matches.length} rooms',
+          ),
+        ),
+      ],
+    ),
+  );
+  if (go != true) return 0;
+
+  var done = 0;
+  final failed = <String>[];
+  for (final m in plan.matches) {
+    final error = provider.swapManualRoomForConfig(m.line.id, m.configPath);
+    if (error.isEmpty) {
+      done++;
+    } else {
+      failed.add(m.line.name);
+    }
+  }
+
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      duration: const Duration(seconds: 6),
+      content: Text(
+        '$done estimate${done == 1 ? '' : 's'} replaced by the room'
+        '${done == 1 ? '' : 's'} drawn for them.'
+        '${failed.isEmpty ? '' : ' Left on the plan: ${failed.join(', ')}.'}',
+      ),
+    ),
+  );
+  return done;
 }

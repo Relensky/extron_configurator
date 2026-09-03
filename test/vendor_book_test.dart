@@ -185,13 +185,67 @@ void main() {
       // nothing about whether there is anything to add.
       final button = find.byKey(const ValueKey('add_saved_vendors'));
       expect(button, findsOneWidget);
-      expect(find.text('Add 2 saved vendors'), findsOneWidget);
+      expect(find.text('Add saved vendors (2)'), findsOneWidget);
 
+      // IT OPENS A LIST RATHER THAN ADDING THE LIST. A shop with nineteen
+      // suppliers on the share is not asking eleven of them to quote a
+      // two-room refresh.
       await tester.tap(button);
       await tester.pumpAndSettle();
-      expect([for (final v in p.project.vendors) v.name], ['Extron', 'Shure']);
-      // And it goes away, because there is nothing left to offer.
-      expect(find.byKey(const ValueKey('add_saved_vendors')), findsNothing);
+      expect(find.byKey(const ValueKey('vendor_pick_dialog')), findsOneWidget);
+      expect(
+        p.project.vendors,
+        isEmpty,
+        reason: 'opening the picker is not a decision',
+      );
+
+      // Nothing ticked, nothing to add.
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('vendor_pick_ok')))
+            .onPressed,
+        isNull,
+      );
+
+      final extron = p.vendorBook.byName('Extron')!;
+      await tester.tap(find.byKey(ValueKey('vendor_pick_${extron.id}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('vendor_pick_ok')));
+      await tester.pumpAndSettle();
+
+      expect([for (final v in p.project.vendors) v.name], ['Extron']);
+      // Still offered, because Shure is still off the job.
+      expect(find.text('Add a saved vendor'), findsOneWidget);
+    });
+
+    testWidgets('the picker leaves the job alone when it is cancelled', (
+      tester,
+    ) async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.newProject(name: 'Bessey refresh');
+      p.vendorBook.add(name: 'Extron');
+
+      tester.view.physicalSize = const Size(1700, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(home: Scaffold(body: ProjectView())),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('add_saved_vendors')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('vendor_pick_all')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('vendor_pick_cancel')));
+      await tester.pumpAndSettle();
+
+      expect(p.project.vendors, isEmpty);
     });
 
     test('a job vendor is a copy - editing it leaves the share alone', () {

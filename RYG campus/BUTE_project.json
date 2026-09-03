@@ -300,7 +300,7 @@
             "notes": "1 Projector  ·  RYG estimate for 1 Projector",
             "equipment": [
                 {
-                    "model": "DTP CrossPoint 84 IPCP SA",
+                    "model": "MLC 226 IP",
                     "category": "Control processor",
                     "quantity": 1
                 }
@@ -434,7 +434,7 @@
             "notes": "conference  ·  1 Projector  ·  RYG estimate for 1 Projector",
             "equipment": [
                 {
-                    "model": "LC-90LE657U",
+                    "model": "MLC 226 IP",
                     "category": "Control processor",
                     "quantity": 1
                 }

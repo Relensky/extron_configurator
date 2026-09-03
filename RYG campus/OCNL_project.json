@@ -459,7 +459,7 @@
             "notes": "LEC-Lecture  ·  capacity ??  ·  ECC  ·  figure typed on the master sheet",
             "equipment": [
                 {
-                    "model": "IN1808",
+                    "model": "IPCP Pro 355M",
                     "category": "Control processor",
                     "quantity": 1
                 },

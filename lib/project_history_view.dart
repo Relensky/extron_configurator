@@ -339,8 +339,24 @@ class _HistoryDialog extends StatefulWidget {
   State<_HistoryDialog> createState() => _HistoryDialogState();
 }
 
+/// What the dialog's own content is inset by, now that the content padding is
+/// zero so the scrollbar can sit at the edge. The Material default, so the
+/// header still lines up with every other dialog in the app.
+const EdgeInsets _headerPad = EdgeInsets.symmetric(horizontal: 24);
+
 class _HistoryDialogState extends State<_HistoryDialog> {
   HistoryScope _scope = HistoryScope.both;
+
+  /// Shared by the bar and the list, because a Scrollbar with no controller
+  /// and a ListView with none are two different scroll positions and the
+  /// thumb ends up tracking nothing.
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -365,6 +381,13 @@ class _HistoryDialogState extends State<_HistoryDialog> {
     return AlertDialog(
       key: const ValueKey('history_dialog'),
       title: const Text('What has been changed'),
+      // THE SCROLLBAR RIDES THE DIALOG'S EDGE, not the text's. With the
+      // default content padding the list stops 24px in and the thumb comes
+      // down on top of the last words of every long line. So the padding is
+      // taken off here and put back on the things that are NOT the list -
+      // see [_headerPad] - which leaves the bar out at the edge where a
+      // scrollbar belongs and the rows clear of it.
+      contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 24),
       content: SizedBox(
         width: 760,
         height: 520,
@@ -375,7 +398,9 @@ class _HistoryDialogState extends State<_HistoryDialog> {
             // session with just a room open, a switcher whose other two
             // options are both empty is a control that can only disappoint.
             if (hasProject && hasRoom)
-              Align(
+              Padding(
+                padding: _headerPad,
+                child: Align(
                 alignment: Alignment.centerLeft,
                 child: SegmentedButton<HistoryScope>(
                   segments: [
@@ -391,9 +416,12 @@ class _HistoryDialogState extends State<_HistoryDialog> {
                   selected: {_scope},
                   onSelectionChanged: (v) => setState(() => _scope = v.first),
                 ),
+                ),
               ),
             const SizedBox(height: 8),
-            Text(
+            Padding(
+              padding: _headerPad,
+              child: Text(
               rows.isEmpty
                   ? 'Nothing recorded yet. Edits to this room and decisions on '
                       'the job are logged here as they are made, with the '
@@ -404,12 +432,21 @@ class _HistoryDialogState extends State<_HistoryDialog> {
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
+              ),
             ),
             const Divider(),
             Expanded(
               child: rows.isEmpty
                   ? const SizedBox.shrink()
-                  : ListView.builder(
+                  : Scrollbar(
+                      controller: _scroll,
+                      thumbVisibility: true,
+                      child: ListView.builder(
+                      controller: _scroll,
+                      // The rows keep the inset the header has; the gap on the
+                      // right is the lane the thumb runs in, so it never lands
+                      // on a word.
+                      padding: const EdgeInsets.only(left: 24, right: 20),
                       itemCount: rows.length,
                       itemBuilder: (context, i) => _EditRow(
                         edit: rows[i].edit,
@@ -420,6 +457,7 @@ class _HistoryDialogState extends State<_HistoryDialog> {
                         source: _scope == HistoryScope.both
                             ? rows[i].from
                             : null,
+                      ),
                       ),
                     ),
             ),

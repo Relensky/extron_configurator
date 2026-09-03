@@ -55,7 +55,7 @@
             "notes": "LEC-lecture  ·  capacity 44  ·  HFA  ·  HIST  ·  2 Display 1 Cam 1 Mic  ·  RYG estimate for 2 Display 1 Cam 1 Mic",
             "equipment": [
                 {
-                    "model": "DTP CrossPoint 84 IPCP SA",
+                    "model": "IPCP Pro 350M",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -305,7 +305,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 }
             ]
@@ -365,7 +365,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 }
             ]
@@ -444,7 +444,7 @@
             "notes": "LAB-Laboratory  ·  capacity 26  ·  HFA  ·  ART  ·  1 Proj 1 Display 2 Cam 2 Mic  ·  RYG estimate for 1 Proj 1 Display 2 Cam 2 Mic",
             "equipment": [
                 {
-                    "model": "VPL-PHZ60",
+                    "model": "IPCP Pro 355MQ xi",
                     "category": "Control processor",
                     "quantity": 1
                 },
@@ -490,7 +490,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {

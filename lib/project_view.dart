@@ -39,6 +39,7 @@ import 'project_swap.dart';
 import 'project_todo_view.dart';
 import 'project_timeline_view.dart';
 import 'project_workbook.dart';
+import 'vendor_pick_dialog.dart' show pickVendorsFromBook;
 import 'vendor_rfq_view.dart';
 import 'workbook_export.dart' show exportProjectWorkbook;
 
@@ -6136,15 +6137,22 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
             // it already (see AppStateProvider._seedProjectVendors); this is
             // the way in for the job that was started before a company was
             // added to the list, and for the one somebody trimmed. It says
-            // how many are missing rather than just 'add', because the count
+            // how many are on offer rather than just 'add', because the count
             // is what makes it worth pressing.
+            //
+            // IT OPENS A LIST RATHER THAN ADDING THE LIST. A shop with
+            // nineteen suppliers on the share is not asking eleven of them to
+            // quote a two-room refresh, and adding all of them so nine can be
+            // deleted is not a shortcut. See [pickVendorsFromBook].
             if (offList.isNotEmpty) ...[
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 key: const ValueKey('add_saved_vendors'),
-                onPressed: () {
-                  final added = provider.addProjectVendorsFromBook();
-                  ScaffoldMessenger.of(context).showSnackBar(
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final added = await pickVendorsFromBook(context);
+                  if (added == 0) return;
+                  messenger.showSnackBar(
                     SnackBar(
                       content: Text(
                         added == 1
@@ -6157,8 +6165,8 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
                 icon: const Icon(Icons.playlist_add, size: 18),
                 label: Text(
                   offList.length == 1
-                      ? 'Add 1 saved vendor'
-                      : 'Add ${offList.length} saved vendors',
+                      ? 'Add a saved vendor'
+                      : 'Add saved vendors (${offList.length})',
                 ),
               ),
             ],

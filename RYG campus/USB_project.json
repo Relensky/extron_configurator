@@ -50,7 +50,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -95,7 +95,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -175,7 +175,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
@@ -220,7 +220,7 @@
                 },
                 {
                     "model": "Toggle",
-                    "category": "USB",
+                    "category": "USB interface",
                     "quantity": 1
                 },
                 {
