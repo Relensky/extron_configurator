@@ -11,6 +11,7 @@ import 'campus_lifecycle_view.dart' show showCampusLifecycle;
 import 'equipment_lifecycle.dart';
 import 'lifecycle_export.dart';
 import 'lifecycle_picture.dart';
+import 'lifecycle_spend_chart.dart';
 import 'manual_room_equipment.dart' show manualRoomEquipmentSummary;
 import 'manual_room_lines.dart';
 import 'lifecycle_view.dart'
@@ -96,6 +97,22 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
     ];
   }
 
+  // THE SHAPE OF THE PLAN, before the grid it is derived from. Same
+  // arithmetic, same lifecycle - see [LifecycleSpendChart] - and one point per
+  // year that can be asked which rooms are in it.
+  final spend = <SpendYear>[
+    for (final year in building.yearsThroughDue())
+      (
+        year: year,
+        amount: building.costDueIn(year),
+        parts: [
+          for (final room in building.rooms)
+            if (room.costDueIn(year) > 0)
+              (name: room.roomName, amount: room.costDueIn(year)),
+        ],
+      ),
+  ];
+
   return [
     SliverToBoxAdapter(
       child: _Summary(
@@ -106,7 +123,29 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
       ),
     ),
     SliverToBoxAdapter(child: LifecycleYearGrid(building: building)),
+    // THE SHAPE OF THE SAME PLAN, UNDER THE SHEET RATHER THAN OVER IT.
+    //
+    // The grid is the point of this pane and has to own the first screen -
+    // above it, the chart pushed the sheet's own zoom controls below the fold
+    // on a laptop at 150%. So it sits between the document and the room list
+    // it is summarised from, which is also where somebody asks the question it
+    // answers: the grid says what, this says how much and when, and hovering a
+    // year names the rooms in it.
+    SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+        child: LifecycleSpendChart(
+          key: const ValueKey('lifecycle_spend_chart'),
+          years: spend,
+          currency: building.currency,
+          asOfYear: building.asOf.year,
+          levelAmount:
+              LifecycleSpendChart.levelSpendFor(spend, building.asOf.year),
+        ),
+      ),
+    ),
     const SliverToBoxAdapter(child: Divider(height: 1)),
+
     // ROOM BY ROOM, WITH THE MONEY BROKEN OUT BY THE YEAR IT LANDS. The grid
     // above is the picture; this is the list a budget request is written from.
     SliverList.separated(

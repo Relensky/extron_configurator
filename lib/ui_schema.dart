@@ -25,6 +25,9 @@ import 'config_dictionary.dart';
 ///    "combo"    ONE dropdown that writes to MULTIPLE config keys at once
 ///               ("writes" array + "options" with a "values" array per option)
 ///    "hidden"   never render this key (e.g. keys managed by a combo or wizard)
+///    "com_port" a serial port, typed as the NUMBER alone: the field prints
+///               the "COM" itself and stores 'COM3' when '3' is typed (see
+///               [normalizeComPort])
 ///
 ///    "room_sources" dropdown whose options are the sources THIS room has,
 ///               read off the input_* keys in SYSTEM_SETUP (see
@@ -136,6 +139,35 @@ String _fillPlaceholders(String text, Map<String, dynamic> section) =>
       final v = section[m.group(1)];
       return (v == null || v.toString().isEmpty) ? '(unset)' : v.toString();
     });
+
+/// A COM port the way config.json wants it, from whatever was typed.
+///
+/// A port on a processor is COM1, COM2, COM3 - the word never varies, so the
+/// editor asks for the number alone and puts the "COM" on: '3' -> 'COM3'. A
+/// value that already carries it ('COM3', 'com 3' off a survey sheet) is
+/// accepted and tidied to the same thing, so pasting a whole port still works.
+///
+/// Anything that is NOT a plain port number is returned trimmed and otherwise
+/// untouched: a value this does not understand is one to see on the tab, not
+/// one to quietly rewrite.
+String normalizeComPort(String raw) {
+  final text = raw.trim();
+  final m = RegExp(r'^(?:com\s*)?(\d+)$', caseSensitive: false).firstMatch(text);
+  if (m == null) return text;
+  // '01' is COM1 - a leading zero is a typing artifact, not a port.
+  final digits = m.group(1)!.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+  return 'COM$digits';
+}
+
+/// The number to SHOW for a stored serial port, with the "COM" the field
+/// prints for itself taken off: 'COM3' -> '3'. A value that is not a plain
+/// COM port comes back whole, for the same reason [normalizeComPort] leaves
+/// it alone.
+String comPortNumber(dynamic value) {
+  final text = value?.toString().trim() ?? '';
+  final m = RegExp(r'^com\s*(\d+)$', caseSensitive: false).firstMatch(text);
+  return m == null ? text : m.group(1)!;
+}
 
 /// A single selectable option for "dropdown" and "combo" fields.
 class OptionSpec {

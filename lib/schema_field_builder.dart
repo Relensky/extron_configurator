@@ -864,11 +864,21 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
       widget.value is int ||
       widget.value is double;
 
+  /// A serial port, typed as the number alone - the field prints the 'COM'.
+  bool get _isComPort => widget.type == 'com_port';
+
+  /// The 'COM' is only printed beside a port NUMBER. A value the type does not
+  /// understand ('/dev/ttyS1', kept rather than rewritten) is shown as it is,
+  /// instead of reading as 'COM/dev/ttyS1'.
+  bool get _showsComPrefix =>
+      _isComPort && RegExp(r'^\d*$').hasMatch(_controller.text.trim());
+
   // TOUCH-PANEL LINE BREAKS: config values store panel line breaks as the
   // two-character sequence \r (written to disk as \\r). Show them as REAL line
   // breaks so the field reads the way the panel will render it.
   String _display(dynamic v) {
     final raw = v?.toString() ?? '';
+    if (_isComPort) return comPortNumber(raw);
     return _isNumeric ? raw : raw.replaceAll(r'\r', '\n');
   }
 
@@ -926,12 +936,16 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
       controller: _controller,
       focusNode: _focusNode,
       // Text fields grow to show every \r line; numeric fields stay one line
-      maxLines: _isNumeric ? 1 : null,
+      maxLines: _isNumeric || _isComPort ? 1 : null,
       keyboardType: _isNumeric
           ? const TextInputType.numberWithOptions(decimal: true)
-          : TextInputType.multiline,
+          : _isComPort
+              ? TextInputType.number
+              : TextInputType.multiline,
       decoration: InputDecoration(
         labelText: widget.label,
+        // The port NUMBER is all that is typed; the 'COM' is printed in the box.
+        prefixText: _showsComPrefix ? 'COM' : null,
         // Orange label = carried over from the loaded file; white = written by
         // the conversion. Null (no conversion) leaves the theme's own color.
         labelStyle: labelColor == null ? null : TextStyle(color: labelColor),
@@ -951,7 +965,10 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
         dynamic parsedVal;
         // Respect the declared schema type first, then the live value's type,
         // so config.json keeps clean numeric types either way.
-        if (widget.type == 'int' || widget.value is int) {
+        if (_isComPort) {
+          // '3' is stored as 'COM3' - see [normalizeComPort].
+          parsedVal = normalizeComPort(val);
+        } else if (widget.type == 'int' || widget.value is int) {
           parsedVal = int.tryParse(val) ?? 0;
         } else if (widget.type == 'double' || widget.value is double) {
           parsedVal = double.tryParse(val) ?? 0.0;
@@ -964,6 +981,9 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
         }
         widget.provider
             .updateDeviceValue(widget.sectionKey, widget.fieldKey, parsedVal);
+        // The 'COM' comes and goes with what is in the box, and a provider
+        // write that changes nothing repaints nothing - so ask for it here.
+        if (_isComPort) setState(() {});
       },
     );
   }

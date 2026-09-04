@@ -2645,6 +2645,30 @@ class ProcessorSearchField extends StatelessWidget {
 }
 
 /// View for mapping application paths and selecting the active deployment room
+/// HOW WIDE THE BUTTON ON THE END OF A PATH ROW IS.
+///
+/// Every file-path row on the settings tab is a field that stretches and a
+/// button that does not, and the button used to be exactly as wide as its own
+/// label. So 'Reload Rules' was narrower than 'Reload Catalog', the field
+/// beside it was correspondingly longer, and five rows that are the same row
+/// ended in five different places down the page - which reads as five
+/// different kinds of row rather than one kind repeated.
+///
+/// One width, set from the longest label there is, puts every field on the
+/// same right-hand edge and makes every button the same size. See
+/// [_settingsAction], which is how a row asks for it.
+const double _kSettingsActionWidth = 264;
+
+/// The button on the end of a path row, at the one width they all share.
+///
+/// The height matches an [OutlineInputBorder] text field, so the button sits
+/// square with the field rather than floating above its helper text.
+Widget _settingsAction(Widget button) => SizedBox(
+      width: _kSettingsActionWidth,
+      height: 56,
+      child: button,
+    );
+
 class AppSettingsView extends StatelessWidget {
   const AppSettingsView({super.key});
 
@@ -3225,9 +3249,8 @@ class AppSettingsView extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            SizedBox(
-              height: 56, // Matches the height of the TextFormField
-              child: ElevatedButton.icon(
+            _settingsAction(
+              ElevatedButton.icon(
                 icon: const Icon(Icons.upload_file),
                 label: const Text('Load Template'),
                 style: ElevatedButton.styleFrom(
@@ -3287,9 +3310,8 @@ class AppSettingsView extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            SizedBox(
-              height: 56, // Matches the height of the TextFormField
-              child: ElevatedButton.icon(
+            _settingsAction(
+              ElevatedButton.icon(
                 icon: const Icon(Icons.refresh),
                 label: const Text('Reload Schema'),
                 onPressed: () async {
@@ -3351,9 +3373,8 @@ class AppSettingsView extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            SizedBox(
-              height: 56, // Matches the height of the TextFormField
-              child: ElevatedButton.icon(
+            _settingsAction(
+              ElevatedButton.icon(
                 icon: const Icon(Icons.refresh),
                 label: const Text('Reload Catalog'),
                 onPressed: () async {
@@ -3421,9 +3442,8 @@ class AppSettingsView extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            SizedBox(
-              height: 56,
-              child: ElevatedButton.icon(
+            _settingsAction(
+              ElevatedButton.icon(
                 icon: const Icon(Icons.refresh),
                 label: const Text('Reload Rules'),
                 onPressed: () async {
@@ -3480,19 +3500,45 @@ class AppSettingsView extends StatelessWidget {
                       'of names.',
                   helperMaxLines: 3,
                   border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.file_open),
-                    tooltip: 'Select JSON File',
-                    onPressed: () async {
-                      FilePickerResult? result = await FilePicker.pickFiles(
-                        type: FileType.custom,
-                        allowedExtensions: ['json'],
-                      );
-                      if (result != null) {
-                        provider.updateSetting('deliveryLocationsFilePath',
-                            result.files.single.path!);
-                      }
-                    },
+                  // RE-READING THE FILE IS A FIELD ACTION, so it lives on the
+                  // field beside the button that picks the file, rather than
+                  // as a second button on the end of the row. That is what
+                  // keeps this row on the same grid as every other path row -
+                  // see [_kSettingsActionWidth].
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Re-read the file',
+                        onPressed: () async {
+                          // Pick up what a colleague has saved to the share
+                          // since this copy read it.
+                          await provider.loadDeliveryLocations();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text('Delivery locations reloaded: '
+                                  '${provider.deliveryLocations.count} places'),
+                            ));
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.file_open),
+                        tooltip: 'Select JSON File',
+                        onPressed: () async {
+                          FilePickerResult? result =
+                              await FilePicker.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: ['json'],
+                          );
+                          if (result != null) {
+                            provider.updateSetting('deliveryLocationsFilePath',
+                                result.files.single.path!);
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ),
                 initialValue: provider.deliveryLocationsFilePath,
@@ -3501,33 +3547,12 @@ class AppSettingsView extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            SizedBox(
-              height: 56, // Matches the height of the TextFormField
-              child: ElevatedButton.icon(
+            _settingsAction(
+              ElevatedButton.icon(
                 key: const ValueKey('edit_delivery_locations'),
                 icon: const Icon(Icons.warehouse_outlined),
                 label: const Text('Edit Locations'),
                 onPressed: () => showDeliveryLocationsDialog(context),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 56,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reload'),
-                onPressed: () async {
-                  // Pick up what a colleague has saved to the share since this
-                  // copy read it.
-                  await provider.loadDeliveryLocations();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(
-                          'Delivery locations reloaded: '
-                          '${provider.deliveryLocations.count} places'),
-                    ));
-                  }
-                },
               ),
             ),
           ],
@@ -3567,19 +3592,42 @@ class AppSettingsView extends StatelessWidget {
                       'directory.',
                   helperMaxLines: 3,
                   border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.file_open),
-                    tooltip: 'Select JSON File',
-                    onPressed: () async {
-                      FilePickerResult? result = await FilePicker.pickFiles(
-                        type: FileType.custom,
-                        allowedExtensions: ['json'],
-                      );
-                      if (result != null) {
-                        provider.updateSetting(
-                            'vendorListFilePath', result.files.single.path!);
-                      }
-                    },
+                  // Re-reading the file is a field action - see the delivery
+                  // locations row above.
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Re-read the file',
+                        onPressed: () async {
+                          // Pick up what a colleague has saved to the share
+                          // since this copy read it.
+                          await provider.loadVendorBook();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text('Default vendors reloaded: '
+                                  '${provider.vendorBook.count} vendors'),
+                            ));
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.file_open),
+                        tooltip: 'Select JSON File',
+                        onPressed: () async {
+                          FilePickerResult? result =
+                              await FilePicker.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: ['json'],
+                          );
+                          if (result != null) {
+                            provider.updateSetting('vendorListFilePath',
+                                result.files.single.path!);
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ),
                 initialValue: provider.vendorListFilePath,
@@ -3588,33 +3636,12 @@ class AppSettingsView extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            SizedBox(
-              height: 56, // Matches the height of the TextFormField
-              child: ElevatedButton.icon(
+            _settingsAction(
+              ElevatedButton.icon(
                 key: const ValueKey('edit_default_vendors'),
                 icon: const Icon(Icons.store_outlined),
                 label: const Text('Edit Vendors'),
                 onPressed: () => showVendorBookDialog(context),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 56,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reload'),
-                onPressed: () async {
-                  // Pick up what a colleague has saved to the share since this
-                  // copy read it.
-                  await provider.loadVendorBook();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(
-                          'Default vendors reloaded: '
-                          '${provider.vendorBook.count} vendors'),
-                    ));
-                  }
-                },
               ),
             ),
           ],
@@ -3655,9 +3682,8 @@ class AppSettingsView extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            SizedBox(
-              height: 56, // Matches the height of the TextFormField
-              child: ElevatedButton.icon(
+            _settingsAction(
+              ElevatedButton.icon(
                 icon: const Icon(Icons.refresh),
                 label: const Text('Reload Key Map'),
                 onPressed: () async {

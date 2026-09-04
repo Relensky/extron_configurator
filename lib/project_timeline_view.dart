@@ -9,6 +9,7 @@ import 'app_state.dart';
 import 'building_project.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart' show formatMoney, trimNumber;
+import 'hover_chart.dart';
 import 'name_colors.dart' show projectRfqColor;
 import 'project_deliveries_view.dart' show PoFileButtons, showPoPartsDialog;
 import 'equipment_lifecycle.dart'
@@ -107,6 +108,7 @@ List<Widget> _lifecycleSlivers(
       child: ProjectDateGraph(
         schedule: schedule,
         project: provider.project,
+        currency: estimate.currency,
       ),
     ),
     // THE PHASES, which are the thing a refresh is actually planned in and the
@@ -502,6 +504,7 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
       child: ProjectDateGraph(
         schedule: schedule,
         project: provider.project,
+        currency: estimate.currency,
       ),
     ),
     SliverToBoxAdapter(
@@ -2192,6 +2195,24 @@ const double _kMarkGap = 6;
 /// How much rail one month label needs to itself before the months thin out.
 const double _kMonthLabelWidth = 56;
 
+/// HOW FAR APART THINGS ON THE SAME DAY ARE DRAWN.
+///
+/// Same date means same x, so the stems up to them were four lines drawn down
+/// one pixel: the last one painted covered the rest, and a day carrying an
+/// RFQ going out, a package awarded and a phase landing read as one colored
+/// line. The stems FAN instead. They still meet the rail on the true date -
+/// which is the fact the rail is asserting - and separate on the way up, so
+/// every card has its own line in its own color running to it. The cards step
+/// across with their stems, which is also what says at a glance that the four
+/// of them are one day rather than four days close together.
+const double _kSameDayFan = 7;
+
+/// What the rail calls the day the reader is standing on. A string because
+/// two places have to agree about it: the mark [_ProjectDateGraphState._marks]
+/// adds, and [_ProjectDateGraphState._nextDue], which must not offer 'today'
+/// as the next thing coming.
+const String _kTodayLabel = 'Today';
+
 /// The whole schedule as one line, above the cards it is made of.
 ///
 /// Hidden rather than empty when there is nothing to draw. A rail with one
@@ -2202,10 +2223,16 @@ class ProjectDateGraph extends StatefulWidget {
   final ProjectSchedule schedule;
   final BuildingProject project;
 
+  /// What the money on the commitment curve is said in. Passed in rather than
+  /// read off the provider, because the rail is drawn in tests that have a
+  /// schedule and no application state behind it.
+  final String currency;
+
   const ProjectDateGraph({
     super.key,
     required this.schedule,
     required this.project,
+    this.currency = r'$',
   });
 
   @override
@@ -2237,6 +2264,10 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
   double _zoom = kGridZoomNormal;
 
   final ScrollController _scroll = ScrollController();
+
+  /// The date the 'Take me there' button last ran to, so the card for it can
+  /// be lit while the reader is looking at it. Null until somebody presses.
+  DateTime? _focus;
 
   ProjectSchedule get schedule => widget.schedule;
   BuildingProject get project => widget.project;
@@ -2277,9 +2308,108 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
     });
   }
 
+  /// THE NEXT THING WITH A DATE ON IT, from today forwards.
+  ///
+  /// Every mark on the rail except today itself, and every order date as well
+  /// - because what somebody has to do next is as often a trip to the
+  /// purchasing office as it is a phase landing, and a 'next up' that only
+  /// counted the phases would quietly skip the order that has to go in first.
+  ///
+  /// Null when the whole job is behind: a plan with nothing left in front of
+  /// it has no next date, and a box saying so would be a box saying nothing.
+  ({DateTime date, List<String> labels, int parts, double cost})? _nextDue(
+    List<_DateMark> marks,
+  ) {
+    final today = schedule.asOf;
+    DateTime? best;
+    void consider(DateTime date) {
+      if (date.isBefore(today)) return;
+      if (best == null || date.isBefore(best!)) best = date;
+    }
+
+    for (final mark in marks) {
+      if (mark.label == _kTodayLabel) continue;
+      consider(mark.date);
+    }
+    for (final day in schedule.orderDays) {
+      consider(day.date);
+    }
+    if (best == null) return null;
+
+    final on = formatIsoDate(best!);
+    // EVERYTHING THAT LANDS ON IT, not just the first thing found. The day the
+    // conduit order goes in is very often also the day a quote is due back,
+    // and a box that named one of them would send somebody to the wrong
+    // meeting.
+    final labels = <String>[
+      for (final mark in marks)
+        if (mark.label != _kTodayLabel && formatIsoDate(mark.date) == on)
+          mark.label,
+    ];
+    var parts = 0;
+    var cost = 0.0;
+    for (final day in schedule.orderDays) {
+      if (formatIsoDate(day.date) != on) continue;
+      parts += day.parts.length;
+      for (final part in day.parts) {
+        cost += part.line.total;
+      }
+    }
+    return (date: best!, labels: labels, parts: parts, cost: cost);
+  }
+
+  /// THE RAIL, RUN ALONG UNTIL [date] IS IN THE MIDDLE OF THE FRAME.
+  ///
+  /// FITTED, THE PRESS ZOOMS IN FIRST. With the whole job on screen there is
+  /// nothing to scroll, and "take me to it" on a six-year rail means "show me
+  /// that fortnight" - not "confirm the date is somewhere in this line".
+  ///
+  /// IT RUNS RATHER THAN JUMPS because the distance is the information: a
+  /// reader who watches eight months go past under the frame has learnt
+  /// something a rail that blinked to the right answer would not have told
+  /// them. Reduce motion turns it back into a jump.
+  void _goToDate(DateTime date, DateTime first, int span) {
+    final fraction =
+        span <= 0 ? 0.0 : (daysBetween(first, date) / span).clamp(0.0, 1.0);
+    final jump = MediaQuery.disableAnimationsOf(context);
+    setState(() {
+      _focus = date;
+      if (_zoom == kGridZoomNormal) _zoom = _closeEnoughZoom(span);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      final view = _scroll.position.viewportDimension;
+      final whole = view + _scroll.position.maxScrollExtent;
+      final to = (fraction * whole - view / 2)
+          .clamp(0.0, _scroll.position.maxScrollExtent);
+      if (jump) {
+        _scroll.jumpTo(to);
+      } else {
+        _scroll.animateTo(
+          to,
+          duration: const Duration(milliseconds: 520),
+          curve: Curves.easeInOutCubic,
+        );
+      }
+    });
+  }
+
+  /// The step that puts about a season in the frame, which is the reading
+  /// 'what is next' is asked at. A job already short enough stays fitted.
+  static double _closeEnoughZoom(int span) {
+    if (span <= 120) return kGridZoomNormal;
+    for (final step in kTimelineZoomSteps) {
+      if (span / step <= 120) return step;
+    }
+    return kTimelineZoomSteps.last;
+  }
+
   /// The whole job back in the frame, from wherever somebody had got to.
   void _fitAll() {
-    setState(() => _zoom = kGridZoomNormal);
+    setState(() {
+      _zoom = kGridZoomNormal;
+      _focus = null;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _scroll.hasClients) _scroll.jumpTo(0);
     });
@@ -2293,7 +2423,7 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
     final out = <_DateMark>[
       (
         date: schedule.asOf,
-        label: 'Today',
+        label: _kTodayLabel,
         color: theme.colorScheme.onSurfaceVariant,
       ),
     ];
@@ -2439,6 +2569,7 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
     }
     final span = daysBetween(first, last);
     if (span <= 0 || marks.length < 2) return const SizedBox.shrink();
+    final nextDue = _nextDue(marks);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -2488,6 +2619,22 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
                   ),
                 ],
               ),
+              // WHAT IS COMING, IN THE BIGGEST TYPE ON THE CARD.
+              //
+              // The rail says everything at once, which is what it is for and
+              // also its one weakness: the date somebody has to act on this
+              // week is the same size as the phase that lands in 2029. So the
+              // next one is lifted off the rail and printed - and the button
+              // beside it runs the rail along to it, because a date read in a
+              // box and then hunted for in a line is a date read twice.
+              if (nextDue != null) ...[
+                const SizedBox(height: 8),
+                _NextDueBox(
+                  next: nextDue,
+                  asOf: schedule.asOf,
+                  onGo: () => _goToDate(nextDue.date, first, span),
+                ),
+              ],
               const SizedBox(height: 6),
               // THE RAIL SCROLLS ONCE IT IS LONGER THAN THE CARD. Fitted it
               // never is, and the bar stays out of the way; zoomed it is the
@@ -2516,11 +2663,94 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
                   );
                 },
               ),
+              // WHAT IT COMES TO, AND BY WHEN. The rail above says which days
+              // matter; this says how much money each of them commits, and is
+              // the one thing on the card that can be asked a question - hover
+              // any point and it names the parts on that date. See
+              // [HoverLineChart].
+              ..._commitmentCurve(context, first, span),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// The money the job has to have committed by each order date, as a line
+  /// with a readout on it.
+  ///
+  /// CUMULATIVE rather than per-day, because the question purchasing is
+  /// actually asked is "how much has to be spent by March" - a per-day chart
+  /// answers a question about one trip, and the trips are already the cards
+  /// below. The per-day figure is in the readout, where it costs nothing.
+  ///
+  /// Nothing is drawn at all under two order dates, or when nothing on the job
+  /// is priced: a flat line at zero is a chart that says the job is free.
+  List<Widget> _commitmentCurve(BuildContext context, DateTime first, int span) {
+    final theme = Theme.of(context);
+    final days = schedule.orderDays;
+    if (days.length < 2) return const [];
+
+    final currency = widget.currency;
+    final points = <HoverPoint>[];
+    var running = 0.0;
+    for (final day in days) {
+      var spend = 0.0;
+      for (final part in day.parts) {
+        spend += part.line.total;
+      }
+      running += spend;
+      final worst =
+          day.parts.map((p) => p.status).reduce((a, b) => a.index < b.index ? a : b);
+      points.add(HoverPoint(
+        x: daysBetween(first, day.date).toDouble(),
+        y: running,
+        axisLabel: formatScheduleDate(day.date),
+        title: '${formatScheduleDate(day.date)}  ·  ${kOrderStatusLabels[worst] ?? ''}',
+        color: orderStatusColor(context, worst),
+        rows: [
+          (
+            label: 'Parts to order',
+            value: '${day.parts.length}',
+          ),
+          if (spend > 0)
+            (label: 'That day', value: formatMoney(spend, currency)),
+          (label: 'Committed by then', value: formatMoney(running, currency)),
+          // THE PARTS THEMSELVES, up to a readout's worth. This is the whole
+          // reason to hover: 'what is the spike in March' is answered by the
+          // names, not by the figure.
+          for (final part in day.parts.take(6))
+            (
+              label: '· ${part.line.description.isEmpty ? part.line.model : part.line.description}',
+              value: trimNumber(part.line.qty),
+            ),
+          if (day.parts.length > 6)
+            (label: '· and ${day.parts.length - 6} more', value: ''),
+        ],
+      ));
+    }
+    if (running <= 0) return const [];
+
+    return [
+      const SizedBox(height: 10),
+      Text(
+        'WHAT HAS TO BE COMMITTED, AND BY WHEN',
+        style: theme.textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      const SizedBox(height: 4),
+      HoverLineChart(
+        key: const ValueKey('timeline_commitment_chart'),
+        points: points,
+        lineColor: theme.colorScheme.primary,
+        formatY: (v) => shortMoney(v, currency),
+        markerX: daysBetween(first, schedule.asOf).toDouble(),
+        markerXLabel: _kTodayLabel,
+        height: 200,
+      ),
+    ];
   }
 
   /// HOW MUCH OF THE JOB IS IN FRONT OF SOMEBODY, in the unit they would say
@@ -2571,10 +2801,26 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
     // of RFQs in one week, or several dates on the same day - a new lane is
     // opened rather than a card dropped on top of another, and the plot is
     // that much taller.
-    final used = <double>[];
-    final placed = <({_DateMark mark, double left, int lane})>[];
+    // SEVERAL THINGS ON ONE DAY, EACH VISIBLE - see [_kSameDayFan]. Counted
+    // first so the fan can be centered on the true date: a day with one thing
+    // on it must not move, and a day with three must not drift right.
+    final perDay = <String, int>{};
     for (final mark in marks) {
-      final left = (xOf(mark.date) - markWidth / 2)
+      final on = formatIsoDate(mark.date);
+      perDay[on] = (perDay[on] ?? 0) + 1;
+    }
+    final placedToday = <String, int>{};
+
+    final used = <double>[];
+    final placed =
+        <({_DateMark mark, double left, double stemX, int lane})>[];
+    for (final mark in marks) {
+      final on = formatIsoDate(mark.date);
+      final sharing = perDay[on]!;
+      final nth = placedToday[on] = (placedToday[on] ?? -1) + 1;
+      final fan = sharing < 2 ? 0.0 : (nth - (sharing - 1) / 2) * _kSameDayFan;
+
+      final left = (xOf(mark.date) + fan - markWidth / 2)
           .clamp(0.0, (width - markWidth).clamp(0.0, width));
       var slot = used.indexWhere((end) => end < left - _kMarkGap);
       if (slot < 0) {
@@ -2582,7 +2828,13 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
         used.add(0);
       }
       used[slot] = left + markWidth;
-      placed.add((mark: mark, left: left, lane: slot));
+      placed.add((
+        mark: mark,
+        left: left,
+        // Where the stem ENDS. It still starts on the rail at the true date.
+        stemX: (xOf(mark.date) + fan).clamp(pad, pad + plot),
+        lane: slot,
+      ));
     }
 
     final lanes = placed.fold<int>(1, (m, p) => p.lane + 1 > m ? p.lane + 1 : m);
@@ -2624,6 +2876,7 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
                   for (final p in placed)
                     (
                       x: xOf(p.mark.date),
+                      topX: p.stemX,
                       top: topOf(p.lane) + markHeight,
                       color: p.mark.color,
                     ),
@@ -2660,6 +2913,11 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
                 label: p.mark.label,
                 date: p.mark.date,
                 color: p.mark.color,
+                // Lit while the reader is looking at where the button took
+                // them, so the box above and the card on the rail are visibly
+                // the same date.
+                focused: _focus != null &&
+                    formatIsoDate(_focus!) == formatIsoDate(p.mark.date),
               ),
             ),
         ],
@@ -2702,6 +2960,126 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
   }
 }
 
+/// WHAT IS COMING, IN THE BIGGEST TYPE ON THE CARD.
+///
+/// The rail's own weakness, said plainly: everything on it is drawn the same
+/// size, so the order that has to go in on Thursday looks exactly like the
+/// phase that lands in 2029. This is the one date somebody has to do something
+/// about, printed large, with everything that shares the day named under it.
+///
+/// AND A BUTTON TO GO THERE. A date read in a box and then hunted for in a
+/// six-year line is a date read twice; the button runs the rail along until
+/// the card for it is in the middle of the frame - zooming in first when the
+/// whole job is still fitted, because at that reading the fortnight in
+/// question is four pixels wide.
+class _NextDueBox extends StatelessWidget {
+  final ({DateTime date, List<String> labels, int parts, double cost}) next;
+  final DateTime asOf;
+  final VoidCallback onGo;
+
+  const _NextDueBox({
+    required this.next,
+    required this.asOf,
+    required this.onGo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final days = daysBetween(asOf, next.date);
+    // COLORED THE WAY THE REST OF THE TAB COLORS A DEADLINE, so the box agrees
+    // with the dots on the rail under it rather than inventing a third scheme.
+    final tint = orderStatusColor(
+      context,
+      days <= 0
+          ? OrderStatus.late
+          : days <= kOrderDueSoonDays
+              ? OrderStatus.dueSoon
+              : OrderStatus.onTrack,
+    );
+
+    final what = <String>[
+      ...next.labels,
+      if (next.parts > 0)
+        '${next.parts} part${next.parts == 1 ? '' : 's'} to order',
+    ];
+
+    return Container(
+      key: const ValueKey('timeline_next_due'),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(6),
+        border: Border(left: BorderSide(color: tint, width: 4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'NEXT UP',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                // THE DATE ITSELF, LARGE. The whole reason for the box.
+                Text(
+                  formatScheduleDate(next.date),
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  // How far off, in the words somebody would say it in. The
+                  // date alone is a fact; the gap is the thing that decides
+                  // whether it matters this week.
+                  days == 0
+                      ? 'Today'
+                      : days < 0
+                          ? '${-days} day${days == -1 ? '' : 's'} ago'
+                          : 'in $days day${days == 1 ? '' : 's'}',
+                  style: theme.textTheme.titleSmall?.copyWith(color: tint),
+                ),
+                if (what.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    what.join('  ·  '),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                if (next.cost > 0)
+                  Text(
+                    '${formatMoney(next.cost)} to commit',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton.tonalIcon(
+            key: const ValueKey('timeline_next_due_go'),
+            onPressed: onGo,
+            icon: const Icon(Icons.my_location, size: 18),
+            label: const Text('Take me there'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// One named date, as it sits over the rail.
 class _DateCallout extends StatelessWidget {
   final Key markKey;
@@ -2709,11 +3087,15 @@ class _DateCallout extends StatelessWidget {
   final DateTime date;
   final Color color;
 
+  /// True when this is the date the reader was just taken to.
+  final bool focused;
+
   const _DateCallout({
     required this.markKey,
     required this.label,
     required this.date,
     required this.color,
+    this.focused = false,
   });
 
   @override
@@ -2721,15 +3103,22 @@ class _DateCallout extends StatelessWidget {
     final theme = Theme.of(context);
     return Tooltip(
       message: '$label  ·  ${formatScheduleDate(date)}',
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
         key: markKey,
         padding: const EdgeInsets.fromLTRB(6, 3, 6, 3),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
+          color: color.withValues(alpha: focused ? 0.28 : 0.12),
           borderRadius: BorderRadius.circular(4),
           // The color is a second way to read the rail, never the only one -
           // this tab gets printed and photographed. The words say it too.
-          border: Border(left: BorderSide(color: color, width: 2.5)),
+          //
+          // Lit, the card is ringed rather than given a heavier left edge: a
+          // rounded box can only carry a border of ONE color, so a thick left
+          // rule and three thin sides is not a border Flutter will paint.
+          border: focused
+              ? Border.fromBorderSide(BorderSide(color: color, width: 2))
+              : Border(left: BorderSide(color: color, width: 2.5)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2770,8 +3159,10 @@ class _DateGraphPainter extends CustomPainter {
   /// One per order date, in the color the worst part on that day reads in.
   final List<({double x, Color color})> dots;
 
-  /// Up from the rail to the bottom of each callout.
-  final List<({double x, double top, Color color})> stems;
+  /// Up from the rail to the bottom of each callout. [x] is where it meets
+  /// the rail - the true date - and [topX] where it meets the card, which
+  /// differs when several things share a day. See [_kSameDayFan].
+  final List<({double x, double topX, double top, Color color})> stems;
 
   /// Where the month labels are, so the rail can carry a tick under each.
   final List<double> ticks;
@@ -2828,7 +3219,7 @@ class _DateGraphPainter extends CustomPainter {
     for (final stem in stems) {
       canvas.drawLine(
         Offset(stem.x, railY),
-        Offset(stem.x, stem.top),
+        Offset(stem.topX, stem.top),
         Paint()
           ..color = stem.color.withValues(alpha: 0.6)
           ..strokeWidth = 1.5,

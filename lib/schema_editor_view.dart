@@ -81,6 +81,7 @@ const List<String> kSchemaFieldTypes = [
   'dropdown',
   'combo',
   'hidden',
+  'com_port',
   'room_sources',
   'module_states',
   'source_map',
@@ -147,6 +148,12 @@ const Map<String, ({String name, String blurb})> kSchemaFieldTypeInfo = {
     blurb: 'The key stays in the config and is kept off the tab. Use it for '
         'keys a combo or the Setup Wizard owns, so nobody edits one half of a '
         'pair by hand.',
+  ),
+  'com_port': (
+    name: 'Serial port number',
+    blurb: 'A box for the port NUMBER alone - it prints the "COM" itself and '
+        'stores COM3 when 3 is typed. Use it on a key that holds a processor '
+        'COM port; a value that is not a port number is kept as typed.',
   ),
   'room_sources': (
     name: 'Pick one of this room’s sources',

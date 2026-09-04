@@ -14,8 +14,10 @@
     "  description: Text behind the (i) info button.",
     "  helperText:  Small gray hint line under the field.",
     "  type:        auto | text | int | double | bool | dropdown | combo | hidden |",
-    "               room_sources | module_states | source_map.",
+    "               com_port | room_sources | module_states | source_map.",
     "               'auto' (default) infers from the JSON value type.",
+    "               'com_port' is a serial port typed as the NUMBER alone - the",
+    "               field prints the 'COM' and stores COM3 when 3 is typed.",
     "               'source_map' edits an OBJECT of source-name pairs (a display's",
     "               source_overrides) as one dropdown row per substitution.",
     "  options:     For dropdown/combo. Plain strings, or objects with value/label.",
@@ -918,6 +920,8 @@
       "description": "Protocol in use for network connections (TCP, SSH, or UDP). SSH is what makes the processor send user + password as credentials on connect. Not carried by a Serial or SPI device."
     },
     "serial_port": {
+      "type": "com_port",
+      "label": "Serial Port (serial_port)",
       "addIfMissing": true,
       "hideWhen": [
         "com_type=Network",
@@ -925,8 +929,8 @@
         "com_type=HTTP",
         "com_type=SPI"
       ],
-      "helperText": "Serial connections only",
-      "description": "Serial port in use if using Serial as the com type (e.g. COM1). Only the Serial connection opens a port on the host - a Network or SerialOverEthernet device reaches its hardware by ip_address + net_port, and an SPI device by its spdevice alias, so the field is not offered and the key is not written for those."
+      "helperText": "Serial connections only. Type the port NUMBER - 3 is saved as COM3",
+      "description": "Serial port in use if using Serial as the com type (e.g. COM1). The editor asks for the number alone and writes the COM itself, so 3 becomes COM3. Only the Serial connection opens a port on the host - a Network or SerialOverEthernet device reaches its hardware by ip_address + net_port, and an SPI device by its spdevice alias, so the field is not offered and the key is not written for those."
     },
     "baud": {
       "type": "int",

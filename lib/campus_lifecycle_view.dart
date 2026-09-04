@@ -19,6 +19,7 @@ import 'contrast.dart';
 import 'equipment_lifecycle.dart';
 import 'lifecycle_export.dart';
 import 'lifecycle_picture.dart';
+import 'lifecycle_spend_chart.dart';
 import 'lifecycle_view.dart'
     show
         EquipmentTimingKey,
@@ -710,6 +711,31 @@ class _CampusViewState extends State<_CampusView> {
     );
   }
 
+  /// The estate's money, year by year, with each job named in the readout.
+  Widget _budgetChart(CampusLifecycle campus) {
+    final spend = <SpendYear>[
+      for (final year in campus.yearsThroughDue())
+        (
+          year: year,
+          amount: campus.totalIn(year),
+          parts: [
+            for (final job in campus.ok)
+              if (campus.costIn(job, year) > 0)
+                (name: job.name, amount: campus.costIn(job, year)),
+          ],
+        ),
+    ];
+    return LifecycleSpendChart(
+      key: const ValueKey('campus_budget_chart'),
+      years: spend,
+      currency: campus.currency,
+      asOfYear: campus.asOf.year,
+      levelAmount: LifecycleSpendChart.levelSpendFor(spend, campus.asOf.year),
+      title: 'THE BUDGET, YEAR BY YEAR',
+      height: 240,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -956,7 +982,19 @@ class _CampusViewState extends State<_CampusView> {
                       )
                     else ...[
                       const EquipmentTimingKey(),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
+                      // THE BUDGET LINE, AND WHAT IT WOULD COST TO FLATTEN IT.
+                      //
+                      // The grid below is the document a budget meeting is
+                      // sent; this is the picture the meeting actually argues
+                      // over. One point per year, hover it to see which
+                      // buildings are in it, and a dashed line across the lot
+                      // showing what the same estate costs a year if the
+                      // spikes are pushed off and the whole plan is spread
+                      // evenly from here to the end. The gap between the two
+                      // is the size of the deferral being proposed.
+                      _budgetChart(campus),
+                      const SizedBox(height: 16),
                       CampusYearGrid(campus: campus, onOpenJob: _openJobPlan),
                       const SizedBox(height: 16),
                       _JobList(

@@ -12,6 +12,10 @@ dependencies:
   dartssh2: ^2.17.1
   file_picker: ^11.0.2
   flex_color_scheme: ^8.4.0
+  # Charts. The lifecycle, campus and timeline tabs each had a hand-painted
+  # plot that could show a shape but could not answer "what is that point" —
+  # fl_chart gives them a real line chart with a hover readout on it.
+  fl_chart: ^1.2.0
   flutter:
     sdk: flutter
   flutter_secure_storage: ^10.3.1
