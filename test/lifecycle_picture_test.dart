@@ -292,12 +292,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('lifecycle_picture')));
     await tester.pumpAndSettle();
 
-    final sheet = find.byType(LifecyclePlanSheet);
+    // The COLUMN HEADS, not the sheet as a whole: the spend chart above the
+    // grid prints years along its own axis, so "is it on the sheet" stopped
+    // being the same question as "is it a column".
+    final years = find.byKey(const ValueKey('lifecycle_sheet_years'));
+    expect(find.byType(LifecyclePlanSheet), findsOneWidget);
     // A 1998 install at one end and a 2062 replacement at the other: both are
     // dates the plan turns on, and both were off the picture.
     for (final year in [plan.allYears.first, plan.allYears.last]) {
       expect(
-        find.descendant(of: sheet, matching: find.text('$year')),
+        find.descendant(of: years, matching: find.text('$year')),
         findsOneWidget,
         reason: '$year is on the plan and has to be on the picture',
       );
@@ -305,7 +309,7 @@ void main() {
     // ...and every year in between, so the row a reader traces is unbroken.
     for (final year in plan.allYears) {
       expect(
-        find.descendant(of: sheet, matching: find.text('$year')),
+        find.descendant(of: years, matching: find.text('$year')),
         findsOneWidget,
         reason: '$year should be a column on the picture',
       );

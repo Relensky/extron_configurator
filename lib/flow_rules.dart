@@ -75,13 +75,33 @@ import 'room_locations.dart';
 ///  this room was built with.
 /// ============================================================================
 
+/// WHICH EDITION OF THE RULE BOOK A SAVED FILE WAS WRITTEN BY.
+///
+/// Stamped into every file this app writes, and read back for one purpose:
+/// telling "this shop deleted that rule" apart from "that rule did not exist
+/// when this file was saved".
+///
+/// The two are indistinguishable without it, and the difference matters,
+/// because defining a family in the file REPLACES the built-in one. When the
+/// room's speakers stopped being a constant in the routing pass and became a
+/// `destinationBoxes` rule, every rule file already on a shared drive was a
+/// file with a destinationBoxes block and no speakers in it - so every room
+/// on every one of those installs would quietly have stopped drawing the run
+/// to the ceiling. Version 2 is that rule arriving; a file older than it gets
+/// it filled in, and a file newer than it is taken at its word.
+const int kFlowRulesVersion = 2;
+
+/// The version at which each rule the app back-fills was introduced.
+/// A rule missing from a file written BEFORE its version was never a choice.
+const Map<String, int> kFlowRuleAddedIn = {'output_audio': 2};
+
 /// How many numbered blocks of a family a rule looks through when it names one
 /// by its prefix ('DSPDEVICE_'). The device counts in these rooms are single
 /// digits; this is the point past which "the DSP" stops meaning anything.
 const int kFlowFamilyDepth = 8;
 
 /// Where a rule's box lives, as the zone names the room locations use.
-const List<String> kFlowZones = ['lectern', 'rack', 'wall'];
+const List<String> kFlowZones = ['lectern', 'rack', 'wall', 'ceiling'];
 
 /// The source-box rule for the laptop plate in a VGA room.
 ///
@@ -95,6 +115,7 @@ const String kFlowVgaPlateKey = 'input_usb (VGA room)';
 RoomZone flowZoneFromName(String name) => switch (name.trim().toLowerCase()) {
       'rack' => RoomZone.rack,
       'wall' => RoomZone.wall,
+      'ceiling' => RoomZone.ceiling,
       _ => RoomZone.lectern,
     };
 
@@ -169,6 +190,18 @@ class FlowBoxRule {
   /// line-audio output, and looking for a video socket on it finds nothing.
   final String signals;
 
+  /// Boxes whose presence means this one is NOT placed, in the [FlowTarget]
+  /// syntax. Empty for most rules.
+  ///
+  /// The room's speakers are the reason this exists. `output_audio` in a room
+  /// with no DSP is the amplifier inside the switcher and the run is speaker
+  /// level to the ceiling; in a room WITH a DSP the same key is the number of
+  /// the tie across the expansion bus, and the pair are joined by their EXP
+  /// connectors instead. So the rule is "speakers, unless this room has a
+  /// DSP" — `unless: 'DSPDEVICE_'` — rather than a condition compiled into
+  /// the routing pass where nobody can see or change it.
+  final String unless;
+
   const FlowBoxRule({
     required this.configKey,
     required this.label,
@@ -176,7 +209,11 @@ class FlowBoxRule {
     this.zone = 'lectern',
     this.excludeFromCost = false,
     this.signals = 'video',
+    this.unless = '',
   });
+
+  /// The boxes [unless] names, in the order they should be looked for.
+  FlowTarget get blockedBy => FlowTarget(unless);
 
   factory FlowBoxRule.fromJson(String configKey, Map<String, dynamic> json) =>
       FlowBoxRule(
@@ -186,6 +223,7 @@ class FlowBoxRule {
         zone: json['zone']?.toString() ?? 'lectern',
         excludeFromCost: json['excludeFromCost'] == true,
         signals: json['signals']?.toString() ?? 'video',
+        unless: json['unless']?.toString() ?? '',
       );
 
   Map<String, dynamic> toJson() => {
@@ -194,6 +232,7 @@ class FlowBoxRule {
         if (zone != 'lectern') 'zone': zone,
         if (excludeFromCost) 'excludeFromCost': true,
         if (signals != 'video') 'signals': signals,
+        if (unless.isNotEmpty) 'unless': unless,
       };
 
   FlowBoxRule copyWith({
@@ -203,6 +242,7 @@ class FlowBoxRule {
     String? zone,
     bool? excludeFromCost,
     String? signals,
+    String? unless,
   }) =>
       FlowBoxRule(
         configKey: configKey ?? this.configKey,
@@ -211,6 +251,7 @@ class FlowBoxRule {
         zone: zone ?? this.zone,
         excludeFromCost: excludeFromCost ?? this.excludeFromCost,
         signals: signals ?? this.signals,
+        unless: unless ?? this.unless,
       );
 }
 
@@ -490,6 +531,17 @@ class FlowRules {
               model: 'Assisted Listening',
               zone: 'rack',
               signals: 'lineAudio'),
+          // The room's speakers, on the amplifier inside the switcher. See
+          // [FlowBoxRule.unless] for why a room with a DSP draws none: there
+          // the program audio never leaves the pair as analog, and the run
+          // this rule would draw does not exist.
+          FlowBoxRule(
+              configKey: 'output_audio',
+              label: 'Ceiling speakers',
+              model: 'Ceiling Speakers',
+              zone: 'ceiling',
+              signals: 'speaker',
+              unless: 'DSPDEVICE_'),
         ],
         captureDestinations: const [
           FlowDeviceRule(
@@ -538,17 +590,29 @@ class FlowRules {
   /// rules; a family it defines replaces them outright.
   factory FlowRules.fromJson(Map<String, dynamic> doc) {
     final rules = FlowRules.builtIn();
+    // Absent on every file written before the stamp existed, which is exactly
+    // what "0" should mean - see [kFlowRulesVersion].
+    final writtenBy = (doc['__rulesVersion'] as num?)?.toInt() ?? 0;
 
     List<FlowBoxRule> boxes(String key, List<FlowBoxRule> fallback) {
       final raw = doc[key];
       if (raw is! Map) return fallback;
-      return [
+      final read = [
         for (final e in raw.entries)
           if (!e.key.toString().startsWith('__') && e.value is Map)
             FlowBoxRule.fromJson(
               e.key.toString(),
               (e.value as Map).map((k, v) => MapEntry(k.toString(), v)),
             ),
+      ];
+      // A rule this file is simply too old to have had an opinion about. Not
+      // a deletion - see [kFlowRuleAddedIn].
+      return [
+        ...read,
+        for (final builtIn in fallback)
+          if (writtenBy < (kFlowRuleAddedIn[builtIn.configKey] ?? 0) &&
+              !read.any((r) => r.configKey == builtIn.configKey))
+            builtIn,
       ];
     }
 
@@ -613,6 +677,10 @@ class FlowRules {
                 'same cable, and what hangs off a USB switcher. Edited on the '
                 'Flow Rules tab. A family left out of this file keeps the '
                 "app's built-in rules.",
+        // Which edition of the rule book wrote this - see [kFlowRulesVersion].
+        // It is how a rule somebody DELETED is told from one that did not
+        // exist yet, and nothing else reads it.
+        '__rulesVersion': kFlowRulesVersion,
         'sourceBoxes': {
           for (final r in sourceBoxes) r.configKey: r.toJson(),
         },

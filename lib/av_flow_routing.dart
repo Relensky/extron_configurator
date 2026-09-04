@@ -65,11 +65,6 @@ const Set<SignalType> _videoSignals = {
   SignalType.vga,
 };
 
-/// Line-level audio and speaker level. The line-audio set moved to
-/// [kFlowLineAudio], where a rule can ask for it by name; this file still
-/// needs the speaker set to tell an amplifier output from a DSP output.
-const Set<SignalType> _speakerAudio = {SignalType.speaker};
-
 /// One source the config names but the diagram has no box for.
 ///
 /// The room's own gear is already on the canvas — a camera and a wireless
@@ -775,6 +770,7 @@ RoutingPlan planRoutingFromConfig(
   final lectern = _locationFor(provider, RoomZone.lectern);
   final rack = _locationFor(provider, RoomZone.rack);
   final wall = _locationFor(provider, RoomZone.wall);
+  final ceiling = _locationFor(provider, RoomZone.ceiling);
 
   /// [at] overrides the running column position, for a box whose place on the
   /// page is decided by the box it feeds rather than by the order it was
@@ -786,6 +782,18 @@ RoutingPlan planRoutingFromConfig(
     Offset? at,
     String? label,
   }) {
+    // THE BOX THIS KEY ALREADY PUT ON THE CANVAS IS THIS KEY'S BOX, whatever
+    // it has since been renamed or re-modelled to. The id is the identity —
+    // see [avAutoNodeId] — and a lookup by MODEL alone cannot see that: a
+    // room whose ceiling speakers were changed to the SM 28 pair it actually
+    // has stopped matching 'Ceiling Speakers' and the pass placed a second
+    // set. Worse, [AppStateProvider.addAvNode] re-keys an id that is taken,
+    // so the duplicate arrived as AVNODE_7 — outside the dismissal record
+    // too, which is why deleting it brought it back on the next pass.
+    final drawn = nodesById[nodeId] ??
+        newNodes.where((n) => n.id == nodeId).firstOrNull;
+    if (drawn != null) return drawn;
+
     final template = provider.avDeviceLibrary.resolve(
       configKey: nodeId,
       model: spec.model,
@@ -813,6 +821,7 @@ RoutingPlan planRoutingFromConfig(
       locationId: switch (spec.zone) {
         RoomZone.rack => rack,
         RoomZone.wall => wall,
+        RoomZone.ceiling => ceiling,
         _ => lectern,
       },
     );
@@ -1659,6 +1668,16 @@ RoutingPlan planRoutingFromConfig(
           dismissed(rule.configKey)) {
         continue;
       }
+      // A box this room's build does not have — see [FlowBoxRule.unless].
+      // PROGRAM AUDIO is the one that needs it: in a room with a DSP,
+      // `output_audio` is the LINK on the switcher side, the number of the
+      // tie that feeds the DSP over the expansion bus, not a discrete analog
+      // output somebody runs a lead from. So no speakers are drawn from it:
+      // the pair is joined by their DMP EXP connectors below, which is the
+      // one cable that actually exists between them. Without a DSP the same
+      // key means what it always did — the amplifier is inside the switcher
+      // (an SA or MA build) and the run is speaker level to the ceiling.
+      if (!rule.blockedBy.isEmpty && boxFor(rule.blockedBy) != null) continue;
       // Which connectors the tie may land on. The assisted-listening feed is
       // line audio and everything else here is video, and a rule says which
       // rather than the key being special-cased by name.
@@ -1677,38 +1696,6 @@ RoutingPlan planRoutingFromConfig(
       final node = existing ??
           place(_specOf(rule), avAutoNodeId(rule.configKey), onLeft: false);
       routeDestination(rule.configKey, node, signals: signals);
-    }
-
-    // PROGRAM AUDIO.
-    //
-    // In a room with a DSP, `output_audio` is the LINK on the switcher side —
-    // the number of the tie that feeds the DSP over the expansion bus, not a
-    // discrete analog output somebody runs a lead from. So nothing is drawn
-    // from it here: the pair is joined by their DMP EXP connectors below, which
-    // is the one cable that actually exists between them.
-    //
-    // Without a DSP the same key means what it always did: the amplifier is
-    // inside the switcher (an SA or MA build) and the run is speaker level to
-    // the ceiling.
-    if (audioValue.isNotEmpty &&
-        audioValue.toLowerCase() != 'none' &&
-        nodesById['DSPDEVICE_1'] == null) {
-      // The amplifier output already has a speaker run on it: a preset that
-      // ships an SM 28 pair is a room with speakers, whatever they are called.
-      if (!switcherSocketTaken(audioValue,
-          wantOutput: true, signals: _speakerAudio)) {
-        final existing = _existingByModelOrLabel(
-            provider, const ['Ceiling Speakers'], 'output_audio');
-        final node = existing ??
-            place(
-                const _SourceSpec(
-                    'Ceiling speakers', 'Ceiling Speakers', RoomZone.ceiling),
-                avAutoNodeId('output_audio'),
-                onLeft: false);
-        routeDestination('output_audio', node, signals: _speakerAudio);
-      } else {
-        alreadyDrawn++;
-      }
     }
   }
 

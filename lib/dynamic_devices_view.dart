@@ -6,6 +6,7 @@ import 'app_state.dart';
 import 'av_flow_swap_dialogs.dart' show syncDrawnDeviceToModel;
 import 'config_dictionary.dart';
 import 'config_maintenance.dart';
+import 'device_info_editor.dart';
 import 'model_defaults_dialog.dart';
 import 'pdf_viewer_dialog.dart';
 import 'schema_field_builder.dart';
@@ -888,6 +889,21 @@ class DeviceConfigurationForm extends StatelessWidget {
                           modPath;
                 }
               },
+            ),
+            const SizedBox(width: 8),
+            // WHAT THIS DRIVER SAYS ABOUT ITSELF, editable. A model typed in
+            // by hand on a device whose driver declares no models is the
+            // symptom this answers: open the driver, give it a DEVICE_INFO,
+            // and the model is on the dropdown from then on.
+            IconButton(
+              key: const ValueKey('edit_module_device_info'),
+              icon: const Icon(Icons.description),
+              tooltip: 'Edit what this python module declares - its models, '
+                  'device family and connection defaults',
+              onPressed: () => showDeviceInfoEditor(
+                context,
+                module: moduleName.isEmpty ? null : moduleName,
+              ),
             ),
           ],
         )),

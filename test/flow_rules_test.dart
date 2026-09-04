@@ -442,6 +442,62 @@ void main() {
       expect(rules.isExpansionLabel('DMP EXP'), isTrue);
       expect(rules.isExpansionLabel('EXPO'), isFalse);
       expect(rules.outletAliases['switch'], 'SWITCHERDEVICE_');
+
+      // The room's speakers, which used to be a constant in the routing pass:
+      // a run to the ceiling off the amplifier inside the switcher, and
+      // nothing at all in a room whose program audio is on the DSP's
+      // expansion bus.
+      final speakers = rules.destinationBoxes
+          .firstWhere((r) => r.configKey == 'output_audio');
+      expect(speakers.model, 'Ceiling Speakers');
+      expect(speakers.signals, 'speaker');
+      expect(speakers.zone, 'ceiling');
+      expect(speakers.unless, 'DSPDEVICE_');
+    });
+
+    test('a rule file written before a rule existed still gets it', () {
+      // DEFINING A FAMILY REPLACES IT, which is what makes a rule removable -
+      // and what would have silently stopped every room on an install with a
+      // saved rule file from drawing its speakers, because no file on any
+      // shared drive could have carried a rule that did not exist yet.
+      final old = FlowRules.fromJson({
+        'destinationBoxes': {
+          'output_monitor_1': {
+            'label': 'Confidence monitor',
+            'model': 'Confidence Monitor',
+          },
+        },
+      });
+      expect(
+        old.destinationBoxes.map((r) => r.configKey),
+        containsAll(['output_monitor_1', 'output_audio']),
+      );
+
+      // A file written by THIS edition is taken at its word: a rule left out
+      // of it was left out on purpose.
+      final deleted = FlowRules.fromJson({
+        '__rulesVersion': kFlowRulesVersion,
+        'destinationBoxes': {
+          'output_monitor_1': {
+            'label': 'Confidence monitor',
+            'model': 'Confidence Monitor',
+          },
+        },
+      });
+      expect(
+        deleted.destinationBoxes.map((r) => r.configKey),
+        ['output_monitor_1'],
+      );
+    });
+
+    test('what it writes, it reads back', () {
+      final written = FlowRules.builtIn().toJson();
+      expect(written['__rulesVersion'], kFlowRulesVersion);
+      final read = FlowRules.fromJson(written);
+      expect(
+        read.destinationBoxes.map((r) => r.configKey),
+        FlowRules.builtIn().destinationBoxes.map((r) => r.configKey),
+      );
     });
   });
 }

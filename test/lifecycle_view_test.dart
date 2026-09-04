@@ -365,6 +365,74 @@ void main() {
     );
   });
 
+  group('what to put aside for the room each year', () {
+    /// A room whose two dates fall due in different years, so the plan is a
+    /// line rather than a single spike and there is something to level.
+    Future<AppStateProvider> planned(WidgetTester tester) async {
+      // PRICED, because an unpriced plan has no line to draw and nothing to
+      // set aside - the chart refuses to draw a flat zero and say the room
+      // is free. The figures come off the base-cost card by config key, the
+      // way a room whose models the catalog does not carry is priced.
+      final p = room()
+        ..baseCosts = BaseCostBook(
+          costs: const [
+            BaseCost(category: 'Projector', price: 6000),
+            BaseCost(category: 'Display', price: 3000),
+          ],
+        )
+        ..avDeviceLibrary = AvDeviceLibrary.empty();
+      p.setAvNodeInstalledOn('PROJECTORDEVICE_1', DateTime(2014, 5, 1));
+      p.setAvNodeInstalledOn('DISPLAYDEVICE_1', DateTime(2019, 5, 1));
+      await pumpRoom(tester, p);
+      return p;
+    }
+
+    testWidgets('the room draws its plan as a line, like the building does', (
+      tester,
+    ) async {
+      // The grid says which year; the shape says which year is the bad one -
+      // and on a room read standing in front of it, "what should we be
+      // saving" is the question being asked.
+      await planned(tester);
+      expect(
+        find.byKey(const ValueKey('room_lifecycle_spend_chart')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('WHAT THIS ROOM COSTS'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('lifecycle_room_set_aside')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the picture carries the line and the figure with it', (
+      tester,
+    ) async {
+      // The picture is what gets handed over. A sheet with the grid on it and
+      // neither the shape nor the set-aside leaves the reader to work out the
+      // one number the plan is read for.
+      await planned(tester);
+      await tester.tap(find.byKey(const ValueKey('lifecycle_room_picture')));
+      await tester.pumpAndSettle();
+
+      final sheet = find.byType(LifecyclePlanSheet);
+      expect(
+        find.descendant(
+          of: sheet,
+          matching: find.byKey(const ValueKey('lifecycle_sheet_spend_chart')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: sheet,
+          matching: find.text('TO SET ASIDE EACH YEAR'),
+        ),
+        findsOneWidget,
+      );
+    });
+  });
+
   // -------------------------------------------------------------------------
   //  WALKING ONE ROOM THROUGH
   // -------------------------------------------------------------------------

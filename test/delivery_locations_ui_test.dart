@@ -204,6 +204,13 @@ void main() {
         400,
         scrollable: find.byType(Scrollable).first,
       );
+      // scrollUntilVisible stops as soon as the row EXISTS, which can leave it
+      // half under the bottom edge - and a tap there lands on nothing. Where
+      // it stops moves whenever anything above it on the tab changes height.
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('edit_delivery_locations')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('edit_delivery_locations')));
       await tester.pumpAndSettle();
       expect(

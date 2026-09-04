@@ -9,6 +9,7 @@ import 'av_flow_view.dart' show buildAvFlowModel;
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
 import 'lifecycle_picture.dart' show showLifecycleSheetPicture;
+import 'lifecycle_spend_chart.dart';
 import 'project_lifecycle_view.dart'
     show LifecyclePlanSheet, LifecycleYearGrid, lifecycleFileStemFor;
 import 'pinned_grid.dart' show gridMetric;
@@ -100,6 +101,18 @@ class _LifecycleViewState extends State<LifecycleView> {
       );
     }
 
+    // A BUILDING OF ONE, which is how everything below reads this room: the
+    // grid, the chart and the picture all take a [BuildingLifecycle], so the
+    // room's own tab and the job's plan can never draw the same room two
+    // different ways.
+    final asBuilding = BuildingLifecycle(
+      rooms: [room],
+      asOf: room.asOf,
+      currency: provider.currencySymbol,
+    );
+    final spend = spendYearsOf(asBuilding);
+    final setAside = annualSetAsideFor(asBuilding);
+
     // The plan, and then — only when asked for — the positions held off it.
     final rows = <({EquipmentLife item, bool never})>[
       for (final i in room.items) (item: i, never: false),
@@ -113,7 +126,11 @@ class _LifecycleViewState extends State<LifecycleView> {
         controller: _scroll,
         slivers: [
           SliverToBoxAdapter(
-            child: _Summary(room: room, currency: provider.currencySymbol),
+            child: _Summary(
+              room: room,
+              currency: provider.currencySymbol,
+              setAside: setAside,
+            ),
           ),
           SliverToBoxAdapter(
             child: _RoomActions(
@@ -160,10 +177,32 @@ class _LifecycleViewState extends State<LifecycleView> {
                 assumed: room.assumedLifeYears,
                 onChanged: provider.setAssumedLifeCycle,
               ),
-              building: BuildingLifecycle(
-                rooms: [room],
-                asOf: room.asOf,
+              building: asBuilding,
+            ),
+          ),
+          // THE SHAPE OF THIS ROOM'S PLAN, and what to put aside for it.
+          //
+          // The same chart the building and the campus draw, asked of one
+          // room - see [LifecycleSpendChart]. A room's plan is usually two or
+          // three spikes years apart, and the question standing in front of
+          // it is never "what does the refresh cost" but "what should we be
+          // saving a year": the dashed line is that figure, and the summary
+          // above prints it.
+          //
+          // UNDER THE GRID, NOT OVER IT, for the same reason it is under the
+          // building's: the grid is the document and has to own the first
+          // screen, and a chart above it pushes the sheet's own controls off
+          // a laptop at 150%.
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+              child: LifecycleSpendChart(
+                key: const ValueKey('room_lifecycle_spend_chart'),
+                years: spend,
                 currency: provider.currencySymbol,
+                asOfYear: room.asOf.year,
+                levelAmount: setAside,
+                title: 'WHAT THIS ROOM COSTS, YEAR BY YEAR',
               ),
             ),
           ),
@@ -1109,7 +1148,16 @@ class _Summary extends StatelessWidget {
   final RoomLifecycle room;
   final String currency;
 
-  const _Summary({required this.room, required this.currency});
+  /// What this room's plan comes to a year if it is funded evenly rather
+  /// than asked for in lumps - see [annualSetAsideFor]. Null when there is
+  /// nothing left on the plan to spread.
+  final double? setAside;
+
+  const _Summary({
+    required this.room,
+    required this.currency,
+    this.setAside,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1196,6 +1244,17 @@ class _Summary extends StatelessWidget {
                     ? 'nothing priced'
                     : formatLifecycleMoney(room.refreshCost, currency),
               ),
+              // WHAT TO SAVE A YEAR FOR IT. The refresh cost is what the
+              // upgrade comes to; this is what it comes to if the room is
+              // funded instead of asked for - the same figure the chart
+              // below draws its dashed line at.
+              if (setAside != null)
+                _Stat(
+                  key: const ValueKey('lifecycle_room_set_aside'),
+                  label: 'To set aside each year',
+                  value: formatLifecycleMoney(setAside!, currency),
+                  color: Theme.of(context).colorScheme.tertiary,
+                ),
             ],
           ),
           SizedBox(height: gap * 0.9),

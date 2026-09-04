@@ -280,6 +280,39 @@ It stays quiet where it can't know: a device with no model yet, a driver that
 never declared which models it covers, and a model the driver does list under a
 different capitalization.
 
+## A driver that lists no models
+
+"A driver that never declared which models it covers" is worth its own section,
+because it's the quietest fault in the app. At the top of each python driver is
+a short block - `DEVICE_INFO` - naming the models it drives, the kind of
+equipment they are, and how the box is reached. That block is where the Model
+dropdown comes from, what picking a model fills a device in with, and what
+*Check Module Defaults* measures a room against.
+
+A driver without one still loads and still answers. Its products simply never
+appear anywhere, which looks exactly like the app not supporting them.
+
+**App Config -> What each driver declares...** (also on the Devices tab, beside
+the module box) lists every driver the app has read and marks the ones with no
+block.
+
+- **Read the file** fills the form in from what the driver actually says about
+  itself: the models out of its own `self.Models` dict, and the baud rate,
+  protocol and connection styles out of the wrapper classes at the bottom of it.
+  Anything already typed in is left alone, so it's safe to press on a
+  half-finished block.
+- **The one thing a driver can never say is its network port.** Every driver is
+  told which port to use rather than declaring one, so the port is left blank
+  and has to come off the manufacturer's communication sheet. The rest of the
+  blanks are site facts - an address, a COM port, a password - and are left for
+  the room.
+- Panel object names, the keep-alive and the credentials are seeded from what
+  every other driver of that family in the folder already uses, and the
+  keep-alive is checked against the commands this driver actually has.
+- **Save to the .py** shows the exact python first. Only that one block in the
+  file is touched, and the whole folder is re-read afterwards, so the Model
+  dropdown is looking at the file as it is now.
+
 # The drawings
 
 ## Control Schematic

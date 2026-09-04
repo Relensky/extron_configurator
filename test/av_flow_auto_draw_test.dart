@@ -724,6 +724,54 @@ void main() {
           'Ceiling speakers');
     });
 
+    test('speakers somebody re-modelled are still this room’s speakers', () {
+      // THE BUG THIS EXISTS FOR. The box `output_audio` places is recognized
+      // by its ID, not by its model — a room whose ceiling speakers were
+      // changed to the SM 28 pair actually specified stopped matching
+      // 'Ceiling Speakers', so the pass drew a SECOND set. It arrived under a
+      // re-keyed id (addAvNode renames an id that is taken), which put it
+      // outside the dismissal record as well: deleting it brought it back on
+      // every pass, under a new id each time.
+      final p = room();
+      (p.roomConfig['SYSTEM_SETUP'] as Map)['output_audio'] = '1';
+      autoDrawRoutingFromConfig(p);
+
+      final speakers = p.avNodeById(avAutoNodeId('output_audio'));
+      expect(speakers, isNotNull);
+      p.updateAvNode(
+        speakers!.copyWith(model: 'SM 28 Black', label: 'Speakers - SM 28'),
+      );
+
+      p.avRoutedFingerprint = ''; // force the pass to run again
+      autoDrawRoutingFromConfig(p);
+
+      expect(
+        p.avNodes.where((n) => n.ports.any((port) =>
+            port.signal == SignalType.speaker && port.isInput)),
+        hasLength(1),
+        reason: 'the SM 28s are the speakers; nothing else should be placed',
+      );
+      expect(p.avNodeById(avAutoNodeId('output_audio'))?.model, 'SM 28 Black');
+    });
+
+    test('speakers taken off the canvas stay off it', () {
+      final p = room();
+      (p.roomConfig['SYSTEM_SETUP'] as Map)['output_audio'] = '1';
+      autoDrawRoutingFromConfig(p);
+      expect(p.avNodeById(avAutoNodeId('output_audio')), isNotNull);
+
+      p.removeAvNode(avAutoNodeId('output_audio'));
+      p.avRoutedFingerprint = '';
+      autoDrawRoutingFromConfig(p);
+
+      expect(p.avNodeById(avAutoNodeId('output_audio')), isNull);
+      expect(
+        p.avNodes.where((n) => n.model == 'Ceiling Speakers'),
+        isEmpty,
+        reason: 'a box somebody deleted stays deleted',
+      );
+    });
+
     test('assisted listening is a box of its own, cabled and quoted', () {
       final p = withDsp();
       autoDrawRoutingFromConfig(p);

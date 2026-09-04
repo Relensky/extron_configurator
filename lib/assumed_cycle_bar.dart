@@ -34,6 +34,115 @@ import 'equipment_lifecycle.dart' show assumedCycleLabel, kAssumedCycleYears;
 /// One figure the restatement moved: what it is, what it was, what it is now.
 typedef CycleShift = ({String label, String was, String now});
 
+/// The dropdown value behind "Type a year..." — not a cycle, a doorway to the
+/// box that asks for one. Negative so it can never collide with a real cycle.
+const int _kCustomCycle = -1;
+
+/// The longest cycle the box will take. A refresh plan is a funding document
+/// and the estate's oldest kit is under thirty; past that the figure is a typo
+/// rather than a plan, and one accepted silently restates the whole sheet.
+const int kMaxAssumedCycleYears = 60;
+
+/// Asks for a cycle in years. Returns null when the box was cancelled or what
+/// was typed is not a year anybody meant.
+///
+/// THE LIST IS NOT THE LIMIT. [kAssumedCycleYears] is the six cycles that get
+/// asked about, not the six that are allowed: a campus told to model seven,
+/// or a department that funds on a nine-year rotation, was stuck with the
+/// nearest entry on a list somebody else wrote.
+Future<int?> askForCycleYears(BuildContext context, {int? initial}) =>
+    showDialog<int>(
+      context: context,
+      builder: (ctx) => _CustomCycleDialog(initial: initial),
+    );
+
+/// The box behind "Type a year...".
+///
+/// A widget of its own rather than a [StatefulBuilder] because the field's
+/// controller has to outlive the pop: disposing it as the future returns tears
+/// it down while the dialog is still animating away.
+class _CustomCycleDialog extends StatefulWidget {
+  final int? initial;
+
+  const _CustomCycleDialog({this.initial});
+
+  @override
+  State<_CustomCycleDialog> createState() => _CustomCycleDialogState();
+}
+
+class _CustomCycleDialogState extends State<_CustomCycleDialog> {
+  late final TextEditingController _field = TextEditingController(
+      text: widget.initial == null || widget.initial! <= 0
+          ? ''
+          : '${widget.initial}');
+  String? _error;
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final typed = int.tryParse(_field.text.trim());
+    if (typed == null || typed <= 0) {
+      setState(() => _error = 'Give it a number of years.');
+      return;
+    }
+    if (typed > kMaxAssumedCycleYears) {
+      setState(() => _error =
+          'A $typed-year cycle is longer than anything in the estate lasts. '
+          '$kMaxAssumedCycleYears is the most this will take.');
+      return;
+    }
+    Navigator.of(context).pop(typed);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        key: const ValueKey('custom_cycle_dialog'),
+        title: const Text('Restate on your own cycle'),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Every position is restated as though it were replaced on '
+                'this cycle, whatever life is recorded against it. It is a '
+                'what-if: nothing is saved.',
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                key: const ValueKey('custom_cycle_field'),
+                controller: _field,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Years',
+                  errorText: _error,
+                  border: const OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => _submit(),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('custom_cycle_apply'),
+            onPressed: _submit,
+            child: const Text('Restate'),
+          ),
+        ],
+      );
+}
+
 /// The picker itself, sized to sit on a sheet's header row.
 ///
 /// No border and no fill: it is one control among the sheet's other controls,
@@ -101,8 +210,32 @@ class AssumedCycleControl extends StatelessWidget {
                   value: years,
                   child: Text('$years-year cycle'),
                 ),
+              // A cycle somebody typed is on the list while it is in force —
+              // a dropdown whose value is not one of its items draws blank,
+              // and a control that goes blank the moment it is used is a
+              // control nobody trusts the figures under.
+              if (on && !kAssumedCycleYears.contains(assumed))
+                DropdownMenuItem(
+                  key: ValueKey('${keyPrefix}_cycle_$assumed'),
+                  value: assumed,
+                  child: Text('$assumed-year cycle'),
+                ),
+              DropdownMenuItem(
+                key: ValueKey('${keyPrefix}_cycle_custom'),
+                value: _kCustomCycle,
+                child: const Text('Type a year...'),
+              ),
             ],
-            onChanged: onChanged,
+            onChanged: (value) async {
+              if (value != _kCustomCycle) {
+                onChanged(value);
+                return;
+              }
+              final typed = await askForCycleYears(context, initial: assumed);
+              // Cancelled leaves the sheet on whatever it was already
+              // restated at, rather than snapping back to the plan.
+              if (typed != null) onChanged(typed);
+            },
           ),
         ],
       ),

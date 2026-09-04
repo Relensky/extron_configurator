@@ -360,6 +360,50 @@ const List<HelpTopic> kHelpTopics = [
         'about a thing that can never be fixed.',
   ),
   HelpTopic(
+    title: 'A driver that lists no models',
+    section: 'The room',
+    where: 'Devices tab, beside the module box, and App Config → Python '
+        'Modules Path',
+    plain:
+        'A driver file can carry a short description of itself: which '
+        'products it drives, and how they are reached. Without one it still '
+        'loads, but none of its equipment appears in the Model list - so it '
+        'looks like the app has never heard of the product.',
+    keywords: [
+      'device_info',
+      'driver',
+      'module',
+      'python',
+      'models missing',
+      'model dropdown empty',
+      'connection defaults',
+      'annotate',
+    ],
+    body:
+        'At the top of each python driver is a short block naming the models '
+        'it drives, the kind of equipment they are, and how the box is '
+        'reached - the port, the protocol, the poll, the panel object names. '
+        'That block is where the Model list comes from, what picking a model '
+        'fills a device in with, and what "check module defaults" measures a '
+        'room against.\n\n'
+        'A driver without one is SILENT RATHER THAN BROKEN: it loads, it '
+        'answers, and its products simply never appear anywhere - which looks '
+        'exactly like the app not supporting them. The editor lists every '
+        'driver the app has read and marks the ones with no block.\n\n'
+        'READ THE FILE fills the form in from what the driver actually says '
+        'about itself: the models out of its own model list, and the baud '
+        'rate, protocol and connection styles out of the wrapper classes at '
+        'the bottom of it. Anything already typed in is left alone.\n\n'
+        'ONE THING A DRIVER CAN NEVER SAY IS ITS NETWORK PORT. Every driver '
+        'is TOLD which port to use rather than declaring one, so the port is '
+        'left blank and has to come off the manufacturer\'s communication '
+        'sheet. The rest of the blanks are site facts - an address, a COM '
+        'port, a password - and are deliberately left for the room.\n\n'
+        'The exact python is shown before anything is written, only that one '
+        'block in the file is touched, and the whole folder is read again '
+        'afterwards so the Model list is looking at the file as it is now.',
+  ),
+  HelpTopic(
     title: 'Building the control side from the drawing',
     section: 'The room',
     where: 'Cost tab, the System tab placeholder, and the missing-modules '

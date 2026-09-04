@@ -105,18 +105,7 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
   // THE SHAPE OF THE PLAN, before the grid it is derived from. Same
   // arithmetic, same lifecycle - see [LifecycleSpendChart] - and one point per
   // year that can be asked which rooms are in it.
-  final spend = <SpendYear>[
-    for (final year in building.yearsThroughDue())
-      (
-        year: year,
-        amount: building.costDueIn(year),
-        parts: [
-          for (final room in building.rooms)
-            if (room.costDueIn(year) > 0)
-              (name: room.roomName, amount: room.costDueIn(year)),
-        ],
-      ),
-  ];
+  final spend = spendYearsOf(building);
 
   return [
     SliverToBoxAdapter(
@@ -605,6 +594,8 @@ class LifecyclePlanSheet extends StatelessWidget {
     final yearColumn = gridMetric(context, 76);
     final rowHeight = gridMetric(context, 28);
     final roomColumn = gridMetric(context, 200);
+    final spend = spendYearsOf(building);
+    final setAside = annualSetAsideFor(building);
 
     final headStyle = theme.textTheme.labelMedium?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
@@ -684,6 +675,17 @@ class LifecyclePlanSheet extends StatelessWidget {
                     currency,
                   ),
                 ),
+                // WHAT TO PUT ASIDE A YEAR. The one figure on this sheet
+                // somebody writes down: a plan is a demand curve, and the
+                // question it is read to answer is not "what does the whole
+                // refresh cost" but "what should we be saving". The chart
+                // below draws its dashed line at the same number.
+                if (setAside != null)
+                  _SheetFigure(
+                    label: 'To set aside each year',
+                    value: formatLifecycleMoney(setAside, currency),
+                    color: theme.colorScheme.tertiary,
+                  ),
               ],
             ),
             if (undated > 0) ...[
@@ -699,8 +701,35 @@ class LifecyclePlanSheet extends StatelessWidget {
             ],
             const SizedBox(height: 12),
             const EquipmentTimingKey(),
+            // THE SHAPE, ON THE SHEET SOMEBODY IS HANDED. The grid is what a
+            // budget request is written FROM; the line is what the meeting
+            // looks at, and a picture that carried the grid and not the line
+            // left the reader to find the bad year by eye across seventy
+            // columns.
+            //
+            // GIVEN AN EXPLICIT WIDTH because a picture is laid out at its
+            // natural size with nothing bounding it, and a chart with no
+            // width to fill cannot be laid out at all. The grid's width, so
+            // the years under the line are the years in the columns.
+            if (spend.length > 1) ...[
+              const SizedBox(height: 14),
+              SizedBox(
+                width: roomColumn + yearColumn * years.length,
+                child: LifecycleSpendChart(
+                  key: const ValueKey('lifecycle_sheet_spend_chart'),
+                  years: spend,
+                  currency: currency,
+                  asOfYear: thisYear,
+                  levelAmount: setAside,
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             Row(
+              // Named because the chart above it also prints years, and "is
+              // this year a COLUMN on the sheet" is a different question from
+              // "does this year appear on the sheet somewhere".
+              key: const ValueKey('lifecycle_sheet_years'),
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 SizedBox(width: roomColumn, child: Text('ROOM', style: headStyle)),

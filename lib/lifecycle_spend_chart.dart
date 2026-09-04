@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'equipment_lifecycle.dart' show formatLifecycleMoney;
+import 'equipment_lifecycle.dart'
+    show BuildingLifecycle, formatLifecycleMoney;
 import 'hover_chart.dart';
 
 /// ============================================================================
@@ -41,6 +42,36 @@ typedef SpendYear = ({
   /// provokes and a count cannot answer it.
   List<({String name, double amount})> parts,
 });
+
+/// A plan as one point per year, each naming the rooms in it.
+///
+/// ONE PLACE, because three screens draw this line - the building's plan, the
+/// campus calendar and a single room's own tab - and three copies of the same
+/// comprehension is three chances for one of them to disagree with the grid
+/// underneath it.
+List<SpendYear> spendYearsOf(BuildingLifecycle building) => [
+      for (final year in building.yearsThroughDue())
+        (
+          year: year,
+          amount: building.costDueIn(year),
+          parts: [
+            for (final room in building.rooms)
+              if (room.costDueIn(year) > 0)
+                (name: room.roomName, amount: room.costDueIn(year)),
+          ],
+        ),
+    ];
+
+/// WHAT TO PUT ASIDE A YEAR FOR THIS PLAN, or null when there is nothing to
+/// spread - a plan with no future left on it, or nothing priced on it.
+///
+/// The same figure the chart draws its dashed line at, named because it is
+/// asked for on its own: "what should we be saving a year for this room" is
+/// the question a refresh plan is usually being read to answer, and it is the
+/// one number on the sheet somebody writes down.
+double? annualSetAsideFor(BuildingLifecycle building) =>
+    LifecycleSpendChart.levelSpendFor(
+        spendYearsOf(building), building.asOf.year);
 
 /// The plan as a line with a readout on it.
 ///

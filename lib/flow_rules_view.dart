@@ -396,7 +396,8 @@ class _FlowRulesViewState extends State<FlowRulesView> {
         title: rule.configKey,
         subtitle: '${rule.label} • ${rule.model} • ${rule.zone}'
             '${rule.excludeFromCost ? ' • not quoted' : ''}'
-            '${rule.signals == 'video' ? '' : ' • ${rule.signals}'}',
+            '${rule.signals == 'video' ? '' : ' • ${rule.signals}'}'
+            '${rule.unless.isEmpty ? '' : ' • not in a room with ${rule.unless}'}',
         warning: _modelWarning(provider, rule.model),
         onEdit: () => _editBox(rules, rule, isSource: isSource),
         onDelete: () => _apply(isSource
@@ -529,6 +530,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
     final key = TextEditingController(text: existing?.configKey ?? '');
     final label = TextEditingController(text: existing?.label ?? '');
     final model = TextEditingController(text: existing?.model ?? '');
+    final unless = TextEditingController(text: existing?.unless ?? '');
     String zone = existing?.zone ?? 'lectern';
     String signals = existing?.signals ?? 'video';
     bool excluded = existing?.excludeFromCost ?? false;
@@ -582,6 +584,11 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                       ],
                       onChanged: (v) => setLocal(() => signals = v ?? 'video'),
                     ),
+                    _field(unless, 'Not in a room that has',
+                        'Leave blank for most boxes. A room with one of these '
+                            'gets no box from this rule - the speakers are '
+                            'DSPDEVICE_, because a room with a DSP carries its '
+                            'program audio on the expansion bus instead.'),
                   ],
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -623,6 +630,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
       zone: zone,
       excludeFromCost: excluded,
       signals: isSource ? 'video' : signals,
+      unless: isSource ? '' : unless.text.trim(),
     );
     final list = [
       for (final r in isSource ? rules.sourceBoxes : rules.destinationBoxes)

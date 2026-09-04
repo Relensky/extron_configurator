@@ -27,6 +27,7 @@ import 'cost_estimate_view.dart';
 import 'delivery_locations_dialog.dart';
 import 'vendor_book_dialog.dart';
 import 'device_editor_view.dart';
+import 'device_info_editor.dart';
 import 'flow_rules_view.dart';
 import 'schema_editor_view.dart';
 import 'device_start_wizard.dart';
@@ -3211,6 +3212,25 @@ class AppSettingsView extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        // A DRIVER WITH NO DEVICE_INFO IS SILENT, NOT BROKEN: it loads, it
+        // answers, and its models simply never reach the Model dropdown -
+        // which reads as the app not supporting the product. This is where
+        // that is seen and fixed; see device_info_editor.dart.
+        //
+        // ON ITS OWN LINE, not on the row above. Every path row on this tab
+        // is one field and one button of one fixed width, so the fields all
+        // end on the same edge - see settings_path_rows_test.dart. A second
+        // button in that row pushes one field short of the column.
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('edit_device_info'),
+            icon: const Icon(Icons.description),
+            label: const Text('What each driver declares…'),
+            onPressed: () => showDeviceInfoEditor(context),
+          ),
         ),
         const SizedBox(height: 20),
 

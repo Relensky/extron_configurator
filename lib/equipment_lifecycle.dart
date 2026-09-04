@@ -178,11 +178,15 @@ const Map<EquipmentLifeSource, String> kEquipmentLifeSourceLabels = {
 //  bracket is not on the refresh plan at all - and a what-if that quietly put
 //  every mount and pole back on the budget would be a what-if nobody trusts.
 
-/// The cycles a plan can be restated on, as the control offers them.
+/// The cycles the control offers without being asked.
 ///
 /// Around the eight-year default the sheet is modeled on, out to the twenty
 /// years an estate argues for when there is no money. Short enough at the
 /// bottom to be honest about what a fast refresh costs.
+///
+/// THE SHORTCUTS, NOT THE LIMIT. Any positive number of years restates the
+/// plan - see `askForCycleYears` in assumed_cycle_bar.dart, which is how a
+/// department that funds on a nine-year rotation asks for nine.
 const List<int> kAssumedCycleYears = [6, 8, 10, 12, 15, 20];
 
 /// What a plan says it is drawn on, in one phrase.

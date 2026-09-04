@@ -310,5 +310,68 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets('a cycle nobody put on the list can be typed in', (
+      tester,
+    ) async {
+      // The six on the dropdown are the cycles that get asked about, not the
+      // six that are allowed. A department funding a nine-year rotation was
+      // stuck picking the nearest entry on somebody else's list.
+      tester.view.physicalSize = const Size(1600, 1800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final provider = AppStateProvider(autoLoadSettings: false);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: provider,
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showCampusLifecycleFile(
+                  context,
+                  CampusFile(name: 'Chico', projects: [job('SCI')]),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await until(
+        tester,
+        () => find
+            .byKey(const ValueKey('campus_assumed_cycle'))
+            .evaluate()
+            .isNotEmpty,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('campus_cycle_picker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('campus_cycle_custom')).last);
+      await tester.pumpAndSettle();
+
+      // A year past anything in the estate is a typo, and is refused rather
+      // than restating forty rooms on it.
+      await tester.enterText(
+          find.byKey(const ValueKey('custom_cycle_field')), '400');
+      await tester.tap(find.byKey(const ValueKey('custom_cycle_apply')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('custom_cycle_dialog')), findsOneWidget);
+
+      await tester.enterText(
+          find.byKey(const ValueKey('custom_cycle_field')), '9');
+      await tester.tap(find.byKey(const ValueKey('custom_cycle_apply')));
+      await tester.pumpAndSettle();
+
+      // The estate is restated on it, and the picker says so rather than
+      // going blank on a value that is not one of its six.
+      expect(find.textContaining('9-year cycle'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('campus_shift_Worst single year')),
+        findsOneWidget,
+      );
+    });
   });
 }
