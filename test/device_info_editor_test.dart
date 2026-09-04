@@ -467,5 +467,79 @@ $driver
         'Network',
       );
     });
+
+    testWidgets('the drivers folder is changed from inside the dialog', (
+      tester,
+    ) async {
+      // WHY THE PATH IS ON THIS SCREEN AT ALL. The list is only ever as
+      // right as the folder it was read from, and the person finding out it
+      // is the wrong folder is the person standing here - the driver they
+      // opened the editor to fix is not in the list.
+      tester.view.physicalSize = const Size(1600, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final first = Directory(path.join(dir.path, 'devices'))
+        ..createSync(recursive: true);
+      File(path.join(first.path, 'extr_dsp_Thing.py')).writeAsStringSync(driver);
+      final second = Directory(path.join(dir.path, 'other_devices'))
+        ..createSync(recursive: true);
+      File(path.join(second.path, 'epsn_vp_BrightLink.py'))
+          .writeAsStringSync(driver);
+
+      late AppStateProvider provider;
+      await tester.runAsync(() async {
+        provider = AppStateProvider(autoLoadSettings: false)
+          ..uiSchema = await UiSchema.load(explicitPath: 'ui_schema.json')
+          ..modulesPath = first.path;
+        await provider.preloadAllModules();
+      });
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: provider,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => showDeviceInfoEditor(context),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await until(
+        tester,
+        () => find
+            .byKey(const ValueKey('device_info_modules_path'))
+            .evaluate()
+            .isNotEmpty,
+      );
+
+      // The folder being read, in the box, and its driver in the list.
+      final box = tester.widget<TextField>(
+          find.byKey(const ValueKey('device_info_modules_path')));
+      expect(box.controller?.text, first.path);
+      await until(tester, () => find.text('extr_dsp_Thing').evaluate().isNotEmpty);
+
+      // Point it somewhere else.
+      await tester.enterText(
+          find.byKey(const ValueKey('device_info_modules_path')), second.path);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await until(
+        tester,
+        () => find.text('epsn_vp_BrightLink').evaluate().isNotEmpty,
+      );
+
+      // THE WHOLE APP FOLLOWED, not just the list: this is the App Config
+      // setting, and the drivers behind the Model dropdown are the new
+      // folder's now.
+      expect(provider.modulesPath, second.path);
+      expect(provider.availableModules, ['epsn_vp_BrightLink']);
+      expect(find.text('extr_dsp_Thing'), findsNothing);
+    });
   });
 }

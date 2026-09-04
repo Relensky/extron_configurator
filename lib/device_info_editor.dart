@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -88,6 +89,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
   String _module = '';
 
   final _searchCtl = TextEditingController();
+  final _pathCtl = TextEditingController();
   final _modelsCtl = TextEditingController();
   final _omitCtl = TextEditingController();
 
@@ -118,6 +120,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<AppStateProvider>();
+      _pathCtl.text = provider.modulesPath;
       _surveyFolder(provider);
       final wanted = widget.module?.trim() ?? '';
       if (wanted.isNotEmpty) _open(provider, AppStateProvider.moduleStem(wanted));
@@ -127,6 +130,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
   @override
   void dispose() {
     _searchCtl.dispose();
+    _pathCtl.dispose();
     _modelsCtl.dispose();
     _omitCtl.dispose();
     _disposeRows();
@@ -172,6 +176,53 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
       }
     }
     if (mounted) setState(() {});
+  }
+
+  /// Points the app at another folder of drivers, and waits for it to be read.
+  ///
+  /// THE SAME SETTING App Config carries, written the same way - the whole
+  /// app follows the folder, not just this dialog. It is repeated here
+  /// because this is the screen somebody is standing on when they find out
+  /// the app has been reading the wrong folder: the list is short, or the
+  /// driver they opened the editor to fix is not in it. Sending them to
+  /// another tab to fix that loses the block they had half typed.
+  ///
+  /// [force] re-reads the folder even when the path has not changed, which is
+  /// what the button beside the box is for: a driver edited outside the app
+  /// is one the app still believes the old copy of.
+  Future<void> _applyPath(AppStateProvider provider, String value,
+      {bool force = false}) async {
+    final wanted = value.trim();
+    if (!force && wanted == provider.modulesPath) return;
+    if (_dirty && !await _confirmDiscard()) {
+      _pathCtl.text = provider.modulesPath; // put the box back
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _notes = [];
+    });
+
+    // updateSetting saves the path and starts a read it does not wait for,
+    // and this screen has to know when the read is DONE - the driver list,
+    // the "no block" marks and the model registry all come out of it.
+    await provider.updateSetting('modulesPath', wanted);
+    final found = await provider.reloadModules();
+    if (!mounted) return;
+
+    // Whatever was open belongs to the old folder, so the form goes back to
+    // empty rather than showing a block for a file that is no longer there.
+    setState(() {
+      _loading = false;
+      _dirty = false;
+      _module = '';
+      _fill(DeviceInfoDraft());
+      _hasBlock.clear();
+    });
+    await _surveyFolder(provider);
+    _snack('$found driver${found == 1 ? '' : 's'} read from '
+        '${provider.effectiveModulesPath}.');
   }
 
   // --- opening one ----------------------------------------------------------
@@ -455,24 +506,34 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
       content: SizedBox(
         width: 1080,
         height: 640,
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(width: 300, child: _moduleList(provider, theme)),
-            const VerticalDivider(width: 24),
+            _folderRow(provider, theme),
+            const SizedBox(height: 12),
             Expanded(
-              child: _module.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Pick a driver on the left.\nThe ones marked "no '
-                        'block" drive nothing the Model dropdown offers.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    )
-                  : _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _editor(provider, theme),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(width: 300, child: _moduleList(provider, theme)),
+                  const VerticalDivider(width: 24),
+                  Expanded(
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _module.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'Pick a driver on the left.\nThe ones '
+                                  'marked "no block" drive nothing the Model '
+                                  'dropdown offers.',
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              )
+                            : _editor(provider, theme),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -485,6 +546,59 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
             navigator.pop();
           },
           child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+
+  /// The folder every driver on this screen is read out of, editable here.
+  ///
+  /// The list beside it is only ever as right as this path is.
+  Widget _folderRow(AppStateProvider provider, ThemeData theme) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: TextField(
+            key: const ValueKey('device_info_modules_path'),
+            controller: _pathCtl,
+            style: theme.textTheme.bodySmall,
+            decoration: InputDecoration(
+              isDense: true,
+              border: const OutlineInputBorder(),
+              labelText: 'Python modules folder',
+              // Blank is not nothing: it means the "devices" folder under the
+              // Root Folder, which is where the drivers are on a machine
+              // nobody has pointed anywhere else.
+              hintText: provider.effectiveModulesPath,
+              helperText: 'The App Config setting, changed from here. Enter '
+                  'applies it; blank = the "devices" folder under the Root '
+                  'Folder.',
+              helperMaxLines: 2,
+              suffixIcon: IconButton(
+                key: const ValueKey('device_info_modules_path_pick'),
+                icon: const Icon(Icons.folder, size: 18),
+                tooltip: 'Select Directory',
+                onPressed: () async {
+                  final picked = await FilePicker.getDirectoryPath();
+                  if (picked == null) return;
+                  _pathCtl.text = picked;
+                  await _applyPath(provider, picked);
+                },
+              ),
+            ),
+            onSubmitted: (value) => _applyPath(provider, value),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // A DRIVER EDITED OUTSIDE THE APP is one the app still believes the
+        // old copy of - every .py is parsed once and the answer kept. This
+        // reads the folder again whether or not the path moved.
+        OutlinedButton.icon(
+          key: const ValueKey('device_info_modules_path_apply'),
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Read the folder'),
+          onPressed: () => _applyPath(provider, _pathCtl.text, force: true),
         ),
       ],
     );
