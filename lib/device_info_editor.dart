@@ -443,7 +443,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
       key: const ValueKey('device_info_editor'),
       title: Row(
         children: [
-          const Expanded(child: Text('What each driver says about itself')),
+          const Expanded(child: Text('Edit module default settings')),
           if (_dirty)
             Chip(
               label: const Text('Not written'),
@@ -640,13 +640,13 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
               _section(theme, 'Connection',
                   'How the box is reached. Written onto a device block when '
                   'somebody picks one of the models above.'),
-              _rows(theme, _connection, kConnectionKeys),
+              _rows(theme, _connection, kConnectionKeys, name: 'connection'),
               const SizedBox(height: 16),
 
               _section(theme, 'Defaults',
                   'The rest of the device block: panel object names, the '
                   'keep-alive, the credentials.'),
-              _rows(theme, _defaults, kDefaultsKeys),
+              _rows(theme, _defaults, kDefaultsKeys, name: 'defaults'),
               if (_commands.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -714,55 +714,79 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
       );
 
   /// A block of key/value rows, with the keys it usually carries offered.
-  Widget _rows(ThemeData theme, List<_Pair> rows, List<String> suggested) =>
+  /// [name] is what the row keys are built from ('connection',
+  /// 'defaults', a connection style), so a test can name the block it
+  /// means and two blocks on one page never share a key.
+  Widget _rows(
+    ThemeData theme,
+    List<_Pair> rows,
+    List<String> suggested, {
+    required String name,
+  }) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final row in rows)
+          for (final (i, row) in rows.indexed)
             Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
+              key: ValueKey('device_info_row_${name}_$i'),
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 200,
-                    child: TextField(
-                      controller: row.key,
-                      style: const TextStyle(
-                          fontFamily: 'monospace', fontSize: 13),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        border: const OutlineInputBorder(),
-                        // The description the info buttons show, so the key
-                        // is explained where it is being typed.
-                        helperText: _describe(row.key.text),
-                        helperMaxLines: 2,
-                        helperStyle: theme.textTheme.labelSmall,
+                  Row(
+                    children: [
+                      // BOTH FIELDS DECORATED IDENTICALLY, which is what keeps
+                      // them on one line. The key's description used to be the
+                      // decoration's helperText, and a helper line makes that
+                      // field taller than the one beside it - so the Row
+                      // centred the two boxes against each other and neither
+                      // the boxes in a row nor the rows down a block lined up.
+                      // The description sits under the row instead.
+                      SizedBox(
+                        width: 200,
+                        child: TextField(
+                          controller: row.key,
+                          style: const TextStyle(
+                              fontFamily: 'monospace', fontSize: 13),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding:
+                                EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (_) => setState(() => _dirty = true),
+                        ),
                       ),
-                      onChanged: (_) => setState(() => _dirty = true),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: row.value,
-                      style: const TextStyle(
-                          fontFamily: 'monospace', fontSize: 13),
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        border: OutlineInputBorder(),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: row.value,
+                          style: const TextStyle(
+                              fontFamily: 'monospace', fontSize: 13),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding:
+                                EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (_) => _dirty = true,
+                        ),
                       ),
-                      onChanged: (_) => _dirty = true,
-                    ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: 'Drop this key',
+                        onPressed: () => setState(() {
+                          rows.remove(row);
+                          row.dispose();
+                          _dirty = true;
+                        }),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    tooltip: 'Drop this key',
-                    onPressed: () => setState(() {
-                      rows.remove(row);
-                      row.dispose();
-                      _dirty = true;
-                    }),
-                  ),
+                  // What the key means, from the same dictionary the (i)
+                  // buttons use - under the pair rather than beside one of
+                  // them, so it reads as being about the row.
+                  ?_describeUnder(theme, row.key.text),
                 ],
               ),
             ),
@@ -834,7 +858,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
                 ),
               ],
             ),
-            _rows(theme, rows, kConnectionKeys),
+            _rows(theme, rows, kConnectionKeys, name: style),
           ],
         ),
       ),
@@ -845,8 +869,23 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
   String? _describe(String key) {
     final text = ConfigDictionary.descriptions[key.trim()];
     if (text == null) return null;
-    // The first sentence: the row is 200 pixels wide, not a manual page.
+    // The first sentence: this is a line under a row, not a manual page.
     final stop = text.indexOf('. ');
     return stop < 0 ? text : text.substring(0, stop + 1);
+  }
+
+  /// That description as the line under a row, or nothing when the dictionary
+  /// has never heard of the key - which is most of a driver's own keys.
+  Widget? _describeUnder(ThemeData theme, String key) {
+    final text = _describe(key);
+    if (text == null) return null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 3, 40, 0),
+      child: Text(
+        text,
+        style: theme.textTheme.labelSmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+    );
   }
 }

@@ -1093,7 +1093,12 @@ Future<void> saveAllToRoomFolder(
     // still land in their folders.
     try {
       if (ref != null) {
-        final error = await provider.openProjectRoomRef(ref);
+        // NOT ON THE RECENT LIST. This is the app walking the job on
+        // somebody's behalf, not somebody choosing a room - and nine rooms
+        // swept through in one press would push a week of real history off
+        // the list. The room the session STARTED on is put back at the end,
+        // and that one is remembered, because that one they did choose.
+        final error = await provider.openProjectRoomRef(ref, remember: false);
         if (error.isNotEmpty) {
           done.add((room: label, export: null, error: error));
           continue;

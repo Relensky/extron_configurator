@@ -13,6 +13,7 @@ import 'package:path/path.dart' as path;
 import 'app_logger.dart';
 import 'app_snack.dart';
 import 'campus_file.dart';
+import 'recent_files_menu.dart';
 import 'campus_lifecycle_view.dart'
     show showCampusLifecycle, showCampusLifecycleFile;
 import 'app_state.dart';
@@ -1106,6 +1107,17 @@ class _MainDashboardState extends State<MainDashboard> {
             tooltip: 'Open a room config, a project or a campus',
             onPressed: () => _openExistingConfig(context, provider),
           ),
+          // AND THE ONES ALREADY OPENED, beside it. A split pair, like Save
+          // and its menu: the act on the left, the shortcut to a document
+          // already known on the right. Open itself stays one press — putting
+          // the file dialog inside a menu to make room for this would cost
+          // everybody a click forever to save some people one.
+          //
+          // Three lists, because a room, a job and a campus are three
+          // different questions — see recent_files.dart.
+          RecentFilesButton(
+            onOpen: (file) => _openDocumentAtPath(context, provider, file),
+          ),
           // BACK ONE STEP ON WHATEVER THIS PAGE EDITS, driven by the same
           // question the Save button at the end of this row answers. Nothing
           // at all on the pages that carry their own pair - see
@@ -1495,6 +1507,17 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
             ),
             const SizedBox(height: 28),
+            // WHAT THIS MACHINE WAS WORKING ON, on the screen somebody lands
+            // on. The title bar has the same list a click away, but a start
+            // screen is read by somebody who has just launched the app and is
+            // deciding — and for them the answer to "where was I" should not
+            // be behind a button. Draws nothing at all on a cold install.
+            if (provider.recentFiles.isNotEmpty) ...[
+              RecentFilesPanel(
+                onOpen: (file) => _openDocumentAtPath(context, provider, file),
+              ),
+              const SizedBox(height: 28),
+            ],
             // The recovery copies, mentioned exactly where somebody who has
             // just lost a session would look for them.
             Text(
@@ -1525,7 +1548,19 @@ class _MainDashboardState extends State<MainDashboard> {
     );
     final file = picked?.files.single.path;
     if (file == null || !context.mounted) return;
+    await _openDocumentAtPath(context, provider, file);
+  }
 
+  /// Opens whichever of the three documents [file] is - everything
+  /// [_openExistingConfig] does once the picker has closed.
+  ///
+  /// Its own method because the picker is no longer the only way in: Open
+  /// Recent hands a path straight here, and a room opened off that menu has to
+  /// be the same room as one picked out of the dialog - same conversion
+  /// notice, same sidecars, same message when the file turns out not to be
+  /// what it says it is.
+  Future<void> _openDocumentAtPath(
+      BuildContext context, AppStateProvider provider, String file) async {
     // THREE DOCUMENTS, ONE BUTTON. A campus is a list of jobs somebody
     // assembled and named - see campus_file.dart - and opening it here rather
     // than only from inside the campus view means the file behaves like the

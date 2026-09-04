@@ -240,6 +240,50 @@ const List<HelpTopic> kHelpTopics = [
         'rather than five documents to keep in step.',
   ),
   HelpTopic(
+    title: 'Getting back to a file you had open',
+    section: 'Start here',
+    where: 'Open Recent, beside Open in the title bar - and the start screen',
+    plain:
+        'The app remembers the last ten rooms, the last ten jobs and the last '
+        'ten campuses it opened or saved, so getting back to one is a click '
+        'instead of a hunt through folders.',
+    keywords: [
+      'recent',
+      'open recent',
+      'history',
+      'last opened',
+      'reopen',
+      'start screen',
+    ],
+    body:
+        'THREE LISTS, NOT ONE. A room, a job and a campus all live as .json '
+        'files in the same folders, and one mixed list of thirty is a list '
+        'that has to be read rather than glanced at. Each kind keeps its own '
+        'ten, headed and in order, so the job somebody was quoting on Friday '
+        'and the room they were drawing on Friday are two different short '
+        'lists.\n\n'
+        'Every open counts, not just the ones that went through the file '
+        'dialog: a room reached from the Project tab lands on the list the '
+        'same way as one picked by hand.\n\n'
+        'SAVING COUNTS TOO, because half the documents here are never opened '
+        'at all - a room comes out of the wizard, a job out of New Project, '
+        'an estate out of a list assembled by hand. Each of those goes on the '
+        'list the first time it is written, and a Save As moves the entry to '
+        'the file you are now working from. The one exception is Save All to '
+        'a room folder: that walks every room of the job on your behalf, and '
+        'nine rooms swept through in one press would push a week of real work '
+        'off the list, so the walk is not recorded.\n\n'
+        'An entry is a POINTER, never a copy. Choosing one re-reads the file '
+        'off disk exactly as Open would - same conversion check, same '
+        'drawings beside it - so a room somebody else has edited since comes '
+        'up as it stands now.\n\n'
+        'A file that has been moved, renamed or archived stays on the list, '
+        'drawn struck through; choosing it offers to drop the line rather '
+        'than pretending it opened. Clear the list forgets all of them and '
+        'touches no file. The lists are kept in app_config.json alongside '
+        'every other setting on this machine, so they survive an update.',
+  ),
+  HelpTopic(
     title: 'Where the app keeps your rules',
     section: 'Start here',
     where: 'App Config tab, and the Schema, Flow Rules and Catalog tabs',

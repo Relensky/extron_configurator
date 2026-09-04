@@ -275,6 +275,96 @@ DEVICE_INFO = {
       await tester.pump();
     }
 
+    testWidgets('every key sits level with its own value', (tester) async {
+      // THE FAULT THIS HOLDS THE LINE ON. The key's description used to be
+      // the decoration's helperText, which makes that field taller than the
+      // one beside it - so the Row centred the two boxes against each other
+      // and the key sat above its value. Worse, it only happened on keys the
+      // dictionary describes, so no two rows down a block lined up either.
+      tester.view.physicalSize = const Size(1600, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final devices = Directory(path.join(dir.path, 'devices'))
+        ..createSync(recursive: true);
+      // A block whose first key IS described in the dictionary (com_type) and
+      // whose second is not (a group number a driver made up), so the row
+      // that used to break and the row that never did are both measured.
+      File(path.join(devices.path, 'extr_dsp_Thing.py')).writeAsStringSync('''
+DEVICE_INFO = {
+    "device_type": "dsp",
+    "models": ["DMP 64 Plus C"],
+    "connection": {
+        "com_type": "Network",
+        "group_prog_gain": "1",
+        "net_port": 22023,
+    },
+}
+
+
+$driver
+''');
+
+      late AppStateProvider provider;
+      await tester.runAsync(() async {
+        provider = AppStateProvider(autoLoadSettings: false)
+          ..uiSchema = await UiSchema.load(explicitPath: 'ui_schema.json')
+          ..modulesPath = devices.path;
+        await provider.preloadAllModules();
+      });
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: provider,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => showDeviceInfoEditor(context,
+                      module: 'extr_dsp_Thing'),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await until(
+        tester,
+        () => find
+            .byKey(const ValueKey('device_info_row_connection_0'))
+            .evaluate()
+            .isNotEmpty,
+      );
+
+      // Every row of the connection block: the key box and the value box on
+      // one line, and the same height as each other.
+      Rect? firstTop;
+      for (var i = 0; i < 3; i++) {
+        final row = find.byKey(ValueKey('device_info_row_connection_$i'));
+        expect(row, findsOneWidget, reason: 'row $i should be on screen');
+        final fields =
+            find.descendant(of: row, matching: find.byType(TextField));
+        expect(fields, findsNWidgets(2));
+
+        final key = tester.getRect(fields.at(0));
+        final value = tester.getRect(fields.at(1));
+        expect(key.top, moreOrLessEquals(value.top, epsilon: 0.5),
+            reason: 'row $i: the key box starts where its value box starts');
+        expect(key.bottom, moreOrLessEquals(value.bottom, epsilon: 0.5),
+            reason: 'row $i: and ends where it ends');
+
+        // And one row is the same height as the next, described or not.
+        firstTop ??= key;
+        expect(key.height, moreOrLessEquals(firstTop.height, epsilon: 0.5),
+            reason: 'row $i is the same box as every other row');
+      }
+
+      // The description is still there - moved under the row, not dropped.
+      expect(find.textContaining('Type of connection'), findsOneWidget);
+    });
+
     testWidgets('a silent driver is given a block, and its models arrive', (
       tester,
     ) async {

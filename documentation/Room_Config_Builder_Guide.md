@@ -209,6 +209,35 @@ BSS103_old_config.json                the pristine original, from the first load
 
 # Opening, converting and saving
 
+## Getting back to a file you had open
+
+The app remembers the last ten rooms, the last ten jobs and the last ten
+campuses it opened or saved. They are on the **Open Recent** menu beside Open
+in the title bar, and on the start screen under the Open button.
+
+Three lists, not one: a room, a job and a campus all live as `.json` files in
+the same folders, and one mixed list of thirty is a list you have to read
+rather than glance at. Each kind keeps its own ten, headed and most recent
+first.
+
+Every open counts, not just the ones that went through the file dialog - a room
+reached from the Project tab lands on the list the same way as one picked by
+hand. An entry is a pointer, never a copy, so choosing one re-reads the file off
+disk exactly as Open would.
+
+Saving counts too, because half the documents here are never opened at all: a
+room comes out of the wizard, a job out of New Project, an estate out of a list
+you assembled by hand. Each of those goes on the list the first time it is
+written, and a *Save As* moves the entry to the file you are now working from.
+The one exception is *Save All to a room folder* - that walks every room of the
+job on your behalf, and nine rooms swept through in one press would push a week
+of real work off the list, so the walk is not recorded.
+
+A file that has been moved, renamed or archived stays on the list, drawn struck
+through; choosing it offers to drop the line rather than pretending it opened.
+*Clear the list* forgets all of them and touches no file. The lists are kept in
+`app_config.json` with the rest of your settings, so they survive an update.
+
 ## What happens when a file loads
 
 Old configs don't look like new ones. Rather than making you fix them by hand,

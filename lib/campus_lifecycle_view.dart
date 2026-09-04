@@ -16,6 +16,7 @@ import 'campus_lifecycle.dart';
 import 'manual_rooms_dialog.dart';
 import 'model_standards_view.dart';
 import 'online_copy_dialog.dart' show publishCampusCopy;
+import 'recent_files.dart';
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
 import 'lifecycle_export.dart';
@@ -128,6 +129,7 @@ Future<void> showCampusLifecycleFile(
   // sort of quiet edit nobody would think to look for. Saving a campus is how
   // that is changed on purpose - see [_CampusViewState._saveCampus].
   rememberCampusOnOpenProject(context, campus);
+  rememberCampusAsRecent(context, campus);
   await showDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -139,6 +141,23 @@ Future<void> showCampusLifecycleFile(
       ),
     ),
   );
+}
+
+/// Puts a campus that has just been opened or written on the recent list.
+///
+/// Every door calls it - Open File hands one to [showCampusLifecycleFile], the
+/// Open button inside the sheet replaces the estate in place without going
+/// through that, and [_CampusViewState._saveCampus] is how an estate somebody
+/// assembled by hand gets a file in the first place. A campus is a campus
+/// whichever way they came in.
+///
+/// A campus nobody has saved has no file to point at, and is skipped.
+void rememberCampusAsRecent(BuildContext context, CampusFile campus) {
+  if (campus.file.trim().isEmpty) return;
+  // ignore: unawaited_futures
+  context
+      .read<AppStateProvider>()
+      .rememberRecentFile(RecentKind.campus, campus.file, name: campus.name);
 }
 
 /// Tells the OPEN job which campus sheet it is on, when it is on this one and
@@ -438,6 +457,12 @@ class _CampusViewState extends State<_CampusView> {
         _name = name;
         _file = target;
       });
+      // AN ESTATE ASSEMBLED BY HAND HAS NEVER BEEN OPENED. Saving it is the
+      // moment it becomes a document, so it is the moment it goes on the list.
+      rememberCampusAsRecent(
+        context,
+        CampusFile(name: name, projects: _paths, file: target),
+      );
       showSavedFileSnack(context, context.read<AppStateProvider>(),
           'The campus', target);
       if (mounted) await _rememberInEveryJob(target);
@@ -508,6 +533,7 @@ class _CampusViewState extends State<_CampusView> {
       final campus = await CampusFile.load(file);
       if (!mounted) return;
       rememberCampusOnOpenProject(context, campus);
+      rememberCampusAsRecent(context, campus);
       setState(() {
         _paths
           ..clear()

@@ -34,6 +34,7 @@ import 'project_estimate.dart';
 import 'project_swap.dart';
 import 'layout_tools.dart';
 import 'room_locations.dart';
+import 'recent_files.dart';
 import 'room_presets.dart';
 import 'room_sidecar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -904,6 +905,10 @@ class AppStateProvider extends ChangeNotifier {
       'autosaveEnabled': autosaveEnabled,
       'autosaveMinutes': autosaveMinutes,
       'roomScanDepth': roomScanDepth,
+      // The three lists of documents this copy has opened or written — see
+      // recent_files.dart. Settings is where they belong: they are a
+      // fact about this machine and this person, not about any one job.
+      'recentFiles': recentFiles.toJson(),
     };
 
   /// Serializes every setting to app_config.json. Failures are logged but
@@ -922,6 +927,69 @@ class AppStateProvider extends ChangeNotifier {
       AppLogger.logError(
           'Failed to save settings to $settingsFilePath', e, stack);
     }
+  }
+
+  // ---------------------------------------------------------------------
+  //  RECENTLY OPENED AND SAVED DOCUMENTS
+  //  Ten rooms, ten projects and ten campuses, most recent first, kept in
+  //  app_config.json with everything else this machine remembers. See
+  //  recent_files.dart for why the three are separate lists, and
+  //  recent_files_menu.dart for what draws them.
+  // ---------------------------------------------------------------------
+
+  /// The documents this copy of the app has opened or written. Replaced
+  /// wholesale when settings are read; edited only through the three methods
+  /// below, so every change is saved and every change repaints the menu.
+  RecentFiles recentFiles = RecentFiles();
+
+  /// The name the OPEN ROOM calls itself, or '' when it has none.
+  ///
+  /// A room file's name is usually a code - bss103.json - and the name inside
+  /// the config is the one somebody would recognize on a menu. But a room that
+  /// arrived without one is given the schema's placeholder on load (see
+  /// [UiSchema.systemDefaults]), and a list of five rooms all called 'Legacy
+  /// Room Update' is a list of five rooms nobody can tell apart. So the
+  /// placeholder is treated as the blank it stands for, and the file name
+  /// takes over.
+  String get recentRoomName {
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map) return '';
+    final name = setup['gui_full_room_name']?.toString().trim() ?? '';
+    final placeholder =
+        uiSchema.systemDefaults['gui_full_room_name']?.toString().trim() ?? '';
+    return name == placeholder ? '' : name;
+  }
+
+  /// Records that [file] has just been opened or written.
+  ///
+  /// CALLED FROM THE LOADERS AND THE WRITERS, not from the buttons. A room
+  /// reached from the Project tab is as opened as one picked out of a file
+  /// dialog, and a room built in the wizard is never opened at all - a list
+  /// that only knew about the file dialog would be a list that forgot the room
+  /// somebody actually spent the afternoon in.
+  Future<void> rememberRecentFile(
+    RecentKind kind,
+    String file, {
+    String name = '',
+  }) async {
+    if (!recentFiles.remember(kind, file, name: name)) return;
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  /// Takes one document off its list — the answer to a line pointing at a file
+  /// that is not there any more.
+  Future<void> forgetRecentFile(RecentKind kind, String file) async {
+    if (!recentFiles.forget(kind, file)) return;
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  /// Empties one list, or all three when [kind] is left out.
+  Future<void> clearRecentFiles([RecentKind? kind]) async {
+    if (!recentFiles.clear(kind)) return;
+    notifyListeners();
+    await _persistSettings();
   }
 
   /// One-time import of settings saved by older versions in the OS store
@@ -7121,6 +7189,7 @@ class AppStateProvider extends ChangeNotifier {
           saved['autosaveEnabled'] is bool ? saved['autosaveEnabled'] : true;
       autosaveMinutes = _sanitizeAutosaveMinutes(saved['autosaveMinutes']);
       roomScanDepth = _sanitizeRoomScanDepth(saved['roomScanDepth']);
+      recentFiles = RecentFiles.fromJson(saved['recentFiles']);
 
       // MIGRATION: the Auris style used to be stored as one value per accent
       // ('amber' | 'teal' | 'magenta'); it is now 'auris' + aurisColor.
@@ -7220,7 +7289,12 @@ class AppStateProvider extends ChangeNotifier {
   /// exactly the same pipeline — the same backup, the same migration, the same
   /// change log — or a room opened from the project would be a differently
   /// loaded room from the same room opened by hand.
-  Future<bool> openConfigAtPath(String file) async {
+  /// [remember] is false for a room the app opens on somebody's behalf rather
+  /// than because they asked for it - the room-by-room walk Save All makes is
+  /// the only one. Nine rooms swept through in one press are nine rooms that
+  /// would push everything else off the recent list, which is the opposite of
+  /// what the list is for.
+  Future<bool> openConfigAtPath(String file, {bool remember = true}) async {
     try {
       final f = File(file);
       final originalContents = await f.readAsString();
@@ -7247,6 +7321,12 @@ class AppStateProvider extends ChangeNotifier {
       // The config half of the recovery check. The sidecars are not in yet, so
       // this pass only reports and never retires — see checkForRoomRecovery.
       checkForRoomRecovery(sidecarsLoaded: false);
+      // ON THE RECENT LIST BY THE NAME IT CALLS ITSELF. The file name is
+      // usually a code — bss103.json — and the name in the config is the one
+      // somebody would recognize on a menu.
+      if (remember) {
+        await rememberRecentFile(RecentKind.room, f.path, name: recentRoomName);
+      }
       AppLogger.logInfo("Loaded existing config from ${f.path}");
       return true;
     } catch (e, stack) {
@@ -10060,6 +10140,15 @@ class AppStateProvider extends ChangeNotifier {
       // this one: dropping the whole cache made saving a room in a forty-room
       // job re-read forty files to learn that one of them had changed.
       _forgetCachedRoom(currentConfigPath);
+      // A ROOM SAVED IS A ROOM WORKED ON. The list would already carry one
+      // that was opened from a file, but a room built in the wizard has never
+      // been opened at all - and without this the only way onto the list would
+      // be to close it and open it again.
+      await rememberRecentFile(
+        RecentKind.room,
+        currentConfigPath,
+        name: recentRoomName,
+      );
       notifyListeners(); // The Undo button becomes available
       return currentConfigPath;
     } catch (e, stack) {
@@ -10272,6 +10361,13 @@ class AppStateProvider extends ChangeNotifier {
       // The diagrams and the cost estimate follow the config to its new home.
       await saveProjectSidecars();
       markRoomSaved();
+      // The file this room is worked from from now on, so it is the one the
+      // list should point at - not the one it was saved away from.
+      await rememberRecentFile(
+        RecentKind.room,
+        outputFile,
+        name: recentRoomName,
+      );
       // The project's cached read of this room is now the stale one.
       _projectRooms.clear();
       notifyListeners();
@@ -12231,6 +12327,7 @@ class AppStateProvider extends ChangeNotifier {
       // Anything a crash left behind for THIS project, offered back the same
       // way a room's is.
       checkForProjectRecovery();
+      await rememberRecentFile(RecentKind.project, file, name: project.name);
       _projectDocumentReplaced();
       return '';
     } catch (e, stack) {
@@ -12343,6 +12440,9 @@ class AppStateProvider extends ChangeNotifier {
       currentProjectPath = target;
       projectDirty = false;
       clearProjectRecovery();
+      // Including a Save As, which is how a job ends up in a different folder:
+      // the list follows the file the session is now working from.
+      await rememberRecentFile(RecentKind.project, target, name: project.name);
       AppLogger.logInfo('Project saved to $target.');
       notifyListeners();
       return '';
@@ -15506,7 +15606,10 @@ class AppStateProvider extends ChangeNotifier {
   /// the room being switched to, and asking would be noise on every hop.
   ///
   /// Returns the message to show, or '' when it worked.
-  Future<String> openProjectRoomRef(ProjectRoomRef ref) async {
+  Future<String> openProjectRoomRef(
+    ProjectRoomRef ref, {
+    bool remember = true,
+  }) async {
     final absolute = BuildingProject.resolvePath(
       ref.configPath,
       currentProjectPath,
@@ -15516,7 +15619,7 @@ class AppStateProvider extends ChangeNotifier {
       return 'The config is not at $absolute.';
     }
 
-    final ok = await openConfigAtPath(absolute);
+    final ok = await openConfigAtPath(absolute, remember: remember);
     if (!ok) return 'Could not open $absolute - see the log.';
 
     loadAvFlowForCurrentConfig();
