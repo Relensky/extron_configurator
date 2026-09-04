@@ -1420,6 +1420,88 @@ const List<HelpTopic> kHelpTopics = [
         'The sheet zooms and fits, because it is read both for a figure and '
         'for its shape.',
   ),
+  HelpTopic(
+    title: 'What to put aside each year',
+    section: 'The refresh plan',
+    where: 'Lifecycle tab, Project tab → Lifecycle, and the campus report',
+    plain:
+        'A refresh plan is a few big years with quiet ones between them. This '
+        'is the same plan drawn as a line, with the flat figure under it: '
+        'what it would cost a year to fund it evenly instead of asking for '
+        'it in lumps.',
+    keywords: [
+      'chart',
+      'graph',
+      'line',
+      'level',
+      'set aside',
+      'sinking fund',
+      'save',
+      'per year',
+      'annual',
+      'spread',
+      'phasing',
+      'peak',
+      'spike',
+    ],
+    body:
+        'The grid says which year and how much. The line says which year is '
+        'the bad one, which is the thing a room, a building or an estate is '
+        'usually being read for - and hovering any point on it names what is '
+        'in that year.\n\n'
+        'THE DASHED LINE IS THE OTHER HALF OF THE QUESTION. It is what the '
+        'same plan costs a year if the peaks are pushed off and the whole of '
+        'it is spread evenly from today to the end of the plan. The gap '
+        'between the spike and the flat line is the size of the deferral '
+        'being argued about, and the flat figure is printed beside the totals '
+        'as "to set aside each year".\n\n'
+        'It is worked out over the years still AHEAD. Dividing a plan by '
+        'twenty years when twelve of them are behind you produces a '
+        'comfortable figure nobody can actually spend to.\n\n'
+        'Both the line and the figure are on the picture, so the sheet handed '
+        'to a budget meeting carries the shape and the ask rather than a grid '
+        'of cells somebody has to add up.',
+  ),
+  HelpTopic(
+    title: 'Modelling a different refresh cycle',
+    section: 'The refresh plan',
+    where: 'The Cycle picker on the Lifecycle tab, Project tab → Lifecycle, '
+        'and the campus report',
+    plain:
+        'See what a room, a building or the whole estate would cost if '
+        'everything were replaced every so many years, whatever life is '
+        'recorded against it. Nothing is saved and one press puts it back.',
+    keywords: [
+      'cycle',
+      'what if',
+      'restate',
+      'assumed',
+      'ten year',
+      'refresh cycle',
+      'model',
+      'scenario',
+      'custom year',
+    ],
+    body:
+        'The life on each position is a decision somebody made, and editing '
+        'it across forty rooms to see what twelve years looks like is not a '
+        'what-if - it is a rewrite with no way back. So the plan is RESTATED '
+        'instead: every sheet, grid, chart and picture is rebuilt as though '
+        'everything were on the cycle you asked for.\n\n'
+        'The picker offers six common cycles and "Type a year...", which '
+        'takes any number of years up to 60 - a department funding a '
+        'nine-year rotation asks for nine rather than picking the nearest '
+        'entry on somebody else\'s list.\n\n'
+        'ONE SETTING, THREE SCREENS. A room, its building and the estate are '
+        'the same question at three sizes, so a cycle picked on one is the '
+        'cycle the others read at - they can never end up modelling the same '
+        'room two different ways.\n\n'
+        'NOTHING IS WRITTEN ANYWHERE. A note above the sheet says what is '
+        'being assumed and what it moved, anything exported while it is on '
+        'says so on its face, and "As recorded" puts the plan back. One thing '
+        'is never restated: a position somebody has taken off the refresh '
+        'cycle stays off it.',
+  ),
 
   // ---------------------------------------------------------------------------
   //  THE ESTATE
@@ -1613,7 +1695,18 @@ const List<HelpTopic> kHelpTopics = [
         'The families are: source boxes, source devices, display outputs, '
         'destination boxes, capture, extenders, USB switchers, the expansion '
         'bus and outlet names. Adding a kind of source the app has never heard '
-        'of is a rule, not a build.',
+        'of is a rule, not a build.\n\n'
+        'A destination box can also say what it is NOT drawn alongside. The '
+        'room\'s speakers are the reason: in a room with no audio processor '
+        'the amplifier is inside the switcher and the run really is a lead to '
+        'the ceiling, and in a room with one the program audio never leaves '
+        'the pair as analog. So that rule reads "speakers, unless this room '
+        'has a DSP" rather than being a condition buried in the code - and '
+        'the model on it is yours to change, so a room fitted with surface '
+        'speakers draws those instead.\n\n'
+        'A box the drawing already has is never drawn twice, however it has '
+        'since been renamed or re-modelled, and one you delete on purpose '
+        'stays deleted.',
   ),
   HelpTopic(
     title: 'The schema editor',

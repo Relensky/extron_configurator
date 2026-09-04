@@ -1173,6 +1173,54 @@ A room is rarely one date - the projector went in in 2016 and the displays in
 in the first. The sheet zooms and fits, because it is read both for a figure and
 for its shape.
 
+## The line under the grid, and what to set aside
+
+The grid says which year and how much. It cannot show a **shape** - forty rows
+of cells have to be read across before the one bad year in them is visible - so
+the same figures are drawn as a line under it, on all three screens: a room, a
+building and the estate. Hover any point and it names what is in that year.
+
+The dashed line across it is the other half of the question. A refresh plan is a
+demand curve, and a demand curve with one bad year in it is the reason phasing
+exists, so the chart also draws what the **same plan** would cost every year if
+the peaks were pushed off and the whole of it spread evenly from today to the end
+of the plan. The gap between the spike and the flat line is the size of the
+deferral being argued about.
+
+That flat figure is printed beside the totals as **to set aside each year**. It
+is the one number on the sheet somebody writes down: not "what does the refresh
+cost" but "what should we be saving". It is worked out over the years still
+**ahead** - dividing a plan by twenty years when twelve of them are already gone
+produces a comfortable figure nobody can spend to.
+
+Both the line and the figure are on the picture, so a sheet handed to a budget
+meeting carries the shape and the ask rather than a grid of cells somebody has to
+add up.
+
+## Modelling a different cycle
+
+"What if we did every room at ten years" is the question every capital planning
+meeting asks, and answering it by editing the life on forty rooms is not a
+what-if - it is a rewrite with no way back.
+
+So the plan is **restated** instead. The **Cycle** picker on the sheet's own
+header row rebuilds every grid, chart, picture and spreadsheet as though
+everything were on the cycle you asked for, whatever life is recorded against it.
+It offers six common cycles and **Type a year...**, which takes any number of
+years up to 60 - a department funding a nine-year rotation asks for nine rather
+than picking the nearest entry on somebody else's list.
+
+One setting, three screens: a room, its building and the estate are the same
+question at three sizes, so a cycle picked on one is the cycle the others read
+at.
+
+Nothing is written anywhere. A note above the sheet says what is being assumed
+and what it moved, anything exported while it is on says so on its face, and
+**As recorded** puts the plan back in one press. One thing is never restated: a
+position somebody has taken off the refresh cycle stays off it - that is a
+statement that the bracket is not on the plan at all, not a life figure to be
+argued with.
+
 # The campus
 
 Several buildings on one sheet. Add the project files, or point it at a folder,
