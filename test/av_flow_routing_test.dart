@@ -279,8 +279,14 @@ void main() {
     expect(tie(plan, 'input_pc'), 'HDMI OUT -> HDMI 1');
     expect(tie(plan, 'input_wireless'), 'HDMI OUT -> HDMI 3');
     expect(tie(plan, 'input_hdmi'), 'HDMI OUT -> HDMI 4');
-    expect(tie(plan, 'input_usb'), 'USB-C OUT -> HDMI 5');
     expect(tie(plan, 'input_doc_cam'), 'HDMI OUT -> HDMI 6');
+    // The USB-C plate is the room's one FORMAT mismatch: a USB-C lead does
+    // not go into an HDMI input, so the run is a USB-C HD 101 and two leads.
+    expect(ties(plan, 'input_usb'), ['USB-C OUT -> USB-C', 'HDMI -> HDMI 5']);
+    expect(
+      plan.newNodes.where((n) => n.model == 'USB-C HD 101'),
+      hasLength(1),
+    );
     // The cameras are on DTP inputs and a camera has an HDMI socket and
     // nothing else, so each of those two runs is a transmitter and two leads.
     expect(ties(plan, 'input_aud_cam'),
@@ -381,7 +387,9 @@ void main() {
 
     expect(tie(plan, 'input_pc'), 'HDMI OUT -> HDMI 001');
     expect(tie(plan, 'input_wireless'), 'HDMI OUT -> HDMI 003');
-    expect(tie(plan, 'input_usb'), 'USB-C OUT -> HDMI 005');
+    // The USB-C plate goes through a USB-C HD 101 — see BSS 239 above.
+    expect(
+        ties(plan, 'input_usb'), ['USB-C OUT -> USB-C', 'HDMI -> HDMI 005']);
     // The HDMI plate and the camera are both on DTP inputs here.
     expect(ties(plan, 'input_hdmi'), ['HDMI OUT -> HDMI', 'DTP -> DTP IN 007']);
     expect(ties(plan, 'input_inst_cam'),

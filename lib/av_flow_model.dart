@@ -1257,6 +1257,25 @@ class AvNode {
 //  CABLES
 // ---------------------------------------------------------------------------
 
+/// A run named by the two connectors it joins, whichever way round they were
+/// drawn.
+///
+/// The cable's own id is no use for remembering a run across a redraw — it is
+/// handed out by a counter, so the same lead drawn again is a different id.
+/// The pair of sockets is the run: there is only ever one lead between two
+/// connectors. Sorted so that A→B and B→A are one key, because they are one
+/// cable.
+String avCableKey(
+  String fromNodeId,
+  String fromPortId,
+  String toNodeId,
+  String toPortId,
+) {
+  final a = '$fromNodeId.$fromPortId';
+  final b = '$toNodeId.$toPortId';
+  return a.compareTo(b) <= 0 ? '$a>$b' : '$b>$a';
+}
+
 /// One cable run between two ports.
 class AvCable {
   final String id;

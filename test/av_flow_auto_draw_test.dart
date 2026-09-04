@@ -198,6 +198,131 @@ void main() {
     });
   });
 
+  group('the format converters', () {
+    /// The laptop plate, as a VGA plate on an HDMI input.
+    AppStateProvider vgaPlate() {
+      final p = room();
+      final setup = p.roomConfig['SYSTEM_SETUP'] as Map;
+      setup['input_usb'] = '5';
+      setup['gui_usb_or_vga'] = 'VGA';
+      return p;
+    }
+
+    test('a VGA plate on an HDMI input is a converter and two leads', () {
+      final p = vgaPlate();
+      autoDrawRoutingFromConfig(p);
+
+      // The plate itself: a VGA socket and nothing else.
+      final plate = p.avNodeById(avAutoNodeId('input_usb'));
+      expect(plate?.model, 'VGA Laptop');
+
+      // A VGA lead does not go into an HDMI input at any length, so the run
+      // is the plate, the box that converts it, and the matrix.
+      final box = p.avNodeById(avAutoNodeId('input_usb_tx'));
+      expect(box, isNotNull, reason: 'the run needs a box between it');
+      expect(box!.model, 'DVC RGB-HD A');
+
+      expect(runsFrom(p, plate!.id),
+          contains('VGA OUT -> ${box.label} (VGA)'));
+      expect(landsOn(p, box.id), 'HDMI 5');
+
+      // And nothing was drawn straight through beside it.
+      expect(
+        p.avCables.where((c) =>
+            c.fromNodeId == plate.id && c.toNodeId == 'SWITCHERDEVICE_1'),
+        isEmpty,
+      );
+    });
+
+    test('a USB-C plate gets the USB-C HD 101', () {
+      final p = room();
+      final setup = p.roomConfig['SYSTEM_SETUP'] as Map;
+      setup['input_usb'] = '5';
+      setup['gui_usb_or_vga'] = 'USB';
+      autoDrawRoutingFromConfig(p);
+
+      final box = p.avNodeById(avAutoNodeId('input_usb_tx'));
+      expect(box?.model, 'USB-C HD 101');
+      expect(landsOn(p, box!.id), 'HDMI 5');
+    });
+
+    test('a converter somebody drew by hand is the one that gets used', () {
+      // THE CASE THIS MATTERS FOR. A room documented before the rule existed
+      // has the box on the canvas already, under whatever it was called when
+      // somebody dragged it there. Recognized by what it DOES - takes VGA,
+      // sends HDMI, has no config block - so the pass cables through it
+      // instead of buying a second one.
+      final p = vgaPlate();
+      final plate = p.addAvNode(AvNode(
+        id: avAutoNodeId('input_usb'),
+        label: 'Laptop at the VGA plate',
+        model: 'VGA Laptop',
+        pos: Offset.zero,
+        ports: const [
+          AvPort(
+            id: 'out_1',
+            label: 'VGA OUT',
+            signal: SignalType.vga,
+            direction: PortDirection.output,
+            side: PortSide.right,
+          ),
+        ],
+      ));
+      final byHand = p.addAvNode(AvNode(
+        id: 'AVNODE_9',
+        label: 'VGA to HDMI',
+        model: '',
+        pos: Offset.zero,
+        ports: const [
+          AvPort(
+            id: 'in_1',
+            label: 'VGA IN',
+            signal: SignalType.vga,
+            direction: PortDirection.input,
+            side: PortSide.left,
+          ),
+          AvPort(
+            id: 'out_1',
+            label: 'HDMI OUT',
+            signal: SignalType.hdmi,
+            direction: PortDirection.output,
+            side: PortSide.right,
+          ),
+        ],
+      ));
+      p.addAvCable(
+        fromNodeId: plate.id,
+        fromPortId: 'out_1',
+        toNodeId: byHand.id,
+        toPortId: 'in_1',
+        signal: SignalType.vga,
+      );
+
+      autoDrawRoutingFromConfig(p);
+
+      expect(p.avNodes.where((n) => n.model == 'DVC RGB-HD A'), isEmpty,
+          reason: 'the room already has the box this run needs');
+      expect(landsOn(p, byHand.id), 'HDMI 5');
+    });
+
+    test('a mismatch with no rule for it is reported, not drawn', () {
+      final p = vgaPlate();
+      p.applyFlowRules(p.flowRules.copyWith(extenders: [
+        for (final r in p.flowRules.extenders)
+          if (r.id != 'vga_to_hdmi') r,
+      ]));
+
+      final plan = planRoutingFromConfig(p);
+
+      expect(plan.cables.where((c) => c.configKey == 'input_usb'), isEmpty);
+      final left =
+          plan.unresolved.singleWhere((u) => u.configKey == 'input_usb');
+      expect(left.reason, contains('converter'));
+      expect(left.reason, contains('VGA'));
+      expect(left.reason, contains('HDMI'));
+    });
+  });
+
   group('the power controller', () {
     /// The box an outlet's mains lead lands on.
     ///
@@ -754,6 +879,36 @@ void main() {
       expect(p.avNodeById(avAutoNodeId('output_audio'))?.model, 'SM 28 Black');
     });
 
+    test('an SA amplifier output runs at speaker level to the ceiling', () {
+      // THE AMP TERMINALS ARE NOT A LINE OUTPUT. On an SA build the amplifier
+      // is inside the switcher and its SA OUT is speaker level — the catalog
+      // used to file it as analog audio, which put it in among the AUDIO
+      // outputs when `output_audio` went looking for the number and left the
+      // speakers landing on a line socket.
+      final p = room();
+      final setup = p.roomConfig['SYSTEM_SETUP'] as Map;
+      setup['output_audio'] = '1';
+      (p.roomConfig['SWITCHERDEVICE_1'] as Map)['model'] =
+          'DTP CrossPoint 84 IPCP SA';
+      final template = p.avDeviceLibrary.resolve(
+          configKey: 'SWITCHERDEVICE_1', model: 'DTP CrossPoint 84 IPCP SA');
+      p.updateAvNode(p.avNodeById('SWITCHERDEVICE_1')!.copyWith(
+        model: 'DTP CrossPoint 84 IPCP SA',
+        ports: withPowerInlet(template.ports, template.powerInput),
+      ));
+      p.avRoutedFingerprint = '';
+      autoDrawRoutingFromConfig(p);
+
+      final speakers = p.avNodeById(avAutoNodeId('output_audio'));
+      expect(speakers, isNotNull);
+
+      final lead = p.avCables.singleWhere((c) => c.toNodeId == speakers!.id);
+      expect(p.avNodeById('SWITCHERDEVICE_1')!.portById(lead.fromPortId)!.label,
+          startsWith('SA OUT'));
+      expect(lead.signal, SignalType.speaker);
+      expect(speakers!.portById(lead.toPortId)?.signal, SignalType.speaker);
+    });
+
     test('speakers taken off the canvas stay off it', () {
       final p = room();
       (p.roomConfig['SYSTEM_SETUP'] as Map)['output_audio'] = '1';
@@ -851,6 +1006,63 @@ void main() {
 
       expect(p.avNodeById(avAutoNodeId('input_dvd')), isNotNull);
       expect(p.avCables.length, greaterThan(before));
+    });
+
+    test('a run deleted by hand is not drawn again', () {
+      // THE OTHER HALF OF "the diagram is a document". A box deleted by hand
+      // stays deleted; a RUN deleted by hand used to come straight back the
+      // next time anything in the config changed, and the usual reason for
+      // deleting one is that the drawing knows something the config does not
+      // — a converter patched in between two ends the config states directly.
+      final p = room();
+      autoDrawRoutingFromConfig(p);
+
+      final lead = p.avCables
+          .firstWhere((c) => c.fromNodeId == avAutoNodeId('input_pc'));
+      p.removeAvCable(lead.id);
+
+      // Something else in the config changes, so the pass runs again.
+      (p.roomConfig['SYSTEM_SETUP'] as Map)['input_dvd'] = '2';
+      autoDrawRoutingFromConfig(p);
+
+      expect(
+        p.avCables.where((c) => c.fromNodeId == avAutoNodeId('input_pc')),
+        isEmpty,
+        reason: 'the run somebody deleted is a decision, not an omission',
+      );
+      // And the pass still did its other work.
+      expect(p.avNodeById(avAutoNodeId('input_dvd')), isNotNull);
+    });
+
+    test('"Place all from config" draws the deleted runs again', () {
+      final p = room();
+      autoDrawRoutingFromConfig(p);
+      final lead = p.avCables
+          .firstWhere((c) => c.fromNodeId == avAutoNodeId('input_pc'));
+      p.removeAvCable(lead.id);
+
+      // The opposite instruction: draw the config, all of it, again.
+      p.clearAvDismissedDevices();
+      autoDrawRoutingFromConfig(p);
+
+      expect(landsOn(p, avAutoNodeId('input_pc')), 'HDMI 1');
+    });
+
+    test('a deleted run drawn again by hand is no longer deleted', () {
+      final p = room();
+      autoDrawRoutingFromConfig(p);
+      final lead = p.avCables
+          .firstWhere((c) => c.fromNodeId == avAutoNodeId('input_pc'));
+      p.removeAvCable(lead.id);
+      p.addAvCable(
+        fromNodeId: lead.fromNodeId,
+        fromPortId: lead.fromPortId,
+        toNodeId: lead.toNodeId,
+        toPortId: lead.toPortId,
+        signal: lead.signal,
+      );
+
+      expect(p.avDismissedCables, isEmpty);
     });
 
     test('a device swapped for another model lets it run again too', () {

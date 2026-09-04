@@ -119,6 +119,9 @@ void main() {
 
     test('a family the file leaves out keeps its built-in rules', () {
       final rules = FlowRules.fromJson({
+        // This edition's stamp, so the file is taken at its word - see the
+        // back-fill test below for what an older one gets.
+        '__rulesVersion': kFlowRulesVersion,
         'extenders': {
           'rx': {
             'switcherSignal': 'hdbaset',
@@ -205,14 +208,20 @@ void main() {
 
       final plan = planRoutingFromConfig(p);
 
-      // Without a rule the two ends are joined directly — which is the old
-      // bug, so this is the check that a shop removing the rule is choosing
-      // that, rather than getting it by accident.
+      // A DTP output and an HDMI socket, with no rule left saying what goes
+      // between them. Nothing is invented and nothing is drawn: a twisted
+      // pair lead into an HDMI connector is a lead nobody can buy, and an
+      // estimate taken off it is missing whatever would have made it work.
+      // The tie is reported instead, with the two signals named, so somebody
+      // can put the rule back or draw the run by hand.
       expect(p.avNodeById(avAutoNodeId('output_proj_1_rx')), isNull);
-      expect(
-        plan.cables.where((c) => c.configKey == 'output_proj_1'),
-        hasLength(1),
-      );
+      expect(plan.cables.where((c) => c.configKey == 'output_proj_1'), isEmpty);
+
+      final left = plan.unresolved
+          .singleWhere((u) => u.configKey == 'output_proj_1');
+      expect(left.reason, contains('converter'));
+      expect(left.reason, contains('HDBaseT'));
+      expect(left.reason, contains('HDMI'));
     });
 
     test('the USB order is the rule, port for port', () {
@@ -487,6 +496,35 @@ void main() {
       expect(
         deleted.destinationBoxes.map((r) => r.configKey),
         ['output_monitor_1'],
+      );
+
+      // The same, for the format converters, which arrived at version 3. A
+      // saved file whose extenders are the two DTP boxes and nothing else is
+      // a shop that never had the converters, not one that threw them out.
+      final beforeConverters = FlowRules.fromJson({
+        'extenders': {
+          'rx': {
+            'switcherSignal': 'hdbaset',
+            'farSignal': 'hdmi',
+            'onOutput': true,
+            'model': 'DTP HDMI 4K 230 Rx',
+            'label': 'Room-end DTP receiver',
+          },
+        },
+      });
+      expect(
+        beforeConverters.extenders.map((r) => r.id),
+        containsAll(['rx', 'vga_to_hdmi', 'usbc_to_hdmi']),
+      );
+      expect(
+        beforeConverters
+            .extenderFor(
+              switcherSignal: SignalType.hdmi,
+              farSignal: SignalType.vga,
+              onOutput: false,
+            )
+            ?.model,
+        'DVC RGB-HD A',
       );
     });
 

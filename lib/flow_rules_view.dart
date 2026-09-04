@@ -16,7 +16,8 @@ import 'side_pane.dart';
 ///  switcher input its number names, every display on the output that feeds
 ///  it, the boxes the config never mentions because everybody knows they are
 ///  there — the receiver behind the display, the transmitter beside the
-///  camera, the leads into the USB switcher. Which box, and when, used to be
+///  camera, the converter between a VGA plate and an HDMI input, the leads
+///  into the USB switcher. Which box, and when, used to be
 ///  constants compiled into the routing pass, so a new model or a differently
 ///  wired room meant a code change.
 ///
@@ -47,9 +48,11 @@ enum _RuleSection {
   captureDestinations('Capture', Icons.cameraswitch,
       'Where the capture feed lands - whichever of these boxes this room was '
           'built with.'),
-  extenders('Extenders', Icons.settings_ethernet,
+  extenders('Extenders and converters', Icons.settings_ethernet,
       'When the two ends of a run do not take the same cable, this is the box '
-          'that goes between them.'),
+          'that goes between them - a DTP receiver for the distance, a VGA or '
+          'USB-C converter for the format. A pair with no rule here is '
+          'reported rather than drawn.'),
   usbSwitchers('USB switchers', Icons.usb,
       'What is plugged into each port of a USB switcher. Nothing in the '
           'config says, so this does.'),
@@ -788,10 +791,12 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                     items: const [
                       DropdownMenuItem(
                           value: true,
-                          child: Text('An output - a receiver at the display')),
+                          child: Text(
+                              'An output - a box at the display end')),
                       DropdownMenuItem(
                           value: false,
-                          child: Text('An input - a transmitter at the source')),
+                          child:
+                              Text('An input - a box at the source end')),
                     ],
                     onChanged: (v) => setLocal(() => onOutput = v ?? true),
                   ),

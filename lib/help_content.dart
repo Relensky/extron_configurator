@@ -1733,6 +1733,9 @@ const List<HelpTopic> kHelpTopics = [
       'rule',
       'extender',
       'usb switcher',
+      'converter',
+      'vga',
+      'usb-c',
       'source',
       'destination',
       'auto draw',
@@ -1741,6 +1744,14 @@ const List<HelpTopic> kHelpTopics = [
         'How a room turns into a drawing. A rule says which box a config key '
         'means, what goes between two ends that do not match, and what hangs '
         'off a USB switcher.\n\n'
+        'The extenders family covers both reasons a run needs a box in the '
+        'middle. Distance is the old one - a twisted-pair output lands on a '
+        'receiver at the display. FORMAT is the other: a VGA plate on an HDMI '
+        'input is a VGA to HDMI converter, a USB-C plate is a USB-C HD 101, '
+        'and the same goes for DisplayPort and SDI. Two ends that do not '
+        'match and have no rule between them are reported rather than joined '
+        'by a lead nobody can buy - so the gap shows up on Draw the routing '
+        'from config instead of in an estimate that is short a box.\n\n'
         'The families are: source boxes, source devices, display outputs, '
         'destination boxes, capture, extenders, USB switchers, the expansion '
         'bus and outlet names. Adding a kind of source the app has never heard '
@@ -1755,7 +1766,12 @@ const List<HelpTopic> kHelpTopics = [
         'speakers draws those instead.\n\n'
         'A box the drawing already has is never drawn twice, however it has '
         'since been renamed or re-modelled, and one you delete on purpose '
-        'stays deleted.',
+        'stays deleted. So does a RUN you delete: the drawing knowing '
+        'something the config does not - a converter patched in by hand - is '
+        'the usual reason for deleting one, and putting it back beside the '
+        'run that replaced it helps nobody. Place all from config and '
+        'Recreate from config are the two ways of asking for all of it '
+        'again.',
   ),
   HelpTopic(
     title: 'The schema editor',

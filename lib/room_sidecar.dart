@@ -88,6 +88,7 @@ const Map<RoomSidecarPart, List<String>> kRoomSidecarKeys = {
     'nodes',
     'cables',
     'dismissedDevices',
+    'dismissedCables',
     'signalColors',
     'roomMode',
     // The backdrop belongs to the signal flow canvas, not to the floor plans:

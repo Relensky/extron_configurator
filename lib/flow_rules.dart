@@ -47,7 +47,11 @@ import 'room_locations.dart';
 ///  * EXTENDERS ([FlowExtenderRule]) — "a switcher connector carrying X, a far
 ///    end that takes Y, and the box that goes between them". Both the receiver
 ///    on an output and the transmitter on an input are this one rule read in
-///    the two directions.
+///    the two directions, and so is every FORMAT CONVERTER: a VGA plate on an
+///    HDMI input is a DVC RGB-HD A, a USB-C plate is a USB-C HD 101. A pair of
+///    ends this family does not cover and that do not go straight together
+///    ([flowSignalsInterchange]) is reported rather than drawn as a lead
+///    nobody can buy.
 ///
 ///  * USB SWITCHERS ([FlowUsbRule]) — which peripheral lands on each DEVICE
 ///    port of a USB switcher, and which machine each HOST port feeds. Nothing
@@ -89,11 +93,26 @@ import 'room_locations.dart';
 /// on every one of those installs would quietly have stopped drawing the run
 /// to the ceiling. Version 2 is that rule arriving; a file older than it gets
 /// it filled in, and a file newer than it is taken at its word.
-const int kFlowRulesVersion = 2;
+const int kFlowRulesVersion = 3;
 
 /// The version at which each rule the app back-fills was introduced.
 /// A rule missing from a file written BEFORE its version was never a choice.
 const Map<String, int> kFlowRuleAddedIn = {'output_audio': 2};
+
+/// The same, for the boxes in [FlowRules.extenders].
+///
+/// Version 3 is the format converters arriving - the run from a VGA plate to
+/// an HDMI input, and the four beside it. Before it, an extender file was a
+/// file about twisted pair and nothing else, so a saved rule book with two
+/// entries in it is a shop that never had the converters rather than a shop
+/// that deleted them.
+const Map<String, int> kFlowExtenderAddedIn = {
+  'vga_to_hdmi': 3,
+  'usbc_to_hdmi': 3,
+  'dp_to_hdmi': 3,
+  'sdi_to_hdmi': 3,
+  'hdmi_to_dp': 3,
+};
 
 /// How many numbered blocks of a family a rule looks through when it names one
 /// by its prefix ('DSPDEVICE_'). The device counts in these rooms are single
@@ -145,6 +164,32 @@ Set<SignalType> flowSignalsFromName(String name) =>
       'usb' => const {SignalType.usbData},
       _ => kFlowVideoSignals,
     };
+
+/// The signals that go straight into one another, with nothing in between.
+///
+/// A run whose two ends disagree is normally a box the config forgot to
+/// mention: a VGA plate on an HDMI input is a converter, not a lead. But not
+/// every disagreement is. A line output landing on a MIC/LINE input is one
+/// cable and always was — the connector takes either level and the trim on the
+/// front panel is how the difference is dealt with — and a room that quoted a
+/// converter for it would be quoting a box nobody sells.
+///
+/// So the families here are the exceptions, and everything outside them needs
+/// a [FlowExtenderRule] or gets reported. Speaker level is deliberately NOT in
+/// with the line audio: an amplifier's terminals into a line input is the one
+/// audio mistake that costs a box, and it is worth saying out loud.
+const List<Set<SignalType>> kFlowInterchangeable = [
+  {SignalType.analogAudio, SignalType.micLine},
+];
+
+/// True when a lead can run from [from] to [to] with no box between them.
+bool flowSignalsInterchange(SignalType from, SignalType to) {
+  if (from == to) return true;
+  for (final family in kFlowInterchangeable) {
+    if (family.contains(from) && family.contains(to)) return true;
+  }
+  return false;
+}
 
 /// One `|`-separated reference to a box in the room — see the file header.
 class FlowTarget {
@@ -570,6 +615,63 @@ class FlowRules {
             label: 'DTP transmitter',
             zone: 'lectern',
           ),
+          // THE FORMAT CONVERTERS. Same rule, same shape, a different reason
+          // for the box: twisted pair needs a receiver because of the
+          // DISTANCE, and these need one because of the FORMAT. A VGA plate
+          // does not go into an HDMI input at any length.
+          //
+          // All five run toward HDMI or away from it, because that is what
+          // the switchers in these rooms take and give. A pair with no rule
+          // here is not drawn as a lead that cannot be bought - it is
+          // reported, so somebody picks the box and adds it. See
+          // [flowSignalsInterchange].
+          FlowExtenderRule(
+            id: 'vga_to_hdmi',
+            switcherSignal: 'hdmi',
+            farSignal: 'vga',
+            onOutput: false,
+            model: 'DVC RGB-HD A',
+            label: 'VGA to HDMI converter',
+            zone: 'lectern',
+          ),
+          FlowExtenderRule(
+            id: 'usbc_to_hdmi',
+            switcherSignal: 'hdmi',
+            farSignal: 'usbC',
+            onOutput: false,
+            model: 'USB-C HD 101',
+            label: 'USB-C to HDMI interface',
+            zone: 'lectern',
+          ),
+          FlowExtenderRule(
+            id: 'dp_to_hdmi',
+            switcherSignal: 'hdmi',
+            farSignal: 'displayPort',
+            onOutput: false,
+            model: 'DPH 101 4K PLUS',
+            label: 'DisplayPort to HDMI converter',
+            zone: 'lectern',
+          ),
+          FlowExtenderRule(
+            id: 'sdi_to_hdmi',
+            switcherSignal: 'hdmi',
+            farSignal: 'sdi',
+            onOutput: false,
+            model: 'DSC 3G-HD A',
+            label: 'SDI to HDMI converter',
+            zone: 'lectern',
+          ),
+          // The one that goes the other way: a panel with only a DisplayPort
+          // socket on an HDMI output.
+          FlowExtenderRule(
+            id: 'hdmi_to_dp',
+            switcherSignal: 'hdmi',
+            farSignal: 'displayPort',
+            onOutput: true,
+            model: 'HDP 101 4K',
+            label: 'HDMI to DisplayPort converter',
+            zone: 'wall',
+          ),
         ],
         usbSwitchers: const [
           FlowUsbRule(
@@ -641,14 +743,25 @@ class FlowRules {
           devices('captureDestinations', rules.captureDestinations),
       extenders: extendersRaw is! Map
           ? rules.extenders
-          : [
-              for (final e in extendersRaw.entries)
-                if (!e.key.toString().startsWith('__') && e.value is Map)
-                  FlowExtenderRule.fromJson(
-                    e.key.toString(),
-                    (e.value as Map).map((k, v) => MapEntry(k.toString(), v)),
-                  ),
-            ],
+          : () {
+              final read = [
+                for (final e in extendersRaw.entries)
+                  if (!e.key.toString().startsWith('__') && e.value is Map)
+                    FlowExtenderRule.fromJson(
+                      e.key.toString(),
+                      (e.value as Map).map((k, v) => MapEntry(k.toString(), v)),
+                    ),
+              ];
+              // A converter this file is simply too old to have had an
+              // opinion about - see [kFlowExtenderAddedIn].
+              return [
+                ...read,
+                for (final builtIn in rules.extenders)
+                  if (writtenBy < (kFlowExtenderAddedIn[builtIn.id] ?? 0) &&
+                      !read.any((r) => r.id == builtIn.id))
+                    builtIn,
+              ];
+            }(),
       usbSwitchers: usbRaw is! List
           ? rules.usbSwitchers
           : [
@@ -674,9 +787,11 @@ class FlowRules {
         '__readme':
             'AV flow rules for the Room Config Builder: which box each config '
                 'key means, what goes between two ends that do not take the '
-                'same cable, and what hangs off a USB switcher. Edited on the '
-                'Flow Rules tab. A family left out of this file keeps the '
-                "app's built-in rules.",
+                'same cable - a DTP receiver for the distance, a format '
+                'converter for a VGA or USB-C source on an HDMI input - and '
+                'what hangs off a USB switcher. Edited on the Flow Rules tab. '
+                "A family left out of this file keeps the app's built-in "
+                'rules.',
         // Which edition of the rule book wrote this - see [kFlowRulesVersion].
         // It is how a rule somebody DELETED is told from one that did not
         // exist yet, and nothing else reads it.

@@ -4553,6 +4553,21 @@ class AppStateProvider extends ChangeNotifier {
   /// re-seeding doesn't keep dragging them back.
   final Set<String> avDismissedDevices = {};
 
+  /// The runs the user deliberately deleted, as [avCableKey] pairs of
+  /// connectors, so the routing pass doesn't keep drawing them again.
+  ///
+  /// The same idea as [avDismissedDevices] and for the same reason. A tie the
+  /// config states is drawn once; deleting it says the config is not the whole
+  /// story about that run, and the usual reason is a box the drawing has and
+  /// the config does not — a converter patched in by hand, a plate swapped for
+  /// another. Without this, the next time anything in the config changed the
+  /// pass would put the direct lead straight back beside the run that
+  /// replaced it, and there was no way to tell it not to.
+  ///
+  /// Cleared by **Place all from config** and **Recreate from config**, which
+  /// are the two ways of saying "draw the config, all of it, again".
+  final Set<String> avDismissedCables = {};
+
   /// The config the automatic routing pass was last run against, as a
   /// fingerprint of everything that pass reads — see [routingFingerprint].
   ///
@@ -5422,14 +5437,20 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Forgets which config devices were taken off the canvas by hand, so the
-  /// next seed places every one of them. This is what "Place all from config"
-  /// means, as opposed to the automatic first-visit seed, which respects the
-  /// removals.
+  /// Forgets which config devices and which runs were taken off the canvas by
+  /// hand, so the next pass places and draws every one of them. This is what
+  /// "Place all from config" means, as opposed to the automatic first-visit
+  /// seed, which respects the removals.
   void clearAvDismissedDevices() {
-    if (avDismissedDevices.isEmpty) return;
+    if (avDismissedDevices.isEmpty && avDismissedCables.isEmpty) return;
     _pushAvUndo('Place all from config', _flowScope);
     avDismissedDevices.clear();
+    avDismissedCables.clear();
+    // The routing pass skips a room whose config it has already read, so
+    // forgetting the removals has to let it read this one again or the runs
+    // that were just un-dismissed would not come back until something else
+    // changed.
+    avRoutedFingerprint = '';
     notifyListeners();
   }
 
@@ -5455,6 +5476,7 @@ class AppStateProvider extends ChangeNotifier {
     avNodes.clear();
     avCables.clear();
     avDismissedDevices.clear();
+    avDismissedCables.clear();
     // The automatic routing pass keys off this. Cleared, it runs again over
     // the room it has just been handed.
     avRoutedFingerprint = '';
@@ -5522,6 +5544,9 @@ class AppStateProvider extends ChangeNotifier {
       label: label.isEmpty ? id : label,
     );
     avCables.add(cable);
+    // Drawn again, by hand or by the routing pass, is the removal taken back.
+    avDismissedCables
+        .remove(avCableKey(fromNodeId, fromPortId, toNodeId, toPortId));
     notifyListeners();
     return cable;
   }
@@ -5541,7 +5566,19 @@ class AppStateProvider extends ChangeNotifier {
 
   void removeAvCable(String cableId) {
     _pushAvUndo('Remove cable $cableId', _flowScope);
+    final cable = avCables.where((c) => c.id == cableId).firstOrNull;
     avCables.removeWhere((c) => c.id == cableId);
+    // Remembered as a run the drawing does not want, so the routing pass
+    // leaves it alone next time it reads the config — see
+    // [avDismissedCables].
+    if (cable != null) {
+      avDismissedCables.add(avCableKey(
+        cable.fromNodeId,
+        cable.fromPortId,
+        cable.toNodeId,
+        cable.toPortId,
+      ));
+    }
     notifyListeners();
   }
 
@@ -5903,6 +5940,7 @@ class AppStateProvider extends ChangeNotifier {
     avFloorPlans.clear();
     avFlowBackground = const DiagramBackground();
     avDismissedDevices.clear();
+    avDismissedCables.clear();
     avRoutedFingerprint = '';
     avSignalColors.clear();
     avCost.clear();
@@ -6091,6 +6129,10 @@ class AppStateProvider extends ChangeNotifier {
           }
         });
       }
+      final dismissedCables = doc['dismissedCables'];
+      if (dismissedCables is List) {
+        avDismissedCables.addAll(dismissedCables.map((e) => e.toString()));
+      }
       final dismissed = doc['dismissedDevices'];
       if (dismissed is List) {
         avDismissedDevices.addAll(dismissed.map((e) => e.toString()));
@@ -6278,6 +6320,7 @@ class AppStateProvider extends ChangeNotifier {
           'flowBackground': avFlowBackground.toJson(),
         'floorPlans': avFloorPlans.map((p) => p.toJson()).toList(),
         'dismissedDevices': avDismissedDevices.toList(),
+        'dismissedCables': avDismissedCables.toList(),
         if (avRoutedFingerprint.isNotEmpty)
           'routedFrom': avRoutedFingerprint,
         'roomMode': roomMode.name,
@@ -10587,6 +10630,23 @@ class AppStateProvider extends ChangeNotifier {
     // A dismissal followed the old id; the device is in the config now, so
     // carrying it over would hide the very block that was just created.
     avDismissedDevices.remove(oldId);
+
+    // A deleted run named its two ends by node id, and one of them has just
+    // been renamed. Rewritten rather than dropped: the run somebody deleted
+    // is the same run after the box it touches gains a config block.
+    final movedCables = avDismissedCables
+        .where((k) => k.contains('$oldId.'))
+        .toList();
+    for (final key in movedCables) {
+      avDismissedCables.remove(key);
+      final ends = key.split('>');
+      if (ends.length != 2) continue;
+      String moved(String end) =>
+          end.startsWith('$oldId.') ? '$newId.${end.substring(oldId.length + 1)}' : end;
+      final a = moved(ends[0]);
+      final b = moved(ends[1]);
+      avDismissedCables.add(a.compareTo(b) <= 0 ? '$a>$b' : '$b>$a');
+    }
 
     // Callouts pointing at the device follow it, or they become dangling
     // references on the floor plan.

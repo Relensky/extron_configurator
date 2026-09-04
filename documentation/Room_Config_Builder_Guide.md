@@ -408,6 +408,9 @@ there:
   taken off it is missing a $600 box per display.
 - A **DTP transmitter** beside a camera on a DTP input, which is the same fact
   read the other way round.
+- A **format converter** wherever the two ends don't take the same cable: a VGA
+  plate on an HDMI input is a VGA to HDMI converter, a USB-C plate is a USB-C
+  HD 101. A mismatch with no rule for it is reported rather than drawn.
 - The **expansion bus** between a switcher with a DSP in it and the DMP racked
   beside it, rather than an analog lead into a socket nobody patches.
 - The **USB chain** into a USB switcher - see below.
@@ -463,7 +466,7 @@ table is four lines on the Flow Rules tab.
 - **Edit** mode lets you drag boxes, draw cables between ports, add bends to a
   run, and open any box to correct its connectors.
 - **Place all from config** adds every config device that isn't on the canvas -
-  including any you deleted earlier.
+  including any you deleted earlier - and draws the runs you deleted again.
 - **Draw the routing from config** shows you what the config's numbers would
   draw, tie by tie, with a reason for anything that didn't resolve, before it
   draws it.
@@ -473,6 +476,17 @@ table is four lines on the Flow Rules tab.
   re-reading the config is no reason to unrack the room.
 - **Room type presets** stamp a whole standard room onto the canvas, wiring and
   all, for the builds you do over and over.
+
+**The drawing is a document, not a view.** Once the room is on the canvas the
+app leaves it alone: boxes stay where you dragged them, and the routing only
+runs again when something it reads has changed - a device edited, a model
+swapped, one of the `input_`/`output_` numbers corrected, or the rules
+themselves. A box you delete stays deleted, and so does a **run** you delete.
+That last one matters when the drawing knows something the config doesn't: a
+converter patched in between two ends the config states directly, say. Deleting
+the direct lead used to be undone the next time anything else changed; now it
+sticks until you ask for all of it again with *Place all from config* or
+*Recreate from config*.
 
 ### Reading the routing report
 
@@ -487,6 +501,9 @@ what it resolved to, and - for the ones that didn't - why. Typical reasons:
   - dead config left over from when the room was bigger.
 - *"Every input on the recorder that could take 2 is already fed"* - the box has
   one socket and the config asks for two feeds.
+- *"... so the run needs a converter between them - and no flow rule says which
+  box that is"* - the two ends carry different signals. Add the rule under
+  **Flow Rules → Extenders and converters**, or draw the run by hand.
 
 # Racks, plans, cabling and money
 
@@ -1574,7 +1591,7 @@ Where the capture feed lands. A room's capture box is a MediaPort in one build
 and an AV Bridge in another, so the rule names the alternatives in the order
 they should be looked for.
 
-### Extenders
+### Extenders and converters
 
 The most useful family, and the one worth understanding.
 
@@ -1583,16 +1600,34 @@ arrives at the far end on another, this is the box that goes between them.* The
 run becomes two cables and a box on the drawing, and the box lands on the
 estimate.
 
-The shipped rules are the two directions of the same fact:
+There are two reasons a run needs one. **Distance**: a twisted-pair output
+lands on a receiver at the display. **Format**: a VGA plate does not go into an
+HDMI input at any length, and neither does a USB-C one. The shipped rules cover
+both:
 
 | At the switcher | At the far end | Which end | Box |
 |---|---|---|---|
 | `hdbaset` | `hdmi` | an output | DTP HDMI 4K 230 Rx |
 | `hdbaset` | `hdmi` | an input | DTP HDMI 4K 230 Tx |
+| `hdmi` | `vga` | an input | DVC RGB-HD A |
+| `hdmi` | `usbC` | an input | USB-C HD 101 |
+| `hdmi` | `displayPort` | an input | DPH 101 4K PLUS |
+| `hdmi` | `sdi` | an input | DSC 3G-HD A |
+| `hdmi` | `displayPort` | an output | HDP 101 4K |
 
 Before it invents anything, the app checks whether the far end takes twisted
 pair itself - a projector with an HDBaseT socket needs no receiver, and putting
-one in quotes a box the room doesn't need.
+one in quotes a box the room doesn't need. It also looks for a converter
+already on the canvas: a box with no config block that takes the one signal and
+sends the other is the box this run needs, whatever it was called when somebody
+dragged it there, so a room documented before these rules existed is cabled
+through the converter it already has rather than being sold a second one.
+
+**Two ends that don't match and have no rule between them are reported, not
+drawn.** Nothing is joined by a lead nobody can buy, so the gap shows up on
+**Draw the routing from config** - with both signals named - instead of in an
+estimate that is quietly short a box. The exception is a line output on a
+MIC/LINE input, which really is one cable.
 
 ### USB switchers
 
@@ -2150,7 +2185,9 @@ block.
 | A red outline on two fields | A consistency rule says they disagree. The red helper line says which. |
 | A device tab you didn't expect, or one missing | The family's `dev_` count on the Wizard, or the family list under **Schema → Device families**. |
 | The AV Flow is missing a lead | Press **Draw the routing from config** and read the reason. Usually a blank config number or a connector the catalog doesn't list. |
-| A run drawn straight from a DTP output into an HDMI socket | The extender rule for that pair was removed. **Flow Rules → Extenders**. |
+| A run drawn straight from a DTP output into an HDMI socket | The extender rule for that pair was removed. **Flow Rules → Extenders and converters**. |
+| A tie reported as "needs a converter between them" | The two ends carry different signals and no rule says which box converts them. Add one under **Flow Rules → Extenders and converters**, or draw the run by hand. |
+| A run you deleted keeps coming back | It shouldn't any more - a deleted run stays deleted. **Place all from config** and **Recreate from config** are the two ways of asking for all of it again. |
 | Nothing plugged into the USB switcher | The USB rule names boxes this room doesn't have, or their catalog entries have no USB connector. |
 | An outlet's mains lead isn't drawn | Two boxes answered to the name equally well, so nothing was drawn. Add an entry under **Flow Rules → Outlet names**. |
 | A box on the drawing that costs nothing | Its model isn't in the catalog. The Cost tab counts these for you. |

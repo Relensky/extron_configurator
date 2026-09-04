@@ -20612,7 +20612,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -21038,7 +21038,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -21462,7 +21462,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -21886,7 +21886,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -23098,7 +23098,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -23424,7 +23424,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -23749,7 +23749,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -24074,7 +24074,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -26016,7 +26016,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -26372,7 +26372,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -26726,7 +26726,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -27080,7 +27080,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -28162,7 +28162,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -28494,7 +28494,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -30723,7 +30723,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -31108,7 +31108,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -31491,7 +31491,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -31874,7 +31874,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -35500,7 +35500,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -35742,7 +35742,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -35983,7 +35983,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -36224,7 +36224,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -56131,7 +56131,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -56425,7 +56425,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -56808,7 +56808,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -57100,7 +57100,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -57618,7 +57618,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -59395,7 +59395,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -59637,7 +59637,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -59878,7 +59878,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -60119,7 +60119,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -66003,7 +66003,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -66593,7 +66593,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -68618,7 +68618,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -68699,7 +68699,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -68956,14 +68956,14 @@
         {
           "id": "sa_out_8_4_1",
           "label": "SA OUT 8Ω/4Ω 1",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_2",
           "label": "SA OUT 8Ω/4Ω 2",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -69248,7 +69248,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -78992,7 +78992,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -79024,7 +79024,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -79163,7 +79163,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -79195,7 +79195,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -79229,14 +79229,14 @@
         {
           "id": "sa_out_8_4_1",
           "label": "SA OUT 8Ω/4Ω 1",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_2",
           "label": "SA OUT 8Ω/4Ω 2",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -79270,7 +79270,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -79350,7 +79350,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -79427,14 +79427,14 @@
         {
           "id": "sa_out_8_4_1",
           "label": "SA OUT 8Ω/4Ω 1",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_2",
           "label": "SA OUT 8Ω/4Ω 2",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -79614,7 +79614,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -79659,7 +79659,7 @@
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -79945,28 +79945,28 @@
         {
           "id": "sa_out_8_4_1",
           "label": "SA OUT 8Ω/4Ω 1",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_2",
           "label": "SA OUT 8Ω/4Ω 2",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_3",
           "label": "SA OUT 8Ω/4Ω 3",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_4",
           "label": "SA OUT 8Ω/4Ω 4",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -80188,14 +80188,14 @@
         {
           "id": "sa_out_8_4_1",
           "label": "SA OUT 8Ω/4Ω 1",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_2",
           "label": "SA OUT 8Ω/4Ω 2",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -80269,14 +80269,14 @@
         {
           "id": "sa_out_8_4_1",
           "label": "SA OUT 8Ω/4Ω 1",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_2",
           "label": "SA OUT 8Ω/4Ω 2",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
@@ -80396,28 +80396,28 @@
         {
           "id": "sa_out_8_4_1",
           "label": "SA OUT 8Ω/4Ω 1",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_2",
           "label": "SA OUT 8Ω/4Ω 2",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_3",
           "label": "SA OUT 8Ω/4Ω 3",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4_4",
           "label": "SA OUT 8Ω/4Ω 4",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },

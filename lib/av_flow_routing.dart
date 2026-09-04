@@ -462,12 +462,20 @@ AvPort? portForIoValue(
     // 'HDMI 001A' on a CrossPoint 82). Without this the bare number picked
     // the DTP socket, because it was the one that looked letterless, and a
     // display on the HDMI connector was drawn onto twisted pair.
+    //
+    // Audio numbers the same way, and for the same reason. Output 4 on a DTP
+    // CrossPoint is 'AUDIO 004' and 'S/PDIF 004' — one analog socket and one
+    // digital — and the S/PDIF is listed first and carries no letter either,
+    // so `output_audio_ald: 4` answered with it and the assisted-listening
+    // box was drawn onto a connector it has no input for.
     if (sameNumber.length > 1) {
-      final hdmi = [
-        for (final p in sameNumber)
-          if (p.signal == SignalType.hdmi) p,
-      ];
-      if (hdmi.length == 1) return hdmi.first;
+      for (final primary in const [SignalType.hdmi, SignalType.analogAudio]) {
+        final ofSignal = [
+          for (final p in sameNumber)
+            if (p.signal == primary) p,
+        ];
+        if (ofSignal.length == 1) return ofSignal.first;
+      }
     }
     for (final p in sameNumber) {
       if (refs[p]!.letter.isEmpty) return p;
@@ -745,6 +753,18 @@ RoutingPlan planRoutingFromConfig(
       respectDismissed &&
       provider.avDismissedDevices.contains(avAutoNodeId(key));
 
+  /// True when this exact run was deleted from the canvas by hand.
+  ///
+  /// The config says the tie exists and the drawing says it does not, and the
+  /// DRAWING wins — the same way it wins everywhere else in this pass. A run
+  /// deleted on purpose is nearly always a run that has been replaced by a
+  /// better one: a converter patched in between two ends the config states
+  /// directly. Redrawing it puts the impossible lead back beside the real one.
+  bool cableDismissed(AvNode from, AvPort fromPort, AvNode to, AvPort toPort) =>
+      respectDismissed &&
+      provider.avDismissedCables
+          .contains(avCableKey(from.id, fromPort.id, to.id, toPort.id));
+
   // How many outputs the box HAS, which its connector labels do not always
   // say — see [portForIoValue] pass 5. Read off the MODEL, so it is only
   // asked of a switcher: `switcherSize` answers "4 in, 1 out" for anything it
@@ -895,6 +915,7 @@ RoutingPlan planRoutingFromConfig(
       alreadyDrawn++;
       return;
     }
+    if (cableDismissed(from, fromPort, to, toPort)) return;
     if (cables.any((c) =>
         c.fromNodeId == from.id &&
         c.fromPortId == fromPort.id &&
@@ -1083,18 +1104,44 @@ RoutingPlan planRoutingFromConfig(
           '${source.label} has no video output to run from.'));
       return;
     }
+    // The box that goes in the middle when the two ends do not take the same
+    // cable: a transmitter for the distance, a converter for the format. See
+    // [FlowExtenderRule].
+    //
+    // Looked up HERE, before the checks below, because one of them needs the
+    // answer: a converter already hanging off this source is not the source
+    // running somewhere else, it is this run drawn as far as somebody got.
+    final txRule = rules.extenderFor(
+      switcherSignal: switcherPort.signal,
+      farSignal: out.signal,
+      onOutput: false,
+    );
+    final usable =
+        txRule != null && txRule.switcherType != null && txRule.farType != null;
+    // The box for it that is on the canvas already, whatever it was called
+    // when somebody dragged it there.
+    final drawnTx = !usable
+        ? null
+        : _extenderBetween(provider, source,
+            takes: txRule.farType!,
+            sends: txRule.switcherType!,
+            fedBySource: true);
+
     // The socket at the SOURCE end takes one lead as well. A camera whose
     // HDMI OUT already runs to the recorder has nothing left to plug into the
     // switcher with, and drawing it anyway is two cables out of one
     // connector — the same mistake as two feeds into one display, at the
     // other end of the run.
     //
-    // Not counted: a far end that IS the switcher (this tie, already drawn)
-    // or a transmitter sitting on the switcher input this tie names, which is
-    // this pass recognizing the box it put in on an earlier run.
+    // Not counted: a far end that IS the switcher (this tie, already drawn),
+    // a transmitter sitting on the switcher input this tie names, which is
+    // this pass recognizing the box it put in on an earlier run, or the
+    // converter this run needs, cabled to the source and no further.
     final onThatSocket = feedsInto(source.id, out.id);
     final servesThisTie = onThatSocket.any((f) =>
-        f.node == switcher.id || joinedTo(switcher, switcherPort, f.node));
+        f.node == switcher.id ||
+        f.node == drawnTx?.id ||
+        joinedTo(switcher, switcherPort, f.node));
     if (onThatSocket.isNotEmpty && !servesThisTie) {
       // Already on the matrix, by whatever route the drawing shows — straight
       // in, or through the transmitter beside it. The number in the config
@@ -1143,15 +1190,9 @@ RoutingPlan planRoutingFromConfig(
     // The other half of what the receiver rule fixes, and the more common:
     // the cameras land on DTP inputs and a camera has an HDMI socket. Twisted
     // pair into the switcher, a short HDMI lead at the camera, and a
-    // transmitter where the two meet.
-    final txRule = rules.extenderFor(
-      switcherSignal: switcherPort.signal,
-      farSignal: out.signal,
-      onOutput: false,
-    );
-    if (txRule != null &&
-        txRule.switcherType != null &&
-        txRule.farType != null) {
+    // transmitter where the two meet. A VGA or USB-C plate on an HDMI input
+    // is the same shape with a converter in the middle instead.
+    if (usable) {
       // Deleted by hand takes both its cables with it — half a run drawn to a
       // box that is not there is worse than the gap it leaves.
       if (dismissed('${key}_tx')) return;
@@ -1186,6 +1227,24 @@ RoutingPlan planRoutingFromConfig(
         toPort: switcherPort,
         signal: txRule.switcherType!,
       );
+      return;
+    }
+
+    // NO RULE, AND THE TWO ENDS STILL DISAGREE. Every pair the rule book
+    // covers has been tried by now, so what is left is a format nobody has
+    // named a box for - and drawing it anyway is a lead that cannot be
+    // bought and an estimate missing whatever would have made it work.
+    if (!flowSignalsInterchange(out.signal, switcherPort.signal)) {
+      unresolved.add(UnroutedTie(
+          key,
+          value,
+          '${source.label} leaves by ${out.label} '
+          '(${kSignalLabels[out.signal] ?? out.signal.name}) and '
+          '${switcherPort.label} on ${switcher.label} takes '
+          '${kSignalLabels[switcherPort.signal] ?? switcherPort.signal.name}'
+          ', so the run needs a converter between them - and no flow rule '
+          'says which box that is. Add one on the Flow Rules tab, or draw '
+          'this run by hand.'));
       return;
     }
 
@@ -1591,6 +1650,21 @@ RoutingPlan planRoutingFromConfig(
         toPort: landing,
         signal: rxRule.farType!,
       );
+      return;
+    }
+
+    // The other end of the same question - see the source side above.
+    if (!flowSignalsInterchange(switcherPort.signal, landing.signal)) {
+      unresolved.add(UnroutedTie(
+          key,
+          value,
+          '${switcherPort.label} on ${switcher.label} carries '
+          '${kSignalLabels[switcherPort.signal] ?? switcherPort.signal.name} '
+          'and ${dest.label} takes ${landing.label} '
+          '(${kSignalLabels[landing.signal] ?? landing.signal.name}), so the '
+          'run needs a converter between them - and no flow rule says which '
+          'box that is. Add one on the Flow Rules tab, or draw this run by '
+          'hand.'));
       return;
     }
 
