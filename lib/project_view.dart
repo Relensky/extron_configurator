@@ -3792,76 +3792,89 @@ class _PartRow extends StatelessWidget {
                   if (line.hasControlGap)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Row(
+                      // THE COMPLAINT ON ONE LINE AND THE FIX UNDER IT, rather
+                      // than the two sharing a row.
+                      //
+                      // They shared one, each with a flex, and on the parts
+                      // table the whole block gets about two hundred pixels of
+                      // a half-width window - so the note came out as three
+                      // words and the button read 'Never nee...' at every size
+                      // there is. A CONTROL WHOSE LABEL IS CUT IS A CONTROL
+                      // NOBODY PRESSES, and this one is the entire reason the
+                      // row can be retired, so it gets the width it needs and
+                      // the note keeps the line above to ellipsize in.
+                      //
+                      // A Wrap rather than a Column: on a wide window there is
+                      // room for both on one line and that is where they read
+                      // best, side by side.
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 2,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          Icon(
-                            Icons.memory,
-                            size: 13,
-                            color: errorTextOn(theme.colorScheme, theme.cardColor),
-                          ),
-                          const SizedBox(width: 4),
-                          // Both halves flex. The note used to be flexible
-                          // beside a fixed-width button, which on a narrow
-                          // window left the text a negative width and put an
-                          // overflow stripe across the row — the button is the
-                          // wider of the two and had to be allowed to shrink
-                          // as well.
-                          Flexible(
-                            flex: 3,
-                            // THE NOTE IS THE WAY IN. A driver is picked on
-                            // the room's own Devices page, and until now the
-                            // only thing this note did was name the rooms
-                            // somebody then had to go and find. It has no
-                            // single click of its own to lose, so the jump
-                            // is the only gesture on it and the tooltip
-                            // says what it is.
-                            child: Tooltip(
-                              message: gapRoom == null
-                                  ? 'Nothing on this job drives these.'
-                                  : 'Nothing on this job drives these.\n'
+                          // THE NOTE IS THE WAY IN. A driver is picked on the
+                          // room's own Devices page, and until now the only
+                          // thing this note did was name the rooms somebody
+                          // then had to go and find. It has no single click of
+                          // its own to lose, so the jump is the only gesture on
+                          // it and the tooltip says what it is.
+                          Tooltip(
+                            message: gapRoom == null
+                                ? 'Nothing on this job drives these.'
+                                : 'Nothing on this job drives these.\n'
                                       'Double-click to open ${gapRoom.name} '
                                       'on its Devices page and pick one.',
-                              child: InkWell(
-                                key: ValueKey('part_gap_${line.key}'),
-                                borderRadius: BorderRadius.circular(4),
-                                onDoubleTap: gapRoom == null
-                                    ? null
-                                    : () => openProjectRoomOn(
-                                          context,
-                                          gapRoom.ref,
-                                          AppTab.devices,
-                                          'pick the control module for '
-                                              '${line.description} here',
-                                          roomName: gapRoom.name,
-                                        ),
-                                child: Text(
-                                  'No control module - $undriven',
-                                  style: theme.textTheme.bodySmall?.copyWith(
+                            child: InkWell(
+                              key: ValueKey('part_gap_${line.key}'),
+                              borderRadius: BorderRadius.circular(4),
+                              onDoubleTap: gapRoom == null
+                                  ? null
+                                  : () => openProjectRoomOn(
+                                        context,
+                                        gapRoom.ref,
+                                        AppTab.devices,
+                                        'pick the control module for '
+                                            '${line.description} here',
+                                        roomName: gapRoom.name,
+                                      ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.memory,
+                                    size: 13,
                                     color: errorTextOn(
                                       theme.colorScheme,
                                       theme.cardColor,
                                     ),
                                   ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      'No control module - $undriven',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                        color: errorTextOn(
+                                          theme.colorScheme,
+                                          theme.cardColor,
+                                        ),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                          // The fix, next to the complaint. Some of these rows
-                          // are a driver waiting to be written and some are a
-                          // passive splitter that will never have one, and the
-                          // second kind is why this list gets scrolled past —
-                          // so the way to retire it is on the row that is
-                          // wrong, not three tabs away.
-                          if (line.model.trim().isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            Flexible(
-                              flex: 2,
-                              child: _NeverNeedsModuleButton(
-                                model: line.model,
-                              ),
-                            ),
-                          ],
+                          // The fix, beside the complaint where there is room
+                          // and under it where there is not. Some of these
+                          // rows are a driver waiting to be written and some
+                          // are a passive splitter that will never have one,
+                          // and the second kind is why this list gets scrolled
+                          // past - so the way to retire it is on the row that
+                          // is wrong, not three tabs away.
+                          if (line.model.trim().isNotEmpty)
+                            _NeverNeedsModuleButton(model: line.model),
                         ],
                       ),
                     ),
@@ -4548,7 +4561,7 @@ class _SwapPreviewDialog extends StatelessWidget {
   }
 }
 
-/// "Never needs one" — retiring a control-gap row by telling the CATALOG that
+/// "Never driven" — retiring a control-gap row by telling the CATALOG that
 /// the product has no control interface at all.
 ///
 /// A confirm step, short but real, because this is the only control on the
@@ -4625,28 +4638,69 @@ class _NeverNeedsModuleButtonState extends State<_NeverNeedsModuleButton> {
     );
   }
 
+  /// What the button says, when it has room to say anything.
+  ///
+  /// 'Never driven' rather than the 'Never needs one' it used to read: the
+  /// parts table gives this block about a hundred and eighty pixels on a
+  /// half-width window, and the longer label came out as 'Never nee...'. It is
+  /// also the word the complaint beside it already uses - the row reads 'No
+  /// control module - 2 undriven' - so the two now agree.
+  static const String _label = 'Never driven';
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Tooltip(
-      message:
-          'Nothing can drive a ${widget.model} anywhere - record that on '
-          'the catalog entry',
-      child: TextButton(
-        key: ValueKey('never_needs_module_${widget.model}'),
-        onPressed: _busy ? null : _mark,
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          textStyle: theme.textTheme.bodySmall,
-        ),
-        child: const Text(
-          'Never needs one',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
+    final style = theme.textTheme.bodySmall;
+
+    // THE LABEL GIVES WAY BEFORE THE BUTTON DOES - the same rule the campus
+    // bar and the pane switcher follow. This sits in a column of a table that
+    // is a proportional share of the window, so at 150% on a half-width one
+    // there is no label short enough to fit and something has to go. A cut
+    // label is a control nobody can identify; an ICON with the same tooltip is
+    // still a control, and the sentence beside it has already said what the
+    // problem is.
+    //
+    // MEASURED, not read off a width threshold: the answer depends on the
+    // reader's text size as much as on the window, and a threshold picked at
+    // 100% is wrong at 150% in the direction that clips.
+    return LayoutBuilder(
+      builder: (context, box) {
+        final painter = TextPainter(
+          text: TextSpan(text: _label, style: style),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout();
+        final needed = painter.width + 12;
+        painter.dispose();
+        final room = box.maxWidth.isFinite ? box.maxWidth : needed;
+
+        return Tooltip(
+          message:
+              'Nothing can drive a ${widget.model} anywhere - record that on '
+              'the catalog entry',
+          child: needed <= room
+              ? TextButton(
+                  key: ValueKey('never_needs_module_${widget.model}'),
+                  onPressed: _busy ? null : _mark,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: style,
+                  ),
+                  child: const Text(_label, maxLines: 1),
+                )
+              : IconButton(
+                  key: ValueKey('never_needs_module_${widget.model}'),
+                  onPressed: _busy ? null : _mark,
+                  icon: const Icon(Icons.block),
+                  iconSize: 16,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+        );
+      },
     );
   }
 }

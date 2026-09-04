@@ -137,13 +137,66 @@ enum EquipmentLifeSource {
 
   /// Nobody has said, so the blanket cycle applies.
   fallback,
+
+  /// NOT A RECORDED LIFE AT ALL - a cycle somebody is asking the plan to be
+  /// restated on, to see what it would look like. See [RoomLifecycle.onCycle].
+  /// It beats all three of the above, because the whole question is "never
+  /// mind what is recorded, what if we did every room at ten years".
+  assumed,
 }
 
 const Map<EquipmentLifeSource, String> kEquipmentLifeSourceLabels = {
   EquipmentLifeSource.position: 'set on this item',
   EquipmentLifeSource.catalog: 'from the catalog',
   EquipmentLifeSource.fallback: 'default cycle',
+  EquipmentLifeSource.assumed: 'assumed cycle',
 };
+
+// ---------------------------------------------------------------------------
+//  WHAT IF WE DID EVERY ROOM AT TEN YEARS?
+// ---------------------------------------------------------------------------
+//  Every figure on a replacement plan hangs off one number per position: how
+//  long it is good for. Those numbers are recorded - on the position, on the
+//  catalog entry, or as the blanket default - and they are RIGHT, in the sense
+//  that they are what somebody decided.
+//
+//  They are also the one thing a budget conversation wants to move. "We cannot
+//  fund eight-year refreshes; what does the estate look like on twelve" is the
+//  question that gets asked in every capital planning meeting there has ever
+//  been, and answering it meant editing the life on every position of every
+//  room of every building - which is not a what-if, it is a rewrite of the
+//  record, and there is no way back from it.
+//
+//  So a plan can be RESTATED. Nothing is written anywhere: the sheet, the
+//  grid, the chart, the picture and the spreadsheet are all rebuilt as though
+//  every position were on the cycle asked for, the assumption is printed on
+//  everything that leaves the room, and dropping back to 'As recorded' is one
+//  press. See [RoomLifecycle.onCycle] and the two above it.
+//
+//  ONE THING IS NEVER RESTATED: a position somebody has taken OFF the cycle.
+//  That is not a life figure to be argued with, it is a statement that the
+//  bracket is not on the refresh plan at all - and a what-if that quietly put
+//  every mount and pole back on the budget would be a what-if nobody trusts.
+
+/// The cycles a plan can be restated on, as the control offers them.
+///
+/// Around the eight-year default the sheet is modeled on, out to the twenty
+/// years an estate argues for when there is no money. Short enough at the
+/// bottom to be honest about what a fast refresh costs.
+const List<int> kAssumedCycleYears = [6, 8, 10, 12, 15, 20];
+
+/// What a plan says it is drawn on, in one phrase.
+String assumedCycleLabel(int? years) => years == null || years <= 0
+    ? 'As recorded'
+    : 'Every room on a $years-year cycle';
+
+/// The same, for a report heading or a picture: a full sentence, or '' when
+/// the plan is the plan as it stands and there is nothing to declare.
+String assumedCycleNote(int? years) => years == null || years <= 0
+    ? ''
+    : 'What-if: every position restated on a $years-year cycle, whatever '
+        'life is recorded against it. Positions held off the refresh cycle '
+        'are unchanged.';
 
 /// What a position off the refresh cycle reads as, on the screen and in the
 /// tooltip. Not a step on the ramp and not a condition: it is the answer
@@ -510,6 +563,30 @@ class EquipmentLife {
   /// row's color and its label can never disagree.
   late final EquipmentCondition condition = conditionOfTiming(timing);
 
+  /// The same position as though it were on a [years] cycle.
+  ///
+  /// A position OFF the cycle comes back untouched - see the note above
+  /// [kAssumedCycleYears]. Everything else is rebuilt rather than mutated,
+  /// because every figure on this class is derived from [lifeYears] and cached
+  /// on first use; a life changed in place would leave the due date it was
+  /// worked out from behind.
+  EquipmentLife onCycle(int years) {
+    if (years <= 0 || neverReplaced) return this;
+    return EquipmentLife(
+      node: node,
+      category: category,
+      locationName: locationName,
+      zone: zone,
+      installedOn: installedOn,
+      lifeYears: years,
+      lifeSource: EquipmentLifeSource.assumed,
+      asOf: asOf,
+      replacementCost: replacementCost,
+      costIsEstimate: costIsEstimate,
+      replacementModel: replacementModel,
+    );
+  }
+
   /// True when this position has been through at least one swap, so the room
   /// report can say how long the last unit lasted.
   bool get hasHistory => node.swaps.isNotEmpty;
@@ -587,13 +664,36 @@ class RoomLifecycle {
   /// not exist. See [buildManualRoomLifecycle].
   final String manualRoomId;
 
+  /// The cycle this plan has been RESTATED on, or null when it is the plan as
+  /// recorded. Carried so every screen, picture and spreadsheet drawn from it
+  /// can say so - see the note above [kAssumedCycleYears].
+  final int? assumedLifeYears;
+
   RoomLifecycle({
     required this.roomName,
     required this.items,
     required this.asOf,
     this.neverReplaced = const [],
     this.manualRoomId = '',
+    this.assumedLifeYears,
   });
+
+  /// The same room as though every position in it were on a [years] cycle.
+  ///
+  /// Null or zero gives the room back unchanged, which is what makes 'As
+  /// recorded' the same object rather than a restatement onto itself.
+  RoomLifecycle onCycle(int? years) {
+    if (years == null || years <= 0) return this;
+    return RoomLifecycle(
+      roomName: roomName,
+      items: sortEquipmentLives([for (final i in items) i.onCycle(years)]),
+      // Off the cycle is off the cycle, whatever anybody is assuming.
+      neverReplaced: neverReplaced,
+      asOf: asOf,
+      manualRoomId: manualRoomId,
+      assumedLifeYears: years,
+    );
+  }
 
   // -------------------------------------------------------------------------
   //  INDEXED ONCE
@@ -946,6 +1046,27 @@ class _RoomIndex {
       : (cost: 0.0, estimated: false, model: '');
 }
 
+/// Worst first, then by due date, then by name - so the top of a room's list
+/// is always what to do something about, and two readings of the same room
+/// come out in the same order.
+///
+/// Top-level because a plan restated on another cycle is the same items in a
+/// different order, and a second copy of this comparator is a second order the
+/// two screens could disagree about. Sorts [items] in place and returns it.
+List<EquipmentLife> sortEquipmentLives(List<EquipmentLife> items) {
+  items.sort((a, b) {
+    final bySeverity =
+        _severity(a.condition).compareTo(_severity(b.condition));
+    if (bySeverity != 0) return bySeverity;
+    final ad = a.dueOn, bd = b.dueOn;
+    if (ad != null && bd != null && ad != bd) return ad.compareTo(bd);
+    if (ad == null && bd != null) return 1;
+    if (ad != null && bd == null) return -1;
+    return a.node.label.toLowerCase().compareTo(b.node.label.toLowerCase());
+  });
+  return items;
+}
+
 RoomLifecycle buildRoomLifecycle({
   required AvFlowModel model,
   String roomName = '',
@@ -1024,19 +1145,7 @@ RoomLifecycle buildRoomLifecycle({
     (a, b) => a.node.label.toLowerCase().compareTo(b.node.label.toLowerCase()),
   );
 
-  // Worst first, then by due date, then by name — so the top of the list is
-  // always what to do something about, and two readings of the same room come
-  // out in the same order.
-  items.sort((a, b) {
-    final bySeverity =
-        _severity(a.condition).compareTo(_severity(b.condition));
-    if (bySeverity != 0) return bySeverity;
-    final ad = a.dueOn, bd = b.dueOn;
-    if (ad != null && bd != null && ad != bd) return ad.compareTo(bd);
-    if (ad == null && bd != null) return 1;
-    if (ad != null && bd == null) return -1;
-    return a.node.label.toLowerCase().compareTo(b.node.label.toLowerCase());
-  });
+  sortEquipmentLives(items);
 
   return RoomLifecycle(
     roomName: roomName,
@@ -1058,11 +1167,41 @@ class BuildingLifecycle {
   /// The currency the replacement figures are in, for the report headings.
   final String currency;
 
+  /// The cycle this plan has been RESTATED on - see [RoomLifecycle.onCycle].
+  final int? assumedLifeYears;
+
   BuildingLifecycle({
     required this.rooms,
     required this.asOf,
     this.currency = '\$',
+    this.assumedLifeYears,
   });
+
+  /// The whole building as though every room were on a [years] cycle.
+  BuildingLifecycle onCycle(int? years) {
+    if (years == null || years <= 0) return this;
+    return BuildingLifecycle(
+      rooms: [for (final r in rooms) r.onCycle(years)],
+      asOf: asOf,
+      currency: currency,
+      assumedLifeYears: years,
+    );
+  }
+
+  /// The worst year on the calendar - the one a phased plan exists to flatten,
+  /// and the figure a restatement is usually being judged on. 0 when nothing
+  /// falls due at all.
+  ///
+  /// Read across EVERY year rather than the ones the screen has room for: a
+  /// spike parked outside the window is still the year that has to be funded.
+  late final double peakYear = () {
+    var worst = 0.0;
+    for (final y in allYears) {
+      final total = costDueIn(y);
+      if (total > worst) worst = total;
+    }
+    return worst;
+  }();
 
   /// Every position on the job, flattened ONCE.
   ///
@@ -1410,6 +1549,13 @@ List<ReportSection> roomLifecycleSections(
       header: const ['Item', 'Value'],
       rows: [
         ['As of', formatEquipmentDate(room.asOf)],
+        // WHAT THE SHEET IS DRAWN ON, when it is not drawn on the record.
+        // A restated plan that left the room without saying so is a document
+        // somebody budgets from believing it is the plan - see the note above
+        // [kAssumedCycleYears]. First row after the date, where it cannot be
+        // read past.
+        if (room.assumedLifeYears != null)
+          ['Cycle assumed', assumedCycleNote(room.assumedLifeYears)],
         ['Items tracked', room.items.length],
         // Count AND cost on the same line. Which items and how much is one
         // question in a budget meeting, and answering half of it sends
@@ -1612,6 +1758,13 @@ List<ReportSection> buildingLifecycleSections(
       header: const ['Item', 'Value'],
       rows: [
         ['As of', formatEquipmentDate(building.asOf)],
+        // WHAT THE SHEET IS DRAWN ON, when it is not drawn on the record.
+        // A restated plan that left the room without saying so is a document
+        // somebody budgets from believing it is the plan - see the note above
+        // [kAssumedCycleYears]. First row after the date, where it cannot be
+        // read past.
+        if (building.assumedLifeYears != null)
+          ['Cycle assumed', assumedCycleNote(building.assumedLifeYears)],
         ['Rooms', building.rooms.length],
         ['Items tracked', building.items.length],
         for (final c in kEquipmentConditionSeverity)

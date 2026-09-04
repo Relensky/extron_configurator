@@ -698,6 +698,23 @@ class DeviceConfigurationForm extends StatelessWidget {
                 onlySection: deviceKey,
               ),
             ),
+            // THE SAME CHECK, AGAINST THE FILE AS IT IS NOW. Drivers are
+            // parsed once and kept - see [AppStateProvider.reloadModules] -
+            // so somebody who has just edited one in the next window is
+            // looking at an app that still believes the old copy. This
+            // re-reads the folder first. Icon-only: it is the rarer of the
+            // two and the row is already three controls wide.
+            IconButton(
+              key: const ValueKey('recheck_module_defaults'),
+              icon: const Icon(Icons.sync),
+              tooltip: 'Re-read the python modules from disk, then check '
+                  'this device against them',
+              onPressed: () => offerModuleRecheck(
+                context,
+                provider,
+                onlySection: deviceKey,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 20),

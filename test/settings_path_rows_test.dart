@@ -21,6 +21,7 @@ void main() {
   /// Every path row on the tab, in the order it prints them: the words on the
   /// button, and the setting the field beside it writes.
   const rows = <(String, String)>[
+    ('Re-read Modules', 'modulesPath'),
     ('Load Template', 'templateFilePath'),
     ('Reload Schema', 'uiSchemaPath'),
     ('Reload Catalog', 'avDevicesFilePath'),

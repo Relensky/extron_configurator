@@ -1,6 +1,8 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import 'pinned_grid.dart' show gridMetric;
+
 /// ============================================================================
 ///  A LINE YOU CAN ASK QUESTIONS OF
 /// ============================================================================
@@ -106,7 +108,13 @@ class HoverLineChart extends StatelessWidget {
   final double? markerX;
   final String? markerXLabel;
 
-  /// How tall the plot is drawn.
+  /// How tall the plot is drawn, before the reader's text size is applied.
+  ///
+  /// GROWN WITH THE TYPE, like every other fixed dimension in this app - see
+  /// [gridMetric]. An axis whose labels are half again as big inside a box
+  /// that did not move is an axis with its figures clipped, which is the one
+  /// thing a chart cannot afford: the shape is readable without them and the
+  /// FIGURES are the reason it is here rather than a sparkline.
   final double height;
 
   /// A curve through the points rather than straight segments. Off by
@@ -177,7 +185,7 @@ class HoverLineChart extends StatelessWidget {
     );
 
     return SizedBox(
-      height: height,
+      height: gridMetric(context, height),
       child: LineChart(
         LineChartData(
           minX: minX,
@@ -242,7 +250,8 @@ class HoverLineChart extends StatelessWidget {
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 62,
+                // Room for '$1.2M' at the reader's own text size.
+                reservedSize: gridMetric(context, 62),
                 getTitlesWidget: (value, meta) => SideTitleWidget(
                   meta: meta,
                   child: Text(
@@ -259,7 +268,7 @@ class HoverLineChart extends StatelessWidget {
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 26,
+                reservedSize: gridMetric(context, 26),
                 interval: 1,
                 getTitlesWidget: (value, meta) {
                   final label = labelAt[value];
@@ -303,7 +312,10 @@ class HoverLineChart extends StatelessWidget {
                 ),
             ],
             touchTooltipData: LineTouchTooltipData(
-              maxContentWidth: 320,
+              // The readout is a list of names and figures, and its longest
+              // line decides how wide it has to be - which grows with the
+              // type like everything else on it.
+              maxContentWidth: gridMetric(context, 320),
               fitInsideHorizontally: true,
               fitInsideVertically: true,
               tooltipBorder: BorderSide(color: scheme.outlineVariant),

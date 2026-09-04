@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'assumed_cycle_bar.dart';
 import 'av_flow_model.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'contrast.dart';
@@ -74,15 +75,18 @@ class _LifecycleViewState extends State<LifecycleView> {
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
     final model = buildAvFlowModel(provider);
-    final room = buildRoomLifecycle(
+    // THE ROOM AS RECORDED, always built first - the what-if is a lens over
+    // it, and the control has to be able to say what the lens moved.
+    final recorded = buildRoomLifecycle(
       model: model,
       roomName: roomCodeFromConfig(provider.roomConfig),
       library: provider.avDeviceLibrary,
       baseCosts: provider.baseCosts,
       tier: provider.pricingTier,
     );
+    final room = recorded.onCycle(provider.assumedLifeCycle);
 
-    if (room.items.isEmpty) {
+    if (recorded.items.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
@@ -119,6 +123,21 @@ class _LifecycleViewState extends State<LifecycleView> {
               onShowNever: () => setState(() => _showNever = !_showNever),
             ),
           ),
+          // WHAT IF THIS ROOM WERE REFRESHED ON A DIFFERENT CYCLE. The same
+          // control the building plan and the campus carry, on the same
+          // session setting - see [AppStateProvider.assumedLifeCycle] - so a
+          // room read here and the same room read on the job cannot end up
+          // modelled two different ways.
+          //
+          // The picker rides on the grid's header row below and costs no
+          // height; this line appears only once a cycle has been picked.
+          SliverToBoxAdapter(
+            child: roomCycleNote(
+              recorded: recorded,
+              shown: room,
+              currency: provider.currencySymbol,
+            ),
+          ),
           // THE SAME CALENDAR THE PROJECT DRAWS, FOR THIS ROOM.
           //
           // This tab answered "how old is everything in here" as a list of
@@ -136,6 +155,11 @@ class _LifecycleViewState extends State<LifecycleView> {
               // The key is already on the strip above this, under the timing
               // bar it explains. Twice on one page reads as two keys.
               showKey: false,
+              headerAction: AssumedCycleControl(
+                keyPrefix: 'room_lifecycle',
+                assumed: room.assumedLifeYears,
+                onChanged: provider.setAssumedLifeCycle,
+              ),
               building: BuildingLifecycle(
                 rooms: [room],
                 asOf: room.asOf,
@@ -173,6 +197,42 @@ class _LifecycleViewState extends State<LifecycleView> {
       ),
     );
   }
+}
+
+/// What the cycle in force is doing to this room, or nothing at all when the
+/// room is the room as recorded.
+///
+/// The same two figures the building's plan prints, asked of one room: what it
+/// is asking for now, and the year the first of it lands.
+Widget roomCycleNote({
+  required RoomLifecycle recorded,
+  required RoomLifecycle shown,
+  required String currency,
+}) {
+  if (shown.assumedLifeYears == null) return const SizedBox.shrink();
+  String money(double v) =>
+      v <= 0 ? '${currency}0' : formatLifecycleMoney(v, currency);
+
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+    child: AssumedCycleNote(
+      keyPrefix: 'room_lifecycle',
+      assumed: shown.assumedLifeYears,
+      scope: 'everything in this room',
+      shifts: [
+        (
+          label: 'Recommended now',
+          was: money(recorded.toReplaceCost),
+          now: money(shown.toReplaceCost),
+        ),
+        (
+          label: 'First due',
+          was: '${recorded.firstDueYear ?? '-'}',
+          now: '${shown.firstDueYear ?? '-'}',
+        ),
+      ],
+    ),
+  );
 }
 
 /// Which record a life is written onto.
@@ -475,7 +535,12 @@ class _RoomActions extends StatelessWidget {
       onPressed: () => showLifecycleSheetPicture(
         context,
         dialogTitle: 'The replacement plan as a picture',
-        fileStem: lifecycleFileStemFor(room.roomName),
+        // A restatement is its own document - see the same rule on the
+        // building's plan.
+        fileStem: room.assumedLifeYears == null
+            ? lifecycleFileStemFor(room.roomName)
+            : '${lifecycleFileStemFor(room.roomName)}'
+                  '_${room.assumedLifeYears}yr_cycle',
         what: 'The replacement plan',
         sheetBuilder: _sheetAt,
         detailLabel: 'Every date',

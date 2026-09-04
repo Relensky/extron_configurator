@@ -173,9 +173,16 @@ class GridZoomControls extends StatelessWidget {
           tooltip: zoomOutTooltip ?? 'Smaller cells, and more years in the frame',
         ),
         SizedBox(
-          // A fixed box, so the arrows do not shuffle sideways as the figure
-          // goes from 50% to 100% and back.
-          width: 46,
+          // A FIXED BOX, so the arrows do not shuffle sideways as the figure
+          // goes from 50% to 100% and back - but fixed at the size of the
+          // LONGEST thing it can say, and grown with the reader's type.
+          //
+          // It was 46 flat, which fitted '100%' and cut everything else: a
+          // timeline says its level as a stretch of time rather than as a
+          // multiplier - see [_ProjectDateGraphState._spanLabel] - so the box
+          // had '13 mo' in it as '13 m', and on a display at 150% every one
+          // of them, percentages included, was clipped mid-figure.
+          width: gridMetric(context, 76),
           child: TextButton(
             key: ValueKey('${keyPrefix}_zoom_level'),
             onPressed: zoom == kGridZoomNormal && !fitted

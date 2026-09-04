@@ -243,7 +243,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Both products are undriven, so both rows carry it.
-      expect(find.text('Never needs one'), findsNWidgets(2));
+      expect(find.text('Never driven'), findsNWidgets(2));
     });
 
     testWidgets('confirms before writing, and canceling writes nothing',
@@ -329,7 +329,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Never needs one'), findsNothing);
+      expect(find.text('Never driven'), findsNothing);
       expect(p.priceProject().undrivenDevices, 0);
     });
   });

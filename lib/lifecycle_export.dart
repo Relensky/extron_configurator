@@ -211,6 +211,12 @@ List<ReportSection> campusLifecycleSections(CampusLifecycle campus) {
       header: const ['Item', 'Value'],
       rows: [
         ['As of', formatEquipmentDate(campus.asOf)],
+        // WHAT THE SHEET IS DRAWN ON, when it is not drawn on the record - see
+        // the note above [kAssumedCycleYears]. A restated estate that left the
+        // room without saying so is a document somebody budgets from believing
+        // it is the plan.
+        if (campus.assumedLifeYears != null)
+          ['Cycle assumed', assumedCycleNote(campus.assumedLifeYears)],
         ['Buildings', campus.ok.length],
         ['Rooms', campus.rooms],
         ['Items tracked', campus.items.length],

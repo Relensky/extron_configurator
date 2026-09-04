@@ -9,6 +9,7 @@ import 'building_project.dart' show ManualRoom;
 import 'av_flow_model.dart' show formatEquipmentDate;
 import 'campus_lifecycle_view.dart' show showCampusLifecycle;
 import 'equipment_lifecycle.dart';
+import 'assumed_cycle_bar.dart';
 import 'lifecycle_export.dart';
 import 'lifecycle_picture.dart';
 import 'lifecycle_spend_chart.dart';
@@ -50,14 +51,18 @@ import 'project_estimate.dart';
 /// scroll view.
 List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
   final provider = context.watch<AppStateProvider>();
-  final building = buildProjectLifecycle(
+  // THE PLAN AS RECORDED, always built first. The what-if is a lens over it -
+  // see [BuildingLifecycle.onCycle] - and the control needs both to be able to
+  // say what the restatement moved.
+  final recorded = buildProjectLifecycle(
     estimate: estimate,
     library: provider.avDeviceLibrary,
     baseCosts: provider.baseCosts,
     tier: provider.pricingTier,
   );
+  final building = recorded.onCycle(provider.assumedLifeCycle);
 
-  if (building.items.isEmpty) {
+  if (recorded.items.isEmpty) {
     return [
       SliverFillRemaining(
         hasScrollBody: false,
@@ -122,7 +127,20 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
         linesOnly: estimate.rooms.isEmpty,
       ),
     ),
-    SliverToBoxAdapter(child: LifecycleYearGrid(building: building)),
+    // WHAT IF THE WHOLE BUILDING WERE REFRESHED ON A DIFFERENT CYCLE.
+    //
+    // The picker itself rides on the grid's own header row and costs no
+    // height; this is the line that says what is being assumed and what it
+    // moved, and it draws nothing at all until somebody has asked something.
+    SliverToBoxAdapter(
+      child: buildingCycleNote(recorded: recorded, shown: building),
+    ),
+    SliverToBoxAdapter(
+      child: LifecycleYearGrid(
+        building: building,
+        headerAction: buildingCycleControl(context, shown: building),
+      ),
+    ),
     // THE SHAPE OF THE SAME PLAN, UNDER THE SHEET RATHER THAN OVER IT.
     //
     // The grid is the point of this pane and has to own the first screen -
@@ -158,6 +176,64 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
     ),
     const SliverToBoxAdapter(child: SizedBox(height: 24)),
   ];
+}
+
+/// The what-if picker for a building, for the grid's own header row.
+///
+/// A FUNCTION RATHER THAN A WIDGET because the state is not here: the cycle
+/// lives on the session - see [AppStateProvider.assumedLifeCycle] - so the
+/// room's own Lifecycle tab and this plan cannot end up modelling the same
+/// room two different ways.
+Widget buildingCycleControl(
+  BuildContext context, {
+  required BuildingLifecycle shown,
+  String keyPrefix = 'lifecycle',
+}) => AssumedCycleControl(
+  keyPrefix: keyPrefix,
+  assumed: shown.assumedLifeYears,
+  onChanged: context.read<AppStateProvider>().setAssumedLifeCycle,
+);
+
+/// What the cycle in force is doing to the building, or nothing at all when
+/// the plan is the plan as recorded.
+Widget buildingCycleNote({
+  required BuildingLifecycle recorded,
+  required BuildingLifecycle shown,
+  String scope = 'every room in this building',
+  String keyPrefix = 'lifecycle',
+}) {
+  if (shown.assumedLifeYears == null) return const SizedBox.shrink();
+  final currency = recorded.currency;
+  String money(double v) =>
+      v <= 0 ? '${currency}0' : formatLifecycleMoney(v, currency);
+
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+    child: AssumedCycleNote(
+      keyPrefix: keyPrefix,
+      assumed: shown.assumedLifeYears,
+      scope: scope,
+      // The three figures a refresh request turns on: what is being asked for
+      // now, the worst single year, and when the first money lands.
+      shifts: [
+        (
+          label: 'Recommended now',
+          was: money(recorded.toReplaceCost),
+          now: money(shown.toReplaceCost),
+        ),
+        (
+          label: 'Worst single year',
+          was: money(recorded.peakYear),
+          now: money(shown.peakYear),
+        ),
+        (
+          label: 'First due',
+          was: '${firstDueYearOf(recorded) ?? '-'}',
+          now: '${firstDueYearOf(shown) ?? '-'}',
+        ),
+      ],
+    ),
+  );
 }
 
 /// What the documents this pane writes are headed with: the job, the building,
@@ -319,7 +395,13 @@ class _Summary extends StatelessWidget {
                 _PlanExportButtons(
                   building: building,
                   title: title,
-                  fileStem: fileStem,
+                  // A WHAT-IF IS ITS OWN DOCUMENT. Two exports of one building
+                  // on two cycles are two different plans, and a name that did
+                  // not say which would let the second quietly replace the
+                  // first in the folder they are both filed in.
+                  fileStem: building.assumedLifeYears == null
+                      ? fileStem
+                      : '${fileStem}_${building.assumedLifeYears}yr_cycle',
                 ),
                 const _CampusButton(),
                 // A ROOM THAT IS ON THE PLAN AND NOT IN THE APP.
@@ -537,6 +619,20 @@ class LifecyclePlanSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(title, style: theme.textTheme.titleLarge),
+            // WHAT THIS PICTURE IS DRAWN ON, when it is not drawn on the
+            // record. A photographed what-if that does not say it is one
+            // looks exactly like the plan and is not - see the note above
+            // [kAssumedCycleYears].
+            if (building.assumedLifeYears != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                assumedCycleNote(building.assumedLifeYears),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.tertiary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
             const SizedBox(height: 2),
             Text(
               'As of ${formatEquipmentDate(building.asOf)}  ·  '
@@ -867,10 +963,25 @@ class LifecycleYearGrid extends StatefulWidget {
   /// different keys for two different things.
   final bool showKey;
 
+  /// Something the SHEET is controlled by, on its own header row beside the
+  /// zoom stepper.
+  ///
+  /// A CONTROL OVER THE SHEET BELONGS ON THE SHEET. The refresh-cycle what-if
+  /// lived in a block of its own above the grid and cost eighty pixels of the
+  /// first screen whether anybody used it or not - which on a laptop at 150%
+  /// is the grid's own zoom controls pushed under the fold. Here it costs
+  /// nothing: the header row had a Spacer in it.
+  ///
+  /// Passed in rather than built here, because the state behind it belongs to
+  /// the screen - see [AppStateProvider.assumedLifeCycle] - and this widget is
+  /// drawn in tests that have a building and no application state.
+  final Widget? headerAction;
+
   const LifecycleYearGrid({
     super.key,
     required this.building,
     this.showKey = true,
+    this.headerAction,
   });
 
   /// The rooms, opened out into one line per due date where there is more than
@@ -1004,27 +1115,44 @@ class _LifecycleYearGridState extends State<LifecycleYearGrid> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          // A WRAP, NOT A ROW WITH A SPACER. The heading and two controls are
+          // wider than a half-width window at 130% text, and a Row ran the
+          // zoom stepper off the right-hand edge behind the overflow stripes -
+          // which is a control that cannot be pressed on a screen that had
+          // room for it. Here the controls drop onto their own line instead.
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: gap,
+            runSpacing: gap * 0.5,
             children: [
               Text(
                 'REPLACEMENT YEAR',
                 style: headStyle?.copyWith(fontWeight: FontWeight.bold),
               ),
-              const Spacer(),
-              GridZoomControls(
-                keyPrefix: 'lifecycle',
-                zoom: zoom,
-                fitted: _fit,
-                onChanged: (z) => setState(() {
-                  _zoom = z;
-                  _fit = false;
-                }),
-                onFit: () => setState(() {
-                  // Leaving the fit keeps the size it fitted to, so the sheet
-                  // does not jump back to 100% under the reader.
-                  if (_fit) _zoom = zoom;
-                  _fit = !_fit;
-                }),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.headerAction != null) ...[
+                    widget.headerAction!,
+                    SizedBox(width: gap * 1.5),
+                  ],
+                  GridZoomControls(
+                    keyPrefix: 'lifecycle',
+                    zoom: zoom,
+                    fitted: _fit,
+                    onChanged: (z) => setState(() {
+                      _zoom = z;
+                      _fit = false;
+                    }),
+                    onFit: () => setState(() {
+                      // Leaving the fit keeps the size it fitted to, so the
+                      // sheet does not jump back to 100% under the reader.
+                      if (_fit) _zoom = zoom;
+                      _fit = !_fit;
+                    }),
+                  ),
+                ],
               ),
             ],
           ),

@@ -1140,6 +1140,28 @@ class AppStateProvider extends ChangeNotifier {
     _persistSettings();
   }
 
+  /// A REFRESH CYCLE ASSUMED OVER THE OPEN JOB, for budgeting what-ifs.
+  ///
+  /// Null is the plan as recorded, which is what it is until somebody asks a
+  /// question. Anything else restates every position on the room's Lifecycle
+  /// tab and the job's replacement plan as though it were on that cycle - see
+  /// the note above [kAssumedCycleYears] and [RoomLifecycle.onCycle].
+  ///
+  /// SESSION ONLY, AND DELIBERATELY NOT PERSISTED. It is a way of LOOKING at
+  /// the job rather than a fact about it; a job that reopened on somebody's
+  /// twelve-year what-if would be a plan that reads differently for two people
+  /// and says nothing about why. The room tab and the project plan share the
+  /// one setting on purpose - they are the same question at two sizes, and
+  /// two of them could disagree about the same room.
+  int? assumedLifeCycle;
+
+  void setAssumedLifeCycle(int? years) {
+    final wanted = years != null && years > 0 ? years : null;
+    if (assumedLifeCycle == wanted) return;
+    assumedLifeCycle = wanted;
+    notifyListeners();
+  }
+
   /// When true (default), loading a config also fills any device properties
   /// missing from the schema's "device_defaults" (e.g. a DSP without its
   /// audio group numbers). Additions are listed in the acknowledgement
@@ -6556,6 +6578,37 @@ class AppStateProvider extends ChangeNotifier {
     } catch (e) {
       return ['HDMI 1', 'HDMI 2', 'VGA', 'HDBaseT'];
     }
+  }
+
+  /// RE-READS EVERY PYTHON DRIVER FROM DISK, and says how many it found.
+  ///
+  /// THE CACHES ARE THE POINT. A module is parsed once and the answer kept —
+  /// its commands, its inputs, the states of each command, its DEVICE_INFO —
+  /// because the device tabs ask for all four on every rebuild and a driver
+  /// does not usually change while somebody is editing a room. When one DOES,
+  /// which is most of a working morning for whoever maintains them, the app
+  /// goes on offering the commands the file had at startup: a new Update
+  /// method added ten minutes ago is simply not in the dropdown, and the
+  /// config it writes is checked against a driver that no longer exists.
+  ///
+  /// So this drops all three parse caches before rescanning, rather than
+  /// warming them again on top of stale entries. Everything downstream is
+  /// derived from the scan — see [preloadAllModules], which rebuilds the model
+  /// registry and the DEVICE_INFO defaults from scratch for the same reason.
+  ///
+  /// Nothing in the open config is touched. What the newly-read drivers now
+  /// disagree with is a question for the review dialog — see
+  /// `offerModuleRecheck` in model_defaults_dialog.dart.
+  Future<int> reloadModules() async {
+    _moduleCommandsCache.clear();
+    _moduleInputsCache.clear();
+    _moduleStatesCache.clear();
+    await preloadAllModules();
+    // The open room's own modules first, so the tabs have their dropdowns back
+    // before anybody clicks one.
+    _preloadModulesFromConfig();
+    notifyListeners();
+    return availableModules.length;
   }
 
   /// Scans the entire modules directory at startup (or when the path changes)

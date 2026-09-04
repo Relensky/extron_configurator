@@ -58,11 +58,42 @@ class CampusLifecycle {
   final DateTime asOf;
   final String currency;
 
+  /// The cycle this estate has been RESTATED on, or null when it is the plan
+  /// as recorded - see [RoomLifecycle.onCycle] and the note above
+  /// [kAssumedCycleYears].
+  final int? assumedLifeYears;
+
   CampusLifecycle({
     required this.jobs,
     required this.asOf,
     this.currency = r'$',
+    this.assumedLifeYears,
   });
+
+  /// THE WHOLE ESTATE AS THOUGH EVERY ROOM WERE ON A [years] CYCLE.
+  ///
+  /// Derived from the jobs ALREADY READ rather than by going back to disk.
+  /// Reading eleven projects takes a moment; a what-if control that cost that
+  /// moment on every press is a control nobody plays with, and playing with it
+  /// is the entire point.
+  CampusLifecycle onCycle(int? years) {
+    if (years == null || years <= 0) return this;
+    return CampusLifecycle(
+      jobs: [
+        for (final job in jobs)
+          (
+            path: job.path,
+            name: job.name,
+            lifecycle: job.lifecycle?.onCycle(years),
+            rooms: job.rooms,
+            error: job.error,
+          ),
+      ],
+      asOf: asOf,
+      currency: currency,
+      assumedLifeYears: years,
+    );
+  }
 
   /// The jobs that actually read, in the order they were added.
   late final List<CampusJob> ok = [

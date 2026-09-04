@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'assumed_cycle_bar.dart';
 import 'av_flow_model.dart' show formatEquipmentDate;
 import 'building_project.dart' show kProjectFileSuffix;
 import 'campus_file.dart';
@@ -181,8 +182,26 @@ class _CampusViewState extends State<_CampusView> {
   late String _name = widget.name;
   late String _file = widget.savedAt;
 
-  CampusLifecycle? _campus;
+  /// The estate as it was read off disk. Nothing on screen uses this
+  /// directly - see [_campus], which is this seen through whatever cycle is
+  /// being modelled.
+  CampusLifecycle? _read;
   bool _reading = false;
+
+  /// THE CYCLE THE ESTATE IS BEING LOOKED AT ON, or null for the plan as
+  /// recorded. See the note above [kAssumedCycleYears].
+  ///
+  /// HELD ON THE SCREEN rather than in the campus file, because it is a way of
+  /// looking and not a fact about the estate: a campus that reopened on
+  /// somebody's twelve-year what-if would be a plan that reads differently for
+  /// two people, and the second of them would have no idea.
+  int? _cycle;
+
+  /// The estate as everything on this screen reads it: the jobs off disk,
+  /// restated on [_cycle]. Every figure, grid, chart, picture and spreadsheet
+  /// comes through here, so none of them can disagree about what is being
+  /// assumed.
+  CampusLifecycle? get _campus => _read?.onCycle(_cycle);
 
   // -------------------------------------------------------------------------
   //  UNDO FOR THE ASSEMBLY
@@ -215,7 +234,7 @@ class _CampusViewState extends State<_CampusView> {
       _paths
         ..clear()
         ..addAll([for (final p in (doc['projects'] as List? ?? [])) '$p']);
-      _campus = null;
+      _read = null;
     });
     // The sheet holds no figures of its own — every one is derived from the
     // jobs — so a list that changed has to be read again rather than patched.
@@ -281,7 +300,7 @@ class _CampusViewState extends State<_CampusView> {
     final campus = await readCampus(provider: provider, projectPaths: _paths);
     if (!mounted) return;
     setState(() {
-      _campus = campus;
+      _read = campus;
       _reading = false;
     });
   }
@@ -495,7 +514,7 @@ class _CampusViewState extends State<_CampusView> {
           ..addAll(campus.projects);
         _name = campus.name;
         _file = campus.file;
-        _campus = null;
+        _read = null;
       });
       // A DIFFERENT DOCUMENT, so a new history. Carrying the last campus's
       // steps across would let Undo paste an estate somebody had finished with
@@ -594,7 +613,7 @@ class _CampusViewState extends State<_CampusView> {
       () => _paths.removeWhere((p) => path.equals(p, file)),
     );
     if (_paths.isEmpty) {
-      setState(() => _campus = null);
+      setState(() => _read = null);
     } else {
       _reread();
     }
@@ -626,7 +645,12 @@ class _CampusViewState extends State<_CampusView> {
     final named = _name.trim().isEmpty
         ? ''
         : '${CampusFile(name: _name, projects: const []).fileStem}_';
-    return '${named}campus_refresh_plan_${at.year}-$month-$day';
+    // A WHAT-IF IS ITS OWN DOCUMENT. Two exports of one estate on two cycles
+    // are two different plans, and a name that did not say which would let
+    // the second quietly replace the first in the folder they are both filed
+    // in - and there is no way to tell them apart once it has.
+    final cycle = _cycle == null ? '' : '_${_cycle}yr_cycle';
+    return '${named}campus_refresh_plan_${at.year}-$month-$day$cycle';
   }
 
   /// The published copy's name, WITHOUT the date [_fileStem] carries.
@@ -709,6 +733,57 @@ class _CampusViewState extends State<_CampusView> {
       what: 'The campus refresh plan',
       bytes: buildCampusLifecycleXlsx(campus: campus, picture: picture),
     );
+  }
+
+  /// What the cycle in force is doing to the estate, or nothing at all when
+  /// the calendar is the calendar as recorded.
+  ///
+  /// THE THREE FIGURES A CAPITAL PLANNING MEETING ARGUES OVER: what is being
+  /// asked for now, the worst single year on the calendar, and when the first
+  /// money lands. Each printed as it stands and as it would be, so the
+  /// restatement can be checked rather than believed.
+  Widget _cycleNote(CampusLifecycle campus) {
+    final asRead = _read;
+    if (_cycle == null || asRead == null) return const SizedBox.shrink();
+    final currency = campus.currency;
+    String money(double v) =>
+        v <= 0 ? '${currency}0' : formatLifecycleMoney(v, currency);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AssumedCycleNote(
+        keyPrefix: 'campus',
+        assumed: _cycle,
+        scope: 'every room on this campus',
+        shifts: [
+          (
+            label: 'Recommended now',
+            was: money(asRead.toReplaceCost),
+            now: money(campus.toReplaceCost),
+          ),
+          (
+            label: 'Worst single year',
+            was: money(asRead.peakYear),
+            now: money(campus.peakYear),
+          ),
+          (
+            label: 'First year with money in it',
+            was: '${_firstSpendYear(asRead) ?? '-'}',
+            now: '${_firstSpendYear(campus) ?? '-'}',
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The earliest year the estate has anything falling due in, or null when it
+  /// has nothing. The date a restatement moves first, and the one somebody
+  /// actually has to put in a budget cycle.
+  static int? _firstSpendYear(CampusLifecycle campus) {
+    for (final year in campus.allYears) {
+      if (campus.totalIn(year) > 0) return year;
+    }
+    return null;
   }
 
   /// The estate's money, year by year, with each job named in the readout.
@@ -982,20 +1057,37 @@ class _CampusViewState extends State<_CampusView> {
                       )
                     else ...[
                       const EquipmentTimingKey(),
+                      const SizedBox(height: 12),
+                      // WHAT IF THE ESTATE WERE REFRESHED ON A DIFFERENT
+                      // CYCLE. The picker rides on the calendar's own header
+                      // row and costs no height; this is the line that says
+                      // what is being assumed and what it moved, and it draws
+                      // nothing at all until somebody has asked something.
+                      _cycleNote(campus),
+                      CampusYearGrid(
+                        campus: campus,
+                        onOpenJob: _openJobPlan,
+                        headerAction: AssumedCycleControl(
+                          keyPrefix: 'campus',
+                          assumed: _cycle,
+                          onChanged: (years) =>
+                              setState(() => _cycle = years),
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       // THE BUDGET LINE, AND WHAT IT WOULD COST TO FLATTEN IT.
                       //
-                      // The grid below is the document a budget meeting is
-                      // sent; this is the picture the meeting actually argues
-                      // over. One point per year, hover it to see which
-                      // buildings are in it, and a dashed line across the lot
-                      // showing what the same estate costs a year if the
-                      // spikes are pushed off and the whole plan is spread
-                      // evenly from here to the end. The gap between the two
-                      // is the size of the deferral being proposed.
+                      // UNDER THE CALENDAR RATHER THAN OVER IT. The calendar
+                      // is the document a budget meeting is sent and has to
+                      // own the first screen - over it, the chart pushed the
+                      // job list clean off a laptop window. This is the same
+                      // figures as a shape: one point per year, hover it to
+                      // see which buildings are in it, and a dashed line
+                      // showing what the estate costs a year if the spikes
+                      // are pushed off and the plan spread evenly from here
+                      // to the end. The gap between the two is the size of
+                      // the deferral being proposed.
                       _budgetChart(campus),
-                      const SizedBox(height: 16),
-                      CampusYearGrid(campus: campus, onOpenJob: _openJobPlan),
                       const SizedBox(height: 16),
                       _JobList(
                         campus: campus,
@@ -1211,7 +1303,17 @@ class CampusYearGrid extends StatefulWidget {
   /// which is what a picture of the sheet wants.
   final ValueChanged<String>? onOpenJob;
 
-  const CampusYearGrid({super.key, required this.campus, this.onOpenJob});
+  /// Something the CALENDAR is controlled by, on its own header row beside the
+  /// zoom stepper - see [LifecycleYearGrid.headerAction], which carries the
+  /// reasoning. Null on a picture of the sheet, which has no controls at all.
+  final Widget? headerAction;
+
+  const CampusYearGrid({
+    super.key,
+    required this.campus,
+    this.onOpenJob,
+    this.headerAction,
+  });
 
   @override
   State<CampusYearGrid> createState() => _CampusYearGridState();
@@ -1280,25 +1382,41 @@ class _CampusYearGridState extends State<CampusYearGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        // A Wrap rather than a Row with a Spacer - see the same header on the
+        // building's own plan. The heading and two controls do not fit a
+        // half-width window at 130% text, and the answer is another line
+        // rather than a control off the edge.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: gridMetric(context, 12),
+          runSpacing: gridMetric(context, 4),
           children: [
             Text(
               'REPLACEMENT YEAR, ACROSS THE CAMPUS',
               style: headStyle?.copyWith(fontWeight: FontWeight.bold),
             ),
-            const Spacer(),
-            GridZoomControls(
-              keyPrefix: 'campus',
-              zoom: zoom,
-              fitted: _fit,
-              onChanged: (z) => setState(() {
-                _zoom = z;
-                _fit = false;
-              }),
-              onFit: () => setState(() {
-                if (_fit) _zoom = zoom;
-                _fit = !_fit;
-              }),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.headerAction != null) ...[
+                  widget.headerAction!,
+                  SizedBox(width: gridMetric(context, 12)),
+                ],
+                GridZoomControls(
+                  keyPrefix: 'campus',
+                  zoom: zoom,
+                  fitted: _fit,
+                  onChanged: (z) => setState(() {
+                    _zoom = z;
+                    _fit = false;
+                  }),
+                  onFit: () => setState(() {
+                    if (_fit) _zoom = zoom;
+                    _fit = !_fit;
+                  }),
+                ),
+              ],
             ),
           ],
         ),
@@ -1683,6 +1801,21 @@ class CampusPlanSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('Campus refresh plan', style: theme.textTheme.titleLarge),
+            // WHAT THIS PICTURE IS DRAWN ON, when it is not drawn on the
+            // record. A photographed what-if that does not say it is one is
+            // the single most dangerous thing this screen can produce: it
+            // looks exactly like the plan and is not. Under the title, in the
+            // ink the control uses, before any figure it explains.
+            if (campus.assumedLifeYears != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                assumedCycleNote(campus.assumedLifeYears),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.tertiary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
             const SizedBox(height: 2),
             Text(
               'As of ${formatEquipmentDate(campus.asOf)}  ·  '

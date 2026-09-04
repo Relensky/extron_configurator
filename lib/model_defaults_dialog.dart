@@ -68,6 +68,67 @@ Future<void> offerModelDefaults(
   ));
 }
 
+/// ============================================================================
+///  THE DRIVER CHANGED. CHECK THE ROOM AGAINST IT AGAIN.
+/// ============================================================================
+///  Every python driver is parsed once and the answer kept — see
+///  [AppStateProvider.reloadModules] for why. Which means the person who
+///  maintains the drivers, editing one in the next window, is looking at an
+///  app that still believes the file it read at startup: the new Update method
+///  is not in the keep-alive dropdown, the port DEVICE_INFO now publishes is
+///  not what the room is measured against, and nothing on screen says so.
+///  Restarting the app was the only way to pick it up.
+///
+///  This is that, as a button. The drivers are re-read from disk and then the
+///  open room is put back to them — the same review the conversion offers,
+///  asked again against the files as they are now.
+///
+///  IT ALWAYS SAYS SOMETHING. A room that agrees with the freshly-read drivers
+///  reports how many were read and that nothing moved; a button that goes
+///  quiet when pressed reads as a broken button, and this one is pressed
+///  precisely when somebody is unsure whether their edit landed.
+///
+///  NOTHING IS WRITTEN by the reload itself. The review applies only what is
+///  ticked, exactly as it does after a conversion.
+Future<void> offerModuleRecheck(
+  BuildContext context,
+  AppStateProvider provider, {
+  String? onlySection,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final found = await provider.reloadModules();
+  if (!context.mounted) return;
+
+  // WITH NO ROOM OPEN there is nothing to check against, and saying "every
+  // device matches" about no devices would be a lie of omission.
+  if (provider.roomConfig.isEmpty) {
+    messenger.showSnackBar(SnackBar(
+      content: Text(
+        'Re-read $found python module${found == 1 ? '' : 's'} from '
+        '${provider.effectiveModulesPath}. Open a config to check it against '
+        'them.',
+      ),
+    ));
+    return;
+  }
+
+  final before = auditModelDefaults(provider, onlySection: onlySection).length;
+  messenger.showSnackBar(SnackBar(
+    content: Text(
+      'Re-read $found python module${found == 1 ? '' : 's'}. '
+      '${before == 0 ? 'Nothing in this config disagrees with them.' : '$before device${before == 1 ? '' : 's'} now disagree${before == 1 ? 's' : ''} with a driver.'}',
+    ),
+  ));
+  if (!context.mounted) return;
+  // The snack has said the count; the review says which, and is the only
+  // thing that can change anything.
+  await offerModelDefaults(
+    context,
+    provider,
+    onlySection: onlySection,
+  );
+}
+
 /// Returns the number of properties written, or 0 when nothing was.
 Future<int> showModelDefaultsDialog(
   BuildContext context,

@@ -20,6 +20,7 @@ import 'av_device_library.dart';
 import 'av_only_notice.dart';
 import 'av_flow_view.dart';
 import 'contrast.dart';
+import 'pinned_grid.dart' show gridMetric;
 import 'error_reporting.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
@@ -1681,7 +1682,7 @@ class _StartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SizedBox(
-      width: _startCardWidth,
+      width: _startCardWidth(context),
       child: Card(
         elevation: 2,
         child: Padding(
@@ -1747,8 +1748,19 @@ class _StartCard extends StatelessWidget {
 /// around its column, and it has to be right: it is what the blocks below are
 /// measured at, and a measurement taken at the wrong width reserves the wrong
 /// number of lines.
-const double _startCardWidth = 340;
-const double _startCardTextWidth = _startCardWidth - 8 - 48;
+///
+/// GROWN WITH THE READER'S TYPE. Fixed at 340 the card was the first screen of
+/// the application reading 'Create a New Fi...' on any display above 100% -
+/// the blurbs reserved their lines properly and the one control on the card
+/// did not, which is the wrong half to get right. See [gridMetric].
+/// 368 rather than the 340 it was: the card's one button reads 'Create a New
+/// File', and at 340 the label wanted twenty-two pixels the card did not have
+/// even at 100%. A card is sized by the longest thing on it, and the longest
+/// thing on this one is the control.
+double _startCardWidth(BuildContext context) => gridMetric(context, 368);
+
+double _startCardTextWidth(BuildContext context) =>
+    _startCardWidth(context) - 8 - 48;
 
 /// The height of the tallest of [blocks] when wrapped inside a start card.
 ///
@@ -1768,7 +1780,7 @@ double _tallestBlock(
       text: TextSpan(text: block, style: style),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
-    )..layout(maxWidth: _startCardTextWidth);
+    )..layout(maxWidth: _startCardTextWidth(context));
     if (painter.height > tallest) tallest = painter.height;
     painter.dispose();
   }
@@ -2645,7 +2657,8 @@ class ProcessorSearchField extends StatelessWidget {
 }
 
 /// View for mapping application paths and selecting the active deployment room
-/// HOW WIDE THE BUTTON ON THE END OF A PATH ROW IS.
+/// HOW WIDE THE BUTTON ON THE END OF A PATH ROW IS, at the reader's own text
+/// size.
 ///
 /// Every file-path row on the settings tab is a field that stretches and a
 /// button that does not, and the button used to be exactly as wide as its own
@@ -2655,17 +2668,26 @@ class ProcessorSearchField extends StatelessWidget {
 /// different kinds of row rather than one kind repeated.
 ///
 /// One width, set from the longest label there is, puts every field on the
-/// same right-hand edge and makes every button the same size. See
-/// [_settingsAction], which is how a row asks for it.
-const double _kSettingsActionWidth = 264;
-
-/// The button on the end of a path row, at the one width they all share.
+/// same right-hand edge and makes every button the same size.
 ///
-/// The height matches an [OutlineInputBorder] text field, so the button sits
+/// A BOX THAT DOES NOT GROW IS A LABEL THAT GETS CUT. Fixed at 264 this was a
+/// tidy column on the machine it was written on and 'Re-read Mod...' on a
+/// display at 150%, where the type is half again as big and the box was not -
+/// the one failure mode this app cares most about, because the people reading
+/// these screens in meeting rooms are exactly the ones with their text turned
+/// up. It is grown the way the type inside it is grown; see [gridMetric],
+/// which is how every other fixed dimension in the app handles the same
+/// question.
+const double _kSettingsActionWidth = 280;
+const double _kSettingsActionHeight = 56;
+
+/// The button on the end of a path row, at the one size they all share.
+///
+/// The height tracks an [OutlineInputBorder] text field, so the button sits
 /// square with the field rather than floating above its helper text.
-Widget _settingsAction(Widget button) => SizedBox(
-      width: _kSettingsActionWidth,
-      height: 56,
+Widget _settingsAction(BuildContext context, Widget button) => SizedBox(
+      width: gridMetric(context, _kSettingsActionWidth),
+      height: gridMetric(context, _kSettingsActionHeight),
       child: button,
     );
 
@@ -3133,31 +3155,62 @@ class AppSettingsView extends StatelessWidget {
         const SizedBox(height: 20),
 
         // Python Modules Path
-        TextFormField(
-          // Value in the key forces a refresh when the path is picked via the
-          // dialog. The field-name prefix keeps the key unique among this
-          // ListView's children: on a fresh install every path is blank, so
-          // the bare value alone made four siblings share a ValueKey('').
-          key: ValueKey('modulesPath_${provider.modulesPath}'),
-          decoration: InputDecoration(
-            labelText: 'Python Modules Path',
-            // Blank = the "devices" sub-folder of the Root Folder
-            hintText: provider.effectiveModulesPath,
-            helperText: 'Blank = "devices" sub-folder of the Root Folder',
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.folder),
-              tooltip: 'Select Directory',
-              onPressed: () async {
-                String? selectedDirectory = await FilePicker.getDirectoryPath();
-                if (selectedDirectory != null) {
-                  provider.updateSetting('modulesPath', selectedDirectory);
-                }
-              },
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                // Value in the key forces a refresh when the path is picked
+                // via the dialog. The field-name prefix keeps the key unique
+                // among this ListView's children: on a fresh install every
+                // path is blank, so the bare value alone made four siblings
+                // share a ValueKey('').
+                key: ValueKey('modulesPath_${provider.modulesPath}'),
+                decoration: InputDecoration(
+                  labelText: 'Python Modules Path',
+                  // Blank = the "devices" sub-folder of the Root Folder
+                  hintText: provider.effectiveModulesPath,
+                  helperText:
+                      'Blank = "devices" sub-folder of the Root Folder. '
+                      '${provider.availableModules.length} module'
+                      '${provider.availableModules.length == 1 ? '' : 's'} '
+                      'read. Drivers are parsed once, so re-read them after '
+                      'editing one.',
+                  helperMaxLines: 3,
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.folder),
+                    tooltip: 'Select Directory',
+                    onPressed: () async {
+                      String? selectedDirectory =
+                          await FilePicker.getDirectoryPath();
+                      if (selectedDirectory != null) {
+                        provider.updateSetting(
+                            'modulesPath', selectedDirectory);
+                      }
+                    },
+                  ),
+                ),
+                initialValue: provider.modulesPath,
+                onChanged: (val) =>
+                    provider.updateSetting('modulesPath', val),
+              ),
             ),
-          ),
-          initialValue: provider.modulesPath,
-          onChanged: (val) => provider.updateSetting('modulesPath', val),
+            const SizedBox(width: 16),
+            // A DRIVER EDITED WHILE THE APP IS OPEN is a driver the app does
+            // not know about: every .py is parsed once and the answer kept.
+            // This re-reads the folder and then puts the open config back to
+            // the drivers as they are NOW - see [offerModuleRecheck].
+            _settingsAction(
+              context,
+              ElevatedButton.icon(
+                key: const ValueKey('reload_python_modules'),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Re-read Modules'),
+                onPressed: () => offerModuleRecheck(context, provider),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 20),
 
@@ -3250,6 +3303,7 @@ class AppSettingsView extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             _settingsAction(
+              context,
               ElevatedButton.icon(
                 icon: const Icon(Icons.upload_file),
                 label: const Text('Load Template'),
@@ -3311,6 +3365,7 @@ class AppSettingsView extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             _settingsAction(
+              context,
               ElevatedButton.icon(
                 icon: const Icon(Icons.refresh),
                 label: const Text('Reload Schema'),
@@ -3374,6 +3429,7 @@ class AppSettingsView extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             _settingsAction(
+              context,
               ElevatedButton.icon(
                 icon: const Icon(Icons.refresh),
                 label: const Text('Reload Catalog'),
@@ -3443,6 +3499,7 @@ class AppSettingsView extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             _settingsAction(
+              context,
               ElevatedButton.icon(
                 icon: const Icon(Icons.refresh),
                 label: const Text('Reload Rules'),
@@ -3548,6 +3605,7 @@ class AppSettingsView extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             _settingsAction(
+              context,
               ElevatedButton.icon(
                 key: const ValueKey('edit_delivery_locations'),
                 icon: const Icon(Icons.warehouse_outlined),
@@ -3637,6 +3695,7 @@ class AppSettingsView extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             _settingsAction(
+              context,
               ElevatedButton.icon(
                 key: const ValueKey('edit_default_vendors'),
                 icon: const Icon(Icons.store_outlined),
@@ -3683,6 +3742,7 @@ class AppSettingsView extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             _settingsAction(
+              context,
               ElevatedButton.icon(
                 icon: const Icon(Icons.refresh),
                 label: const Text('Reload Key Map'),
