@@ -686,10 +686,11 @@ class _MatrixGridState extends State<_MatrixGrid> {
   }) {
     final floor = gridMetric(context, 60) * zoom;
     final ceiling = gridMetric(context, 132) * zoom;
-    // What is left of the column once the rules, the padding and the drag grip
-    // have had theirs. Measured narrow rather than wide: a head one line
-    // taller than it needed is tidy, and one line shorter is an ellipsis.
-    final text = columnWidth - 8 - gridMetric(context, 16) * zoom;
+    // What is left of the column once the rules and the padding have had
+    // theirs. The grip no longer stands beside the name - it has a line of
+    // its own above it - so the name is measured across the WHOLE column and
+    // the grip's line is added to the height instead.
+    final text = columnWidth - 8;
     if (text <= 0) return floor;
 
     final scaler = MediaQuery.textScalerOf(context);
@@ -706,9 +707,10 @@ class _MatrixGridState extends State<_MatrixGrid> {
       if (painter.height > tallest) tallest = painter.height;
       painter.dispose();
     }
-    // Breathing room under the last line, so a two-line name does not sit on
-    // the rule below it.
-    return (tallest + 10 * zoom).clamp(floor, ceiling);
+    // The grip's own line, and breathing room under the last line of the name
+    // so it does not sit on the rule below it.
+    return (tallest + gridMetric(context, _kGripIcon) + 10 * zoom)
+        .clamp(floor, ceiling);
   }
 
   @override
@@ -1130,23 +1132,41 @@ class _MatrixGridState extends State<_MatrixGrid> {
               showResponsibilityEditor(context, item.id, widget.columns),
           child: _cell(
             height: m.headRow,
-            align: Alignment.bottomLeft,
+            align: Alignment.topLeft,
             line: line,
             fill: _headFill(theme),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            // THE GRIP ON A LINE OF ITS OWN, in the top left corner, and the
+            // name under it starting at the same left edge as every other
+            // name.
+            //
+            // Beside the name it indented each heading by its own width, so
+            // thirty scope names began thirty times in a place the column's
+            // own ruled edge did not - and a name long enough to wrap put its
+            // second line further left than its first. The two are stacked
+            // instead: the handle is one thing, the name is another, and both
+            // are flush left.
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _ColumnGrip(item: item, width: m.itemColumn),
                 Expanded(
+                  // ON THE RULE IT BELONGS TO. The name sits at the bottom of
+                  // the head, against the parties it is answered by, however
+                  // many lines it runs to.
+                  //
                   // The ROW is sized to the longest of these - see
                   // [_scopeHeadHeight] - so the limit here is a backstop and
                   // not the thing deciding what gets read.
-                  child: Text(
-                    item.scope,
-                    maxLines: kScopeHeadLines,
-                    overflow: TextOverflow.ellipsis,
-                    style: zoomed.labelMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                  child: Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Text(
+                      item.scope,
+                      textAlign: TextAlign.left,
+                      maxLines: kScopeHeadLines,
+                      overflow: TextOverflow.ellipsis,
+                      style: zoomed.labelMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -1177,6 +1197,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
           child: _PartyCell(
             party: item.furnishedBy,
             missing: item.furnishedBy.trim().isEmpty,
+            fontSize: _partySize(zoomed),
           ),
         ),
         _cell(
@@ -1187,6 +1208,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
           child: _PartyCell(
             party: item.installedBy,
             missing: item.installedBy.trim().isEmpty,
+            fontSize: _partySize(zoomed),
           ),
         ),
         // THE STRIP THAT ENDS THE AGREEMENT AND STARTS THE COUNT. Empty over
@@ -1249,6 +1271,14 @@ class _MatrixGridState extends State<_MatrixGrid> {
       ),
     );
   }
+
+  /// HOW BIG A PARTY'S NAME IS DRAWN. Off the zoomed theme, like every other
+  /// word on the sheet: the rows those chips sit in already grow with the
+  /// zoom, so a name that stayed 11 pixels was the one thing on the document
+  /// that got smaller as the sheet got bigger - and 'Owner' against
+  /// 'Contractor' is the pair the whole matrix is read for.
+  static double _partySize(TextTheme zoomed) =>
+      zoomed.labelSmall?.fontSize ?? 11;
 
   static TextStyle? _headStyle(ThemeData theme, TextTheme zoomed) =>
       zoomed.labelMedium?.copyWith(
@@ -1352,6 +1382,12 @@ class _MatrixGridState extends State<_MatrixGrid> {
   static Color _sepFill(ThemeData theme) =>
       theme.colorScheme.onSurface.withValues(alpha: 0.13);
 }
+
+/// How big the drag grip is drawn. Shared, because the head measures its own
+/// height off it: a grip taller than the row allowed for is a scope name with
+/// its last line under the rule.
+const double _kGripIcon = 14;
+
 /// The handle a column is dragged by.
 ///
 /// ITS OWN TARGET, not the whole heading. The sheet is panned sideways by
@@ -1374,7 +1410,7 @@ class _ColumnGrip extends StatelessWidget {
         cursor: SystemMouseCursors.grab,
         child: Icon(
           Icons.drag_indicator,
-          size: gridMetric(context, 14),
+          size: gridMetric(context, _kGripIcon),
           color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
@@ -1421,10 +1457,17 @@ class _PartyCell extends StatelessWidget {
   /// that says it is not finished yet.
   final String missingLabel;
 
+  /// How big the name is drawn. The grid passes the size the rest of the
+  /// sheet is being read at, so the parties grow and shrink with the
+  /// quantities under them; the editor list below does not zoom and takes the
+  /// default.
+  final double fontSize;
+
   const _PartyCell({
     required this.party,
     required this.missing,
     this.missingLabel = 'NOBODY',
+    this.fontSize = 11,
   });
 
   @override
@@ -1435,6 +1478,7 @@ class _PartyCell extends StatelessWidget {
         missingLabel,
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.labelSmall?.copyWith(
+          fontSize: fontSize,
           color: theme.colorScheme.error,
           fontWeight: FontWeight.w600,
         ),
@@ -1453,6 +1497,7 @@ class _PartyCell extends StatelessWidget {
       child: NameTintChip(
         name: party,
         color: assigned == null ? null : Color(assigned),
+        fontSize: fontSize,
       ),
     );
   }

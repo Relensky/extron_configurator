@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -2258,7 +2259,8 @@ class ProjectDateGraph extends StatefulWidget {
 ///  ZOOMING HOLDS THE MIDDLE OF THE FRAME. A zoom that jumped back to January
 ///  every time would make the arrows useless for the thing they are for, which
 ///  is looking harder at the fortnight already on screen.
-class _ProjectDateGraphState extends State<ProjectDateGraph> {
+class _ProjectDateGraphState extends State<ProjectDateGraph>
+    with TickerProviderStateMixin {
   /// How far in the rail is read at. 1 is the whole job in the frame - see
   /// [kTimelineZoomSteps], which does not go below it.
   double _zoom = kGridZoomNormal;
@@ -2269,12 +2271,103 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
   /// be lit while the reader is looking at it. Null until somebody presses.
   DateTime? _focus;
 
+  /// THE RAIL DRAWING ITSELF, LEFT TO RIGHT.
+  ///
+  /// A schedule is read in one direction - today first, the deadline last -
+  /// and a rail that arrives complete states all of it at once. Played, the
+  /// order of the job is the order it appears in, and the eye is walked to
+  /// the far end rather than dropped there.
+  ///
+  /// ONCE ON ARRIVAL, and again when the dates change: a phase somebody has
+  /// just dated animates onto the rail instead of appearing in it. Never on a
+  /// scroll or a zoom, which are the reader moving, not the job.
+  late final AnimationController _draw;
+
+  /// The pulse under the card 'Take me there' just ran to. Finite - two beats
+  /// and out - because a light that never stops blinking is one nobody reads
+  /// twice.
+  late final AnimationController _flash;
+
+  /// What the rail is currently a picture of. A change here is a change to
+  /// the job and worth replaying; anything else is not.
+  String _drawn = '';
+
+  bool _started = false;
+
   ProjectSchedule get schedule => widget.schedule;
   BuildingProject get project => widget.project;
 
   @override
+  void initState() {
+    super.initState();
+    _draw = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _flash = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Whether to animate at all is a MediaQuery question, and initState is
+    // too early to ask one.
+    if (_started) return;
+    _started = true;
+    _drawn = _signature();
+    _play();
+  }
+
+  @override
+  void didUpdateWidget(ProjectDateGraph old) {
+    super.didUpdateWidget(old);
+    final now = _signature();
+    if (now == _drawn) return;
+    _drawn = now;
+    _play();
+  }
+
+  /// The dates the rail is drawn from, as one string.
+  String _signature() {
+    final b = StringBuffer(formatIsoDate(schedule.asOf));
+    for (final day in schedule.orderDays) {
+      b.write('|${formatIsoDate(day.date)}');
+    }
+    for (final track in project.tracks) {
+      b.write('|${track.deadline}|${track.completion}');
+    }
+    b.write('|${schedule.deadline}|${project.rfqs.length}');
+    return b.toString();
+  }
+
+  void _play() {
+    // Reduce motion means 'show me the schedule', not 'show me a slower one'.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _draw.value = 1;
+      return;
+    }
+    _draw.forward(from: 0);
+  }
+
+  /// How far out of the sweep something [fraction] along the rail is: 0 until
+  /// the playhead reaches it, 1 once it has caught up. Everything is 1 at the
+  /// end of the run, so a settled rail is the rail as it always was.
+  double _reveal(double fraction) {
+    final t = _draw.value;
+    if (t >= 1) return 1;
+    const lead = 0.55;
+    final out = (t - fraction.clamp(0.0, 1.0) * lead) / (1 - lead);
+    return Curves.easeOutCubic.transform(out.clamp(0.0, 1.0));
+  }
+
+  @override
   void dispose() {
     _scroll.dispose();
+    _draw.dispose();
+    _flash.dispose();
     super.dispose();
   }
 
@@ -2376,6 +2469,13 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
       _focus = date;
       if (_zoom == kGridZoomNormal) _zoom = _closeEnoughZoom(span);
     });
+    // The card is lit for as long as the reader is on it; the beat is what
+    // says WHICH of the cards now in the frame the button meant.
+    if (jump) {
+      _flash.value = 0;
+    } else {
+      _flash.forward(from: 0);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
       final view = _scroll.position.viewportDimension;
@@ -2406,6 +2506,7 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
 
   /// The whole job back in the frame, from wherever somebody had got to.
   void _fitAll() {
+    _flash.stop();
     setState(() {
       _zoom = kGridZoomNormal;
       _focus = null;
@@ -2601,6 +2702,16 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
+                  ),
+                  // The run again, for somebody who arrived mid-sweep or
+                  // wants the order of the job put back in front of them.
+                  IconButton(
+                    key: const ValueKey('timeline_graph_replay'),
+                    onPressed: _play,
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    tooltip: 'Run the dates through again',
+                    icon: const Icon(Icons.replay),
                   ),
                   // HOW FAR IN THE RAIL IS READ AT, said as a stretch of time
                   // rather than as a multiplier: '6 weeks' is the number
@@ -2843,84 +2954,139 @@ class _ProjectDateGraphState extends State<ProjectDateGraph> {
     final railY = lanes * lane + 2;
     final ticks = _monthTicks(first, span, plot, xOf);
 
+    // Where along the rail a thing sits, which is what paces it onto the
+    // screen: the sweep runs in the direction the job does.
+    double alongOf(double x) =>
+        plot <= 0 ? 0 : ((x - pad) / plot).clamp(0.0, 1.0);
+
     return SizedBox(
       height: railY + gridMetric(context, 26),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _DateGraphPainter(
-                railY: railY,
-                startX: pad,
-                endX: pad + plot,
-                todayX: xOf(schedule.asOf),
-                axis: theme.colorScheme.outlineVariant,
-                gone:
-                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
-                today: theme.colorScheme.onSurfaceVariant,
-                ground: theme.cardColor,
-                dots: [
-                  for (final day in schedule.orderDays)
-                    (
-                      x: xOf(day.date),
-                      color: orderStatusColor(
-                        context,
-                        day.parts
-                            .map((p) => p.status)
-                            .reduce((a, b) => a.index < b.index ? a : b),
-                      ),
-                    ),
-                ],
-                stems: [
-                  for (final p in placed)
-                    (
-                      x: xOf(p.mark.date),
-                      topX: p.stemX,
-                      top: topOf(p.lane) + markHeight,
-                      color: p.mark.color,
-                    ),
-                ],
-                ticks: [for (final t in ticks) t.x],
-              ),
-            ),
-          ),
-          // The months under the rail. What turns a row of dots into a
-          // distance: without them the gap between two dates is a gap, and
-          // with them it is three months.
-          for (final tick in ticks)
-            Positioned(
-              top: railY + 6,
-              left: tick.x - _kMonthLabelWidth / 2,
-              width: _kMonthLabelWidth,
-              child: Text(
-                tick.label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_draw, _flash]),
+        builder: (context, _) {
+          // The playhead leads the reveal: the rail is already at March while
+          // February's cards are still settling in behind it.
+          final head = (_draw.value / 0.55).clamp(0.0, 1.0);
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _DateGraphPainter(
+                    railY: railY,
+                    startX: pad,
+                    endX: pad + plot,
+                    todayX: xOf(schedule.asOf),
+                    axis: theme.colorScheme.outlineVariant,
+                    gone: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.45),
+                    today: theme.colorScheme.onSurfaceVariant,
+                    ground: theme.cardColor,
+                    head: head,
+                    todayAt: _reveal(alongOf(xOf(schedule.asOf))),
+                    phase: _draw.value,
+                    dots: [
+                      for (final day in schedule.orderDays)
+                        (
+                          x: xOf(day.date),
+                          color: orderStatusColor(
+                            context,
+                            day.parts
+                                .map((p) => p.status)
+                                .reduce((a, b) => a.index < b.index ? a : b),
+                          ),
+                          at: _reveal(alongOf(xOf(day.date))),
+                        ),
+                    ],
+                    stems: [
+                      for (final p in placed)
+                        (
+                          x: xOf(p.mark.date),
+                          topX: p.stemX,
+                          top: topOf(p.lane) + markHeight,
+                          color: p.mark.color,
+                          at: _reveal(alongOf(xOf(p.mark.date))),
+                        ),
+                    ],
+                    ticks: [for (final t in ticks) t.x],
+                  ),
                 ),
               ),
+              // The months under the rail. What turns a row of dots into a
+              // distance: without them the gap between two dates is a gap,
+              // and with them it is three months.
+              for (final tick in ticks)
+                Positioned(
+                  top: railY + 6,
+                  left: tick.x - _kMonthLabelWidth / 2,
+                  width: _kMonthLabelWidth,
+                  child: Opacity(
+                    opacity: _reveal(alongOf(tick.x)),
+                    child: Text(
+                      tick.label,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              for (final p in placed)
+                _placedCallout(
+                  p,
+                  at: _reveal(alongOf(xOf(p.mark.date))),
+                  top: topOf(p.lane),
+                  markWidth: markWidth,
+                  markHeight: markHeight,
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// One callout, in the state this frame of the sweep has it in.
+  ///
+  /// UP ONTO ITS STEM rather than in from nowhere: the card arrives from the
+  /// date it belongs to, which is the one direction that says anything.
+  Widget _placedCallout(
+    ({_DateMark mark, double left, double stemX, int lane}) p, {
+    required double at,
+    required double top,
+    required double markWidth,
+    required double markHeight,
+  }) {
+    final lit = _focus != null &&
+        formatIsoDate(_focus!) == formatIsoDate(p.mark.date);
+    return Positioned(
+      top: top,
+      left: p.left,
+      width: markWidth,
+      height: markHeight,
+      child: Opacity(
+        opacity: at,
+        child: Transform.translate(
+          offset: Offset(0, (1 - at) * 12),
+          child: Transform.scale(
+            scale: 0.92 + 0.08 * at,
+            alignment: Alignment.bottomCenter,
+            child: _DateCallout(
+              markKey: ValueKey('timeline_date_mark_${p.mark.label}'),
+              label: p.mark.label,
+              date: p.mark.date,
+              color: p.mark.color,
+              // Lit while the reader is looking at where the button took
+              // them, so the box above and the card on the rail are visibly
+              // the same date.
+              focused: lit,
+              // Two beats on arrival, and only under the card the button
+              // actually meant.
+              beat: lit ? _flash.value : 0,
             ),
-          for (final p in placed)
-            Positioned(
-              top: topOf(p.lane),
-              left: p.left,
-              width: markWidth,
-              height: markHeight,
-              child: _DateCallout(
-                markKey: ValueKey('timeline_date_mark_${p.mark.label}'),
-                label: p.mark.label,
-                date: p.mark.date,
-                color: p.mark.color,
-                // Lit while the reader is looking at where the button took
-                // them, so the box above and the card on the rail are visibly
-                // the same date.
-                focused: _focus != null &&
-                    formatIsoDate(_focus!) == formatIsoDate(p.mark.date),
-              ),
-            ),
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -3004,12 +3170,28 @@ class _NextDueBox extends StatelessWidget {
         '${next.parts} part${next.parts == 1 ? '' : 's'} to order',
     ];
 
-    return Container(
+    // Reduce motion means 'show me the date', not 'show me it arriving'.
+    final still = MediaQuery.disableAnimationsOf(context);
+
+    return AnimatedContainer(
       key: const ValueKey('timeline_next_due'),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
       padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
       decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(6),
+        // Weighted towards the rule it carries, so the box leans on the color
+        // that says how urgent it is rather than sitting in a flat panel of
+        // it. Late, due soon and on track look different across the whole
+        // width now, not only at the left edge.
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            tint.withValues(alpha: 0.16),
+            tint.withValues(alpha: 0.04),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(8),
         border: Border(left: BorderSide(color: tint, width: 4)),
       ),
       child: Row(
@@ -3029,24 +3211,57 @@ class _NextDueBox extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 // THE DATE ITSELF, LARGE. The whole reason for the box.
-                Text(
-                  formatScheduleDate(next.date),
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurface,
+                //
+                // SWAPPED RATHER THAN REPLACED. Dating a phase or placing an
+                // order moves what is next, and a figure that changed between
+                // two frames is a figure nobody noticed changing.
+                AnimatedSwitcher(
+                  duration: Duration(milliseconds: still ? 0 : 300),
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: SlideTransition(
+                      position: Tween(
+                        begin: const Offset(0, 0.35),
+                        end: Offset.zero,
+                      ).animate(anim),
+                      child: child,
+                    ),
+                  ),
+                  child: Text(
+                    formatScheduleDate(next.date),
+                    key: ValueKey(formatIsoDate(next.date)),
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  // How far off, in the words somebody would say it in. The
-                  // date alone is a fact; the gap is the thing that decides
-                  // whether it matters this week.
-                  days == 0
-                      ? 'Today'
-                      : days < 0
-                          ? '${-days} day${days == -1 ? '' : 's'} ago'
-                          : 'in $days day${days == 1 ? '' : 's'}',
-                  style: theme.textTheme.titleSmall?.copyWith(color: tint),
+                // How far off, in the words somebody would say it in. The
+                // date alone is a fact; the gap is the thing that decides
+                // whether it matters this week.
+                //
+                // COUNTED UP TO rather than printed: the run is short, and it
+                // is what draws the eye to the one number on the card that
+                // changes every morning.
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: days.toDouble()),
+                  duration: Duration(milliseconds: still ? 0 : 520),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, run, _) {
+                    // The WORDS come off the real gap and only the figure is
+                    // counted, so the line never empties and shoves the card
+                    // about on its way to the answer.
+                    final n = run.round();
+                    return Text(
+                      days == 0
+                          ? 'Today'
+                          : days < 0
+                              ? '${-n} day${n == -1 ? '' : 's'} ago'
+                              : 'in $n day${n == 1 ? '' : 's'}',
+                      style: theme.textTheme.titleSmall?.copyWith(color: tint),
+                    );
+                  },
                 ),
                 if (what.isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -3090,59 +3305,90 @@ class _DateCallout extends StatelessWidget {
   /// True when this is the date the reader was just taken to.
   final bool focused;
 
+  /// How far through the arrival beat this card is, 0 to 1. Only ever nonzero
+  /// on the card 'Take me there' just ran to.
+  final double beat;
+
   const _DateCallout({
     required this.markKey,
     required this.label,
     required this.date,
     required this.color,
     this.focused = false,
+    this.beat = 0,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // TWO BEATS, FADING OUT. A sine that dies with the run, so the card
+    // finishes at exactly the lit state it will sit in - no snap at the end.
+    final glow = beat <= 0 || beat >= 1
+        ? 0.0
+        : math.sin(beat * math.pi * 4).abs() * (1 - beat);
+    final fill = (focused ? 0.24 : 0.12) + 0.16 * glow;
+
     return Tooltip(
       message: '$label  ·  ${formatScheduleDate(date)}',
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        key: markKey,
-        padding: const EdgeInsets.fromLTRB(6, 3, 6, 3),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: focused ? 0.28 : 0.12),
-          borderRadius: BorderRadius.circular(4),
-          // The color is a second way to read the rail, never the only one -
-          // this tab gets printed and photographed. The words say it too.
-          //
-          // Lit, the card is ringed rather than given a heavier left edge: a
-          // rounded box can only carry a border of ONE color, so a thick left
-          // rule and three thin sides is not a border Flutter will paint.
-          border: focused
-              ? Border.fromBorderSide(BorderSide(color: color, width: 2))
-              : Border(left: BorderSide(color: color, width: 2.5)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
+      child: Transform.scale(
+        scale: 1 + 0.05 * glow,
+        child: Container(
+          key: markKey,
+          padding: const EdgeInsets.fromLTRB(6, 3, 6, 3),
+          decoration: BoxDecoration(
+            // A wash that fades to the right, so a lane of cards reads as
+            // cards rather than as a row of colored blocks.
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                color.withValues(alpha: fill),
+                color.withValues(alpha: fill * 0.3),
+              ],
             ),
-            Text(
-              formatScheduleDate(date),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            borderRadius: BorderRadius.circular(5),
+            // The color is a second way to read the rail, never the only one -
+            // this tab gets printed and photographed. The words say it too.
+            //
+            // Lit, the card is ringed rather than given a heavier left edge: a
+            // rounded box can only carry a border of ONE color, so a thick left
+            // rule and three thin sides is not a border Flutter will paint.
+            border: focused
+                ? Border.fromBorderSide(BorderSide(color: color, width: 2))
+                : Border(left: BorderSide(color: color, width: 2.5)),
+            boxShadow: glow <= 0
+                ? null
+                : [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.45 * glow),
+                      blurRadius: 6 + 10 * glow,
+                    ),
+                  ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface,
+                ),
               ),
-            ),
-          ],
+              Text(
+                formatScheduleDate(date),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -3151,18 +3397,35 @@ class _DateCallout extends StatelessWidget {
 
 /// The rail, the days already gone, the order dates on it, and the stems up to
 /// the cards.
+///
+/// EVERYTHING IS DRAWN AT A REVEAL. The sweep runs left to right - see
+/// [_ProjectDateGraphState._draw] - so each thing carries how far out it is,
+/// and a settled rail is every reveal at 1.
 class _DateGraphPainter extends CustomPainter {
   final double railY;
   final double startX, endX, todayX;
   final Color axis, gone, today, ground;
 
+  /// How far the rail itself has been drawn, 0 to 1. The playhead.
+  final double head;
+
+  /// How far out today's rule is, which trails the playhead like everything
+  /// else standing on the rail.
+  final double todayAt;
+
+  /// Where the whole run has got to. Only the repaint check reads it: the
+  /// reveals keep moving after the playhead has reached the end, so the head
+  /// alone is not enough to know the picture has changed.
+  final double phase;
+
   /// One per order date, in the color the worst part on that day reads in.
-  final List<({double x, Color color})> dots;
+  final List<({double x, Color color, double at})> dots;
 
   /// Up from the rail to the bottom of each callout. [x] is where it meets
   /// the rail - the true date - and [topX] where it meets the card, which
   /// differs when several things share a day. See [_kSameDayFan].
-  final List<({double x, double topX, double top, Color color})> stems;
+  final List<({double x, double topX, double top, Color color, double at})>
+      stems;
 
   /// Where the month labels are, so the rail can carry a tick under each.
   final List<double> ticks;
@@ -3176,6 +3439,9 @@ class _DateGraphPainter extends CustomPainter {
     required this.gone,
     required this.today,
     required this.ground,
+    required this.head,
+    required this.todayAt,
+    required this.phase,
     required this.dots,
     required this.stems,
     required this.ticks,
@@ -3183,22 +3449,75 @@ class _DateGraphPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawLine(
-      Offset(startX, railY),
-      Offset(endX, railY),
-      Paint()
-        ..color = axis
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round,
-    );
+    // How far along the rail the sweep has got. Nothing right of it is drawn
+    // at all, which is what makes the run read as one movement rather than as
+    // a dozen things fading in together.
+    final drawn = startX + (endX - startX) * head;
 
-    // TIME ALREADY SPENT, drawn heavier than the rest of the rail. A schedule
-    // is read from where the reader is standing, and the part behind them is
-    // the part no decision can be taken about any more.
-    if (todayX > startX) {
+    // TIME ALREADY SPENT, AS GROUND RATHER THAN AS A LINE. The part of the
+    // job behind the reader is the part no decision can be taken about any
+    // more, and shading it says so under every card standing in it.
+    final pastX = todayX < drawn ? todayX : drawn;
+    if (pastX > startX) {
+      final past = Rect.fromLTRB(startX, 0, pastX, railY);
+      canvas.drawRect(
+        past,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              gone.withValues(alpha: 0.02),
+              gone.withValues(alpha: 0.12),
+            ],
+          ).createShader(past),
+      );
+    }
+
+    // The months, carried up the plot at a weight that structures the cards
+    // without being read as a mark on the rail.
+    for (final x in ticks) {
+      if (x > drawn) continue;
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, railY),
+        Paint()
+          ..color = axis.withValues(alpha: 0.35)
+          ..strokeWidth = 1,
+      );
+    }
+
+    // THE RAIL. Lightest where the job starts and fullest where it ends, so
+    // the line itself leans in the direction it is read.
+    if (drawn > startX) {
+      final rail = Rect.fromLTRB(startX, railY - 1.5, drawn, railY + 1.5);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rail, const Radius.circular(1.5)),
+        Paint()
+          ..shader = LinearGradient(
+            colors: [
+              axis.withValues(alpha: 0.4),
+              axis,
+            ],
+          ).createShader(Rect.fromLTRB(startX, railY - 1.5, endX, railY + 1.5)),
+      );
+    }
+
+    // Where the rail has got to, while it is still getting there.
+    if (head > 0 && head < 1) {
+      canvas.drawCircle(
+        Offset(drawn, railY),
+        4,
+        Paint()
+          ..color = axis.withValues(alpha: 0.5)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      );
+    }
+
+    if (pastX > startX) {
       canvas.drawLine(
         Offset(startX, railY),
-        Offset(todayX, railY),
+        Offset(pastX, railY),
         Paint()
           ..color = gone
           ..strokeWidth = 4
@@ -3207,6 +3526,7 @@ class _DateGraphPainter extends CustomPainter {
     }
 
     for (final x in ticks) {
+      if (x > drawn) continue;
       canvas.drawLine(
         Offset(x, railY - 3),
         Offset(x, railY + 3),
@@ -3216,33 +3536,98 @@ class _DateGraphPainter extends CustomPainter {
       );
     }
 
+    // THE STEMS, EACH GROWING OUT OF ITS OWN DATE. Curved rather than
+    // slanted: a day carrying four things fans four lines that stay clearly
+    // separate all the way up, and a curve says 'this card belongs to that
+    // point' where a diagonal only points near it.
     for (final stem in stems) {
-      canvas.drawLine(
-        Offset(stem.x, railY),
-        Offset(stem.topX, stem.top),
+      if (stem.at <= 0) continue;
+      final top = railY + (stem.top - railY) * stem.at;
+      final topX = stem.x + (stem.topX - stem.x) * stem.at;
+      final path = Path()
+        ..moveTo(stem.x, railY)
+        ..cubicTo(
+          stem.x,
+          railY + (top - railY) * 0.45,
+          topX,
+          railY + (top - railY) * 0.55,
+          topX,
+          top,
+        );
+      canvas.drawPath(
+        path,
         Paint()
-          ..color = stem.color.withValues(alpha: 0.6)
-          ..strokeWidth = 1.5,
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              stem.color.withValues(alpha: 0.75 * stem.at),
+              stem.color.withValues(alpha: 0.12 * stem.at),
+            ],
+          ).createShader(
+            Rect.fromLTRB(stem.x, top, stem.x + 1, railY),
+          ),
+      );
+      // Where the stem meets the rail, in the mark's own color. A named date
+      // had no mark on the rail at all before this - only a line leaving it.
+      canvas.drawCircle(
+        Offset(stem.x, railY),
+        2.5 * stem.at,
+        Paint()..color = stem.color.withValues(alpha: 0.9),
       );
     }
 
     // THE ORDER DATES. Each is punched out of the rail first, so eleven dates
-    // in one fortnight read as eleven dates rather than as one thick smear.
+    // in one fortnight read as eleven dates rather than as one thick smear -
+    // and each lands with a ring that settles onto it.
     for (final dot in dots) {
-      canvas.drawCircle(Offset(dot.x, railY), 5, Paint()..color = ground);
-      canvas.drawCircle(Offset(dot.x, railY), 3.5, Paint()..color = dot.color);
+      if (dot.at <= 0) continue;
+      final pop = Curves.easeOutBack.transform(dot.at);
+      canvas.drawCircle(
+        Offset(dot.x, railY),
+        6.5 * pop,
+        Paint()..color = dot.color.withValues(alpha: 0.18 * dot.at),
+      );
+      canvas.drawCircle(Offset(dot.x, railY), 5 * pop, Paint()..color = ground);
+      canvas.drawCircle(
+        Offset(dot.x, railY),
+        3.5 * pop,
+        Paint()..color = dot.color,
+      );
     }
 
-    // Where today is: a full-height rule rather than a dot, because every
-    // other mark on the rail is read against it.
-    canvas.drawLine(
-      Offset(todayX, 0),
-      Offset(todayX, railY),
-      Paint()
-        ..color = today.withValues(alpha: 0.35)
-        ..strokeWidth = 1,
-    );
-    canvas.drawCircle(Offset(todayX, railY), 4, Paint()..color = today);
+    // WHERE TODAY IS: a rule rather than a dot, because every other mark on
+    // the rail is read against it. Dashed and fading upwards, so it separates
+    // the plot without competing with the dates standing in it.
+    if (todayAt > 0) {
+      final reach = railY * todayAt;
+      final line = Paint()
+        ..color = today.withValues(alpha: 0.45)
+        ..strokeWidth = 1;
+      for (var y = railY; y > railY - reach; y -= 6) {
+        final to = y - 3.5;
+        canvas.drawLine(
+          Offset(todayX, y),
+          Offset(todayX, to < railY - reach ? railY - reach : to),
+          line
+            ..color = today.withValues(
+              alpha: 0.12 + 0.33 * (y - (railY - reach)) / (reach + 1),
+            ),
+        );
+      }
+      canvas.drawCircle(
+        Offset(todayX, railY),
+        7 * todayAt,
+        Paint()..color = today.withValues(alpha: 0.15),
+      );
+      canvas.drawCircle(
+        Offset(todayX, railY),
+        4 * todayAt,
+        Paint()..color = today,
+      );
+    }
   }
 
   @override
@@ -3251,6 +3636,9 @@ class _DateGraphPainter extends CustomPainter {
       old.todayX != todayX ||
       old.startX != startX ||
       old.endX != endX ||
+      old.head != head ||
+      old.phase != phase ||
+      old.todayAt != todayAt ||
       old.dots.length != dots.length ||
       old.stems.length != stems.length ||
       old.ticks.length != ticks.length;
