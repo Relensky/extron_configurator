@@ -184,9 +184,18 @@ class AssumedCycleControl extends StatelessWidget {
         children: [
           Icon(Icons.published_with_changes, size: 16, color: ink),
           const SizedBox(width: 5),
-          Text(
-            'Cycle',
-            style: theme.textTheme.labelMedium?.copyWith(color: ink),
+          // THE WORD GIVES BEFORE THE PICKER DOES. This control sits in a Wrap
+          // on both the sheet's header and the Current models pane, and a Wrap
+          // can only move a whole child onto the next line - it cannot narrow
+          // one. On a narrow window at the reader's type the pair is that
+          // child, and the label is the half that can be lost: the icon and
+          // the picker's own value still say what it is.
+          Flexible(
+            child: Text(
+              'Cycle',
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(color: ink),
+            ),
           ),
           const SizedBox(width: 6),
           DropdownButton<int?>(

@@ -1152,18 +1152,27 @@ class LifecycleEverythingChunk extends StatelessWidget {
           // "142 items, $284,000" reads as a single quantity; the pair is two
           // answers - how much there is, and what it is worth - and they get
           // quoted separately.
-          _EverythingFigure(
-            label: 'Items',
-            value: '$items',
-            valueKey: const ValueKey('lifecycle_everything_items'),
+          //
+          // FLEXIBLE, because this block sits in a Wrap: a Wrap moves a whole
+          // child onto the next line and cannot narrow one, so at the
+          // reader's type on a narrow window the row went off the edge. The
+          // labels give first and the tooltip carries the whole sentence.
+          Flexible(
+            child: _EverythingFigure(
+              label: 'Items',
+              value: '$items',
+              valueKey: const ValueKey('lifecycle_everything_items'),
+            ),
           ),
           const SizedBox(width: 20),
-          _EverythingFigure(
-            label: 'Replacement value',
-            value: cost > 0
-                ? formatLifecycleMoney(cost, currency)
-                : 'not priced',
-            valueKey: const ValueKey('lifecycle_everything_money'),
+          Flexible(
+            child: _EverythingFigure(
+              label: 'Replacement value',
+              value: cost > 0
+                  ? formatLifecycleMoney(cost, currency)
+                  : 'not priced',
+              valueKey: const ValueKey('lifecycle_everything_money'),
+            ),
           ),
         ],
       ),
@@ -1193,12 +1202,18 @@ class _EverythingFigure extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
+          overflow: TextOverflow.ellipsis,
           style: theme.textTheme.labelSmall?.copyWith(
             fontSize: 10,
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
-        Text(value, key: valueKey, style: theme.textTheme.titleSmall),
+        Text(
+          value,
+          key: valueKey,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleSmall,
+        ),
       ],
     );
   }
@@ -1255,11 +1270,18 @@ class _Summary extends StatelessWidget {
                     color: headline,
                   ),
                   SizedBox(width: gap * 0.7),
-                  Text(
-                    kEquipmentTimingLabels[timing]!,
-                    key: const ValueKey('lifecycle_room_condition'),
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: headline,
+                  // FLEXIBLE for the same reason the building's bands are:
+                  // this row sits in a Wrap, and a Wrap can only move a whole
+                  // child onto the next line - it cannot narrow one that does
+                  // not fit by itself. At the reader's type on a narrow
+                  // window this headline is that child.
+                  Flexible(
+                    child: Text(
+                      kEquipmentTimingLabels[timing]!,
+                      key: const ValueKey('lifecycle_room_condition'),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: headline,
+                      ),
                     ),
                   ),
                 ],

@@ -966,23 +966,31 @@ class _Band extends StatelessWidget {
           color: color,
         ),
         const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              kEquipmentConditionLabels[condition]!.toUpperCase(),
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+        // FLEXIBLE, because a band sits in a Wrap and a Wrap only helps by
+        // moving whole children onto the next line - it cannot make one that
+        // is too wide on its own any narrower. "2 rooms - 2 items, not
+        // priced" at the reader's type on a half-width window is exactly
+        // that, and the row ran off the edge behind the overflow stripes.
+        // Given room to shrink, the words wrap instead.
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                kEquipmentConditionLabels[condition]!.toUpperCase(),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
-            Text(
-              '$rooms room${rooms == 1 ? '' : 's'} · '
-              '${formatEquipmentBand(items, cost, currency)}',
-              key: ValueKey('lifecycle_band_${condition.name}'),
-              style: theme.textTheme.titleMedium?.copyWith(color: color),
-            ),
-          ],
+              Text(
+                '$rooms room${rooms == 1 ? '' : 's'} · '
+                '${formatEquipmentBand(items, cost, currency)}',
+                key: ValueKey('lifecycle_band_${condition.name}'),
+                style: theme.textTheme.titleMedium?.copyWith(color: color),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -1227,13 +1235,19 @@ class _LifecycleYearGridState extends State<LifecycleYearGrid> {
                 'REPLACEMENT YEAR',
                 style: headStyle?.copyWith(fontWeight: FontWeight.bold),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              // AND A WRAP INSIDE IT, for the same reason one step further
+              // in. Dropping the controls onto their own line only helps
+              // while the controls FIT on a line: with a what-if picker
+              // beside the zoom stepper the pair is wider than a half-width
+              // window at 150%, and a Row cannot give - it ran the stepper
+              // off the edge behind the overflow stripes again. This lets the
+              // two of them split as well.
+              Wrap(
+                spacing: gap * 1.5,
+                runSpacing: gap * 0.5,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  if (widget.headerAction != null) ...[
-                    widget.headerAction!,
-                    SizedBox(width: gap * 1.5),
-                  ],
+                  ?widget.headerAction,
                   GridZoomControls(
                     keyPrefix: 'lifecycle',
                     zoom: zoom,
@@ -2028,6 +2042,14 @@ class _DueYearChip extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(6),
         ),
+        // THE YEAR IS THE CHIP, and the two figures beside it can give.
+        //
+        // Chips sit in a Wrap, which moves a whole chip onto the next line
+        // and cannot narrow one - so at the reader's type on a narrow window
+        // this row went off the edge. The year stays whole because a chip
+        // whose year is clipped is not a chip; the money and the count are
+        // ellipsized instead, and the tooltip on the whole chip already
+        // spells out what is in it.
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2036,22 +2058,28 @@ class _DueYearChip extends StatelessWidget {
               style: theme.textTheme.titleSmall?.copyWith(color: ink),
             ),
             SizedBox(width: gridMetric(context, 8)),
-            Text(
-              group.cost > 0
-                  ? '${estimated ? '~' : ''}'
-                        '${formatLifecycleMoney(group.cost, currency)}'
-                  : 'not priced',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                fontStyle: estimated ? FontStyle.italic : FontStyle.normal,
+            Flexible(
+              child: Text(
+                group.cost > 0
+                    ? '${estimated ? '~' : ''}'
+                          '${formatLifecycleMoney(group.cost, currency)}'
+                    : 'not priced',
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontStyle: estimated ? FontStyle.italic : FontStyle.normal,
+                ),
               ),
             ),
             SizedBox(width: gridMetric(context, 8)),
-            Text(
-              '${group.items.length} item'
-              '${group.items.length == 1 ? '' : 's'}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            Flexible(
+              child: Text(
+                '${group.items.length} item'
+                '${group.items.length == 1 ? '' : 's'}',
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],
