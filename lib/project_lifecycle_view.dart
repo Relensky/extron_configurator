@@ -15,6 +15,7 @@ import 'lifecycle_picture.dart';
 import 'lifecycle_spend_chart.dart';
 import 'manual_room_equipment.dart' show manualRoomEquipmentSummary;
 import 'manual_room_lines.dart';
+import 'model_standards_view.dart' show ModelStandardsPane;
 import 'lifecycle_view.dart'
     show
         EquipmentTimingKey,
@@ -49,7 +50,18 @@ import 'project_estimate.dart';
 
 /// The building's replacement plan, as slivers for the project tab's one
 /// scroll view.
-List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
+///
+/// TWO READINGS OF THE SAME BUILDING, on [standards]: the year grid, which says
+/// WHEN it falls due and what that comes to, and Current Models, which says
+/// what the figures behind it assume - see [ModelStandardsPane]. The estate
+/// carries the same pair, and this is the level most people are standing on
+/// when they ask what a projector costs: one job, whose gear they can name.
+List<Widget> lifecycleSlivers(
+  BuildContext context,
+  ProjectEstimate estimate, {
+  bool standards = false,
+  ValueChanged<bool>? onStandards,
+}) {
   final provider = context.watch<AppStateProvider>();
   // THE PLAN AS RECORDED, always built first. The what-if is a lens over it -
   // see [BuildingLifecycle.onCycle] - and the control needs both to be able to
@@ -116,54 +128,110 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
         linesOnly: estimate.rooms.isEmpty,
       ),
     ),
-    // WHAT IF THE WHOLE BUILDING WERE REFRESHED ON A DIFFERENT CYCLE.
-    //
-    // The picker itself rides on the grid's own header row and costs no
-    // height; this is the line that says what is being assumed and what it
-    // moved, and it draws nothing at all until somebody has asked something.
-    SliverToBoxAdapter(
-      child: buildingCycleNote(recorded: recorded, shown: building),
-    ),
-    SliverToBoxAdapter(
-      child: LifecycleYearGrid(
-        building: building,
-        headerAction: buildingCycleControl(context, shown: building),
-      ),
-    ),
-    // THE SHAPE OF THE SAME PLAN, UNDER THE SHEET RATHER THAN OVER IT.
-    //
-    // The grid is the point of this pane and has to own the first screen -
-    // above it, the chart pushed the sheet's own zoom controls below the fold
-    // on a laptop at 150%. So it sits between the document and the room list
-    // it is summarised from, which is also where somebody asks the question it
-    // answers: the grid says what, this says how much and when, and hovering a
-    // year names the rooms in it.
-    SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-        child: LifecycleSpendChart(
-          key: const ValueKey('lifecycle_spend_chart'),
-          years: spend,
-          currency: building.currency,
-          asOfYear: building.asOf.year,
-          levelAmount:
-              LifecycleSpendChart.levelSpendFor(spend, building.asOf.year),
+    // THE TWO QUESTIONS A BUILDING GETS ASKED, on the same segmented pair the
+    // estate carries: what year does it fall due, and what are the figures
+    // behind that actually assuming.
+    if (onStandards != null)
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<bool>(
+              key: const ValueKey('lifecycle_pane'),
+              segments: const [
+                ButtonSegment(
+                  value: false,
+                  icon: Icon(Icons.calendar_month, size: 18),
+                  label: Text('The plan'),
+                ),
+                ButtonSegment(
+                  value: true,
+                  icon: Icon(Icons.inventory_2_outlined, size: 18),
+                  label: Text('Current models'),
+                ),
+              ],
+              selected: {standards},
+              showSelectedIcon: false,
+              onSelectionChanged: (v) => onStandards(v.first),
+            ),
+          ),
         ),
       ),
-    ),
-    const SliverToBoxAdapter(child: Divider(height: 1)),
-
-    // ROOM BY ROOM, WITH THE MONEY BROKEN OUT BY THE YEAR IT LANDS. The grid
-    // above is the picture; this is the list a budget request is written from.
-    SliverList.separated(
-      itemCount: building.rooms.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, i) => _RoomRow(
-        room: building.rooms[i],
-        currency: building.currency,
+    if (standards)
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: ModelStandardsPane(
+            key: const ValueKey('lifecycle_standards'),
+            items: building.items,
+            asOf: building.asOf,
+            currency: building.currency,
+            scope: 'building',
+            // THE SAME PICKER THE GRID CARRIES. The lump sums here do not
+            // care what life anybody assumes; what each kind of thing costs
+            // A YEAR does, and that is the figure a capital plan is written
+            // in - so the restatement has to be reachable without switching
+            // back to the calendar and back again.
+            headerAction: buildingCycleControl(
+              context,
+              shown: building,
+              keyPrefix: 'lifecycle_standards',
+            ),
+          ),
+        ),
+      )
+    else ...[
+      // WHAT IF THE WHOLE BUILDING WERE REFRESHED ON A DIFFERENT CYCLE.
+      //
+      // The picker itself rides on the grid's own header row and costs no
+      // height; this is the line that says what is being assumed and what it
+      // moved, and it draws nothing at all until somebody has asked something.
+      SliverToBoxAdapter(
+        child: buildingCycleNote(recorded: recorded, shown: building),
       ),
-    ),
-    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      SliverToBoxAdapter(
+        child: LifecycleYearGrid(
+          building: building,
+          headerAction: buildingCycleControl(context, shown: building),
+        ),
+      ),
+      // THE SHAPE OF THE SAME PLAN, UNDER THE SHEET RATHER THAN OVER IT.
+      //
+      // The grid is the point of this pane and has to own the first screen -
+      // above it, the chart pushed the sheet's own zoom controls below the fold
+      // on a laptop at 150%. So it sits between the document and the room list
+      // it is summarised from, which is also where somebody asks the question
+      // it answers: the grid says what, this says how much and when, and
+      // hovering a year names the rooms in it.
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+          child: LifecycleSpendChart(
+            key: const ValueKey('lifecycle_spend_chart'),
+            years: spend,
+            currency: building.currency,
+            asOfYear: building.asOf.year,
+            levelAmount:
+                LifecycleSpendChart.levelSpendFor(spend, building.asOf.year),
+          ),
+        ),
+      ),
+      const SliverToBoxAdapter(child: Divider(height: 1)),
+
+      // ROOM BY ROOM, WITH THE MONEY BROKEN OUT BY THE YEAR IT LANDS. The grid
+      // above is the picture; this is the list a budget request is written
+      // from.
+      SliverList.separated(
+        itemCount: building.rooms.length,
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (context, i) => _RoomRow(
+          room: building.rooms[i],
+          currency: building.currency,
+        ),
+      ),
+      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+    ],
   ];
 }
 

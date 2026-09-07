@@ -10,6 +10,7 @@ import 'contrast.dart';
 import 'equipment_lifecycle.dart';
 import 'lifecycle_picture.dart' show showLifecycleSheetPicture;
 import 'lifecycle_spend_chart.dart';
+import 'model_standards_view.dart' show ModelStandardsPane;
 import 'project_lifecycle_view.dart'
     show LifecyclePlanSheet, LifecycleYearGrid, lifecycleFileStemFor;
 import 'pinned_grid.dart' show gridMetric;
@@ -55,6 +56,16 @@ class _LifecycleViewState extends State<LifecycleView> {
   /// a room that opened with them showing because somebody once looked would
   /// be a plan that reads differently for two people.
   bool _showNever = false;
+
+  /// Whether the tab is showing what this room would be bought on today
+  /// rather than its plan.
+  ///
+  /// THE SMALLEST LEVEL THE ESTATE'S QUESTION GETS ASKED AT. "What does a
+  /// projector cost" is a question people ask standing in the room with the
+  /// projector in it, not reading a twelve-building sheet - and the answer is
+  /// written onto the same one card either way. Off by default: the room's
+  /// plan is what the tab is opened for.
+  bool _standards = false;
 
   /// ONE SCROLL REGION FOR THE WHOLE TAB, and the bar that says so.
   ///
@@ -132,105 +143,163 @@ class _LifecycleViewState extends State<LifecycleView> {
               setAside: setAside,
             ),
           ),
-          SliverToBoxAdapter(
-            child: _RoomActions(
-              room: room,
-              currency: provider.currencySymbol,
-              showNever: _showNever,
-              onShowNever: () => setState(() => _showNever = !_showNever),
-            ),
-          ),
-          // WHAT IF THIS ROOM WERE REFRESHED ON A DIFFERENT CYCLE. The same
-          // control the building plan and the campus carry, on the same
-          // session setting - see [AppStateProvider.assumedLifeCycle] - so a
-          // room read here and the same room read on the job cannot end up
-          // modelled two different ways.
+          // THE TWO QUESTIONS ASKED OF THIS ROOM, on the same segmented pair
+          // the building's plan and the estate carry: what year does it fall
+          // due, and what are the figures behind that actually assuming.
           //
-          // The picker rides on the grid's header row below and costs no
-          // height; this line appears only once a cycle has been picked.
-          SliverToBoxAdapter(
-            child: roomCycleNote(
-              recorded: recorded,
-              shown: room,
-              currency: provider.currencySymbol,
-            ),
-          ),
-          // THE SAME CALENDAR THE PROJECT DRAWS, FOR THIS ROOM.
-          //
-          // This tab answered "how old is everything in here" as a list of
-          // positions, and left "what year does it land, in how many tranches,
-          // and what does each cost" to the Project tab - which is a different
-          // screen, on a job the room may not even be on. They are the same
-          // facts about the same room, and this is where somebody is standing
-          // when the question comes up.
-          //
-          // A building of ONE. Nothing in the grid cares how many rooms it is
-          // given, and handing it the room this way means the two screens can
-          // never draw the same room two different ways.
-          SliverToBoxAdapter(
-            child: LifecycleYearGrid(
-              // The key is already on the strip above this, under the timing
-              // bar it explains. Twice on one page reads as two keys.
-              showKey: false,
-              headerAction: AssumedCycleControl(
-                keyPrefix: 'room_lifecycle',
-                assumed: room.assumedLifeYears,
-                onChanged: provider.setAssumedLifeCycle,
-              ),
-              building: asBuilding,
-            ),
-          ),
-          // THE SHAPE OF THIS ROOM'S PLAN, and what to put aside for it.
-          //
-          // The same chart the building and the campus draw, asked of one
-          // room - see [LifecycleSpendChart]. A room's plan is usually two or
-          // three spikes years apart, and the question standing in front of
-          // it is never "what does the refresh cost" but "what should we be
-          // saving a year": the dashed line is that figure, and the summary
-          // above prints it.
-          //
-          // UNDER THE GRID, NOT OVER IT, for the same reason it is under the
-          // building's: the grid is the document and has to own the first
-          // screen, and a chart above it pushes the sheet's own controls off
-          // a laptop at 150%.
+          // It is the same one base cost card at all three levels, so a
+          // projector benchmarked here is benchmarked for the estate - and
+          // this is where somebody is standing when they can name the gear.
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-              child: LifecycleSpendChart(
-                key: const ValueKey('room_lifecycle_spend_chart'),
-                years: spend,
-                currency: provider.currencySymbol,
-                asOfYear: room.asOf.year,
-                levelAmount: setAside,
-                title: 'WHAT THIS ROOM COSTS, YEAR BY YEAR',
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SegmentedButton<bool>(
+                  key: const ValueKey('room_lifecycle_pane'),
+                  segments: const [
+                    ButtonSegment(
+                      value: false,
+                      icon: Icon(Icons.calendar_month, size: 18),
+                      label: Text('The plan'),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      icon: Icon(Icons.inventory_2_outlined, size: 18),
+                      label: Text('Current models'),
+                    ),
+                  ],
+                  selected: {_standards},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (v) =>
+                      setState(() => _standards = v.first),
+                ),
               ),
             ),
           ),
-          const SliverToBoxAdapter(child: Divider(height: 1)),
-          if (rows.isEmpty)
+          if (_standards)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'Every item in this room is off the refresh cycle.\n\n'
-                  'Nothing here falls due, which is a real answer for a '
-                  'room of brackets and plates - and the toggle above '
-                  'shows them.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                child: ModelStandardsPane(
+                  key: const ValueKey('room_lifecycle_standards'),
+                  items: room.items,
+                  asOf: room.asOf,
+                  currency: provider.currencySymbol,
+                  scope: 'room',
+                  // THE SAME PICKER THE GRID CARRIES, on the same session
+                  // setting. What a projector costs is a lump sum; what it
+                  // costs A YEAR is that over the life, and this is the pane
+                  // where somebody is deciding both at once.
+                  headerAction: AssumedCycleControl(
+                    keyPrefix: 'room_standards',
+                    assumed: room.assumedLifeYears,
+                    onChanged: provider.setAssumedLifeCycle,
+                  ),
                 ),
               ),
             )
-          else
-            SliverList.separated(
-              itemCount: rows.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, i) => _ItemRow(
-                item: rows[i].item,
+          else ...[
+            SliverToBoxAdapter(
+              child: _RoomActions(
+                room: room,
                 currency: provider.currencySymbol,
-                never: rows[i].never,
+                showNever: _showNever,
+                onShowNever: () => setState(() => _showNever = !_showNever),
               ),
             ),
+            // WHAT IF THIS ROOM WERE REFRESHED ON A DIFFERENT CYCLE. The same
+            // control the building plan and the campus carry, on the same
+            // session setting - see [AppStateProvider.assumedLifeCycle] - so a
+            // room read here and the same room read on the job cannot end up
+            // modelled two different ways.
+            //
+            // The picker rides on the grid's header row below and costs no
+            // height; this line appears only once a cycle has been picked.
+            SliverToBoxAdapter(
+              child: roomCycleNote(
+                recorded: recorded,
+                shown: room,
+                currency: provider.currencySymbol,
+              ),
+            ),
+            // THE SAME CALENDAR THE PROJECT DRAWS, FOR THIS ROOM.
+            //
+            // This tab answered "how old is everything in here" as a list of
+            // positions, and left "what year does it land, in how many
+            // tranches, and what does each cost" to the Project tab - which is
+            // a different screen, on a job the room may not even be on. They
+            // are the same facts about the same room, and this is where
+            // somebody is standing when the question comes up.
+            //
+            // A building of ONE. Nothing in the grid cares how many rooms it
+            // is given, and handing it the room this way means the two screens
+            // can never draw the same room two different ways.
+            SliverToBoxAdapter(
+              child: LifecycleYearGrid(
+                // The key is already on the strip above this, under the timing
+                // bar it explains. Twice on one page reads as two keys.
+                showKey: false,
+                headerAction: AssumedCycleControl(
+                  keyPrefix: 'room_lifecycle',
+                  assumed: room.assumedLifeYears,
+                  onChanged: provider.setAssumedLifeCycle,
+                ),
+                building: asBuilding,
+              ),
+            ),
+            // THE SHAPE OF THIS ROOM'S PLAN, and what to put aside for it.
+            //
+            // The same chart the building and the campus draw, asked of one
+            // room - see [LifecycleSpendChart]. A room's plan is usually two or
+            // three spikes years apart, and the question standing in front of
+            // it is never "what does the refresh cost" but "what should we be
+            // saving a year": the dashed line is that figure, and the summary
+            // above prints it.
+            //
+            // UNDER THE GRID, NOT OVER IT, for the same reason it is under the
+            // building's: the grid is the document and has to own the first
+            // screen, and a chart above it pushes the sheet's own controls off
+            // a laptop at 150%.
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+                child: LifecycleSpendChart(
+                  key: const ValueKey('room_lifecycle_spend_chart'),
+                  years: spend,
+                  currency: provider.currencySymbol,
+                  asOfYear: room.asOf.year,
+                  levelAmount: setAside,
+                  title: 'WHAT THIS ROOM COSTS, YEAR BY YEAR',
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: Divider(height: 1)),
+            if (rows.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Every item in this room is off the refresh cycle.\n\n'
+                    'Nothing here falls due, which is a real answer for a '
+                    'room of brackets and plates - and the toggle above '
+                    'shows them.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              )
+            else
+              SliverList.separated(
+                itemCount: rows.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, i) => _ItemRow(
+                  item: rows[i].item,
+                  currency: provider.currencySymbol,
+                  never: rows[i].never,
+                ),
+              ),
+          ],
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),

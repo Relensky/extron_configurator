@@ -323,6 +323,15 @@ class ProjectView extends StatefulWidget {
 class _ProjectViewState extends State<ProjectView> {
   _ProjectPane _pane = _ProjectPane.rooms;
 
+  /// Whether the Lifecycle pane is showing what the building would be bought
+  /// on today rather than the year grid.
+  ///
+  /// HELD HERE rather than inside the pane because the pane is a list of
+  /// slivers in this screen's one scroll view - see [lifecycleSlivers] - and
+  /// the room rows below it have to stay lazily built. Off by default: the
+  /// calendar is the document a budget meeting is sent.
+  bool _lifecycleStandards = false;
+
   /// Master-list filter: '' for everything, otherwise a vendor id, or the
   /// sentinel below for the parts nothing claimed.
   String _vendorFilter = '';
@@ -662,7 +671,12 @@ class _ProjectViewState extends State<ProjectView> {
               onSelectShown: _selectShownDeliveries,
               onClearSelected: _clearSelectedDeliveries,
             ),
-            _ProjectPane.lifecycle => lifecycleSlivers(context, estimate),
+            _ProjectPane.lifecycle => lifecycleSlivers(
+              context,
+              estimate,
+              standards: _lifecycleStandards,
+              onStandards: (v) => setState(() => _lifecycleStandards = v),
+            ),
             _ProjectPane.responsibility =>
               responsibilitySlivers(context, estimate),
             _ProjectPane.vendors => vendorsSlivers(context, estimate),

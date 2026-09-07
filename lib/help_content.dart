@@ -641,8 +641,8 @@ const List<HelpTopic> kHelpTopics = [
         'no model chosen yet, and what the refresh plan budgets a position at '
         'when the catalog has no price for its model.\n\n'
         'A card can also record WHICH product its figure was benchmarked on '
-        'and when - see "Current models" on the campus report, which is where '
-        'that gets set. A figure with a model and a date behind it is one a '
+        'and when - see "Current models", on the campus, on a job\'s Lifecycle '
+        'pane and in any room, which is where that gets set. A figure with a model and a date behind it is one a '
         'finance office can argue with; one without is a number.\n\n'
         '0 means "not set" and is reported as an unpriced line rather than '
         'costed at nothing.',
@@ -1582,11 +1582,14 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'Current models - what we would buy this year',
     section: 'The estate',
-    where: 'Campus → Current models',
+    where:
+        'Campus → Current models, Project → Lifecycle → Current models, and a '
+        'room\'s Lifecycle tab → Current models',
     plain:
-        'For each kind of equipment, how many the estate holds and what it '
-        'would cost to replace them all with this year model. Choosing one '
-        'sets the price the whole plan is built on.',
+        'For each kind of equipment, how many are held and what it would cost '
+        'to replace them all with this year model. Read it of the estate, one '
+        'building or one room; choosing a model sets the price the whole plan '
+        'is built on.',
     keywords: [
       'current models',
       'standard',
@@ -1596,6 +1599,8 @@ const List<HelpTopic> kHelpTopics = [
       'projector price',
       'refresh budget',
       'stale',
+      'room models',
+      'building models',
     ],
     body:
         'A whole refresh plan is built out of one number per kind of thing - '
@@ -1603,20 +1608,34 @@ const List<HelpTopic> kHelpTopics = [
         'no provenance at all. Somebody typed them onto the base cost card '
         'once, and an estate was budgeted off them for as long as nobody '
         're-typed them.\n\n'
-        'This tab is where that number gets decided, in front of the evidence. '
-        'For every kind of thing the estate actually holds it says: how many '
-        'there are, which models they are, how many of those the catalog has '
-        'already retired, and what the plan presently budgets them at.\n\n'
+        'This is where that number gets decided, in front of the evidence. '
+        'For every kind of thing actually held it says: how many there are, '
+        'which models they are, how many of those the catalog has already '
+        'retired, and what the plan presently budgets them at.\n\n'
+        'THE SAME READING AT THREE LEVELS, beside the plan it explains: the '
+        'whole estate, one building on the project tab, or the eleven boxes '
+        'in one room. Only the number of positions the arithmetic multiplies '
+        'changes - and the room is where somebody is usually standing when '
+        'they can actually name the gear.\n\n'
         'Pick this year\'s model out of the catalog and the comparison is on '
         'screen BEFORE anything is committed: the unit price, forty-one of '
         'them, and the gap against what the plan assumes. That gap is the '
         'reading - a budget short by it is a budget that fails at purchase '
         'order time.\n\n'
+        'AND WHAT THAT IS A YEAR. The lump sum is what gets asked for once; '
+        'the annual figure beside it is what has to be in the budget every '
+        'year, and it is the one number on the card the refresh cycle moves. '
+        'The cycle picker sits on this pane for that reason: forty-one '
+        'projectors cost the same to buy on any cycle, but they are a very '
+        'different annual ask on eight years than on twenty, and that gap is '
+        'the argument a refresh cycle is actually about.\n\n'
         'Accepting it writes the figure, the model and the date onto the base '
         'cost card - the same card the room cost page, the project report and '
         'the campus report already price from - so the decision reaches all '
-        'three without any of them knowing this tab exists. A card set on a '
-        '2022 projector in 2026 can then be SEEN to be four years stale.',
+        'three without any of them knowing this tab exists. It is ONE card for '
+        'the whole app, not one per room: a projector benchmarked standing in '
+        'a room is benchmarked for the estate. A card set on a 2022 projector '
+        'in 2026 can then be SEEN to be four years stale.',
   ),
 
   // ---------------------------------------------------------------------------

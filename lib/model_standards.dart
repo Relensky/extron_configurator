@@ -1,6 +1,5 @@
 import 'av_device_library.dart';
 import 'base_costs.dart';
-import 'campus_lifecycle.dart';
 import 'equipment_lifecycle.dart';
 
 /// ============================================================================
@@ -23,13 +22,18 @@ import 'equipment_lifecycle.dart';
 ///    eleven projectors wants to know what they are eleven OF. "About 4,200"
 ///    is not a specification, and the person who knew what it meant has left.
 ///
-///  So this is the arithmetic behind a tab that answers both. For every kind of
-///  thing the estate actually holds it says: how many there are, which models
-///  they are, what the plan presently budgets them at, and - once somebody
-///  picks this year's model out of the catalog - what the same estate would
-///  come to at that. Setting it writes the model, the price and the DATE onto
-///  the base card, which is the card the room cost page, the project report and
-///  the campus report all already price from.
+///  So this is the arithmetic behind a pane that answers both. For every kind
+///  of thing actually held it says: how many there are, which models they are,
+///  what the plan presently budgets them at, and - once somebody picks this
+///  year's model out of the catalog - what the same positions would come to at
+///  that. Setting it writes the model, the price and the DATE onto the base
+///  card, which is the card the room cost page, the project report and the
+///  campus report all already price from.
+///
+///  ASKED AT ANY LEVEL, off one function. The estate asks it of twelve
+///  buildings, a job of one, a room of the eleven boxes in it - and the person
+///  who can actually say what the projector is is standing in the room, not
+///  assembling an estate off a shared drive.
 ///
 ///  NOTHING HERE DECIDES ANYTHING. It is a comparison somebody reads and a
 ///  figure they choose to accept; the tab that shows it is the one place on the
@@ -63,6 +67,22 @@ typedef ModelStandard = ({
   /// Which models are actually in them, commonest first.
   List<InstalledModel> models,
 
+  /// How many of these fall due in an average year - the sum of one-over-life
+  /// across the positions. Forty-one projectors on an eight-year cycle is
+  /// 5.125 a year.
+  ///
+  /// THE FIGURE THE CYCLE MOVES. Everything else on the row is a lump sum and
+  /// a lump sum does not care what life anybody assumes: the same forty-one
+  /// projectors cost the same to buy on any cycle. What the cycle decides is
+  /// how OFTEN, and therefore what has to be in the budget every year - which
+  /// is the number a capital plan is actually written in.
+  double replacementsPerYear,
+
+  /// What the plan implies setting aside a year for this kind of thing - the
+  /// sum of cost-over-life across the positions, at what each is budgeted at
+  /// now. Zero when nothing here is priced.
+  double perYearNow,
+
   /// How many of those positions hold a model the catalog has retired. The
   /// number that makes the case for re-benchmarking on its own - see
   /// [AvDeviceTemplate.replacedBy].
@@ -87,29 +107,54 @@ typedef StandardQuote = ({
   double unitPrice,
   double total,
 
+  /// [total] spread over the life in force - what this kind of thing costs a
+  /// year at the chosen model. The one figure on the card the assumed cycle
+  /// moves, which is why the cycle picker sits on this pane too.
+  double perYear,
+
+  /// [perYear] against what the plan sets aside now. Positive means the
+  /// standard costs more a year than the budget carries.
+  double perYearDelta,
+
   /// [total] against what the plan budgets today. Positive means the standard
   /// is DEARER than the plan assumes, which is the direction that matters: a
   /// budget short by this much is a budget that fails at purchase order time.
   double delta,
 });
 
-/// [positions] of something at [unitPrice], against [budgetedNow].
+/// [positions] of something at [unitPrice], against [budgetedNow] - as a lump
+/// sum, and as what it comes to a year.
+///
+/// [replacementsPerYear] and [perYearNow] come off the row - see
+/// [ModelStandard] - because they are the half of the reading the refresh
+/// cycle moves, and a card that quoted only the lump sum would sit unchanged
+/// while somebody restated the whole plan underneath it.
 StandardQuote quoteAtStandard({
   required int positions,
   required double unitPrice,
   required double budgetedNow,
+  double replacementsPerYear = 0,
+  double perYearNow = 0,
 }) {
   final total = positions * unitPrice;
+  final perYear = unitPrice * replacementsPerYear;
   return (
     positions: positions,
     unitPrice: unitPrice,
     total: total,
+    perYear: perYear,
+    perYearDelta: perYear - perYearNow,
     delta: total - budgetedNow,
   );
 }
 
-/// Every kind of thing on [campus], with what it is budgeted at and what it is
+/// Every kind of thing in [items], with what it is budgeted at and what it is
 /// benchmarked on.
+///
+/// ANY PILE OF AGED POSITIONS - a whole estate's, one building's, or the eleven
+/// boxes in one room. The level changes nothing but how many positions the
+/// arithmetic multiplies, so all three panes read the same figures out of here
+/// rather than each growing its own.
 ///
 /// SORTED BY WHAT IS AT STAKE - the money the plan has riding on the category,
 /// biggest first. A campus holds four hundred positions in twenty categories
@@ -120,23 +165,6 @@ StandardQuote quoteAtStandard({
 /// CATEGORIES WITH NOTHING IN THEM ARE NOT HERE. The base card ships with every
 /// family this app knows and most estates use a third of them; a tab listing
 /// the other two thirds is a tab where the answer is buried in blanks.
-List<ModelStandard> campusModelStandards({
-  required CampusLifecycle campus,
-  AvDeviceLibrary? library,
-  BaseCostBook? baseCosts,
-}) => modelStandardsFor(
-  items: campus.items,
-  asOf: campus.asOf,
-  library: library,
-  baseCosts: baseCosts,
-);
-
-/// The same reading over any pile of aged positions — one building's, or a
-/// whole estate's.
-///
-/// Split out from [campusModelStandards] so a single project can show the same
-/// tab off [BuildingLifecycle.items] without a campus having to be assembled
-/// first.
 List<ModelStandard> modelStandardsFor({
   required List<EquipmentLife> items,
   required DateTime asOf,
@@ -166,9 +194,18 @@ List<ModelStandard> modelStandardsFor({
     var budgeted = 0.0;
     var priced = 0;
     var retired = 0;
+    // HOW OFTEN, not just how much. A position with no life on it cannot be
+    // spread over one, so it is left out of the per-year figures rather than
+    // divided by zero - it is already counted as unpriced above.
+    var perYearUnits = 0.0;
+    var perYear = 0.0;
     for (final row in rows) {
       budgeted += row.replacementCost;
       if (row.replacementCost > 0) priced++;
+      if (row.lifeYears > 0) {
+        perYearUnits += 1 / row.lifeYears;
+        perYear += row.replacementCost / row.lifeYears;
+      }
 
       final model = row.node.model.trim();
       if (model.isNotEmpty) {
@@ -196,6 +233,8 @@ List<ModelStandard> modelStandardsFor({
       positions: rows.length,
       priced: priced,
       budgetedNow: budgeted,
+      replacementsPerYear: perYearUnits,
+      perYearNow: perYear,
       models: List.unmodifiable(models),
       retiredPositions: retired,
       card: card,

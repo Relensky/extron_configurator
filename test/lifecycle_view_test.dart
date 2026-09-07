@@ -694,7 +694,20 @@ void main() {
     /// of the window first: the level button is both "100%" and "stop
     /// fitting", which is exactly the state they were written against.
     Future<void> atNaturalSize(WidgetTester tester) async {
-      await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_level')));
+      const level = ValueKey('lifecycle_zoom_level');
+      // THE SHEET IS UNDER THE FIGURES, and at 150% on a laptop that strip is
+      // the whole first screen - so scroll to the sheet before pressing
+      // anything on it. These tests are about the size of a cell, which is
+      // the same wherever the sheet is sitting.
+      if (find.byKey(level).evaluate().isEmpty) {
+        await tester.scrollUntilVisible(
+          find.byKey(level),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.byKey(level));
       await tester.pumpAndSettle();
     }
 

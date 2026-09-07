@@ -9,7 +9,7 @@ import 'base_costs.dart';
 import 'campus_lifecycle.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart' show formatMoney;
-import 'equipment_lifecycle.dart' show formatLifecycleMoney;
+import 'equipment_lifecycle.dart' show EquipmentLife, formatLifecycleMoney;
 import 'model_standards.dart';
 
 /// ============================================================================
@@ -43,27 +43,71 @@ import 'model_standards.dart';
 ///  2022 projector in 2026 can be SEEN to be four years stale.
 /// ============================================================================
 
-/// The Current Models pane for a campus.
-class CampusModelStandards extends StatelessWidget {
-  final CampusLifecycle campus;
+/// The Current Models pane, for whatever pile of aged positions it is handed.
+///
+/// ONE PANE AT THREE LEVELS. The estate asks it of twelve buildings, a job of
+/// one, and a room of the eleven boxes in it - and it is the same reading every
+/// time, off [modelStandardsFor]. The level only changes how many positions the
+/// arithmetic is multiplied by, so a widget per level would be three copies of
+/// the same card drifting apart.
+///
+/// AND THE DECISION IS THE SAME DECISION WHEREVER IT IS MADE: the base cost
+/// card is one card for the whole app, so a projector benchmarked standing in
+/// front of one room is benchmarked for the estate. The prose says so.
+class ModelStandardsPane extends StatelessWidget {
+  /// The positions to read - a campus's, a building's, or one room's.
+  final List<EquipmentLife> items;
 
-  /// Called once a card has been written, so the sheet behind can be re-read -
-  /// every figure on it came from one pass over disk and a card that changed
-  /// changes most of them.
-  final Future<void> Function() onChanged;
+  /// The day the plan is read as of, which is what makes a benchmark stale.
+  final DateTime asOf;
 
-  const CampusModelStandards({
+  final String currency;
+
+  /// What [items] belong to, in words: 'estate', 'building', 'room'. The pane
+  /// is read at three levels and "what the same estate would come to" is a lie
+  /// on two of them.
+  final String scope;
+
+  /// The what-if cycle picker, for the heading row.
+  ///
+  /// THE PANE IS HALF A CYCLE QUESTION. A lump sum does not care what life
+  /// anybody assumes - forty-one projectors cost the same to buy on any cycle
+  /// - but what has to be in the budget EVERY YEAR is that sum over the life,
+  /// and that is the figure a capital plan is written in. Leaving the picker
+  /// on the year grid meant the reader had to switch panes, restate, and
+  /// switch back to see what it did to the per-year figures on this one.
+  ///
+  /// A WIDGET PASSED IN, not built here, because the cycle lives on the screen
+  /// above: the session for a room and a job - see
+  /// [AppStateProvider.assumedLifeCycle] - and the campus's own state for an
+  /// estate. Built here it would be a second, disagreeing copy.
+  final Widget? headerAction;
+
+  /// Called once a card has been written, so a sheet built from disk can be
+  /// re-read - every figure on the campus came from one pass over the files and
+  /// a card that changed changes most of them.
+  ///
+  /// Null where the screen prices off the provider it is already watching: the
+  /// project and the room re-price themselves the moment the card notifies.
+  final Future<void> Function()? onChanged;
+
+  const ModelStandardsPane({
     super.key,
-    required this.campus,
-    required this.onChanged,
+    required this.items,
+    required this.asOf,
+    required this.currency,
+    this.scope = 'estate',
+    this.headerAction,
+    this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final provider = context.watch<AppStateProvider>();
-    final rows = campusModelStandards(
-      campus: campus,
+    final rows = modelStandardsFor(
+      items: items,
+      asOf: asOf,
       library: provider.avDeviceLibrary,
       baseCosts: provider.baseCosts,
     );
@@ -72,11 +116,11 @@ class CampusModelStandards extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          'Nothing on this estate has a category on it yet.\n\n'
+          'Nothing in this $scope has a category on it yet.\n\n'
           'A position gets one from the catalog entry for its model, or from '
-          'what it does in the room. Draw a room, or put the models into the '
-          'catalog, and every kind of thing on the estate is listed here with '
-          'what it is budgeted at.',
+          'what it does in the room. Put the models into the catalog and every '
+          'kind of thing this $scope holds is listed here with what it is '
+          'budgeted at.',
           style: theme.textTheme.bodyMedium,
         ),
       );
@@ -93,21 +137,37 @@ class CampusModelStandards extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'WHAT WE WOULD BUY THIS YEAR',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                // A WRAP, NOT A ROW. The picker carries a dropdown whose
+                // label is a phrase rather than a word, and at the reader's
+                // type on a narrow window the heading and it stop fitting on
+                // one line. A row cannot give and would overflow; this drops
+                // the picker onto its own line instead.
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      'WHAT WE WOULD BUY THIS YEAR',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    ?headerAction,
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Every kind of thing this estate holds, what the plan '
-                  'budgets it at, and what the same estate would come to at a '
+                  'Every kind of thing this $scope holds, what the plan '
+                  'budgets it at, and what the same $scope would come to at a '
                   'model chosen out of the catalog today. Setting one writes '
                   'the figure onto the base cost card - the same card the '
                   'room cost page and both reports already price from - along '
-                  'with which model it was priced on and when.',
+                  'with which model it was priced on and when, and it is one '
+                  'card for the whole app rather than one per $scope. The '
+                  'cycle restates what each of them comes to A YEAR, which is '
+                  'the figure a budget is written in.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -133,7 +193,8 @@ class CampusModelStandards extends StatelessWidget {
         for (final row in rows)
           _StandardCard(
             row: row,
-            currency: campus.currency,
+            currency: currency,
+            scope: scope,
             onChanged: onChanged,
           ),
       ],
@@ -141,16 +202,77 @@ class CampusModelStandards extends StatelessWidget {
   }
 }
 
+/// The Current Models pane for a campus.
+class CampusModelStandards extends StatelessWidget {
+  final CampusLifecycle campus;
+
+  /// The what-if cycle picker for the estate, for the pane's heading row - see
+  /// [ModelStandardsPane.headerAction]. The campus holds its own cycle rather
+  /// than the session's, so it is passed in like everything else here.
+  final Widget? headerAction;
+
+  /// Called once a card has been written, so the sheet behind can be re-read -
+  /// every figure on it came from one pass over disk and a card that changed
+  /// changes most of them.
+  final Future<void> Function() onChanged;
+
+  const CampusModelStandards({
+    super.key,
+    required this.campus,
+    required this.onChanged,
+    this.headerAction,
+  });
+
+  @override
+  Widget build(BuildContext context) => ModelStandardsPane(
+    items: campus.items,
+    asOf: campus.asOf,
+    currency: campus.currency,
+    headerAction: headerAction,
+    onChanged: onChanged,
+  );
+}
+
+/// How many of something falls due in an average year, said the way somebody
+/// would say it: '5.1', or '1' rather than '1.0'.
+///
+/// One decimal, because the whole point is that it is a FRACTION - forty-one
+/// projectors on eight years is five and a bit a year, and rounding that to
+/// five loses a projector a year out of the budget.
+String _perYearCount(double n) {
+  final whole = n.roundToDouble();
+  return (n - whole).abs() < 0.05
+      ? whole.toStringAsFixed(0)
+      : n.toStringAsFixed(1);
+}
+
+/// The same gap as an annual figure, for the sentence that carries the lump
+/// sum - or '' when there is no life to spread it over.
+///
+/// A CLAUSE RATHER THAN ITS OWN LINE. The lump sum and the yearly figure are
+/// one fact said two ways, and a reader who has just been told the plan is
+/// short by ninety thousand wants the recurring number in the same breath, not
+/// three lines down where it reads as a second problem.
+String _perYearGap(StandardQuote quote, String currency) {
+  if (quote.perYear <= 0) return '';
+  final gap = quote.perYearDelta.abs();
+  if (gap < 0.005) return '';
+  return ', and ${formatLifecycleMoney(gap, currency)} a year '
+      '${quote.perYearDelta > 0 ? 'more' : 'less'} to keep';
+}
+
 /// One kind of thing on the estate: what is in it, what it costs now, and what
 /// this year's model would make it.
 class _StandardCard extends StatefulWidget {
   final ModelStandard row;
   final String currency;
-  final Future<void> Function() onChanged;
+  final String scope;
+  final Future<void> Function()? onChanged;
 
   const _StandardCard({
     required this.row,
     required this.currency,
+    required this.scope,
     required this.onChanged,
   });
 
@@ -187,6 +309,8 @@ class _StandardCardState extends State<_StandardCard> {
             positions: row.positions,
             unitPrice: unit,
             budgetedNow: row.budgetedNow,
+            replacementsPerYear: row.replacementsPerYear,
+            perYearNow: row.perYearNow,
           );
 
     return Card(
@@ -242,6 +366,20 @@ class _StandardCardState extends State<_StandardCard> {
                       'budgeted now',
                       style: theme.textTheme.labelSmall?.copyWith(color: muted),
                     ),
+                    // AND WHAT THAT IS A YEAR. The lump sum is what the
+                    // category costs to replace; this is what it costs to
+                    // KEEP, which is the line a recurring budget carries and
+                    // the one the cycle picker above moves.
+                    if (row.perYearNow > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${formatLifecycleMoney(row.perYearNow, currency)} '
+                        'a year',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: muted,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -443,9 +581,25 @@ class _StandardCardState extends State<_StandardCard> {
           const SizedBox(height: 2),
           Text(
             '${quote.positions} × = ${formatLifecycleMoney(quote.total, currency)} '
-            'across the estate.',
+            'across this ${widget.scope}.',
             style: theme.textTheme.bodySmall,
           ),
+          // WHAT IT COSTS A YEAR TO KEEP, ON THE CYCLE IN FORCE.
+          //
+          // The lump sum above is what the reader asks for once. This is the
+          // line a capital plan is actually written in, and it is the only
+          // figure on the card the cycle picker moves: the same positions at
+          // the same model are a different annual ask on eight years than on
+          // twelve, which is the whole argument a refresh cycle is about.
+          if (widget.row.replacementsPerYear > 0) ...[
+            const SizedBox(height: 2),
+            Text(
+              '${_perYearCount(widget.row.replacementsPerYear)} a year on the cycle '
+              'in force = ${formatLifecycleMoney(quote.perYear, currency)} a '
+              'year to keep.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 2),
           Text(
             // THE GAP IS THE READING. Over is a problem and under is not, and
@@ -454,10 +608,11 @@ class _StandardCardState extends State<_StandardCard> {
                 ? 'Exactly what the plan already budgets.'
                 : over
                 ? '${formatLifecycleMoney(quote.delta, currency)} MORE than the '
-                      'plan budgets. A plan left as it is would be short by '
-                      'that much.'
+                      'plan budgets'
+                      '${_perYearGap(quote, currency)}. A plan left as it is '
+                      'would be short by that much.'
                 : '${formatLifecycleMoney(-quote.delta, currency)} less than '
-                      'the plan budgets.',
+                      'the plan budgets${_perYearGap(quote, currency)}.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: over
                   ? errorTextOn(theme.colorScheme, theme.cardColor)
@@ -522,8 +677,9 @@ class _StandardCardState extends State<_StandardCard> {
     setState(() => _trying = null);
 
     // The sheet is re-read rather than patched: every figure on it came from
-    // one pass over disk, and one card changed changes most of them.
-    await widget.onChanged();
+    // one pass over disk, and one card changed changes most of them. A screen
+    // that prices straight off the provider has nothing to re-read.
+    await widget.onChanged?.call();
 
     showTimedSnackBar(
       messenger,

@@ -1080,6 +1080,15 @@ class _CampusViewState extends State<_CampusView> {
                       CampusModelStandards(
                         campus: campus,
                         onChanged: _reread,
+                        // The same restatement the calendar offers. The lump
+                        // sums do not move on it; what each kind of thing
+                        // costs the estate A YEAR does.
+                        headerAction: AssumedCycleControl(
+                          keyPrefix: 'campus_standards',
+                          assumed: _cycle,
+                          onChanged: (years) =>
+                              setState(() => _cycle = years),
+                        ),
                       )
                     else ...[
                       const EquipmentTimingKey(),
