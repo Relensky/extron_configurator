@@ -2378,13 +2378,13 @@ class _ResponsibilityEditorDialogState
       TextEditingController(text: widget.item.productLink);
   late final TextEditingController _notes =
       TextEditingController(text: widget.item.notes);
+  /// THE CELL AS THE SHEET SHOWS IT, not just its count - see
+  /// [ResponsibilityItem.cellText]. Seeding these from the count map alone
+  /// meant a room answered '0' or answered in words opened this dialog blank,
+  /// and saving then wrote that blank back over the answer.
   late final Map<String, TextEditingController> _qty = {
     for (final room in widget.columns)
-      room.id: TextEditingController(
-        text: (widget.item.qtyByRoom[room.id] ?? 0) > 0
-            ? formatResponsibilityQty(widget.item.qtyByRoom[room.id]!)
-            : '',
-      ),
+      room.id: TextEditingController(text: widget.item.cellText(room.id)),
   };
 
   /// Picks a cutsheet off disk into the product field.
@@ -2469,10 +2469,26 @@ class _ResponsibilityEditorDialogState
   }
 
   void _save() {
-    final counts = <String, double>{};
+    // THE SAME ROAD A CELL TAKES FROM THE GRID - see
+    // [responsibilityCellIsCount]. This used to keep only values above zero,
+    // which silently threw away both of the answers the sheet learned to hold:
+    // a room settled at none, and a room answered in words.
+    //
+    // STARTED FROM WHAT THE ITEM ALREADY HAS so a room that is not one of
+    // these columns keeps its answer. The dialog only knows about the rooms it
+    // was handed.
+    final counts = Map<String, double>.from(widget.item.qtyByRoom);
+    final notes = Map<String, String>.from(widget.item.noteByRoom);
     for (final room in widget.columns) {
-      final value = double.tryParse(_qty[room.id]!.text.trim()) ?? 0;
-      if (value > 0) counts[room.id] = value;
+      final typed = _qty[room.id]!.text.trim();
+      counts.remove(room.id);
+      notes.remove(room.id);
+      if (typed.isEmpty) continue;
+      if (responsibilityCellIsCount(typed)) {
+        counts[room.id] = double.parse(typed);
+      } else {
+        notes[room.id] = typed;
+      }
     }
     context.read<AppStateProvider>().updateResponsibilityItem(
       widget.item.copyWith(
@@ -2486,6 +2502,7 @@ class _ResponsibilityEditorDialogState
         installedBy: _installed.text.trim(),
         neededBy: _needed.text.trim(),
         qtyByRoom: counts,
+        noteByRoom: notes,
         work: _work.text.trim(),
         productLink: _link.text.trim(),
         notes: _notes.text.trim(),
@@ -2565,9 +2582,11 @@ class _ResponsibilityEditorDialogState
                         child: TextField(
                           key: ValueKey('responsibility_qty_${room.id}'),
                           controller: _qty[room.id],
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
+                          // NOT A NUMBER-ONLY FIELD. The cell takes a count,
+                          // a 0 for none, or the answer in words - the same
+                          // three the grid's own menu offers - and a numeric
+                          // keyboard here would be the dialog quietly
+                          // disagreeing with the sheet it edits.
                           decoration: InputDecoration(
                             labelText: room.name,
                             border: const OutlineInputBorder(),

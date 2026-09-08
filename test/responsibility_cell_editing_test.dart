@@ -379,6 +379,100 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  //  THE LINE'S OWN EDITOR AGREES WITH THE SHEET
+  // -------------------------------------------------------------------------
+  //  A cell can be answered from the grid or from the line's editor dialog,
+  //  and for a while they disagreed: the dialog kept only counts above zero,
+  //  so opening a line and saving it threw away every room settled at none and
+  //  every room answered in words. Setting a cell from the grid and then
+  //  touching the line put it straight back to blank.
+
+  group('the line editor', () {
+    testWidgets('opens showing what each cell says, zeros and words alike', (
+      tester,
+    ) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Projection screen');
+      final rooms = p.project.rooms.map((r) => r.id).toList();
+      p.setResponsibilityQty(item.id, rooms.first, 0);
+      p.setResponsibilityNote(item.id, rooms.last, 'As required');
+      await pumpPane(tester, p);
+
+      await tester.tap(find.byKey(ValueKey('matrix_head_${item.id}')));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(ValueKey('responsibility_qty_${rooms.first}')),
+            )
+            .controller
+            ?.text,
+        '0',
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(ValueKey('responsibility_qty_${rooms.last}')),
+            )
+            .controller
+            ?.text,
+        'As required',
+      );
+    });
+
+    testWidgets('saving it leaves the zeros and the words alone', (
+      tester,
+    ) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Projection screen');
+      final rooms = p.project.rooms.map((r) => r.id).toList();
+      p.setResponsibilityQty(item.id, rooms.first, 0);
+      p.setResponsibilityNote(item.id, rooms.last, 'As required');
+      await pumpPane(tester, p);
+
+      await tester.tap(find.byKey(ValueKey('matrix_head_${item.id}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('responsibility_save')));
+      await tester.pumpAndSettle();
+
+      // THE ROUND TRIP THAT USED TO DESTROY THEM.
+      final after = p.project.responsibilityById(item.id)!;
+      expect(after.cellText(rooms.first), '0');
+      expect(after.cellIsNone(rooms.first), isTrue);
+      expect(after.cellText(rooms.last), 'As required');
+      expect(after.cellIsNote(rooms.last), isTrue);
+    });
+
+    testWidgets('takes an answer in words typed straight into it', (
+      tester,
+    ) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Projection screen');
+      final rooms = p.project.rooms.map((r) => r.id).toList();
+      await pumpPane(tester, p);
+
+      await tester.tap(find.byKey(ValueKey('matrix_head_${item.id}')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(ValueKey('responsibility_qty_${rooms.first}')),
+        'Per plan',
+      );
+      await tester.enterText(
+        find.byKey(ValueKey('responsibility_qty_${rooms.last}')),
+        '0',
+      );
+      await tester.tap(find.byKey(const ValueKey('responsibility_save')));
+      await tester.pumpAndSettle();
+
+      final after = p.project.responsibilityById(item.id)!;
+      expect(after.cellIsNote(rooms.first), isTrue);
+      expect(after.cellText(rooms.first), 'Per plan');
+      expect(after.cellIsNone(rooms.last), isTrue);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   //  THE TOTALS ROW SAYS WHAT IT COULD NOT ADD
   // -------------------------------------------------------------------------
   //  A column of nine lines whose total reads 6 is not wrong, but it is not
