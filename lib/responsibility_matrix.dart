@@ -59,6 +59,31 @@ const List<String> kResponsibilityParties = [
   'TBD',
 ];
 
+/// The answers a room's cell takes, offered rather than typed.
+///
+/// NUMBERS AND WORDS IN ONE LIST, because a cell takes either and the person
+/// filling it in does not think of them as two kinds of thing - they think
+/// "how many of these go in room 101", and sometimes the true answer is four
+/// and sometimes it is "as required". A picker that offered only counts would
+/// be telling them the second answer is not allowed.
+///
+/// The counts stop at eight. Past that it is quicker to type the number than
+/// to find it in a list, and a dropdown thirty long is a dropdown that has to
+/// be scrolled.
+const List<String> kResponsibilityCellAnswers = [
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  'As required',
+  'Per plan',
+  'Existing',
+  'By others',
+  'N/A',
+  'TBD',
+];
+
 /// A party reduced to what it MEANS, which is what a color is filed under.
 ///
 /// One place rather than a call to [normalizedName] at every site, because the
@@ -96,6 +121,24 @@ class ResponsibilityItem {
   /// absent rather than stored as zero.
   final Map<String, double> qtyByRoom;
 
+  /// Room id -> the answer in WORDS, for a cell that is not a count.
+  ///
+  /// NOT EVERY CELL ON THIS SHEET IS A NUMBER. The honest answer for a room is
+  /// often 'as required', 'per plan', 'existing to remain' or 'TBD' - and
+  /// until now typing one of those left the cell empty, because a quantity
+  /// that would not parse was dropped on the way in. An empty cell and "we
+  /// have not decided" are opposite things to a contractor pricing the line.
+  ///
+  /// A CELL HOLDS ONE OR THE OTHER, never both - see [withRoomQty] and
+  /// [withRoomNote], each of which clears the other. A room with a count and a
+  /// note would be a cell with two answers, and the totals row could only
+  /// honor one of them.
+  ///
+  /// These do NOT reach [total]. 'As required' cannot be added up, and a sheet
+  /// that quietly counted it as one would be a bid short by however many rooms
+  /// said it. They are highlighted wherever the matrix is drawn instead.
+  final Map<String, String> noteByRoom;
+
   /// What the work actually is, in the words it will be read in on site. The
   /// longest field on the sheet and the one that settles arguments.
   final String work;
@@ -113,15 +156,36 @@ class ResponsibilityItem {
     this.installedBy = '',
     this.neededBy = '',
     Map<String, double>? qtyByRoom,
+    Map<String, String>? noteByRoom,
     this.work = '',
     this.productLink = '',
     this.notes = '',
-  }) : qtyByRoom = qtyByRoom ?? const {};
+  })  : qtyByRoom = qtyByRoom ?? const {},
+        noteByRoom = noteByRoom ?? const {};
 
   /// How many of these the whole job needs — the number a bid is written
   /// against.
   double get total =>
       qtyByRoom.values.fold<double>(0, (sum, q) => sum + q);
+
+  /// What one room's cell says: its note if it has one, else its count, else
+  /// nothing at all. THE ONE ANSWER TO "what goes in this box", so the grid,
+  /// the editor list, the picture and the spreadsheet cannot disagree.
+  String cellText(String roomId) {
+    final note = noteByRoom[roomId]?.trim() ?? '';
+    if (note.isNotEmpty) return note;
+    return formatResponsibilityQty(qtyByRoom[roomId] ?? 0);
+  }
+
+  /// True when this room's answer is words rather than a count - the cells
+  /// that are highlighted, and the ones [total] cannot include.
+  bool cellIsNote(String roomId) =>
+      (noteByRoom[roomId]?.trim() ?? '').isNotEmpty;
+
+  /// How many rooms answered this line in words. What the totals row says out
+  /// loud, so a total that is short of the room count says why.
+  int get noteCount =>
+      noteByRoom.values.where((n) => n.trim().isNotEmpty).length;
 
   /// True when neither party has been settled. The matrix's own to-do list.
   bool get unassigned =>
@@ -164,6 +228,7 @@ class ResponsibilityItem {
     String? installedBy,
     String? neededBy,
     Map<String, double>? qtyByRoom,
+    Map<String, String>? noteByRoom,
     String? work,
     String? productLink,
     String? notes,
@@ -174,6 +239,7 @@ class ResponsibilityItem {
     installedBy: installedBy ?? this.installedBy,
     neededBy: neededBy ?? this.neededBy,
     qtyByRoom: qtyByRoom ?? this.qtyByRoom,
+    noteByRoom: noteByRoom ?? this.noteByRoom,
     work: work ?? this.work,
     productLink: productLink ?? this.productLink,
     notes: notes ?? this.notes,
@@ -193,7 +259,26 @@ class ResponsibilityItem {
     } else {
       next.remove(roomId);
     }
-    return copyWith(qtyByRoom: next);
+    // A COUNT REPLACES A NOTE. The cell has one answer; leaving 'as required'
+    // behind a 4 would put two of them in one box, and only one of the two can
+    // reach the totals row.
+    final notes = Map<String, String>.from(noteByRoom)..remove(roomId);
+    return copyWith(qtyByRoom: next, noteByRoom: notes);
+  }
+
+  /// The same item with [roomId] answered in words, or cleared when [note] is
+  /// blank. Drops any count that room had, for the reason on [withRoomQty].
+  ResponsibilityItem withRoomNote(String roomId, String note) {
+    final clean = note.trim();
+    final notes = Map<String, String>.from(noteByRoom);
+    final counts = Map<String, double>.from(qtyByRoom);
+    if (clean.isEmpty) {
+      notes.remove(roomId);
+    } else {
+      notes[roomId] = clean;
+      counts.remove(roomId);
+    }
+    return copyWith(qtyByRoom: counts, noteByRoom: notes);
   }
 
   Map<String, dynamic> toJson() => {
@@ -203,6 +288,7 @@ class ResponsibilityItem {
     if (installedBy.isNotEmpty) 'installedBy': installedBy,
     if (neededBy.isNotEmpty) 'neededBy': neededBy,
     if (qtyByRoom.isNotEmpty) 'qtyByRoom': qtyByRoom,
+    if (noteByRoom.isNotEmpty) 'noteByRoom': noteByRoom,
     if (work.isNotEmpty) 'work': work,
     if (productLink.isNotEmpty) 'productLink': productLink,
     if (notes.isNotEmpty) 'notes': notes,
@@ -210,14 +296,31 @@ class ResponsibilityItem {
 
   factory ResponsibilityItem.fromJson(Map<String, dynamic> json) {
     final qty = <String, double>{};
+    final notes = <String, String>{};
     final raw = json['qtyByRoom'];
     if (raw is Map) {
       raw.forEach((k, v) {
         final n = v is num ? v.toDouble() : double.tryParse(v.toString());
-        // A quantity that is not a number is dropped rather than read as
-        // zero: "2 per room" typed into a count is somebody's note, and
-        // honoring it as 0 would quietly take the line off the bid.
-        if (n != null && n > 0) qty[k.toString()] = n;
+        if (n != null && n > 0) {
+          qty[k.toString()] = n;
+          return;
+        }
+        // A QUANTITY THAT IS NOT A NUMBER IS THE ROOM'S ANSWER IN WORDS, and
+        // it used to be dropped here - "2 per room" or "as required" typed
+        // into a count left the cell blank, which reads to a contractor as a
+        // room that does not want the line. It is kept as a note now, which is
+        // where such an answer belongs; a bare 0 is still nothing at all.
+        final text = v?.toString().trim() ?? '';
+        if (text.isNotEmpty && text != '0' && n == null) {
+          notes[k.toString()] = text;
+        }
+      });
+    }
+    final rawNotes = json['noteByRoom'];
+    if (rawNotes is Map) {
+      rawNotes.forEach((k, v) {
+        final text = v?.toString().trim() ?? '';
+        if (text.isNotEmpty) notes[k.toString()] = text;
       });
     }
     return ResponsibilityItem(
@@ -227,6 +330,7 @@ class ResponsibilityItem {
       installedBy: json['installedBy']?.toString() ?? '',
       neededBy: json['neededBy']?.toString() ?? '',
       qtyByRoom: qty,
+      noteByRoom: notes,
       work: json['work']?.toString() ?? '',
       productLink: json['productLink']?.toString() ?? '',
       notes: json['notes']?.toString() ?? '',
@@ -364,6 +468,48 @@ XlsxTint responsibilityPartyCell(
 const String kResponsibilityMissingFill = 'FBE4E4';
 const String kResponsibilityMissingInk = 'A21C1C';
 
+/// The wash a cell answered in WORDS prints in - see
+/// [ResponsibilityItem.noteByRoom].
+///
+/// A DIFFERENT COLOR FROM THE MISSING ONE, because they are different
+/// problems: a blank party has to be chased, and 'as required' is a decision
+/// somebody made. Amber rather than red, and the words are in the cell either
+/// way - the wash is the second way to read it, never the only one.
+const String kResponsibilityNoteFill = 'FFF3D6';
+const String kResponsibilityNoteInk = '7A4E00';
+
+/// One room's cell for the spreadsheet: the count as plain text, or the words
+/// with a wash behind them.
+///
+/// A plain String rather than an unwashed [XlsxTint], because a count is the
+/// ordinary case and most of this grid is counts - tinting every one of them
+/// white would put a fill on three hundred cells to make a point about four.
+Object responsibilityQtyCell(ResponsibilityItem item, String roomId) {
+  final text = item.cellText(roomId);
+  if (!item.cellIsNote(roomId)) return text;
+  return XlsxTint(
+    text: text,
+    fillHex: kResponsibilityNoteFill,
+    inkHex: kResponsibilityNoteInk,
+  );
+}
+
+/// True when what somebody typed into a cell is a COUNT rather than an answer
+/// in words.
+///
+/// ONE RULE, in one place. The dialog says which of the two it is about to
+/// save, the sheet highlights the ones that are not counts, and the totals row
+/// adds up the ones that are - three readings of the same question, and a
+/// second opinion anywhere among them is a cell that is highlighted and
+/// counted, or counted and not shown.
+///
+/// A bare '0' is not a count: it is how a room is taken OFF the line, which is
+/// an absence rather than a quantity of nothing.
+bool responsibilityCellIsCount(String typed) {
+  final n = double.tryParse(typed.trim());
+  return n != null && n > 0;
+}
+
 /// A quantity with no trailing `.0` on it — a matrix counts screens and
 /// speakers, and '2.0 screens' reads as a measurement rather than a count.
 String formatResponsibilityQty(double qty) {
@@ -411,8 +557,14 @@ List<ReportSection> responsibilityMatrixSections(
         ),
         item.neededBy,
         for (final room in roomNames)
-          formatResponsibilityQty(item.qtyByRoom[room.id] ?? 0),
-        formatResponsibilityQty(item.total),
+          responsibilityQtyCell(item, room.id),
+        // THE TOTAL SAYS WHAT IT COULD NOT ADD. 'As required' in four rooms is
+        // four rooms missing from a figure the contractor bids against, and a
+        // bare number gives no sign of it.
+        item.noteCount > 0
+            ? '${formatResponsibilityQty(item.total)} '
+                  '(+${item.noteCount} noted)'
+            : formatResponsibilityQty(item.total),
       ],
   ];
 

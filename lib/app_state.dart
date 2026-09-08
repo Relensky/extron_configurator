@@ -14111,11 +14111,41 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Sets how many of [itemId] one room needs, or takes the room off that line
-  /// when [qty] is not positive.
+  /// when [qty] is not positive. Clears any note that room was answered with.
   void setResponsibilityQty(String itemId, String roomId, double qty) {
     final item = project.responsibilityById(itemId);
     if (item == null) return;
     project.updateResponsibilityItem(item.withRoomQty(roomId, qty));
+    _projectChanged(repricing: false);
+  }
+
+  /// Answers one room's cell in WORDS - 'as required', 'per plan', 'existing'
+  /// - or clears it when [note] is blank. Drops any count that room had: a
+  /// cell carries one answer. See [ResponsibilityItem.noteByRoom].
+  void setResponsibilityNote(String itemId, String roomId, String note) {
+    final item = project.responsibilityById(itemId);
+    if (item == null) return;
+    project.updateResponsibilityItem(item.withRoomNote(roomId, note));
+    _projectChanged(repricing: false);
+  }
+
+  /// Sets one line's furnishing or installing party from the sheet itself,
+  /// without opening the whole row.
+  ///
+  /// WHOSE JOB IT IS is the question this document exists to answer, and it
+  /// was the one field on it that could only be changed through a dialog -
+  /// so agreeing a sheet of thirty lines meant thirty round trips through an
+  /// editor whose other seven fields were not being touched.
+  void setResponsibilityParty(
+    String itemId, {
+    String? furnishedBy,
+    String? installedBy,
+  }) {
+    final item = project.responsibilityById(itemId);
+    if (item == null) return;
+    project.updateResponsibilityItem(
+      item.copyWith(furnishedBy: furnishedBy, installedBy: installedBy),
+    );
     _projectChanged(repricing: false);
   }
 

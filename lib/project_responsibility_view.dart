@@ -1005,20 +1005,43 @@ class _MatrixGridState extends State<_MatrixGrid> {
                 child: InkWell(
                   key: ValueKey('matrix_cell_${item.id}_${room.id}'),
                   onTap: () => _editQty(context, item, room),
-                  child: _cell(
-                    height: m.bodyRow,
-                    align: Alignment.center,
-                    line: line,
-                    // The band and the highlight both run across the whole
-                    // row, frozen half included, which is what makes a
-                    // quantity readable against the room name thirty columns
-                    // to its left.
-                    fill: fill,
-                    strongBottom: last,
-                    child: Text(
-                      formatResponsibilityQty(item.qtyByRoom[room.id] ?? 0),
-                      style: zoomed.bodyMedium?.copyWith(
-                        fontWeight: lit ? FontWeight.w600 : null,
+                  child: _noted(
+                    context,
+                    item: item,
+                    roomId: room.id,
+                    child: _cell(
+                      height: m.bodyRow,
+                      align: Alignment.center,
+                      line: line,
+                      // The band and the highlight both run across the whole
+                      // row, frozen half included, which is what makes a
+                      // quantity readable against the room name thirty columns
+                      // to its left.
+                      //
+                      // A CELL THAT IS NOT A NUMBER OVERRIDES BOTH. It is the
+                      // one thing on this row that is not what the reader is
+                      // scanning for, and it has to say so wherever the
+                      // pointer happens to be.
+                      fill: item.cellIsNote(room.id)
+                          ? _noteFill(theme, lit)
+                          : fill,
+                      strongBottom: last,
+                      child: Text(
+                        item.cellText(room.id),
+                        // A count is a character or two and a note is a
+                        // phrase, in a column sized for the count. Clipped
+                        // with an ellipsis rather than wrapped, because a cell
+                        // that grew to fit its words would push every room row
+                        // on the sheet out of line with the room names beside
+                        // them - and the tooltip carries the whole answer.
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: zoomed.bodyMedium?.copyWith(
+                          fontWeight: lit || item.cellIsNote(room.id)
+                              ? FontWeight.w600
+                              : null,
+                        ),
                       ),
                     ),
                   ),
@@ -1044,8 +1067,17 @@ class _MatrixGridState extends State<_MatrixGrid> {
               align: Alignment.center,
               line: line,
               fill: _totalsFill(theme),
+              // THE TOTAL SAYS WHAT IT COULD NOT ADD. Four rooms answered
+              // 'as required' are four rooms missing from the figure a
+              // contractor bids against, and a bare number gives no sign of
+              // it - see [ResponsibilityItem.noteCount].
               child: Text(
-                formatResponsibilityQty(item.total),
+                item.noteCount > 0
+                    ? '${formatResponsibilityQty(item.total)}'
+                          '  +${item.noteCount}'
+                    : formatResponsibilityQty(item.total),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: zoomed.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
             ),
@@ -1078,6 +1110,21 @@ class _MatrixGridState extends State<_MatrixGrid> {
     ),
   );
 
+  /// Puts the whole answer within reach of a cell too narrow to print it.
+  ///
+  /// ONLY ON THE CELLS THAT NEED IT. A count is never clipped, and a tooltip
+  /// on three hundred cells saying '4' is three hundred tooltips in the way of
+  /// a sheet somebody is scanning.
+  Widget _noted(
+    BuildContext context, {
+    required ResponsibilityItem item,
+    required String roomId,
+    required Widget child,
+  }) {
+    if (!item.cellIsNote(roomId)) return child;
+    return Tooltip(message: item.cellText(roomId), child: child);
+  }
+
   /// Sets one cell. A dialog rather than an inline field: thirty columns of
   /// live text fields is thirty focus nodes and thirty controllers on a grid
   /// most of whose cells are empty.
@@ -1087,15 +1134,26 @@ class _MatrixGridState extends State<_MatrixGrid> {
     ({String id, String name}) room,
   ) async {
     final provider = context.read<AppStateProvider>();
-    final typed = await showDialog<double>(
+    final typed = await showDialog<String>(
       context: context,
       builder: (_) => _QtyDialog(
         title: '${item.scope} in ${room.name}',
-        initial: item.qtyByRoom[room.id] ?? 0,
+        initial: item.cellText(room.id),
       ),
     );
     if (typed == null) return;
-    provider.setResponsibilityQty(item.id, room.id, typed);
+    // ONE FIELD, TWO PLACES IT CAN LAND - see [responsibilityCellIsCount].
+    // A count goes where the totals row can add it; anything else is the
+    // answer for that room, kept as written and highlighted.
+    if (responsibilityCellIsCount(typed)) {
+      provider.setResponsibilityQty(
+        item.id,
+        room.id,
+        double.parse(typed.trim()),
+      );
+    } else {
+      provider.setResponsibilityNote(item.id, room.id, typed);
+    }
   }
 
   /// One scope item's heading: its name, whose job it is, and the way to its
@@ -1190,13 +1248,16 @@ class _MatrixGridState extends State<_MatrixGrid> {
           ),
         // WHOSE JOB IT IS, IN ITS OWN COLOR. Two rows under every scope
         // name, and the pair of them is what the sheet is read for.
+        // ANSWERED WHERE THEY ARE READ - see [_PartyPicker]. These two rows
+        // are what the sheet is for, and until now they were the only thing
+        // on it that could not be changed by pressing it.
         _cell(
           height: m.partyRow,
           line: line,
           fill: _headFill(theme),
-          child: _PartyCell(
-            party: item.furnishedBy,
-            missing: item.furnishedBy.trim().isEmpty,
+          child: _PartyPicker(
+            item: item,
+            installing: false,
             fontSize: _partySize(zoomed),
           ),
         ),
@@ -1205,9 +1266,9 @@ class _MatrixGridState extends State<_MatrixGrid> {
           line: line,
           fill: _headFill(theme),
           strongBottom: true,
-          child: _PartyCell(
-            party: item.installedBy,
-            missing: item.installedBy.trim().isEmpty,
+          child: _PartyPicker(
+            item: item,
+            installing: true,
             fontSize: _partySize(zoomed),
           ),
         ),
@@ -1363,6 +1424,21 @@ class _MatrixGridState extends State<_MatrixGrid> {
         : null;
   }
 
+  /// Behind a cell answered in WORDS - see [ResponsibilityItem.noteByRoom].
+  ///
+  /// AMBER, AND NOT THE ROW BAND OR THE PARTY COLORS. It is saying something
+  /// different from either: not "this is where you are" and not "this is whose
+  /// job it is", but "this one is not a number, so it is not in the total you
+  /// are about to bid against". Strong enough to find across two feet of grid
+  /// while scanning a row of digits, because the whole point is that it does
+  /// not read as one.
+  ///
+  /// The words are in the cell either way. The wash is the second way to read
+  /// it, never the only one - the same rule the party colors are held to.
+  static Color _noteFill(ThemeData theme, bool lit) =>
+      (lit ? const Color(0xFFF5A623) : const Color(0xFFE8A33D))
+          .withValues(alpha: lit ? 0.38 : 0.26);
+
   /// Behind the totals line - one of the two blocks that is not a room row.
   /// Faint, and enough to say the grid has ends.
   static Color _totalsFill(ThemeData theme) =>
@@ -1503,49 +1579,178 @@ class _PartyCell extends StatelessWidget {
   }
 }
 
-/// How many of one thing in one room.
+/// A party cell that can be ANSWERED where it is read.
 ///
-/// Its own widget so the controller is owned by a State. A controller made in
-/// the caller and disposed when the dialog's future completes is torn out from
-/// under a field the exit animation is still building — see the same note on
-/// [_ResponsibilityEditorDialog].
-class _QtyDialog extends StatefulWidget {
-  final String title;
-  final double initial;
+/// WHOSE JOB IT IS is the question this whole document exists to settle, and
+/// it was the one thing on the sheet that could not be changed from the sheet:
+/// the cell was ink, and changing it meant opening the row's editor, finding
+/// the right field among eight, typing, and saving. Agreeing a matrix of
+/// thirty lines is thirty of those.
+///
+/// A MENU RATHER THAN A FIELD, because the answer is almost always one of six
+/// words and the sheet already knows which - see [_partyChoices], which offers
+/// the usual answers first and then the parties this job has actually named,
+/// so the second line agreed reads back the name typed on the first rather
+/// than a near-miss spelling of it. Anything genuinely new is one more press
+/// down, under 'Someone else...'.
+class _PartyPicker extends StatelessWidget {
+  final ResponsibilityItem item;
 
-  const _QtyDialog({required this.title, required this.initial});
+  /// Which of the two this cell is. The pair is the whole point of the sheet,
+  /// so they are one widget told which way round it is rather than two.
+  final bool installing;
+
+  final double fontSize;
+  final String missingLabel;
+
+  const _PartyPicker({
+    required this.item,
+    required this.installing,
+    this.fontSize = 11,
+    this.missingLabel = 'NOBODY',
+  });
+
+  // Sentinels, not parties. A real party is something somebody would
+  // write on a drawing, so neither of these can collide with one.
+  static const String _kOther = '__responsibility_other__';
+  static const String _kClear = '__responsibility_clear__';
+
+  String get _party => installing ? item.installedBy : item.furnishedBy;
+
+  void _set(BuildContext context, String value) =>
+      context.read<AppStateProvider>().setResponsibilityParty(
+        item.id,
+        furnishedBy: installing ? null : value,
+        installedBy: installing ? value : null,
+      );
+
+  Future<void> _typeOne(BuildContext context) async {
+    final typed = await showResponsibilityPartyPrompt(
+      context,
+      title: installing ? 'Who installs it?' : 'Who furnishes it?',
+      initial: _party,
+    );
+    if (typed == null || !context.mounted) return;
+    _set(context, typed.trim());
+  }
 
   @override
-  State<_QtyDialog> createState() => _QtyDialogState();
+  Widget build(BuildContext context) {
+    final named = _party.trim().isNotEmpty;
+    return PopupMenuButton<String>(
+      key: ValueKey(
+        'matrix_party_${installing ? 'installed' : 'furnished'}_${item.id}',
+      ),
+      tooltip: installing ? 'Who installs it' : 'Who furnishes it',
+      position: PopupMenuPosition.under,
+      itemBuilder: (context) => [
+        for (final choice in _partyChoices(context))
+          CheckedPopupMenuItem(
+            key: ValueKey('matrix_party_choice_$choice'),
+            value: choice,
+            checked: normalizedName(choice) == normalizedName(_party),
+            child: Text(choice),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          key: ValueKey('matrix_party_other'),
+          value: _kOther,
+          child: Text('Someone else...'),
+        ),
+        // Only when there is something to take back off. A sheet where every
+        // cell offers to clear an answer nobody has given reads as an
+        // instruction rather than a menu.
+        if (named)
+          const PopupMenuItem(
+            key: ValueKey('matrix_party_clear'),
+            value: _kClear,
+            child: Text('Nobody yet'),
+          ),
+      ],
+      onSelected: (value) {
+        if (value == _kOther) {
+          _typeOne(context);
+          return;
+        }
+        _set(context, value == _kClear ? '' : value);
+      },
+      child: _PartyCell(
+        party: _party,
+        missing: !named,
+        missingLabel: missingLabel,
+        fontSize: fontSize,
+      ),
+    );
+  }
+
+  /// The usual answers, then the ones this job has actually used.
+  ///
+  /// THE SHEET'S OWN VOCABULARY MATTERS MORE THAN THE DEFAULTS. A job that
+  /// calls its contractor 'Valley/DPR' says so on thirty lines, and a menu
+  /// that offered only the generic six would have somebody re-typing it - and
+  /// a re-typed name is a second party as far as the color, the totals and
+  /// the contractor are concerned.
+  List<String> _partyChoices(BuildContext context) {
+    final onSheet = partiesOn(
+      context.read<AppStateProvider>().project.responsibility,
+    );
+    final seen = <String>{};
+    final out = <String>[];
+    for (final party in [...kResponsibilityParties, ...onSheet]) {
+      final clean = party.trim();
+      final key = normalizedName(clean);
+      if (key.isEmpty || !seen.add(key)) continue;
+      out.add(clean);
+    }
+    return out;
+  }
 }
 
-class _QtyDialogState extends State<_QtyDialog> {
-  late final TextEditingController _qty = TextEditingController(
-    text: widget.initial > 0 ? formatResponsibilityQty(widget.initial) : '',
+/// Asks for a party nobody offered. Its own dialog so the controller belongs
+/// to a State - see the note on [_ResponsibilityEditorDialog].
+Future<String?> showResponsibilityPartyPrompt(
+  BuildContext context, {
+  required String title,
+  required String initial,
+}) => showDialog<String>(
+  context: context,
+  builder: (_) => _PartyPromptDialog(title: title, initial: initial),
+);
+
+class _PartyPromptDialog extends StatefulWidget {
+  final String title;
+  final String initial;
+
+  const _PartyPromptDialog({required this.title, required this.initial});
+
+  @override
+  State<_PartyPromptDialog> createState() => _PartyPromptDialogState();
+}
+
+class _PartyPromptDialogState extends State<_PartyPromptDialog> {
+  late final TextEditingController _name = TextEditingController(
+    text: widget.initial,
   );
 
   @override
   void dispose() {
-    _qty.dispose();
+    _name.dispose();
     super.dispose();
   }
 
-  void _save() => Navigator.of(context).pop(
-    double.tryParse(_qty.text.trim()) ?? 0,
-  );
+  void _save() => Navigator.of(context).pop(_name.text);
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    key: const ValueKey('matrix_qty_dialog'),
+    key: const ValueKey('matrix_party_dialog'),
     title: Text(widget.title),
     content: TextField(
-      key: const ValueKey('matrix_qty_field'),
-      controller: _qty,
+      key: const ValueKey('matrix_party_field'),
+      controller: _name,
       autofocus: true,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: const InputDecoration(
-        labelText: 'How many',
-        helperText: 'Blank or 0 takes this room off the line.',
+        labelText: 'Party',
+        helperText: 'The name it is called on the job - "Valley/DPR", "CFCI".',
         border: OutlineInputBorder(),
       ),
       onSubmitted: (_) => _save(),
@@ -1556,12 +1761,142 @@ class _QtyDialogState extends State<_QtyDialog> {
         child: const Text('Cancel'),
       ),
       FilledButton(
-        key: const ValueKey('matrix_qty_save'),
+        key: const ValueKey('matrix_party_save'),
         onPressed: _save,
         child: const Text('Set'),
       ),
     ],
   );
+}
+
+/// WHAT GOES IN ONE ROOM'S CELL: a count, or the answer in words.
+///
+/// NOT EVERY CELL IS A NUMBER. Ask anybody filling one of these in what goes
+/// in room 101 and about a tenth of the time the true answer is "as required",
+/// "per plan" or "existing to remain" - and this field used to accept only
+/// digits, so those cells were left blank. A blank and "we have not decided"
+/// are opposite things to a contractor pricing the line, which is the whole
+/// argument this document exists to prevent.
+///
+/// A MENU OVER A FIELD, not instead of it. The menu carries the answers that
+/// come up - the small counts and the half-dozen phrases, see
+/// [kResponsibilityCellAnswers] - and puts whatever is picked INTO the field
+/// rather than closing on it, so the field is the single answer to "what does
+/// this cell say" and anything at all can still be typed. A closed list would
+/// be back to telling somebody their real answer is not allowed.
+///
+/// Its own widget so the controller is owned by a State. A controller made in
+/// the caller and disposed when the dialog's future completes is torn out from
+/// under a field the exit animation is still building — see the same note on
+/// [_ResponsibilityEditorDialog].
+class _QtyDialog extends StatefulWidget {
+  final String title;
+
+  /// What the cell says now - a formatted count, a note, or ''.
+  final String initial;
+
+  const _QtyDialog({required this.title, required this.initial});
+
+  @override
+  State<_QtyDialog> createState() => _QtyDialogState();
+}
+
+class _QtyDialogState extends State<_QtyDialog> {
+  late final TextEditingController _value =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void initState() {
+    super.initState();
+    // The helper line under the field says which of the two the cell is about
+    // to become, and it has to say it while the words are being typed rather
+    // than after they are committed.
+    _value.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _value.dispose();
+    super.dispose();
+  }
+
+  void _save() => Navigator.of(context).pop(_value.text);
+
+  /// True when what is typed will be counted. The same test the sheet itself
+  /// uses, so the warning here and the highlight there cannot disagree.
+  bool get _isCount => responsibilityCellIsCount(_value.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final typed = _value.text.trim();
+    return AlertDialog(
+      key: const ValueKey('matrix_qty_dialog'),
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey('matrix_qty_field'),
+            controller: _value,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'How many, or what the answer is',
+              border: const OutlineInputBorder(),
+              // THE USUAL ANSWERS, on the field they fill in. Same shape as
+              // the party field above - see [_PartyField] - so the two places
+              // on this sheet that offer a list offer it the same way.
+              suffixIcon: PopupMenuButton<String>(
+                key: const ValueKey('matrix_qty_menu'),
+                tooltip: 'The usual answers',
+                icon: const Icon(Icons.arrow_drop_down),
+                itemBuilder: (_) => [
+                  for (final answer in kResponsibilityCellAnswers)
+                    PopupMenuItem(
+                      key: ValueKey('matrix_qty_answer_$answer'),
+                      value: answer,
+                      child: Text(answer),
+                    ),
+                ],
+                onSelected: (value) => _value.text = value,
+              ),
+            ),
+            onSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            typed.isEmpty
+                ? 'Blank takes this room off the line.'
+                : _isCount
+                ? 'A count. It adds into the line total.'
+                : 'Not a number, so it is kept as the answer for this room '
+                      'and highlighted on the sheet. It cannot add into the '
+                      'total.',
+            key: const ValueKey('matrix_qty_kind'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: typed.isNotEmpty && !_isCount
+                  ? theme.colorScheme.onSurface
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight:
+                  typed.isNotEmpty && !_isCount ? FontWeight.w600 : null,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('matrix_qty_save'),
+          onPressed: _save,
+          child: const Text('Set'),
+        ),
+      ],
+    );
+  }
 }
 
 /// One line of the matrix on the editor.
@@ -1582,9 +1917,17 @@ class _ItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final provider = context.read<AppStateProvider>();
+    // EVERY ROOM THAT HAS AN ANSWER, counted or not. A room answered 'as
+    // required' is on this line as much as a room answered 4, and leaving it
+    // out of the summary put the two states - answered in words, and not
+    // answered at all - into the same blank.
     final rooms = columns
-        .where((c) => (item.qtyByRoom[c.id] ?? 0) > 0)
-        .map((c) => '${c.name} ×${formatResponsibilityQty(item.qtyByRoom[c.id]!)}')
+        .where((c) => item.cellText(c.id).isNotEmpty)
+        .map(
+          (c) => item.cellIsNote(c.id)
+              ? '${c.name}: ${item.cellText(c.id)}'
+              : '${c.name} ×${item.cellText(c.id)}',
+        )
         .join('  ·  ');
 
     return ListTile(
@@ -1617,9 +1960,9 @@ class _ItemRow extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              _PartyCell(
-                party: item.furnishedBy,
-                missing: item.furnishedBy.trim().isEmpty,
+              _PartyPicker(
+                item: item,
+                installing: false,
                 missingLabel: 'NOBODY YET',
               ),
               Text(
@@ -1628,9 +1971,9 @@ class _ItemRow extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              _PartyCell(
-                party: item.installedBy,
-                missing: item.installedBy.trim().isEmpty,
+              _PartyPicker(
+                item: item,
+                installing: true,
                 missingLabel: 'NOBODY YET',
               ),
               if (item.neededBy.isNotEmpty)
@@ -2420,6 +2763,29 @@ class _MatrixTable extends StatelessWidget {
     Color partyTint(String party) =>
         resolveTint(assigned: project.partyColor(party), name: party);
 
+    /// A room's cell on the printed sheet: the count plain, the words washed.
+    ///
+    /// THE SAME AMBER THE SPREADSHEET USES - see [kResponsibilityNoteFill].
+    /// This picture and that file are two copies of one document, and a cell
+    /// flagged in one and quiet in the other is a reader who trusts whichever
+    /// they were sent.
+    Widget qtyCell(ResponsibilityItem item, String roomId) {
+      final text = item.cellText(roomId);
+      if (!item.cellIsNote(roomId)) return cell(text);
+      return Container(
+        color: const Color(0xFFFFF3D6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF7A4E00),
+          ),
+        ),
+      );
+    }
+
     Widget partyCell(String party) {
       final named = party.trim();
       if (named.isEmpty) {
@@ -2534,11 +2900,13 @@ class _MatrixTable extends StatelessWidget {
                     partyCell(item.furnishedBy),
                     partyCell(item.installedBy),
                     cell(item.neededBy),
-                    for (final room in columns)
-                      cell(
-                        formatResponsibilityQty(item.qtyByRoom[room.id] ?? 0),
-                      ),
-                    cell(formatResponsibilityQty(item.total)),
+                    for (final room in columns) qtyCell(item, room.id),
+                    cell(
+                      item.noteCount > 0
+                          ? '${formatResponsibilityQty(item.total)} '
+                                '(+${item.noteCount} noted)'
+                          : formatResponsibilityQty(item.total),
+                    ),
                     cell(item.work),
                     cell(item.productName),
                     cell(item.notes),
