@@ -174,24 +174,19 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('a room cell', () {
-    testWidgets('takes a count, and it adds into the total', (tester) async {
+    testWidgets('sets a count straight off the menu', (tester) async {
       final p = withProject();
       final item = p.addResponsibilityItem('Projection screen');
       await pumpPane(tester, p);
 
+      // THE SAME GESTURE THE PARTY CELLS TAKE. A modal to put a 4 in a box is
+      // a focus change and a button press for something that could be
+      // pointed at, three hundred times over.
       await tester.tap(
         find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
       );
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('matrix_qty_field')),
-        '4',
-      );
-      await tester.pumpAndSettle();
-      // The dialog says which of the two it is about to save, while it is
-      // being typed rather than after it is committed.
-      expect(find.textContaining('adds into the line total'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('matrix_qty_save')));
+      await tester.tap(find.byKey(const ValueKey('matrix_cell_answer_4')));
       await tester.pumpAndSettle();
 
       final after = p.project.responsibilityById(item.id)!;
@@ -200,7 +195,7 @@ void main() {
       expect(after.cellIsNote(roomId(p)), isFalse);
     });
 
-    testWidgets('takes words, keeps them, and leaves them out of the total', (
+    testWidgets('sets words off the same menu, out of the total', (
       tester,
     ) async {
       final p = withProject();
@@ -211,13 +206,15 @@ void main() {
         find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
       );
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('matrix_qty_field')),
-        'As required',
+      // COUNTS AND WORDS IN ONE MENU: the cell takes either, and the person
+      // filling it in does not think of them as two kinds of thing.
+      expect(
+        find.byKey(const ValueKey('matrix_cell_answer_As required')),
+        findsOneWidget,
       );
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Not a number'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('matrix_qty_save')));
+      await tester.tap(
+        find.byKey(const ValueKey('matrix_cell_answer_As required')),
+      );
       await tester.pumpAndSettle();
 
       final after = p.project.responsibilityById(item.id)!;
@@ -227,11 +224,10 @@ void main() {
       // bid short by however many rooms said it.
       expect(after.total, 0);
       expect(after.noteCount, 1);
-      // And the words are on the sheet, not just in the file.
       expect(find.text('As required'), findsWidgets);
     });
 
-    testWidgets('offers the usual answers, numbers and words together', (
+    testWidgets('takes anything at all through "Something else"', (
       tester,
     ) async {
       final p = withProject();
@@ -242,28 +238,42 @@ void main() {
         find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('matrix_qty_menu')));
+      await tester.tap(find.byKey(const ValueKey('matrix_cell_other')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('matrix_qty_answer_2')), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('matrix_qty_answer_Per plan')),
-        findsOneWidget,
+      // The dialog is the exception now, not the road every cell goes down.
+      expect(find.byKey(const ValueKey('matrix_qty_dialog')), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('matrix_qty_field')),
+        'Two per bay',
       );
+      await tester.pumpAndSettle();
+      // It still says which of the two it is about to save, while it is being
+      // typed rather than after it is committed.
+      expect(find.textContaining('Not a number'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('matrix_qty_save')));
+      await tester.pumpAndSettle();
 
-      // PICKING FILLS THE FIELD rather than closing on it: the field stays the
-      // single answer to what the cell says, and anything can still be typed.
+      expect(
+        p.project.responsibilityById(item.id)!.cellText(roomId(p)),
+        'Two per bay',
+      );
+    });
+
+    testWidgets('shows which answer the cell is already on', (tester) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Projection screen');
+      p.setResponsibilityQty(item.id, roomId(p), 2);
+      await pumpPane(tester, p);
+
       await tester.tap(
-        find.byKey(const ValueKey('matrix_qty_answer_Per plan')),
+        find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
       );
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const ValueKey('matrix_qty_field')))
-            .controller
-            ?.text,
-        'Per plan',
+      final checked = tester.widget<CheckedPopupMenuItem<String>>(
+        find.byKey(const ValueKey('matrix_cell_answer_2')),
       );
+      expect(checked.checked, isTrue);
     });
 
     testWidgets('a cell holds one answer, so words replace a count', (
@@ -285,24 +295,115 @@ void main() {
       expect(again.cellText(roomId(p)), '2');
     });
 
-    testWidgets('blank takes the room off the line', (tester) async {
+    testWidgets('takes the room off the line, and only offers to when set', (
+      tester,
+    ) async {
       final p = withProject();
       final item = p.addResponsibilityItem('Projection screen');
-      p.setResponsibilityNote(item.id, roomId(p), 'As required');
       await pumpPane(tester, p);
+
+      // Nothing to clear on a cell nobody has answered.
+      await tester.tap(
+        find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('matrix_cell_clear')), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('matrix_cell_answer_As required')),
+      );
+      await tester.pumpAndSettle();
 
       await tester.tap(
         find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
       );
       await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const ValueKey('matrix_qty_field')), '');
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('matrix_qty_save')));
+      await tester.tap(find.byKey(const ValueKey('matrix_cell_clear')));
       await tester.pumpAndSettle();
 
       final after = p.project.responsibilityById(item.id)!;
       expect(after.cellText(roomId(p)), isEmpty);
       expect(after.cellIsNote(roomId(p)), isFalse);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  THE TOTALS ROW SAYS WHAT IT COULD NOT ADD
+  // -------------------------------------------------------------------------
+  //  A column of nine lines whose total reads 6 is not wrong, but it is not
+  //  the whole story either - three of those rooms answered in words. The
+  //  figure a contractor bids against has to carry the sum AND the count it
+  //  could not include, and the count has to look like the cells it came from
+  //  rather than like part of the sum.
+
+  group('the totals row', () {
+    testWidgets('carries the sum and the note count, marked apart', (
+      tester,
+    ) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Projection screen');
+      final rooms = p.project.rooms.map((r) => r.id).toList();
+      p.setResponsibilityQty(item.id, rooms.first, 6);
+      p.setResponsibilityNote(item.id, rooms.last, 'As required');
+      await pumpPane(tester, p);
+
+      // BOTH FIGURES. The sum is what is bid against; the count beside it is
+      // why the sum is smaller than the sheet looks.
+      expect(find.text('6'), findsWidgets);
+      expect(find.text('+1'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('matrix_total_notes')),
+        findsWidgets,
+        reason: 'the count is marked the way the cells it came from are',
+      );
+    });
+
+    testWidgets('the Totals label carries the whole sheet count', (
+      tester,
+    ) async {
+      final p = withProject();
+      final rooms = p.project.rooms.map((r) => r.id).toList();
+      final screens = p.addResponsibilityItem('Projection screen');
+      final speakers = p.addResponsibilityItem('Ceiling speakers');
+      p.setResponsibilityQty(screens.id, rooms.first, 4);
+      p.setResponsibilityNote(screens.id, rooms.last, 'As required');
+      p.setResponsibilityNote(speakers.id, rooms.last, 'Per plan');
+      await pumpPane(tester, p);
+
+      // ONE NUMBER FOR "how much of this matrix is still in words", on the
+      // label rather than buried in the thirtieth column - it is the question
+      // somebody asks before sending the sheet to a contractor.
+      expect(find.text('Totals'), findsWidgets);
+      expect(find.text('+2'), findsWidgets);
+    });
+
+    testWidgets('a sheet answered entirely in counts says nothing extra', (
+      tester,
+    ) async {
+      final p = withProject();
+      final rooms = p.project.rooms.map((r) => r.id).toList();
+      final screens = p.addResponsibilityItem('Projection screen');
+      p.setResponsibilityQty(screens.id, rooms.first, 4);
+      p.setResponsibilityQty(screens.id, rooms.last, 2);
+      await pumpPane(tester, p);
+
+      expect(find.text('Totals'), findsWidgets);
+      expect(find.byKey(const ValueKey('matrix_total_notes')), findsNothing);
+    });
+
+    testWidgets('a column that added everything is a bare figure', (
+      tester,
+    ) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Projection screen');
+      final rooms = p.project.rooms.map((r) => r.id).toList();
+      p.setResponsibilityQty(item.id, rooms.first, 2);
+      p.setResponsibilityQty(item.id, rooms.last, 3);
+      await pumpPane(tester, p);
+
+      expect(find.text('5'), findsWidgets);
+      // Nothing is drawn at all when every cell was a count, which is most
+      // columns on most jobs.
+      expect(find.byKey(const ValueKey('matrix_total_notes')), findsNothing);
     });
   });
 
@@ -369,6 +470,58 @@ void main() {
       expect(row[5], isNot(isA<String>()));
       // The total says what it could not add.
       expect(row[6].toString(), contains('+1 noted'));
+    });
+
+    test('the totals row says it per room as well', () {
+      // THE OTHER WAY ROUND. The line total counts the rooms on one line; the
+      // row at the foot counts the lines in one room, and without it that row
+      // is the one figure on the sheet giving no sign of what it left out.
+      const screens = ResponsibilityItem(
+        id: 'resp1',
+        scope: 'Projection screen',
+        qtyByRoom: {'r1': 4},
+        noteByRoom: {'r2': 'As required'},
+      );
+      const speakers = ResponsibilityItem(
+        id: 'resp2',
+        scope: 'Ceiling speakers',
+        qtyByRoom: {'r1': 6},
+        noteByRoom: {'r2': 'Per plan'},
+      );
+      expect(responsibilityNotesInRoom([screens, speakers], 'r2'), 2);
+      expect(responsibilityNotesInRoom([screens, speakers], 'r1'), 0);
+
+      final sections = responsibilityMatrixSections(
+        [screens, speakers],
+        roomNames: [(id: 'r1', name: 'BSS 101'), (id: 'r2', name: 'BSS 103')],
+      );
+      final totals = sections.first.rows.last;
+      // The label carries the sheet's whole shortfall - both lines answered
+      // room 103 in words.
+      expect(totals.first, 'Totals (+2 noted)');
+      // Room 101 added both lines; room 103 added neither and says so.
+      expect(totals[4].toString(), '10');
+      expect(totals[5].toString(), contains('+2 noted'));
+    });
+
+    test('the spreadsheet totals label says it too', () {
+      const screens = ResponsibilityItem(
+        id: 'resp1',
+        scope: 'Projection screen',
+        qtyByRoom: {'r1': 4},
+        noteByRoom: {'r2': 'As required'},
+      );
+      final sections = responsibilityMatrixSections(
+        [screens],
+        roomNames: [(id: 'r1', name: 'BSS 101'), (id: 'r2', name: 'BSS 103')],
+      );
+      expect(sections.first.rows.last.first, 'Totals (+1 noted)');
+    });
+
+    test('one wording for a total everywhere it is printed', () {
+      expect(responsibilityTotalText(6, 0), '6');
+      expect(responsibilityTotalText(6, 1), '6 (+1 noted)');
+      expect(responsibilityTotalText(0, 2), '(+2 noted)');
     });
 
     test('the shared rule decides what counts', () {

@@ -967,12 +967,45 @@ class _MatrixGridState extends State<_MatrixGrid> {
               ),
             ),
           ),
+        // THE WHOLE SHEET'S SHORTFALL, WHERE THE ROW IS NAMED.
+        //
+        // The figures along this row each say what their own column could not
+        // add. This says how many there are altogether - the one number that
+        // answers "how much of this matrix is still in words", which is the
+        // question somebody asks before sending it to a contractor, and it
+        // belongs on the label rather than buried in the thirtieth column.
         _cell(
           height: m.bodyRow,
           line: line,
           fill: _totalsFill(theme),
           strongRight: true,
-          child: Text('Totals', style: _headStyle(theme, zoomed)),
+          child: Builder(
+            builder: (context) {
+              final notes = widget.project.responsibility.fold<int>(
+                0,
+                (sum, i) => sum + i.noteCount,
+              );
+              final label = Text('Totals', style: _headStyle(theme, zoomed));
+              if (notes <= 0) return label;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(child: label),
+                  const SizedBox(width: 6),
+                  _NoteCountChip(
+                    count: notes,
+                    fill: _noteFill(theme, false),
+                    style: _headStyle(theme, zoomed),
+                    message:
+                        '$notes cell${notes == 1 ? '' : 's'} on this sheet '
+                        '${notes == 1 ? 'is' : 'are'} answered in words rather '
+                        'than a count, so ${notes == 1 ? 'it is' : 'they are'} '
+                        'in none of these totals.',
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ],
     );
@@ -1002,9 +1035,13 @@ class _MatrixGridState extends State<_MatrixGrid> {
             for (final item in items)
               SizedBox(
                 width: m.itemColumn,
-                child: InkWell(
-                  key: ValueKey('matrix_cell_${item.id}_${room.id}'),
-                  onTap: () => _editQty(context, item, room),
+                // ANSWERED FROM A MENU ON THE CELL - see [_CellPicker]. The
+                // same gesture the party rows above take, rather than a modal
+                // for every one of three hundred boxes.
+                child: _CellPicker(
+                  item: item,
+                  roomId: room.id,
+                  roomName: room.name,
                   child: _noted(
                     context,
                     item: item,
@@ -1067,18 +1104,13 @@ class _MatrixGridState extends State<_MatrixGrid> {
               align: Alignment.center,
               line: line,
               fill: _totalsFill(theme),
-              // THE TOTAL SAYS WHAT IT COULD NOT ADD. Four rooms answered
-              // 'as required' are four rooms missing from the figure a
-              // contractor bids against, and a bare number gives no sign of
-              // it - see [ResponsibilityItem.noteCount].
-              child: Text(
-                item.noteCount > 0
-                    ? '${formatResponsibilityQty(item.total)}'
-                          '  +${item.noteCount}'
-                    : formatResponsibilityQty(item.total),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: zoomed.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+              child: _TotalWithNotes(
+                total: item.total,
+                notes: item.noteCount,
+                style: zoomed.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                noteFill: _noteFill(theme, false),
               ),
             ),
           ),
@@ -1123,37 +1155,6 @@ class _MatrixGridState extends State<_MatrixGrid> {
   }) {
     if (!item.cellIsNote(roomId)) return child;
     return Tooltip(message: item.cellText(roomId), child: child);
-  }
-
-  /// Sets one cell. A dialog rather than an inline field: thirty columns of
-  /// live text fields is thirty focus nodes and thirty controllers on a grid
-  /// most of whose cells are empty.
-  Future<void> _editQty(
-    BuildContext context,
-    ResponsibilityItem item,
-    ({String id, String name}) room,
-  ) async {
-    final provider = context.read<AppStateProvider>();
-    final typed = await showDialog<String>(
-      context: context,
-      builder: (_) => _QtyDialog(
-        title: '${item.scope} in ${room.name}',
-        initial: item.cellText(room.id),
-      ),
-    );
-    if (typed == null) return;
-    // ONE FIELD, TWO PLACES IT CAN LAND - see [responsibilityCellIsCount].
-    // A count goes where the totals row can add it; anything else is the
-    // answer for that room, kept as written and highlighted.
-    if (responsibilityCellIsCount(typed)) {
-      provider.setResponsibilityQty(
-        item.id,
-        room.id,
-        double.parse(typed.trim()),
-      );
-    } else {
-      provider.setResponsibilityNote(item.id, room.id, typed);
-    }
   }
 
   /// One scope item's heading: its name, whose job it is, and the way to its
@@ -1643,6 +1644,11 @@ class _PartyPicker extends StatelessWidget {
       ),
       tooltip: installing ? 'Who installs it' : 'Who furnishes it',
       position: PopupMenuPosition.under,
+      // NO PADDING OF ITS OWN. The cell around this already has its height
+      // and its rules - see [_MatrixGridState._cell] - and the button's
+      // default eight pixels all round is eight the fixed-height party row
+      // does not have to give.
+      padding: EdgeInsets.zero,
       itemBuilder: (context) => [
         for (final choice in _partyChoices(context))
           CheckedPopupMenuItem(
@@ -1703,6 +1709,223 @@ class _PartyPicker extends StatelessWidget {
       out.add(clean);
     }
     return out;
+  }
+}
+
+/// A total, and beside it how many cells it could NOT add.
+///
+/// BOTH FIGURES, AND THEY LOOK DIFFERENT. The sum is the number a contractor
+/// bids against and it stays the plain bold figure a totals row is read for.
+/// The count of rooms answered in words is not part of it - it is the reason
+/// the sum is smaller than the sheet looks - so it carries the same amber the
+/// cells themselves carry, and the reader who spots one on the grid finds the
+/// other at the bottom of the same column.
+///
+/// A CHIP RATHER THAN MORE TEXT. '12 +3' in one style reads as a sum somebody
+/// wrote badly; the mark is what says the second number is a different KIND of
+/// thing. Nothing is drawn at all when every cell was a count, which is most
+/// columns on most jobs.
+class _TotalWithNotes extends StatelessWidget {
+  final double total;
+  final int notes;
+  final TextStyle? style;
+
+  /// The wash the note cells in this column are drawn in, passed rather than
+  /// derived so the bottom of a column cannot end up a different amber from
+  /// the cells above it.
+  final Color noteFill;
+
+  const _TotalWithNotes({
+    required this.total,
+    required this.notes,
+    required this.style,
+    required this.noteFill,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final figure = Text(
+      formatResponsibilityQty(total),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    if (notes <= 0) return figure;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Flexible(child: figure),
+        const SizedBox(width: 4),
+        _NoteCountChip(
+          count: notes,
+          fill: noteFill,
+          style: style,
+          message:
+              '$notes room${notes == 1 ? '' : 's'} answered in words rather '
+              'than a count, so ${notes == 1 ? 'it is' : 'they are'} not in '
+              'this total.',
+        ),
+      ],
+    );
+  }
+}
+
+/// The amber '+n' that says how many answers a figure could not include.
+///
+/// ONE CHIP, wherever the sheet admits to a shortfall - at the foot of a
+/// column and beside the word Totals. Two of these drawn separately would be
+/// two ambers and two paddings within a few pixels of each other, which is
+/// exactly the kind of difference a reader reads as meaning something.
+///
+/// THE WORDS ARE ON IT, not only the color: '+3' beside a total is meaningless
+/// on a mono printout or to a reader who cannot pick the amber out, so the
+/// tooltip says it in full and the chip says the number.
+class _NoteCountChip extends StatelessWidget {
+  final int count;
+  final Color fill;
+  final TextStyle? style;
+  final String message;
+
+  const _NoteCountChip({
+    required this.count,
+    required this.fill,
+    required this.style,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: message,
+    child: Container(
+      key: const ValueKey('matrix_total_notes'),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        '+$count',
+        maxLines: 1,
+        style: style?.copyWith(fontWeight: FontWeight.w600),
+      ),
+    ),
+  );
+}
+
+/// A room's cell, answered from a menu on the cell itself.
+///
+/// THE SAME GESTURE THE PARTY CELLS TAKE - see [_PartyPicker]. This sheet asks
+/// two kinds of question, whose job it is and how many, and answering them
+/// used to take two different motions: a menu for one and a dialog for the
+/// other. A dialog to put a 2 in a box is a modal, a focus change, a typed
+/// character and a button press for something the reader could have pointed
+/// at, and there are three hundred boxes.
+///
+/// COUNTS AND WORDS IN ONE MENU, because the cell takes either and the person
+/// filling it in does not think of them as two kinds of thing - see
+/// [kResponsibilityCellAnswers]. Anything not on the list is still one press
+/// further on, under 'Something else...', which is where the dialog went: it
+/// is now the exception rather than the road every cell goes down.
+class _CellPicker extends StatelessWidget {
+  final ResponsibilityItem item;
+  final String roomId;
+
+  /// Named in the prompt when somebody types their own, so a dialog that
+  /// opens over a sheet of three hundred cells says which one it is about.
+  final String roomName;
+
+  /// The cell as it is drawn - the ruled box, its fill and its text. Passed
+  /// in rather than built here because the grid decides what a cell looks
+  /// like and this decides what pressing one does.
+  final Widget child;
+
+  const _CellPicker({
+    required this.item,
+    required this.roomId,
+    required this.roomName,
+    required this.child,
+  });
+
+  static const String _kOther = '__responsibility_cell_other__';
+  static const String _kClear = '__responsibility_cell_clear__';
+
+  /// Sends one answer to the half of the item that can hold it.
+  ///
+  /// ONE FIELD, TWO PLACES IT CAN LAND - see [responsibilityCellIsCount]. A
+  /// count goes where the totals row can add it; anything else is the answer
+  /// for that room, kept as written and highlighted.
+  static void apply(
+    BuildContext context,
+    ResponsibilityItem item,
+    String roomId,
+    String typed,
+  ) {
+    final provider = context.read<AppStateProvider>();
+    if (responsibilityCellIsCount(typed)) {
+      provider.setResponsibilityQty(item.id, roomId, double.parse(typed.trim()));
+    } else {
+      provider.setResponsibilityNote(item.id, roomId, typed);
+    }
+  }
+
+  Future<void> _typeOne(BuildContext context) async {
+    final typed = await showDialog<String>(
+      context: context,
+      builder: (_) => _QtyDialog(
+        title: '${item.scope} in $roomName',
+        initial: item.cellText(roomId),
+      ),
+    );
+    if (typed == null || !context.mounted) return;
+    apply(context, item, roomId, typed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = item.cellText(roomId);
+    return PopupMenuButton<String>(
+      key: ValueKey('matrix_cell_${item.id}_$roomId'),
+      tooltip: '${item.scope} in $roomName',
+      position: PopupMenuPosition.under,
+      // See the note on [_PartyPicker]: the cell owns its own size.
+      padding: EdgeInsets.zero,
+      itemBuilder: (context) => [
+        for (final answer in kResponsibilityCellAnswers)
+          CheckedPopupMenuItem(
+            key: ValueKey('matrix_cell_answer_$answer'),
+            value: answer,
+            checked: answer.toLowerCase() == current.trim().toLowerCase(),
+            child: Text(answer),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          key: ValueKey('matrix_cell_other'),
+          value: _kOther,
+          child: Text('Something else...'),
+        ),
+        // Only when there is something to take back off, for the reason on
+        // [_PartyPicker]: a menu that offers to clear an empty cell reads as
+        // an instruction rather than a choice.
+        if (current.isNotEmpty)
+          const PopupMenuItem(
+            key: ValueKey('matrix_cell_clear'),
+            value: _kClear,
+            child: Text('Not in this room'),
+          ),
+      ],
+      onSelected: (value) {
+        if (value == _kOther) {
+          _typeOne(context);
+          return;
+        }
+        // Clearing goes through the count road at zero, which drops the note
+        // with it - see [ResponsibilityItem.withRoomQty].
+        apply(context, item, roomId, value == _kClear ? '' : value);
+      },
+      child: child,
+    );
   }
 }
 
@@ -2786,6 +3009,52 @@ class _MatrixTable extends StatelessWidget {
       );
     }
 
+    /// A total on the printed sheet, with what it could not add marked beside
+    /// it in the same amber the noted cells carry.
+    ///
+    /// THE SUM STAYS THE PLAIN FIGURE. It is the number the contractor bids
+    /// against; the count beside it is the reason the sum is smaller than the
+    /// sheet looks, and printing the two the same way would read as one badly
+    /// written number.
+    Widget totalCell(double total, int notes) {
+      final figure = Text(
+        formatResponsibilityQty(total),
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: Colors.black,
+        ),
+      );
+      if (notes <= 0) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          child: figure,
+        );
+      }
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            figure,
+            const SizedBox(width: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+              color: const Color(0xFFFFF3D6),
+              child: Text(
+                '+$notes',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF7A4E00),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     Widget partyCell(String party) {
       final named = party.trim();
       if (named.isEmpty) {
@@ -2901,12 +3170,7 @@ class _MatrixTable extends StatelessWidget {
                     partyCell(item.installedBy),
                     cell(item.neededBy),
                     for (final room in columns) qtyCell(item, room.id),
-                    cell(
-                      item.noteCount > 0
-                          ? '${formatResponsibilityQty(item.total)} '
-                                '(+${item.noteCount} noted)'
-                          : formatResponsibilityQty(item.total),
-                    ),
+                    totalCell(item.total, item.noteCount),
                     cell(item.work),
                     cell(item.productName),
                     cell(item.notes),
@@ -2916,25 +3180,35 @@ class _MatrixTable extends StatelessWidget {
                 TableRow(
                   decoration: const BoxDecoration(color: Color(0xFFF6F6F6)),
                   children: [
-                    cell('Totals', style: headStyle),
-                    cell(''),
-                    cell(''),
-                    cell(''),
-                    for (final room in columns)
-                      cell(
-                        formatResponsibilityQty(
-                          items.fold<double>(
-                            0,
-                            (sum, i) => sum + (i.qtyByRoom[room.id] ?? 0),
-                          ),
-                        ),
+                    // The whole sheet's shortfall, beside the word that names
+                    // the row - the same place the screen carries it.
+                    () {
+                      final notes = items.fold<int>(
+                        0,
+                        (sum, i) => sum + i.noteCount,
+                      );
+                      return cell(
+                        notes > 0 ? 'Totals  (+$notes noted)' : 'Totals',
                         style: headStyle,
+                      );
+                    }(),
+                    cell(''),
+                    cell(''),
+                    cell(''),
+                    // EVERY TOTAL SAYS WHAT IT LEFT OUT, this row included -
+                    // a room column reading 6 when nine lines mention the
+                    // room is a figure somebody has to be told about.
+                    for (final room in columns)
+                      totalCell(
+                        items.fold<double>(
+                          0,
+                          (sum, i) => sum + (i.qtyByRoom[room.id] ?? 0),
+                        ),
+                        responsibilityNotesInRoom(items, room.id),
                       ),
-                    cell(
-                      formatResponsibilityQty(
-                        items.fold<double>(0, (sum, i) => sum + i.total),
-                      ),
-                      style: headStyle,
+                    totalCell(
+                      items.fold<double>(0, (sum, i) => sum + i.total),
+                      items.fold<int>(0, (sum, i) => sum + i.noteCount),
                     ),
                     // Work, cutsheet, notes: nothing to total, but a Table
                     // demands every row be the same width.

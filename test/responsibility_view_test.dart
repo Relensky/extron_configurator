@@ -439,6 +439,11 @@ void main() {
         find.byKey(ValueKey('matrix_cell_resp1_${rooms.first}')),
       );
       await tester.pumpAndSettle();
+      // A cell is a menu of the answers that come up - see [_CellPicker] - and
+      // twelve ceiling speakers is not one of them, so this is the road a
+      // number nobody offered goes down.
+      await tester.tap(find.byKey(const ValueKey('matrix_cell_other')));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('matrix_qty_field')),
         '12',

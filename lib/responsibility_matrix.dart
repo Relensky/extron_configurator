@@ -75,7 +75,8 @@ const List<String> kResponsibilityCellAnswers = [
   '2',
   '3',
   '4',
-  '5',
+  '6',
+  '8',
   'As required',
   'Per plan',
   'Existing',
@@ -478,6 +479,27 @@ const String kResponsibilityMissingInk = 'A21C1C';
 const String kResponsibilityNoteFill = 'FFF3D6';
 const String kResponsibilityNoteInk = '7A4E00';
 
+/// How many lines answered one ROOM in words rather than a count.
+///
+/// The other way round from [ResponsibilityItem.noteCount], which counts the
+/// rooms on one line. The totals row at the foot of the sheet adds a column
+/// per room, so it needs this one - and without it that row is the one figure
+/// on the document that gives no sign of what it left out.
+int responsibilityNotesInRoom(List<ResponsibilityItem> items, String roomId) =>
+    items.where((i) => i.cellIsNote(roomId)).length;
+
+/// A total with what it could not add said beside it, or the bare figure when
+/// it added everything.
+///
+/// ONE WORDING, so the grid, the picture and the spreadsheet cannot describe
+/// the same shortfall three ways.
+/// A column where nothing at all could be added prints as '(+3 noted)' rather
+/// than ' (+3 noted)': [formatResponsibilityQty] gives '' for a zero, and the
+/// separator has nothing to separate.
+String responsibilityTotalText(double total, int notes) => notes > 0
+    ? '${formatResponsibilityQty(total)} (+$notes noted)'.trim()
+    : formatResponsibilityQty(total);
+
 /// One room's cell for the spreadsheet: the count as plain text, or the words
 /// with a wash behind them.
 ///
@@ -561,27 +583,32 @@ List<ReportSection> responsibilityMatrixSections(
         // THE TOTAL SAYS WHAT IT COULD NOT ADD. 'As required' in four rooms is
         // four rooms missing from a figure the contractor bids against, and a
         // bare number gives no sign of it.
-        item.noteCount > 0
-            ? '${formatResponsibilityQty(item.total)} '
-                  '(+${item.noteCount} noted)'
-            : formatResponsibilityQty(item.total),
+        responsibilityTotalText(item.total, item.noteCount),
       ],
   ];
 
   // The row a bid is checked against. Down the bottom rather than the top,
   // where a spreadsheet reader looks for a total.
   if (roomNames.isNotEmpty) {
+    final noted = items.fold<int>(0, (sum, i) => sum + i.noteCount);
     grid.add([
-      'Totals',
+      // The sheet's whole shortfall, beside the word that names the row - the
+      // same place the screen and the picture carry it.
+      noted > 0 ? 'Totals (+$noted noted)' : 'Totals',
       '',
       '',
       '',
+      // EVERY TOTAL ON THE SHEET SAYS WHAT IT LEFT OUT, this row included.
+      // A room column whose figure is 6 when nine lines mention the room is a
+      // figure somebody has to be told about.
       for (final room in roomNames)
-        formatResponsibilityQty(
+        responsibilityTotalText(
           items.fold<double>(0, (sum, i) => sum + (i.qtyByRoom[room.id] ?? 0)),
+          responsibilityNotesInRoom(items, room.id),
         ),
-      formatResponsibilityQty(
+      responsibilityTotalText(
         items.fold<double>(0, (sum, i) => sum + i.total),
+        items.fold<int>(0, (sum, i) => sum + i.noteCount),
       ),
     ]);
   }
