@@ -13,7 +13,6 @@ import 'av_flow_model.dart';
 import 'av_flow_report.dart' show driverGapSections;
 import 'av_flow_routing.dart';
 import 'av_flow_swap_dialogs.dart';
-import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon, kRowIconWidth;
 import 'av_rack_view.dart' show iconForRackItem;
 import 'base_costs.dart';
@@ -351,16 +350,22 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
-    final model = widget.model ?? buildAvFlowModel(provider);
+    // The tab's own case is the provider's, which holds both of these for as
+    // long as nothing has changed - so coming back to this page costs nothing.
+    // A caller that handed a model in is pricing something else, and gets its
+    // own arithmetic. See [AppStateProvider.roomCost].
+    final model = widget.model ?? provider.avFlowModel;
     final settings = provider.avCost;
-    final estimate = computeRoomCost(
-      model: model,
-      library: provider.avDeviceLibrary,
-      settings: settings,
-      rates: provider.laborRates,
-      baseCosts: provider.baseCosts,
-      tier: provider.pricingTier,
-    );
+    final estimate = widget.model == null
+        ? provider.roomCost
+        : computeRoomCost(
+            model: model,
+            library: provider.avDeviceLibrary,
+            settings: settings,
+            rates: provider.laborRates,
+            baseCosts: provider.baseCosts,
+            tier: provider.pricingTier,
+          );
     // THE CARDS ARE BUILT FROM WHATEVER CONTEXT ASKS FOR THEM, which is the
     // whole point: the image is rendered under a theme of its own - see the
     // frame below - and a card built out here would carry the APP's colors
@@ -3663,7 +3668,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // from the entry and the length by the estimate itself, and a second copy
     // of that rule here would be one more thing to keep in step.
     final after = computeRoomCost(
-      model: widget.model ?? buildAvFlowModel(provider),
+      model: widget.model ?? provider.avFlowModel,
       library: library,
       settings: provider.avCost,
       rates: provider.laborRates,

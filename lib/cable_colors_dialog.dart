@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'av_flow_model.dart' show kCableSwatches;
-import 'av_flow_view.dart' show buildAvFlowModel;
 import 'cabling_schematic.dart';
 import 'color_wheel_picker.dart';
 
@@ -77,7 +76,7 @@ Future<void> showCableColorsDialog(
       builder: (ctx, setLocal) {
         final theme = Theme.of(ctx);
         final types = cablingTypesIn(
-          provider.cablingSchematic(buildAvFlowModel(provider)),
+          provider.cablingDrawing,
         );
 
         return AlertDialog(

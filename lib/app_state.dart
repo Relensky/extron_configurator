@@ -20,6 +20,7 @@ import 'config_key_mapper.dart';
 import 'flow_rules.dart';
 import 'cabling_schematic.dart';
 import 'building_project.dart';
+import 'av_flow_routing.dart' show autoDrawRoutingFromConfig;
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'export_tools.dart' show roomFileStem;
 import 'online_copy.dart';
@@ -3699,6 +3700,92 @@ class AppStateProvider extends ChangeNotifier {
     palette: avSignalColors,
   );
 
+  // --- what the room tabs derive, worked out once ---------------------------
+
+  /// The room's AV model, its cabling sheet and its price, held for as long as
+  /// nothing has changed.
+  ///
+  /// WHY THESE MOVED UP HERE. Each of the three is a walk of the whole room —
+  /// the model is every node, cable and config device; the sheet places every
+  /// box against every box already placed on top of that; the estimate prices
+  /// a thousand lines off it — and each was being worked out again in the
+  /// build() of every page that shows one. The views that memoized theirs kept
+  /// it in their own State, which meant the answer was thrown away and paid
+  /// for again the moment somebody changed tabs and came back. That is the
+  /// delay: not the room being read, but the same arithmetic being redone on
+  /// the way into a page it was already done for.
+  ///
+  /// Held on the provider instead, so the fourteen tabs share one answer and a
+  /// tab switch spends nothing. [warmRoomTabs] fills them at the moment a room
+  /// arrives, so even the FIRST page costs nothing either.
+  ///
+  /// WHY THEY CANNOT GO STALE. All three are dropped in [notifyListeners],
+  /// which every mutation on this provider goes through — so a cached answer
+  /// can only survive a stretch in which nothing changed at all. Exactly the
+  /// reasoning behind [_projectEstimate]; see that field for the long version.
+  AvFlowModel? _avFlowModel;
+  CablingSchematic? _cablingDrawing;
+  CostEstimate? _roomCost;
+
+  /// Whether all three are in hand, without asking for any of them.
+  ///
+  /// The only way to tell a warm room from a cold one: reading the getters
+  /// would fill them, and a test that did that would pass whether or not the
+  /// load had warmed anything. See [warmRoomTabs].
+  bool get roomTabsAreWarm =>
+      _avFlowModel != null && _cablingDrawing != null && _roomCost != null;
+
+  /// Nulls the three above. Called from [notifyListeners] and nowhere else.
+  void _forgetRoomDerived() {
+    _avFlowModel = null;
+    _cablingDrawing = null;
+    _roomCost = null;
+  }
+
+  /// The AV diagram as the drawing tabs read it.
+  AvFlowModel get avFlowModel => _avFlowModel ??= buildAvFlowModel(this);
+
+  /// The cabling sheet over [avFlowModel], overrides applied.
+  CablingSchematic get cablingDrawing =>
+      _cablingDrawing ??= cablingSchematic(avFlowModel);
+
+  /// This room priced, at the tier the app is set to.
+  CostEstimate get roomCost => _roomCost ??= computeRoomCost(
+    model: avFlowModel,
+    library: avDeviceLibrary,
+    settings: avCost,
+    rates: laborRates,
+    baseCosts: baseCosts,
+    tier: pricingTier,
+  );
+
+  /// Works out everything the room tabs derive, NOW, while the room is being
+  /// opened rather than when somebody first looks at a page.
+  ///
+  /// The routing pass first, because it is the one that can still change the
+  /// drawing — it puts the boxes and leads the config already names onto the
+  /// canvas, and until it has run the model and the estimate would be for a
+  /// room without its PC, doc cam and DTP receivers in it. It is fingerprinted
+  /// against the config, so on the second and later opens of a room this is a
+  /// string compare and nothing else. Then the three derived answers, in
+  /// dependency order, so opening any tab afterwards is a cache read.
+  ///
+  /// Called from [loadAvFlowForCurrentConfig], which is where a room's
+  /// sidecars land however it was opened — by hand, off the project picker, or
+  /// down from a processor. Not from the config load: the sidecars are not in
+  /// yet at that point, and routing an empty canvas would be work thrown away
+  /// by the sidecar read that follows it.
+  ///
+  /// ALWAYS THE LAST THING ITS CALLER DOES, after the [notifyListeners] that
+  /// announces the room — because that call is exactly what empties the three
+  /// caches. Warming before it fills them and then throws them away, which
+  /// looks like it works and buys nothing at all.
+  void warmRoomTabs() {
+    if (roomConfig.isEmpty && avNodes.isEmpty) return;
+    autoDrawRoutingFromConfig(this);
+    final _ = (avFlowModel, cablingDrawing, roomCost);
+  }
+
   /// [recordUndo] false while a drag is in flight — one entry for the move.
   void setCablingBoxPosition(String id, Offset pos, {bool recordUndo = true}) {
     if (recordUndo) _pushAvUndo('Move box', _cablingScope);
@@ -5979,6 +6066,9 @@ class AppStateProvider extends ChangeNotifier {
     AppLogger.logInfo('Kept the in-memory AV flow; the saved diagram beside '
         '$currentConfigPath was not loaded.');
     notifyListeners();
+    // Settled either way is settled, so the tabs can be worked out now. After
+    // the notify, never before it — see [warmRoomTabs].
+    warmRoomTabs();
   }
 
   /// Called when the AV Flow tab opens: reload the sidecar if the working
@@ -6027,6 +6117,7 @@ class AppStateProvider extends ChangeNotifier {
       markRoomSaved();
       checkForRoomRecovery();
       notifyListeners();
+      warmRoomTabs();
       return;
     }
 
@@ -6058,6 +6149,10 @@ class AppStateProvider extends ChangeNotifier {
             'moves to ${path.basename(avFlowSidecarPath)} on the next '
             'Save AV Setup.' : '.'}');
     notifyListeners();
+    // The room is whole — config AND sidecars — so everything its tabs derive
+    // can be worked out now instead of on the way into the first one somebody
+    // opens. After the notify, never before it — see [warmRoomTabs].
+    warmRoomTabs();
   }
 
   /// Reads one AV sidecar document into the live state. Shared by the file
@@ -13469,7 +13564,7 @@ class AppStateProvider extends ChangeNotifier {
     final stem = roomFileStem(this, '').replaceAll(RegExp(r'_+$'), '');
     final bytes = buildRoomWorkbookBytes(
       provider: this,
-      av: buildAvFlowModel(this),
+      av: avFlowModel,
       generated: at,
     );
 
@@ -15738,6 +15833,12 @@ class AppStateProvider extends ChangeNotifier {
       '$absolute.',
     );
     notifyListeners();
+    // Again, and after this method's own notify — the load above warmed the
+    // room and clearing the project cache threw it straight back out. Hopping
+    // rooms from a picker is the case this matters most in: it is a page
+    // somebody steps through, and the next tab they look at is as likely to be
+    // Racks or Cost as the diagram. See [warmRoomTabs].
+    warmRoomTabs();
     return '';
   }
 
@@ -15859,6 +15960,9 @@ class AppStateProvider extends ChangeNotifier {
     // is the one place every mutation passes through. See
     // [_cachedRoomFingerprint].
     _forgetRoomFingerprint();
+    // And what the room tabs derive — the AV model, the cabling sheet, the
+    // estimate — for the same reason again. See [_avFlowModel].
+    _forgetRoomDerived();
     // AND THE UNDO HISTORIES, for the third time and the same reason. These
     // only start a clock — the document is encoded once the typing stops, not
     // once per keystroke. See undo_history.dart.

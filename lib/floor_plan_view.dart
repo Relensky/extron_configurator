@@ -12,7 +12,6 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
-import 'av_flow_view.dart' show ProviderMemo, buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
 import 'cable_colors_dialog.dart';
 import 'cabling_schematic.dart';
@@ -115,11 +114,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   final GlobalKey _planKey = GlobalKey();
   final GlobalKey _viewportKey = GlobalKey();
   final TransformationController _transform = TransformationController();
-
-  /// The room and its cabling, worked out when the room changes rather than
-  /// on every frame of a drag across the plan. See [ProviderMemo].
-  final ProviderMemo<AvFlowModel> _modelMemo = ProviderMemo();
-  final ProviderMemo<CablingSchematic> _schematicMemo = ProviderMemo();
 
   /// What a click on the plan drops. Off by default: the common visit is to
   /// look at the plan, not to edit it, and a page where every stray click
@@ -382,7 +376,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     bool monochrome = false,
   }) async {
     final provider = context.read<AppStateProvider>();
-    final drawing = provider.cablingSchematic(buildAvFlowModel(provider));
+    final drawing = provider.cablingDrawing;
     final startingSheet = provider.activeFloorPlan?.id ?? '';
     final drawn = sheetsWorthDrawing(provider);
     final sheets = <FloorPlan?>[
@@ -553,7 +547,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// email or a ticket. Every report in the app offers this, in the same place
   /// on the menu.
   Future<void> _copyReportText(AppStateProvider provider) async {
-    final model = buildAvFlowModel(provider);
+    final model = provider.avFlowModel;
     final sections = locationSections(model);
     if (sections.isEmpty) {
       _snack('Nothing to report yet - no locations, runs or callouts.');
@@ -577,7 +571,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     AppStateProvider provider, {
     required bool asXlsx,
   }) async {
-    final model = buildAvFlowModel(provider);
+    final model = provider.avFlowModel;
     final sections = locationSections(model);
     if (sections.isEmpty) {
       _snack('Nothing to report yet - no locations, runs or callouts.');
@@ -642,15 +636,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
-    final model = _modelMemo.of(provider, () => buildAvFlowModel(provider));
+    final model = provider.avFlowModel;
     final plan = provider.activeFloorPlan;
     // Built once and handed down: the layer chips, the runs and the count of
-    // what could not be placed are three readings of the same drawing. Held
-    // across builds for the same reason — see [ProviderMemo].
-    final drawing = _schematicMemo.of(
-      provider,
-      () => provider.cablingSchematic(model),
-    );
+    // what could not be placed are three readings of the same drawing.
+    final drawing = provider.cablingDrawing;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncImage(provider);
@@ -2677,8 +2667,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// and neither has to read around the other's runs. Every sheet in the room,
   /// because a set issued for one story is not the set.
   Future<void> _exportLayers(AppStateProvider provider) async {
-    final model = buildAvFlowModel(provider);
-    final drawing = provider.cablingSchematic(model);
+    final drawing = provider.cablingDrawing;
     if (provider.avFloorPlans.every(
       (sheet) => _cableLayers(provider, sheet, drawing).isEmpty,
     )) {

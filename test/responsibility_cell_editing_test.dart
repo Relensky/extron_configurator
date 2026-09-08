@@ -207,24 +207,26 @@ void main() {
       );
       await tester.pumpAndSettle();
       // COUNTS AND WORDS IN ONE MENU: the cell takes either, and the person
-      // filling it in does not think of them as two kinds of thing.
+      // filling it in does not think of them as two kinds of thing. 'TBD' is
+      // the word one here because it is on the menu — the free-typed kind is
+      // "Something else...", which the next test covers.
       expect(
-        find.byKey(const ValueKey('matrix_cell_answer_As required')),
+        find.byKey(const ValueKey('matrix_cell_answer_TBD')),
         findsOneWidget,
       );
       await tester.tap(
-        find.byKey(const ValueKey('matrix_cell_answer_As required')),
+        find.byKey(const ValueKey('matrix_cell_answer_TBD')),
       );
       await tester.pumpAndSettle();
 
       final after = p.project.responsibilityById(item.id)!;
-      expect(after.cellText(roomId(p)), 'As required');
+      expect(after.cellText(roomId(p)), 'TBD');
       expect(after.cellIsNote(roomId(p)), isTrue);
       // IT CANNOT BE ADDED UP, and a sheet that counted it as one would be a
       // bid short by however many rooms said it.
       expect(after.total, 0);
       expect(after.noteCount, 1);
-      expect(find.text('As required'), findsWidgets);
+      expect(find.text('TBD'), findsWidgets);
     });
 
     testWidgets('takes anything at all through "Something else"', (

@@ -140,9 +140,9 @@ class ResponsibilityItem {
   /// note would be a cell with two answers, and the totals row could only
   /// honor one of them.
   ///
-  /// These do NOT reach [total]. 'As required' cannot be added up, and a sheet
-  /// that quietly counted it as one would be a bid short by however many rooms
-  /// said it. They are highlighted wherever the matrix is drawn instead.
+  /// These do NOT reach [total]. 'TBD' cannot be added up, and a sheet that
+  /// quietly counted it as one would be a bid short by however many rooms said
+  /// it. They are highlighted wherever the matrix is drawn instead.
   final Map<String, String> noteByRoom;
 
   /// What the work actually is, in the words it will be read in on site. The
@@ -629,9 +629,9 @@ List<ReportSection> responsibilityMatrixSections(
         item.neededBy,
         for (final room in roomNames)
           responsibilityQtyCell(item, room.id),
-        // THE TOTAL SAYS WHAT IT COULD NOT ADD. 'As required' in four rooms is
-        // four rooms missing from a figure the contractor bids against, and a
-        // bare number gives no sign of it.
+        // THE TOTAL SAYS WHAT IT COULD NOT ADD. 'TBD' in four rooms is four
+        // rooms missing from a figure the contractor bids against, and a bare
+        // number gives no sign of it.
         responsibilityTotalText(item.total, item.noteCount),
       ],
   ];

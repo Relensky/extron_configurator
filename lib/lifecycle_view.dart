@@ -5,7 +5,6 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'assumed_cycle_bar.dart';
 import 'av_flow_model.dart';
-import 'av_flow_view.dart' show buildAvFlowModel;
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
 import 'lifecycle_picture.dart' show showLifecycleSheetPicture;
@@ -86,7 +85,7 @@ class _LifecycleViewState extends State<LifecycleView> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
-    final model = buildAvFlowModel(provider);
+    final model = provider.avFlowModel;
     // THE ROOM AS RECORDED, always built first - the what-if is a lens over
     // it, and the control has to be able to say what the lens moved.
     final recorded = buildRoomLifecycle(

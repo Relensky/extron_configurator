@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import 'app_logger.dart';
 import 'app_state.dart';
-import 'av_flow_view.dart' show buildAvFlowModel;
 import 'screenshot_tools.dart';
 
 /// ============================================================================
@@ -229,7 +228,7 @@ Future<DiagramImages> captureDiagramTabs(
   final cabling = await attempt(
     'cabling drawing',
     () async =>
-        provider.cablingSchematic(buildAvFlowModel(provider)).boxes.isEmpty
+        provider.cablingDrawing.boxes.isEmpty
             ? null
             : await capture(AppTab.cabling),
     null,
