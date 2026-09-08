@@ -32,15 +32,33 @@ void main() {
       expect(item.total, 16);
     });
 
-    test('a room with none of it is left off rather than stored as a zero', () {
+    test('a room answered NONE keeps its zero, and adds nothing', () {
+      // A ZERO AND A BLANK ARE DIFFERENT ANSWERS. This used to drop the zero,
+      // which put a room somebody had looked at and settled back among the
+      // ones nobody had reached - and the blanks are the sheet's to-do list.
       final project = job();
       final rooms = project.rooms.map((r) => r.id).toList();
       final item = project
           .addResponsibilityItem('Projection screen')
           .withRoomQty(rooms[0], 2)
           .withRoomQty(rooms[1], 0);
-      expect(item.qtyByRoom.keys, [rooms[0]]);
+      expect(item.qtyByRoom.keys, [rooms[0], rooms[1]]);
+      expect(item.cellText(rooms[1]), '0');
+      expect(item.cellIsNone(rooms[1]), isTrue);
       expect(item.total, 2);
+    });
+
+    test('a room nobody has answered is left off entirely', () {
+      final project = job();
+      final rooms = project.rooms.map((r) => r.id).toList();
+      final item = project
+          .addResponsibilityItem('Projection screen')
+          .withRoomQty(rooms[0], 2)
+          .withRoomQty(rooms[1], 0)
+          .withRoomCleared(rooms[1]);
+      expect(item.qtyByRoom.keys, [rooms[0]]);
+      expect(item.cellText(rooms[1]), isEmpty);
+      expect(item.cellIsNone(rooms[1]), isFalse);
     });
 
     test('a line with nobody named on it is flagged, not assumed', () {

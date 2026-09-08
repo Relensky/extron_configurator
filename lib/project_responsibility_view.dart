@@ -1074,7 +1074,16 @@ class _MatrixGridState extends State<_MatrixGrid> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
+                        // A ZERO IS DRAWN QUIETLY. It is an answer, so it is
+                        // written; it is not a quantity anybody has to buy,
+                        // so it must not read like one down a column being
+                        // scanned for numbers.
                         style: zoomed.bodyMedium?.copyWith(
+                          color: item.cellIsNone(room.id)
+                              ? theme.colorScheme.onSurfaceVariant.withValues(
+                                  alpha: 0.7,
+                                )
+                              : null,
                           fontWeight: lit || item.cellIsNote(room.id)
                               ? FontWeight.w600
                               : null,
@@ -1849,7 +1858,8 @@ class _CellPicker extends StatelessWidget {
   });
 
   static const String _kOther = '__responsibility_cell_other__';
-  static const String _kClear = '__responsibility_cell_clear__';
+  static const String _kNone = '0';
+  static const String _kBlank = '__responsibility_cell_blank__';
 
   /// Sends one answer to the half of the item that can hold it.
   ///
@@ -1863,7 +1873,11 @@ class _CellPicker extends StatelessWidget {
     String typed,
   ) {
     final provider = context.read<AppStateProvider>();
-    if (responsibilityCellIsCount(typed)) {
+    if (typed.trim().isEmpty) {
+      // Blank is not an answer of either kind, so it takes the whole cell
+      // back to unanswered - both maps, see [clearResponsibilityCell].
+      provider.clearResponsibilityCell(item.id, roomId);
+    } else if (responsibilityCellIsCount(typed)) {
       provider.setResponsibilityQty(item.id, roomId, double.parse(typed.trim()));
     } else {
       provider.setResponsibilityNote(item.id, roomId, typed);
@@ -1908,11 +1922,23 @@ class _CellPicker extends StatelessWidget {
         // Only when there is something to take back off, for the reason on
         // [_PartyPicker]: a menu that offers to clear an empty cell reads as
         // an instruction rather than a choice.
+        // A ZERO, NOT A BLANK. "This room does not get one" is an answer
+        // somebody reached, and it used to be written as an empty cell -
+        // which is identical on screen to the rooms nobody has looked at yet.
+        // The sheet is walked line by line before it goes out, and the blanks
+        // are the to-do list; a room that is finished has to leave it.
+        const PopupMenuItem(
+          key: ValueKey('matrix_cell_clear'),
+          value: _kNone,
+          child: Text('None in this room'),
+        ),
+        // And the way back to not having answered at all, for a cell somebody
+        // filled in by mistake.
         if (current.isNotEmpty)
           const PopupMenuItem(
-            key: ValueKey('matrix_cell_clear'),
-            value: _kClear,
-            child: Text('Not in this room'),
+            key: ValueKey('matrix_cell_blank'),
+            value: _kBlank,
+            child: Text('Leave it blank'),
           ),
       ],
       onSelected: (value) {
@@ -1920,9 +1946,7 @@ class _CellPicker extends StatelessWidget {
           _typeOne(context);
           return;
         }
-        // Clearing goes through the count road at zero, which drops the note
-        // with it - see [ResponsibilityItem.withRoomQty].
-        apply(context, item, roomId, value == _kClear ? '' : value);
+        apply(context, item, roomId, value == _kBlank ? '' : value);
       },
       child: child,
     );
@@ -2994,6 +3018,13 @@ class _MatrixTable extends StatelessWidget {
     /// they were sent.
     Widget qtyCell(ResponsibilityItem item, String roomId) {
       final text = item.cellText(roomId);
+      // A settled 'none' - printed, and printed quietly.
+      if (item.cellIsNone(roomId)) {
+        return cell(
+          text,
+          style: const TextStyle(fontSize: 11, color: Color(0xFF8A8A8A)),
+        );
+      }
       if (!item.cellIsNote(roomId)) return cell(text);
       return Container(
         color: const Color(0xFFFFF3D6),

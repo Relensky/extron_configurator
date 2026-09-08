@@ -75,9 +75,13 @@ const List<String> kResponsibilityCellAnswers = [
   '2',
   '3',
   '4',
-  '5',
   '6',
+  '8',
+  'As required',
+  'Per plan',
   'Existing',
+  'By others',
+  'N/A',
   'TBD',
 ];
 
@@ -114,8 +118,17 @@ class ResponsibilityItem {
   /// CONTRACTOR needs it by, which is usually earlier.
   final String neededBy;
 
-  /// Room id ([ProjectRoomRef.id]) -> how many. Rooms with none are simply
-  /// absent rather than stored as zero.
+  /// Room id ([ProjectRoomRef.id]) -> how many.
+  ///
+  /// A ROOM THAT IS ABSENT AND A ROOM STORED AS 0 ARE DIFFERENT ANSWERS, and
+  /// the difference is the same one the notes draw: absent means nobody has
+  /// said, and 0 means somebody decided this room does not get one. On a sheet
+  /// being walked line by line before it goes to a contractor, "we looked and
+  /// the answer is none" is worth writing down - an empty cell is the thing
+  /// still to do, and a zero is a thing that is finished.
+  ///
+  /// A zero is drawn quietly rather than in the count's ink: it is an answer,
+  /// but it is not a quantity anybody has to buy.
   final Map<String, double> qtyByRoom;
 
   /// Room id -> the answer in WORDS, for a cell that is not a count.
@@ -171,13 +184,22 @@ class ResponsibilityItem {
   String cellText(String roomId) {
     final note = noteByRoom[roomId]?.trim() ?? '';
     if (note.isNotEmpty) return note;
-    return formatResponsibilityQty(qtyByRoom[roomId] ?? 0);
+    final qty = qtyByRoom[roomId];
+    if (qty == null) return '';
+    // WRITTEN OUT, unlike the blank a missing room gets. See [qtyByRoom]:
+    // a zero is an answer and has to look like one.
+    return qty == 0 ? '0' : formatResponsibilityQty(qty);
   }
 
   /// True when this room's answer is words rather than a count - the cells
   /// that are highlighted, and the ones [total] cannot include.
   bool cellIsNote(String roomId) =>
       (noteByRoom[roomId]?.trim() ?? '').isNotEmpty;
+
+  /// True when somebody has answered this room with NONE - see [qtyByRoom].
+  /// Drawn quietly: it is settled, and it is nothing to buy.
+  bool cellIsNone(String roomId) =>
+      !cellIsNote(roomId) && qtyByRoom[roomId] == 0;
 
   /// How many rooms answered this line in words. What the totals row says out
   /// loud, so a total that is short of the room count says why.
@@ -249,9 +271,12 @@ class ResponsibilityItem {
   /// NEEDS: a matrix that wrote a 0 for every room that does not want a
   /// projection screen would be mostly zeroes, and the export would print
   /// them.
+  /// A NEGATIVE [qty] IS NOT AN ANSWER and takes the room off the line; zero
+  /// is an answer and is kept - see [qtyByRoom]. To blank a cell outright, use
+  /// [withRoomCleared], which says so at the call site.
   ResponsibilityItem withRoomQty(String roomId, double qty) {
     final next = Map<String, double>.from(qtyByRoom);
-    if (qty > 0) {
+    if (qty >= 0) {
       next[roomId] = qty;
     } else {
       next.remove(roomId);
@@ -263,6 +288,17 @@ class ResponsibilityItem {
     return copyWith(qtyByRoom: next, noteByRoom: notes);
   }
 
+  /// The same item with this room unanswered again - no count and no note.
+  ///
+  /// BOTH MAPS, which is what makes this its own method. Clearing used to go
+  /// through the note road with an empty string, and that dropped the note and
+  /// left the count sitting there - so "not in this room" did nothing at all
+  /// to the cells that had a number in them, which is most of them.
+  ResponsibilityItem withRoomCleared(String roomId) => copyWith(
+    qtyByRoom: Map<String, double>.from(qtyByRoom)..remove(roomId),
+    noteByRoom: Map<String, String>.from(noteByRoom)..remove(roomId),
+  );
+
   /// The same item with [roomId] answered in words, or cleared when [note] is
   /// blank. Drops any count that room had, for the reason on [withRoomQty].
   ResponsibilityItem withRoomNote(String roomId, String note) {
@@ -270,7 +306,9 @@ class ResponsibilityItem {
     final notes = Map<String, String>.from(noteByRoom);
     final counts = Map<String, double>.from(qtyByRoom);
     if (clean.isEmpty) {
-      notes.remove(roomId);
+      // Blank is not an answer in words, so it takes the whole cell back to
+      // unanswered rather than leaving a count behind - see [withRoomCleared].
+      return withRoomCleared(roomId);
     } else {
       notes[roomId] = clean;
       counts.remove(roomId);
@@ -298,7 +336,10 @@ class ResponsibilityItem {
     if (raw is Map) {
       raw.forEach((k, v) {
         final n = v is num ? v.toDouble() : double.tryParse(v.toString());
-        if (n != null && n > 0) {
+        // Zero included - see [ResponsibilityItem.qtyByRoom]: a room answered
+        // 'none' is a room somebody settled, and dropping it would put it back
+        // among the ones still to do.
+        if (n != null && n >= 0) {
           qty[k.toString()] = n;
           return;
         }
@@ -308,7 +349,7 @@ class ResponsibilityItem {
         // room that does not want the line. It is kept as a note now, which is
         // where such an answer belongs; a bare 0 is still nothing at all.
         final text = v?.toString().trim() ?? '';
-        if (text.isNotEmpty && text != '0' && n == null) {
+        if (text.isNotEmpty && n == null) {
           notes[k.toString()] = text;
         }
       });
@@ -496,6 +537,12 @@ String responsibilityTotalText(double total, int notes) => notes > 0
     ? '${formatResponsibilityQty(total)} (+$notes noted)'.trim()
     : formatResponsibilityQty(total);
 
+/// The ink a room answered NONE prints in: gray on the faintest wash. It is a
+/// settled answer, not a quantity, and it must not draw the eye the way a
+/// number to be bought does.
+const String kResponsibilityNoneFill = 'F4F4F4';
+const String kResponsibilityNoneInk = '8A8A8A';
+
 /// One room's cell for the spreadsheet: the count as plain text, or the words
 /// with a wash behind them.
 ///
@@ -504,12 +551,21 @@ String responsibilityTotalText(double total, int notes) => notes > 0
 /// white would put a fill on three hundred cells to make a point about four.
 Object responsibilityQtyCell(ResponsibilityItem item, String roomId) {
   final text = item.cellText(roomId);
-  if (!item.cellIsNote(roomId)) return text;
-  return XlsxTint(
-    text: text,
-    fillHex: kResponsibilityNoteFill,
-    inkHex: kResponsibilityNoteInk,
-  );
+  if (item.cellIsNote(roomId)) {
+    return XlsxTint(
+      text: text,
+      fillHex: kResponsibilityNoteFill,
+      inkHex: kResponsibilityNoteInk,
+    );
+  }
+  if (item.cellIsNone(roomId)) {
+    return XlsxTint(
+      text: text,
+      fillHex: kResponsibilityNoneFill,
+      inkHex: kResponsibilityNoneInk,
+    );
+  }
+  return text;
 }
 
 /// True when what somebody typed into a cell is a COUNT rather than an answer
@@ -521,11 +577,12 @@ Object responsibilityQtyCell(ResponsibilityItem item, String roomId) {
 /// second opinion anywhere among them is a cell that is highlighted and
 /// counted, or counted and not shown.
 ///
-/// A bare '0' is not a count: it is how a room is taken OFF the line, which is
-/// an absence rather than a quantity of nothing.
+/// A BARE '0' IS A COUNT. It is somebody saying this room gets none, which is
+/// an answer and belongs with the numbers; a room nobody has answered is the
+/// blank, and blank is not a count. See [ResponsibilityItem.qtyByRoom].
 bool responsibilityCellIsCount(String typed) {
   final n = double.tryParse(typed.trim());
-  return n != null && n > 0;
+  return n != null && n >= 0;
 }
 
 /// A quantity with no trailing `.0` on it — a matrix counts screens and

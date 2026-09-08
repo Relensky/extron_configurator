@@ -295,29 +295,81 @@ void main() {
       expect(again.cellText(roomId(p)), '2');
     });
 
-    testWidgets('takes the room off the line, and only offers to when set', (
+    testWidgets('answers "none" with a zero rather than a blank', (
       tester,
     ) async {
       final p = withProject();
       final item = p.addResponsibilityItem('Projection screen');
+      p.setResponsibilityQty(item.id, roomId(p), 4);
       await pumpPane(tester, p);
-
-      // Nothing to clear on a cell nobody has answered.
-      await tester.tap(
-        find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('matrix_cell_clear')), findsNothing);
-      await tester.tap(
-        find.byKey(const ValueKey('matrix_cell_answer_As required')),
-      );
-      await tester.pumpAndSettle();
 
       await tester.tap(
         find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('matrix_cell_clear')));
+      await tester.pumpAndSettle();
+
+      // IT USED TO DO NOTHING AT ALL HERE. Clearing went through the note
+      // road with an empty string, which dropped the note and left the count
+      // sitting there - so on a cell with a number in it, which is most of
+      // them, the menu item had no effect.
+      final after = p.project.responsibilityById(item.id)!;
+      expect(after.cellText(roomId(p)), '0');
+      expect(after.cellIsNone(roomId(p)), isTrue);
+      expect(after.total, 0);
+      // A settled 'none' is not a note: it is a number, and it is not
+      // highlighted as something still to decide.
+      expect(after.cellIsNote(roomId(p)), isFalse);
+      expect(after.noteCount, 0);
+      expect(find.text('0'), findsWidgets);
+    });
+
+    testWidgets('a zero is offered on every cell, blank only on a full one', (
+      tester,
+    ) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Projection screen');
+      await pumpPane(tester, p);
+
+      // 'None' is an answer somebody can reach from an empty cell.
+      await tester.tap(
+        find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('matrix_cell_clear')), findsOneWidget);
+      // Nothing to blank on a cell nobody has answered.
+      expect(find.byKey(const ValueKey('matrix_cell_blank')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('matrix_cell_clear')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('matrix_cell_blank')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('matrix_cell_blank')));
+      await tester.pumpAndSettle();
+
+      // AND ALL THE WAY BACK. A blank is the sheet's to-do list, so a cell
+      // filled in by mistake has to be able to rejoin it.
+      final after = p.project.responsibilityById(item.id)!;
+      expect(after.cellText(roomId(p)), isEmpty);
+      expect(after.cellIsNone(roomId(p)), isFalse);
+      expect(after.qtyByRoom.containsKey(roomId(p)), isFalse);
+    });
+
+    testWidgets('blanking a noted cell clears it outright', (tester) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Projection screen');
+      p.setResponsibilityNote(item.id, roomId(p), 'As required');
+      await pumpPane(tester, p);
+
+      await tester.tap(
+        find.byKey(ValueKey('matrix_cell_${item.id}_${roomId(p)}')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('matrix_cell_blank')));
       await tester.pumpAndSettle();
 
       final after = p.project.responsibilityById(item.id)!;
@@ -439,13 +491,16 @@ void main() {
       expect(back.qtyByRoom['r1'], 2);
       expect(back.cellText('r2'), 'as required');
       expect(back.cellIsNote('r2'), isTrue);
-      // A bare zero is still an absence rather than an answer.
+      // A stored zero is somebody answering 'none' - see
+      // [ResponsibilityItem.qtyByRoom]. Nothing wrote one before this, so
+      // reading it as the settled answer cannot mis-read an older file.
       final zeroed = ResponsibilityItem.fromJson({
         'id': 'resp2',
         'scope': 'Speakers',
         'qtyByRoom': {'r1': 0},
       });
-      expect(zeroed.cellText('r1'), isEmpty);
+      expect(zeroed.cellText('r1'), '0');
+      expect(zeroed.cellIsNone('r1'), isTrue);
       expect(zeroed.cellIsNote('r1'), isFalse);
     });
 
@@ -528,7 +583,8 @@ void main() {
       // One rule, so the dialog, the highlight and the total agree.
       expect(responsibilityCellIsCount('4'), isTrue);
       expect(responsibilityCellIsCount(' 2.5 '), isTrue);
-      expect(responsibilityCellIsCount('0'), isFalse);
+      // A zero IS a count now: it is somebody saying this room gets none.
+      expect(responsibilityCellIsCount('0'), isTrue);
       expect(responsibilityCellIsCount('As required'), isFalse);
       expect(responsibilityCellIsCount(''), isFalse);
     });

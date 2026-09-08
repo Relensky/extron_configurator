@@ -14119,6 +14119,19 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
+  /// Takes one room back to unanswered - no count and no note.
+  ///
+  /// ITS OWN METHOD because the two maps have to be cleared together, and
+  /// going through the note road with an empty string cleared only one of
+  /// them: a cell with a number in it came back unchanged, which is what
+  /// "not in this room" used to do to most of the sheet.
+  void clearResponsibilityCell(String itemId, String roomId) {
+    final item = project.responsibilityById(itemId);
+    if (item == null) return;
+    project.updateResponsibilityItem(item.withRoomCleared(roomId));
+    _projectChanged(repricing: false);
+  }
+
   /// Answers one room's cell in WORDS - 'as required', 'per plan', 'existing'
   /// - or clears it when [note] is blank. Drops any count that room had: a
   /// cell carries one answer. See [ResponsibilityItem.noteByRoom].
