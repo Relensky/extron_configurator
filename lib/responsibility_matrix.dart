@@ -75,12 +75,8 @@ const List<String> kResponsibilityCellAnswers = [
   '2',
   '3',
   '4',
-  '6',
-  '8',
-  'As required',
-  'Per plan',
+  '5',
   'Existing',
-  'By others',
   'N/A',
   'TBD',
 ];
