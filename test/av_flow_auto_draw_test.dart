@@ -839,21 +839,33 @@ void main() {
       expect(switcherToDsp(p), ['DMP EXP -> DMP EXP']);
     });
 
-    test('a room with no DSP still feeds the ceiling', () {
+    test('a room with no DSP still gets its speakers', () {
       // The amplifier is inside the switcher on an SA or MA build, and there
-      // the same key really is a run — speaker level, to the ceiling.
+      // the same key really is a run — speaker level, out to the room.
+      //
+      // JUST 'SPEAKERS'. The box is a placeholder for a pair nobody has
+      // picked yet, so it does not decide where they hang: a room with a
+      // wall-mounted pair was handed a set called 'Ceiling speakers'.
       final p = room();
       (p.roomConfig['SYSTEM_SETUP'] as Map)['output_audio'] = '1';
       autoDrawRoutingFromConfig(p);
-      expect(p.avNodeById(avAutoNodeId('output_audio'))?.label,
-          'Ceiling speakers');
+      final speakers = p.avNodeById(avAutoNodeId('output_audio'));
+      expect(speakers?.label, 'Speakers');
+      expect(speakers?.model, 'Speakers');
+      // With the connector that makes it a speaker, so the SA output has
+      // somewhere to land and a swap to the real pair keeps the lead.
+      expect(
+        speakers!.ports.where(
+            (port) => port.signal == SignalType.speaker && port.isInput),
+        hasLength(1),
+      );
     });
 
     test('speakers somebody re-modelled are still this room’s speakers', () {
       // THE BUG THIS EXISTS FOR. The box `output_audio` places is recognized
-      // by its ID, not by its model — a room whose ceiling speakers were
-      // changed to the SM 28 pair actually specified stopped matching
-      // 'Ceiling Speakers', so the pass drew a SECOND set. It arrived under a
+      // by its ID, not by its model — a room whose speakers were changed to
+      // the SM 28 pair actually specified stopped matching the generic
+      // 'Speakers', so the pass drew a SECOND set. It arrived under a
       // re-keyed id (addAvNode renames an id that is taken), which put it
       // outside the dismissal record as well: deleting it brought it back on
       // every pass, under a new id each time.
@@ -877,6 +889,49 @@ void main() {
         reason: 'the SM 28s are the speakers; nothing else should be placed',
       );
       expect(p.avNodeById(avAutoNodeId('output_audio'))?.model, 'SM 28 Black');
+    });
+
+    test('speakers somebody drew by hand are not bought a second time', () {
+      // THE OTHER HALF OF THE SAME BUG. The re-model case above is recognized
+      // by the box's id; this one has no id to recognize — the pair was drawn
+      // by hand, or stamped from a room type, before `output_audio` was ever
+      // read. Matching the rule's model finds nothing, so a second set was
+      // placed beside the one already on the drawing.
+      //
+      // The connector is what says it is the speakers. The tie is drawn to
+      // the pair that is there.
+      final p = room();
+      (p.roomConfig['SYSTEM_SETUP'] as Map)['output_audio'] = '1';
+      final drawn = p.addAvNode(AvNode(
+        id: 'AVNODE_1',
+        label: 'Speakers - SM 28',
+        model: 'SM 28 Black',
+        pos: const Offset(600, 400),
+        ports: const [
+          AvPort(
+            id: 'in_spk_1',
+            label: 'SPEAKER IN',
+            signal: SignalType.speaker,
+            direction: PortDirection.input,
+            side: PortSide.left,
+          ),
+        ],
+      ));
+
+      autoDrawRoutingFromConfig(p);
+
+      expect(p.avNodeById(avAutoNodeId('output_audio')), isNull,
+          reason: 'the room already has speakers; no placeholder pair');
+      expect(
+        p.avNodes.where((n) => n.ports.any(
+            (port) => port.signal == SignalType.speaker && port.isInput)),
+        hasLength(1),
+      );
+      expect(
+        p.avCables.where((c) => c.toNodeId == drawn.id),
+        hasLength(1),
+        reason: 'the amplifier output lands on the pair that is drawn',
+      );
     });
 
     test('an SA amplifier output runs at speaker level to the ceiling', () {
@@ -921,7 +976,7 @@ void main() {
 
       expect(p.avNodeById(avAutoNodeId('output_audio')), isNull);
       expect(
-        p.avNodes.where((n) => n.model == 'Ceiling Speakers'),
+        p.avNodes.where((n) => n.model == 'Speakers'),
         isEmpty,
         reason: 'a box somebody deleted stays deleted',
       );

@@ -259,6 +259,22 @@ DeviceTypeSpec? familyForNode(AppStateProvider provider, AvNode node) {
   // a camera block stays one.
   if (isSourceOnlyDevice(node.model, node.label)) return null;
 
+  // NOTHING DRIVES IT, SO IT IS IN NO FAMILY. The families are the control
+  // side's own list — a family is a block with a driver, an address and a line
+  // on the schematic — and a product the catalog has already said is
+  // uncontrollable can never be one of those, whatever its name reads like.
+  //
+  // The AverMedia capture sticks are why. They are HDMI-to-USB converters with
+  // nothing to talk to, and the word USB in the model matched the USB SWITCHER
+  // family: the prefill offered a USBDEVICE block for one, and a swap onto the
+  // model MOVED an existing block into that family. Both invented a Toggle
+  // out of a $150 dongle.
+  //
+  // The two callers that write blocks already asked this question their own
+  // way ([AppStateProvider.avNodeIsUncontrolled]), so this changes no answer
+  // they get - it closes the paths that never asked it.
+  if (provider.avModelNeverControlled(node.model)) return null;
+
   final template = provider.avDeviceLibrary.templateForModel(node.model);
 
   // Every token this device offers about what it is, best evidence first.

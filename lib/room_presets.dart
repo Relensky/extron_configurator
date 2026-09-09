@@ -1145,7 +1145,7 @@ RoomPreset _hyflexClassroom() {
     ),
     _device(
       'AVNODE_7',
-      'Ceiling speakers',
+      'Speakers',
       _ceiling.id,
       [_p('in_spk_1', 'SPEAKER IN', SignalType.speaker, PortDirection.input)],
       pos: const Offset(1420, 760),
@@ -1855,7 +1855,7 @@ RoomPreset _activeLearningSpace() {
     ),
     _device(
       'AVNODE_8',
-      'Ceiling speakers',
+      'Speakers',
       _ceiling.id,
       [_p('in_spk_1', 'SPEAKER IN', SignalType.speaker, PortDirection.input)],
       pos: const Offset(1880, 1240),

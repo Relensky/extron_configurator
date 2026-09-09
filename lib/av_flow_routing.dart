@@ -805,8 +805,8 @@ RoutingPlan planRoutingFromConfig(
     // THE BOX THIS KEY ALREADY PUT ON THE CANVAS IS THIS KEY'S BOX, whatever
     // it has since been renamed or re-modelled to. The id is the identity —
     // see [avAutoNodeId] — and a lookup by MODEL alone cannot see that: a
-    // room whose ceiling speakers were changed to the SM 28 pair it actually
-    // has stopped matching 'Ceiling Speakers' and the pass placed a second
+    // room whose speakers were changed to the SM 28 pair it actually has
+    // stopped matching the generic 'Speakers' and the pass placed a second
     // set. Worse, [AppStateProvider.addAvNode] re-keys an id that is taken,
     // so the duplicate arrived as AVNODE_7 — outside the dismissal record
     // too, which is why deleting it brought it back on the next pass.
@@ -1765,8 +1765,18 @@ RoutingPlan planRoutingFromConfig(
         alreadyDrawn++;
         continue;
       }
+      // THE SPEAKERS THE ROOM ALREADY HAS ARE THE ROOM'S SPEAKERS. Matching
+      // the rule's own model finds only the generic box this pass places, so
+      // a room whose pair was drawn by hand, stamped from a room type or
+      // re-modelled to what was actually specified got a SECOND set beside
+      // the one already cabled to the amplifier. The CONNECTOR is the fact: a
+      // box taking speaker level is the speaker run, whatever it is called
+      // and whatever it is fed from. See [_existingSpeaker].
       final existing =
-          _existingByModelOrLabel(provider, [rule.model], rule.configKey);
+          _existingByModelOrLabel(provider, [rule.model], rule.configKey) ??
+              (signals.contains(SignalType.speaker)
+                  ? _existingSpeaker(provider)
+                  : null);
       final node = existing ??
           place(_specOf(rule), avAutoNodeId(rule.configKey), onLeft: false);
       routeDestination(rule.configKey, node, signals: signals);
@@ -2234,6 +2244,31 @@ AvNode? _existingByModelOrLabel(
   for (final n in provider.avNodes) {
     if (n.isJackField) continue;
     if (wanted.contains(_flatten(n.model))) return n;
+  }
+  return null;
+}
+
+/// The speakers already on the canvas: any box with a speaker-level INPUT.
+///
+/// A speaker is the one destination in the rule book that cannot be recognized
+/// by its model. The generic box `output_audio` places is a placeholder, and
+/// the first thing anybody does with it is change it to the pair the room was
+/// specified with — an SM 28, a soundbar, a column somebody typed in — at
+/// which point a lookup by model stops finding it and the next pass buys
+/// another set. Every one of them has the same connector, so that is what is
+/// asked about instead.
+///
+/// Fed or not: a pair drawn but not yet cabled is still the room's pair, and
+/// the tie is drawn to THAT rather than to a second box beside it. A pair
+/// already fed from something else - the amplifier off the DSP - is left
+/// alone, and the disagreement is reported rather than drawn over - which is
+/// what the rest of this pass does with a box that is already fed.
+AvNode? _existingSpeaker(AppStateProvider provider) {
+  for (final n in provider.avNodes) {
+    if (n.isJackField) continue;
+    if (n.ports.any((p) => p.signal == SignalType.speaker && p.isInput)) {
+      return n;
+    }
   }
   return null;
 }

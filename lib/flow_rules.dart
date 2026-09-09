@@ -580,21 +580,38 @@ class FlowRules {
           // [FlowBoxRule.unless] for why a room with a DSP draws none: there
           // the program audio never leaves the pair as analog, and the run
           // this rule would draw does not exist.
+          //
+          // JUST 'SPEAKERS'. The box this places is a placeholder for whatever
+          // the room turns out to have, and calling it 'Ceiling speakers'
+          // decided that before anybody had picked one — every room with an
+          // audio output got a ceiling pair on the drawing, including the ones
+          // hung on the wall. The zone below is only which room LOCATION it is
+          // filed under, which is editable on the box like any other; the name
+          // and the model are generic, and somebody sets the model to the pair
+          // actually specified.
           FlowBoxRule(
               configKey: 'output_audio',
-              label: 'Ceiling speakers',
-              model: 'Ceiling Speakers',
+              label: 'Speakers',
+              model: 'Speakers',
               zone: 'ceiling',
               signals: 'speaker',
               unless: 'DSPDEVICE_'),
         ],
+        // Whichever box makes the room's USB feed. The three families first,
+        // then the capture sticks BY MODEL — see [FlowTarget], where naming a
+        // catalog model is how a rule reaches a box with no config block
+        // behind it. The AverMedia interfaces are exactly that: HDMI in, USB
+        // out, nothing to control, so no family owns them and the number had
+        // nowhere to land on a room built around one.
         captureDestinations: const [
           FlowDeviceRule(
               configKey: 'output_cc',
-              target: 'MEDIAPORTDEVICE_1|RECORDERDEVICE_1|USBDEVICE_1'),
+              target: 'MEDIAPORTDEVICE_1|RECORDERDEVICE_1|USBDEVICE_1'
+                  '|AverMedia USB Interface|BU113G2-BLACK'),
           FlowDeviceRule(
               configKey: 'output_cc2',
-              target: 'MEDIAPORTDEVICE_1|RECORDERDEVICE_1|USBDEVICE_1'),
+              target: 'MEDIAPORTDEVICE_1|RECORDERDEVICE_1|USBDEVICE_1'
+                  '|AverMedia USB Interface|BU113G2-BLACK'),
         ],
         extenders: const [
           FlowExtenderRule(

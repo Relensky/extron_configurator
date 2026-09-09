@@ -458,7 +458,7 @@ void main() {
       // expansion bus.
       final speakers = rules.destinationBoxes
           .firstWhere((r) => r.configKey == 'output_audio');
-      expect(speakers.model, 'Ceiling Speakers');
+      expect(speakers.model, 'Speakers');
       expect(speakers.signals, 'speaker');
       expect(speakers.zone, 'ceiling');
       expect(speakers.unless, 'DSPDEVICE_');

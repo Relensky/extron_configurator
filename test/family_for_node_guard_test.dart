@@ -72,6 +72,22 @@ void main() {
     });
   });
 
+  group('a product nothing drives is in no family at all', () {
+    test('an AverMedia capture stick is not a USB switcher', () {
+      // The word USB in the model matched the USB SWITCHER family, so a
+      // $150 HDMI-to-USB dongle was offered a USBDEVICE block - a driver
+      // slot, an address and a line on the control schematic for a converter
+      // that presents itself to the PC as a webcam and has nothing to say.
+      expect(family('USB interface', model: 'AverMedia USB Interface'),
+          isNull);
+      expect(family('Capture card', model: 'BU113G2-BLACK'), isNull);
+    });
+
+    test('and the room speakers are in none either', () {
+      expect(family('Speakers', model: 'Speakers'), isNull);
+    });
+  });
+
   group('a box with no catalog entry is read on its last word', () {
     test('which is the noun', () {
       // The fallback doing the job it exists for.

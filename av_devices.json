@@ -592,6 +592,23 @@
       ]
     },
     {
+      "model": "Speakers",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "neverControlled": true,
+      "notes": "The room's speakers, drawn as one load. Deliberately generic - the AV flow places this for an audio output before anybody has said whether the pair is in the ceiling, on the wall or on stands, and the model is changed to the pair actually specified. What drives it is the amplifier in the switcher (an SA or MA build) or a separate amp fed from the DSP.",
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
+    },
+    {
       "model": "USB-C Laptop",
       "rackUnits": 0,
       "powerInput": "none",
@@ -1439,8 +1456,9 @@
     {
       "model": "AverMedia USB Interface",
       "manufacturer": "AVerMedia",
-      "category": "Recorder / streamer",
+      "category": "AV / Misc",
       "rackUnits": 0,
+      "neverControlled": true,
       "notes": "HDMI to USB capture. No driver - it presents itself to the PC as a webcam, and there is nothing about it to control.",
       "ports": [
         {
@@ -1469,9 +1487,10 @@
     {
       "model": "BU113G2-BLACK",
       "manufacturer": "AVerMedia",
-      "category": "USB interface",
+      "category": "AV / Misc",
       "rackUnits": 0,
       "powerInput": "none",
+      "neverControlled": true,
       "notes": "HDMI to USB capture. The RYG sheet's \"Capture Card: Basic\" - what puts a room camera into a soft codec.",
       "ports": [
         {
