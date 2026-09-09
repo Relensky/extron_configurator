@@ -19,7 +19,9 @@
         "password": "ATEC2008",
         "protocol": "UDP",
         "service_port": 0,
-        "user": "main"
+        "user": "main",
+        "warm_up_time": null,
+        "cool_down_time": null
     },
     "CAMERADEVICE_2": {
         "btn_name": "Btn_Con_Cam2",
@@ -41,7 +43,9 @@
         "password": "Atec!2008",
         "protocol": "UDP",
         "service_port": 0,
-        "user": "averadmin"
+        "user": "averadmin",
+        "warm_up_time": null,
+        "cool_down_time": null
     },
     "DSPDEVICE_1": {
         "btn_name": "Btn_Con_DSP1",
@@ -203,7 +207,9 @@
         "speaker_mute": true,
         "speaker_mute_method": "volume",
         "speaker_unmute_volume": null,
-        "user": "root"
+        "user": "root",
+        "warm_up_time": null,
+        "cool_down_time": null
     },
     "PROJECTORDEVICE_2": {
         "btn_name": "Btn_Con_Projector2",
@@ -233,7 +239,9 @@
         "presenter_follow": true,
         "speaker_mute": true,
         "speaker_mute_method": "volume",
-        "speaker_unmute_volume": null
+        "speaker_unmute_volume": null,
+        "warm_up_time": null,
+        "cool_down_time": null
     },
     "PROJECTORDEVICE_3": {
         "btn_name": "Btn_Con_Projector3",
@@ -267,7 +275,9 @@
         "speaker_mute": true,
         "speaker_mute_method": "volume",
         "speaker_unmute_volume": null,
-        "user": "root"
+        "user": "root",
+        "warm_up_time": null,
+        "cool_down_time": null
     },
     "PROJECTORDEVICE_4": {
         "btn_name": "Btn_Con_Projector4",
@@ -301,7 +311,9 @@
         "speaker_mute": true,
         "speaker_mute_method": "volume",
         "speaker_unmute_volume": null,
-        "user": "root"
+        "user": "root",
+        "warm_up_time": null,
+        "cool_down_time": null
     },
     "RECORDERDEVICE_1": {
         "btn_name": "Btn_Con_Recorder1",
@@ -493,6 +505,8 @@
         "share_room_type": "display",
         "share_room_default_mode": "combined",
         "disable_inactivity_timer": false,
+        "startup_time": null,
+        "shutdown_time": null,
         "annex_mute_channels": "Left,Right",
         "annex_mute_label": "Annex",
         "annex_mute_output": "1",

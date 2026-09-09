@@ -117,6 +117,34 @@ void main() {
     expect(p.avNodeById(node.id), isNotNull);
   });
 
+  test('an AverMedia capture stick is never a USB switcher', () async {
+    // THE ONE THAT KEPT COMING BACK. Adding one of these to the drawing wrote
+    // a USBDEVICE block — a Toggle's worth of control settings, a driver slot
+    // and an address field — for a dongle that presents itself to the PC as a
+    // webcam and has nothing to talk to. The word USB in the model was all it
+    // took: no family owned the box, so the fallback read the model as words
+    // and the USB SWITCHER family answered to one of them.
+    //
+    // Two things stop it now, and this checks the pair from the button end.
+    // The catalog says these products are never controlled, and a product
+    // nothing drives is in no control family at all — see [familyForNode].
+    final p = await emptyRoom();
+    for (final model in ['AverMedia USB Interface', 'BU113G2-BLACK']) {
+      final node = place(p, model);
+
+      final plan = planControlSide(p, nodeIds: [node.id]);
+      expect(plan.creatable, isEmpty, reason: '$model drives nothing');
+      expect(applyControlSide(p, plan).created, 0);
+
+      expect(p.roomConfig.keys.where((k) => k.startsWith('USBDEVICE_')),
+          isEmpty);
+      expect(p.roomConfig['SYSTEM_SETUP']['dev_usb_switchers'], '0');
+      // Still bought, still drawn, still on the estimate. The box is real —
+      // it is the control block that was invented.
+      expect(p.avNodeById(node.id), isNotNull);
+    }
+  });
+
   test('a second part of the same family numbers past the first', () async {
     final p = await emptyRoom();
     final first = place(p, 'DMP 64 Plus C');

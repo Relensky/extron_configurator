@@ -542,7 +542,18 @@
     "dev_Power_Control": "dev_power_controllers",
     "dev_Recorder_Installed": "dev_recorders",
     "dev_USB_Switcher": "dev_usb_switchers",
-    "gui_CaptureSource_Available": "gui_capture_source_available"
+    "gui_CaptureSource_Available": "gui_capture_source_available",
+    "__comment_timers": "The transition timers, folded onto their canonical spelling. The processor deliberately answers to several - warmup_time and warm_up read the same as warm_up_time - because these get hand-edited by people who are not reading its source. The app writes the canonical one, so a room that arrives with an alias would end up carrying BOTH, and the canonical key wins silently while the number somebody actually typed sits beside it doing nothing.",
+    "warmup_time": "warm_up_time",
+    "warm_up": "warm_up_time",
+    "warmup": "warm_up_time",
+    "cooldown_time": "cool_down_time",
+    "cool_down": "cool_down_time",
+    "cooldown": "cool_down_time",
+    "start_up_time": "startup_time",
+    "system_startup_time": "startup_time",
+    "shut_down_time": "shutdown_time",
+    "system_shutdown_time": "shutdown_time"
   },
   "value_map": {
     "__comment": "Applied AFTER renaming, keyed by the NEW property name. Mapped values keep their JSON type, so string 'True' can become boolean true.",

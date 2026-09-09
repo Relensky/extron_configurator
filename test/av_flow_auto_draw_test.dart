@@ -839,20 +839,24 @@ void main() {
       expect(switcherToDsp(p), ['DMP EXP -> DMP EXP']);
     });
 
-    test('a room with no DSP still gets its speakers', () {
+    test('an MA build feeds a ceiling run', () {
       // The amplifier is inside the switcher on an SA or MA build, and there
       // the same key really is a run — speaker level, out to the room.
       //
-      // JUST 'SPEAKERS'. The box is a placeholder for a pair nobody has
-      // picked yet, so it does not decide where they hang: a room with a
-      // wall-mounted pair was handed a set called 'Ceiling speakers'.
+      // WHICH SPEAKERS IS THE AMPLIFIER'S ANSWER. This room's switcher is an
+      // MA 70: a 70 volt line, which is a distributed run tapped off in the
+      // ceiling. The pass used to call every one of them 'Ceiling speakers'
+      // whatever the build, and then — for a while — none of them.
       final p = room();
       (p.roomConfig['SYSTEM_SETUP'] as Map)['output_audio'] = '1';
       autoDrawRoutingFromConfig(p);
       final speakers = p.avNodeById(avAutoNodeId('output_audio'));
-      expect(speakers?.label, 'Speakers');
-      expect(speakers?.model, 'Speakers');
-      // With the connector that makes it a speaker, so the SA output has
+      expect(speakers?.label, 'Ceiling speakers');
+      // A real model, priced and part-numbered, rather than a placeholder
+      // somebody has to come back and fill in. Its transformer IS the 70/100
+      // volt tap this build puts out.
+      expect(speakers?.model, 'SF 228T Plus');
+      // With the connector that makes it a speaker, so the amp output has
       // somewhere to land and a swap to the real pair keeps the lead.
       expect(
         speakers!.ports.where(
@@ -934,12 +938,19 @@ void main() {
       );
     });
 
-    test('an SA amplifier output runs at speaker level to the ceiling', () {
+    test('an SA build puts the pair on the wall, at speaker level', () {
+      // TWO THINGS AT ONCE, because they are the same run.
+      //
       // THE AMP TERMINALS ARE NOT A LINE OUTPUT. On an SA build the amplifier
       // is inside the switcher and its SA OUT is speaker level — the catalog
       // used to file it as analog audio, which put it in among the AUDIO
       // outputs when `output_audio` went looking for the number and left the
       // speakers landing on a line socket.
+      //
+      // AND SA IS A LOW-IMPEDANCE PAIR, which is hung either side of the
+      // screen rather than tapped off a line in the ceiling. The connector
+      // the number lands on says which build it is, so the box the pass
+      // places follows the switcher without anybody being asked.
       final p = room();
       final setup = p.roomConfig['SYSTEM_SETUP'] as Map;
       setup['output_audio'] = '1';
@@ -957,11 +968,37 @@ void main() {
       final speakers = p.avNodeById(avAutoNodeId('output_audio'));
       expect(speakers, isNotNull);
 
-      final lead = p.avCables.singleWhere((c) => c.toNodeId == speakers!.id);
+      expect(speakers!.label, 'Wall speakers');
+      // Priced and part-numbered, like the ceiling run: the SM 28 is the 8
+      // ohm pair an SA amplifier drives directly.
+      expect(speakers.model, 'SM 28 Black');
+
+      final lead = p.avCables.singleWhere((c) => c.toNodeId == speakers.id);
       expect(p.avNodeById('SWITCHERDEVICE_1')!.portById(lead.fromPortId)!.label,
           startsWith('SA OUT'));
       expect(lead.signal, SignalType.speaker);
-      expect(speakers!.portById(lead.toPortId)?.signal, SignalType.speaker);
+      expect(speakers.portById(lead.toPortId)?.signal, SignalType.speaker);
+    });
+
+    test('an IN1608 says which build it is on the model, not the socket', () {
+      // THE CONNECTOR DOES NOT ALWAYS SAY. A DTP CrossPoint prints the build
+      // on the terminals — 'MA OUT 70V', 'SA OUT 8Ω/4Ω' — and an IN1608 does
+      // not: its socket is 'SPEAKER OUT' on the SA and '70V AMP OUT' on the
+      // MA. The model carries the word in both cases, so it is asked second
+      // rather than the room falling back to speakers with nowhere decided.
+      final p = room();
+      (p.roomConfig['SYSTEM_SETUP'] as Map)['output_audio'] = '1';
+      (p.roomConfig['SWITCHERDEVICE_1'] as Map)['model'] = 'IN1608 IPCP SA';
+      final template = p.avDeviceLibrary
+          .resolve(configKey: 'SWITCHERDEVICE_1', model: 'IN1608 IPCP SA');
+      p.updateAvNode(p.avNodeById('SWITCHERDEVICE_1')!.copyWith(
+        model: 'IN1608 IPCP SA',
+        ports: withPowerInlet(template.ports, template.powerInput),
+      ));
+      p.avRoutedFingerprint = '';
+      autoDrawRoutingFromConfig(p);
+
+      expect(p.avNodeById(avAutoNodeId('output_audio'))?.model, 'SM 28 Black');
     });
 
     test('speakers taken off the canvas stay off it', () {
@@ -976,7 +1013,8 @@ void main() {
 
       expect(p.avNodeById(avAutoNodeId('output_audio')), isNull);
       expect(
-        p.avNodes.where((n) => n.model == 'Speakers'),
+        p.avNodes.where((n) => n.ports.any(
+            (port) => port.signal == SignalType.speaker && port.isInput)),
         isEmpty,
         reason: 'a box somebody deleted stays deleted',
       );

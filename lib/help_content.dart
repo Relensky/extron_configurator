@@ -404,6 +404,58 @@ const List<HelpTopic> kHelpTopics = [
         'about a thing that can never be fixed.',
   ),
   HelpTopic(
+    title: 'How long the room takes to come up',
+    section: 'The room',
+    where: 'Devices tab (per projector, display and camera) and System '
+        'Settings (the whole room)',
+    plain:
+        'How many seconds a screen or a camera needs before it is usable, '
+        'and how long the startup and shutdown animation on the panel runs. '
+        'Set them where the equipment in the room is slower or faster than '
+        'its driver claims.',
+    keywords: [
+      'warm up',
+      'warm_up_time',
+      'cool down',
+      'cool_down_time',
+      'startup_time',
+      'shutdown_time',
+      'startup time',
+      'shutdown time',
+      'loading bar',
+      'animation',
+      'lamp',
+      'timer',
+      'seconds',
+    ],
+    body:
+        'Every driver carries the manufacturer\'s figure for how long its '
+        'kind of device takes to warm up and cool down. That is a number for a '
+        'FAMILY of products, not a measurement of the one hanging in this room: a '
+        'lamp projector at the end of its life is slower than the datasheet, a '
+        'laser panel is usually faster, and correcting either used to mean editing '
+        'a driver that the next module refresh writes over.\n\n'
+        'So each projector, display and camera can name its own. The processor '
+        'asks the room first, the driver second, and falls back to a built-in '
+        'figure only when neither says anything - so a room nobody has touched '
+        'behaves exactly as it did before.\n\n'
+        'LEAVE THEM BLANK unless the room needs correcting. Blank means ask the '
+        'driver; zero is a real answer meaning no wait at all, so clear the field '
+        'with the trash button rather than typing 0.\n\n'
+        'THE WHOLE ROOM has a pair of its own on System Settings - how long the '
+        'loading bar runs at startup and at shutdown. Left blank the processor '
+        'works it out from the room\'s PROJECTORS, floored at five seconds and '
+        'capped at ten for startup and twenty for shutdown. That cap is the reason '
+        'to set one: a room whose projector genuinely takes twenty-five seconds '
+        'was being held to ten, dropping the user onto a live panel in front of a '
+        'screen that had not lit yet. A number here answers outright, cap and '
+        'all.\n\n'
+        'None of this is the power SCHEDULE. The times the room brings itself up '
+        'in the morning and shuts itself down at night are written by the '
+        'processor as the schedule shifts, and are shown on the same page for '
+        'reference only.',
+  ),
+  HelpTopic(
     title: 'A driver that lists no models',
     section: 'The room',
     where: 'Devices tab, beside the module box, and App Config → Python '
@@ -1777,12 +1829,18 @@ const List<HelpTopic> kHelpTopics = [
         'of is a rule, not a build.\n\n'
         'A destination box can also say what it is NOT drawn alongside. The '
         'room\'s speakers are the reason: in a room with no audio processor '
-        'the amplifier is inside the switcher and the run really is a lead to '
-        'the ceiling, and in a room with one the program audio never leaves '
+        'the amplifier is inside the switcher and the run really is a lead out '
+        'to the speakers, and in a room with one the program audio never leaves '
         'the pair as analog. So that rule reads "speakers, unless this room '
-        'has a DSP" rather than being a condition buried in the code - and '
-        'the model on it is yours to change, so a room fitted with surface '
-        'speakers draws those instead.\n\n'
+        'has a DSP" rather than being a condition buried in the code.\n\n'
+        'WHICH SPEAKERS follows the amplifier, and there is a rule for each. '
+        'An MA build puts out a 70 volt line, which is a distributed run in '
+        'the ceiling; an SA build is low impedance, which is a pair on the '
+        'wall either side of the screen. The output the number lands on says '
+        'which, and both rules name a real model, so the box arrives priced '
+        'rather than as a placeholder. A room fitted with something else is '
+        'one field on the box, and a shop that hangs its pairs somewhere else '
+        'is one edit to the rule.\n\n'
         'A box the drawing already has is never drawn twice, however it has '
         'since been renamed or re-modelled, and one you delete on purpose '
         'stays deleted. So does a RUN you delete: the drawing knowing '

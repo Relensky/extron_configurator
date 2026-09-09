@@ -412,6 +412,39 @@ void main() {
     });
   });
 
+  group('which amplifier a speaker run leaves by', () {
+    // What picks between the two speaker rules. Extron prints the build on
+    // the terminals on some boxes and only in the model name on others, so
+    // both are read - see [flowAmplifierBuild].
+    test('the connector says so on a DTP CrossPoint', () {
+      expect(flowAmplifierBuild('MA OUT 70V', ''), 'ma');
+      expect(flowAmplifierBuild('SA OUT 8Ω/4Ω', ''), 'sa');
+    });
+
+    test('and the model says so on an IN1608, whose socket does not', () {
+      expect(flowAmplifierBuild('SPEAKER OUT', 'IN1608 IPCP SA'), 'sa');
+      expect(flowAmplifierBuild('70V AMP OUT', 'IN1608 IPCP MA 70'), 'ma');
+    });
+
+    test('a constant-voltage line is a distributed run whatever it is called',
+        () {
+      // 100 volt is the same decision as 70: it is a line with taps on it.
+      expect(flowAmplifierBuild('MA OUT 100V', ''), 'ma');
+    });
+
+    test('the connector is asked before the model', () {
+      // A box drawn by hand may carry any model at all, or none. The output
+      // the run actually leaves from is the better fact.
+      expect(flowAmplifierBuild('SA OUT 8Ω/4Ω', 'IN1608 MA'), 'sa');
+      expect(flowAmplifierBuild('', ''), '');
+    });
+
+    test('and a word inside a part number is not a build', () {
+      // Read as whole words, or 'SAW' and 'MAX' would be answers.
+      expect(flowAmplifierBuild('OUTPUT SAW 1', 'SOMAX 4'), '');
+    });
+  });
+
   group('the rules the app starts with', () {
     test('are the constants the routing pass used to carry', () {
       final rules = FlowRules.builtIn();
@@ -453,15 +486,28 @@ void main() {
       expect(rules.outletAliases['switch'], 'SWITCHERDEVICE_');
 
       // The room's speakers, which used to be a constant in the routing pass:
-      // a run to the ceiling off the amplifier inside the switcher, and
-      // nothing at all in a room whose program audio is on the DSP's
-      // expansion bus.
+      // a run off the amplifier inside the switcher, and nothing at all in a
+      // room whose program audio is on the DSP's expansion bus.
       final speakers = rules.destinationBoxes
           .firstWhere((r) => r.configKey == 'output_audio');
       expect(speakers.model, 'Speakers');
       expect(speakers.signals, 'speaker');
       expect(speakers.zone, 'ceiling');
       expect(speakers.unless, 'DSPDEVICE_');
+
+      // And where they hang, which the amplifier decides: a 70 volt line is
+      // a distributed run in the ceiling, a low-impedance pair goes on the
+      // wall. Both boxes are here to be edited rather than compiled in.
+      final ceiling = rules.destinationBoxFor(kFlowMaSpeakerKey)!;
+      expect(ceiling.model, 'SF 228T Plus',
+          reason: 'the ceiling box arrives as a real model, priced');
+      expect(ceiling.zone, 'ceiling');
+      expect(ceiling.signals, 'speaker');
+      final wall = rules.destinationBoxFor(kFlowSaSpeakerKey)!;
+      expect(wall.model, 'SM 28 Black',
+          reason: '8 ohm, which is what an SA amplifier drives');
+      expect(wall.zone, 'wall');
+      expect(wall.signals, 'speaker');
     });
 
     test('a rule file written before a rule existed still gets it', () {

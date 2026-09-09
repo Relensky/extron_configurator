@@ -138,6 +138,60 @@ RoomZone flowZoneFromName(String name) => switch (name.trim().toLowerCase()) {
       _ => RoomZone.lectern,
     };
 
+/// The destination-box rules for the room's speakers on each amplifier build.
+///
+/// `output_audio` is one config key with more than one meaning, the way
+/// `input_usb` is — see [kFlowVgaPlateKey]. The amplifier inside the switcher
+/// decides where the speakers hang, and Extron prints which build it is on the
+/// box and on the connector itself:
+///
+///   * MA is a 70 (or 100) volt line — a DISTRIBUTED run, which in these
+///     rooms means speakers in the ceiling;
+///   * SA is low impedance, 8 or 4 ohms — a stereo PAIR, which goes on the
+///     wall beside the screen.
+///
+/// Neither of these is a config key and nothing reads either out of
+/// SYSTEM_SETUP: the number is `output_audio` in every room, and these are the
+/// two boxes the pass picks between once it knows which output it lands on. A
+/// build neither word fits falls back to the plain `output_audio` rule.
+///
+/// They are here rather than compiled into the routing pass for the same
+/// reason [FlowBoxRule.unless] is: it is this shop's answer, and a shop that
+/// hangs its SA pairs somewhere else edits the rule instead of the app.
+const String kFlowMaSpeakerKey = 'output_audio (MA build)';
+
+/// The SA half of [kFlowMaSpeakerKey].
+const String kFlowSaSpeakerKey = 'output_audio (SA build)';
+
+/// Which amplifier a speaker-level run leaves by: 'ma', 'sa', or '' when
+/// nothing here can honestly say.
+///
+/// [portLabel] is the connector on the switcher the number resolved to and
+/// [model] is the switcher itself, and BOTH are asked because neither says it
+/// every time. A DTP CrossPoint prints the build on the connector ('MA OUT
+/// 70V', 'SA OUT 8 ohm / 4 ohm') and an IN1608 does not - its sockets are
+/// 'SPEAKER OUT' and '70V AMP OUT' - but every one of them carries the word
+/// in the model name ('IN1608 IPCP SA', 'IN1608 IPCP MA 70'). The connector
+/// goes first: it is the output the run actually leaves from, and a switcher
+/// somebody drew by hand may have no model on it at all.
+String flowAmplifierBuild(String portLabel, String model) {
+  final byPort = _amplifierBuildWord(portLabel);
+  return byPort.isNotEmpty ? byPort : _amplifierBuildWord(model);
+}
+
+/// The build one piece of text names, read as whole words so 'MA' is a build
+/// and not the middle of a part number.
+String _amplifierBuildWord(String text) {
+  final words = text.toUpperCase().split(RegExp(r'[^A-Z0-9]+')).toSet();
+  if (words.contains('SA')) return 'sa';
+  if (words.contains('MA')) return 'ma';
+  // The connector printed with the line voltage instead of the build. A
+  // constant-voltage output is a distributed run whatever else it is called,
+  // which is the whole of what the MA rule turns on.
+  if (words.contains('70V') || words.contains('100V')) return 'ma';
+  return '';
+}
+
 /// The signal groups a rule can ask for by name, for the connector a tie is
 /// allowed to land on.
 const List<String> kFlowSignalGroups = ['video', 'lineAudio', 'speaker', 'usb'];
@@ -581,19 +635,46 @@ class FlowRules {
           // the program audio never leaves the pair as analog, and the run
           // this rule would draw does not exist.
           //
-          // JUST 'SPEAKERS'. The box this places is a placeholder for whatever
-          // the room turns out to have, and calling it 'Ceiling speakers'
-          // decided that before anybody had picked one — every room with an
-          // audio output got a ceiling pair on the drawing, including the ones
-          // hung on the wall. The zone below is only which room LOCATION it is
-          // filed under, which is editable on the box like any other; the name
-          // and the model are generic, and somebody sets the model to the pair
-          // actually specified.
+          // THE ONE NEITHER WORD FITS. The two rules under it are the answer
+          // in every room this shop builds — see [kFlowMaSpeakerKey] — and
+          // this is what is left: an amplifier output whose connector and
+          // whose model both decline to say which build it is. Speakers, with
+          // nowhere decided, for somebody to name.
           FlowBoxRule(
               configKey: 'output_audio',
               label: 'Speakers',
               model: 'Speakers',
               zone: 'ceiling',
+              signals: 'speaker',
+              unless: 'DSPDEVICE_'),
+          // THE 70 VOLT LINE IS A CEILING RUN. These two are not config keys
+          // — see [kFlowMaSpeakerKey] — and nothing reads them out of
+          // SYSTEM_SETUP: the pass picks between them off the amplifier output
+          // `output_audio` lands on.
+          //
+          // A REAL MODEL RATHER THAN A PLACEHOLDER. The SF 228T Plus is this
+          // shop's ceiling tile speaker and its transformer is the 70/100 V
+          // tap an MA build is looking for, so the box arrives priced, with a
+          // part number on it and countable on the estimate instead of as a
+          // line somebody has to come back and fill in. Swapping it for
+          // whatever a particular room specifies is one field on the box.
+          FlowBoxRule(
+              configKey: kFlowMaSpeakerKey,
+              label: 'Ceiling speakers',
+              model: 'SF 228T Plus',
+              zone: 'ceiling',
+              signals: 'speaker',
+              unless: 'DSPDEVICE_'),
+          // AND THE LOW-IMPEDANCE PAIR GOES ON THE WALL. A real model for the
+          // same reason the ceiling run has one: the SM 28 is 8 ohm, which is
+          // what an SA amplifier drives, and it is the pair these rooms are
+          // specified with — see the Basic classroom room type, which has one
+          // either side of the screen.
+          FlowBoxRule(
+              configKey: kFlowSaSpeakerKey,
+              label: 'Wall speakers',
+              model: 'SM 28 Black',
+              zone: 'wall',
               signals: 'speaker',
               unless: 'DSPDEVICE_'),
         ],

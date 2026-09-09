@@ -294,7 +294,9 @@
     "display_max_volume": 100,
     "sub_switch_sources": "",
     "input_sub_switcher": "",
-    "sub_switch_switcher": "2"
+    "sub_switch_switcher": "2",
+    "startup_time": null,
+    "shutdown_time": null
   },
   "section_defaults": {
     "__readme": [
@@ -405,7 +407,13 @@
       "source_follow": true,
       "source_fixed": null,
       "source_overrides": {},
-      "presenter_follow": true
+      "presenter_follow": true,
+      "warm_up_time": null,
+      "cool_down_time": null
+    },
+    "CAMERADEVICE_*": {
+      "warm_up_time": null,
+      "cool_down_time": null
     },
     "NBPDEVICE_*": {
       "volume_default": 30,
@@ -532,7 +540,37 @@
         "description": "How much one detent of the panel's volume knob changes the level. 5 on a 0-100 scale gives twenty clicks end to end."
       }
     },
+    "CAMERADEVICE_*": {
+      "warm_up_time": {
+        "type": "int",
+        "label": "Warm Up Time (warm_up_time)",
+        "addIfMissing": true,
+        "helperText": "Seconds. Blank/absent = ask this model's python module",
+        "description": "How long THIS camera takes to come up, in seconds, overriding the WarmUpTime in its python module - the seconds the panel holds its 'camera starting' message before the controls are live. The module's figure is a manufacturer's number for a family of devices rather than a measurement of the one on the wall, and correcting it used to mean editing a vendor driver the next module refresh overwrites. Left blank the module answers, and a module with nothing to say falls back to 45s. Note that 0 is a real answer here and means 'no wait at all' - clear the key (trash button) rather than typing 0 if you want the module's figure back."
+      },
+      "cool_down_time": {
+        "type": "int",
+        "label": "Cool Down Time (cool_down_time)",
+        "addIfMissing": true,
+        "helperText": "Seconds. Blank/absent = ask this model's python module",
+        "description": "How long THIS camera takes to go down, in seconds, overriding the CoolDownTime in its python module. The same rule as warm_up_time in every respect: config first, then the module, then 10s. 0 means 'no wait at all' rather than 'unset' - clear the key to get the module's figure back."
+      }
+    },
     "PROJECTORDEVICE_*": {
+    "warm_up_time": {
+      "type": "int",
+      "label": "Warm Up Time (warm_up_time)",
+      "addIfMissing": true,
+      "helperText": "Seconds. Blank/absent = ask this model's python module",
+      "description": "How long THIS screen takes to come up, in seconds, overriding the figure in its python module. The module's WarmUpTime is the manufacturer's number for a family of devices, not a measurement of the one hanging in this room: a lamp projector at the end of its life is slower than the datasheet and a laser panel is usually faster, and neither could be corrected without editing a vendor driver the next module refresh overwrites. Left blank the module answers, and a module with nothing to say falls back to 30s for a projector and 10s for a flat panel (device_role decides which). Note that 0 is a real answer here and means 'no wait at all' - clear the key (trash button) rather than typing 0 if you want the module's figure back. This is also the number the room's own startup animation is built from - see SYSTEM_SETUP startup_time."
+    },
+    "cool_down_time": {
+      "type": "int",
+      "label": "Cool Down Time (cool_down_time)",
+      "addIfMissing": true,
+      "helperText": "Seconds. Blank/absent = ask this model's python module",
+      "description": "How long THIS screen takes to go down, in seconds, overriding the CoolDownTime in its python module. The same rule as warm_up_time in every respect: config first, then the module, then 10s for a projector and 5s for a flat panel. 0 means 'no wait at all' rather than 'unset' - clear the key to get the module's figure back. It is also what the room's shutdown animation is built from - see SYSTEM_SETUP shutdown_time."
+    },
       "use_device_mute": {
         "type": "bool",
         "addIfMissing": true,
@@ -782,6 +820,18 @@
     "nightly_shutdown_time": {
       "label": "Nightly Shutdown Time (nightly_shutdown_time)",
       "description": "Set by the PROCESSOR, not by hand: the time it next shuts the room down, written back into config.json as the schedule shifts. Shown here for reference - editing it is overwritten on the next cycle."
+    },
+    "startup_time": {
+      "type": "int",
+      "label": "System Startup Time (startup_time)",
+      "helperText": "Seconds the startup animation runs. Blank = work it out from the projectors",
+      "description": "How long the room's STARTUP animation runs, in seconds - the loading bar the panel shows while everything comes up. Left blank the processor works it out: the longest warm_up_time of the room's PROJECTORS (cameras and everything else are not in the running), floored at 5 seconds and capped at 10. Setting a number here answers outright and the cap does not apply, which is the point - a room whose projector genuinely takes 25 seconds was being held to 10 and dropping the user onto a panel in front of a screen that had not lit yet. Nothing to do with morning_power_on_time or nightly_shutdown_time, which are the power SCHEDULE and are written by the processor."
+    },
+    "shutdown_time": {
+      "type": "int",
+      "label": "System Shutdown Time (shutdown_time)",
+      "helperText": "Seconds the shutdown animation runs. Blank = work it out from the projectors",
+      "description": "How long the room's SHUTDOWN animation runs, in seconds. The same rule as startup_time in every respect: blank means the longest cool_down_time of the room's PROJECTORS, floored at 5 seconds and capped at 20, and a number here answers outright with no cap. Not to be confused with nightly_shutdown_time, which is the CLOCK TIME the processor next powers the room down and is written by the processor rather than set here."
     },
     "btn_name": {
       "description": "GUI object name for the connection status that has two states. Usually represented as a red dot when disconnected."

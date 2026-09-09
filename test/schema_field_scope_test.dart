@@ -165,6 +165,71 @@ void main() {
     });
   });
 
+  group('the transition timers', () {
+    // Per-device warm-up and cool-down, and the whole-room animation they
+    // feed. The processor reads config first, then the device's own python
+    // module, then a built-in default — so these keys are how a room corrects
+    // a manufacturer's figure without forking a vendor driver that the next
+    // module refresh overwrites.
+    test('are offered on the two families that take time to come up', () {
+      for (final section in const ['PROJECTORDEVICE_1', 'CAMERADEVICE_1']) {
+        expect(offeredOn(section), contains('warm_up_time'), reason: section);
+        expect(offeredOn(section), contains('cool_down_time'), reason: section);
+      }
+    });
+
+    test('and on nothing that comes up instantly', () {
+      for (final section in const [
+        'DSPDEVICE_1',
+        'SWITCHERDEVICE_1',
+        'POWERDEVICE_1',
+        'USBDEVICE_1',
+        'WIRELESSDEVICE_1',
+        'RECORDERDEVICE_1',
+        'MEDIAPORTDEVICE_1',
+        'SCREENDEVICE_1',
+      ]) {
+        expect(offeredOn(section), isNot(contains('warm_up_time')),
+            reason: '$section has no warm-up to wait through');
+        expect(offeredOn(section), isNot(contains('cool_down_time')),
+            reason: section);
+      }
+    });
+
+    test('are seconds, and blank rather than zero when unset', () {
+      // 0 IS A REAL ANSWER — 'no wait at all' — so a new block carries the
+      // key unset rather than defaulted, and the field has to be clearable.
+      // Typing 0 to mean 'use the module's figure' would drop the wait.
+      for (final section in const ['PROJECTORDEVICE_1', 'CAMERADEVICE_1']) {
+        for (final key in const ['warm_up_time', 'cool_down_time']) {
+          final spec = schema.specFor(key, sectionKey: section);
+          expect(spec, isNotNull, reason: '$section.$key');
+          expect(spec!.type, 'int', reason: '$section.$key is seconds');
+          expect(spec.description, isNotNull, reason: '$section.$key');
+        }
+        expect(schema.defaultsFor(section)['warm_up_time'], isNull);
+        expect(schema.defaultsFor(section)['cool_down_time'], isNull);
+      }
+    });
+
+    test('and the room has its own pair, on SYSTEM_SETUP', () {
+      for (final key in const ['startup_time', 'shutdown_time']) {
+        final spec = schema.specFor(key);
+        expect(spec, isNotNull, reason: key);
+        expect(spec!.type, 'int', reason: '$key is seconds');
+        expect(spec.description, isNotNull, reason: key);
+      }
+      // Injected on load so the System tab draws them: that tab shows exactly
+      // the keys the block holds, so a key nobody has set is a key nobody can
+      // set. Null is 'work it out from the projectors', which is what the
+      // room did before either key existed.
+      expect(schema.systemDefaults.containsKey('startup_time'), isTrue);
+      expect(schema.systemDefaults['startup_time'], isNull);
+      expect(schema.systemDefaults.containsKey('shutdown_time'), isTrue);
+      expect(schema.systemDefaults['shutdown_time'], isNull);
+    });
+  });
+
   group('the != condition', () {
     test('reads the key and the value off either side of it', () {
       final spec = FieldSpec(key: 'x', hideWhen: ['mode!=Conference']);

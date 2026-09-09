@@ -126,14 +126,21 @@ _SourceSpec _specOfExtender(FlowExtenderRule rule) => _SourceSpec(
       flowZoneFromName(rule.zone),
     );
 
-/// The `input_*` keys this pass handles itself rather than off the plain
-/// source-box loop: the PC has a second lead (`input_pc_extended`), and the
-/// laptop plate is one key with two meanings — USB-C or VGA, as
-/// `gui_usb_or_vga` says — so its rule is chosen at plan time.
+/// The keys this pass handles itself rather than off the plain box loops.
+///
+/// Two shapes of it. The PC has a second lead (`input_pc_extended`), so it is
+/// placed once and routed twice. And the rest are one key with more than one
+/// meaning, whose rule is chosen at plan time: the laptop plate is USB-C or
+/// VGA as `gui_usb_or_vga` says, and the speakers are a ceiling run or a wall
+/// pair as the amplifier output says — see [kFlowMaSpeakerKey]. The pseudo-key
+/// rules are in the book to be read and edited; nothing looks them up in
+/// SYSTEM_SETUP, so the loops skip them.
 const Set<String> _handledElsewhere = {
   'input_pc',
   'input_usb',
   kFlowVgaPlateKey,
+  kFlowMaSpeakerKey,
+  kFlowSaSpeakerKey,
 };
 
 /// One cable the routing would draw.
@@ -1736,6 +1743,7 @@ RoutingPlan planRoutingFromConfig(
     }
 
     for (final rule in rules.destinationBoxes) {
+      if (_handledElsewhere.contains(rule.configKey)) continue;
       final value = setup[rule.configKey]?.toString().trim() ?? '';
       if (value.isEmpty ||
           value.toLowerCase() == 'none' ||
@@ -1765,20 +1773,46 @@ RoutingPlan planRoutingFromConfig(
         alreadyDrawn++;
         continue;
       }
+      // WHICH SPEAKERS. The amplifier decides where they hang — a 70 volt
+      // line is a distributed run in the ceiling and a low-impedance pair
+      // goes on the wall — and the OUTPUT the number lands on is what says
+      // which. Both boxes are in the rule book: see [kFlowMaSpeakerKey],
+      // which is also why an installation that hangs them differently edits
+      // a rule instead of asking for a build of the app.
+      //
+      // The key stays `output_audio` through all of it. The rule chosen is
+      // the BOX — its name, its model, the zone it is filed under — and the
+      // number, the dismissal record and the node id are the config key's own,
+      // so a room whose switcher is swapped from one build to the other does
+      // not end up with two sets of speakers on the drawing.
+      var placing = rule;
+      if (rule.configKey == 'output_audio') {
+        final out = portForIoValue(switcher, value,
+            wantOutput: true,
+            signals: signals,
+            declaredOutputs: declaredOutputs);
+        final variant = switch (
+            flowAmplifierBuild(out?.label ?? '', switcher.model)) {
+          'ma' => rules.destinationBoxFor(kFlowMaSpeakerKey),
+          'sa' => rules.destinationBoxFor(kFlowSaSpeakerKey),
+          _ => null,
+        };
+        if (variant != null) placing = variant;
+      }
       // THE SPEAKERS THE ROOM ALREADY HAS ARE THE ROOM'S SPEAKERS. Matching
-      // the rule's own model finds only the generic box this pass places, so
-      // a room whose pair was drawn by hand, stamped from a room type or
+      // the rule's own model finds only the box this pass would place, so a
+      // room whose pair was drawn by hand, stamped from a room type or
       // re-modelled to what was actually specified got a SECOND set beside
       // the one already cabled to the amplifier. The CONNECTOR is the fact: a
       // box taking speaker level is the speaker run, whatever it is called
       // and whatever it is fed from. See [_existingSpeaker].
       final existing =
-          _existingByModelOrLabel(provider, [rule.model], rule.configKey) ??
+          _existingByModelOrLabel(provider, [placing.model], rule.configKey) ??
               (signals.contains(SignalType.speaker)
                   ? _existingSpeaker(provider)
                   : null);
       final node = existing ??
-          place(_specOf(rule), avAutoNodeId(rule.configKey), onLeft: false);
+          place(_specOf(placing), avAutoNodeId(rule.configKey), onLeft: false);
       routeDestination(rule.configKey, node, signals: signals);
     }
   }

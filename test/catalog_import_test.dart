@@ -48,6 +48,34 @@ void main() {
     expect(mains + poe + passive, catalog.modelCount);
   });
 
+  test('every passive loudspeaker has somewhere for the lead to land', () {
+    // THE SWAP HAS TO KEEP THE CABLE. The AV flow places a pair for the
+    // amplifier output — a ceiling run on an MA build, a wall pair on an SA
+    // one — and the next thing anybody does is change the model to what this
+    // particular room specifies. A catalog entry with no connectors on it
+    // turns that swap into a box the amplifier cannot reach: the lead has
+    // nowhere to land and the run drops off the drawing and off the cable
+    // schedule with it.
+    //
+    // Only the SM 28 carried the connector, so it was the only model the swap
+    // survived. The five ranges are every passive loudspeaker the catalog
+    // has: SpeedMount surface mount, SoundField, the ceiling systems, the
+    // flat fields and the column arrays.
+    final speakers = catalog.all
+        .where((e) => RegExp(r'^(SM|SF|CS|FF|CA) \d').hasMatch(e.model))
+        .toList();
+    expect(speakers, hasLength(greaterThan(40)),
+        reason: 'the loudspeaker ranges are in the catalog');
+    for (final entry in speakers) {
+      final inputs = entry.ports.where(
+          (p) => p.signal == SignalType.speaker && p.isInput);
+      expect(inputs, hasLength(1),
+          reason: '${entry.model} takes one speaker-level lead');
+      expect(entry.powerInput, PowerInput.none,
+          reason: '${entry.model} is passive - the amplifier drives it');
+    }
+  });
+
   test('the inlet is kept out of the signal connector counts', () {
     final switcher = catalog.templateForModel('SW4 HD 4K PLUS')!;
     expect(switcher.ports.any((p) => p.isPowerInlet), isTrue);

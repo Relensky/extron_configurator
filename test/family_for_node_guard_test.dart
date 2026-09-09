@@ -83,6 +83,24 @@ void main() {
       expect(family('Capture card', model: 'BU113G2-BLACK'), isNull);
     });
 
+    test('and neither is one typed in without its catalog entry', () {
+      // THE ONE THAT KEPT COMING BACK. The catalog entry answers for the box
+      // added FROM the catalog; a name somebody types into Add custom device
+      // has no entry behind it, so the fallback read 'USB' out of the middle
+      // of the name and the USB SWITCHER family took it. See
+      // [isUncontrolledProduct].
+      expect(family('AverMedia USB'), isNull);
+      expect(family('Capture', model: 'AverMedia USB'), isNull);
+      expect(family('AverMedia capture stick'), isNull);
+    });
+
+    test('but a box that really does switch USB still is one', () {
+      // The guard above is about named products, not about the word USB —
+      // which still has to claim the family, or an Extron SW4 USB added from
+      // the catalog would stop getting the block it needs.
+      expect(family('Lectern USB switch', model: 'SW4 USB'), 'USBDEVICE_');
+    });
+
     test('and the room speakers are in none either', () {
       expect(family('Speakers', model: 'Speakers'), isNull);
     });

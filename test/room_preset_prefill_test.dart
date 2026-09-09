@@ -122,8 +122,10 @@ void main() {
       'Lectern DTP transmitter',
       'Credenza DTP transmitter',
       'Room-end DTP receiver',
-      // Just 'Speakers': the room's pair, wherever it ends up hanging.
-      'Speakers',
+      // Both halves of the pair of rules: a 70 volt ceiling run on an MA
+      // build, a low-impedance pair on the wall on an SA one.
+      'Ceiling speakers',
+      'Wall speakers',
       'Speakers - SM 28',
       'Ceiling mic array',
       'Confidence monitor',

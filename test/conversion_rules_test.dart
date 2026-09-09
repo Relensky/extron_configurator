@@ -13,6 +13,63 @@ void main() {
     map = await ConfigKeyMap.load(explicitPath: 'key_map.json');
   });
 
+  group('the transition timers arrive on one spelling', () {
+    // The processor answers to several spellings on purpose - these keys get
+    // hand-edited by people who are not reading its source, and 'warmup_time'
+    // failing silently is worse than accepting it. The app writes the
+    // canonical one, so a room that arrives on an alias has to be folded onto
+    // it: carrying both, the canonical key wins on the processor and the
+    // number somebody actually typed sits beside it doing nothing.
+    test('a device block on any alias comes out on warm_up_time', () {
+      for (final alias in const ['warmup_time', 'warm_up', 'warmup']) {
+        final result = map.apply({
+          'SYSTEM_SETUP': {'dev_projectors': '1'},
+          'PROJECTORDEVICE_1': {alias: 45},
+        });
+        final dev = result.config['PROJECTORDEVICE_1'] as Map;
+        expect(dev['warm_up_time'], 45, reason: alias);
+        expect(dev.containsKey(alias), isFalse, reason: alias);
+      }
+    });
+
+    test('and on cool_down_time', () {
+      for (final alias in const ['cooldown_time', 'cool_down', 'cooldown']) {
+        final result = map.apply({
+          'SYSTEM_SETUP': {'dev_cameras': '1'},
+          'CAMERADEVICE_1': {alias: 12},
+        });
+        final dev = result.config['CAMERADEVICE_1'] as Map;
+        expect(dev['cool_down_time'], 12, reason: alias);
+        expect(dev.containsKey(alias), isFalse, reason: alias);
+      }
+    });
+
+    test('the room pair the same way', () {
+      final result = map.apply({
+        'SYSTEM_SETUP': {
+          'system_startup_time': 25,
+          'shut_down_time': 18,
+        },
+      });
+      final setup = result.config['SYSTEM_SETUP'] as Map;
+      expect(setup['startup_time'], 25);
+      expect(setup['shutdown_time'], 18);
+      expect(setup.containsKey('system_startup_time'), isFalse);
+      expect(setup.containsKey('shut_down_time'), isFalse);
+    });
+
+    test('and the processor-written schedule is left alone', () {
+      // nightly_shutdown_time is a CLOCK TIME the processor writes as the
+      // schedule shifts, and it is one word away from the animation length.
+      final result = map.apply({
+        'SYSTEM_SETUP': {'nightly_shutdown_time': '23:37:12'},
+      });
+      final setup = result.config['SYSTEM_SETUP'] as Map;
+      expect(setup['nightly_shutdown_time'], '23:37:12');
+      expect(setup.containsKey('shutdown_time'), isFalse);
+    });
+  });
+
   group('serial devices lose their network-only properties', () {
     Map<String, dynamic> serialCamera() => {
           'SYSTEM_SETUP': {'dev_cameras': '1', 'dev_power_controllers': '1'},

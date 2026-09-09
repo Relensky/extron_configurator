@@ -75,8 +75,11 @@ void main() {
 
     Future<void> pumpForm(WidgetTester tester) async {
       // Tall enough to build the whole form: the device form is a lazy
-      // ListView, so a field below the fold does not exist to find.
-      tester.view.physicalSize = const Size(1200, 1400);
+      // ListView, so a field below the fold does not exist to find. This
+      // has to stay ahead of the form, which grows whenever the schema
+      // offers the family another key - the warm-up and cool-down timers
+      // pushed serial_port off the bottom of a 1400px surface.
+      tester.view.physicalSize = const Size(1200, 2200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(

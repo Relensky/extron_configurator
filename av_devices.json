@@ -66,7 +66,7 @@
       "rackUnits": 0,
       "powerInput": "none",
       "neverControlled": true,
-      "notes": "The room's ceiling speaker run, drawn as one load. What drives it is the amplifier in the switcher (an SA or MA build) or a separate amp fed from the DSP.",
+      "notes": "The room's ceiling speaker run, drawn as one load. The MA build's distributed line: the amplifier inside the switcher puts out 70 (or 100) volts, which is what a run of ceiling speakers is tapped off. What else drives it is a separate amp fed from the DSP. See Wall Speakers for the low-impedance pair an SA build feeds.",
       "ports": [
         {
           "id": "in_spk_1",
@@ -597,7 +597,7 @@
       "rackUnits": 0,
       "powerInput": "none",
       "neverControlled": true,
-      "notes": "The room's speakers, drawn as one load. Deliberately generic - the AV flow places this for an audio output before anybody has said whether the pair is in the ceiling, on the wall or on stands, and the model is changed to the pair actually specified. What drives it is the amplifier in the switcher (an SA or MA build) or a separate amp fed from the DSP.",
+      "notes": "The room's speakers, drawn as one load, with nowhere decided. What the AV flow places for an audio output whose amplifier says neither MA nor SA - the two builds get Ceiling Speakers and Wall Speakers instead - and the model is changed to the pair actually specified.",
       "ports": [
         {
           "id": "in_spk_1",
@@ -636,6 +636,23 @@
           "signal": "vga",
           "direction": "output",
           "side": "right"
+        }
+      ]
+    },
+    {
+      "model": "Wall Speakers",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "neverControlled": true,
+      "notes": "The room's speakers on a wall, drawn as one load. The SA build's pair: the amplifier inside the switcher is low impedance, 8 or 4 ohms, and the two boxes go either side of the screen. See Ceiling Speakers for the 70 volt run an MA build feeds.",
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
         }
       ]
     },
@@ -7617,10 +7634,25 @@
       "partNumber": "V12H467020",
       "category": "AV / Misc",
       "rackUnits": 0,
-      "powerInput": "none",
       "price": 219.0,
       "educationPrice": 150.0,
-      "ports": []
+      "notes": "A powered speaker pair - the amplifier is inside it. So it is not wired like the passive pairs beside it in this catalog: it takes LINE level rather than speaker level, and it needs an outlet of its own.",
+      "ports": [
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
     },
     {
       "model": "ELPSP10 PixelPlus™ Projector Controller",
@@ -13644,7 +13676,15 @@
       "powerInput": "none",
       "price": 1460.0,
       "notes": "Long Throw Column Array Speaker - Low-Profile Mount, Single, 70/100V, Blk",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 163 LP, 70/100V, White",
@@ -13655,7 +13695,15 @@
       "powerInput": "none",
       "price": 1460.0,
       "notes": "Long Throw Column Array Speaker - Low-Profile Mount, Single, 70/100V, Wht",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 163 LP, 8 Ohm, Black",
@@ -13666,7 +13714,15 @@
       "powerInput": "none",
       "price": 1460.0,
       "notes": "Long Throw Column Array Speaker - Low-Profile Mount, Single, 8 Ohm, Black",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 163 LP, 8 Ohm, White",
@@ -13677,7 +13733,15 @@
       "powerInput": "none",
       "price": 1460.0,
       "notes": "Long Throw Column Array Speaker - Low-Profile Mount, Single, 8 Ohm, White",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 163 PT, 70/100V, Black",
@@ -13688,7 +13752,15 @@
       "powerInput": "none",
       "price": 1460.0,
       "notes": "Long Throw Column Array Speaker - Pan and Tilt Mount, Single, 70/100V, Black",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 163 PT, 70/100V, White",
@@ -13699,7 +13771,15 @@
       "powerInput": "none",
       "price": 1460.0,
       "notes": "Long Throw Column Array Speaker - Pan and Tilt Mount, Single, 70/100V, White",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 163 PT, 8 Ohm, Black",
@@ -13710,7 +13790,15 @@
       "powerInput": "none",
       "price": 1460.0,
       "notes": "Long Throw Column Array Speaker - Pan and Tilt Mount, Single, 8 Ohm, Black",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 163 PT, 8 Ohm, White",
@@ -13721,7 +13809,15 @@
       "powerInput": "none",
       "price": 1460.0,
       "notes": "Long Throw Column Array Speaker - Pan and Tilt Mount, Single, 8 Ohm, White",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 43T LP, Black",
@@ -13732,7 +13828,15 @@
       "powerInput": "none",
       "price": 620.0,
       "notes": "17\" Four Driver Column Array Speaker - Low Profile Mount, Single, Black",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 43T LP, White",
@@ -13743,7 +13847,15 @@
       "powerInput": "none",
       "price": 620.0,
       "notes": "17\" Four Driver Column Array Speaker - Low Profile Mount, Single, White",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 43T PT, Black",
@@ -13754,7 +13866,15 @@
       "powerInput": "none",
       "price": 620.0,
       "notes": "17\" Four Driver Column Array Speaker - Pan and Tilt Mount, Single, Black",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 43T PT, White",
@@ -13765,7 +13885,15 @@
       "powerInput": "none",
       "price": 620.0,
       "notes": "17\" Four Driver Column Array Speaker - Pan and Tilt Mount, Single, White",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 83T LP, Black",
@@ -13776,7 +13904,15 @@
       "powerInput": "none",
       "price": 830.0,
       "notes": "30\" Eight Driver Column Array Speaker - Low Profile Mount, Single, Black",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 83T LP, White",
@@ -13787,7 +13923,15 @@
       "powerInput": "none",
       "price": 830.0,
       "notes": "30\" Eight Driver Column Array Speaker - Low Profile Mount, Single, White",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 83T PT, Black",
@@ -13798,7 +13942,15 @@
       "powerInput": "none",
       "price": 830.0,
       "notes": "30\" Eight Driver Column Array Speaker - Pan and Tilt Mount, Single, Black",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CA 83T PT, White",
@@ -13809,7 +13961,15 @@
       "powerInput": "none",
       "price": 830.0,
       "notes": "30\" Eight Driver Column Array Speaker - Pan and Tilt Mount, Single, White",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "Cable Cubby 100 EU AC",
@@ -14111,7 +14271,15 @@
       "educationPrice": 394.4,
       "url": "https://www.extron.com/product/cs1226tplus",
       "notes": "Two-Way 70/100 V SpeedMount Ceiling Speaker System - Two-Way SpeedMount System, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CS 123T",
@@ -14124,7 +14292,15 @@
       "educationPrice": 330.6,
       "url": "https://www.extron.com/product/cs123t",
       "notes": "Full-Range 70/100 V SpeedMount Ceiling Speaker System - Full-Range SpeedMount Speaker System, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CS 26T Plus",
@@ -14137,7 +14313,15 @@
       "educationPrice": 237.8,
       "url": "https://www.extron.com/product/cs1226tplus",
       "notes": "Two-Way Open Back Ceiling Speakers with 70/100 V Transformer - Two-Way, Open Back Speaker, Transformer, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "CS 3T",
@@ -14150,7 +14334,15 @@
       "educationPrice": 168.2,
       "url": "https://www.extron.com/product/cs123t",
       "notes": "Full-Range Open Back Ceiling Speakers with 70/100 V Transformer - Full-Range, Open Back Speaker, Transformer, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "DA 6A",
@@ -44983,7 +45175,15 @@
       "educationPrice": 324.8,
       "url": "https://www.extron.com/product/ff120t",
       "notes": "Full-Range Flat Field Speakers with 1' x 2' Low Profile Enclosure and 70/100 V Transformer - Ceiling - 1' x 2' Drop-In, Xfmr, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "FF 220T 2'x2'",
@@ -44996,7 +45196,15 @@
       "educationPrice": 365.4,
       "url": "https://www.extron.com/product/ff220t",
       "notes": "Full-Range Flat Field Speakers with Low Profile Enclosure and 70/100 V Transformer - Ceiling - 2' x 2' Drop-In, Xfmr, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "FF 220T 600x600",
@@ -45009,7 +45217,15 @@
       "educationPrice": 365.4,
       "url": "https://www.extron.com/product/ff220t",
       "notes": "Full-Range Flat Field Speakers with Low Profile Enclosure and 70/100 V Transformer - Ceiling - 600x600 mm Drop-In, Xfmr, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "FOX3 24x I/O 88 MM",
@@ -71243,7 +71459,15 @@
       "educationPrice": 1769.0,
       "url": "https://www.extron.com/product/sf10csub",
       "notes": "SoundField In-Ceiling Subwoofer - 10\" SoundField In-Ceiling Subwoofer",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 228T Plus",
@@ -71254,7 +71478,15 @@
       "powerInput": "none",
       "price": 1210.0,
       "notes": "8\" Two-Way SoundField Ceiling Tile Speaker - 8\" Two-Way SoundField Ceiling Tile Speaker, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 26CT",
@@ -71267,7 +71499,15 @@
       "educationPrice": 388.6,
       "url": "https://www.extron.com/product/sf26ct",
       "notes": "SoundField XD 6.5\" Two-Way Ceiling Speaker with 8\" Composite Back Can and 70/100 V Transformer - 6.5\" 2-Way Ceiling Spkrs, 70/100V, Complete Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 26CT LP",
@@ -71278,7 +71518,15 @@
       "powerInput": "none",
       "price": 670.0,
       "notes": "SoundField XD 6.5\" Two-Way Ceiling Speaker with Low Profile Back Can - 6.5\" LowProfile 2-Way Ceiling Spkrs, Complete Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 26PT Black",
@@ -71291,7 +71539,15 @@
       "educationPrice": 556.8,
       "url": "https://www.extron.com/product/sf26pt",
       "notes": "SoundField 6.5\" Two-Way Pendant Speaker - 6.5\" Two-Way Pendant Speaker, Pair - Black",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 26PT White",
@@ -71304,7 +71560,15 @@
       "educationPrice": 556.8,
       "url": "https://www.extron.com/product/sf26pt",
       "notes": "SoundField 6.5\" Two-Way Pendant Speaker - 6.5\" Two-Way Pendant Speaker, Pair - White",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 26X",
@@ -71315,7 +71579,15 @@
       "powerInput": "none",
       "price": 280.0,
       "notes": "Two-Way SoundField Open Back 8 Ohm Ceiling Speakers - Ceiling - Open Back, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 28PT Black",
@@ -71324,7 +71596,15 @@
       "rackUnits": 0,
       "powerInput": "none",
       "notes": "SoundField 8\" Two-Way Pendant Speaker",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 28PT White",
@@ -71333,7 +71613,15 @@
       "rackUnits": 0,
       "powerInput": "none",
       "notes": "SoundField 8\" Two-Way Pendant Speaker",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 3C LP",
@@ -71344,7 +71632,15 @@
       "powerInput": "none",
       "price": 320.0,
       "notes": "SoundField XD 3\" Full-Range 8 Ohm Ceiling Speakers with 4\" Low Profile Composite Back Can - 3\" LowProfile Ceiling Spkrs, Complete Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 3CT LP",
@@ -71355,7 +71651,15 @@
       "powerInput": "none",
       "price": 370.0,
       "notes": "SoundField XD 3\" Full-Range Ceiling Speakers with 4\" Low Profile Composite Back Can and 70/100 V Transformer - 3\" 70/100V LowProfile Ceiling Spkrs, Complete Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 3PT Black",
@@ -71368,7 +71672,15 @@
       "educationPrice": 226.2,
       "url": "https://www.extron.com/product/sf3pt",
       "notes": "SoundField 3\" Full-Range Pendant Speaker - 3\" Pendant Speaker Pair - Black - Removable Grille",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 3PT White",
@@ -71381,7 +71693,15 @@
       "educationPrice": 226.2,
       "url": "https://www.extron.com/product/sf3pt",
       "notes": "SoundField 3\" Full-Range Pendant Speaker - 3\" Pendant Speaker Pair - White - Removable Grille",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SF 8CT SUB",
@@ -71392,7 +71712,15 @@
       "powerInput": "none",
       "price": 640.0,
       "notes": "SoundField 8\" Ceiling Subwoofer",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "ShareLink Pro 1000",
@@ -72391,7 +72719,15 @@
       "educationPrice": 301.6,
       "url": "https://www.extron.com/product/sm26",
       "notes": "SpeedMount Two-Way Surface Mount Speakers with 6.5\" Woofer - 8 ohm - Black, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SM 26 White",
@@ -72404,7 +72740,15 @@
       "educationPrice": 301.6,
       "url": "https://www.extron.com/product/sm26",
       "notes": "SpeedMount Two-Way Surface Mount Speakers with 6.5\" Woofer - 8 ohm - White, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SM 26T Black",
@@ -72417,7 +72761,15 @@
       "educationPrice": 336.4,
       "url": "https://www.extron.com/product/sm26",
       "notes": "SpeedMount Two-Way Surface Mount Speakers with 6.5\" Woofer - Transformer - Black, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SM 26T White",
@@ -72430,7 +72782,15 @@
       "educationPrice": 336.4,
       "url": "https://www.extron.com/product/sm26",
       "notes": "SpeedMount Two-Way Surface Mount Speakers with 6.5\" Woofer - Transformer - White, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SM 28 Black",
@@ -72527,7 +72887,15 @@
       "educationPrice": 214.6,
       "url": "https://www.extron.com/product/sm3",
       "notes": "SpeedMount Compact Full-Range Surface Mount Speakers - 8 ohm - Black, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SM 3 White",
@@ -72540,7 +72908,15 @@
       "educationPrice": 214.6,
       "url": "https://www.extron.com/product/sm3",
       "notes": "SpeedMount Compact Full-Range Surface Mount Speakers - 8 ohm - White, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SMD 101",

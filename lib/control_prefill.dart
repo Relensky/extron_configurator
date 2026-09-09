@@ -259,6 +259,12 @@ DeviceTypeSpec? familyForNode(AppStateProvider provider, AvNode node) {
   // a camera block stays one.
   if (isSourceOnlyDevice(node.model, node.label)) return null;
 
+  // A capture stick, by the name on it. The same kind of fact as
+  // [isSourceOnlyDevice] and recorded the same way — see
+  // [isUncontrolledProduct], which is also where the reason a rule cannot do
+  // this job is written down.
+  if (isUncontrolledProduct(node.model, node.label)) return null;
+
   // NOTHING DRIVES IT, SO IT IS IN NO FAMILY. The families are the control
   // side's own list — a family is a block with a driver, an address and a line
   // on the schematic — and a product the catalog has already said is
@@ -366,6 +372,31 @@ bool isSourceOnlyDevice(String model, String label) {
   final m = flat(model);
   final l = flat(label);
   return sources.any((s) => m == s || l == s);
+}
+
+/// True for a product that is real equipment and drives nothing — named, the
+/// way [isSourceOnlyDevice] names the document camera.
+///
+/// The catalog already says this on the entry (`neverControlled`, which is
+/// what [AppStateProvider.avModelNeverControlled] reads), and that is the
+/// right place for it: it is a fact about the product. This catches the same
+/// product when it arrives WITHOUT its catalog entry — somebody typing
+/// "AverMedia USB" into Add custom device, a box drawn before the entry
+/// existed, a model spelled a little differently on an old drawing. There is
+/// no entry to read, so the fallback reads the name as words, and 'USB' is a
+/// word the USB SWITCHER family answers to.
+///
+/// A word rather than a whole name, because the whole name is exactly what
+/// varies. AverMedia makes capture sticks: HDMI in, USB out, no driver and
+/// nothing to talk to, whichever one it is.
+bool isUncontrolledProduct(String model, String label) {
+  const makers = {'avermedia'};
+  for (final text in [model, label]) {
+    for (final word in text.toLowerCase().split(RegExp('[^a-z0-9]+'))) {
+      if (makers.contains(word)) return true;
+    }
+  }
+  return false;
 }
 
 /// The words a family answers to.
