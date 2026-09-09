@@ -2424,6 +2424,25 @@ String _rebootLabel(dynamic supportsReboot, dynamic rebootOnly) {
   return 'No reboot';
 }
 
+/// A transition timer as the report prints it: the seconds with the unit on.
+///
+/// Blank when the room says nothing, which is not the same as zero - it means
+/// the device's own python module answers, and printing "0 s" for it would be
+/// a claim the config never made. A value that is not a number is printed as
+/// it stands rather than swallowed, because it is a typo somebody has to see.
+///
+/// Only the canonical keys are read. The processor also answers to
+/// 'warmup_time' and friends, but those are folded onto the canonical
+/// spelling when the config is loaded - see key_map.json.
+String _timerLabel(dynamic raw) {
+  final text = _friendlyValue(raw).trim();
+  if (text.isEmpty) return '';
+  final seconds = num.tryParse(text);
+  if (seconds == null) return text;
+  final whole = seconds == seconds.truncate() ? seconds.truncate() : seconds;
+  return '$whole s';
+}
+
 /// REPORT-ONLY names for the switcher I/O keys, spelled out for whoever reads
 /// the report rather than edits the config: the tech-facing "AUD Cam" / "Proj
 /// 1" shorthand stays on the device tabs (and in ui_schema.json), while the
@@ -2525,6 +2544,12 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
     ['Sources', sources],
     ['ControlScript Profile', controlScript],
     ['Python Tracebacks', tracebacks],
+    // The room's own startup / shutdown animation. Both drop out when the
+    // room has not named one, which is the ordinary case: the processor works
+    // it out from the projectors, and a row saying so would be a number this
+    // config does not contain.
+    ['System Startup', _timerLabel(setup['startup_time'])],
+    ['System Shutdown', _timerLabel(setup['shutdown_time'])],
     ['Device Count', deviceCount.toString()],
     ['Generated', DateTime.now().toLocal().toString().split('.').first],
   ]..removeWhere((r) {
@@ -2603,6 +2628,14 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
   final deviceRows = <List<dynamic>>[];
   // --- Audio groups: which DSP/switcher group number each function uses ---
   final audioGroupRows = <List<dynamic>>[];
+  // --- Warm-up / cool-down, for the devices that name their own ---
+  //
+  // A section rather than two more columns on Devices, for the reason
+  // Related Equipment is a section: only screens and cameras have a warm-up
+  // at all, and a column is a question asked of every row. Here a room that
+  // has never corrected a timer prints no table, and one that has corrected
+  // two prints two lines.
+  final transitionRows = <List<dynamic>>[];
   for (final node in model.nodes) {
     if (!config.containsKey(node.id)) continue; // processor/IDF/panel
     final dev = config[node.id];
@@ -2621,6 +2654,17 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
       _friendlyValue(dev['keep_alive_command']),
       _friendlyValue(dev['module']),
     ]);
+
+    // Whichever of the two this device names. Blank against the other means
+    // the module still answers for it, which is worth showing beside the one
+    // that was overridden.
+    if (dev is Map) {
+      final warm = _timerLabel(dev['warm_up_time']);
+      final cool = _timerLabel(dev['cool_down_time']);
+      if (warm.isNotEmpty || cool.isNotEmpty) {
+        transitionRows.add([deviceName, warm, cool]);
+      }
+    }
 
     // Any device carrying group_ keys (DSPs and switchers today) lists what
     // each audio group number is tied to.
@@ -2712,6 +2756,11 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
       title: 'Audio Groups',
       header: ['Device', 'Group', 'Number'],
       rows: audioGroupRows
+    ),
+    (
+      title: 'Transition Times',
+      header: ['Device', 'Warm Up', 'Cool Down'],
+      rows: transitionRows
     ),
     (
       title: 'Related Equipment',
