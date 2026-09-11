@@ -149,4 +149,79 @@ void main() {
       expect(rows.join('\n'), isNot(contains('ControlScript Profile')));
     });
   });
+
+  group('the transition timers', () {
+    /// [room] with [extra] merged into one of its blocks. The literals in
+    /// room() are all strings, so the block has to be rebuilt to take the
+    /// numbers a timer is actually stored as.
+    Map<String, dynamic> withKeys(
+      Map<String, dynamic> config,
+      String section,
+      Map<String, dynamic> extra,
+    ) {
+      config[section] = <String, dynamic>{
+        ...(config[section] as Map).cast<String, dynamic>(),
+        ...extra,
+      };
+      return config;
+    }
+
+    /// The timers a room would actually correct: a tired lamp projector that
+    /// needs longer than its driver claims, and a camera whose cool-down is
+    /// the only one worth changing.
+    Map<String, dynamic> timed() {
+      var config = room();
+      config = withKeys(config, 'PROJECTORDEVICE_1',
+          {'warm_up_time': 45, 'cool_down_time': 12});
+      config = withKeys(config, 'CAMERADEVICE_1', {'cool_down_time': 8});
+      config = withKeys(
+          config, 'SYSTEM_SETUP', {'startup_time': 25, 'shutdown_time': 18});
+      return config;
+    }
+
+    test('are a table of their own, in seconds', () async {
+      final rows = await rowsOf(timed(), 'Transition Times');
+      expect(rows, contains('Projector - PT-FW430U | 45 s | 12 s'));
+      // Blank against the one the room did not override: the module still
+      // answers for it, and that is worth seeing beside the one it did.
+      expect(rows, contains('Camera - TR311 |  | 8 s'));
+      // The switcher names neither, so it is not in the table at all.
+      expect(rows.where((r) => r.contains('IN1608')), isEmpty);
+    });
+
+    test('and the room pair reads on the System summary', () async {
+      final rows = await rowsOf(timed(), 'System');
+      expect(rows, contains('System Startup | 25 s'));
+      expect(rows, contains('System Shutdown | 18 s'));
+    });
+
+    test('a room that has corrected nothing grows no table', () async {
+      // The ordinary case. Every device answers out of its own driver, so
+      // there is nothing here the config actually said.
+      final sections = await sectionsFor(room());
+      expect(sections.where((s) => s.title == 'Transition Times'), isEmpty);
+
+      final rows = await rowsOf(room(), 'System');
+      expect(rows.where((r) => r.startsWith('System Startup')), isEmpty);
+      expect(rows.where((r) => r.startsWith('System Shutdown')), isEmpty);
+    });
+
+    test('zero is a real answer and is printed as one', () async {
+      // Not the same as unset: 0 means no wait at all. Reporting it as blank
+      // would read as "the driver decides", which is the opposite.
+      final config = withKeys(room(), 'PROJECTORDEVICE_1', {'warm_up_time': 0});
+      final rows = await rowsOf(config, 'Transition Times');
+      expect(rows, contains('Projector - PT-FW430U | 0 s | '));
+    });
+
+    test('and something that is not a number is shown, not swallowed',
+        () async {
+      // A typo the processor would refuse and fall back on. The report is
+      // where somebody would notice it.
+      final config =
+          withKeys(room(), 'PROJECTORDEVICE_1', {'warm_up_time': 'thirty'});
+      final rows = await rowsOf(config, 'Transition Times');
+      expect(rows, contains('Projector - PT-FW430U | thirty | '));
+    });
+  });
 }

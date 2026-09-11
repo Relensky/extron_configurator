@@ -406,8 +406,9 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'How long the room takes to come up',
     section: 'The room',
-    where: 'Devices tab (per projector, display and camera) and System '
-        'Settings (the whole room)',
+    where: 'Devices tab (per projector, display and camera), System '
+        'Settings (the whole room), and Edit module default settings (every '
+        'room that picks a model)',
     plain:
         'How many seconds a screen or a camera needs before it is usable, '
         'and how long the startup and shutdown animation on the panel runs. '
@@ -442,6 +443,15 @@ const List<HelpTopic> kHelpTopics = [
         'LEAVE THEM BLANK unless the room needs correcting. Blank means ask the '
         'driver; zero is a real answer meaning no wait at all, so clear the field '
         'with the trash button rather than typing 0.\n\n'
+        'WHEN A WHOLE LINE IS WRONG, not one unit, the correction can go in the '
+        'driver\'s own defaults instead - Edit module default settings offers '
+        'warm_up_time and cool_down_time on a projector, display or camera '
+        'driver, and every room that picks one of its models is written the '
+        'number. The editor shows the driver\'s own WarmUpTime and CoolDownTime '
+        'beside them, which is the figure you would be overriding. Leave them '
+        'out where that figure is right: a default that only repeats it pins '
+        'every room to today\'s number, and they stop following the driver when '
+        'it is corrected.\n\n'
         'THE WHOLE ROOM has a pair of its own on System Settings - how long the '
         'loading bar runs at startup and at shutdown. Left blank the processor '
         'works it out from the room\'s PROJECTORS, floored at five seconds and '

@@ -254,9 +254,42 @@ const List<String> kDefaultsKeys = [
   'keep_alive_qualifier',
   'keep_alive_trigger',
   'manual_disconnect',
+  'warm_up_time',
+  'cool_down_time',
   'user',
   'password',
 ];
+
+/// The [kDefaultsKeys] that only some families carry: the transition timers,
+/// which mean something on a screen or a camera and nothing on a DSP.
+///
+/// Which families is the SCHEMA's answer, not this list's - the editor offers
+/// one of these only where ui_schema.json scopes the key to the driver's
+/// family, so the two can never disagree about where a warm-up exists.
+const Set<String> kFamilyScopedDefaultsKeys = {'warm_up_time', 'cool_down_time'};
+
+/// The driver's own warm-up and cool-down in seconds, null for either it does
+/// not declare.
+///
+/// Read off `self.WarmUpTime = 10.0`, the attribute the processor falls back on
+/// when a room's config names no warm_up_time. It is SHOWN in the editor, so a
+/// default is set knowing what it overrides, and never written into the block:
+/// a default that only repeated the driver would pin every room to today's
+/// figure and stop them following a driver that gets corrected. Blank already
+/// means "ask the driver".
+({num? warmUp, num? coolDown}) driverTimersIn(String content) {
+  num? read(String attribute) {
+    final match = RegExp('self\\.$attribute\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)')
+        .firstMatch(content);
+    return match == null ? null : num.tryParse(match.group(1)!);
+  }
+
+  return (warmUp: read('WarmUpTime'), coolDown: read('CoolDownTime'));
+}
+
+/// Seconds as the editor prints them: '10 s' for 10.0, '2.5 s' for 2.5.
+String secondsLabel(num seconds) =>
+    '${seconds == seconds.truncate() ? seconds.truncate() : seconds} s';
 
 /// The gateway a SerialOverEthernet device is actually reached through - an
 /// Extron IPL box in the rack, not the device. Its address and password are

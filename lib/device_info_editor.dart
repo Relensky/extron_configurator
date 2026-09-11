@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 
 import 'app_logger.dart';
 import 'app_state.dart';
-import 'config_dictionary.dart';
 import 'device_info_source.dart';
 import 'search_match.dart';
 
@@ -107,6 +106,10 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
 
   /// The commands this driver can be polled on, for the keep-alive field.
   List<String> _commands = [];
+
+  /// What the driver itself says its warm-up and cool-down are - see
+  /// [driverTimersIn]. Shown under Defaults, never written into the block.
+  ({num? warmUp, num? coolDown}) _driverTimers = (warmUp: null, coolDown: null);
 
   bool _loading = false;
   bool _dirty = false;
@@ -252,6 +255,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
         : DeviceInfoDraft.fromInfo(info);
 
     _commands = updateCommandsIn(content);
+    _driverTimers = driverTimersIn(content);
     _fill(draft);
     if (!mounted) return;
     setState(() {
@@ -350,6 +354,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
     merged.extras.addAll(current.extras);
 
     _commands = updateCommandsIn(content);
+    _driverTimers = driverTimersIn(content);
     setState(() {
       _fill(merged);
       _notes = scan.notes;
@@ -754,13 +759,16 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
               _section(theme, 'Connection',
                   'How the box is reached. Written onto a device block when '
                   'somebody picks one of the models above.'),
-              _rows(theme, _connection, kConnectionKeys, name: 'connection'),
+              _rows(provider, theme, _connection, kConnectionKeys,
+                  name: 'connection'),
               const SizedBox(height: 16),
 
               _section(theme, 'Defaults',
                   'The rest of the device block: panel object names, the '
                   'keep-alive, the credentials.'),
-              _rows(theme, _defaults, kDefaultsKeys, name: 'defaults'),
+              _rows(provider, theme, _defaults, _defaultsOffered(provider),
+                  name: 'defaults'),
+              ?_driverTimersLine(provider, theme),
               if (_commands.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -779,7 +787,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
                   'way. Changing com_type on a device loads the matching '
                   'block; picking a model merges it over the two above.'),
               for (final style in kComTypeStyleLabels.keys)
-                _comTypeBlock(theme, style),
+                _comTypeBlock(provider, theme, style),
               const SizedBox(height: 16),
 
               _section(theme, 'Keys this model does not use',
@@ -814,6 +822,65 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
     return list;
   }
 
+  /// A section key of the family this driver names ('projector' and
+  /// 'display' both land on PROJECTORDEVICE_1), or null when it names none
+  /// the schema has. Matched the way the Model dropdown matches a driver to a
+  /// tab - [AppStateProvider.modelMatchesDevice] - so this and that dropdown
+  /// cannot disagree about which family a driver belongs to.
+  String? _familySection(AppStateProvider provider) {
+    if (_deviceTypes.isEmpty) return null;
+    final probe = ModelEntry(
+        model: '', module: '', explicit: false, deviceTypes: _deviceTypes);
+    for (final spec in provider.uiSchema.deviceTypes) {
+      final section = '${spec.prefix}1';
+      if (provider.modelMatchesDevice(probe, section)) return section;
+    }
+    return null;
+  }
+
+  /// The Defaults keys offered as chips for this driver.
+  ///
+  /// Everything in [kDefaultsKeys], less a family-scoped key the driver's
+  /// family does not carry: a warm-up on a DSP driver is a chip everybody has
+  /// to ignore. A driver that names no family yet is offered the lot - hiding
+  /// a key there would be guessing.
+  List<String> _defaultsOffered(AppStateProvider provider) {
+    final section = _familySection(provider);
+    return [
+      for (final key in kDefaultsKeys)
+        if (!kFamilyScopedDefaultsKeys.contains(key) ||
+            section == null ||
+            provider.uiSchema.deviceSpecFor(section, key) != null)
+          key,
+    ];
+  }
+
+  /// What the driver itself declares for its warm-up and cool-down, under the
+  /// Defaults block - the number a room uses when its config names none, and
+  /// so the number a timer default here would be overriding. Nothing for a
+  /// driver that declares neither, or one whose family has no warm-up.
+  Widget? _driverTimersLine(AppStateProvider provider, ThemeData theme) {
+    final (:warmUp, :coolDown) = _driverTimers;
+    if (warmUp == null && coolDown == null) return null;
+    if (!_defaultsOffered(provider).contains('warm_up_time')) return null;
+    final parts = [
+      if (warmUp != null) 'WarmUpTime ${secondsLabel(warmUp)}',
+      if (coolDown != null) 'CoolDownTime ${secondsLabel(coolDown)}',
+    ];
+    return Padding(
+      key: const ValueKey('device_info_driver_timers'),
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        'This driver declares ${parts.join(' and ')} - what a room uses when '
+        'its config names none. Add warm_up_time or cool_down_time only '
+        'where these models differ from that; left out, every room follows '
+        'the driver, including when the driver is corrected.',
+        style: theme.textTheme.bodySmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+
   Widget _section(ThemeData theme, String title, String why) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Column(
@@ -832,6 +899,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
   /// 'defaults', a connection style), so a test can name the block it
   /// means and two blocks on one page never share a key.
   Widget _rows(
+    AppStateProvider provider,
     ThemeData theme,
     List<_Pair> rows,
     List<String> suggested, {
@@ -900,7 +968,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
                   // What the key means, from the same dictionary the (i)
                   // buttons use - under the pair rather than beside one of
                   // them, so it reads as being about the row.
-                  ?_describeUnder(theme, row.key.text),
+                  ?_describeUnder(provider, theme, row.key.text),
                 ],
               ),
             ),
@@ -930,7 +998,8 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
         ],
       );
 
-  Widget _comTypeBlock(ThemeData theme, String style) {
+  Widget _comTypeBlock(
+      AppStateProvider provider, ThemeData theme, String style) {
     final rows = _comTypes[style];
     final label = kComTypeStyleLabels[style]!;
     if (rows == null) {
@@ -972,17 +1041,22 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
                 ),
               ],
             ),
-            _rows(theme, rows, kConnectionKeys, name: style),
+            _rows(provider, theme, rows, kConnectionKeys, name: style),
           ],
         ),
       ),
     );
   }
 
-  /// What a config key means, from the same dictionary the (i) buttons use.
-  String? _describe(String key) {
-    final text = ConfigDictionary.descriptions[key.trim()];
-    if (text == null) return null;
+  /// What a config key means, asked the way the (i) buttons ask it: the
+  /// schema first, scoped to this driver's family, and the compiled-in
+  /// dictionary only when the schema has nothing. Reading the dictionary
+  /// alone left every key the schema describes and the dictionary does not -
+  /// the transition timers among them - with no line under its row.
+  String? _describe(AppStateProvider provider, String key) {
+    final text = provider.uiSchema
+        .descriptionFor(key.trim(), sectionKey: _familySection(provider));
+    if (text == null || text.isEmpty) return null;
     // The first sentence: this is a line under a row, not a manual page.
     final stop = text.indexOf('. ');
     return stop < 0 ? text : text.substring(0, stop + 1);
@@ -990,8 +1064,8 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
 
   /// That description as the line under a row, or nothing when the dictionary
   /// has never heard of the key - which is most of a driver's own keys.
-  Widget? _describeUnder(ThemeData theme, String key) {
-    final text = _describe(key);
+  Widget? _describeUnder(AppStateProvider provider, ThemeData theme, String key) {
+    final text = _describe(provider, key);
     if (text == null) return null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 3, 40, 0),

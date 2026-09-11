@@ -65,6 +65,16 @@ class EthernetClass(EthernetClientInterface, DeviceClass):
         pass
 ''';
 
+  /// [source] with the two attributes the processor falls back on when a
+  /// room names no warm_up_time / cool_down_time, where every driver in the
+  /// folder puts them: first thing in DeviceClass.__init__.
+  String withTimers(String source) => source.replaceFirst(
+        '    def __init__(self):\n',
+        '    def __init__(self):\n'
+            '        self.WarmUpTime = 45.0\n'
+            '        self.CoolDownTime = 15.0\n',
+      );
+
   group('scanning a driver', () {
     test('reads the models out of self.Models', () {
       final scan = scanModuleSource(driver, fileName: 'epsn_vp_BrightLink.py');
@@ -246,6 +256,57 @@ DEVICE_INFO = {
         expect(after['defaults'], before['defaults'],
             reason: '${file.path} changed its defaults');
       }
+    });
+  });
+
+  group('the transition timers', () {
+    /// The driver above, with the two attributes the processor falls back on
+    /// when a room names no warm_up_time / cool_down_time.
+    final timed = withTimers(driver);
+
+    test("the driver's own figures are read off its attributes", () {
+      final timers = driverTimersIn(timed);
+      expect(timers.warmUp, 45);
+      expect(timers.coolDown, 15);
+      // A driver that declares neither says nothing, rather than zero.
+      final none = driverTimersIn(driver);
+      expect(none.warmUp, isNull);
+      expect(none.coolDown, isNull);
+    });
+
+    test('and printed the way a person reads seconds', () {
+      expect(secondsLabel(45.0), '45 s');
+      expect(secondsLabel(2.5), '2.5 s');
+    });
+
+    test('a scan does NOT copy them into the block', () {
+      // THE DRIVER'S NUMBER IS ALREADY THE ANSWER when the block says
+      // nothing. Copying it into the defaults would write it into every room
+      // that picks the model, and those rooms would stop following the driver
+      // - including the day somebody corrects it.
+      final scan = scanModuleSource(timed, fileName: 'epsn_vp_BrightLink.py');
+      expect(scan.draft.defaults.containsKey('warm_up_time'), isFalse);
+      expect(scan.draft.defaults.containsKey('cool_down_time'), isFalse);
+    });
+
+    test('set by hand, they are written and read straight back', () {
+      final draft = DeviceInfoDraft(
+        deviceTypes: ['projector'],
+        models: ['EB-1440Ui'],
+        defaults: {'keep_alive_command': 'Power', 'warm_up_time': 60,
+            'cool_down_time': 20},
+      );
+      final text = formatDeviceInfo(draft);
+      // In the defaults block, in the order the folder writes it.
+      expect(text.indexOf('"keep_alive_command"'),
+          lessThan(text.indexOf('"warm_up_time"')));
+      expect(text.indexOf('"warm_up_time"'),
+          lessThan(text.indexOf('"cool_down_time"')));
+
+      final back = AppStateProvider.parseDeviceInfo('x.py', '$text\n');
+      final defaults = back?['defaults'] as Map?;
+      expect(defaults?['warm_up_time'], 60);
+      expect(defaults?['cool_down_time'], 20);
     });
   });
 
@@ -540,6 +601,128 @@ $driver
       expect(provider.modulesPath, second.path);
       expect(provider.availableModules, ['epsn_vp_BrightLink']);
       expect(find.text('extr_dsp_Thing'), findsNothing);
+    });
+
+    testWidgets('a screen driver offers its timers, and says what it overrides',
+        (tester) async {
+      tester.view.physicalSize = const Size(1600, 2600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final devices = Directory(path.join(dir.path, 'devices'))
+        ..createSync(recursive: true);
+      String withBlock(String type, String model) => '''
+DEVICE_INFO = {
+    "device_type": "$type",
+    "models": ["$model"],
+    "defaults": {
+        "keep_alive_command": "Power",
+    },
+}
+
+
+${withTimers(driver)}
+''';
+      File(path.join(devices.path, 'epsn_vp_Screen.py'))
+          .writeAsStringSync(withBlock('projector', 'EB-1440Ui'));
+      File(path.join(devices.path, 'extr_dsp_Thing.py'))
+          .writeAsStringSync(withBlock('dsp', 'DMP 64 Plus C'));
+
+      late AppStateProvider provider;
+      await tester.runAsync(() async {
+        provider = AppStateProvider(autoLoadSettings: false)
+          ..uiSchema = await UiSchema.load(explicitPath: 'ui_schema.json')
+          ..modulesPath = devices.path;
+        await provider.preloadAllModules();
+      });
+
+      Future<void> open(String module) async {
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(
+          ChangeNotifierProvider<AppStateProvider>.value(
+            value: provider,
+            child: MaterialApp(
+              home: Scaffold(
+                body: Builder(
+                  builder: (context) => TextButton(
+                    onPressed: () => showDeviceInfoEditor(context,
+                        module: module),
+                    child: const Text('open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('open'));
+        // Loaded when the Models box shows what the file declares.
+        await until(tester, () {
+          final models = find.byKey(const ValueKey('device_info_models'));
+          if (models.evaluate().isEmpty) return false;
+          return tester.widget<TextField>(models).controller!.text.isNotEmpty;
+        });
+        // The Defaults block is below the fold of a fixed-height dialog, and
+        // the form is a lazy list: scrolled to, or it is never built at all.
+        final form = find
+            .ancestor(
+              of: find.text('Device family'),
+              matching: find.byType(Scrollable),
+            )
+            .first;
+        await tester.scrollUntilVisible(
+          find.byKey(const ValueKey('device_info_row_defaults_0')),
+          200,
+          scrollable: form,
+        );
+        // And on past it, to the chips and the line under the block. Found
+        // again from the row: the family title the first lookup hung off has
+        // scrolled out of the list by now.
+        await tester.drag(
+          find
+              .ancestor(
+                of: find.byKey(const ValueKey('device_info_row_defaults_0')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+          const Offset(0, -160),
+        );
+        await tester.pump();
+      }
+
+      // A projector: both chips, and the driver's own figures beside them -
+      // the number a default here would be overriding.
+      await open('epsn_vp_Screen');
+      expect(find.text('+ warm_up_time'), findsOneWidget);
+      expect(find.text('+ cool_down_time'), findsOneWidget);
+      final line = find.byKey(const ValueKey('device_info_driver_timers'));
+      expect(line, findsOneWidget);
+      expect(
+        find.descendant(of: line, matching: find.textContaining('WarmUpTime 45 s')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+            of: line, matching: find.textContaining('CoolDownTime 15 s')),
+        findsOneWidget,
+      );
+
+      // Added, the row says what the key means - out of the SCHEMA, scoped to
+      // this family, which is where the timers are described. The editor used
+      // to read the compiled-in dictionary alone, and that has no entry.
+      await tester.tap(find.text('+ warm_up_time'));
+      await tester.pump();
+      expect(find.textContaining('How long THIS screen takes to come up'),
+          findsOneWidget);
+
+      // A DSP comes up instantly: no chips to ignore, and nothing to say.
+      await open('extr_dsp_Thing');
+      // The Defaults chips ARE on screen - so the two missing are missing
+      // because this family has no warm-up, not because nothing was built.
+      expect(find.text('+ manual_disconnect'), findsOneWidget);
+      expect(find.text('+ warm_up_time'), findsNothing);
+      expect(find.text('+ cool_down_time'), findsNothing);
+      expect(find.byKey(const ValueKey('device_info_driver_timers')),
+          findsNothing);
     });
   });
 }
