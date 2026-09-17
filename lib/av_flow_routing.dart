@@ -1315,13 +1315,50 @@ RoutingPlan planRoutingFromConfig(
     }
   }
 
+  // --- the laptop plates -----------------------------------------------------
+  //  See [kLaptopBoxDrawing]. Two rules, both of them about a box the room
+  //  does not buy and the config cannot vouch for.
+
+  /// The laptop boxes this pass has already used, by node id, so two plate
+  /// keys never both land on the same one.
+  final claimedLaptops = <String>{};
+
+  /// True when [configKey] is a laptop plate that should not be drawn at all:
+  /// an estimate-only room, where the numbers in SYSTEM_SETUP came in with
+  /// the template rather than from anybody designing the room's inputs.
+  bool skipLaptopPlate(String configKey) =>
+      provider.isEstimateRoom && kFlowLaptopPlateKeys.contains(configKey);
+
+  /// The laptop box already on the canvas for [rule], or null to place one.
+  ///
+  /// An exact model match first - the box a previous pass placed, which is
+  /// still the common case. Then any laptop nobody has claimed yet, which is
+  /// the case this exists for: a room priced as an estimate has its laptop
+  /// put in BY HAND out of the catalog, as a 'Laptop / BYOD input' or
+  /// whatever the person typed, and converting it to a programmed room used
+  /// to draw a second laptop beside the first.
+  ///
+  /// Only for the laptop rules. Every other source box is a model the room
+  /// buys and is recognized by it.
+  AvNode? laptopNodeFor(FlowBoxRule rule) {
+    final exact = _existingByModelOrLabel(provider, [rule.model], rule.configKey);
+    if (exact != null) {
+      claimedLaptops.add(exact.id);
+      return exact;
+    }
+    if (!kFlowLaptopPlateKeys.contains(rule.configKey)) return null;
+    final free = _existingLaptop(provider, claimedLaptops);
+    if (free == null) return null;
+    claimedLaptops.add(free.id);
+    return free;
+  }
+
   for (final rule in rules.sourceBoxes) {
     if (_handledElsewhere.contains(rule.configKey)) continue;
     final value = setup[rule.configKey]?.toString().trim() ?? '';
     if (value.isEmpty || dismissed(rule.configKey)) continue;
-    final existing =
-        _existingByModelOrLabel(provider, [rule.model], rule.configKey);
-    final node = existing ??
+    if (skipLaptopPlate(rule.configKey)) continue;
+    final node = laptopNodeFor(rule) ??
         place(_specOf(rule), avAutoNodeId(rule.configKey), onLeft: true);
     routeSource(rule.configKey, node);
   }
@@ -1331,15 +1368,15 @@ RoutingPlan planRoutingFromConfig(
   // is actually hanging off it — so the box drawn has to follow that setting
   // or the drawing contradicts the panel's own button.
   final usbValue = setup['input_usb']?.toString().trim() ?? '';
-  if (usbValue.isNotEmpty && !dismissed('input_usb')) {
+  if (usbValue.isNotEmpty &&
+      !dismissed('input_usb') &&
+      !skipLaptopPlate('input_usb')) {
     final isVga =
         (setup['gui_usb_or_vga']?.toString().trim().toUpperCase() ?? 'USB') ==
             'VGA';
     final rule = rules.sourceBoxFor(isVga ? kFlowVgaPlateKey : 'input_usb');
     if (rule != null) {
-      final existing =
-          _existingByModelOrLabel(provider, [rule.model], 'input_usb');
-      final node = existing ??
+      final node = laptopNodeFor(rule) ??
           place(_specOf(rule), avAutoNodeId('input_usb'), onLeft: true);
       routeSource('input_usb', node);
     }
@@ -2282,6 +2319,49 @@ AvNode? _existingByModelOrLabel(
   return null;
 }
 
+/// ============================================================================
+///  [kLaptopBoxDrawing] - WHY THE LAPTOP PLATES ARE A SPECIAL CASE
+/// ============================================================================
+///  `input_hdmi` and `input_usb` are the two keys that put somebody's own
+///  laptop on the drawing, and they are the only source keys the config
+///  cannot vouch for:
+///
+///    * EVERY room template ships with a number in them. In a room being
+///      priced - an estimate-only room, where the system has not been designed
+///      yet - that number is a leftover from the template, not a statement
+///      that the room has a plate. So the plates are not drawn there at all;
+///      the person pricing the room adds the laptop position if the room has
+///      one. [FlowRules.builtIn] marks the same boxes `excludeFromCost`,
+///      because they are not equipment the room buys either.
+///
+///    * A laptop drawn by hand does not carry a model the rule book knows.
+///      Somebody pricing a room picks 'Laptop / BYOD input' out of the
+///      catalog, or types a name; converting the room to a programmed one
+///      then ran this pass for the first time, found no box modelled
+///      'HDMI Laptop', and drew a SECOND laptop next to the first. So an
+///      unclaimed laptop already on the canvas is used instead - recognized
+///      the way [_existingSpeaker] recognizes a pair of speakers, by what the
+///      box plainly is rather than by a model string.
+/// ============================================================================
+/// A laptop box already on the canvas that no plate key has taken yet.
+///
+/// Matched on the word rather than a model, because the box this is looking
+/// for is the one somebody added by hand and named themselves. [claimed]
+/// holds the ones already used, so a room with an HDMI plate and a USB-C
+/// plate does not tie both of them to the same box.
+AvNode? _existingLaptop(AppStateProvider provider, Set<String> claimed) {
+  for (final n in provider.avNodes) {
+    if (n.isJackField || claimed.contains(n.id)) continue;
+    // A box THIS PASS placed belongs to the key that placed it, whatever it
+    // has since been renamed to. Taking one here would let the HDMI plate
+    // steal the USB-C plate's box and tie it to the wrong switcher input.
+    if (n.id.startsWith(kAvAutoNodeIdPrefix)) continue;
+    final what = '${n.model} ${n.label}'.toLowerCase();
+    if (what.contains('laptop') || what.contains('byod')) return n;
+  }
+  return null;
+}
+
 /// The speakers already on the canvas: any box with a speaker-level INPUT.
 ///
 /// A speaker is the one destination in the rule book that cannot be recognized
@@ -2315,7 +2395,12 @@ AvNode? _existingSpeaker(AppStateProvider provider) {
 /// by itself: a second pass recognizes the box instead of drawing a second
 /// one, and a box somebody deleted on purpose is remembered as deleted (see
 /// [AppStateProvider.avDismissedDevices]).
-String avAutoNodeId(String configKey) => 'AVSOURCE_${configKey.toUpperCase()}';
+String avAutoNodeId(String configKey) => '$kAvAutoNodeIdPrefix'
+    '${configKey.toUpperCase()}';
+
+/// What every id [avAutoNodeId] builds starts with, so a box this pass put on
+/// the canvas can be told from one a person dragged there.
+const String kAvAutoNodeIdPrefix = 'AVSOURCE_';
 
 /// The room's location for a zone, or [kNoLocationId] when it has none. A box
 /// drawn into a room that has recorded its locations should land in one;

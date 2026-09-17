@@ -549,13 +549,15 @@ Future<Uint8List> buildEstimatePdf(
         margin: const pw.EdgeInsets.only(top: 10),
         child: pw.Row(
           children: [
+            // WHICH ROOM THIS IS, not who made it. An estimate is read as
+            // loose pages next to three others, and the question asked of
+            // page 4 is which room it belongs to. Who prepared it is already
+            // on the first page, beside the date.
             pw.Expanded(
               child: pw.Text(
-                t(
-                  info.preparedBy.trim().isEmpty
-                      ? ''
-                      : 'Prepared by ${info.preparedBy.trim()}',
-                ),
+                t(info.roomName.trim().isEmpty
+                    ? ''
+                    : 'Estimate for ${info.roomName.trim()}'),
                 style: small,
               ),
             ),

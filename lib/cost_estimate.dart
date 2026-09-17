@@ -196,6 +196,22 @@ const Map<CostEquipmentSort, String> kCostEquipmentSortLabels = {
   CostEquipmentSort.manufacturer: 'Manufacturer',
 };
 
+/// The qualifications every estimate goes out with, put into [notes] when a
+/// new estimate room is made.
+///
+/// They are the terms of the number rather than a description of the room, so
+/// they are the same on every estimate and nobody should have to remember to
+/// type them. Editable afterwards like anything else in the box - this is a
+/// starting point, not a fixed footer - and only ever filled in when the notes
+/// are empty, so it never writes over what somebody wrote.
+const String kDefaultEstimateNotes =
+    'Equipment costs are preliminary estimates and may vary depending on '
+    'final product selection, availability, shipping costs, and applicable '
+    'taxes. The miscellaneous materials allowance is intended to cover '
+    'cables, surge protection, and other minor installation materials that '
+    'may be required. Any additional work or materials beyond the scope '
+    'described above may result in additional costs.';
+
 /// The room's estimate settings. Lives in `<config>_av_flow.json` beside the
 /// diagram it prices, because a negotiated price is a fact about this job,
 /// not about the model.

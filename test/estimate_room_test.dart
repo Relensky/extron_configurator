@@ -98,6 +98,25 @@ void main() {
       expect(RoomCostSettings().toJson().containsKey('scopeOfWork'), isFalse);
     });
 
+    // A new estimate goes out with the standard qualifications on it, so
+    // nobody has to remember to type them. See [kDefaultEstimateNotes].
+    test('a new estimate starts with the standard qualifications', () {
+      final p = room();
+      p.applyDefaultEstimateNotes();
+
+      expect(p.avCost.notes, kDefaultEstimateNotes);
+      expect(p.avCost.notes, contains('preliminary estimates'));
+      expect(p.avCost.notes, contains('miscellaneous materials allowance'));
+      expect(p.avCost.notes, contains('beyond the scope described above'));
+    });
+
+    test('notes somebody already wrote are left alone', () {
+      final p = room();
+      p.setAvCostNotes('Quoted at the November price.');
+      p.applyDefaultEstimateNotes();
+      expect(p.avCost.notes, 'Quoted at the November price.');
+    });
+
     test('edits can be undone', () {
       final p = room();
       p.setAvCostScopeOfWork('Replace');

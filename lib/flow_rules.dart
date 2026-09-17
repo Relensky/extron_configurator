@@ -131,6 +131,21 @@ const List<String> kFlowZones = ['lectern', 'rack', 'wall', 'ceiling'];
 /// of SYSTEM_SETUP.
 const String kFlowVgaPlateKey = 'input_usb (VGA room)';
 
+/// The source-box keys that stand for SOMEBODY'S OWN LAPTOP at a plate rather
+/// than a box the room buys: the HDMI plate, and the USB-C/VGA plate both ways
+/// round.
+///
+/// They are singled out because a laptop is the one source the config cannot
+/// vouch for. `input_hdmi` and `input_usb` carry a number in every room
+/// template whether or not anyone has designed the room's inputs yet, so in a
+/// room being priced they are a leftover from the template, not a statement
+/// that the room has a plate. See [kLaptopBoxDrawing] in av_flow_routing.dart.
+const Set<String> kFlowLaptopPlateKeys = {
+  'input_hdmi',
+  'input_usb',
+  kFlowVgaPlateKey,
+};
+
 RoomZone flowZoneFromName(String name) => switch (name.trim().toLowerCase()) {
       'rack' => RoomZone.rack,
       'wall' => RoomZone.wall,

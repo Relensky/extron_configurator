@@ -375,6 +375,73 @@ void main() {
     });
   });
 
+  // [FEATURE - APP UPDATES]: the release folder is editable in Settings, so
+  // a build can be tried from a test copy of the folder without a rebuild.
+  // The choice is remembered in a file beside the updater's work folder;
+  // every test here puts that file back the way it found it.
+  group('release folder', () {
+    setUp(() => writeSavedReleaseFolder(null));
+    tearDown(() => writeSavedReleaseFolder(null));
+
+    FolderUpdater updater({String? folder}) => FolderUpdater(
+          appName: 'Test App',
+          releasePrefix: 'test_app',
+          releaseFolder: folder ?? '${tmp.path}\built_in',
+        );
+
+    test('defaults to the folder the app was built with', () {
+      final u = updater();
+      expect(u.releaseFolder, '${tmp.path}\built_in');
+      expect(u.releaseFolderIsCustom, isFalse);
+      expect(readSavedReleaseFolder(), isNull);
+      u.dispose();
+    });
+
+    test('a folder set in Settings is used and remembered', () async {
+      final u = updater()..releaseFolder = tmp.path;
+      expect(u.releaseFolder, tmp.path);
+      expect(u.releaseFolderIsCustom, isTrue);
+      expect(readSavedReleaseFolder(), tmp.path,
+          reason: 'saved for the next launch');
+      await u.checkNow();
+      u.dispose();
+
+      // A fresh updater - the next launch - starts on the saved folder.
+      final next = updater();
+      expect(next.releaseFolder, tmp.path);
+      expect(next.builtInReleaseFolder, '${tmp.path}\built_in');
+      next.dispose();
+    });
+
+    test('blank leaves the folder alone', () {
+      final u = updater()..releaseFolder = '   ';
+      expect(u.releaseFolder, '${tmp.path}\built_in');
+      expect(readSavedReleaseFolder(), isNull);
+      u.dispose();
+    });
+
+    test('Use default forgets the folder that was set', () async {
+      final u = updater()..releaseFolder = tmp.path;
+      expect(readSavedReleaseFolder(), isNotNull);
+
+      u.resetReleaseFolder();
+      expect(u.releaseFolder, '${tmp.path}\built_in');
+      expect(u.releaseFolderIsCustom, isFalse);
+      expect(readSavedReleaseFolder(), isNull);
+      await u.checkNow();
+      u.dispose();
+    });
+
+    test('reachable says whether the folder can be seen from here', () {
+      final u = updater(folder: tmp.path);
+      expect(u.releaseFolderReachable, isTrue);
+      u.releaseFolder = '${tmp.path}\nope';
+      expect(u.releaseFolderReachable, isFalse,
+          reason: 'the hint under the field reports this');
+      u.dispose();
+    });
+  });
+
   group('timed checks', () {
     // The folder is missing, so a check ends quickly as folderUnavailable.
     FolderUpdater updater({required Duration first, required Duration every}) =>

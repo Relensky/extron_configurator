@@ -153,6 +153,51 @@ void main() {
       expect(p.avNodeById(avAutoNodeId('input_pc')), isNotNull);
     });
 
+    // [LAPTOP PLATES]: input_hdmi and input_usb carry a number in every room
+    // template, so in a room being priced they say nothing about whether the
+    // room has a plate. See [kLaptopBoxDrawing].
+    test('never draws the laptop plates, even when Recreate is pressed', () {
+      final p = room()..setRoomMode(RoomMode.estimate);
+      autoDrawRoutingFromConfig(p, evenForEstimate: true);
+
+      expect(p.avNodeById(avAutoNodeId('input_hdmi')), isNull,
+          reason: "the laptop at the HDMI plate is not the estimate's to buy");
+      expect(p.avNodeById(avAutoNodeId('input_usb')), isNull);
+      expect(p.avNodeById(avAutoNodeId('input_pc')), isNotNull,
+          reason: 'the room PC is still drawn - it is equipment the room buys');
+    });
+
+    test('a laptop added by hand is not drawn a second time on conversion', () {
+      final p = room()..setRoomMode(RoomMode.estimate);
+
+      // What pricing a room actually looks like: the laptop position comes
+      // out of the catalog under whatever name the person picked, not under
+      // the rule book's 'HDMI Laptop'.
+      final template = p.avDeviceLibrary
+          .resolve(configKey: 'AVNODE_1', model: 'Laptop / BYOD input');
+      p.addAvNode(AvNode(
+        id: 'AVNODE_1',
+        label: 'Laptop / BYOD input',
+        model: 'Laptop / BYOD input',
+        pos: const Offset(10, 10),
+        ports: withPowerInlet(template.ports, template.powerInput),
+      ));
+
+      p.setRoomMode(RoomMode.full);
+      autoDrawRoutingFromConfig(p);
+
+      final laptops = p.avNodes
+          .where((n) => '${n.model} ${n.label}'.toLowerCase().contains('laptop'))
+          .toList();
+      expect(laptops.length, 1,
+          reason: "the laptop already drawn is the room's laptop: "
+              '${laptops.map((n) => n.label).join(', ')}');
+      expect(laptops.single.id, 'AVNODE_1');
+      expect(p.avNodeById(avAutoNodeId('input_hdmi')), isNull);
+      expect(landsOn(p, 'AVNODE_1'), isNotNull,
+          reason: 'and input_hdmi ties it to the switcher');
+    });
+
     test('starts without the template devices', () {
       final p = room();
       final setup = p.roomConfig['SYSTEM_SETUP'] as Map;

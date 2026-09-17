@@ -33,6 +33,56 @@ String? releaseFolderOverride() {
   return (v == null || v.trim().isEmpty) ? null : v.trim();
 }
 
+/// Where the folder the user picked in Settings is remembered.
+///
+/// It lives beside the updater's own working files rather than in the app's
+/// config, so the same lib/updater/ folder gives every CTS app this setting
+/// with no wiring. One file per exe, so the apps do not share a choice.
+File get _releaseFolderFile =>
+    File('${_workDir.path}\\release_folder.txt');
+
+/// The folder saved from Settings, or null when the app has never been
+/// pointed anywhere but its built-in default.
+String? readSavedReleaseFolder() {
+  try {
+    final f = _releaseFolderFile;
+    if (!f.existsSync()) return null;
+    final v = f.readAsStringSync().trim();
+    return v.isEmpty ? null : v;
+  } catch (_) {
+    // An unreadable preference is not worth failing the app over; the
+    // built-in default still works.
+    return null;
+  }
+}
+
+/// Remembers [folder] for the next launch, or forgets it when [folder] is
+/// null or blank, which puts the app back on its built-in default.
+void writeSavedReleaseFolder(String? folder) {
+  try {
+    final f = _releaseFolderFile;
+    final v = folder?.trim() ?? '';
+    if (v.isEmpty) {
+      if (f.existsSync()) f.deleteSync();
+      return;
+    }
+    f.parent.createSync(recursive: true);
+    f.writeAsStringSync(v);
+  } catch (_) {
+    // Saving is best-effort: the folder still applies to this session.
+  }
+}
+
+/// Whether [path] is a folder this computer can see right now. A UNC path
+/// off the VPN answers false, which is what the Settings hint reports.
+bool folderExists(String path) {
+  try {
+    return path.trim().isNotEmpty && Directory(path.trim()).existsSync();
+  } catch (_) {
+    return false;
+  }
+}
+
 /// The running exe's version resource.
 Future<AppBuildVersion?> readRunningVersion() async {
   final bytes = await File(Platform.resolvedExecutable).readAsBytes();

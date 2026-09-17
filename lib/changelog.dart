@@ -2,9 +2,14 @@
 ///
 /// [kAppVersion] must match `version:` in pubspec.yaml - the updater compares
 /// releases by that number, and changelog_test.dart holds the two together.
+///
+/// VERSIONS BEFORE 0.2.0 WERE NUMBERED AFTERWARDS, from the git history: every
+/// one of those builds still carried pubspec.yaml's original `0.1.0`, so the
+/// 0.1.x numbers below name a run of work rather than a build anybody
+/// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.2.0+2';
+const String kAppVersion = '0.3.0+3';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -25,9 +30,38 @@ class ChangelogEntry {
   });
 }
 
-/// Newest first. Builds before 0.2.0 all carried 0.1.0, so their entries are
-/// grouped by date.
+/// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.3.0',
+    date: 'September 17, 2026',
+    title: 'Estimate notes, the release folder and the laptop plates',
+    changes: [
+      'A new estimate starts with the standard qualifications in Estimate '
+          'Notes: that equipment costs are preliminary and may vary with final '
+          'product selection, availability, shipping and tax; what the '
+          'miscellaneous materials allowance covers; and that work beyond the '
+          'scope described may cost more. Edit or delete them like any other '
+          'text - they are only ever put in when the box is empty.',
+      'Every page of the estimate PDF is now footed with "Estimate for" and '
+          'the building and room number, so a page read on its own says which '
+          'room it belongs to. Who prepared it is still printed on the first '
+          'page beside the date.',
+      'An estimate-only room no longer draws the laptop plates on the AV '
+          'flow. Every room template carries a number in input_hdmi and '
+          'input_usb whether or not the room has been designed yet, so in a '
+          'room being priced those numbers said nothing.',
+      'Converting an estimate to a programmed room no longer draws a second '
+          'laptop beside one already on the AV flow. A laptop added by hand '
+          'out of the catalog is recognized as the room\'s laptop whatever it '
+          'was named.',
+      'The release folder the app watches for updates can be set in App '
+          'Config - App Updates: type or paste a path, or press Browse, then '
+          'Save. The line under the box says whether the folder can be seen '
+          'from this computer, the choice is remembered and survives an '
+          'update, and Use default folder puts it back.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.2.0',
     date: 'September 17, 2026',
@@ -58,7 +92,7 @@ const List<ChangelogEntry> kChangelog = [
     ],
   ),
   ChangelogEntry(
-    version: '0.1.0',
+    version: '0.1.10',
     date: 'September 8 - 17, 2026',
     title: 'Updates, timers and the responsibility matrix',
     changes: [
@@ -69,10 +103,11 @@ const List<ChangelogEntry> kChangelog = [
       'AV flow rules fixed for USB devices and speakers.',
       'Fixed a tab that could hang.',
       'Responsibility matrix drop-downs, zeroing out and numbering.',
+      'The Epson BrightLink driver is counted in the module tally.',
     ],
   ),
   ChangelogEntry(
-    version: '0.1.0',
+    version: '0.1.9',
     date: 'September 1 - 7, 2026',
     title: 'Module editor, lifecycle charts and deliveries',
     changes: [
@@ -84,14 +119,16 @@ const List<ChangelogEntry> kChangelog = [
       'The in-app help book, rewritten in plain language.',
       'Manual editing of surveyed rooms, and a manual room equipment dialog.',
       'Campus information added to the refresh plan files.',
-      'Bulk deliveries, saved delivery locations and a default vendor list.',
+      'Bulk deliveries, saved delivery locations and a default vendor list. '
+          'The equipment page shows what has been delivered, and a project '
+          'can list where its deliveries go.',
       'Quote requests can go to several vendors at once.',
       'Speaker output routing fixed; timeline overlap fixed.',
       'Screenshot tool works at any window size.',
     ],
   ),
   ChangelogEntry(
-    version: '0.1.0',
+    version: '0.1.8',
     date: 'August 25 - 31, 2026',
     title: 'Undo, purchase orders and campuses',
     changes: [
@@ -100,60 +137,145 @@ const List<ChangelogEntry> kChangelog = [
       'Read Excel files, and a sync folder for Excel and Google Sheets.',
       'Campus view, manual edit mode for campus projects, and a base list of '
           'rooms.',
-      'Rooms can be added to the cost projection by hand, and converted to '
-          'real rooms.',
+      'Rooms can be added to the cost projection by hand and converted to '
+          'real rooms, and to the timeline before they exist.',
       'Screenshot annotation, zoom on image previews, and fit to screen.',
       'Lifecycle target, sorting, export and price editing by double-click.',
       'Cable colors, color picking for responsible parties, and contrast '
           'fixes.',
       'New start screen layout.',
       'Beginner guide, and a PDF version of the guide.',
+      'Laptops can be flagged as never controlled.',
+      'Chapters in exported PDFs, and error handling through the app.',
     ],
   ),
   ChangelogEntry(
-    version: '0.1.0',
-    date: 'August 17 - 24, 2026',
-    title: 'Projects and room types',
+    version: '0.1.7',
+    date: 'August 21 - 24, 2026',
+    title: 'Projects, room types and the lifecycle rail',
     changes: [
       'Projects: rooms on a job, deadlines, pricing, to-dos, plans and a '
           'project workbook.',
       'Lifecycle rail and spares.',
       'Room types that stamp in a room\'s usual equipment, locations and '
           'cabling.',
-      'Automatic routing and connection lines on the AV flow, with '
-          'animation.',
-      'Editors for the UI schema and the signal flow rules.',
-      'Snap to grid and grid lines on the drawings.',
-      'Room history, manufacturer search and replacing rack parts.',
-      'New app icon, banner and navigation rail.',
+      'Animation on the signal flow.',
+      'Room history and sign-in data.',
+      'Manufacturer search, "never in config", and replacing rack parts.',
+      'New app icon, banner and navigation rail, and a new project and room '
+          'setup screen.',
+      'Opening a project folder can pick a file inside it.',
     ],
   ),
   ChangelogEntry(
-    version: '0.1.0',
+    version: '0.1.6',
+    date: 'August 17 - 20, 2026',
+    title: 'Presets, automatic routing and the schema editors',
+    changes: [
+      'Room presets, with defaults for modules and devices.',
+      'Automatic routing and connection lines on the AV flow, drawn so '
+          'overlapping runs separate rather than sitting on each other.',
+      'Snap to grid, grid lines that do not export, and a blank background '
+          'page for drawing floor plans on.',
+      'Editors for the UI schema and the signal flow rules.',
+      'Clear buttons for the schematic and the AV flow.',
+      'The schematic view works with AV LAN and IDF drop-downs.',
+      'USB in the AV flow, with the DMP, AV Bridge and document camera '
+          'defaulting to the PC.',
+      'Device merging by item type, with the model renamed to match and a '
+          'banner when a device is swapped.',
+      'Presenter mode and the annex in the schema, a relay port, and cable '
+          'length spares.',
+      'Updated config builder guide.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.1.5',
     date: 'August 8 - 13, 2026',
     title: 'Pricing, floor plans and racks',
     changes: [
       'Cost estimates with catalog pricing, MSRP and labor rates.',
       'Devices can be left off the cost estimate.',
+      'A retired list, and catalog items taken from the diagrams.',
       'Floor plans and cabling, with movable labels and bendable lines.',
       'Rack builder and rack editor.',
-      'AV signal flow drawings with curved lines, a legend and a report.',
+      'AV signal flow drawings with curved lines, a color picker, a legend '
+          'and a report.',
       'Undo for the drawings.',
+      'Correct keys per device type in the configurator.',
+      'Module stubs kept identical, and module settings and defaults.',
     ],
   ),
   ChangelogEntry(
-    version: '0.1.0',
-    date: 'July 7 - August 3, 2026',
+    version: '0.1.4',
+    date: 'August 1 - 3, 2026',
+    title: 'Saving, undo and edits as you type',
+    changes: [
+      'A Save button, and undo from the backup file.',
+      'Edits apply as you type and are written to the file when Save is '
+          'pressed.',
+      'Per-device mute in the schema.',
+      'New room configs include the environment block, and system keys are '
+          'pruned or restored when device counts change.',
+      'Export writes the JSON as well.',
+      'Colors cleared for edited text on headers, and the config dictionary '
+          'updated.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.1.3',
+    date: 'July 23 - 31, 2026',
+    title: 'Reporting, reboot commands and the encrypted password',
+    changes: [
+      'The processor password is encrypted, and autofill changed to match.',
+      'Reboot commands, and an environment setting for the processor type.',
+      'Changes to the report and to how items are written to the config.',
+      'SFTP searching is space-agnostic, and the snackbar on open was fixed.',
+      'Fixed a timer after a successful upload that could break the app, and '
+          'a bug with new timers and an existing environment.',
+      'Schema changes for VGA and for new config items; the group is left '
+          'off scalers and switchers.',
+      'A Python file that checks the documentation against the module files.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.1.2',
+    date: 'July 14 - 17, 2026',
+    title: 'Module documents, device info and the schematic',
+    changes: [
+      'Control schematic view and an exported report, with more schematic '
+          'options and the button moved.',
+      'Module documentation with a built-in PDF viewer and annotations.',
+      'More model detail on the device info fields, and modules and '
+          'documents assigned to the configurator builder.',
+      'Excel export by column, with GUI fields tied to the touch panel - '
+          'removing one removes the panel entry.',
+      'A Deny button on the startup prompt, and a toggle for deleting '
+          'without being asked.',
+      'New app icon, and changes to how the schematic lines are drawn.',
+      'Fixed the screenshot tool and a drop-down that did not load.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.1.1',
+    date: 'July 7 - 13, 2026',
     title: 'Schema-driven configs',
     changes: [
       'The whole app is driven by the UI schema, with key mapping for older '
-          'configs.',
-      'Control schematic and exported report.',
-      'Module documentation with a built-in PDF viewer and annotations.',
-      'Auris theme, secondary color and text size.',
-      'Encrypted processor password and SFTP fixes.',
-      'Save button, undo from backup, and edits applied as you type.',
-      'Reboot commands, environment settings and per-device mute.',
+          'configs, so devices and settings are set from the JSON rather than '
+          'from anything hard-coded.',
+      'The backup is named from the room in the file, and is written after '
+          'key mapping so the name matches what the file actually contains.',
+      'Model naming and key matching reworked, with more red flags for '
+          'possible typos and a count of unneeded legacy keys.',
+      'Auris theme, a secondary color, a color picker and a text size '
+          'option.',
+      'File settings moved into app data, with search, a New file button and '
+          'a changed save location.',
+      'Connection settings on the menu, and a toggle to set files to their '
+          'default values.',
+      'Fixed autosave, the building name, and the file paths for modules and '
+          'buildings.',
     ],
   ),
   ChangelogEntry(
@@ -164,6 +286,7 @@ const List<ChangelogEntry> kChangelog = [
       'Edit a room config with a picker for every field.',
       'Download and upload configs over SFTP.',
       'System settings, light mode and saving.',
+      'Module function names and the parser.',
     ],
   ),
 ];

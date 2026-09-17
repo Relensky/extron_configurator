@@ -3123,7 +3123,12 @@ class AppSettingsView extends StatelessWidget {
         // app_updates.dart; nothing installs until the user presses Update.
         Text('App Updates', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 4),
-        UpdateSettingsSection(updater: appUpdater),
+        UpdateSettingsSection(
+          updater: appUpdater,
+          pickFolder: () => FilePicker.getDirectoryPath(
+            dialogTitle: 'Select the release folder',
+          ),
+        ),
         const SizedBox(height: 20),
 
         // --- AUTOSAVE ---

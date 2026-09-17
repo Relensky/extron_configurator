@@ -7,9 +7,11 @@
 // Quizzer). Fix it in one and copy the folder to the others.
 //
 // How a release is found:
-//   * The folder (default [FolderUpdater.defaultReleaseFolder]) is listed for
-//     zips whose name starts with the app's release prefix, e.g.
-//     `cts_dashboard_9_11_2026.zip` for the prefix `cts_dashboard`.
+//   * The folder is listed for zips whose name starts with the app's release
+//     prefix, e.g. `cts_dashboard_9_11_2026.zip` for the prefix
+//     `cts_dashboard`. It is [FolderUpdater.defaultReleaseFolder] unless
+//     Settings -> App Updates -> Release folder points somewhere else, which
+//     is remembered per app and survives an update.
 //   * The zip must hold this app's exe - at its root or inside one top-level
 //     folder. The VERSION STAMPED INTO THAT EXE is the release's version (it
 //     is pubspec.yaml's `version:`, which Flutter writes into the exe), so the
@@ -156,7 +158,8 @@ class FolderUpdater extends ChangeNotifier {
       r'\\doit-files\ATEC\CTS\StaffFiles\Program_Releases';
 
   /// Set this environment variable to watch a different folder - for trying
-  /// a release out before it is copied to the share.
+  /// a release out before it is copied to the share. It wins over the folder
+  /// chosen in Settings, which is why that field locks while it is set.
   static const String folderEnvironmentVariable = 'CTS_UPDATE_FOLDER';
 
   /// The name people know the app by, for the notice text.
@@ -191,15 +194,58 @@ class FolderUpdater extends ChangeNotifier {
     this.beforeExit,
     this.relaunchArguments = const [],
     this.log,
-  }) : _releaseFolder = platform.releaseFolderOverride() ?? releaseFolder;
+  })  : _builtInReleaseFolder = releaseFolder,
+        _releaseFolder = platform.releaseFolderOverride() ??
+            platform.readSavedReleaseFolder() ??
+            releaseFolder;
+
+  /// The folder this app was built to watch, before anything the user chose
+  /// in Settings. [resetReleaseFolder] goes back to it.
+  final String _builtInReleaseFolder;
+  String get builtInReleaseFolder => _builtInReleaseFolder;
 
   String _releaseFolder;
+
+  /// The folder being watched: the [folderEnvironmentVariable] if it is set,
+  /// otherwise the one chosen in Settings, otherwise the built-in default.
   String get releaseFolder => _releaseFolder;
+
+  /// Points the app at another folder and remembers it for the next launch.
+  /// Blank, or the folder already in use, does nothing. A new folder is
+  /// checked straight away, so Settings shows what is there without waiting
+  /// for the next half-hourly check.
   set releaseFolder(String value) {
     final v = value.trim();
     if (v.isEmpty || v == _releaseFolder) return;
     _releaseFolder = v;
+    platform.writeSavedReleaseFolder(v);
     _available = null;
+    _dismissedVersion = null;
+    notifyListeners();
+    unawaited(checkNow());
+  }
+
+  /// True when [folderEnvironmentVariable] is set. It wins over Settings, so
+  /// the Settings field is shown but not editable while it is.
+  bool get releaseFolderIsLocked => platform.releaseFolderOverride() != null;
+
+  /// True when the app chose this folder rather than being built with it.
+  bool get releaseFolderIsCustom => _releaseFolder != _builtInReleaseFolder;
+
+  /// Whether the folder can be seen from this computer right now. False off
+  /// the VPN, or when the path is wrong.
+  bool get releaseFolderReachable => platform.folderExists(_releaseFolder);
+
+  /// Forgets the folder chosen in Settings and goes back to the built-in one.
+  void resetReleaseFolder() {
+    platform.writeSavedReleaseFolder(null);
+    if (releaseFolderIsLocked || _releaseFolder == _builtInReleaseFolder) {
+      notifyListeners();
+      return;
+    }
+    _releaseFolder = _builtInReleaseFolder;
+    _available = null;
+    _dismissedVersion = null;
     notifyListeners();
     unawaited(checkNow());
   }

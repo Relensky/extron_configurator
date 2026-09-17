@@ -4750,6 +4750,15 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Puts the standard qualifications into the Estimate Notes of a new
+  /// estimate. Does nothing when the box already says something, so
+  /// converting or reopening a room never writes over what was typed there.
+  void applyDefaultEstimateNotes() {
+    if (avCost.notes.trim().isNotEmpty) return;
+    avCost.notes = kDefaultEstimateNotes;
+    notifyListeners();
+  }
+
   void setAvCostNotes(String text) {
     if (avCost.notes == text) return;
     _pushAvUndo('Estimate notes', _costScope, coalesce: 'cost:notes');

@@ -751,7 +751,14 @@ const List<HelpTopic> kHelpTopics = [
         'the scope of work near the top, the notes after the totals. A box '
         'left empty is left off the PDF and the screenshot.\n\n'
         'Typing in either one is a single undo step per run of keystrokes, '
-        'like the other boxes on the Cost tab.',
+        'like the other boxes on the Cost tab.\n\n'
+        'A NEW ESTIMATE STARTS WITH THE STANDARD QUALIFICATIONS in the notes - '
+        'that equipment costs are preliminary and may vary with final product '
+        'selection, availability, shipping and tax; what the miscellaneous '
+        'materials allowance covers; and that work beyond the scope described '
+        'may cost more. Edit or delete them like any other text. They are put '
+        'in only when the box is empty, so they never write over notes '
+        'somebody typed.',
   ),
   HelpTopic(
     title: 'The estimate PDF',
@@ -772,7 +779,11 @@ const List<HelpTopic> kHelpTopics = [
         'showing an amount, and a line with no price yet shows TBD. Where the '
         'prices came from is not printed - that is working information, not '
         'part of the quote.\n\n'
-        'If the room is on the open project, the project name is printed too.',
+        'If the room is on the open project, the project name is printed too.\n\n'
+        'Every page is footed with "Estimate for" and the room - the building '
+        'and room number - so a page read on its own says which room it '
+        'belongs to. Who prepared it is printed on the first page, beside the '
+        'date.',
   ),
   HelpTopic(
     title: 'Adding equipment from the catalog',
@@ -2133,6 +2144,8 @@ const List<HelpTopic> kHelpTopics = [
       'install',
       'release',
       'program_releases',
+      'release folder',
+      'folder',
     ],
     body:
         'The app looks in the Program_Releases folder on the CTS file share when '
@@ -2147,6 +2160,12 @@ const List<HelpTopic> kHelpTopics = [
         'config.json, the catalog, pricing and every other file beside the app '
         'are left as they are; a file the release adds that this copy does not '
         'have yet is copied in. If anything fails part-way, the old version is '
-        'put back and the next start says why.',
+        'put back and the next start says why.\n\n'
+        'App Config -> App Updates also sets WHICH folder is watched. Type or '
+        'paste a path, or press Browse, then Save - for trying a build out of '
+        'a test folder before it goes on the share. The line under the box '
+        'says whether the folder can be seen from this computer, the choice is '
+        'remembered and survives an update, and Use default folder puts it '
+        'back.',
   ),
 ];

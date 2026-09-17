@@ -9,7 +9,8 @@
 //   * [UserActivityWatcher] marks the updater busy while someone is typing or
 //     clicking, so neither the checks nor the card land in the middle of it.
 //   * [UpdateSettingsSection] goes in a settings screen: the running version,
-//     the folder being watched, the last check, and Check now / Update.
+//     the folder being watched - which can be changed there and is remembered
+//     - the last check, and Check now / Update.
 //
 // The card sits above the Navigator, so it uses no dialogs, tooltips or
 // routes - only what MaterialApp.builder's context already provides.
@@ -230,9 +231,76 @@ class _UpdateCardState extends State<_UpdateCard> {
 }
 
 /// Version, release folder, last check and the Check now / Update buttons.
-class UpdateSettingsSection extends StatelessWidget {
+///
+/// The release folder is editable here. Someone testing a build before it
+/// goes on the share, or working from a copy of the folder, points the app at
+/// it without a rebuild, and the choice is remembered for the next launch.
+class UpdateSettingsSection extends StatefulWidget {
   final FolderUpdater updater;
-  const UpdateSettingsSection({super.key, required this.updater});
+
+  /// Opens the app's own folder picker for the Browse button. Apps without a
+  /// picker leave it off and the path is typed or pasted instead.
+  final Future<String?> Function()? pickFolder;
+
+  const UpdateSettingsSection({
+    super.key,
+    required this.updater,
+    this.pickFolder,
+  });
+
+  @override
+  State<UpdateSettingsSection> createState() => _UpdateSettingsSectionState();
+}
+
+class _UpdateSettingsSectionState extends State<UpdateSettingsSection> {
+  late final TextEditingController _folder =
+      TextEditingController(text: widget.updater.releaseFolder);
+  late final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.updater.addListener(_syncFromUpdater);
+  }
+
+  @override
+  void dispose() {
+    widget.updater.removeListener(_syncFromUpdater);
+    _folder.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  /// Keeps the field on the folder actually in use - after Use Default, or
+  /// after another part of the app changed it - without stealing what someone
+  /// is part way through typing.
+  void _syncFromUpdater() {
+    final current = widget.updater.releaseFolder;
+    if (_focus.hasFocus || _folder.text == current) return;
+    _folder.text = current;
+  }
+
+  /// True when the field says something other than the folder in use, so Save
+  /// is worth pressing.
+  bool get _edited => _folder.text.trim() != widget.updater.releaseFolder;
+
+  void _save() {
+    final v = _folder.text.trim();
+    if (v.isEmpty) {
+      _folder.text = widget.updater.releaseFolder;
+      return;
+    }
+    _focus.unfocus();
+    widget.updater.releaseFolder = v;
+    setState(() {});
+  }
+
+  Future<void> _browse() async {
+    final picked = await widget.pickFolder?.call();
+    if (picked == null || picked.trim().isEmpty || !mounted) return;
+    _folder.text = picked.trim();
+    _save();
+  }
 
   static String _time(DateTime t) {
     final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
@@ -242,11 +310,13 @@ class UpdateSettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final updater = widget.updater;
     return ListenableBuilder(
       listenable: updater,
       builder: (context, _) {
         final u = updater;
         final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
         if (!u.isSupported) {
           return const ListTile(
             leading: Icon(Icons.system_update_alt),
@@ -278,12 +348,80 @@ class UpdateSettingsSection extends StatelessWidget {
                   'Version ${u.currentVersion?.toString() ?? 'unknown'}'),
               subtitle: Text(status),
             ),
-            ListTile(
-              dense: true,
-              title: const Text('Release folder'),
-              subtitle: SelectableText(u.releaseFolder,
-                  style: theme.textTheme.bodySmall),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Release folder',
+                      style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 2),
+                  Text(
+                    u.releaseFolderIsLocked
+                        ? 'Set by the ${FolderUpdater.folderEnvironmentVariable} '
+                            'environment variable, which wins over this setting.'
+                        : 'Where this app looks for a newer release. Leave it '
+                            'on the default unless you have been told '
+                            'otherwise.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _folder,
+                          focusNode: _focus,
+                          enabled: !u.releaseFolderIsLocked,
+                          style: theme.textTheme.bodySmall,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            border: const OutlineInputBorder(),
+                            hintText: FolderUpdater.defaultReleaseFolder,
+                            helperText: u.releaseFolderReachable
+                                ? (u.releaseFolderIsCustom
+                                    ? 'Found. Not the default folder.'
+                                    : 'Found.')
+                                : "Can't see this folder from this computer "
+                                    'right now - check the path, or that you '
+                                    'are on the network.',
+                            helperMaxLines: 3,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                          onSubmitted: (_) => _save(),
+                        ),
+                      ),
+                      if (widget.pickFolder != null) ...[
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: u.releaseFolderIsLocked
+                              ? null
+                              : () => unawaited(_browse()),
+                          child: const Text('Browse…'),
+                        ),
+                      ],
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed:
+                            u.releaseFolderIsLocked || !_edited ? null : _save,
+                        child: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                  if (!u.releaseFolderIsLocked && u.releaseFolderIsCustom)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: u.resetReleaseFolder,
+                        child: const Text('Use default folder'),
+                      ),
+                    ),
+                ],
+              ),
             ),
+            const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Wrap(

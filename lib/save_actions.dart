@@ -485,7 +485,12 @@ Future<bool> createRoomFromChoice(
   // mode lives in it.
   provider.setRoomMode(choice.mode);
   // An estimate holds only what gets picked, not the template's devices.
-  if (choice.mode == RoomMode.estimate) provider.clearTemplateDevices();
+  if (choice.mode == RoomMode.estimate) {
+    provider.clearTemplateDevices();
+    // ...and it goes out with the standard qualifications on it, which
+    // nobody should have to remember to type. See [kDefaultEstimateNotes].
+    provider.applyDefaultEstimateNotes();
+  }
 
   // The room type goes in before anything else, so what it draws lands on a
   // canvas that already has the room's usual gear rather than colliding with

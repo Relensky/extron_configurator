@@ -9,6 +9,12 @@ bool get updatesSupported => false;
 
 String? releaseFolderOverride() => null;
 
+String? readSavedReleaseFolder() => null;
+
+void writeSavedReleaseFolder(String? folder) {}
+
+bool folderExists(String path) => false;
+
 Future<AppBuildVersion?> readRunningVersion() async => null;
 
 Future<AvailableUpdate?> findNewestRelease({

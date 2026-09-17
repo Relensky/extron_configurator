@@ -131,6 +131,31 @@ void main() {
     expect(latin1.decode(bytes), isNot(contains(RegExp(r'/Subtype\s*/Image'))));
   });
 
+  // The footer names the ROOM, not the preparer: an estimate is read as loose
+  // pages beside three others, and page 4 has to say which room it belongs to.
+  test('the footer says which room the estimate is for', () async {
+    final bytes = await buildEstimatePdf(
+      estimate(),
+      info(logoBytes: logo),
+      compress: false,
+    );
+    final text = words(bytes);
+    expect(text, contains('Estimate for Bessey Hall 103'));
+    expect(text, isNot(contains('Prepared by Pat Estimator')),
+        reason: 'who prepared it is on the first page, beside the date');
+    expect(text, contains('Pat Estimator'),
+        reason: 'and it is still printed there');
+  });
+
+  test('a room with no name leaves the footer blank', () async {
+    final bytes = await buildEstimatePdf(
+      estimate(),
+      EstimatePdfInfo(date: DateTime(2026, 1, 2)),
+      compress: false,
+    );
+    expect(words(bytes), isNot(contains('Estimate for')));
+  });
+
   test('a file that is not an image is skipped rather than failing', () async {
     final bytes = await buildEstimatePdf(
       estimate(),
