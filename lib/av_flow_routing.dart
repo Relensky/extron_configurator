@@ -2362,7 +2362,14 @@ const RoutingResult _noRouting =
 /// What it does NOT do is report. A number that resolves onto no connector is
 /// counted and dropped here; **Draw the routing from config** is still the way
 /// to see WHY, one line per tie with the key and the value behind it.
-RoutingResult autoDrawRoutingFromConfig(AppStateProvider provider) {
+///
+/// Skipped in an estimate-only room, where every item is picked by hand,
+/// unless [evenForEstimate] - the Recreate button, which somebody pressed.
+RoutingResult autoDrawRoutingFromConfig(
+  AppStateProvider provider, {
+  bool evenForEstimate = false,
+}) {
+  if (provider.isEstimateRoom && !evenForEstimate) return _noRouting;
   // ONCE PER CHANGE TO THE CONFIG, not once per visit. The drawing is a
   // document: after the conversion has put the room on the canvas, opening
   // the tab again should show it exactly as it was left. Re-running the pass

@@ -263,6 +263,80 @@ void main() {
     expect(p.avCost.extraEquipment, isEmpty);
   });
 
+  group('choosing where a quoted device goes', () {
+    Future<AppStateProvider> addDmp(
+      WidgetTester tester, {
+      bool estimate = false,
+      String? pick,
+    }) async {
+      tester.view.physicalSize = const Size(1600, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      late AppStateProvider p;
+      await tester.runAsync(() async {
+        p = await emptyRoom();
+      });
+      p.loadAvFlowForCurrentConfig();
+      if (estimate) p.setRoomMode(RoomMode.estimate);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(home: Scaffold(body: CostEstimateView())),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add from catalog').first);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search the device catalog'),
+        'dmp64plusc',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('DMP 64 Plus C').first);
+      await tester.pumpAndSettle();
+      if (pick != null) {
+        await tester.tap(find.byKey(ValueKey('placement_$pick')));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      return p;
+    }
+
+    testWidgets('AV flow only draws it without a config block', (
+      tester,
+    ) async {
+      final p = await addDmp(tester, pick: 'flowOnly');
+      expect(p.roomConfig['DSPDEVICE_1'], isNull);
+      expect(p.roomConfig['SYSTEM_SETUP']['dev_dsps'], '0');
+      final drawn = p.avNodes.where((n) => n.model == 'DMP 64 Plus C');
+      expect(drawn, hasLength(1));
+      expect(drawn.single.excludeFromControl, isTrue);
+      expect(p.avCost.extraEquipment, isEmpty);
+    });
+
+    testWidgets('estimate only leaves a quoted line', (tester) async {
+      final p = await addDmp(tester, pick: 'estimateOnly');
+      expect(p.roomConfig['DSPDEVICE_1'], isNull);
+      expect(p.avNodes.where((n) => n.model == 'DMP 64 Plus C'), isEmpty);
+      expect(p.avCost.extraEquipment, hasLength(1));
+    });
+
+    testWidgets('an estimate room draws it and waits for conversion', (
+      tester,
+    ) async {
+      final p = await addDmp(tester, estimate: true);
+      expect(p.roomConfig['DSPDEVICE_1'], isNull);
+      final drawn = p.avNodes.where((n) => n.model == 'DMP 64 Plus C');
+      expect(drawn, hasLength(1));
+      // Still a candidate for a block once the room is programmed.
+      expect(drawn.single.excludeFromControl, isFalse);
+    });
+  });
+
   /// The wizard a room is started from.
   ///
   /// This is where the parts list for a new room is picked, twenty at a time,

@@ -35,7 +35,8 @@ void main() {
 
     await tester.pumpWidget(
       ChangeNotifierProvider<AppStateProvider>.value(
-        value: provider,
+        // The schematic only draws once the room has a processor.
+        value: provider..selectedProcessor ??= {'roomName': 'Test room'},
         child: const MaterialApp(home: Scaffold(body: SchematicView())),
       ),
     );

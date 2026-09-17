@@ -394,6 +394,10 @@ const List<HelpTopic> kHelpTopics = [
         'room on the Cost tab. The hidden tabs come back and the Wizard '
         'opens. If the drawing has devices with no control block yet, you '
         'can build them from the drawing in the same step.\n\n'
+        'An estimate starts empty. The template\'s devices are left out and '
+        'nothing is drawn automatically - no PC, document camera or receivers '
+        '- so every item is one you picked. Recreate from config on the AV '
+        'flow still draws from the config if you ask it to.\n\n'
         'Rooms saved as "AV only" by earlier versions open as estimates.',
   ),
   HelpTopic(
@@ -634,7 +638,11 @@ const List<HelpTopic> kHelpTopics = [
         'from the config rather than laid out by hand, so a device added on '
         'the Devices tab appears here without anybody redrawing anything.\n\n'
         '"Recreate from config" rebuilds the whole picture from the room as it '
-        'stands now, which is what to reach for after a big edit.',
+        'stands now, which is what to reach for after a big edit.\n\n'
+        'The schematic is drawn around the processor, so it waits until the '
+        'room has one: a control processor drawn on the AV flow, one quoted on '
+        'the Cost tab, or a deployment processor chosen in App Config. Until '
+        'then the tab offers to add a processor from the catalog.',
   ),
   HelpTopic(
     title: 'AV signal flow',
@@ -765,6 +773,32 @@ const List<HelpTopic> kHelpTopics = [
         'prices came from is not printed - that is working information, not '
         'part of the quote.\n\n'
         'If the room is on the open project, the project name is printed too.',
+  ),
+  HelpTopic(
+    title: 'Adding equipment from the catalog',
+    section: 'The money',
+    where: 'Cost tab - Equipment - Add from catalog',
+    plain:
+        'Pick a product for the estimate and choose where it goes: onto the '
+        'drawing and the room setup, onto the drawing only, or just onto the '
+        'price.',
+    keywords: [
+      'add equipment',
+      'av flow only',
+      'not in config',
+      'estimate only',
+      'placement',
+    ],
+    body:
+        'AV flow and room config draws the device on the AV flow and, if it is '
+        'something the processor drives, adds its control block. In an '
+        'estimate-only room the block waits until the room is converted.\n\n'
+        'AV flow only draws the device and marks it as never part of the room '
+        'config - a network switch, an owner-furnished display, a passive '
+        'splitter. It is still cabled, racked and priced, and it is never '
+        'flagged as missing from the config.\n\n'
+        'Estimate only puts a priced line on the estimate without drawing it. '
+        'A product the processor cannot drive starts on this choice.',
   ),
   HelpTopic(
     title: 'Base costs - the category rate card',
@@ -1859,6 +1893,29 @@ const List<HelpTopic> kHelpTopics = [
   // ---------------------------------------------------------------------------
   //  THE MACHINERY
   // ---------------------------------------------------------------------------
+  HelpTopic(
+    title: 'Logs and crash reports',
+    section: 'The machinery',
+    where: 'App Config - Open log folder',
+    plain:
+        'The app keeps a record of errors and crashes on this computer, so a '
+        'problem can be looked into after it happens. It is always on.',
+    keywords: ['log', 'crash', 'error', 'dump', 'support', 'bug report'],
+    body:
+        'Three logs are written to the log folder: deployment_app_error_log.txt '
+        'for errors, deployment_app_info_log.txt for everyday events such as '
+        'each start of the app and its version, and '
+        'deployment_app_migration_log.txt for older rooms being converted. '
+        'Logging cannot be switched off.\n\n'
+        'If the app crashes, the error log records what failed and which part '
+        'of the program it was in, and a crash dump (crash_<date>_<time>.dmp) '
+        'is saved beside it. The newest five dumps are kept.\n\n'
+        'If the app stops without closing normally - ended from Task Manager '
+        'after it stopped responding, or Windows shutting down while it was '
+        'open - the next start adds a line to the error log saying so.\n\n'
+        'When reporting a problem, send the error log and the newest crash '
+        'dump from around the time it happened.',
+  ),
   HelpTopic(
     title: 'The device catalog',
     section: 'The machinery',

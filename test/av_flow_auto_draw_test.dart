@@ -136,6 +136,41 @@ void main() {
     return null;
   }
 
+  group('an estimate-only room', () {
+    test('draws nothing on its own', () {
+      final p = room()..setRoomMode(RoomMode.estimate);
+      final before = p.avNodes.length;
+      final result = autoDrawRoutingFromConfig(p);
+      expect(result.nodesAdded, 0);
+      expect(p.avNodes.length, before);
+      expect(p.avNodeById(avAutoNodeId('input_pc')), isNull);
+      expect(p.avNodeById(avAutoNodeId('input_doc_cam')), isNull);
+    });
+
+    test('still draws when Recreate is pressed', () {
+      final p = room()..setRoomMode(RoomMode.estimate);
+      autoDrawRoutingFromConfig(p, evenForEstimate: true);
+      expect(p.avNodeById(avAutoNodeId('input_pc')), isNotNull);
+    });
+
+    test('starts without the template devices', () {
+      final p = room();
+      final setup = p.roomConfig['SYSTEM_SETUP'] as Map;
+      setup['dev_cameras'] = '2';
+      p.roomConfig['CAMERADEVICE_1'] = {'name': 'Cam 1'};
+      p.roomConfig['CAMERADEVICE_2'] = {'name': 'Cam 2'};
+
+      expect(p.clearTemplateDevices(), greaterThan(0));
+      expect(
+        activeDeviceKeysIn(p.roomConfig, p.uiSchema.deviceCountMap),
+        isEmpty,
+      );
+      expect(p.roomConfig.keys.where((k) => k.startsWith('CAMERADEVICE_')),
+          isEmpty);
+      expect(setup['dev_cameras'], '0');
+    });
+  });
+
   group('the sources', () {
     test('each one placed and tied to the input its number names', () {
       final p = room();

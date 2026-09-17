@@ -21,6 +21,7 @@ import 'flow_rules.dart';
 import 'cabling_schematic.dart';
 import 'building_project.dart';
 import 'av_flow_routing.dart' show autoDrawRoutingFromConfig;
+import 'processor_prompt.dart' show isControlProcessorCategory;
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'export_tools.dart' show roomFileStem;
 import 'online_copy.dart';
@@ -332,6 +333,18 @@ class AppStateProvider extends ChangeNotifier {
   RoomMode roomMode = RoomMode.full;
 
   bool get isEstimateRoom => roomMode == RoomMode.estimate;
+
+  /// True when the room has a control processor: drawn on the AV flow, quoted
+  /// on the cost estimate, or chosen as the deployment processor. The control
+  /// schematic is only drawn once it does.
+  bool get roomHasProcessor {
+    if (selectedProcessor != null) return true;
+    bool isProcessor(String model) => isControlProcessorCategory(
+      avDeviceLibrary.templateForModel(model)?.category ?? '',
+    );
+    return avNodes.any((n) => isProcessor(n.model)) ||
+        avCost.extraEquipment.any((i) => isProcessor(i.catalogModel));
+  }
 
   void setRoomMode(RoomMode mode) {
     if (roomMode == mode) return;
@@ -4900,6 +4913,7 @@ class AppStateProvider extends ChangeNotifier {
   List<AvNode> promoteAvCostEquipmentToDiagram(
     String itemId, {
     required Offset at,
+    bool excludeFromControl = false,
   }) {
     final item = avCost.extraEquipment
         .where((i) => i.id == itemId)
@@ -4935,6 +4949,7 @@ class AppStateProvider extends ChangeNotifier {
             powerWatts: template.powerWatts,
             btuPerHour: template.btuPerHour,
             powerSource: powerSourceForInput(template.powerInput),
+            excludeFromControl: excludeFromControl || item.noControl,
           ),
         ),
       );
@@ -10804,6 +10819,23 @@ class AppStateProvider extends ChangeNotifier {
       );
     }
     return true;
+  }
+
+  /// Drops every device block the template came with, so an estimate starts
+  /// with only the equipment somebody picks. Returns how many were removed.
+  int clearTemplateDevices() {
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map) return 0;
+    int removed = 0;
+    uiSchema.deviceCountMap.forEach((devKey, prefix) {
+      final count = int.tryParse('${setup[devKey] ?? ''}') ?? 0;
+      final blocks = roomConfig.keys.where((k) => k.startsWith(prefix)).length;
+      if (count == 0 && blocks == 0) return;
+      removed += blocks;
+      setDeviceCount(devKey, prefix, 0, const {});
+    });
+    if (removed > 0) notifyListeners();
+    return removed;
   }
 
   void setDeviceCount(String devKey, String devicePrefix, int count, Map<String, dynamic> defaultTemplateBlock) {

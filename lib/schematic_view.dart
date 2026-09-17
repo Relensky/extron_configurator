@@ -11,6 +11,7 @@ import 'color_wheel_picker.dart';
 import 'diagram_capture.dart';
 import 'diagram_grid.dart';
 import 'layout_tools.dart';
+import 'processor_prompt.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
 import 'view_zoom.dart';
@@ -1107,6 +1108,7 @@ class _SchematicViewState extends State<SchematicView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
+    if (!provider.roomHasProcessor) return const NoProcessorPrompt();
     final model = _withDragPreview(provider, SchematicModel.build(provider));
     final theme = Theme.of(context);
 

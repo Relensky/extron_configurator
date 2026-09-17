@@ -484,6 +484,8 @@ Future<bool> createRoomFromChoice(
   // Set after the create: createNewConfig resets the AV document, and the room
   // mode lives in it.
   provider.setRoomMode(choice.mode);
+  // An estimate holds only what gets picked, not the template's devices.
+  if (choice.mode == RoomMode.estimate) provider.clearTemplateDevices();
 
   // The room type goes in before anything else, so what it draws lands on a
   // canvas that already has the room's usual gear rather than colliding with

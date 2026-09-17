@@ -2,6 +2,7 @@ import 'package:provider/provider.dart';
 
 import 'app_logger.dart';
 import 'app_state.dart';
+import 'crash_session.dart';
 import 'main.dart' show RoomConfigApp;
 import 'save_actions.dart';
 import 'updater/folder_updater.dart';
@@ -25,5 +26,8 @@ final FolderUpdater appUpdater = FolderUpdater(
     if (!provider.hasUnsavedWork) return true;
     return confirmCloseWithUnsavedWork(context, provider);
   },
+  // exit(0) skips the runner's normal close; without this the next start
+  // would log the update as a crash.
+  beforeExit: () async => endCrashSession(),
   log: (message) => AppLogger.logInfo(message),
 );

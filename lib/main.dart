@@ -19,6 +19,7 @@ import 'recent_files_menu.dart';
 import 'campus_lifecycle_view.dart'
     show showCampusLifecycle, showCampusLifecycleFile;
 import 'app_state.dart';
+import 'changelog.dart';
 import 'av_device_library.dart';
 import 'av_only_notice.dart';
 import 'av_flow_view.dart';
@@ -69,6 +70,9 @@ void main() {
   // double-clicked .exe does not have, and the log this app asks people to send
   // in never hears about it.
   installGlobalErrorHandlers();
+  // Marks where each session starts in the log. Crashes the Dart handlers
+  // cannot see are logged by windows/runner/crash_log.cpp.
+  unawaited(AppLogger.logInfo('Room Config Builder $kAppVersion started.'));
   runApp(
     ChangeNotifierProvider(
       create: (_) => AppStateProvider(),
@@ -3212,7 +3216,8 @@ class AppSettingsView extends StatelessWidget {
           '${autosaveStatusLine(provider)}\n'
           'Recovery copies live in ${provider.autosaveFolder}, one folder '
           'per file, and each is deleted as soon as its document is saved.\n'
-          'The error, info and migration logs live in ${AppLogger.logFolder}.',
+          'The error, info and migration logs, and any crash dumps, live in '
+          '${AppLogger.logFolder}.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 20),

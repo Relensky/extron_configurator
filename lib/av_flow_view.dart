@@ -275,7 +275,10 @@ class _AvFlowViewState extends State<AvFlowView>
       provider.ensureAvFlowForCurrentConfig();
       // First visit to a room with nothing drawn yet: put its real equipment
       // on the canvas so there is something to cable.
-      if (provider.avNodes.isEmpty && provider.roomConfig.isNotEmpty) {
+      // Not in an estimate, where every item is picked by hand.
+      if (provider.avNodes.isEmpty &&
+          provider.roomConfig.isNotEmpty &&
+          !provider.isEstimateRoom) {
         _seedFromConfig(provider, silent: true);
       }
       // Then the cabling the config already states: every source on the
@@ -667,7 +670,7 @@ class _AvFlowViewState extends State<AvFlowView>
     // step after it is told not to take another.
     provider.clearAvFlowDrawing();
     final placed = _seedFromConfig(provider, batch: true);
-    final routed = autoDrawRoutingFromConfig(provider);
+    final routed = autoDrawRoutingFromConfig(provider, evenForEstimate: true);
     final unracked = provider.pruneAvRackSlots(recordUndo: false);
 
     _snack(

@@ -62,6 +62,42 @@ enum _ExtraPart { equipment, cable, hardware, misc }
 /// the Devices tab offers when a model is picked there.
 enum _SwapControl { keepSettings, applyDefaults }
 
+/// Where equipment added from the catalog goes.
+enum EquipmentPlacement {
+  /// Drawn on the AV flow, with a control block when it is a device the
+  /// processor drives.
+  flowAndConfig,
+
+  /// Drawn on the AV flow and marked as never having a control block.
+  flowOnly,
+
+  /// A quoted line that is not drawn.
+  estimateOnly,
+}
+
+/// The placement a picked model starts on: drawn when the processor can drive
+/// it, otherwise quoted only - what adding did before there was a choice.
+EquipmentPlacement defaultPlacementFor(AppStateProvider provider, String model) {
+  if (model.trim().isEmpty) return EquipmentPlacement.estimateOnly;
+  return quotedModelIsControllable(provider, model)
+      ? EquipmentPlacement.flowAndConfig
+      : EquipmentPlacement.estimateOnly;
+}
+
+/// True when [model] is a device the processor could have a block for.
+bool quotedModelIsControllable(AppStateProvider provider, String model) {
+  if (provider.roomConfig['SYSTEM_SETUP'] is! Map) return false;
+  if (provider.avModelNeverControlled(model)) return false;
+  final probe = AvNode(
+    id: '',
+    label: model,
+    model: model,
+    pos: Offset.zero,
+    ports: const [],
+  );
+  return familyForNode(provider, probe) != null;
+}
+
 /// The equipment table's columns. Declared once and read by both the caption
 /// row and every data row — see [_CostEstimateViewState._gridRow].
 /// ============================================================================
@@ -2004,6 +2040,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final qtyController = TextEditingController(text: '1');
     final nameController = TextEditingController();
     String? selectedModel;
+    var placement = EquipmentPlacement.estimateOnly;
 
     final added = await showDialog<bool>(
       context: context,
@@ -2020,7 +2057,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             }),
             content: SizedBox(
               width: 560,
-              height: 520,
+              height: kind == _ExtraPart.equipment ? 660 : 520,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2118,6 +2155,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 onTap: () => setLocal(() {
                                   selectedModel = t.model;
                                   nameController.text = t.model;
+                                  placement =
+                                      defaultPlacementFor(provider, t.model);
                                 }),
                               );
                             },
@@ -2169,6 +2208,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         : 'Priced from the catalog: $selectedModel',
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
+                  if (kind == _ExtraPart.equipment)
+                    _PlacementChoice(
+                      value: placement,
+                      // Drawing needs a catalog entry to build the box from.
+                      canDraw: selectedModel != null,
+                      estimateRoom: provider.isEstimateRoom,
+                      onChanged: (v) => setLocal(() => placement = v),
+                    ),
                 ],
               ),
             ),
@@ -2206,10 +2253,30 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           category: template?.category ?? '',
           qty: qty,
         );
-        // Quoting a device IS putting it in the room, so the control side is
-        // built here rather than left for somebody to remember.
-        if (context.mounted) {
-          await _buildConfigForQuotedDevice(context, provider, line);
+        if (!context.mounted || selectedModel == null) break;
+        switch (placement) {
+          case EquipmentPlacement.estimateOnly:
+            break;
+          case EquipmentPlacement.flowOnly:
+            final drawn = provider.promoteAvCostEquipmentToDiagram(
+              line.id,
+              at: const Offset(40, 60),
+              excludeFromControl: true,
+            );
+            if (drawn.isNotEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '$name added to the AV flow. It is not part of the room '
+                    'config and will not be asked for one.',
+                  ),
+                ),
+              );
+            }
+          case EquipmentPlacement.flowAndConfig:
+            // Quoting a device IS putting it in the room, so the control
+            // side is built here rather than left for somebody to remember.
+            await _buildConfigForQuotedDevice(context, provider, line);
         }
       case _ExtraPart.cable:
         provider.addAvCostExtraCable(
@@ -2269,28 +2336,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   ) async {
     final model = line.catalogModel.trim();
     if (model.isEmpty) return;
-    // No room config open — the estimate works on its own, and there is
-    // nowhere to put a block until there is one.
-    if (provider.roomConfig['SYSTEM_SETUP'] is! Map) return;
-    if (provider.avModelNeverControlled(model)) return;
-
-    // Asked BEFORE the line is promoted: a part nothing drives should stay a
-    // quoted line rather than being moved onto the diagram for a block that
-    // is then never created.
-    final probe = AvNode(
-      id: '',
-      label: line.description.trim().isEmpty ? model : line.description.trim(),
-      model: model,
-      pos: Offset.zero,
-      ports: const [],
-    );
-    if (familyForNode(provider, probe) == null) return;
-
     final added = provider.promoteAvCostEquipmentToDiagram(
       line.id,
       at: const Offset(40, 60),
     );
     if (added.isEmpty) return;
+    // Drawn either way; a block only for a device the processor drives, and
+    // not until an estimate is converted to a programmed room.
+    if (provider.isEstimateRoom ||
+        !quotedModelIsControllable(provider, model)) {
+      return;
+    }
 
     final plan = planControlSide(
       provider,
@@ -6065,6 +6121,65 @@ class _ModelCell extends StatelessWidget {
       message: hover,
       style: style,
       child: Text(text, overflow: TextOverflow.ellipsis, style: style),
+    );
+  }
+}
+
+/// The three places an added piece of equipment can go.
+class _PlacementChoice extends StatelessWidget {
+  final EquipmentPlacement value;
+  final bool canDraw;
+  final bool estimateRoom;
+  final ValueChanged<EquipmentPlacement> onChanged;
+
+  const _PlacementChoice({
+    required this.value,
+    required this.canDraw,
+    required this.estimateRoom,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = canDraw ? value : EquipmentPlacement.estimateOnly;
+    Widget option(EquipmentPlacement v, String title, String subtitle) =>
+        RadioListTile<EquipmentPlacement>(
+          key: ValueKey('placement_${v.name}'),
+          value: v,
+          dense: true,
+          visualDensity: VisualDensity.compact,
+          contentPadding: EdgeInsets.zero,
+          enabled: canDraw || v == EquipmentPlacement.estimateOnly,
+          title: Text(title, style: const TextStyle(fontSize: 13)),
+          subtitle: Text(subtitle, style: const TextStyle(fontSize: 11)),
+        );
+    return RadioGroup<EquipmentPlacement>(
+      groupValue: shown,
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
+      child: Column(
+        children: [
+          option(
+            EquipmentPlacement.flowAndConfig,
+            'AV flow and room config',
+            estimateRoom
+                ? 'Drawn now; its control block is built when the room is '
+                      'converted to a programmed room'
+                : 'Drawn, with a control block if the processor drives it',
+          ),
+          option(
+            EquipmentPlacement.flowOnly,
+            'AV flow only',
+            'Drawn, but never part of the room config',
+          ),
+          option(
+            EquipmentPlacement.estimateOnly,
+            'Estimate only',
+            'Priced here and not drawn',
+          ),
+        ],
+      ),
     );
   }
 }

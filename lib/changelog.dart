@@ -47,6 +47,14 @@ const List<ChangelogEntry> kChangelog = [
       'App Config has an Estimate PDF section for the logo, your name and a '
           'contact line.',
       'Help shows the app version and this list of changes.',
+      'Estimate-only rooms start empty: no template devices, and no PC, '
+          'document camera or receivers added to the AV flow automatically.',
+      'Add from catalog on the Cost tab asks where equipment goes: the AV '
+          'flow and room config, the AV flow only, or the estimate only.',
+      'The control schematic waits until the room has a processor, and '
+          'offers to add one from the catalog.',
+      'Crashes are written to the error log with a crash dump, and a session '
+          'that did not close normally is noted the next time the app starts.',
     ],
   ),
   ChangelogEntry(
