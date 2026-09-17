@@ -1975,4 +1975,35 @@ const List<HelpTopic> kHelpTopics = [
         'write, and overwriting it without asking is not something a tool gets '
         'to do.',
   ),
+  HelpTopic(
+    title: 'Installing a new version',
+    section: 'The machinery',
+    where: 'Notice in the bottom-right corner, or App Config → App Updates',
+    plain:
+        'When a newer version of the app is published, a small notice offers '
+        'it. Nothing changes until you press Update, and your files and '
+        'settings are kept.',
+    keywords: [
+      'update',
+      'upgrade',
+      'new version',
+      'install',
+      'release',
+      'program_releases',
+    ],
+    body:
+        'The app looks in the Program_Releases folder on the CTS file share when '
+        'it starts and every 30 minutes after, for a room_config_builder zip '
+        'whose program is a newer version than the one running. It only ever '
+        'offers: Later hides the notice, and App Config → App Updates can still '
+        'install it afterwards.\n\n'
+        'Update, then Close and Update, copies the release to this computer and '
+        'asks about unsaved work exactly as closing the window does. The app '
+        'then closes, its program files (the .exe, the .dll files and the data '
+        'folder) are replaced, and it opens again on the new version. The '
+        'config.json, the catalog, pricing and every other file beside the app '
+        'are left as they are; a file the release adds that this copy does not '
+        'have yet is copied in. If anything fails part-way, the old version is '
+        'put back and the next start says why.',
+  ),
 ];

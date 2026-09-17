@@ -12,6 +12,8 @@ import 'package:path/path.dart' as path;
 
 import 'app_logger.dart';
 import 'app_snack.dart';
+import 'app_updates.dart';
+import 'updater/update_widgets.dart';
 import 'campus_file.dart';
 import 'recent_files_menu.dart';
 import 'campus_lifecycle_view.dart'
@@ -72,6 +74,9 @@ void main() {
       child: const RoomConfigApp(),
     ),
   );
+  // Looks for a newer release in the background; the first look waits a
+  // little so startup never does. See app_updates.dart.
+  unawaited(appUpdater.start());
 }
 
 class RoomConfigApp extends StatelessWidget {
@@ -220,7 +225,12 @@ class RoomConfigApp extends StatelessWidget {
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.linear(theme.textScale),
         ),
-        child: _helpShortcuts(child!),
+        // The "update available" card sits over every tab and never blocks
+        // anything; see app_updates.dart.
+        child: UpdateNoticeHost(
+          updater: appUpdater,
+          child: _helpShortcuts(child!),
+        ),
       ),
       home: const MainDashboard(),
     );
@@ -3064,6 +3074,14 @@ class AppSettingsView extends StatelessWidget {
             },
           ),
         ),
+        const SizedBox(height: 20),
+
+        // --- APP UPDATES ---
+        // New versions come from the release folder on the file share. See
+        // app_updates.dart; nothing installs until the user presses Update.
+        Text('App Updates', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 4),
+        UpdateSettingsSection(updater: appUpdater),
         const SizedBox(height: 20),
 
         // --- AUTOSAVE ---
