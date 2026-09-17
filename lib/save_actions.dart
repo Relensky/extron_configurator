@@ -500,8 +500,8 @@ Future<bool> createRoomFromChoice(
   );
 
   // The control side, built from what the preset just drew. Skipped for an
-  // AV-only room, which by definition has no control system yet.
-  final control = choice.mode == RoomMode.avOnly
+  // estimate-only room, which is not programmed yet.
+  final control = choice.mode == RoomMode.estimate
       ? null
       : buildControlSideForPreset(provider, preset);
 
@@ -520,8 +520,9 @@ Future<bool> createRoomFromChoice(
               '${control.withoutModule == 0 ? '' : ', ${control.withoutModule} '
                   'device${control.withoutModule == 1 ? '' : 's'} still '
                   'needing a python module'}.'}'
-        ' Set the room number on the Wizard tab, then check the jack '
-        'numbering.',
+        ' Set the room number on the '
+        '${choice.mode == RoomMode.estimate ? 'Cost' : 'Wizard'} tab, then '
+        'check the jack numbering.',
       ),
     ),
   );
@@ -595,7 +596,7 @@ Future<bool> createProjectRoom(
     SnackBar(
       content: Text(
         'Added to ${provider.projectDisplayName}. Set the building and room '
-        'number on the Wizard tab.',
+        'number on the ${provider.isEstimateRoom ? 'Cost' : 'Wizard'} tab.',
       ),
     ),
   );

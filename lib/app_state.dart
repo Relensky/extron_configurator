@@ -138,25 +138,28 @@ typedef RoomUndoStep = ({RoomUndoSource source, AppTab? tab});
 
 /// How far along a room is.
 ///
-/// A room is usually specified long before anybody writes its control config —
-/// the drawings, the rack and the budget all exist first. [RoomMode.avOnly]
-/// says that is where this one is: it has a building, a room number and a list
-/// of devices, and no control system yet. The System and Raw JSON tabs are
-/// about the processor's config file, so they step out of the way; the
-/// schematic, the AV flow, the racks and the costs all still work, because
-/// they are about the room rather than the processor.
-///
-/// The devices are still recorded in the normal config blocks, so nothing has
-/// to be re-entered when the control side is finally built — the only thing
-/// missing is the python module for each device, which the app flags.
-enum RoomMode { full, avOnly }
+/// [RoomMode.estimate] is a room being priced before it is programmed: the
+/// Wizard, Devices, System and Raw JSON tabs are hidden until it is converted
+/// to a programmed room. The drawings, racks and costs all still work.
+enum RoomMode { full, estimate }
 
-RoomMode roomModeFromName(String? name) =>
-    name?.trim().toLowerCase() == 'avonly' ? RoomMode.avOnly : RoomMode.full;
+/// 'avOnly' is what the same mode was called before it became estimate-only.
+RoomMode roomModeFromName(String? name) {
+  final n = name?.trim().toLowerCase();
+  return n == 'estimate' || n == 'avonly' ? RoomMode.estimate : RoomMode.full;
+}
 
 const Map<RoomMode, String> kRoomModeLabels = {
-  RoomMode.full: 'Control system configured',
-  RoomMode.avOnly: 'AV only - no control system yet',
+  RoomMode.full: 'Programmed room',
+  RoomMode.estimate: 'Estimate only - not programmed yet',
+};
+
+/// Tabs hidden from the rail while a room is estimate-only.
+const Set<AppTab> kEstimateHiddenTabs = {
+  AppTab.wizard,
+  AppTab.devices,
+  AppTab.system,
+  AppTab.rawJson,
 };
 
 /// The config's live device blocks, in device-family order: for each dev_
@@ -323,12 +326,12 @@ class AppStateProvider extends ChangeNotifier {
   /// dropped there for the same reason.
   int get revision => _revision;
 
-  /// Whether this room has a control system yet. See [RoomMode]; persisted in
-  /// the AV sidecar, because for an AV-only room that is the only document
+  /// Whether this room is programmed yet. See [RoomMode]; persisted in the AV
+  /// sidecar, because for an estimate-only room that is the only document
   /// that exists.
   RoomMode roomMode = RoomMode.full;
 
-  bool get isAvOnlyRoom => roomMode == RoomMode.avOnly;
+  bool get isEstimateRoom => roomMode == RoomMode.estimate;
 
   void setRoomMode(RoomMode mode) {
     if (roomMode == mode) return;
@@ -899,6 +902,9 @@ class AppStateProvider extends ChangeNotifier {
       'textScale': textScale,
       'currencySymbol': currencySymbol,
       'pricingTier': pricingTier.name,
+      'estimateLogoPath': estimateLogoPath,
+      'estimatePreparedBy': estimatePreparedBy,
+      'estimatePreparerContact': estimatePreparerContact,
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
       'confirmBeforeDelete': confirmBeforeDelete,
       'snapDiagramsToGrid': snapDiagramsToGrid,
@@ -1200,6 +1206,15 @@ class AppStateProvider extends ChangeNotifier {
   /// [PricingTier]; app-wide for the same reason as the symbol, and switchable
   /// per estimate run rather than per device.
   PricingTier pricingTier = PricingTier.msrp;
+
+  /// The image in the top right corner of an estimate PDF. '' prints none.
+  String estimateLogoPath = '';
+
+  /// Who the estimate PDF says prepared it.
+  String estimatePreparedBy = '';
+
+  /// Optional line under the preparer's name - an email or phone number.
+  String estimatePreparerContact = '';
 
   void setPricingTier(PricingTier tier) {
     if (pricingTier == tier) return;
@@ -4715,6 +4730,20 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setAvCostScopeOfWork(String text) {
+    if (avCost.scopeOfWork == text) return;
+    _pushAvUndo('Scope of work', _costScope, coalesce: 'cost:scope');
+    avCost.scopeOfWork = text;
+    notifyListeners();
+  }
+
+  void setAvCostNotes(String text) {
+    if (avCost.notes == text) return;
+    _pushAvUndo('Estimate notes', _costScope, coalesce: 'cost:notes');
+    avCost.notes = text;
+    notifyListeners();
+  }
+
   CostFee addAvCostFee({String name = 'Fee', double percent = 0}) {
     _pushAvUndo('Add $name', _costScope);
     final fee = CostFee(id: _nextCostId('FEE_'), name: name, percent: percent);
@@ -6112,7 +6141,7 @@ class AppStateProvider extends ChangeNotifier {
     }
 
     if (parts.values.every((p) => p == null)) {
-      // No sidecars is still a state that matches the files — an AV-only room
+      // No sidecars is still a state that matches the files — an estimate room
       // nobody has drawn yet is not an unsaved one.
       markRoomSaved();
       checkForRoomRecovery();
@@ -6367,7 +6396,7 @@ class AppStateProvider extends ChangeNotifier {
 
       // The room mode says whether a control system was ever configured. It
       // travels with the diagram because that is the document that exists for
-      // an AV-only room — there may be no control config at all.
+      // an estimate-only room — there may be no control config at all.
       roomMode = roomModeFromName(doc['roomMode']?.toString());
     } catch (e) {
       AppLogger.logError('Failed to read the AV flow document', e);
@@ -7312,6 +7341,9 @@ class AppStateProvider extends ChangeNotifier {
       textScale = double.tryParse(str('textScale', '')) ?? 1.0;
       currencySymbol = str('currencySymbol', r'$');
       pricingTier = pricingTierFromName(str('pricingTier', ''));
+      estimateLogoPath = str('estimateLogoPath', '');
+      estimatePreparedBy = str('estimatePreparedBy', '');
+      estimatePreparerContact = str('estimatePreparerContact', '');
       fillDeviceDefaultsOnLoad = saved['fillDeviceDefaultsOnLoad'] is bool
           ? saved['fillDeviceDefaultsOnLoad']
           : true;
@@ -8320,6 +8352,15 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'pricingTier':
         pricingTier = pricingTierFromName(value);
+        break;
+      case 'estimateLogoPath':
+        estimateLogoPath = value.trim();
+        break;
+      case 'estimatePreparedBy':
+        estimatePreparedBy = value;
+        break;
+      case 'estimatePreparerContact':
+        estimatePreparerContact = value;
         break;
     }
     notifyListeners();

@@ -43,6 +43,7 @@ import 'undo_bar.dart'
 import 'nav_rail.dart';
 import 'project_room_picker.dart';
 import 'project_history_view.dart' show showHistoryDialog;
+import 'estimate_settings_section.dart';
 import 'help_view.dart';
 import 'project_view.dart';
 import 'new_room_dialog.dart';
@@ -426,7 +427,9 @@ class _MainDashboardState extends State<MainDashboard> {
                     '${started.blocks} device block'
                         '${started.blocks == 1 ? '' : 's'} written to the '
                         'config',
-                  if (started.withoutModule > 0)
+                  // Devices is hidden on an estimate.
+                  if (started.withoutModule > 0 &&
+                      choice.mode != RoomMode.estimate)
                     '${started.withoutModule} still needing a python module - '
                         'the Devices tab shows those in red',
                 ].join('. '),
@@ -437,17 +440,17 @@ class _MainDashboardState extends State<MainDashboard> {
         }
       }
 
-      // An AV-only room starts on the Wizard tab, which is where its two
-      // required answers (building and room number) live.
-      if (choice.mode == RoomMode.avOnly) {
-        provider.selectTab(AppTab.wizard.index);
+      // An estimate starts on the Cost tab, where its building and room
+      // number are set.
+      if (choice.mode == RoomMode.estimate) {
+        provider.selectTab(AppTab.cost.index);
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            choice.mode == RoomMode.avOnly
-                ? 'New AV-only room created. Set the building and room '
-                      'number, then add the devices.'
+            choice.mode == RoomMode.estimate
+                ? 'New estimate created. Set the building and room number, '
+                      'then add the equipment.'
                 : 'New config created from template.',
           ),
         ),
@@ -1223,6 +1226,7 @@ class _MainDashboardState extends State<MainDashboard> {
             child: AppNavRail(
               selectedIndex: selectedIndex,
               onDestinationSelected: provider.selectTab,
+              tabs: visibleNavTabs(estimateOnly: provider.isEstimateRoom),
             ),
           ),
           Expanded(
@@ -1233,7 +1237,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   : _buildMainContent(
                       selectedIndex,
                       provider.configRevision,
-                      provider.isAvOnlyRoom,
+                      provider.isEstimateRoom,
                     ),
             ),
           )
@@ -1619,22 +1623,26 @@ class _MainDashboardState extends State<MainDashboard> {
   /// the user switched tabs and came back. App Config is left unkeyed — its
   /// fields are application settings and have nothing to do with the room.
   Widget _buildMainContent(
-      int selectedIndex, int configRevision, bool avOnly) {
+      int selectedIndex, int configRevision, bool estimateOnly) {
     final key = ValueKey('tab_${selectedIndex}_cfg_$configRevision');
     if (selectedIndex < 0 || selectedIndex >= AppTab.values.length) {
       return const Center(child: Text("Select a category"));
     }
-    switch (AppTab.values[selectedIndex]) {
+    final tab = AppTab.values[selectedIndex];
+    // Hidden from the rail, but still reachable from links elsewhere.
+    if (estimateOnly && kEstimateHiddenTabs.contains(tab)) {
+      return ControlSystemPlaceholder(
+        key: key,
+        tabName: 'the ${navTabLabel(tab)} tab',
+      );
+    }
+    switch (tab) {
       case AppTab.wizard:
         return SetupWizardView(key: key);
       case AppTab.devices:
         return DynamicDevicesTabsView(key: key);
       case AppTab.system:
-        // An AV-only room has no processor config to edit yet — see
-        // ControlSystemPlaceholder, which says so and offers the switch.
-        return avOnly
-            ? const ControlSystemPlaceholder(tabName: 'the System tab')
-            : SystemSettingsView(key: key);
+        return SystemSettingsView(key: key);
       case AppTab.schematic:
         return SchematicView(key: key);
       case AppTab.avFlow:
@@ -1658,9 +1666,6 @@ class _MainDashboardState extends State<MainDashboard> {
         // not be thrown away and rebuilt when a different room is opened.
         return const DeviceEditorView();
       case AppTab.rawJson:
-        if (avOnly) {
-          return const ControlSystemPlaceholder(tabName: 'the Raw JSON tab');
-        }
         // Unkeyed on purpose: the raw editor already re-reads the config in
         // didChangeDependencies, and remounting it mid-Apply would cut off its
         // own "applied/saved" feedback.
@@ -2904,6 +2909,10 @@ class AppSettingsView extends StatelessWidget {
           'other tier is flagged on the estimate rather than quietly costed.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        const Divider(height: 40),
+
+        // --- ESTIMATE PDF ---
+        const EstimateSettingsSection(),
         const Divider(height: 40),
 
         // --- THEME STYLE ---

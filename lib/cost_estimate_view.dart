@@ -20,7 +20,9 @@ import 'base_costs_dialog.dart';
 import 'control_prefill.dart';
 import 'ui_schema.dart' show DeviceTypeSpec;
 import 'control_prefill_dialog.dart';
+import 'av_only_notice.dart';
 import 'cost_estimate.dart';
+import 'estimate_pdf.dart';
 import 'export_tools.dart';
 import 'labor_rates.dart';
 import 'labor_rates_dialog.dart';
@@ -29,6 +31,7 @@ import 'live_text_field.dart';
 import 'print_mode.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
+import 'search_match.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -331,13 +334,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
 
   /// True when this room has priced equipment that no control block backs.
   ///
-  /// Restricted to rooms that are AV-only or have no control devices at all,
+  /// Restricted to rooms that have no control devices at all,
   /// because in a finished room a box on the diagram without a block is
   /// usually deliberate — a display, a laptop input, a speaker — and prompting
   /// about those every visit is how a prompt becomes wallpaper.
   static bool _needsControlSide(AppStateProvider provider) {
+    // An estimate room offers conversion instead.
+    if (provider.isEstimateRoom) return false;
     if (provider.avDevicesWithoutControl.isEmpty) return false;
-    if (provider.isAvOnlyRoom) return true;
     return activeDeviceKeysIn(
       provider.roomConfig,
       provider.uiSchema.deviceCountMap,
@@ -374,6 +378,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // paper was the only thing that had heard about the brightness.
     List<Widget> cardsIn(BuildContext context) => <Widget>[
       _header(context, provider, estimate, model),
+      if (!_capturing || settings.scopeOfWork.trim().isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _textCard(
+          context,
+          title: 'Scope of Work',
+          fieldId: 'cost_scope_of_work',
+          value: settings.scopeOfWork,
+          hint: 'What this estimate covers - the work, the areas, what is '
+              'being replaced',
+          onChanged: provider.setAvCostScopeOfWork,
+        ),
+      ],
       const SizedBox(height: 12),
       _equipmentCard(context, provider, estimate, model),
       const SizedBox(height: 12),
@@ -393,6 +409,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           SizedBox(width: 380, child: _totalsCard(context, estimate)),
         ],
       ),
+      if (!_capturing || settings.notes.trim().isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _textCard(
+          context,
+          title: 'Estimate Notes',
+          fieldId: 'cost_notes',
+          value: settings.notes,
+          hint: 'Assumptions, exclusions, lead times, how long the estimate '
+              'is valid',
+          onChanged: provider.setAvCostNotes,
+        ),
+      ],
     ];
 
     // --- the frame that gets photographed ---------------------------------
@@ -556,6 +584,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         _exportEstimate(context, provider, estimate, model, v),
                     itemBuilder: (ctx) => const [
                       PopupMenuItem(
+                        value: 'pdf',
+                        child: Text('PDF estimate (.pdf)'),
+                      ),
+                      PopupMenuItem(
                         value: 'xlsx',
                         child: Text('Excel workbook (.xlsx)'),
                       ),
@@ -603,6 +635,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 ),
               ),
             ),
+            if (!_capturing && provider.isEstimateRoom) ...[
+              const SizedBox(height: 12),
+              const _EstimateRoomBar(),
+            ],
             // A budgeted room is the one that has gear on the diagram and no
             // control blocks behind it, and this is the page somebody is on
             // when they decide to go and build them. Offering it here rather
@@ -4496,6 +4532,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     AvFlowModel model,
     String what,
   ) async {
+    if (what == 'pdf') {
+      return _exportPdf(context, provider, estimate, model);
+    }
     final messenger = ScaffoldMessenger.of(context);
     final theme = Theme.of(context);
     final title = model.roomTitle.isEmpty ? 'Cost estimate' : model.roomTitle;
@@ -4572,6 +4611,106 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         ),
       );
     }
+  }
+
+  /// Writes the client-facing PDF: logo and preparer from App Config, scope
+  /// and notes from this page.
+  Future<void> _exportPdf(
+    BuildContext context,
+    AppStateProvider provider,
+    CostEstimate estimate,
+    AvFlowModel model,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    final settings = provider.avCost;
+    final logoPath = provider.estimateLogoPath;
+    final logo = readEstimateLogo(logoPath);
+
+    String? outputFile = await FilePicker.saveFile(
+      dialogTitle: 'Save Estimate PDF',
+      fileName: '${roomFileStem(provider, 'estimate')}.pdf',
+      type: FileType.custom,
+      allowedExtensions: const ['pdf'],
+    );
+    if (outputFile == null) return;
+    if (!outputFile.toLowerCase().endsWith('.pdf')) outputFile += '.pdf';
+
+    try {
+      final bytes = await buildEstimatePdf(
+        estimate,
+        EstimatePdfInfo(
+          roomName: model.roomTitle.isNotEmpty
+              ? model.roomTitle
+              : roomFolderName(provider),
+          projectName: estimateProjectName(provider),
+          preparedBy: provider.estimatePreparedBy.trim(),
+          preparerContact: provider.estimatePreparerContact.trim(),
+          date: DateTime.now(),
+          logo: logo,
+          scopeOfWork: settings.scopeOfWork,
+          notes: settings.notes,
+        ),
+        theme: loadEstimatePdfTheme(),
+      );
+      await File(outputFile).writeAsBytes(bytes);
+      showSavedSnackBar(
+        messenger: messenger,
+        theme: theme,
+        provider: provider,
+        message: [
+          'Estimate saved as ${path.basename(outputFile)}',
+          if (logoPath.trim().isNotEmpty && logo == null)
+            'the logo set in App Config could not be read',
+          if (provider.estimatePreparedBy.trim().isEmpty)
+            'set "Prepared by" in App Config to name who made it',
+        ].join(' - '),
+        savedPath: outputFile,
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to save the estimate PDF: $e'),
+          backgroundColor: snackErrorFillOn(messenger),
+        ),
+      );
+    }
+  }
+
+  /// A free-text card - the scope of work or the notes. Prints as plain text.
+  Widget _textCard(
+    BuildContext context, {
+    required String title,
+    required String fieldId,
+    required String value,
+    required String hint,
+    required ValueChanged<String> onChanged,
+  }) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CardHeading(title: title),
+            const SizedBox(height: 8),
+            if (_capturing)
+              Text(value.trim(), style: theme.textTheme.bodyMedium)
+            else
+              LiveTextField(
+                key: ValueKey(fieldId),
+                fieldId: fieldId,
+                initial: value,
+                hint: hint,
+                minLines: 3,
+                maxLines: 16,
+                onChanged: onChanged,
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   // --- labor ---------------------------------------------------------------
@@ -5926,6 +6065,93 @@ class _ModelCell extends StatelessWidget {
       message: hover,
       style: style,
       child: Text(text, overflow: TextOverflow.ellipsis, style: style),
+    );
+  }
+}
+
+/// The job name for the estimate PDF, or '' when this room is not on the open
+/// project.
+String estimateProjectName(AppStateProvider provider) =>
+    provider.openProjectRoom == null ? '' : provider.projectDisplayName;
+
+/// Building, room number and the convert button, for an estimate-only room -
+/// which has no Wizard tab to set them on.
+class _EstimateRoomBar extends StatelessWidget {
+  const _EstimateRoomBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final setup = provider.roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map) return const SizedBox.shrink();
+
+    // One entry per code, as the Wizard lists them.
+    final byCode = <String, String>{};
+    provider.buildings.forEach((name, code) {
+      if (!byCode.containsKey(code) || name.length > byCode[code]!.length) {
+        byCode[code] = name;
+      }
+    });
+    final options = [
+      for (final e in byCode.entries) '${e.value} (${e.key})',
+    ];
+    final current = (setup['gve_bldg'] ?? '').toString();
+    final initial = provider.buildings.containsKey(current)
+        ? '$current (${provider.buildings[current]})'
+        : byCode.containsKey(current)
+            ? '${byCode[current]} ($current)'
+            : current;
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SizedBox(
+          width: 340,
+          child: Autocomplete<String>(
+            key: ValueKey('estimate_building_${provider.configRevision}'),
+            initialValue: TextEditingValue(text: initial),
+            optionsBuilder: (value) =>
+                value.text.isEmpty ? options : searchFilter(options, value.text),
+            onSelected: (selection) {
+              final match =
+                  RegExp(r'^(.*)\s\(([^()]*)\)$').firstMatch(selection);
+              setup['gve_bldg'] = match != null ? match.group(2) : selection;
+              provider.updateFullRoomName();
+            },
+            fieldViewBuilder: (context, controller, focus, _) => TextField(
+              controller: controller,
+              focusNode: focus,
+              style: const TextStyle(fontSize: 13),
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Building',
+                border: OutlineInputBorder(),
+                suffixIcon: Icon(Icons.search, size: 18),
+              ),
+              onChanged: (value) {
+                setup['gve_bldg'] = value;
+                provider.updateFullRoomName();
+              },
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 140,
+          child: LiveTextField(
+            key: ValueKey('estimate_room_${provider.configRevision}'),
+            fieldId: 'estimate_room_number',
+            initial: (setup['gve_room'] ?? '').toString(),
+            label: 'Room number',
+            onChanged: (value) {
+              setup['gve_room'] = value;
+              provider.updateFullRoomName();
+            },
+          ),
+        ),
+        const ConvertToProgrammedRoomButton(),
+      ],
     );
   }
 }

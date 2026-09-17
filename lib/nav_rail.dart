@@ -78,6 +78,14 @@ const List<NavTab> kNavTabs = [
   NavTab(AppTab.flowRules, Icons.rule_folder, 'Flow Rules'),
 ];
 
+/// The rail's tabs for a room, less the ones an estimate-only room hides.
+List<NavTab> visibleNavTabs({required bool estimateOnly}) => estimateOnly
+    ? [
+        for (final t in kNavTabs)
+          if (!kEstimateHiddenTabs.contains(t.tab)) t,
+      ]
+    : kNavTabs;
+
 /// What the rail calls [tab], for a message naming a page somebody is about to
 /// be taken to — the room's Undo says where it is going before it goes.
 ///
@@ -139,10 +147,14 @@ class AppNavRail extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
 
+  /// The rows to show. See [visibleNavTabs].
+  final List<NavTab> tabs;
+
   const AppNavRail({
     super.key,
     required this.selectedIndex,
     required this.onDestinationSelected,
+    this.tabs = kNavTabs,
   });
 
   @override
@@ -183,11 +195,12 @@ class _AppNavRailState extends State<AppNavRail> {
     final pos = _scroll.position;
     if (pos.maxScrollExtent <= 0) return; // everything is already on screen
     final rowHeight =
-        (pos.viewportDimension + pos.maxScrollExtent) / kNavTabs.length;
+        (pos.viewportDimension + pos.maxScrollExtent) / widget.tabs.length;
     // The rail's own position, not the tab's: the two stopped being the same
     // number when Project and App Config moved into the banner. A tab that is
     // not in the rail has no row to reveal.
-    final row = kNavTabs.indexWhere((t) => t.tab.index == widget.selectedIndex);
+    final row =
+        widget.tabs.indexWhere((t) => t.tab.index == widget.selectedIndex);
     if (row < 0) return;
     final top = rowHeight * row;
     final bottom = top + rowHeight;
@@ -304,7 +317,7 @@ class _AppNavRailState extends State<AppNavRail> {
 
     for (int step = 0; step <= 8; step++) {
       final fit = candidate(1 - step / 8);
-      if (fit.rowHeight * kNavTabs.length <= height) return fit;
+      if (fit.rowHeight * widget.tabs.length <= height) return fit;
     }
 
     // THE WORDS COME OFF. Fifteen legible labeled rows need more height than
@@ -315,13 +328,14 @@ class _AppNavRailState extends State<AppNavRail> {
     // tooltip so the word is still a hover away.
     final iconOnly = math.max(
       12.0,
-      math.min(_kIconMax, height / kNavTabs.length - _kPadMin * 2 - 1),
+      math.min(_kIconMax, height / widget.tabs.length - _kPadMin * 2 - 1),
     );
     return (
       icon: iconOnly,
       font: math.max(_kFontMin, widthFont),
       pad: _kPadMin,
-      rowHeight: math.max(iconOnly + _kPadMin * 2, height / kNavTabs.length),
+      rowHeight:
+          math.max(iconOnly + _kPadMin * 2, height / widget.tabs.length),
       labels: false,
     );
   }
@@ -338,13 +352,14 @@ class _AppNavRailState extends State<AppNavRail> {
       builder: (context, constraints) {
         final key =
             '${constraints.maxWidth}x${constraints.maxHeight}'
-            '@${scaler.scale(10)}:${base.fontSize}';
+            '@${scaler.scale(10)}:${base.fontSize}:${widget.tabs.length}';
         if (key != _fitKey || _fit == null) {
           _fit = _computeFit(constraints.maxWidth, constraints.maxHeight, base);
           _fitKey = key;
         }
         final fit = _fit!;
-        final fits = fit.rowHeight * kNavTabs.length <= constraints.maxHeight;
+        final fits =
+            fit.rowHeight * widget.tabs.length <= constraints.maxHeight;
 
         return Scrollbar(
           controller: _scroll,
@@ -358,7 +373,7 @@ class _AppNavRailState extends State<AppNavRail> {
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: Column(
                 children: [
-                  for (final tab in kNavTabs)
+                  for (final tab in widget.tabs)
                     NavRailRow(
                       tab: tab,
                       selected: tab.tab.index == widget.selectedIndex,

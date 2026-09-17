@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'changelog.dart';
 import 'help_content.dart';
 
 /// ============================================================================
@@ -80,6 +81,9 @@ class _HelpBookState extends State<HelpBook> {
   /// Whether the narrow layout is showing the page rather than the list.
   bool _onPage = false;
 
+  /// Whether the page is the changelog rather than a topic.
+  bool _changelog = false;
+
   @override
   void initState() {
     super.initState();
@@ -112,6 +116,7 @@ class _HelpBookState extends State<HelpBook> {
 
   void _open(HelpTopic topic) => setState(() {
     _reading = topic.title;
+    _changelog = false;
     _onPage = true;
   });
 
@@ -139,6 +144,14 @@ class _HelpBookState extends State<HelpBook> {
               Icon(Icons.help_outline, color: theme.colorScheme.primary),
               const SizedBox(width: 8),
               Text('Help', style: theme.textTheme.titleMedium),
+              const SizedBox(width: 8),
+              Text(
+                'v$kAppVersionShort',
+                key: const ValueKey('help_version'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: TextField(
@@ -148,7 +161,10 @@ class _HelpBookState extends State<HelpBook> {
                   // ESCAPE CLOSES THE BOOK, from inside the box. A dialog whose
                   // search field swallows Escape is a dialog somebody has to
                   // reach for the mouse to leave.
-                  onChanged: (_) => setState(() => _onPage = false),
+                  onChanged: (_) => setState(() {
+                    _onPage = false;
+                    _changelog = false;
+                  }),
                   decoration: InputDecoration(
                     isDense: true,
                     hintText: 'Search every feature - "vendor", "RFQ", '
@@ -207,11 +223,15 @@ class _HelpBookState extends State<HelpBook> {
                   children: [
                     SizedBox(width: 320, child: _list(theme, hits, current)),
                     const VerticalDivider(width: 1),
-                    Expanded(child: _page(theme, current)),
+                    Expanded(
+                      child: _changelog
+                          ? _changelogPage(theme)
+                          : _page(theme, current),
+                    ),
                   ],
                 )
               : _onPage
-              ? _page(theme, current)
+              ? (_changelog ? _changelogPage(theme) : _page(theme, current))
               : _list(theme, hits, current),
         ),
       ],
@@ -227,7 +247,21 @@ class _HelpBookState extends State<HelpBook> {
     final muted = theme.colorScheme.onSurfaceVariant;
     final grouped = _search.text.trim().isEmpty;
 
-    final rows = <Widget>[];
+    final rows = <Widget>[
+      if (grouped)
+        ListTile(
+          key: const ValueKey('help_whats_new'),
+          dense: true,
+          selected: _changelog,
+          leading: const Icon(Icons.new_releases_outlined, size: 20),
+          title: const Text("What's new"),
+          subtitle: Text('Version $kAppVersionShort'),
+          onTap: () => setState(() {
+            _changelog = true;
+            _onPage = true;
+          }),
+        ),
+    ];
     var section = '';
     for (final topic in hits) {
       if (grouped && topic.section != section) {
@@ -245,7 +279,8 @@ class _HelpBookState extends State<HelpBook> {
           ),
         );
       }
-      final selected = current != null && current.title == topic.title;
+      final selected =
+          !_changelog && current != null && current.title == topic.title;
       rows.add(
         ListTile(
           key: ValueKey('help_topic_${topic.title}'),
@@ -266,6 +301,68 @@ class _HelpBookState extends State<HelpBook> {
     }
 
     return ListView(key: const ValueKey('help_topics'), children: rows);
+  }
+
+  /// Every release, newest first.
+  Widget _changelogPage(ThemeData theme) {
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return SingleChildScrollView(
+      key: const ValueKey('help_changelog'),
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "WHAT'S NEW",
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: muted,
+            ),
+          ),
+          const SizedBox(height: 2),
+          SelectableText(
+            'Room Config Builder $kAppVersionShort',
+            style: theme.textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Build $kAppVersion',
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+          for (final entry in kChangelog) ...[
+            const SizedBox(height: 22),
+            Text(
+              '${entry.version}  ·  ${entry.date}',
+              style: theme.textTheme.labelMedium?.copyWith(color: muted),
+            ),
+            const SizedBox(height: 2),
+            Text(entry.title, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 6),
+            for (final change in entry.changes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: Text('•'),
+                    ),
+                    Expanded(
+                      child: SelectableText(
+                        change,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
   }
 
   /// The topic being read.

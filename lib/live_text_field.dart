@@ -53,6 +53,9 @@ class LiveTextField extends StatefulWidget {
   final bool autofocus;
   final int maxLines;
 
+  /// Set with a larger [maxLines] for a box that grows as it is typed in.
+  final int? minLines;
+
   const LiveTextField({
     super.key,
     required this.fieldId,
@@ -68,6 +71,7 @@ class LiveTextField extends StatefulWidget {
     this.numeric = false,
     this.autofocus = false,
     this.maxLines = 1,
+    this.minLines,
   });
 
   @override
@@ -143,6 +147,7 @@ class _LiveTextFieldState extends State<LiveTextField> {
     focusNode: _focus,
     autofocus: widget.autofocus,
     maxLines: widget.maxLines,
+    minLines: widget.minLines,
     style: const TextStyle(fontSize: 13),
     keyboardType: widget.numeric
         ? const TextInputType.numberWithOptions(decimal: true)

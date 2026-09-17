@@ -308,7 +308,15 @@ class RoomCostSettings {
   /// under the type's own line — see [fromJson].
   final Map<String, double> cableSpares;
 
+  /// What the job covers, printed near the top of the estimate.
+  String scopeOfWork;
+
+  /// Assumptions, exclusions and terms, printed under the totals.
+  String notes;
+
   RoomCostSettings({
+    this.scopeOfWork = '',
+    this.notes = '',
     this.currency = r'$',
     this.taxLabel = 'Sales tax',
     this.taxPercent = 0,
@@ -338,6 +346,8 @@ class RoomCostSettings {
        extraCables = extraCables ?? [];
 
   bool get isEmpty =>
+      scopeOfWork.trim().isEmpty &&
+      notes.trim().isEmpty &&
       taxPercent == 0 &&
       equipmentSort == CostEquipmentSort.standard &&
       fees.isEmpty &&
@@ -358,6 +368,8 @@ class RoomCostSettings {
     taxPercent = 0;
     includeCabling = true;
     equipmentSort = CostEquipmentSort.standard;
+    scopeOfWork = '';
+    notes = '';
     fees.clear();
     priceOverrides.clear();
     items.clear();
@@ -378,6 +390,8 @@ class RoomCostSettings {
     'includeCabling': includeCabling,
     if (equipmentSort != CostEquipmentSort.standard)
       'equipmentSort': equipmentSort.name,
+    if (scopeOfWork.isNotEmpty) 'scopeOfWork': scopeOfWork,
+    if (notes.isNotEmpty) 'notes': notes,
     'fees': [for (final f in fees) f.toJson()],
     // Copied, not handed out live: the undo history snapshots the room by
     // calling this and empties the estimate before reading a snapshot back,
@@ -419,6 +433,8 @@ class RoomCostSettings {
       (s) => s.name == sortName,
       orElse: () => CostEquipmentSort.standard,
     );
+    scopeOfWork = json['scopeOfWork']?.toString() ?? '';
+    notes = json['notes']?.toString() ?? '';
     for (final f in (json['fees'] as List? ?? [])) {
       if (f is Map) fees.add(CostFee.fromJson(Map<String, dynamic>.from(f)));
     }

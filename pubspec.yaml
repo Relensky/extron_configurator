@@ -1,7 +1,7 @@
 name: extron_configurator
 description: "A new Flutter project."
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ^3.11.5
@@ -20,6 +20,8 @@ dependencies:
     sdk: flutter
   flutter_secure_storage: ^10.3.1
   path: ^1.9.1
+  # Writing the estimate PDF; pdfrx only reads them.
+  pdf: ^3.13.0
   pdfrx: ^2.4.7
   provider: ^6.1.5+1
   shared_preferences: ^2.5.5

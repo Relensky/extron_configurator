@@ -18,14 +18,10 @@ import 'room_presets.dart';
 ///
 ///  So a new room answers two questions:
 ///
-///    1. IS THERE A CONTROL SYSTEM YET? "Not yet" gives an AV-only room: the
-///       building, the room number and the devices, with the System and Raw
-///       JSON tabs out of the way. Everything else — schematic, signal flow,
-///       racks, costs — works exactly as it does for a full room, because none
-///       of it depends on the processor. Devices are still recorded in normal
-///       config blocks, so nothing is re-entered when the control side is
-///       finally built; the app just flags which ones still need a python
-///       module.
+///    1. IS IT BEING PROGRAMMED YET? "Estimate only" hides the Wizard,
+///       Devices, System and Raw JSON tabs until the room is converted to a
+///       programmed room. The cost estimate, schematic, signal flow and racks
+///       all work as normal.
 ///
 ///    2. WHERE DO THE DEVICES COME FROM? Starting from the cost estimator —
 ///       picking parts out of the catalog with quantities — is how a room
@@ -126,7 +122,7 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
             ),
             const Divider(height: 28),
             Text(
-              'Will a control system be set up for this room?',
+              'Is this room being programmed now?',
               style: theme.textTheme.titleSmall,
             ),
             const SizedBox(height: 6),
@@ -138,7 +134,7 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
                   RadioListTile<RoomMode>(
                     value: RoomMode.full,
                     contentPadding: EdgeInsets.zero,
-                    title: Text('Yes - configure it now'),
+                    title: Text('Yes - programmed room'),
                     subtitle: Text(
                       'The full room: system settings, device control blocks '
                       'and the processor config, as well as the drawings and '
@@ -146,15 +142,15 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
                     ),
                   ),
                   RadioListTile<RoomMode>(
-                    value: RoomMode.avOnly,
+                    key: ValueKey('new_room_estimate_only'),
+                    value: RoomMode.estimate,
                     contentPadding: EdgeInsets.zero,
-                    title: Text('Not yet - AV only'),
+                    title: Text('Not yet - estimate only'),
                     subtitle: Text(
-                      'Building, room number and the devices. The System and '
-                      'Raw JSON tabs step aside; the schematic, signal flow, '
-                      'racks and costs all work as normal. Devices with no '
-                      'python module are flagged, so the control side has a '
-                      'list waiting when it is built.',
+                      'Price the room first. The Wizard, Devices, System and '
+                      'Raw JSON tabs stay hidden until you convert it to a '
+                      'programmed room; the cost estimate, schematic, AV flow '
+                      'and racks all work as normal.',
                     ),
                   ),
                 ],

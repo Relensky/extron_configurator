@@ -327,7 +327,7 @@ void main() {
           },
         };
       p.loadAvFlowForCurrentConfig();
-      p.setRoomMode(RoomMode.avOnly);
+      p.setRoomMode(RoomMode.estimate);
       return p;
     }
 

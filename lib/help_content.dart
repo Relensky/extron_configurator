@@ -284,6 +284,27 @@ const List<HelpTopic> kHelpTopics = [
         'every other setting on this machine, so they survive an update.',
   ),
   HelpTopic(
+    title: "What's new and the app version",
+    section: 'Start here',
+    where: "Help - What's new, at the top of the list",
+    plain:
+        'Which version of the app you are running, and a list of what has '
+        'changed in each release.',
+    keywords: [
+      'version',
+      'changelog',
+      'release notes',
+      'updates',
+      'what changed',
+    ],
+    body:
+        'The version number is beside the word Help at the top of this '
+        "window. What's new, the first entry in the list, shows every release "
+        'newest first, with what each one added or fixed.\n\n'
+        'Builds before 0.2.0 all carried version 0.1.0, so those entries are '
+        'grouped by date instead.',
+  ),
+  HelpTopic(
     title: 'Where the app keeps your rules',
     section: 'Start here',
     where: 'App Config tab, and the Schema, Flow Rules and Catalog tabs',
@@ -347,6 +368,34 @@ const List<HelpTopic> kHelpTopics = [
   // ---------------------------------------------------------------------------
   //  THE ROOM
   // ---------------------------------------------------------------------------
+  HelpTopic(
+    title: 'Estimate-only rooms',
+    section: 'The room',
+    where: 'New room - "Not yet - estimate only"; Cost tab - Convert to '
+        'programmed room',
+    plain:
+        'A room you are pricing before anyone programs it. Only the tabs '
+        'needed to draw and price the room are shown until you convert it.',
+    keywords: [
+      'estimate only',
+      'av only',
+      'budget',
+      'convert',
+      'programmed room',
+      'hidden tabs',
+    ],
+    body:
+        'Choose "Not yet - estimate only" when creating a room. The Wizard, '
+        'Devices, System and Raw JSON tabs are hidden; the Cost tab, the '
+        'schematic, the AV flow, the floor plan, cabling and racks all work '
+        'as normal. The building and room number are set at the top of the '
+        'Cost tab.\n\n'
+        'When the room is ready to be programmed, press Convert to programmed '
+        'room on the Cost tab. The hidden tabs come back and the Wizard '
+        'opens. If the drawing has devices with no control block yet, you '
+        'can build them from the drawing in the same step.\n\n'
+        'Rooms saved as "AV only" by earlier versions open as estimates.',
+  ),
   HelpTopic(
     title: 'Building a room from a preset',
     section: 'The room',
@@ -679,6 +728,43 @@ const List<HelpTopic> kHelpTopics = [
         'as an estimate rather than mixed in with the ones that are real - a '
         'typical price presented as a quote is how a budget goes wrong '
         'quietly.',
+  ),
+  HelpTopic(
+    title: 'Scope of work and estimate notes',
+    section: 'The money',
+    where: 'Cost tab - Scope of Work, under the heading; Estimate Notes, under '
+        'the totals',
+    plain:
+        'Two free-text boxes on the estimate: what the job covers, and the '
+        'assumptions, exclusions and terms that go with the price.',
+    keywords: ['scope', 'scope of work', 'notes', 'terms', 'exclusions'],
+    body:
+        'Both are saved with the room, and both print on the PDF estimate - '
+        'the scope of work near the top, the notes after the totals. A box '
+        'left empty is left off the PDF and the screenshot.\n\n'
+        'Typing in either one is a single undo step per run of keystrokes, '
+        'like the other boxes on the Cost tab.',
+  ),
+  HelpTopic(
+    title: 'The estimate PDF',
+    section: 'The money',
+    where: 'Cost tab - Export - PDF estimate; App Config - Estimate PDF',
+    plain:
+        'A finished estimate to send out: your logo, who prepared it, the '
+        'scope of work, every priced line, the totals and your notes.',
+    keywords: ['pdf', 'export', 'logo', 'prepared by', 'quote', 'print'],
+    body:
+        'The logo and the name under "Prepared by" are set once in App Config '
+        'under Estimate PDF, with an optional contact line such as an email '
+        'address. The logo can be a PNG or a JPEG and prints in the top right '
+        'corner of the first page.\n\n'
+        'The PDF lists equipment, rack hardware, cabling, labor and other '
+        'items with their quantities and amounts, then the subtotal, fees, '
+        'tax and total. Lines furnished by somebody else say so instead of '
+        'showing an amount, and a line with no price yet shows TBD. Where the '
+        'prices came from is not printed - that is working information, not '
+        'part of the quote.\n\n'
+        'If the room is on the open project, the project name is printed too.',
   ),
   HelpTopic(
     title: 'Base costs - the category rate card',

@@ -6,22 +6,97 @@ import 'app_state.dart';
 import 'control_prefill_dialog.dart';
 
 /// ============================================================================
-///  AV-ONLY ROOMS
+///  ESTIMATE-ONLY ROOMS
 /// ============================================================================
-///  A room created without a control system still has devices, drawings, racks
-///  and a price. What it does not have is a processor config — so the System
-///  and Raw JSON tabs would be editing a document nobody has decided on yet.
-///  Rather than hide them (and leave the user wondering where they went), they
-///  say what state the room is in and offer the one button that changes it.
-///
-///  The other half is the reminder. The single thing an AV-only room is
-///  missing, once the control side gets built, is which python module each
-///  device runs — a processor cannot talk to a device without one. That list
-///  is worth carrying in front of the user from the moment the devices exist,
-///  not discovered at commissioning.
+///  A room being priced before it is programmed. The Wizard, Devices, System
+///  and Raw JSON tabs stay hidden until somebody converts it; the drawings,
+///  racks and costs all work as normal.
 /// ============================================================================
 
-/// Stands in for the System / Raw JSON tabs while a room has no control system.
+/// Converts an estimate-only room to a programmed room, after asking.
+///
+/// Offers to build control blocks from the drawing when it has devices
+/// without one. Returns true when the room was converted.
+Future<bool> convertToProgrammedRoom(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  final unbuilt = provider.avDevicesWithoutControl.length;
+  final choice = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Convert to a programmed room?'),
+      content: SizedBox(
+        width: 460,
+        child: Text(
+          'The Wizard, Devices, System and Raw JSON tabs come back so the '
+          'control system can be set up. The drawings and the estimate are '
+          'kept as they are.'
+          '${unbuilt == 0 ? '' : '\n\n$unbuilt device'
+              '${unbuilt == 1 ? '' : 's'} on the drawing '
+              '${unbuilt == 1 ? 'has' : 'have'} no control block yet.'}',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Cancel'),
+        ),
+        if (unbuilt > 0)
+          OutlinedButton(
+            onPressed: () => Navigator.of(ctx).pop('build'),
+            child: const Text('Convert and build control blocks'),
+          ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(ctx).pop('convert'),
+          child: const Text('Convert'),
+        ),
+      ],
+    ),
+  );
+  if (choice == null || !context.mounted) return false;
+  if (choice == 'build') {
+    // The review dialog switches the mode when it writes the blocks.
+    await showControlPrefillDialog(context, provider);
+  } else {
+    provider.setRoomMode(RoomMode.full);
+  }
+  if (provider.isEstimateRoom) return false;
+  provider.selectTab(AppTab.wizard.index);
+  return true;
+}
+
+/// Shown only while the room is estimate-only.
+class ConvertToProgrammedRoomButton extends StatelessWidget {
+  final bool prominent;
+
+  const ConvertToProgrammedRoomButton({super.key, this.prominent = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    if (!provider.isEstimateRoom) return const SizedBox.shrink();
+    const icon = Icon(Icons.memory, size: 18);
+    const label = Text('Convert to programmed room');
+    void go() => convertToProgrammedRoom(context, provider);
+    return prominent
+        ? ElevatedButton.icon(
+            key: const ValueKey('convert_to_programmed'),
+            icon: icon,
+            label: label,
+            onPressed: go,
+          )
+        : OutlinedButton.icon(
+            key: const ValueKey('convert_to_programmed'),
+            icon: icon,
+            label: label,
+            onPressed: go,
+          );
+  }
+}
+
+/// Stands in for a tab that is hidden while the room is estimate-only, when
+/// something navigates to it anyway.
 class ControlSystemPlaceholder extends StatelessWidget {
   /// What the tab would have shown, so the message names it.
   final String tabName;
@@ -30,7 +105,6 @@ class ControlSystemPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppStateProvider>();
     final theme = Theme.of(context);
     return Center(
       child: ConstrainedBox(
@@ -44,14 +118,14 @@ class ControlSystemPlaceholder extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    Icons.settings_suggest_outlined,
+                    Icons.request_quote_outlined,
                     size: 32,
                     color: theme.disabledColor,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'No control system yet',
+                      'Estimate only',
                       style: theme.textTheme.headlineSmall,
                     ),
                   ),
@@ -59,60 +133,22 @@ class ControlSystemPlaceholder extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'This room was created as AV only, so $tabName is set aside - '
-                'it edits the processor\'s config, and nobody has committed to '
-                'one for this room.',
+                'This room is an estimate, so $tabName is hidden until it is '
+                'converted to a programmed room.',
                 style: theme.textTheme.bodyMedium,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
-                'Everything else works normally: the devices, the schematic, '
-                'the signal flow, the racks and the costs are all about the '
-                'room rather than the processor. The devices are recorded in '
-                'ordinary config blocks, so none of it is re-entered when the '
-                'control side is built.',
+                'The cost estimate, schematic, AV flow, floor plan, cabling '
+                'and racks all work as normal.',
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 24),
               const MissingModulesBanner(),
               const SizedBox(height: 24),
-              // The one that does the work, first. A room budgeted before its
-              // control config already has every device recorded on the
-              // diagram; typing them all in again is the step this replaces,
-              // and offering only the bare mode switch left that job to
-              // whoever pressed it.
               const Align(
                 alignment: Alignment.centerLeft,
-                child: BuildControlSideButton(prominent: true),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Creates a control block for every device on the signal flow, '
-                'prefilled from this application\'s defaults for its family '
-                'and named in order. Devices no python module claims are '
-                'created with the module blank and flagged, here and on the '
-                'exported report.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.disabledColor,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.play_arrow, size: 18),
-                  label: const Text('Just turn the tabs on'),
-                  onPressed: () => provider.setRoomMode(RoomMode.full),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Turns the System and Raw JSON tabs back on without creating '
-                'anything. Nothing is discarded either way - the mode is '
-                'recorded with the room.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.disabledColor,
-                ),
+                child: ConvertToProgrammedRoomButton(prominent: true),
               ),
             ],
           ),
@@ -219,7 +255,7 @@ class MissingModulesBanner extends StatelessWidget {
     // room a box on the diagram with no config block is usually deliberate —
     // a display, a laptop input, a speaker — and flagging every one of those
     // is how a warning turns into wallpaper.
-    final uncontrolled = provider.isAvOnlyRoom
+    final uncontrolled = provider.isEstimateRoom
         ? provider.avDevicesWithoutControl
         : const <UnmodularDevice>[];
     // Devices somebody has already been through and marked as needing no
