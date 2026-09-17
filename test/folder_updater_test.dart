@@ -12,6 +12,7 @@ import 'package:extron_configurator/updater/folder_updater.dart';
 import 'package:extron_configurator/updater/update_platform_io.dart';
 import 'package:extron_configurator/updater/update_widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// A fake exe: junk, the VS_VERSION_INFO key in UTF-16, padding, then a
@@ -355,6 +356,84 @@ void main() {
       expect(find.text('Update to version 2.0.0?'), findsOneWidget);
       u.dispose();
     });
+
+    testWidgets('userBusy holds the offer back until the user is free',
+        (tester) async {
+      final u = availableUpdater()..setBusy(#game, true);
+      await tester.pumpWidget(app(u));
+      expect(find.text('Update available'), findsNothing);
+      u
+        ..setBusy(#typing, true)
+        ..setBusy(#game, false);
+      await tester.pump();
+      expect(find.text('Update available'), findsNothing,
+          reason: 'still busy while any reason is');
+      u.setBusy(#typing, false);
+      await tester.pump();
+      expect(find.text('Update available'), findsOneWidget);
+      u.dispose();
+    });
+  });
+
+  group('timed checks', () {
+    // The folder is missing, so a check ends quickly as folderUnavailable.
+    FolderUpdater updater({required Duration first, required Duration every}) =>
+        FolderUpdater(
+          appName: 'Test App',
+          releasePrefix: 'test_app',
+          releaseFolder: '${tmp.path}\\nope',
+          firstCheckDelay: first,
+          checkInterval: every,
+        );
+
+    test('the launch check runs even when the user is busy', () async {
+      final u = updater(first: Duration.zero, every: const Duration(hours: 1))
+        ..setBusy(#game, true);
+      await u.start();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await u.checkNow(); // joins it if it is still running
+      expect(u.lastChecked, isNotNull);
+      u.dispose();
+    });
+
+    test('later checks wait while the user is busy, then run', () async {
+      final u = updater(
+          first: const Duration(hours: 1),
+          every: const Duration(milliseconds: 20))
+        ..setBusy(#game, true);
+      await u.start();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(u.lastChecked, isNull, reason: 'no check while busy');
+
+      u.setBusy(#game, false);
+      await u.checkNow(); // joins the check that was held back
+      expect(u.lastChecked, isNotNull);
+      u.dispose();
+    });
+  });
+
+  testWidgets('UserActivityWatcher stays busy until the user stops',
+      (tester) async {
+    final u = FolderUpdater(appName: 'Test App', releasePrefix: 'test_app');
+    final watcher =
+        UserActivityWatcher(u, quietPeriod: const Duration(seconds: 10))
+          ..start();
+    await tester.pumpWidget(
+        const MaterialApp(home: Material(child: TextField(autofocus: true))));
+    await tester.pump();
+
+    expect(u.userBusy, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+    expect(u.userBusy, isTrue);
+    await tester.pump(const Duration(seconds: 6));
+    await tester.tap(find.byType(TextField));
+    await tester.pump(const Duration(seconds: 6));
+    expect(u.userBusy, isTrue, reason: 'the click restarted the quiet period');
+    await tester.pump(const Duration(seconds: 5));
+    expect(u.userBusy, isFalse);
+
+    watcher.dispose();
+    u.dispose();
   });
 
   group('apply helper script', () {

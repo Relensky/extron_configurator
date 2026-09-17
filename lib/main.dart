@@ -79,9 +79,10 @@ void main() {
       child: const RoomConfigApp(),
     ),
   );
-  // Looks for a newer release in the background; the first look waits a
-  // little so startup never does. See app_updates.dart.
+  // Looks for a newer release just after launch, and again every half hour
+  // once the user is not in the middle of an edit. See app_updates.dart.
   unawaited(appUpdater.start());
+  UserActivityWatcher(appUpdater).start();
 }
 
 class RoomConfigApp extends StatelessWidget {
@@ -327,14 +328,42 @@ class _MainDashboardState extends State<MainDashboard> {
   /// gets its own prompt.
   String _recoveryAsked = '';
 
+  /// Held so [dispose] can stop listening without reaching for the context.
+  AppStateProvider? _provider;
+  bool _unsavedCheckScheduled = false;
+
   @override
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
+    _provider = context.read<AppStateProvider>()
+      ..addListener(_scheduleUnsavedCheck);
+    _scheduleUnsavedCheck();
+  }
+
+  /// UNSAVED WORK HOLDS THE UPDATE CHECKS BACK.
+  ///
+  /// Somebody with edits that are not on disk is in the middle of something,
+  /// so the half-hourly check waits (and its card stays hidden) until they
+  /// save. Asked at most once a frame: the provider notifies many times a
+  /// frame while editing, and each notify throws away the cached fingerprint
+  /// [AppStateProvider.hasUnsavedWork] compares against.
+  void _scheduleUnsavedCheck() {
+    if (_unsavedCheckScheduled) return;
+    _unsavedCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _unsavedCheckScheduled = false;
+      final provider = _provider;
+      if (!mounted || provider == null) return;
+      appUpdater.setBusy(this, provider.hasUnsavedWork);
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   @override
   void dispose() {
+    _provider?.removeListener(_scheduleUnsavedCheck);
+    appUpdater.setBusy(this, false);
     _lifecycle?.dispose();
     super.dispose();
   }

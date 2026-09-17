@@ -265,6 +265,35 @@ class FolderUpdater extends ChangeNotifier {
   Future<void>? _checking;
   bool _disposed = false;
 
+  final Set<Object> _busyReasons = {};
+  bool _checkDue = false;
+
+  /// True while the user is in the middle of something the app should not
+  /// interrupt - a game, typing, unsaved edits. The half-hourly checks wait
+  /// (one that comes due runs as soon as the user is free) and
+  /// [UpdateNoticeHost] keeps the offer out of sight. The check just after
+  /// [start], [checkNow], and an install already asked for are not held back.
+  bool get userBusy => _busyReasons.isNotEmpty;
+
+  /// Marks the user busy, or no longer busy, for [reason] - any object, so
+  /// separate parts of an app (a game screen, a UserActivityWatcher, an
+  /// unsaved-work flag) can each hold the updater back without undoing each
+  /// other. The user is busy while any reason is.
+  void setBusy(Object reason, bool busy) {
+    final wasBusy = userBusy;
+    if (busy) {
+      _busyReasons.add(reason);
+    } else {
+      _busyReasons.remove(reason);
+    }
+    if (userBusy == wasBusy) return;
+    if (!userBusy && _checkDue) {
+      _checkDue = false;
+      unawaited(checkNow());
+    }
+    _notify();
+  }
+
   /// Reads the running version, picks up the result of an install that just
   /// happened, and starts checking the folder on a timer.
   Future<void> start() async {
@@ -282,10 +311,22 @@ class FolderUpdater extends ChangeNotifier {
       _log('Could not read the running version: $e');
     }
     _notify();
-    _timer = Timer.periodic(checkInterval, (_) => unawaited(checkNow()));
+    _timer = Timer.periodic(checkInterval, (_) => _timedCheck());
+    // The launch check always runs: it is background I/O, and a card it
+    // raises still waits for the user to be free.
     Future.delayed(firstCheckDelay, () {
       if (!_disposed) unawaited(checkNow());
     });
+  }
+
+  /// A check the timer asked for: held until the user is not [userBusy].
+  void _timedCheck() {
+    if (_disposed) return;
+    if (userBusy) {
+      _checkDue = true;
+      return;
+    }
+    unawaited(checkNow());
   }
 
   /// Looks in the release folder now. Safe to call while a check is running;

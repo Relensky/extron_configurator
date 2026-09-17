@@ -3,8 +3,11 @@
 //
 //   * [UpdateNoticeHost] wraps the app (MaterialApp.builder) and shows a small
 //     card in the corner when a newer release is in the folder. It never
-//     blocks anything: "Later" hides it for that version, and nothing installs
-//     until the user presses Update and then confirms.
+//     blocks anything: "Later" hides it for that version, it waits while the
+//     updater is marked userBusy, and nothing installs until the user presses
+//     Update and then confirms.
+//   * [UserActivityWatcher] marks the updater busy while someone is typing or
+//     clicking, so neither the checks nor the card land in the middle of it.
 //   * [UpdateSettingsSection] goes in a settings screen: the running version,
 //     the folder being watched, the last check, and Check now / Update.
 //
@@ -14,7 +17,9 @@
 
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'folder_updater.dart';
 
@@ -47,7 +52,7 @@ class UpdateNoticeHost extends StatelessWidget {
             final started = u.confirming ||
                 u.installFailed ||
                 u.status == UpdateStatus.installing;
-            if (!u.showNotice || (hidden && !started)) {
+            if (!u.showNotice || ((hidden || u.userBusy) && !started)) {
               return const SizedBox.shrink();
             }
             return Positioned(
@@ -308,5 +313,64 @@ class UpdateSettingsSection extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// Holds [updater] busy while the user is working - any key press or click -
+/// and until [quietPeriod] has passed without one. A half-hourly check that
+/// comes due meanwhile runs once they stop.
+///
+/// Hovering and scrolling do not count: reading is not interrupted by a card
+/// in the corner, and a mouse resting on the window would otherwise hold
+/// updates back forever.
+class UserActivityWatcher {
+  final FolderUpdater updater;
+  final Duration quietPeriod;
+
+  UserActivityWatcher(
+    this.updater, {
+    this.quietPeriod = const Duration(minutes: 2),
+  });
+
+  Timer? _quiet;
+  bool _started = false;
+
+  /// Starts listening. Call once the binding exists, e.g. after `runApp`.
+  void start() {
+    if (_started) return;
+    _started = true;
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_onPointer);
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  void dispose() {
+    if (_started) {
+      GestureBinding.instance.pointerRouter.removeGlobalRoute(_onPointer);
+      HardwareKeyboard.instance.removeHandler(_onKey);
+      _started = false;
+    }
+    _quiet?.cancel();
+    _quiet = null;
+    updater.setBusy(this, false);
+  }
+
+  void _onPointer(PointerEvent event) {
+    if (event is PointerDownEvent) _activity();
+  }
+
+  bool _onKey(KeyEvent event) {
+    if (event is KeyDownEvent) _activity();
+    return false; // Only watching; the key still goes where it was going.
+  }
+
+  void _activity() {
+    // Keys and clicks come at human speed, so restarting one timer on each is
+    // nothing.
+    _quiet?.cancel();
+    _quiet = Timer(quietPeriod, () {
+      _quiet = null;
+      updater.setBusy(this, false);
+    });
+    updater.setBusy(this, true);
   }
 }
