@@ -868,11 +868,13 @@ class _MainDashboardState extends State<MainDashboard> {
           provider.lastLoadHadChanges,
           provider.conversionAcknowledged,
         )) {
-          (false, _) => 'Nothing to convert in this file',
+          (false, _) => provider.lastLoadHadNotes
+              ? 'Nothing to convert - open the notes on this file'
+              : 'Nothing to convert in this file',
           (true, false) => 'Convert - review the changes this file needs',
           (true, true) => 'Conversion reviewed - open the log again',
         },
-        onPressed: provider.lastLoadHadChanges
+        onPressed: provider.lastLoadHadChanges || provider.lastLoadHadNotes
             ? () => _showMigrationLogDialog(context, provider.systemLogs)
             : null,
       ),

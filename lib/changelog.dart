@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.3.1+4';
+const String kAppVersion = '0.3.2+5';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,20 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.3.2',
+    date: 'September 18, 2026',
+    title: 'No convert notice for rooms that are already converted',
+    changes: [
+      'Opening a room that is already in the current format no longer says '
+          'it needs converting, or puts a count of 0 on the Convert button. '
+          'Notes about the file - a key the default template does not have, '
+          'a module to set by hand, a device count that looks too low - were '
+          'being counted as changes.',
+      'Those notes can still be read: when a file has notes but nothing to '
+          'convert, the Convert button opens them without showing a count.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.3.1',
     date: 'September 18, 2026',

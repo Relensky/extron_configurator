@@ -161,4 +161,95 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  /// A file that is already converted can still carry notes - keys the
+  /// template does not have, a module to set by hand. Those change nothing, so
+  /// they must not say the file needs converting.
+  group('notes are not changes', () {
+    // The log of an already-converted room, as the app wrote it.
+    const convertedRoomLog = [
+      "BACKUP SAVED: Original file preserved as 'KNDL106C_old_config.json'",
+      '--------------------------------------------------',
+      'OK: Loaded config already matches the current template schema. '
+          'No changes required.',
+      "FLAGGED: 'POWERDEVICE_1.module' is empty and no python module claims "
+          "model 'SX-DPP-102' - set it by hand.",
+      "FLAGGED: SYSTEM_SETUP property 'gui_huddle_space' is not in the "
+          'default config template.',
+      "FLAGGED: 'PROJECTORDEVICE_1.baud' is not in the default config "
+          'template.',
+      'TEMPLATE AUDIT: 3 item(s) in this config are not part of the default '
+          'template.',
+    ];
+
+    test('a converted room with flagged keys needs no converting', () {
+      expect(AppStateProvider.loadLogHasChanges(convertedRoomLog), isFalse);
+      expect(AppStateProvider.loadLogHasNotes(convertedRoomLog), isTrue);
+    });
+
+    test('skipped key maps and count warnings are notes too', () {
+      const log = [
+        "KEYMAP SKIPPED: section 'X' maps to 'Y' which already exists.",
+        'COUNT WARNING: 3 DISPLAYDEVICE_x blocks exist but '
+            "num_displays is '2'.",
+      ];
+      expect(AppStateProvider.loadLogHasChanges(log), isFalse);
+      expect(AppStateProvider.loadLogHasNotes(log), isTrue);
+    });
+
+    test('a real change among the notes still counts', () {
+      for (final change in [
+        'KEY MAPPING: Translated 6 legacy item(s) using key_map.json',
+        "KEYMAP: added missing 'POWERDEVICE_1.protocol' (default: 'TCP')",
+        "-> Added missing property: 'gve_room' (Default: '000')",
+        "COUNT RECOVERED: 'num_displays' was missing from the file",
+        "CONFLICT: 'PROJECTORDEVICE_1.ip' held '10.0.0.5' but the device is "
+            'Serial - removed.',
+      ]) {
+        expect(
+          AppStateProvider.loadLogHasChanges([...convertedRoomLog, change]),
+          isTrue,
+          reason: change,
+        );
+      }
+    });
+
+    testWidgets('notes alone leave the badge down but the log reachable', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1600, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final provider = AppStateProvider(autoLoadSettings: false)
+        ..processors =
+            jsonDecode(File('processors.json').readAsStringSync()) as List
+        ..buildings =
+            jsonDecode(File('buildings.json').readAsStringSync())
+                as Map<String, dynamic>
+        ..settingsLoaded = true
+        ..firstRunSetupNeeded = false
+        ..lastLoadHadNotes = true;
+      provider.systemLogs.addAll(convertedRoomLog);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: provider,
+          child: const RoomConfigApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final badge = find.byKey(const ValueKey('conversion_badge'));
+      expect(tester.widget<Badge>(badge).isLabelVisible, isFalse);
+
+      final button =
+          find.byTooltip('Nothing to convert - open the notes on this file');
+      expect(button, findsOneWidget);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

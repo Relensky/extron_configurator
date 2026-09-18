@@ -1402,6 +1402,28 @@ class AppStateProvider extends ChangeNotifier {
   /// stays silent.
   bool lastLoadHadChanges = false;
 
+  /// True when the last load left notes that change nothing (see
+  /// [loadLogHasNotes]). They keep the log reachable from the Convert button
+  /// without the badge or the "needs converting" notice.
+  bool lastLoadHadNotes = false;
+
+  /// Log lines that mean the load changed the config.
+  static bool loadLogHasChanges(List<String> logs) =>
+      logs.any((l) => !_isLoadNote(l) && _changePrefixes.any(l.startsWith));
+
+  /// Log lines that flag something for a person but change nothing.
+  static bool loadLogHasNotes(List<String> logs) => logs.any(_isLoadNote);
+
+  static const _changePrefixes = [
+    'KEY MAPPING', 'KEYMAP', '->', 'SYSTEM MIGRATION', 'CRITICAL', 'COUNT',
+    'BUILDING CODE', 'DEFAULTS', 'CONFLICT', 'MODULE', 'AUTO-NAME',
+  ];
+
+  static bool _isLoadNote(String l) =>
+      l.startsWith('FLAGGED') ||
+      l.startsWith('COUNT WARNING') ||
+      l.startsWith('KEYMAP SKIPPED');
+
   /// True once the user has dealt with that conversion — read the log and
   /// acknowledged it, or been through the preview and applied their choices.
   ///
@@ -1638,6 +1660,7 @@ class AppStateProvider extends ChangeNotifier {
       roomConfig = jsonDecode(contents);
       systemLogs.clear();
       lastLoadHadChanges = false;
+      lastLoadHadNotes = false;
       conversionAcknowledged = false;
       // Nothing was converted, so there is no provenance to color by
       _clearConversionProvenance();
@@ -7838,26 +7861,16 @@ class AppStateProvider extends ChangeNotifier {
     // acknowledgement next to the backup, named to match it:
     //   SFTP download -> BSS103_backup_log.txt (processor dropdown room)
     //   local open    -> <original file name>_backup_log.txt
-    final bool hasChanges = systemLogs.any((l) =>
-        l.startsWith('KEY MAPPING') ||
-        l.startsWith('KEYMAP') ||
-        l.startsWith('->') ||
-        l.startsWith('SYSTEM MIGRATION') ||
-        l.startsWith('CRITICAL') ||
-        l.startsWith('FLAGGED') ||
-        l.startsWith('COUNT') ||
-        l.startsWith('BUILDING CODE') ||
-        l.startsWith('DEFAULTS') ||
-        l.startsWith('CONFLICT') ||
-        l.startsWith('MODULE') ||
-        l.startsWith('AUTO-NAME'));
-    // The acknowledgement dialog keys off this: a clean re-load of an
-    // already-migrated file (backup + OK lines only) shows no dialog.
+    final bool hasChanges = loadLogHasChanges(systemLogs);
+    final bool hasNotes = loadLogHasNotes(systemLogs);
+    // The Convert badge and notice key off this: a clean re-load of an
+    // already-migrated file shows neither, even with notes about it.
     lastLoadHadChanges = hasChanges;
+    lastLoadHadNotes = hasNotes;
     // A fresh load is a fresh conversion to deal with, so the count comes
     // back — which is the other half of clearing it when the work is done.
     conversionAcknowledged = false;
-    if (hasChanges) {
+    if (hasChanges || hasNotes) {
       String logBase = changeLogBaseName ?? backupBaseName ?? '';
       if (logBase.isEmpty) {
         // Fall back to the same identifiers the backup name uses
@@ -8113,6 +8126,7 @@ class AppStateProvider extends ChangeNotifier {
       // which reads as this config having been converted from that room.
       systemLogs.clear();
       lastLoadHadChanges = false;
+      lastLoadHadNotes = false;
       conversionAcknowledged = false;
 
       // Nothing carried over from the previous room can be restored into this
@@ -8200,6 +8214,7 @@ class AppStateProvider extends ChangeNotifier {
     _clearConversionProvenance();
     systemLogs.clear();
     lastLoadHadChanges = false;
+    lastLoadHadNotes = false;
     conversionAcknowledged = false;
     _prunedSystemKeys.clear();
     _prunedSourceInputs.clear();
