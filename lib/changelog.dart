@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.3.0+3';
+const String kAppVersion = '0.3.1+4';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,23 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.3.1',
+    date: 'September 18, 2026',
+    title: 'Estimate PDF logo corner and accent color',
+    changes: [
+      'The logo on the estimate PDF can print in the top left or top right '
+          'corner - App Config - Estimate PDF - Logo corner. With the logo on '
+          'the left, the Estimate title and the building and room number move '
+          'to the right. Right is still the default.',
+      'The estimate PDF\'s accent color - the headings, rules and total band '
+          '- can be changed in App Config - Estimate PDF. Pick one of the '
+          'swatches, any color off the color wheel, or Default for the navy '
+          'it has always printed in.',
+      'The theme accent and secondary color pickers in App Config have a '
+          'color wheel swatch too, for any color that is not on the grid.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.3.0',
     date: 'September 17, 2026',

@@ -141,6 +141,19 @@ void main() {
       expect(json['estimatePreparerContact'], 'pat@example.edu');
     });
 
+    test('the logo side and accent are saved, unknown sides read as right',
+        () async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      expect(p.estimateLogoSide, 'right');
+      await p.updateSetting('estimateLogoSide', 'left');
+      await p.updateSetting('estimateAccent', '0D47A1');
+      final json = p.settingsAsJson();
+      expect(json['estimateLogoSide'], 'left');
+      expect(json['estimateAccent'], '0D47A1');
+      await p.updateSetting('estimateLogoSide', 'middle');
+      expect(p.estimateLogoSide, 'right');
+    });
+
     testWidgets('App Config edits the preparer', (tester) async {
       final p = AppStateProvider(autoLoadSettings: false);
       await tester.pumpWidget(

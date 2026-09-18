@@ -4704,6 +4704,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           preparerContact: provider.estimatePreparerContact.trim(),
           date: DateTime.now(),
           logo: logo,
+          logoOnLeft: provider.estimateLogoSide == 'left',
+          accent: estimateAccentColor(provider.estimateAccent),
           scopeOfWork: settings.scopeOfWork,
           notes: settings.notes,
         ),

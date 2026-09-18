@@ -36,6 +36,7 @@ import 'flow_rules_view.dart';
 import 'schema_editor_view.dart';
 import 'device_start_wizard.dart';
 import 'cabling_view.dart';
+import 'color_wheel_picker.dart';
 import 'floor_plan_view.dart';
 import 'model_defaults_dialog.dart';
 import 'online_copy_dialog.dart';
@@ -2496,19 +2497,26 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
 /// secondary element color of both styles in App Config (and in the
 /// first-run setup dialog); tapping a swatch persists it immediately and
 /// the theme rebuilds live. With [allowAuto], an extra first swatch clears
-/// the setting so the theme derives the color itself.
+/// the setting so the theme derives the color itself. The last swatch opens
+/// the color wheel for anything off the grid.
 class AccentColorPicker extends StatelessWidget {
   /// Which provider setting the picker writes: 'classicColor' |
-  /// 'aurisColor' | 'classicSecondary'.
+  /// 'aurisColor' | 'classicSecondary' | 'estimateAccent'.
   final String settingKey;
   final List<Color> swatches;
   final bool allowAuto;
+  final String autoLabel;
+
+  /// Fills the auto swatch when auto stands for one known color.
+  final Color? autoColor;
 
   const AccentColorPicker(
       {super.key,
       required this.settingKey,
       required this.swatches,
-      this.allowAuto = false});
+      this.allowAuto = false,
+      this.autoLabel = 'Auto (theme default)',
+      this.autoColor});
 
   String _currentHex(AppStateProvider p) {
     switch (settingKey) {
@@ -2516,10 +2524,15 @@ class AccentColorPicker extends StatelessWidget {
         return p.aurisColor;
       case 'classicSecondary':
         return p.classicSecondary;
+      case 'estimateAccent':
+        return p.estimateAccent;
       default:
         return p.classicColor;
     }
   }
+
+  static String _hexOf(Color c) =>
+      (c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
 
   Widget _swatch(BuildContext context,
       {required bool selected,
@@ -2558,14 +2571,17 @@ class AccentColorPicker extends StatelessWidget {
         // AUTO: clear the setting so the theme derives this color itself
         if (allowAuto)
           Tooltip(
-            message: 'Auto (theme default)',
+            message: autoLabel,
             child: _swatch(
               context,
               selected: hexNow.isEmpty,
+              color: autoColor,
               onTap: () => provider.updateSetting(settingKey, ''),
               child: Icon(Icons.auto_fix_normal,
                   size: 18,
-                  color: Theme.of(context).colorScheme.onSurface),
+                  color: autoColor != null
+                      ? readableOn(autoColor!)
+                      : Theme.of(context).colorScheme.onSurface),
             ),
           ),
         ...swatches.map((color) {
@@ -2575,17 +2591,38 @@ class AccentColorPicker extends StatelessWidget {
             context,
             selected: selected,
             color: color,
-            onTap: () {
-              final hex = color
-                  .toARGB32()
-                  .toRadixString(16)
-                  .toUpperCase()
-                  .substring(2); // strip alpha -> RRGGBB
-              provider.updateSetting(settingKey, hex);
-            },
+            onTap: () => provider.updateSetting(settingKey, _hexOf(color)),
             child: selected
                 ? const Icon(Icons.check, size: 18, color: Colors.white)
                 : null,
+          );
+        }),
+        // WHEEL: any color. Filled with the current one when it is off-grid.
+        Builder(builder: (context) {
+          final bool custom = hexNow.isNotEmpty &&
+              !swatches.any((c) => c.toARGB32() == current.toARGB32());
+          return Tooltip(
+            message: 'Pick from the color wheel',
+            child: _swatch(
+              context,
+              selected: custom,
+              color: custom ? current : null,
+              onTap: () async {
+                final picked = await showColorWheelDialog(context,
+                    initial: hexNow.isEmpty
+                        ? autoColor ?? swatches.first
+                        : current,
+                    title: 'Pick a color');
+                if (picked != null) {
+                  provider.updateSetting(settingKey, _hexOf(picked));
+                }
+              },
+              child: Icon(Icons.palette_outlined,
+                  size: 18,
+                  color: custom
+                      ? readableOn(current)
+                      : Theme.of(context).colorScheme.onSurface),
+            ),
           );
         }),
       ],

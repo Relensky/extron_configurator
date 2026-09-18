@@ -916,6 +916,8 @@ class AppStateProvider extends ChangeNotifier {
       'currencySymbol': currencySymbol,
       'pricingTier': pricingTier.name,
       'estimateLogoPath': estimateLogoPath,
+      'estimateLogoSide': estimateLogoSide,
+      'estimateAccent': estimateAccent,
       'estimatePreparedBy': estimatePreparedBy,
       'estimatePreparerContact': estimatePreparerContact,
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
@@ -1220,8 +1222,16 @@ class AppStateProvider extends ChangeNotifier {
   /// per estimate run rather than per device.
   PricingTier pricingTier = PricingTier.msrp;
 
-  /// The image in the top right corner of an estimate PDF. '' prints none.
+  /// The image in the top corner of an estimate PDF. '' prints none.
   String estimateLogoPath = '';
+
+  /// Which top corner the logo prints in: 'right' (default) or 'left'. The
+  /// title takes the other side.
+  String estimateLogoSide = 'right';
+
+  /// The estimate PDF's headings and total band (RRGGBB hex), or '' for the
+  /// built-in navy.
+  String estimateAccent = '';
 
   /// Who the estimate PDF says prepared it.
   String estimatePreparedBy = '';
@@ -7366,6 +7376,9 @@ class AppStateProvider extends ChangeNotifier {
       currencySymbol = str('currencySymbol', r'$');
       pricingTier = pricingTierFromName(str('pricingTier', ''));
       estimateLogoPath = str('estimateLogoPath', '');
+      estimateLogoSide =
+          str('estimateLogoSide', 'right') == 'left' ? 'left' : 'right';
+      estimateAccent = str('estimateAccent', '');
       estimatePreparedBy = str('estimatePreparedBy', '');
       estimatePreparerContact = str('estimatePreparerContact', '');
       fillDeviceDefaultsOnLoad = saved['fillDeviceDefaultsOnLoad'] is bool
@@ -8379,6 +8392,12 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'estimateLogoPath':
         estimateLogoPath = value.trim();
+        break;
+      case 'estimateLogoSide':
+        estimateLogoSide = value == 'left' ? 'left' : 'right';
+        break;
+      case 'estimateAccent':
+        estimateAccent = value; // RRGGBB hex, or '' = built-in navy
         break;
       case 'estimatePreparedBy':
         estimatePreparedBy = value;

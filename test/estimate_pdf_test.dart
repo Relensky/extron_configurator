@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
 
 import 'package:extron_configurator/cost_estimate.dart';
 import 'package:extron_configurator/estimate_pdf.dart';
@@ -163,6 +164,56 @@ void main() {
       compress: false,
     );
     expect(latin1.decode(bytes), isNot(contains(RegExp(r'/Subtype\s*/Image'))));
+  });
+
+  // Where the logo image and the title start, in points from the left margin.
+  Future<(double, double)> header({required bool logoOnLeft}) async {
+    final raw = latin1.decode(await buildEstimatePdf(
+      estimate(),
+      EstimatePdfInfo(
+        roomName: 'Room',
+        date: DateTime(2026, 1, 2),
+        logo: Uint8List.fromList(logo),
+        logoOnLeft: logoOnLeft,
+      ),
+      compress: false,
+    ));
+    final image = RegExp(r'1 0 0 1 ([\d.]+) 0 cm q 0 0 64 64 re W n')
+        .firstMatch(raw);
+    final title = RegExp(r'([\d.]+) [\d.]+ Td \[\(ESTIMATE\)\]TJ')
+        .firstMatch(raw);
+    return (double.parse(image!.group(1)!), double.parse(title!.group(1)!));
+  }
+
+  test('the logo prints top right by default, the title on the left', () async {
+    final (logoX, titleX) = await header(logoOnLeft: false);
+    expect(logoX, greaterThan(300));
+    expect(titleX, 0);
+  });
+
+  test('a logo on the left pushes the title to the right', () async {
+    final (logoX, titleX) = await header(logoOnLeft: true);
+    expect(logoX, 0);
+    expect(titleX, greaterThan(300));
+  });
+
+  test('the accent color is the one chosen', () async {
+    Future<String> raw(PdfColor? accent) async => latin1.decode(
+      await buildEstimatePdf(
+        estimate(),
+        EstimatePdfInfo(
+          roomName: 'Room',
+          date: DateTime(2026, 1, 2),
+          accent: accent,
+        ),
+        compress: false,
+      ),
+    );
+    final red = await raw(estimateAccentColor('FF0000'));
+    expect(red, contains(' 1 0 0 rg'));
+    expect(red, isNot(contains('0.12157 0.22745 0.37255 rg')));
+    final navy = await raw(estimateAccentColor(''));
+    expect(navy, contains('0.12157 0.22745 0.37255 rg'));
   });
 
   test('builds with the system font when it is there', () async {

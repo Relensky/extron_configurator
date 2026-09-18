@@ -10,7 +10,7 @@ import 'cost_estimate.dart';
 /// ============================================================================
 ///  THE ESTIMATE AS A PDF
 /// ============================================================================
-///  The client-facing copy of the Cost tab: logo top right, who prepared it,
+///  The client-facing copy of the Cost tab: logo in a top corner, who prepared it,
 ///  the scope of work, the priced lines, the totals and the notes. Only what
 ///  the reader of a quote needs - no pricing sources or app wording.
 /// ============================================================================
@@ -30,6 +30,12 @@ class EstimatePdfInfo {
   /// PNG or JPEG bytes, or null for no logo.
   final Uint8List? logo;
 
+  /// Logo in the top left corner, title on the right. Default is the reverse.
+  final bool logoOnLeft;
+
+  /// Headings, rules and the total band. Null prints [defaultEstimateAccent].
+  final PdfColor? accent;
+
   final String scopeOfWork;
   final String notes;
 
@@ -40,6 +46,8 @@ class EstimatePdfInfo {
     this.preparerContact = '',
     required this.date,
     this.logo,
+    this.logoOnLeft = false,
+    this.accent,
     this.scopeOfWork = '',
     this.notes = '',
   });
@@ -47,7 +55,7 @@ class EstimatePdfInfo {
 
 const _ink = PdfColor.fromInt(0xFF1F2933);
 const _muted = PdfColor.fromInt(0xFF616E7C);
-const _accent = PdfColor.fromInt(0xFF1F3A5F);
+const defaultEstimateAccent = PdfColor.fromInt(0xFF1F3A5F);
 const _rule = PdfColor.fromInt(0xFFCBD2D9);
 const _band = PdfColor.fromInt(0xFFF0F3F7);
 
@@ -88,6 +96,12 @@ pw.ThemeData? loadEstimatePdfTheme({String? fontsFolder}) {
   return null;
 }
 
+/// The stored RRGGBB accent as a PDF color, or null for the default.
+PdfColor? estimateAccentColor(String hex) {
+  final v = hex.trim().length == 6 ? int.tryParse(hex.trim(), radix: 16) : null;
+  return v == null ? null : PdfColor.fromInt(0xFF000000 | v);
+}
+
 /// Reads the logo file, or null when there is none or it cannot be read.
 Uint8List? readEstimateLogo(String filePath) {
   if (filePath.trim().isEmpty) return null;
@@ -122,6 +136,7 @@ Future<Uint8List> buildEstimatePdf(
               .map((r) => r < 256 ? r : 0x3F),
         );
 
+  final accent = info.accent ?? defaultEstimateAccent;
   final currency = estimate.currency;
   String cash(double v) => t(formatMoney(v, currency));
 
@@ -152,14 +167,14 @@ Future<Uint8List> buildEstimatePdf(
   pw.Widget sectionTitle(String text) => pw.Container(
     margin: const pw.EdgeInsets.only(top: 16, bottom: 6),
     padding: const pw.EdgeInsets.only(bottom: 3),
-    decoration: const pw.BoxDecoration(
-      border: pw.Border(bottom: pw.BorderSide(color: _accent, width: 1.2)),
+    decoration: pw.BoxDecoration(
+      border: pw.Border(bottom: pw.BorderSide(color: accent, width: 1.2)),
     ),
     child: pw.Text(
       t(text.toUpperCase()),
       style: pw.TextStyle(
         fontSize: 10.5,
-        color: _accent,
+        color: accent,
         fontWeight: pw.FontWeight.bold,
         letterSpacing: 0.6,
       ),
@@ -328,7 +343,7 @@ Future<Uint8List> buildEstimatePdf(
           ),
           pw.Container(
             padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            color: _accent,
+            color: accent,
             child: pw.Row(
               children: [
                 pw.Expanded(
@@ -375,21 +390,35 @@ Future<Uint8List> buildEstimatePdf(
     ],
   );
 
+  // The title takes whichever side the logo leaves free.
+  final titleAlign = logo != null && info.logoOnLeft
+      ? pw.CrossAxisAlignment.end
+      : pw.CrossAxisAlignment.start;
+  final titleTextAlign = logo != null && info.logoOnLeft
+      ? pw.TextAlign.right
+      : pw.TextAlign.left;
+
+  pw.Widget logoBox(pw.ImageProvider image) => pw.ConstrainedBox(
+    constraints: const pw.BoxConstraints(maxWidth: 170, maxHeight: 64),
+    child: pw.Image(image, fit: pw.BoxFit.contain),
+  );
+
   pw.Widget firstPageHeader() => pw.Column(
     crossAxisAlignment: pw.CrossAxisAlignment.start,
     children: [
       pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
+          if (logo != null && info.logoOnLeft) logoBox(logo),
           pw.Expanded(
             child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              crossAxisAlignment: titleAlign,
               children: [
                 pw.Text(
                   'ESTIMATE',
                   style: pw.TextStyle(
                     fontSize: 24,
-                    color: _accent,
+                    color: accent,
                     fontWeight: pw.FontWeight.bold,
                     letterSpacing: 2,
                   ),
@@ -398,24 +427,18 @@ Future<Uint8List> buildEstimatePdf(
                   pw.SizedBox(height: 4),
                   pw.Text(
                     t(info.roomName),
+                    textAlign: titleTextAlign,
                     style: pw.TextStyle(fontSize: 13, color: _ink),
                   ),
                 ],
               ],
             ),
           ),
-          if (logo != null)
-            pw.ConstrainedBox(
-              constraints: const pw.BoxConstraints(
-                maxWidth: 170,
-                maxHeight: 64,
-              ),
-              child: pw.Image(logo, fit: pw.BoxFit.contain),
-            ),
+          if (logo != null && !info.logoOnLeft) logoBox(logo),
         ],
       ),
       pw.SizedBox(height: 12),
-      pw.Container(height: 2, color: _accent),
+      pw.Container(height: 2, color: accent),
       pw.SizedBox(height: 10),
       pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,

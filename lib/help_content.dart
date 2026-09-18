@@ -767,12 +767,18 @@ const List<HelpTopic> kHelpTopics = [
     plain:
         'A finished estimate to send out: your logo, who prepared it, the '
         'scope of work, every priced line, the totals and your notes.',
-    keywords: ['pdf', 'export', 'logo', 'prepared by', 'quote', 'print'],
+    keywords: [
+      'pdf', 'export', 'logo', 'prepared by', 'quote', 'print', 'accent',
+      'color',
+    ],
     body:
         'The logo and the name under "Prepared by" are set once in App Config '
         'under Estimate PDF, with an optional contact line such as an email '
         'address. The logo can be a PNG or a JPEG and prints in the top right '
-        'corner of the first page.\n\n'
+        'corner of the first page, or the top left if you pick Left under Logo '
+        'corner - the Estimate title and room name move to the other side. '
+        'The accent color for the headings, rules and total band can be one '
+        'of the swatches or anything off the color wheel.\n\n'
         'The PDF lists equipment, rack hardware, cabling, labor and other '
         'items with their quantities and amounts, then the subtotal, fees, '
         'tax and total. Lines furnished by somebody else say so instead of '

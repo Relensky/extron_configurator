@@ -5,9 +5,23 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'main.dart' show AccentColorPicker;
 
-/// App Config: what goes on every estimate PDF - the logo in the top right
-/// corner and who prepared it.
+/// Deep tones that print well behind white text, for the estimate's accent.
+/// The built-in navy is the Default swatch in front of them.
+const List<Color> kEstimateAccentSwatches = [
+  Color(0xFF263238), // charcoal
+  Color(0xFF0D47A1), // blue
+  Color(0xFF006064), // teal
+  Color(0xFF1B5E20), // green
+  Color(0xFF4A148C), // purple
+  Color(0xFF880E4F), // plum
+  Color(0xFFB71C1C), // red
+  Color(0xFFBF360C), // rust
+];
+
+/// App Config: what goes on every estimate PDF - the logo, which corner it
+/// prints in, the accent color and who prepared it.
 class EstimateSettingsSection extends StatelessWidget {
   const EstimateSettingsSection({super.key});
 
@@ -67,7 +81,7 @@ class EstimateSettingsSection extends StatelessWidget {
                 initialValue: logoPath,
                 decoration: InputDecoration(
                   labelText: 'Logo',
-                  helperText: 'PNG or JPEG, printed in the top right corner',
+                  helperText: 'PNG or JPEG, printed in a top corner',
                   errorText: logoMissing ? 'File not found' : null,
                   border: const OutlineInputBorder(),
                   suffixIcon: Row(
@@ -125,6 +139,52 @@ class EstimateSettingsSection extends StatelessWidget {
               ),
             ],
           ],
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Logo corner', style: theme.textTheme.titleSmall),
+            SegmentedButton<String>(
+              key: const ValueKey('estimate_logo_side'),
+              segments: const [
+                ButtonSegment(
+                  value: 'left',
+                  icon: Icon(Icons.align_horizontal_left),
+                  label: Text('Left'),
+                ),
+                ButtonSegment(
+                  value: 'right',
+                  icon: Icon(Icons.align_horizontal_right),
+                  label: Text('Right'),
+                ),
+              ],
+              selected: {provider.estimateLogoSide},
+              onSelectionChanged: (v) =>
+                  provider.updateSetting('estimateLogoSide', v.first),
+            ),
+            Text(
+              'The Estimate title and room go on the other side.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text('Accent color', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Headings, rules and the total band on the PDF.',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        const AccentColorPicker(
+          settingKey: 'estimateAccent',
+          swatches: kEstimateAccentSwatches,
+          allowAuto: true,
+          autoLabel: 'Default (navy)',
+          autoColor: Color(0xFF1F3A5F),
         ),
       ],
     );
