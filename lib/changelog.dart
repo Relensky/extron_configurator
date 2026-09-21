@@ -35,7 +35,7 @@ const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
     version: '0.3.2',
     date: 'September 18, 2026',
-    title: 'No convert notice for rooms that are already converted',
+    title: 'Safer saving, and no convert notice for converted rooms',
     changes: [
       'Opening a room that is already in the current format no longer says '
           'it needs converting, or puts a count of 0 on the Convert button. '
@@ -44,6 +44,15 @@ const List<ChangelogEntry> kChangelog = [
           'being counted as changes.',
       'Those notes can still be read: when a file has notes but nothing to '
           'convert, the Convert button opens them without showing a count.',
+      'Saving can no longer leave a room file empty. The file used to be '
+          'emptied before the new copy was written, so if the app closed in '
+          'that moment the room was left at 0 bytes and would not open. Rooms, '
+          'their AV flow, schematic and cost files, projects, campuses, App '
+          'Config and the price, labor, vendor and delivery lists are now '
+          'written to a new file first and swapped in once it is complete.',
+      'A room file that will not open now says why instead of doing '
+          'nothing. An empty file names the _previous.json backup beside it, '
+          'which holds the room as it was before the last save.',
     ],
   ),
   ChangelogEntry(

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'app_logger.dart';
+import 'safe_write.dart';
 
 /// ============================================================================
 ///  DELIVERY LOCATIONS
@@ -331,7 +332,7 @@ class DeliveryLocationBook {
     try {
       const encoder = JsonEncoder.withIndent('  ');
       await File(target).parent.create(recursive: true);
-      await File(target).writeAsString(encoder.convert(toJson()));
+      await writeFileSafely(target, encoder.convert(toJson()));
       filePath = target;
       source = target;
       AppLogger.logInfo('Delivery locations saved to $target.');

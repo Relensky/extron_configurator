@@ -1640,7 +1640,22 @@ class _MainDashboardState extends State<MainDashboard> {
     }
 
     final bool loaded = await provider.openConfigAtPath(file);
-    if (!loaded || !context.mounted) return;
+    if (!context.mounted) return;
+    if (!loaded) {
+      if (provider.lastOpenError.isNotEmpty) {
+        final messenger = ScaffoldMessenger.of(context);
+        showTimedSnackBar(
+          messenger,
+          SnackBar(
+            key: const ValueKey('open_failed_snack'),
+            duration: const Duration(seconds: 12),
+            backgroundColor: snackErrorFillOn(messenger),
+            content: Text(provider.lastOpenError),
+          ),
+        );
+      }
+      return;
+    }
     await _syncDiagramsAfterLoad(context, provider);
     // The conversion is NOT shown here. Opening a file should open the file; a
     // migration dialog in front of it makes every load of a legacy room a

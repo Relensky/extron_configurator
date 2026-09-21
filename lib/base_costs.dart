@@ -4,6 +4,7 @@ import 'dart:io';
 import 'app_logger.dart';
 import 'av_device_library.dart' show PricingTier;
 import 'building_project.dart' show formatIsoDate, parseIsoDate;
+import 'safe_write.dart';
 
 /// ============================================================================
 ///  BASE COSTS
@@ -397,7 +398,7 @@ class BaseCostBook {
     try {
       const encoder = JsonEncoder.withIndent('  ');
       await File(target).parent.create(recursive: true);
-      await File(target).writeAsString(encoder.convert(toJson()));
+      await writeFileSafely(target, encoder.convert(toJson()));
       filePath = target;
       source = target;
       AppLogger.logInfo('Base costs saved to $target.');

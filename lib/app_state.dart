@@ -45,6 +45,7 @@ import 'sftp_client.dart';
 import 'ui_schema.dart';
 import 'vendor_book.dart';
 import 'undo_history.dart';
+import 'safe_write.dart';
 import 'package:file_picker/file_picker.dart';
 
 /// The navigation rail's tabs, in rail order.
@@ -944,7 +945,7 @@ class AppStateProvider extends ChangeNotifier {
       final file = File(settingsFilePath);
       // The per-user settings folder doesn't exist on a first launch.
       await file.parent.create(recursive: true);
-      await file.writeAsString(encoder.convert(data));
+      await writeFileSafely(file.path, encoder.convert(data));
     } catch (e, stack) {
       AppLogger.logError(
           'Failed to save settings to $settingsFilePath', e, stack);
@@ -2317,7 +2318,8 @@ class AppStateProvider extends ChangeNotifier {
     if (sidecar.isEmpty) return '';
     try {
       const encoder = JsonEncoder.withIndent('  ');
-      await File(sidecar).writeAsString(
+      await writeFileSafely(
+        sidecar,
         encoder.convert(schematicLayoutAsJson()),
       );
 
@@ -6536,9 +6538,10 @@ class AppStateProvider extends ChangeNotifier {
         if (part == RoomSidecarPart.flow) continue;
         final file = paths[part];
         if (file == null || file.isEmpty) continue;
-        await File(file).writeAsString(encoder.convert(parts[part]));
+        await writeFileSafely(file, encoder.convert(parts[part]));
       }
-      await File(sidecar).writeAsString(
+      await writeFileSafely(
+        sidecar,
         encoder.convert(parts[RoomSidecarPart.flow]),
       );
 
@@ -7525,6 +7528,7 @@ class AppStateProvider extends ChangeNotifier {
   /// would push everything else off the recent list, which is the opposite of
   /// what the list is for.
   Future<bool> openConfigAtPath(String file, {bool remember = true}) async {
+    lastOpenError = '';
     try {
       final f = File(file);
       final originalContents = await f.readAsString();
@@ -7561,8 +7565,43 @@ class AppStateProvider extends ChangeNotifier {
       return true;
     } catch (e, stack) {
       AppLogger.logError("Failed to load existing config", e, stack);
+      lastOpenError = describeOpenFailure(file, e);
       return false;
     }
+  }
+
+  /// Why the last [openConfigAtPath] failed, for the screen. '' after a
+  /// successful open.
+  String lastOpenError = '';
+
+  /// A failed open, in words: an empty file names the backup beside it, since
+  /// that is where the room still is.
+  static String describeOpenFailure(String file, Object error) {
+    final name = path.basename(file);
+    final f = File(file);
+    if (!f.existsSync()) return '$name is not there any more.';
+    bool empty = false;
+    try {
+      empty = f.readAsStringSync().trim().isEmpty;
+    } catch (_) {}
+    if (empty) {
+      final dir = path.dirname(file);
+      final stem = path.basenameWithoutExtension(file);
+      final previous = '${stem}_previous.json';
+      final hint = File(path.join(dir, previous)).existsSync()
+          ? '$previous beside it holds the copy from before the last save; '
+              'copy it over $name to get the room back.'
+          : 'Look beside it for a backup ending in _previous.json or '
+              '_old_config.json.';
+      return '$name is empty - a save was probably cut off. $hint';
+    }
+    if (error is FormatException) {
+      return '$name is not a valid room file: ${error.message}.';
+    }
+    if (error is FileSystemException) {
+      return 'Could not read $name: ${error.osError?.message ?? error.message}.';
+    }
+    return 'Could not open $name - see the error log.';
   }
 
   /// Downloads /config.json from the processor's root folder over SFTP,
@@ -10352,8 +10391,8 @@ class AppStateProvider extends ChangeNotifier {
     await _backupWorkingFile();
     try {
       const encoder = JsonEncoder.withIndent('    ');
-      await File(currentConfigPath)
-          .writeAsString(encoder.convert(_sortJson(roomConfig)));
+      await writeFileSafely(
+          currentConfigPath, encoder.convert(_sortJson(roomConfig)));
       AppLogger.logInfo("Saved current config to working file $currentConfigPath");
       // Saving the project saves the WHOLE project: the AV diagram and its
       // cost estimate, and the control schematic, both of which live in
@@ -10423,7 +10462,7 @@ class AppStateProvider extends ChangeNotifier {
       final parsed = jsonDecode(contents);
       if (parsed is! Map) return false;
 
-      await File(currentConfigPath).writeAsString(contents);
+      await writeFileSafely(currentConfigPath, contents);
       roomConfig = jsonDecode(contents);
       // The colors and the rejectable change list describe the load this
       // undo just stepped back from, so they no longer describe anything.
@@ -10579,7 +10618,8 @@ class AppStateProvider extends ChangeNotifier {
       // Clean out unused devices and sort keys before saving
       Map<String, dynamic> exportData = _pruneConfig(roomConfig);
 
-      await targetFile.writeAsString(encoder.convert(_sortJson(exportData)));
+      await writeFileSafely(
+          targetFile.path, encoder.convert(_sortJson(exportData)));
       AppLogger.logInfo("Config successfully saved to ${targetFile.path}");
 
       // The recovery copy belongs to the file this room is about to stop
@@ -15934,7 +15974,11 @@ class AppStateProvider extends ChangeNotifier {
     }
 
     final ok = await openConfigAtPath(absolute, remember: remember);
-    if (!ok) return 'Could not open $absolute - see the log.';
+    if (!ok) {
+      return lastOpenError.isNotEmpty
+          ? lastOpenError
+          : 'Could not open $absolute - see the log.';
+    }
 
     loadAvFlowForCurrentConfig();
 

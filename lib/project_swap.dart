@@ -7,6 +7,7 @@ import 'av_device_library.dart';
 import 'building_project.dart';
 import 'model_swap.dart';
 import 'project_estimate.dart';
+import 'safe_write.dart';
 
 /// ============================================================================
 ///  SWAPPING A PRODUCT ACROSS A WHOLE BUILDING
@@ -389,7 +390,7 @@ const JsonEncoder _encoder = JsonEncoder.withIndent('    ');
     for (final c in loaded.model.cables)
       if (cablesById.containsKey(c.id)) cablesById[c.id]!.toJson(),
   ];
-  flowFile.writeAsStringSync(_encoder.convert(flowDoc));
+  writeFileSafelySync(flowFile.path, _encoder.convert(flowDoc));
 
   // --- the control side ----------------------------------------------------
   final live = activeDeviceKeysIn(loaded.config, deviceCountMap).toSet();
@@ -402,7 +403,7 @@ const JsonEncoder _encoder = JsonEncoder.withIndent('    ');
     blocks++;
   }
   if (blocks > 0) {
-    File(room.configPath).writeAsStringSync(_encoder.convert(loaded.config));
+    writeFileSafelySync(room.configPath, _encoder.convert(loaded.config));
   }
 
   return (

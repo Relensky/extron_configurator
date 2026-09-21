@@ -5,6 +5,7 @@ import 'package:path/path.dart' as path;
 
 import 'av_device_library.dart' show AvDeviceLibrary;
 import 'responsibility_matrix.dart';
+import 'safe_write.dart';
 
 /// ============================================================================
 ///  THE BUILDING PROJECT
@@ -4630,7 +4631,7 @@ class BuildingProject {
 
   Future<void> save(String file) async {
     const encoder = JsonEncoder.withIndent('    ');
-    await File(file).writeAsString(encoder.convert(toJson()));
+    await writeFileSafely(file, encoder.convert(toJson()));
   }
 
   /// A deep-enough copy for the undo of a destructive edit (removing a room,

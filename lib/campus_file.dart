@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import 'building_project.dart';
+import 'safe_write.dart';
 
 /// ============================================================================
 ///  A CAMPUS, AS A FILE
@@ -128,7 +129,8 @@ class CampusFile {
         for (final p in projects) BuildingProject.storePath(p, file),
       ],
     };
-    await File(file).writeAsString(const JsonEncoder.withIndent('  ').convert(doc));
+    await writeFileSafely(
+        file, const JsonEncoder.withIndent('  ').convert(doc));
   }
 
   /// 'chico_campus.json' -> 'Chico'. What a file that names no campus is
