@@ -135,8 +135,10 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
         'Rack hardware',
         'Cabling',
         'Other items',
-        'Labor hrs',
+        'Crew hrs',
+        'Total labor hrs',
         'Labor',
+        'Shipping',
         'Fees',
         'Tax',
         'Room total',
@@ -151,8 +153,10 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
               cash(room.estimate!.hardwareTotal),
               cash(room.estimate!.cablingTotal),
               cash(room.estimate!.extrasTotal),
+              trimNumber(room.estimate!.laborCrewHours),
               trimNumber(room.estimate!.laborHours),
               cash(room.estimate!.laborTotal),
+              cash(room.estimate!.shippingTotal),
               cash(room.estimate!.feeTotal),
               cash(room.estimate!.tax),
               cash(room.estimate!.grandTotal),
@@ -164,7 +168,7 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
             // the total is in — a warning somewhere else gets skimmed past.
             [
               room.name,
-              '', '', '', '', '', '', '', '',
+              '', '', '', '', '', '', '', '', '', '',
               '',
               'NOT COUNTED - ${room.room.error}',
             ],
@@ -180,9 +184,12 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
         ['Other items', cash(estimate.extrasTotal)],
         ['Parts subtotal', cash(estimate.partsTotal)],
         [
-          'Labor (${trimNumber(estimate.laborHours)} hrs)',
+          'Labor (${trimNumber(estimate.laborCrewHours)} crew hrs, '
+              '${trimNumber(estimate.laborHours)} total hrs)',
           cash(estimate.laborTotal),
         ],
+        if (estimate.shippingTotal > 0)
+          ['Shipping', cash(estimate.shippingTotal)],
         ['Fees', cash(estimate.feeTotal)],
         ['Tax', cash(estimate.taxTotal)],
         ['PROJECT TOTAL', cash(estimate.grandTotal)],
@@ -1921,14 +1928,15 @@ Uint8List buildProjectWorkbookBytes({
   // out of the total is still work somebody did and still gets read.
   for (final room in estimate.rooms) {
     if (!room.ok) continue;
-    final sections = costReportSections(room.estimate!);
-    if (sections.isEmpty) continue;
+    final priced = costReportSections(room.estimate!);
+    if (priced.isEmpty) continue;
     sheets.add(buildStackedReportSheet(
       sheetName: tab(room.name),
       title: room.ref.included
           ? room.name
           : '${room.name} - EXCLUDED from the project total',
-      sections: sections,
+      // The room's scope, notes and custom sections, as on its own exports.
+      sections: withEstimateSections(priced, room.room.settings),
       generated: stamp,
     ));
   }

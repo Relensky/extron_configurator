@@ -17,7 +17,7 @@ import 'package:extron_configurator/live_text_field.dart';
 /// sits INSIDE a cell: half of these columns are input boxes, and a box
 /// right-aligns its figure and holds it 16 pixels off its own border. "Unit
 /// price" was drawn hard against the left edge of a cell whose number is hard
-/// against the right, and "Techs", "Hours ea." and "Rate/hr" the same — the
+/// against the right, and "Crew", "Crew hours" and "Rate/hr" the same — the
 /// caption reading as though it belonged to the column beside it.
 void main() {
   AppStateProvider room() {
@@ -103,8 +103,8 @@ void main() {
     await pump(tester, p);
 
     for (final pair in const [
-      ('Techs', 'labor_techs_'),
-      ('Hours ea.', 'labor_hours_'),
+      ('Crew', 'labor_techs_'),
+      ('Crew hours', 'labor_hours_'),
       ('Rate/hr', 'labor_rate_'),
     ]) {
       final caption = rectOf(tester, find.text(pair.$1));
@@ -218,7 +218,7 @@ void main() {
 
     for (final table in const [
       ['Device', 'Model', 'Qty', 'Unit price', 'Extended', 'Price from'],
-      ['Job type', 'Scope', 'Techs', 'Hours ea.', 'Rate/hr'],
+      ['Job type', 'Scope', 'Crew', 'Crew hours', 'Total hours', 'Rate/hr'],
     ]) {
       final bottoms = <double>[
         for (final caption in table) rectOf(tester, find.text(caption).first).bottom,

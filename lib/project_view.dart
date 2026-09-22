@@ -2251,9 +2251,12 @@ class _BuildingTotals extends StatelessWidget {
             const Divider(),
             line('Parts subtotal', estimate.partsTotal),
             line(
-              'Labor (${trimNumber(estimate.laborHours)} hrs)',
+              'Labor (${trimNumber(estimate.laborCrewHours)} crew hrs, '
+              '${trimNumber(estimate.laborHours)} total hrs)',
               estimate.laborTotal,
             ),
+            if (estimate.shippingTotal > 0)
+              line('Shipping', estimate.shippingTotal),
             line('Fees', estimate.feeTotal),
             line('Tax', estimate.taxTotal),
             const Divider(),

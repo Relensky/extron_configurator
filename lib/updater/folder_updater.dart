@@ -23,6 +23,9 @@
 // over to a small PowerShell helper that waits for the app to close, swaps the
 // program files, and starts the new version. See update_platform_io.dart for
 // which files are replaced and which are left alone.
+//
+// Updating also offers to add a Desktop and a Start menu shortcut when the
+// app has none, and Settings -> App Updates can add them at any time.
 // ============================================================================
 
 import 'dart:async';
@@ -125,6 +128,17 @@ class UpdateProgress {
   final double? fraction;
 
   const UpdateProgress(this.stage, [this.fraction]);
+}
+
+/// Where this app already has shortcuts. A shortcut counts wherever it lives
+/// in the Desktop or Start menu, and whatever it is called, as long as it
+/// points at this exe.
+@immutable
+class ShortcutState {
+  final bool desktop;
+  final bool startMenu;
+
+  const ShortcutState({required this.desktop, required this.startMenu});
 }
 
 /// Thrown by a check when the release folder cannot be listed.
@@ -448,6 +462,85 @@ class FolderUpdater extends ChangeNotifier {
     _installFailed = false;
     _confirming = true;
     _notify();
+    // The step offers the shortcuts that are missing, so find out which.
+    unawaited(refreshShortcuts());
+  }
+
+  // --------------------------------------------------------------------------
+  // Shortcuts. Someone running the app straight out of a copied folder has no
+  // way to launch it but finding that folder again, so an update offers to
+  // put it on the Desktop and in the Start menu. Only a release build does:
+  // a shortcut to a debug build in build\ is no use to anyone.
+  // --------------------------------------------------------------------------
+
+  /// Whether this build can make shortcuts to itself.
+  bool get canManageShortcuts => canInstall;
+
+  ShortcutState? _shortcuts;
+
+  /// Which shortcuts exist, or null until [refreshShortcuts] has looked.
+  ShortcutState? get shortcuts => _shortcuts;
+
+  /// Ticked on the "close and update now?" step: make these shortcuts as the
+  /// update installs. Off unless the user ticks them.
+  bool addDesktopShortcut = false;
+  bool addStartMenuShortcut = false;
+
+  String? _shortcutError;
+
+  /// Why the last attempt to make a shortcut failed.
+  String? get shortcutError => _shortcutError;
+
+  Future<void>? _findingShortcuts;
+
+  /// Looks for shortcuts to this exe. Safe to call while a look is running;
+  /// the calls share it.
+  Future<void> refreshShortcuts() {
+    if (!canManageShortcuts) return Future.value();
+    return _findingShortcuts ??= () async {
+      try {
+        _shortcuts = await platform.findShortcuts();
+      } catch (e) {
+        _log('Could not look for shortcuts: $e');
+      }
+      _notify();
+    }()
+        .whenComplete(() => _findingShortcuts = null);
+  }
+
+  /// Makes the shortcuts asked for, named after [appName]. Throws with the
+  /// reason when Windows would not make one.
+  Future<void> createShortcuts({
+    bool desktop = false,
+    bool startMenu = false,
+  }) async {
+    if (!canManageShortcuts || (!desktop && !startMenu)) return;
+    try {
+      await platform.createShortcuts(
+        appName,
+        desktop: desktop,
+        startMenu: startMenu,
+      );
+      _shortcutError = null;
+      _log('Added shortcuts:${desktop ? ' Desktop' : ''}'
+          '${startMenu ? ' Start menu' : ''}.');
+    } catch (e) {
+      _shortcutError = '$e';
+      _log('Could not add shortcuts: $e');
+      _notify();
+      rethrow;
+    }
+    await refreshShortcuts();
+  }
+
+  void setAddDesktopShortcut(bool value) {
+    addDesktopShortcut = value;
+    _notify();
+  }
+
+  void setAddStartMenuShortcut(bool value) {
+    addStartMenuShortcut = value;
+    _notify();
   }
 
   void cancelInstall() {
@@ -491,6 +584,22 @@ class FolderUpdater extends ChangeNotifier {
           _log('Install cancelled before closing.');
           _notify();
           return;
+        }
+      }
+      // Before closing, not by the helper: the helper may be running as
+      // administrator, whose Desktop is not this user's. The exe's path does
+      // not change in an update, so the shortcut is right before and after.
+      if (addDesktopShortcut || addStartMenuShortcut) {
+        _progress = const UpdateProgress('Adding shortcuts…');
+        _notify();
+        try {
+          await createShortcuts(
+            desktop: addDesktopShortcut,
+            startMenu: addStartMenuShortcut,
+          );
+        } catch (_) {
+          // A missing shortcut is no reason to hold the update back; it is
+          // logged, and Settings can try again.
         }
       }
       _progress = const UpdateProgress('Closing to finish the update…');

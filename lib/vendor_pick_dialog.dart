@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'vendor_book.dart' show DefaultVendor;
+import 'responsive.dart';
 
 /// ============================================================================
 ///  TAKING COMPANIES OFF THE SHARED LIST, ONE AT A TIME
@@ -97,10 +98,14 @@ class _VendorPickDialogState extends State<_VendorPickDialog> {
                   child: TextField(
                     key: const ValueKey('vendor_pick_search'),
                     controller: _search,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       isDense: true,
-                      prefixIcon: Icon(Icons.search, size: 18),
+                      prefixIcon: const Icon(Icons.search, size: 18),
                       hintText: 'Find a company',
+                      suffixIcon: ClearFieldButton(
+                        controller: _search,
+                        onCleared: () => setState(() {}),
+                      ),
                     ),
                     onChanged: (_) => setState(() {}),
                   ),

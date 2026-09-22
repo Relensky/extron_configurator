@@ -9,6 +9,7 @@ import 'app_logger.dart';
 import 'app_state.dart';
 import 'device_info_source.dart';
 import 'search_match.dart';
+import 'responsive.dart';
 
 /// ============================================================================
 ///  THE DRIVER'S OWN ANSWER, EDITED IN THE APP
@@ -625,11 +626,15 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
         TextField(
           key: const ValueKey('device_info_search'),
           controller: _searchCtl,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             isDense: true,
-            prefixIcon: Icon(Icons.search, size: 18),
+            prefixIcon: const Icon(Icons.search, size: 18),
             hintText: 'Find a driver',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
+            suffixIcon: ClearFieldButton(
+              controller: _searchCtl,
+              onCleared: () => setState(() {}),
+            ),
           ),
           onChanged: (_) => setState(() {}),
         ),

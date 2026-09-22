@@ -46,3 +46,13 @@ Never exitForUpdate() =>
     throw UnsupportedError('Updates are not supported on this platform.');
 
 Future<UpdateOutcome?> takeLastOutcome() async => null;
+
+Future<ShortcutState> findShortcuts() async =>
+    const ShortcutState(desktop: false, startMenu: false);
+
+Future<void> createShortcuts(
+  String name, {
+  required bool desktop,
+  required bool startMenu,
+}) =>
+    throw UnsupportedError('Shortcuts are not supported on this platform.');

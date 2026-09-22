@@ -215,7 +215,11 @@ void main() {
       await tester.scrollUntilVisible(
         find.text('Estimate Notes'),
         400,
-        scrollable: find.byType(Scrollable).first,
+        // The page's vertical list; the page also scrolls sideways when
+        // the window is narrow.
+        scrollable: find.byWidgetPredicate(
+          (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+        ).first,
       );
       expect(find.text('Estimate Notes'), findsOneWidget);
     });

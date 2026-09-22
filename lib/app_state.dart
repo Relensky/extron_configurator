@@ -29,6 +29,7 @@ import 'online_index.dart';
 import 'online_roundtrip.dart';
 import 'room_workbook.dart';
 import 'cost_estimate.dart';
+import 'xlsx_writer.dart' show XlsxTheme;
 import 'labor_rates.dart';
 import 'model_swap.dart' as swap;
 import 'av_flow_swap_dialogs.dart' show applyModelSwap, applyControlSwap;
@@ -4801,6 +4802,83 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The heading printed on the estimate PDF. Blank goes back to the default.
+  void setAvCostDocumentTitle(String text) {
+    if (avCost.documentTitle == text) return;
+    _pushAvUndo('Estimate title', _costScope, coalesce: 'cost:title');
+    avCost.documentTitle = text;
+    notifyListeners();
+  }
+
+  /// Adds a titled block to the estimate PDF - see [EstimateSection].
+  EstimateSection addAvCostSection({
+    String title = '',
+    bool bulleted = false,
+  }) {
+    _pushAvUndo('Add section', _costScope);
+    final section = EstimateSection(
+      id: _nextCostId('SECTION_'),
+      title: title,
+      bulleted: bulleted,
+    );
+    avCost.sections.add(section);
+    notifyListeners();
+    return section;
+  }
+
+  void updateAvCostSection(EstimateSection section) {
+    final index = avCost.sections.indexWhere((s) => s.id == section.id);
+    if (index < 0) return;
+    _pushAvUndo('Edit section', _costScope,
+        coalesce: 'cost:section:${section.id}');
+    avCost.sections[index] = section;
+    notifyListeners();
+  }
+
+  void removeAvCostSection(String id) {
+    if (!avCost.sections.any((s) => s.id == id)) return;
+    _pushAvUndo('Remove section', _costScope);
+    avCost.sections.removeWhere((s) => s.id == id);
+    notifyListeners();
+  }
+
+  /// Moves a section one place up (-1) or down (+1) in print order.
+  void moveAvCostSection(String id, int delta) {
+    final index = avCost.sections.indexWhere((s) => s.id == id);
+    final to = index + delta;
+    if (index < 0 || to < 0 || to >= avCost.sections.length) return;
+    _pushAvUndo('Move section', _costScope);
+    avCost.sections.insert(to, avCost.sections.removeAt(index));
+    notifyListeners();
+  }
+
+  /// Shows or hides the per-item shipping column, and charges it or not.
+  void setAvCostShowShipping(bool show) {
+    if (avCost.showShipping == show) return;
+    _pushAvUndo(show ? 'Show shipping' : 'Hide shipping', _costScope);
+    avCost.showShipping = show;
+    notifyListeners();
+  }
+
+  void setAvCostShippingTaxable(bool taxable) {
+    if (avCost.shippingTaxable == taxable) return;
+    _pushAvUndo('Shipping tax', _costScope);
+    avCost.shippingTaxable = taxable;
+    notifyListeners();
+  }
+
+  /// Shipping for one unit of a line; 0 or less clears it.
+  void setAvCostShipping(String lineKey, double each) {
+    if ((avCost.shippingEach[lineKey] ?? 0) == each) return;
+    _pushAvUndo('Shipping', _costScope, coalesce: 'cost:shipping:$lineKey');
+    if (each <= 0) {
+      avCost.shippingEach.remove(lineKey);
+    } else {
+      avCost.shippingEach[lineKey] = each;
+    }
+    notifyListeners();
+  }
+
   CostFee addAvCostFee({String name = 'Fee', double percent = 0}) {
     _pushAvUndo('Add $name', _costScope);
     final fee = CostFee(id: _nextCostId('FEE_'), name: name, percent: percent);
@@ -7405,6 +7483,7 @@ class AppStateProvider extends ChangeNotifier {
       estimateLogoSide =
           str('estimateLogoSide', 'right') == 'left' ? 'left' : 'right';
       estimateAccent = str('estimateAccent', '');
+      XlsxTheme.accentHex = estimateAccent;
       estimatePreparedBy = str('estimatePreparedBy', '');
       estimatePreparerContact = str('estimatePreparerContact', '');
       fillDeviceDefaultsOnLoad = saved['fillDeviceDefaultsOnLoad'] is bool
@@ -8452,6 +8531,8 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'estimateAccent':
         estimateAccent = value; // RRGGBB hex, or '' = built-in navy
+        // The Excel reports take the same accent as the PDF.
+        XlsxTheme.accentHex = value;
         break;
       case 'estimatePreparedBy':
         estimatePreparedBy = value;

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -304,9 +305,63 @@ class XlsxSheet {
   });
 }
 
+/// The colors of the title and column-header bands in every workbook.
+class XlsxTheme {
+  /// The accent chosen in App Config, 'RRGGBB', or '' for the built-in blue.
+  /// Set by the app whenever the setting changes.
+  static String accentHex = '';
+
+  static const String _defaultTitle = '1F4E79';
+  static const String _defaultHeader = 'D9E2F3';
+
+  static int? _parse(String hex) {
+    final t = hex.trim();
+    return t.length == 6 ? int.tryParse(t, radix: 16) : null;
+  }
+
+  static String _hex(int rgb) =>
+      (rgb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
+
+  /// The title band's fill.
+  static String titleFill(String accent) {
+    final v = _parse(accent);
+    return v == null ? _defaultTitle : _hex(v);
+  }
+
+  /// White on a dark accent, near-black on a light one.
+  static String titleInk(String accent) {
+    final v = _parse(accent);
+    if (v == null) return 'FFFFFF';
+    double lin(int c) {
+      final x = c / 255;
+      return x <= 0.03928 ? x / 12.92 : math.pow((x + 0.055) / 1.055, 2.4) * 1.0;
+    }
+
+    final l = 0.2126 * lin((v >> 16) & 0xFF) +
+        0.7152 * lin((v >> 8) & 0xFF) +
+        0.0722 * lin(v & 0xFF);
+    // Whichever of white and near-black contrasts more.
+    return (1.05 / (l + 0.05)) >= ((l + 0.05) / 0.0625) ? 'FFFFFF' : '1F1F1F';
+  }
+
+  /// The column-header band: the accent mixed mostly with white.
+  static String headerFill(String accent) {
+    final v = _parse(accent);
+    if (v == null) return _defaultHeader;
+    int mix(int c) => (c * 0.2 + 255 * 0.8).round();
+    return _hex(
+      (mix((v >> 16) & 0xFF) << 16) | (mix((v >> 8) & 0xFF) << 8) | mix(v & 0xFF),
+    );
+  }
+}
+
 /// Builds the .xlsx file bytes for [sheets].
-Uint8List buildXlsx(List<XlsxSheet> sheets) {
+///
+/// [accentHex] colors the title and header bands; null uses
+/// [XlsxTheme.accentHex].
+Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
   final archive = Archive();
+  final accent = accentHex ?? XlsxTheme.accentHex;
 
   String esc(String s) => s
       .replaceAll('&', '&amp;')
@@ -511,14 +566,14 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       '<fonts count="${3 + tints.length}">'
       '<font><sz val="11"/><name val="Calibri"/></font>'
       '<font><b/><sz val="11"/><name val="Calibri"/></font>'
-      '<font><b/><sz val="12"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>'
+      '<font><b/><sz val="12"/><color rgb="FF${XlsxTheme.titleInk(accent)}"/><name val="Calibri"/></font>'
       '$tintFonts'
       '</fonts>'
       '<fills count="${5 + tints.length}">'
       '<fill><patternFill patternType="none"/></fill>'
       '<fill><patternFill patternType="gray125"/></fill>'
-      '<fill><patternFill patternType="solid"><fgColor rgb="FF1F4E79"/><bgColor indexed="64"/></patternFill></fill>'
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFD9E2F3"/><bgColor indexed="64"/></patternFill></fill>'
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF${XlsxTheme.titleFill(accent)}"/><bgColor indexed="64"/></patternFill></fill>'
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF${XlsxTheme.headerFill(accent)}"/><bgColor indexed="64"/></patternFill></fill>'
       '<fill><patternFill patternType="solid"><fgColor rgb="FFEFEFEF"/><bgColor indexed="64"/></patternFill></fill>'
       '$tintFills'
       '</fills>'

@@ -194,7 +194,10 @@ Future<ProjectExport> saveProjectFolder({
           // The estimate, then the devices the control system cannot drive. A
           // quote gets signed off on its own, so the warning has to travel
           // with it rather than living only on an AV report nobody opened.
-          [...costSections, ...driverGapSections(provider, av)],
+          [
+            ...withEstimateSections(costSections, provider.avCost),
+            ...driverGapSections(provider, av),
+          ],
           generated: generated,
         ),
       );

@@ -786,6 +786,109 @@ Future<UpdateOutcome?> takeLastOutcome() async {
   return outcome;
 }
 
+// ---------------------------------------------------------------------------
+// Shortcuts
+// ---------------------------------------------------------------------------
+
+/// Where shortcuts to this exe are. The Desktop is searched without its
+/// subfolders, the Start menu with them, and both the user's and the
+/// all-users folders count. [exePath] and the folders are for tests; left
+/// off, they are this exe and Windows' own folders.
+Future<ShortcutState> findShortcuts({
+  String? exePath,
+  List<String>? desktopFolders,
+  List<String>? startMenuFolders,
+}) async {
+  String folders(List<String>? given, List<String> special) => given != null
+      ? '@(${given.map((f) => "'${_psQuote(f)}'").join(', ')})'
+      : '@(${special.map((s) => "[Environment]::GetFolderPath('$s')").join(', ')})';
+  final out = await _runPowerShell('''
+\$exe = '${_psQuote(exePath ?? Platform.resolvedExecutable)}'
+\$shell = New-Object -ComObject WScript.Shell
+function Test-Linked(\$folders, \$recurse) {
+  foreach (\$f in \$folders) {
+    if (-not \$f -or -not (Test-Path -LiteralPath \$f)) { continue }
+    foreach (\$l in @(Get-ChildItem -LiteralPath \$f -Filter *.lnk -File -Recurse:\$recurse -ErrorAction SilentlyContinue)) {
+      try { if (\$shell.CreateShortcut(\$l.FullName).TargetPath -eq \$exe) { return \$true } } catch { }
+    }
+  }
+  return \$false
+}
+'desktop=' + (Test-Linked ${folders(desktopFolders, ['Desktop', 'CommonDesktopDirectory'])} \$false)
+'start=' + (Test-Linked ${folders(startMenuFolders, ['Programs', 'CommonPrograms'])} \$true)
+''');
+  bool has(String key) => RegExp('^$key=True', multiLine: true).hasMatch(out);
+  return ShortcutState(desktop: has('desktop'), startMenu: has('start'));
+}
+
+/// Makes `<name>.lnk` shortcuts to this exe on the user's Desktop and in their
+/// Start menu, replacing a shortcut of that name already there. Per-user
+/// folders, so no administrator permission is needed.
+Future<void> createShortcuts(
+  String name, {
+  required bool desktop,
+  required bool startMenu,
+  String? exePath,
+  String? desktopFolder,
+  String? startMenuFolder,
+}) async {
+  final exe = exePath ?? Platform.resolvedExecutable;
+  final fileName = '${shortcutFileName(name)}.lnk';
+  String folder(String? given, String special) => given != null
+      ? "'${_psQuote(given)}'"
+      : "[Environment]::GetFolderPath('$special')";
+  await _runPowerShell('''
+\$exe = '${_psQuote(exe)}'
+\$shell = New-Object -ComObject WScript.Shell
+\$targets = @()
+${desktop ? '\$targets += ${folder(desktopFolder, 'Desktop')}' : ''}
+${startMenu ? '\$targets += ${folder(startMenuFolder, 'Programs')}' : ''}
+foreach (\$dir in \$targets) {
+  if (-not (Test-Path -LiteralPath \$dir)) { New-Item -ItemType Directory -Path \$dir -Force | Out-Null }
+  \$link = \$shell.CreateShortcut((Join-Path \$dir '${_psQuote(fileName)}'))
+  \$link.TargetPath = \$exe
+  \$link.WorkingDirectory = Split-Path -Parent \$exe
+  \$link.IconLocation = "\$exe,0"
+  \$link.Description = '${_psQuote(name)}'
+  \$link.Save()
+}
+''');
+}
+
+/// [name] with the characters Windows does not allow in a file name removed.
+String shortcutFileName(String name) {
+  final cleaned = name.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '').trim();
+  return cleaned.isEmpty ? _exeBaseName : cleaned;
+}
+
+/// Runs [script] in a short-lived, hidden PowerShell and returns what it
+/// printed. Passed encoded, so quotes and paths in it need no escaping for
+/// the command line. Throws with PowerShell's first error line on failure.
+Future<String> _runPowerShell(String script) async {
+  final encoded = base64.encode([
+    for (final unit in "\$ErrorActionPreference = 'Stop'\n$script".codeUnits)
+      ...[unit & 0xFF, unit >> 8],
+  ]);
+  final result = await Process.run('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-WindowStyle',
+    'Hidden',
+    '-EncodedCommand',
+    encoded,
+  ]);
+  if (result.exitCode != 0) {
+    final detail = '${result.stderr}'
+        .trim()
+        .split(RegExp(r'\r?\n'))
+        .firstWhere((l) => l.trim().isNotEmpty, orElse: () => 'unknown error');
+    throw StateError(detail);
+  }
+  return '${result.stdout}';
+}
+
 String _psQuote(String s) => s.replaceAll("'", "''");
 
 /// The PowerShell (5.1) helper, with its inputs written in as literals.

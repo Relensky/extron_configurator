@@ -170,10 +170,13 @@ Uint8List buildRoomWorkbookBytes({
       sheetName: kRoomWorkbookSheets[5],
       title: title,
       sections: [
-        ..._orPlaceholder(
-          costReportSections(estimate),
-          'Cost Estimate',
-          'No devices on the diagram to price.',
+        ...withEstimateSections(
+          _orPlaceholder(
+            costReportSections(estimate),
+            'Cost Estimate',
+            'No devices on the diagram to price.',
+          ),
+          provider.avCost,
         ),
         // The devices the control system cannot drive, under the money. The
         // Cost sheet is the one that gets printed and signed on its own, and a

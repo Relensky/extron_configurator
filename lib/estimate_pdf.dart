@@ -39,7 +39,15 @@ class EstimatePdfInfo {
   final String scopeOfWork;
   final String notes;
 
+  /// The heading, e.g. 'CTS Estimate'. Blank prints [kDefaultEstimateTitle].
+  final String title;
+
+  /// Extra titled blocks, printed where each one says.
+  final List<EstimateSection> sections;
+
   const EstimatePdfInfo({
+    this.title = kDefaultEstimateTitle,
+    this.sections = const [],
     this.roomName = '',
     this.projectName = '',
     this.preparedBy = '',
@@ -137,6 +145,9 @@ Future<Uint8List> buildEstimatePdf(
         );
 
   final accent = info.accent ?? defaultEstimateAccent;
+  final title = info.title.trim().isEmpty
+      ? kDefaultEstimateTitle
+      : info.title.trim();
   final currency = estimate.currency;
   String cash(double v) => t(formatMoney(v, currency));
 
@@ -151,7 +162,7 @@ Future<Uint8List> buildEstimatePdf(
 
   final doc = pw.Document(
     compress: compress,
-    title: t('Estimate - ${info.roomName}'.trim()),
+    title: t('$title - ${info.roomName}'.trim()),
     author: t(info.preparedBy),
     creator: 'Room Config Builder',
   );
@@ -189,6 +200,40 @@ Future<Uint8List> buildEstimatePdf(
               padding: const pw.EdgeInsets.only(bottom: 2),
               child: pw.Text(t(line), style: body.copyWith(lineSpacing: 2)),
             ),
+  ];
+
+  List<pw.Widget> bullets(String text) => [
+    for (final line in text.trim().split('\n'))
+      if (line.trim().isNotEmpty)
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 2, left: 4),
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Helvetica has no bullet; the middle dot is Latin-1.
+              pw.SizedBox(
+                width: 10,
+                child: pw.Text(theme != null ? '\u2022' : '\u00b7', style: body),
+              ),
+              pw.Expanded(
+                child: pw.Text(
+                  t(line.trim()),
+                  style: body.copyWith(lineSpacing: 2),
+                ),
+              ),
+            ],
+          ),
+        ),
+  ];
+
+  List<pw.Widget> customSections(EstimateSectionPlace place) => [
+    for (final section in info.sections)
+      if (section.place == place && !section.isEmpty) ...[
+        sectionTitle(section.title.trim().isEmpty ? 'Notes' : section.title),
+        ...(section.bulleted
+            ? bullets(section.body)
+            : paragraphs(section.body)),
+      ],
   ];
 
   pw.Widget cell(
@@ -269,6 +314,9 @@ Future<Uint8List> buildEstimatePdf(
     return note.isEmpty ? '' : note[0].toUpperCase() + note.substring(1);
   }
 
+  // A shipping column only on a quote that charges some.
+  final shipping = estimate.shippingTotal > 0;
+
   List<List<pw.Widget>> partRows(List<CostLine> lines, {bool model = true}) => [
     for (final line in lines)
       [
@@ -281,12 +329,27 @@ Future<Uint8List> buildEstimatePdf(
         ),
         cell(qtyLabel(line), right: true),
         cell(priceLabel(line), right: true),
+        if (shipping)
+          cell(
+            line.shippingTotal > 0 ? cash(line.shippingTotal) : '',
+            right: true,
+          ),
         cell(amountLabel(line), right: true),
       ],
   ];
 
-  const partFlex = [4.2, 2.6, 0.8, 1.5, 1.6];
-  const partNumeric = {2, 3, 4};
+  final partFlex = shipping
+      ? const [3.8, 2.4, 0.7, 1.4, 1.3, 1.5]
+      : const [4.2, 2.6, 0.8, 1.5, 1.6];
+  final partNumeric = shipping ? const {2, 3, 4, 5} : const {2, 3, 4};
+  List<String> partHeader(String part) => [
+    'Description',
+    part,
+    'Qty',
+    'Unit',
+    if (shipping) 'Shipping',
+    'Amount',
+  ];
 
   pw.Widget totalsBox() {
     pw.Widget row(String label, double value, {bool strong = false}) =>
@@ -324,6 +387,7 @@ Future<Uint8List> buildEstimatePdf(
                 if (estimate.labor.isNotEmpty) row('Labor', estimate.laborTotal),
                 if (estimate.extras.isNotEmpty)
                   row('Other items', estimate.extrasTotal),
+                if (shipping) row('Shipping', estimate.shippingTotal),
                 divider,
                 row('Subtotal', estimate.subtotal, strong: true),
                 for (final f in estimate.fees)
@@ -415,7 +479,8 @@ Future<Uint8List> buildEstimatePdf(
               crossAxisAlignment: titleAlign,
               children: [
                 pw.Text(
-                  'ESTIMATE',
+                  t(title.toUpperCase()),
+                  textAlign: titleTextAlign,
                   style: pw.TextStyle(
                     fontSize: 24,
                     color: accent,
@@ -472,10 +537,11 @@ Future<Uint8List> buildEstimatePdf(
       sectionTitle('Scope of Work'),
       ...paragraphs(info.scopeOfWork),
     ],
+    ...customSections(EstimateSectionPlace.beforePricing),
     if (estimate.equipment.isNotEmpty) ...[
       sectionTitle('Equipment'),
       table(
-        header: const ['Description', 'Model / Part', 'Qty', 'Unit', 'Amount'],
+        header: partHeader('Model / Part'),
         flex: partFlex,
         numeric: partNumeric,
         rows: partRows(estimate.equipment),
@@ -484,7 +550,7 @@ Future<Uint8List> buildEstimatePdf(
     if (estimate.hardware.isNotEmpty) ...[
       sectionTitle('Rack Hardware'),
       table(
-        header: const ['Description', 'Model / Part', 'Qty', 'Unit', 'Amount'],
+        header: partHeader('Model / Part'),
         flex: partFlex,
         numeric: partNumeric,
         rows: partRows(estimate.hardware),
@@ -493,7 +559,7 @@ Future<Uint8List> buildEstimatePdf(
     if (estimate.cabling.isNotEmpty) ...[
       sectionTitle('Cabling'),
       table(
-        header: const ['Description', 'Part', 'Qty', 'Unit', 'Amount'],
+        header: partHeader('Part'),
         flex: partFlex,
         numeric: partNumeric,
         rows: partRows(estimate.cabling, model: false),
@@ -502,16 +568,22 @@ Future<Uint8List> buildEstimatePdf(
     if (estimate.labor.isNotEmpty) ...[
       sectionTitle('Labor'),
       table(
-        header: const ['Description', 'Crew', 'Hours', 'Rate', 'Amount'],
-        flex: partFlex,
-        numeric: partNumeric,
+        header: const [
+          'Description',
+          'Crew',
+          'Crew hours',
+          'Total hours',
+          'Rate',
+          'Amount',
+        ],
+        flex: const [3.8, 0.9, 1.2, 1.2, 1.4, 1.6],
+        numeric: const {1, 2, 3, 4, 5},
         rows: [
           for (final line in estimate.labor)
             [
               cell(line.roleName, sub: line.description),
-              cell(
-                '${trimNumber(line.techs)} x ${trimNumber(line.hours)} h',
-              ),
+              cell(trimNumber(line.techs), right: true),
+              cell(trimNumber(line.hours), right: true),
               cell(trimNumber(line.totalHours), right: true),
               cell(
                 line.unrated ? 'TBD' : cash(line.hourlyRate),
@@ -525,7 +597,7 @@ Future<Uint8List> buildEstimatePdf(
     if (estimate.extras.isNotEmpty) ...[
       sectionTitle('Other Items'),
       table(
-        header: const ['Description', 'Part', 'Qty', 'Unit', 'Amount'],
+        header: partHeader('Part'),
         flex: partFlex,
         numeric: partNumeric,
         rows: partRows(estimate.extras, model: false),
@@ -540,6 +612,7 @@ Future<Uint8List> buildEstimatePdf(
       sectionTitle('Notes'),
       ...paragraphs(info.notes),
     ],
+    ...customSections(EstimateSectionPlace.afterTotals),
   ];
 
   doc.addPage(
@@ -560,7 +633,7 @@ Future<Uint8List> buildEstimatePdf(
                 children: [
                   pw.Expanded(
                     child: pw.Text(
-                      t('Estimate - ${info.roomName}'.trim()),
+                      t('$title - ${info.roomName}'.trim()),
                       style: small,
                     ),
                   ),
@@ -580,7 +653,7 @@ Future<Uint8List> buildEstimatePdf(
               child: pw.Text(
                 t(info.roomName.trim().isEmpty
                     ? ''
-                    : 'Estimate for ${info.roomName.trim()}'),
+                    : '$title for ${info.roomName.trim()}'),
                 style: small,
               ),
             ),

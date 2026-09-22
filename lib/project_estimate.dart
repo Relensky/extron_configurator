@@ -804,6 +804,13 @@ class ProjectEstimate {
   final double extrasTotal;
   final double laborTotal;
   final double laborHours;
+
+  /// How long the crews are on site, summed over the rooms - see
+  /// [CostEstimate.laborCrewHours].
+  final double laborCrewHours;
+
+  /// Per-item shipping, summed over the rooms. Inside [grandTotal].
+  final double shippingTotal;
   final double feeTotal;
   final double taxTotal;
 
@@ -859,6 +866,8 @@ class ProjectEstimate {
     required this.extrasTotal,
     required this.laborTotal,
     required this.laborHours,
+    this.laborCrewHours = 0,
+    this.shippingTotal = 0,
     required this.feeTotal,
     required this.taxTotal,
     this.projectSpareTotal = 0,
@@ -1526,6 +1535,8 @@ ProjectEstimate computeProjectEstimate({
     extrasTotal: sum((e) => e.extrasTotal) + sparesFor(MasterPartKind.other),
     laborTotal: sum((e) => e.laborTotal),
     laborHours: sum((e) => e.laborHours),
+    laborCrewHours: sum((e) => e.laborCrewHours),
+    shippingTotal: sum((e) => e.shippingTotal),
     feeTotal: sum((e) => e.feeTotal),
     taxTotal: sum((e) => e.tax),
     failedRooms: costed.where((r) => !r.ok).length,

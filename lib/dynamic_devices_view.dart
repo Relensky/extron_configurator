@@ -11,6 +11,7 @@ import 'model_defaults_dialog.dart';
 import 'pdf_viewer_dialog.dart';
 import 'schema_field_builder.dart';
 import 'search_match.dart';
+import 'responsive.dart';
 
 /// The config's live device blocks, in device-family order: for each dev_
 /// count key, the sections that actually exist up to that count.
@@ -110,6 +111,7 @@ class DeviceConfigurationForm extends StatelessWidget {
       context: context,
       builder: (ctx) {
         String filter = '';
+        final searchController = TextEditingController();
         bool showAllTypes = false;
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
@@ -126,10 +128,15 @@ class DeviceConfigurationForm extends StatelessWidget {
                   children: [
                     TextField(
                       autofocus: true,
-                      decoration: const InputDecoration(
+                      controller: searchController,
+                      decoration: InputDecoration(
                         labelText: 'Search models',
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.search),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: ClearFieldButton(
+                          controller: searchController,
+                          onCleared: () => setDialogState(() => filter = ''),
+                        ),
                       ),
                       onChanged: (val) => setDialogState(() => filter = val),
                     ),
@@ -347,6 +354,7 @@ class DeviceConfigurationForm extends StatelessWidget {
       context: context,
       builder: (ctx) {
         String filter = '';
+        final searchController = TextEditingController();
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             final visible = filter.isEmpty
@@ -361,10 +369,15 @@ class DeviceConfigurationForm extends StatelessWidget {
                   children: [
                     TextField(
                       autofocus: true,
-                      decoration: const InputDecoration(
+                      controller: searchController,
+                      decoration: InputDecoration(
                         labelText: 'Search modules',
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.search),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: ClearFieldButton(
+                          controller: searchController,
+                          onCleared: () => setDialogState(() => filter = ''),
+                        ),
                       ),
                       onChanged: (val) => setDialogState(() => filter = val),
                     ),

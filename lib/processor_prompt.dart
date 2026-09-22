@@ -7,6 +7,7 @@ import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'cost_estimate.dart' show formatMoney;
+import 'responsive.dart';
 
 /// True for a catalog category that means a control processor.
 bool isControlProcessorCategory(String category) {
@@ -121,11 +122,15 @@ Future<AvNode?> showAddProcessorDialog(
                 TextField(
                   controller: search,
                   autofocus: true,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Search the control processors',
-                    prefixIcon: Icon(Icons.search, size: 20),
+                    prefixIcon: const Icon(Icons.search, size: 20),
                     isDense: true,
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: ClearFieldButton(
+                      controller: search,
+                      onCleared: () => setLocal(() {}),
+                    ),
                   ),
                   onChanged: (_) => setLocal(() {}),
                 ),

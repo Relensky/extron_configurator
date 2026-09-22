@@ -33,6 +33,7 @@ import 'report_tools.dart';
 import 'screenshot_tools.dart';
 import 'search_match.dart';
 import 'xlsx_writer.dart';
+import 'responsive.dart';
 
 /// ============================================================================
 ///  COST ESTIMATE TAB
@@ -171,6 +172,21 @@ const List<_Col> _kEquipmentCols = [
   _Col('', width: 240),
 ];
 
+/// [columns] with a per-unit shipping box after the unit price when the
+/// estimate charges shipping.
+List<_Col> _withShipping(List<_Col> columns, bool shipping) => !shipping
+    ? columns
+    : [
+        for (final col in columns) ...[
+          col,
+          if (col.text == 'Unit price')
+            const _Col.field('Ship ea.', gap: 12, width: 96, numeric: true),
+        ],
+      ];
+
+/// How wide the page has to be before it scrolls sideways instead.
+double _costPageMinWidth(bool shipping) => shipping ? 1000 : 880;
+
 /// The rack-hardware table's columns — see [_kEquipmentCols].
 const List<_Col> _kHardwareCols = [
   _Col('Item', flex: 3),
@@ -209,8 +225,9 @@ const List<_Col> _kLaborCols = [
   // its caption keeps the box's inset either way.
   _Col.field('Job type', width: 182, keepsBox: true),
   _Col.field('Scope', gap: 8, flex: 3),
-  _Col.field('Techs', gap: 8, width: 78, numeric: true),
-  _Col.field('Hours ea.', gap: 8, width: 86, numeric: true),
+  _Col.field('Crew', gap: 8, width: 70, numeric: true),
+  _Col.field('Crew hours', gap: 8, width: 92, numeric: true),
+  _Col('Total hours', gap: 8, width: 86, align: TextAlign.right),
   _Col.field('Rate/hr', gap: 8, width: 76, numeric: true),
   _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
   _Col('Taxable', width: 92, align: TextAlign.center),
@@ -437,13 +454,25 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       const SizedBox(height: 12),
       _itemsCard(context, provider, estimate),
       const SizedBox(height: 12),
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _feesCard(context, provider, settings)),
-          const SizedBox(width: 12),
-          SizedBox(width: 380, child: _totalsCard(context, estimate)),
-        ],
+      // Side by side when there is room, stacked when there is not.
+      LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth < 760
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _feesCard(context, provider, settings),
+                  const SizedBox(height: 12),
+                  _totalsCard(context, estimate),
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _feesCard(context, provider, settings)),
+                  const SizedBox(width: 12),
+                  SizedBox(width: 380, child: _totalsCard(context, estimate)),
+                ],
+              ),
       ),
       if (!_capturing || settings.notes.trim().isNotEmpty) ...[
         const SizedBox(height: 12),
@@ -456,6 +485,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               'is valid',
           onChanged: provider.setAvCostNotes,
         ),
+      ],
+      for (final section in settings.sections)
+        if (!_capturing || !section.isEmpty) ...[
+          const SizedBox(height: 12),
+          _sectionCard(context, provider, section),
+        ],
+      if (!_capturing) ...[
+        const SizedBox(height: 12),
+        _addSectionBar(context, provider),
       ],
     ];
 
@@ -517,9 +555,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
 
     return RepaintBoundary(
       key: _sheetKey,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        children: cardsIn(context),
+      // The tables are fixed-width columns; a window narrower than them gets
+      // a scrollbar rather than rows cut off at the edge.
+      child: MinWidthScroll(
+        minWidth: _costPageMinWidth(settings.showShipping),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          children: cardsIn(context),
+        ),
       ),
     );
   }
@@ -701,7 +744,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ),
             ],
             const SizedBox(height: 12),
-            Row(
+            // A WRAP, so a narrow window moves the boxes to a second line
+            // rather than pushing the last one off the card.
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 // The tier and the tax rate used to print here as a line of
                 // prose. Both say themselves again where they belong - the
@@ -727,7 +775,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   selected: {provider.pricingTier},
                   onSelectionChanged: (s) => provider.setPricingTier(s.first),
                 ),
-                const SizedBox(width: 12),
                 SizedBox(
                   width: 200,
                   child: LiveTextField(
@@ -737,7 +784,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     onChanged: (v) => provider.setAvCostTax(label: v),
                   ),
                 ),
-                const SizedBox(width: 12),
                 SizedBox(
                   width: 130,
                   child: LiveTextField(
@@ -752,11 +798,26 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         provider.setAvCostTax(percent: double.tryParse(v) ?? 0),
                   ),
                 ),
+                // WHAT THE PDF IS HEADED. 'CTS Estimate', 'Audio Visual
+                // Estimate' - blank prints the default.
+                SizedBox(
+                  width: 240,
+                  child: LiveTextField(
+                    key: const ValueKey('cost_pdf_title'),
+                    fieldId: 'cost_pdf_title',
+                    initial: settings.documentTitle,
+                    label: 'PDF title',
+                    hint: kDefaultEstimateTitle,
+                    clearable: true,
+                    onChanged: provider.setAvCostDocumentTitle,
+                  ),
+                ),
                 ],
-                const SizedBox(width: 16),
                 if (!estimate.isComplete)
-                  Expanded(
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.info_outline,
@@ -764,7 +825,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           color: theme.colorScheme.error,
                         ),
                         const SizedBox(width: 6),
-                        Expanded(
+                        Flexible(
                           child: Text(
                             '${estimate.unpricedDevices} device'
                             '${estimate.unpricedDevices == 1 ? ' has' : 's have'} '
@@ -860,6 +921,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final currency = estimate.currency;
     final byMaker =
         provider.avCost.equipmentSort == CostEquipmentSort.manufacturer;
+    final shipping = provider.avCost.showShipping;
+    final cols = _withShipping(_kEquipmentCols, shipping);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -881,6 +944,28 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 // and the person who sorted the quote that way wants the
                 // screenshot and the workbook to agree with the screen.
                 PrintHide(child: _sortMenu(context, provider)),
+                // PER-ITEM SHIPPING, off until somebody needs it: a display
+                // or a lectern that ships at its own price.
+                PrintHide(
+                  child: FilterChip(
+                    key: const ValueKey('cost_shipping_toggle'),
+                    avatar: const Icon(Icons.local_shipping_outlined, size: 16),
+                    label: const Text('Shipping'),
+                    tooltip: 'A shipping box per item on every table, added '
+                        'to the total',
+                    selected: shipping,
+                    onSelected: provider.setAvCostShowShipping,
+                  ),
+                ),
+                if (shipping)
+                  PrintHide(
+                    child: FilterChip(
+                      key: const ValueKey('cost_shipping_taxable'),
+                      label: const Text('Tax shipping'),
+                      selected: provider.avCost.shippingTaxable,
+                      onSelected: provider.setAvCostShippingTaxable,
+                    ),
+                  ),
                 // Two ways on, the same pair the "Other items" card offers:
                 // off the catalog, so the price follows a revision; or a plain
                 // line for the box that has no catalog entry and a figure
@@ -899,7 +984,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ],
             ),
             const SizedBox(height: 8),
-            _headerRow(context, _kEquipmentCols),
+            _headerRow(context, cols),
             const Divider(height: 12),
             if (estimate.equipment.isEmpty)
               const Padding(
@@ -940,7 +1025,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     i,
                     Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: _gridRow(_kEquipmentCols, [
+                    child: _gridRow(cols, [
                       // Device. The name and the model are one identity -
                       // "Projector 1" says nothing without "PowerLite L630U"
                       // beside it - so either cell, cut off, hovers to both.
@@ -1073,6 +1158,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           );
                         },
                       ),
+                      // Shipping for one unit, when the column is on.
+                      if (shipping) _shippingCell(provider, line.key, currency),
                       // Extended
                       _extendedCell(context, line, currency),
                       // Price from - or who is furnishing it instead, which is
@@ -1309,7 +1396,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               )
             else ...[
               const SizedBox(height: 8),
-              _headerRow(context, _kHardwareCols),
+              _headerRow(
+                context,
+                _withShipping(_kHardwareCols, provider.avCost.showShipping),
+              ),
               const Divider(height: 12),
               for (final (i, line) in estimate.hardware.indexed)
                 Builder(
@@ -1334,7 +1424,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       i,
                       Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: _gridRow(_kHardwareCols, [
+                  child: _gridRow(
+                      _withShipping(
+                        _kHardwareCols,
+                        provider.avCost.showShipping,
+                      ), [
                       // Item
                       Row(
                         children: [
@@ -1398,6 +1492,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           );
                         },
                       ),
+                      if (provider.avCost.showShipping)
+                        _shippingCell(provider, line.key, currency),
                       // Extended
                       _extendedCell(context, line, currency),
                       // Price from - or who is furnishing it instead, which is
@@ -1633,7 +1729,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               )
             else ...[
               const SizedBox(height: 8),
-              _headerRow(context, _kCablingCols),
+              _headerRow(
+                context,
+                _withShipping(_kCablingCols, provider.avCost.showShipping),
+              ),
               const Divider(height: 12),
               // ONE ROW PER LINE THE ESTIMATE MADE, not one per signal type.
               // A room whose HDMI is stocked at 3 ft, 6 ft and 25 ft buys
@@ -1660,7 +1759,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         i,
                         Padding(
                         padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: _gridRow(_kCablingCols, [
+                        child: _gridRow(
+                            _withShipping(
+                              _kCablingCols,
+                              provider.avCost.showShipping,
+                            ), [
                           // Cable type
                           Row(
                             children: [
@@ -1725,6 +1828,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               );
                             },
                           ),
+                          if (provider.avCost.showShipping)
+                            _shippingCell(provider, line.key, currency),
                           // Extended
                           _extendedCell(context, line, currency),
                           // The row's buttons, as one cell, hard against the
@@ -1846,7 +1951,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       countedCabling.length + i,
                       Padding(
                       padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: _gridRow(_kCablingCols, [
+                      child: _gridRow(
+                            _withShipping(
+                              _kCablingCols,
+                              provider.avCost.showShipping,
+                            ), [
                           // Cable type
                           Row(
                             children: [
@@ -1914,6 +2023,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               );
                             },
                           ),
+                          if (provider.avCost.showShipping)
+                            _shippingCell(provider, item.id, currency),
                           // Extended
                           line == null
                               ? Text(
@@ -2102,6 +2213,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       prefixIcon: const Icon(Icons.search, size: 20),
                       isDense: true,
                       border: const OutlineInputBorder(),
+                      suffixIcon: ClearFieldButton(
+                        controller: searchController,
+                        onCleared: () => setLocal(() {}),
+                      ),
                     ),
                     onChanged: (_) => setLocal(() {}),
                   ),
@@ -4610,7 +4725,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // warning has to be on it — a room quoted with three undriven boxes in it
     // is a room that cannot be commissioned when it arrives.
     final sections = [
-      ...priced,
+      // The custom sections sit where the PDF prints them.
+      ...withEstimateSections(priced, provider.avCost),
       ...driverGapSections(provider, model),
     ];
 
@@ -4708,6 +4824,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           accent: estimateAccentColor(provider.estimateAccent),
           scopeOfWork: settings.scopeOfWork,
           notes: settings.notes,
+          title: settings.pdfTitle,
+          sections: List.of(settings.sections),
         ),
         theme: loadEstimatePdfTheme(),
       );
@@ -4771,6 +4889,188 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     );
   }
 
+  /// The per-unit shipping box for one line, keyed like its price.
+  Widget _shippingCell(
+    AppStateProvider provider,
+    String lineKey,
+    String currency,
+  ) {
+    final each = provider.avCost.shippingEach[lineKey] ?? 0;
+    return LiveTextField(
+      key: ValueKey('ship_$lineKey'),
+      fieldId: 'ship_$lineKey',
+      initial: each == 0 ? '' : trimNumber(each),
+      prefix: currency,
+      numeric: true,
+      hint: '0',
+      onChanged: (v) =>
+          provider.setAvCostShipping(lineKey, double.tryParse(v) ?? 0),
+    );
+  }
+
+  // --- custom PDF sections -----------------------------------------------
+
+  /// The buttons that add a titled block to the PDF.
+  Widget _addSectionBar(BuildContext context, AppStateProvider provider) {
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        OutlinedButton.icon(
+          key: const ValueKey('cost_add_section'),
+          icon: const Icon(Icons.notes, size: 16),
+          label: const Text('Add text section'),
+          onPressed: () => provider.addAvCostSection(),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('cost_add_list_section'),
+          icon: const Icon(Icons.format_list_bulleted, size: 16),
+          label: const Text('Add list section'),
+          onPressed: () => provider.addAvCostSection(bulleted: true),
+        ),
+        Text(
+          'Each section prints on the PDF with its own title.',
+          style: theme.textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  /// One custom section: its title, its text, and where it prints.
+  Widget _sectionCard(
+    BuildContext context,
+    AppStateProvider provider,
+    EstimateSection section,
+  ) {
+    final theme = Theme.of(context);
+    final index = provider.avCost.sections.indexOf(section);
+    final count = provider.avCost.sections.length;
+    if (_capturing) {
+      final lines = section.body
+          .trim()
+          .split('\n')
+          .where((l) => l.trim().isNotEmpty);
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardHeading(
+                title: section.title.trim().isEmpty
+                    ? 'Notes'
+                    : section.title.trim(),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                section.bulleted
+                    ? lines.map((l) => '\u2022 ${l.trim()}').join('\n')
+                    : section.body.trim(),
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Card(
+      key: ValueKey('cost_section_${section.id}'),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: LiveTextField(
+                    fieldId: 'section_title_${section.id}',
+                    initial: section.title,
+                    label: 'Section title',
+                    hint: section.bulleted ? 'e.g. Deliverables' : 'e.g. Exclusions',
+                    onChanged: (v) => provider.updateAvCostSection(
+                      section.copyWith(title: v),
+                    ),
+                  ),
+                ),
+                avRowIcon(
+                  Icons.arrow_upward,
+                  'Move up',
+                  index > 0
+                      ? () => provider.moveAvCostSection(section.id, -1)
+                      : null,
+                ),
+                avRowIcon(
+                  Icons.arrow_downward,
+                  'Move down',
+                  index < count - 1
+                      ? () => provider.moveAvCostSection(section.id, 1)
+                      : null,
+                ),
+                avRowIcon(
+                  Icons.delete_outline,
+                  'Remove this section',
+                  () => provider.removeAvCostSection(section.id),
+                  danger: true,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            LiveTextField(
+              fieldId: 'section_body_${section.id}',
+              initial: section.body,
+              hint: section.bulleted
+                  ? 'One item per line - each prints as a bullet'
+                  : 'The text of this section',
+              minLines: 3,
+              maxLines: 16,
+              onChanged: (v) => provider.updateAvCostSection(
+                section.copyWith(body: v),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SegmentedButton<EstimateSectionPlace>(
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  segments: const [
+                    ButtonSegment(
+                      value: EstimateSectionPlace.beforePricing,
+                      label: Text('Above pricing'),
+                    ),
+                    ButtonSegment(
+                      value: EstimateSectionPlace.afterTotals,
+                      label: Text('Below totals'),
+                    ),
+                  ],
+                  selected: {section.place},
+                  onSelectionChanged: (v) => provider.updateAvCostSection(
+                    section.copyWith(place: v.first),
+                  ),
+                ),
+                FilterChip(
+                  avatar: const Icon(Icons.format_list_bulleted, size: 16),
+                  label: const Text('Bulleted list'),
+                  selected: section.bulleted,
+                  onSelected: (v) => provider.updateAvCostSection(
+                    section.copyWith(bulleted: v),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // --- labor ---------------------------------------------------------------
 
   /// Crews, priced as rate x techs x hours. The head count and the hours stay
@@ -4795,7 +5095,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               title: 'Labor',
               subtitle: estimate.labor.isEmpty
                   ? 'rate x techs x hours, off the shared rate card'
-                  : '${trimNumber(estimate.laborHours)} tech-hours',
+                  : '${trimNumber(estimate.laborCrewHours)} crew hours, '
+                      '${trimNumber(estimate.laborHours)} total hours',
               actions: [
                 PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
@@ -4885,6 +5186,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         onChanged: (v) => provider.updateAvCostLabor(
                           line.copyWith(hours: double.tryParse(v) ?? 0),
                         ),
+                      ),
+                      // Total hours: the crew times its hours.
+                      Text(
+                        trimNumber(costed.totalHours),
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(fontSize: 13),
                       ),
                       // Rate. Blank follows the card; a figure here is what
                       // THIS job pays, which is how overtime and a one-off
@@ -4983,7 +5290,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
             if (items.isNotEmpty) ...[
               const SizedBox(height: 4),
-              _headerRow(context, _kItemsCols),
+              _headerRow(
+                context,
+                _withShipping(_kItemsCols, provider.avCost.showShipping),
+              ),
               const Divider(height: 12),
             ],
             for (final (i, item) in items.indexed)
@@ -4992,7 +5302,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 i,
                 Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
-                child: _gridRow(_kItemsCols, [
+                child: _gridRow(
+                    _withShipping(_kItemsCols, provider.avCost.showShipping), [
                     // Description
                     LiveTextField(
                       fieldId: 'desc_${item.id}',
@@ -5032,6 +5343,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         item.copyWith(unitPrice: double.tryParse(v) ?? 0),
                       ),
                     ),
+                    if (provider.avCost.showShipping)
+                      _shippingCell(provider, item.id, currency),
                     // Extended
                     Text(
                       formatMoney(item.total, currency),
@@ -5253,11 +5566,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               row('Cabling', estimate.cablingTotal),
             if (estimate.labor.isNotEmpty)
               row(
-                'Labor (${trimNumber(estimate.laborHours)} h)',
+                'Labor (${laborHoursLabel(estimate)})',
                 estimate.laborTotal,
               ),
             if (estimate.extras.isNotEmpty)
               row('Other items', estimate.extrasTotal),
+            if (estimate.shippingTotal > 0)
+              row('Shipping', estimate.shippingTotal),
             const Divider(),
             row('Subtotal before tax', estimate.subtotal, bold: true),
             for (final f in estimate.fees)
@@ -5365,7 +5680,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// The cells then came out right and the captions inside them still did not,
   /// because half the columns are input boxes: a box right-aligns its figure
   /// and holds it 16 pixels off its own border, so "Unit price" sat hard left
-  /// over a number hard right, and "Techs" and "Hours ea." the same. Which
+  /// over a number hard right, and "Crew" and "Crew hours" the same. Which
   /// cells are boxes is therefore part of the column spec — see [_Col.field].
   ///
   /// Built through a [Builder] so the print skin is read from INSIDE the
@@ -5991,13 +6306,17 @@ Future<String?> _pickJobType(
                 TextField(
                   controller: search,
                   autofocus: true,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Search the rate card',
                     hintText: 'name, class number, or shorthand - "tss", '
                         '"tssIII", "electrician"',
-                    prefixIcon: Icon(Icons.search, size: 20),
+                    prefixIcon: const Icon(Icons.search, size: 20),
                     isDense: true,
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: ClearFieldButton(
+                      controller: search,
+                      onCleared: () => setLocal(() {}),
+                    ),
                   ),
                   onChanged: (_) => setLocal(() {}),
                 ),
@@ -6241,11 +6560,18 @@ class _EstimateRoomBar extends StatelessWidget {
               controller: controller,
               focusNode: focus,
               style: const TextStyle(fontSize: 13),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 labelText: 'Building',
-                border: OutlineInputBorder(),
-                suffixIcon: Icon(Icons.search, size: 18),
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: ClearFieldButton(
+                  controller: controller,
+                  onCleared: () {
+                    setup['gve_bldg'] = '';
+                    provider.updateFullRoomName();
+                  },
+                ),
               ),
               onChanged: (value) {
                 setup['gve_bldg'] = value;

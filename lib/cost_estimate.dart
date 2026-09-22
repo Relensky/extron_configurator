@@ -212,6 +212,76 @@ const String kDefaultEstimateNotes =
     'may be required. Any additional work or materials beyond the scope '
     'described above may result in additional costs.';
 
+/// Where a custom section prints on the estimate PDF.
+enum EstimateSectionPlace {
+  /// Under the scope of work, above the priced tables.
+  beforePricing,
+
+  /// Under the totals, beside the notes.
+  afterTotals,
+}
+
+/// A titled block of text added to the estimate by hand - a list of
+/// deliverables, exclusions, a second notes box. Printed on the PDF.
+class EstimateSection {
+  final String id;
+  final String title;
+  final String body;
+
+  /// Each line of [body] prints as a bullet rather than a paragraph.
+  final bool bulleted;
+
+  final EstimateSectionPlace place;
+
+  const EstimateSection({
+    required this.id,
+    this.title = '',
+    this.body = '',
+    this.bulleted = false,
+    this.place = EstimateSectionPlace.afterTotals,
+  });
+
+  bool get isEmpty => title.trim().isEmpty && body.trim().isEmpty;
+
+  EstimateSection copyWith({
+    String? title,
+    String? body,
+    bool? bulleted,
+    EstimateSectionPlace? place,
+  }) => EstimateSection(
+    id: id,
+    title: title ?? this.title,
+    body: body ?? this.body,
+    bulleted: bulleted ?? this.bulleted,
+    place: place ?? this.place,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'body': body,
+    if (bulleted) 'bulleted': true,
+    'place': place.name,
+  };
+
+  factory EstimateSection.fromJson(Map<String, dynamic> json) {
+    final place = json['place']?.toString();
+    return EstimateSection(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      body: json['body']?.toString() ?? '',
+      bulleted: json['bulleted'] == true,
+      place: EstimateSectionPlace.values.firstWhere(
+        (p) => p.name == place,
+        orElse: () => EstimateSectionPlace.afterTotals,
+      ),
+    );
+  }
+}
+
+/// What the estimate PDF is headed when nothing else has been typed.
+const String kDefaultEstimateTitle = 'Estimate';
+
 /// The room's estimate settings. Lives in `<config>_av_flow.json` beside the
 /// diagram it prices, because a negotiated price is a fact about this job,
 /// not about the model.
@@ -330,9 +400,37 @@ class RoomCostSettings {
   /// Assumptions, exclusions and terms, printed under the totals.
   String notes;
 
+  /// The heading on the PDF - 'CTS Estimate', 'Audio Visual Estimate'. Blank
+  /// prints [kDefaultEstimateTitle].
+  String documentTitle;
+
+  /// Extra titled blocks printed on the PDF. See [EstimateSection].
+  final List<EstimateSection> sections;
+
+  /// LINE KEY -> shipping for ONE unit of that line. A display or a lectern
+  /// often ships at its own price, apart from the freight fee.
+  final Map<String, double> shippingEach;
+
+  /// Whether the shipping column is shown and charged. Off keeps the figures
+  /// typed but takes them off the quote.
+  bool showShipping;
+
+  /// Whether tax is charged on shipping as well.
+  bool shippingTaxable;
+
+  /// [documentTitle], or the default when it is blank.
+  String get pdfTitle => documentTitle.trim().isEmpty
+      ? kDefaultEstimateTitle
+      : documentTitle.trim();
+
   RoomCostSettings({
     this.scopeOfWork = '',
     this.notes = '',
+    this.documentTitle = '',
+    this.showShipping = false,
+    this.shippingTaxable = false,
+    List<EstimateSection>? sections,
+    Map<String, double>? shippingEach,
     this.currency = r'$',
     this.taxLabel = 'Sales tax',
     this.taxPercent = 0,
@@ -349,7 +447,9 @@ class RoomCostSettings {
     List<CostLineItem>? extraEquipment,
     List<CostLineItem>? extraHardware,
     List<CostLineItem>? extraCables,
-  }) : fees = fees ?? [],
+  }) : sections = sections ?? [],
+       shippingEach = shippingEach ?? {},
+       fees = fees ?? [],
        priceOverrides = priceOverrides ?? {},
        items = items ?? [],
        labor = labor ?? [],
@@ -364,6 +464,10 @@ class RoomCostSettings {
   bool get isEmpty =>
       scopeOfWork.trim().isEmpty &&
       notes.trim().isEmpty &&
+      documentTitle.trim().isEmpty &&
+      sections.isEmpty &&
+      shippingEach.isEmpty &&
+      !showShipping &&
       taxPercent == 0 &&
       equipmentSort == CostEquipmentSort.standard &&
       fees.isEmpty &&
@@ -386,6 +490,11 @@ class RoomCostSettings {
     equipmentSort = CostEquipmentSort.standard;
     scopeOfWork = '';
     notes = '';
+    documentTitle = '';
+    showShipping = false;
+    shippingTaxable = false;
+    sections.clear();
+    shippingEach.clear();
     fees.clear();
     priceOverrides.clear();
     items.clear();
@@ -408,6 +517,13 @@ class RoomCostSettings {
       'equipmentSort': equipmentSort.name,
     if (scopeOfWork.isNotEmpty) 'scopeOfWork': scopeOfWork,
     if (notes.isNotEmpty) 'notes': notes,
+    if (documentTitle.isNotEmpty) 'documentTitle': documentTitle,
+    if (sections.isNotEmpty)
+      'sections': [for (final section in sections) section.toJson()],
+    if (shippingEach.isNotEmpty)
+      'shippingEach': Map<String, double>.of(shippingEach),
+    if (showShipping) 'showShipping': true,
+    if (shippingTaxable) 'shippingTaxable': true,
     'fees': [for (final f in fees) f.toJson()],
     // Copied, not handed out live: the undo history snapshots the room by
     // calling this and empties the estimate before reading a snapshot back,
@@ -451,6 +567,24 @@ class RoomCostSettings {
     );
     scopeOfWork = json['scopeOfWork']?.toString() ?? '';
     notes = json['notes']?.toString() ?? '';
+    documentTitle = json['documentTitle']?.toString() ?? '';
+    showShipping = json['showShipping'] == true;
+    shippingTaxable = json['shippingTaxable'] == true;
+    for (final section in (json['sections'] as List? ?? [])) {
+      if (section is Map) {
+        sections.add(
+          EstimateSection.fromJson(Map<String, dynamic>.from(section)),
+        );
+      }
+    }
+    final shipping = json['shippingEach'];
+    if (shipping is Map) {
+      shipping.forEach((key, value) {
+        final each = (value as num?)?.toDouble();
+        if (each == null || each <= 0) return;
+        shippingEach[key.toString()] = each;
+      });
+    }
     for (final f in (json['fees'] as List? ?? [])) {
       if (f is Map) fees.add(CostFee.fromJson(Map<String, dynamic>.from(f)));
     }
@@ -814,6 +948,10 @@ class CostLine {
   /// is what [total] returning zero says.
   final String? furnishedBy;
 
+  /// Shipping for one unit, when the estimate charges it per item. See
+  /// [RoomCostSettings.shippingEach].
+  final double shippingEach;
+
   const CostLine({
     required this.key,
     required this.description,
@@ -828,7 +966,29 @@ class CostLine {
     this.spare = false,
     this.spareQty = 0,
     this.furnishedBy,
+    this.shippingEach = 0,
   });
+
+  /// This line with [each] as its per-unit shipping.
+  CostLine withShipping(double each) => CostLine(
+    key: key,
+    description: description,
+    model: model,
+    partNumber: partNumber,
+    manufacturer: manufacturer,
+    category: category,
+    qty: qty,
+    unitPrice: unitPrice,
+    taxable: taxable,
+    source: source,
+    spare: spare,
+    spareQty: spareQty,
+    furnishedBy: furnishedBy,
+    shippingEach: each,
+  );
+
+  /// Shipping for the whole line; nothing when somebody else is buying it.
+  double get shippingTotal => furnished ? 0 : qty * shippingEach;
 
   /// True when somebody else is buying this.
   bool get furnished => furnishedBy != null;
@@ -930,7 +1090,16 @@ class CostEstimate {
   final double cablingTotal;
   final double extrasTotal;
   final double laborTotal;
+
+  /// Every tech's hours added up: techs x hours on each line.
   final double laborHours;
+
+  /// How long the crews are on the job: the hours of each line, not
+  /// multiplied by how many techs are on it.
+  final double laborCrewHours;
+
+  /// Per-item shipping across every line, when the estimate charges it.
+  final double shippingTotal;
 
   /// Labor lines whose rate is 0 — the rate card has no figure for that job
   /// type yet, so the hours are real but the money is missing.
@@ -982,6 +1151,8 @@ class CostEstimate {
     required this.extrasTotal,
     required this.laborTotal,
     required this.laborHours,
+    this.laborCrewHours = 0,
+    this.shippingTotal = 0,
     required this.unratedLabor,
     required this.subtotal,
     required this.feeTotal,
@@ -1557,6 +1728,27 @@ CostEstimate computeRoomCost({
     for (final item in settings.items) extraLine(item, ''),
   ];
 
+  // --- shipping, per unit, on the lines it was typed against --------------
+  //  Only while the column is on: switching it off takes shipping off the
+  //  quote and keeps the figures for when it comes back.
+  if (settings.showShipping && settings.shippingEach.isNotEmpty) {
+    void ship(List<CostLine> lines) {
+      for (var i = 0; i < lines.length; i++) {
+        final each = settings.shippingEach[lines[i].key] ?? 0;
+        if (each > 0) lines[i] = lines[i].withShipping(each);
+      }
+    }
+
+    ship(equipment);
+    ship(hardware);
+    ship(cabling);
+    ship(extras);
+  }
+  final shippingTotal = _cents(
+    [...equipment, ...hardware, ...cabling, ...extras]
+        .fold(0.0, (sum, l) => sum + l.shippingTotal),
+  );
+
   // --- labor: rate x techs x hours, off the shared rate card -------------
   final labor = <LaborCostLine>[];
   for (final line in settings.labor) {
@@ -1578,6 +1770,7 @@ CostEstimate computeRoomCost({
   }
   final laborTotal = _cents(labor.fold(0.0, (sum, l) => sum + l.total));
   final laborHours = labor.fold(0.0, (sum, l) => sum + l.totalHours);
+  final laborCrewHours = labor.fold(0.0, (sum, l) => sum + l.hours);
   final unratedLabor = labor.where((l) => l.unrated).length;
 
   final equipmentTotal = _cents(
@@ -1587,7 +1780,12 @@ CostEstimate computeRoomCost({
   final cablingTotal = _cents(cabling.fold(0.0, (sum, l) => sum + l.total));
   final extrasTotal = _cents(extras.fold(0.0, (sum, l) => sum + l.total));
   final subtotal = _cents(
-    equipmentTotal + hardwareTotal + cablingTotal + extrasTotal + laborTotal,
+    equipmentTotal +
+        hardwareTotal +
+        cablingTotal +
+        extrasTotal +
+        laborTotal +
+        shippingTotal,
   );
 
   // Every fee is a percentage of the SAME pre-tax subtotal — they don't
@@ -1616,7 +1814,8 @@ CostEstimate computeRoomCost({
         cablingTotal +
         taxableExtras +
         taxableLabor +
-        taxableFees,
+        taxableFees +
+        (settings.shippingTaxable ? shippingTotal : 0),
   );
   final tax = _cents(taxableBase * settings.taxPercent / 100);
 
@@ -1635,6 +1834,8 @@ CostEstimate computeRoomCost({
     extrasTotal: extrasTotal,
     laborTotal: laborTotal,
     laborHours: laborHours,
+    laborCrewHours: laborCrewHours,
+    shippingTotal: shippingTotal,
     unratedLabor: unratedLabor,
     subtotal: subtotal,
     feeTotal: feeTotal,
@@ -1702,6 +1903,64 @@ XlsxMoney money(double value, [String currency = r'$']) {
 //  REPORT SECTIONS
 // ---------------------------------------------------------------------------
 
+/// The custom sections at [place], as report sections for the Excel and text
+/// exports. Two columns, so a long line spills across the sheet instead of
+/// widening column A: a list is numbered, a text section keeps one line per
+/// row.
+List<ReportSection> estimateSectionReports(
+  List<EstimateSection> sections,
+  EstimateSectionPlace place,
+) => [
+  for (final section in sections)
+    if (section.place == place && !section.isEmpty)
+      (
+        title: section.title.trim().isEmpty ? 'Notes' : section.title.trim(),
+        header: section.bulleted ? const ['#', 'Item'] : const ['', ''],
+        rows: [
+          for (final (i, line) in section.body
+              .trim()
+              .split('\n')
+              .map((l) => l.trim())
+              .where((l) => l.isNotEmpty)
+              .indexed)
+            [section.bulleted ? '${i + 1}' : '', line],
+        ],
+      ),
+];
+
+/// [priced] with the scope of work, the notes and the custom sections around
+/// it, in the order the PDF prints them.
+List<ReportSection> withEstimateSections(
+  List<ReportSection> priced,
+  RoomCostSettings settings,
+) {
+  List<ReportSection> text(String title, String body) => body.trim().isEmpty
+      ? const []
+      : estimateSectionReports(
+          [EstimateSection(id: title, title: title, body: body)],
+          EstimateSectionPlace.afterTotals,
+        );
+  return [
+    ...text('Scope of Work', settings.scopeOfWork),
+    ...estimateSectionReports(
+      settings.sections,
+      EstimateSectionPlace.beforePricing,
+    ),
+    ...priced,
+    ...text('Notes', settings.notes),
+    ...estimateSectionReports(
+      settings.sections,
+      EstimateSectionPlace.afterTotals,
+    ),
+  ];
+}
+
+/// "8 crew h, 16 total h" - how long the crews are on site, and every
+/// tech's hours added up.
+String laborHoursLabel(CostEstimate estimate) =>
+    '${trimNumber(estimate.laborCrewHours)} crew h, '
+    '${trimNumber(estimate.laborHours)} total h';
+
 /// The Cost Estimate sheet: what is being bought, what is being added on top,
 /// and what it comes to.
 List<ReportSection> costReportSections(CostEstimate estimate) {
@@ -1724,10 +1983,13 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
   /// the symbol in their headings because the cells now carry it.
   XlsxMoney cash(double value) => money(value, currency);
 
+  // Shipping columns only on a quote that charges some.
+  final shipping = estimate.shippingTotal > 0;
+
   final sections = <ReportSection>[
     (
       title: 'Equipment',
-      header: const [
+      header: [
         'Device',
         'Model',
         // What actually goes on the purchase order — a model name is what the
@@ -1736,6 +1998,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
         'Qty',
         'Unit price',
         'Extended',
+        if (shipping) ...['Shipping ea.', 'Shipping'],
         'Price from',
       ],
       rows: [
@@ -1754,6 +2017,10 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
             line.qty,
             cash(line.unitPrice),
             cash(line.total),
+            if (shipping) ...[
+              line.shippingEach > 0 ? cash(line.shippingEach) : '',
+              line.shippingTotal > 0 ? cash(line.shippingTotal) : '',
+            ],
             priceFromLabel(line),
           ],
       ],
@@ -1811,8 +2078,8 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       header: const [
         'Role',
         'Scope',
-        'Techs',
-        'Hours ea.',
+        'Crew',
+        'Crew hours',
         'Total hours',
         'Rate per hour',
         'Extended',
@@ -1867,11 +2134,12 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       ['Cabling', cash(estimate.cablingTotal)],
     if (estimate.labor.isNotEmpty) ...[
       [
-        'Labor (${trimNumber(estimate.laborHours)} h)',
+        'Labor (${laborHoursLabel(estimate)})',
         cash(estimate.laborTotal),
       ],
     ],
     if (estimate.extras.isNotEmpty) ['Other items', cash(estimate.extrasTotal)],
+    if (shipping) ['Shipping', cash(estimate.shippingTotal)],
     ['Subtotal (before fees and tax)', cash(estimate.subtotal)],
     for (final f in estimate.fees)
       [

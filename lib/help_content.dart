@@ -2152,6 +2152,9 @@ const List<HelpTopic> kHelpTopics = [
       'program_releases',
       'release folder',
       'folder',
+      'shortcut',
+      'desktop shortcut',
+      'start menu',
     ],
     body:
         'The app looks in the Program_Releases folder on the CTS file share when '
@@ -2172,6 +2175,13 @@ const List<HelpTopic> kHelpTopics = [
         'a test folder before it goes on the share. The line under the box '
         'says whether the folder can be seen from this computer, the choice is '
         'remembered and survives an update, and Use default folder puts it '
-        'back.',
+        'back.\n\n'
+        'Shortcuts: after Update, the "Update to version …?" notice offers Add '
+        'a Desktop shortcut and Add a Start menu shortcut for any the app does '
+        'not have yet. Tick the ones you want before Close and Update; nothing '
+        'is added unless you do. App Config -> App Updates -> Shortcuts adds '
+        'them at any time. They are named Room Config Builder and go in your '
+        'own Desktop and Start menu, and one that cannot be made never stops '
+        'the update.',
   ),
 ];

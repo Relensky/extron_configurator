@@ -50,6 +50,8 @@ void main() {
     /// is how a name comes to stand in for a code.
     String building = '',
     String number = '',
+    /// The room's whole cost sheet, when a test needs more than labor on it.
+    RoomCostSettings? cost,
   }) {
     final configPath = path.join(dir.path, '${stem}_config.json');
     File(configPath).writeAsStringSync(jsonEncode({
@@ -65,7 +67,8 @@ void main() {
     }));
     File(path.join(dir.path, '${stem}_config_cost.json'))
         .writeAsStringSync(jsonEncode({
-      'cost': RoomCostSettings(labor: List<LaborLine>.from(labor)).toJson(),
+      'cost': (cost ?? RoomCostSettings(labor: List<LaborLine>.from(labor)))
+          .toJson(),
     }));
     return configPath;
   }
@@ -92,7 +95,10 @@ void main() {
   }
 
   /// A two-room job with both vendors set up and every part tagged.
-  ProjectEstimate job({List<LaborLine> labor = const []}) {
+  ProjectEstimate job({
+    List<LaborLine> labor = const [],
+    RoomCostSettings? cost,
+  }) {
     final a = writeRoom(
       'a',
       name: 'Bessey 101',
@@ -101,6 +107,7 @@ void main() {
         device('d2', 'Room camera', 'RoboSHOT 12E'),
       ],
       labor: labor,
+      cost: cost,
     );
     final b = writeRoom('b', name: 'Bessey 103', nodes: [
       device('d1', 'Lectern TX', 'DTP2 T 211'),
@@ -171,6 +178,55 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('the project workbook', () {
+    test('a room tab carries the scope, notes and sections of that room', () {
+      final archive = ZipDecoder().decodeBytes(buildProjectWorkbookBytes(
+        estimate: job(
+          cost: RoomCostSettings(
+            scopeOfWork: 'Replace the lectern transmitter',
+            notes: 'Valid for 30 days',
+            sections: const [
+              EstimateSection(
+                id: 'S1',
+                title: 'Deliverables',
+                body: 'As-built drawings',
+                bulleted: true,
+                place: EstimateSectionPlace.beforePricing,
+              ),
+              EstimateSection(
+                id: 'S2',
+                title: 'Exclusions',
+                body: 'Painting and patching',
+              ),
+            ],
+          ),
+        ),
+      ));
+      final room = sheetNamed(archive, 'Bessey 101');
+      for (final text in [
+        'Scope of Work',
+        'Replace the lectern transmitter',
+        'Deliverables',
+        'As-built drawings',
+        'Notes',
+        'Valid for 30 days',
+        'Exclusions',
+        'Painting and patching',
+      ]) {
+        expect(room, contains(text), reason: text);
+      }
+      // In the PDF's order: scope, sections above the pricing, the pricing,
+      // the notes, sections below the totals.
+      expect(room.indexOf('Scope of Work'), lessThan(room.indexOf('Deliverables')));
+      expect(room.indexOf('Deliverables'), lessThan(room.indexOf('Equipment')));
+      expect(room.indexOf('Totals'), lessThan(room.indexOf('Valid for 30 days')));
+      expect(
+        room.indexOf('Valid for 30 days'),
+        lessThan(room.indexOf('Exclusions')),
+      );
+      // The other room has none of it.
+      expect(sheetNamed(archive, 'Bessey 103'), isNot(contains('Scope of Work')));
+    });
+
     test('has a summary, a master list, a tab per vendor and one per room',
         () {
       final archive = ZipDecoder()

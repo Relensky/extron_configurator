@@ -10,7 +10,9 @@
 //     clicking, so neither the checks nor the card land in the middle of it.
 //   * [UpdateSettingsSection] goes in a settings screen: the running version,
 //     the folder being watched - which can be changed there and is remembered
-//     - the last check, and Check now / Update.
+//     - the last check, Check now / Update, and Desktop / Start menu shortcut
+//     buttons. The card's "Close and Update" step also offers the shortcuts
+//     the app does not have yet.
 //
 // The card sits above the Navigator, so it uses no dialogs, tooltips or
 // routes - only what MaterialApp.builder's context already provides.
@@ -112,6 +114,7 @@ class _UpdateCardState extends State<_UpdateCard> {
     String body;
     List<Widget> actions;
     Widget? progress;
+    Widget? extra;
 
     final available = u.available;
     final outcome = u.lastOutcome;
@@ -152,6 +155,29 @@ class _UpdateCardState extends State<_UpdateCard> {
       title = 'Update to version ${available.version}?';
       body = '${u.appName} will close, install the update and open again. '
           'Save any work first. Your settings and files are kept.';
+      // Only the shortcuts the app does not have yet, once they are known.
+      final have = u.shortcuts;
+      if (u.canManageShortcuts &&
+          have != null &&
+          (!have.desktop || !have.startMenu)) {
+        extra = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!have.desktop)
+              _ShortcutCheckbox(
+                label: 'Add a Desktop shortcut',
+                value: u.addDesktopShortcut,
+                onChanged: u.setAddDesktopShortcut,
+              ),
+            if (!have.startMenu)
+              _ShortcutCheckbox(
+                label: 'Add a Start menu shortcut',
+                value: u.addStartMenuShortcut,
+                onChanged: u.setAddStartMenuShortcut,
+              ),
+          ],
+        );
+      }
       actions = [
         TextButton(onPressed: u.cancelInstall, child: const Text('Cancel')),
         FilledButton(
@@ -212,6 +238,13 @@ class _UpdateCardState extends State<_UpdateCard> {
                   ),
                 ],
               ),
+              if (extra != null) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.only(left: 24),
+                  child: extra,
+                ),
+              ],
               if (progress != null) ...[
                 const SizedBox(height: 12),
                 progress,
@@ -225,6 +258,43 @@ class _UpdateCardState extends State<_UpdateCard> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// One "add a shortcut" choice on the update card. Checkbox and label are
+/// one click target, so it is not a hunt for the little box.
+class _ShortcutCheckbox extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ShortcutCheckbox({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: () => onChanged(!value),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Checkbox(
+            value: value,
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            onChanged: (v) => onChanged(v ?? false),
+          ),
+          Text(label,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurface)),
+        ],
       ),
     );
   }
@@ -261,6 +331,36 @@ class _UpdateSettingsSectionState extends State<UpdateSettingsSection> {
   void initState() {
     super.initState();
     widget.updater.addListener(_syncFromUpdater);
+    unawaited(widget.updater.refreshShortcuts());
+  }
+
+  bool _addingShortcut = false;
+
+  Future<void> _addShortcut({bool desktop = false, bool startMenu = false}) async {
+    setState(() => _addingShortcut = true);
+    try {
+      await widget.updater
+          .createShortcuts(desktop: desktop, startMenu: startMenu);
+    } catch (_) {
+      // Shown from updater.shortcutError.
+    }
+    if (mounted) setState(() => _addingShortcut = false);
+  }
+
+  /// "Add" while the shortcut is missing, a tick once it is there.
+  Widget _shortcutButton(String label, bool? exists, VoidCallback onAdd) {
+    if (exists == true) {
+      return OutlinedButton.icon(
+        icon: const Icon(Icons.check, size: 18),
+        label: Text('$label shortcut added'),
+        onPressed: null,
+      );
+    }
+    return OutlinedButton.icon(
+      icon: const Icon(Icons.add_link, size: 18),
+      label: Text('Add $label shortcut'),
+      onPressed: exists == null || _addingShortcut ? null : onAdd,
+    );
   }
 
   @override
@@ -447,6 +547,33 @@ class _UpdateSettingsSectionState extends State<UpdateSettingsSection> {
                 ],
               ),
             ),
+            if (u.canManageShortcuts)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('Shortcuts', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _shortcutButton('Desktop', u.shortcuts?.desktop,
+                            () => unawaited(_addShortcut(desktop: true))),
+                        _shortcutButton('Start menu', u.shortcuts?.startMenu,
+                            () => unawaited(_addShortcut(startMenu: true))),
+                      ],
+                    ),
+                    if (u.shortcutError != null) ...[
+                      const SizedBox(height: 4),
+                      Text("Couldn't add the shortcut: ${u.shortcutError}",
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: scheme.error)),
+                    ],
+                  ],
+                ),
+              ),
           ],
         );
       },

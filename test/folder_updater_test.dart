@@ -375,6 +375,59 @@ void main() {
     });
   });
 
+  // [FEATURE - APP UPDATES]: an update offers Desktop and Start menu
+  // shortcuts. These make real shortcuts, in temp folders standing in for the
+  // Desktop and the Start menu.
+  group('shortcuts', () {
+    test('file names drop characters Windows refuses', () {
+      expect(shortcutFileName('CTS Dashboard'), 'CTS Dashboard');
+      expect(shortcutFileName('A/B: "C"?'), 'AB C');
+    });
+
+    test('made shortcuts point at the exe and are found again', () async {
+      final exe = Platform.resolvedExecutable;
+      final desktop = '${tmp.path}\\Desktop';
+      final start = '${tmp.path}\\Start Menu';
+      Directory(desktop).createSync();
+
+      var found = await findShortcuts(
+          exePath: exe, desktopFolders: [desktop], startMenuFolders: [start]);
+      expect(found.desktop, isFalse);
+      expect(found.startMenu, isFalse);
+
+      await createShortcuts("Test App's",
+          desktop: true,
+          startMenu: false,
+          exePath: exe,
+          desktopFolder: desktop,
+          startMenuFolder: start);
+      expect(File("$desktop\\Test App's.lnk").existsSync(), isTrue);
+      found = await findShortcuts(
+          exePath: exe, desktopFolders: [desktop], startMenuFolders: [start]);
+      expect(found.desktop, isTrue);
+      expect(found.startMenu, isFalse);
+
+      // The Start menu folder is made if missing, and searched to any depth.
+      await createShortcuts('Test App',
+          desktop: false,
+          startMenu: true,
+          exePath: exe,
+          desktopFolder: desktop,
+          startMenuFolder: '$start\\Tools');
+      found = await findShortcuts(
+          exePath: exe, desktopFolders: [desktop], startMenuFolders: [start]);
+      expect(found.startMenu, isTrue);
+
+      // A shortcut to some other program does not count.
+      found = await findShortcuts(
+          exePath: '${tmp.path}\\other.exe',
+          desktopFolders: [desktop],
+          startMenuFolders: [start]);
+      expect(found.desktop, isFalse);
+      expect(found.startMenu, isFalse);
+    }, timeout: const Timeout(Duration(minutes: 1)));
+  });
+
   // [FEATURE - APP UPDATES]: the release folder is editable in Settings, so
   // a build can be tried from a test copy of the folder without a rebuild.
   // The choice is remembered in a file beside the updater's work folder;

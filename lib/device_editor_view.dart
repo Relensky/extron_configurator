@@ -18,6 +18,7 @@ import 'cost_estimate.dart' show trimNumber, formatMoney;
 import 'device_merge.dart';
 import 'equipment_lifecycle.dart' show kDefaultEquipmentLifeYears;
 import 'live_text_field.dart';
+import 'responsive.dart';
 import 'side_pane.dart';
 import 'catalog_standards.dart';
 import 'catalog_standards_dialog.dart' show showCatalogStandards;
@@ -287,9 +288,16 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 initialWidth: 340,
                 minWidth: 200,
                 maxWidth: 560,
-                child: _buildList(entries),
+                child: _buildList(entries, library),
               ),
-              Expanded(child: _buildDetail(provider, library)),
+              // Scrolls sideways rather than cutting fields off when the
+              // window is too narrow for the form.
+              Expanded(
+                child: MinWidthScroll(
+                  minWidth: 560,
+                  child: _buildDetail(provider, library),
+                ),
+              ),
             ],
           ),
         ),
@@ -533,12 +541,15 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   fieldId: 'catalog_search',
                   initial: _search,
                   hint: 'Search model, maker, part number',
+                  clearable: true,
                   onChanged: (v) => setState(() => _search = v),
                 ),
               ),
               SizedBox(
                 width: 200,
                 child: DropdownButtonFormField<String>(
+                  // Keyed on the value so "Show all matches" can reset it.
+                  key: ValueKey('catalog_category_$_categoryFilter'),
                   initialValue: _categoryFilter.isEmpty ? null : _categoryFilter,
                   isExpanded: true,
                   decoration: const InputDecoration(
@@ -615,17 +626,56 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 
   // --- the list -------------------------------------------------------------
 
-  Widget _buildList(List<AvDeviceTemplate> entries) {
+  /// True when a filter other than the search box is narrowing the list.
+  bool get _filtering =>
+      _categoryFilter.isNotEmpty || _customOnly || !_showRetired;
+
+  /// How many entries match the search once the filters are ignored — the
+  /// ones a category, "My entries only" or a retired flag is hiding.
+  int _hiddenByFilters(AvDeviceLibrary library) {
+    if (!_filtering) return 0;
+    return searchCatalog(library.all, _search, limit: library.all.length)
+        .length;
+  }
+
+  void _clearFilters() => setState(() {
+        _categoryFilter = '';
+        _customOnly = false;
+        _showRetired = true;
+      });
+
+  Widget _buildList(List<AvDeviceTemplate> entries, AvDeviceLibrary library) {
     final theme = Theme.of(context);
     if (entries.isEmpty) {
+      final hidden = _hiddenByFilters(library);
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
-            'No models match. Clear the search, or add one with '
-            '"New device".',
-            style: theme.textTheme.bodySmall,
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                hidden > 0
+                    ? 'No models match with the current filters. $hidden '
+                          '${hidden == 1 ? 'entry matches' : 'entries match'} '
+                          'the search but ${hidden == 1 ? 'is' : 'are'} '
+                          'hidden by the category, "My entries only" or '
+                          'retired filter.'
+                    : 'No models match. Clear the search, or add one with '
+                          '"New device".',
+                style: theme.textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+              if (hidden > 0) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  key: const ValueKey('catalog_clear_filters'),
+                  icon: const Icon(Icons.filter_alt_off, size: 16),
+                  label: const Text('Show all matches'),
+                  onPressed: _clearFilters,
+                ),
+              ],
+            ],
           ),
         ),
       );
@@ -783,8 +833,16 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         // caused it.
         _duplicateWarning(provider, library, entry),
         const SizedBox(height: 12),
-        Row(
+        // A WRAP, so on a narrow window the prices drop to the next line
+        // instead of running off the edge of the page.
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
           children: [
+            SizedBox(
+              width: 280,
+              child: Row(
+                children: [
             Expanded(
               child: LiveTextField(
                 fieldId: 'cat_$key',
@@ -843,7 +901,9 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   PopupMenuItem(value: c, child: Text(c)),
               ],
             ),
-            const SizedBox(width: 12),
+                ],
+              ),
+            ),
             SizedBox(
               width: 110,
               child: LiveTextField(
@@ -859,7 +919,6 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
             SizedBox(
               width: 140,
               child: LiveTextField(
@@ -892,7 +951,6 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 },
               ),
             ),
-            const SizedBox(width: 12),
             SizedBox(
               width: 140,
               child: LiveTextField(
@@ -913,7 +971,6 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
             SizedBox(
               width: 130,
               child: LiveTextField(
@@ -932,7 +989,6 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
             SizedBox(
               width: 140,
               child: LiveTextField(
@@ -953,7 +1009,6 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
             SizedBox(
               width: 150,
               child: LiveTextField(
@@ -969,7 +1024,6 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
             SizedBox(
               width: 150,
               child: LiveTextField(

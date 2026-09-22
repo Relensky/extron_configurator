@@ -18,6 +18,7 @@ import 'campus_file.dart';
 import 'recent_files_menu.dart';
 import 'campus_lifecycle_view.dart'
     show showCampusLifecycle, showCampusLifecycleFile;
+import 'responsive.dart';
 import 'app_state.dart';
 import 'changelog.dart';
 import 'av_device_library.dart';
@@ -1268,13 +1269,18 @@ class _MainDashboardState extends State<MainDashboard> {
           Expanded(
             child: RepaintBoundary(
               key: _captureKey,
-              child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
-                  ? _buildLandingScreen(context, provider)
-                  : _buildMainContent(
-                      selectedIndex,
-                      provider.configRevision,
-                      provider.isEstimateRoom,
-                    ),
+              // A floor under every page: narrower than this and the page
+              // scrolls sideways with a scrollbar instead of being cut off.
+              child: MinWidthScroll(
+                minWidth: 640,
+                child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
+                    ? _buildLandingScreen(context, provider)
+                    : _buildMainContent(
+                        selectedIndex,
+                        provider.configRevision,
+                        provider.isEstimateRoom,
+                      ),
+              ),
             ),
           )
         ],
@@ -2774,7 +2780,10 @@ class ProcessorSearchField extends StatelessWidget {
               helperText: helperText,
               helperMaxLines: 2,
               border: const OutlineInputBorder(),
-              suffixIcon: const Icon(Icons.search),
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: enabled
+                  ? ClearFieldButton(controller: controller)
+                  : null,
             ),
             // Typing counts too, for anyone who tabs in or pastes.
             onChanged: (_) => onInteracted?.call(),

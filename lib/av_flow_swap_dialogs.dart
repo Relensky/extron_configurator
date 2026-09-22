@@ -8,6 +8,7 @@ import 'control_prefill.dart' show moveControlBlockToFamily;
 import 'av_flow_model.dart';
 import 'model_swap.dart';
 import 'search_match.dart';
+import 'responsive.dart';
 
 /// ============================================================================
 ///  CHANGING YOUR MIND ABOUT A BOX OR A LEAD
@@ -101,10 +102,14 @@ Future<CableEnd?> pickCableEnd(
                   key: const ValueKey('cable_end_search'),
                   controller: searchController,
                   autofocus: true,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Search',
                     hintText: 'device, model or connector',
-                    prefixIcon: Icon(Icons.search, size: 20),
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: ClearFieldButton(
+                      controller: searchController,
+                      onCleared: () => setLocal(() {}),
+                    ),
                   ),
                   onChanged: (_) => setLocal(() {}),
                 ),
@@ -239,12 +244,16 @@ Future<AvDeviceTemplate?> pickCatalogModel(
                   key: const ValueKey('catalog_swap_search'),
                   controller: searchController,
                   autofocus: true,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Search the catalog',
                     hintText: 'model, part number or maker',
-                    prefixIcon: Icon(Icons.search, size: 20),
+                    prefixIcon: const Icon(Icons.search, size: 20),
                     helperText: 'Spaces and dashes are ignored - '
                         '"dtpcross108" finds "DTP CrossPoint 108".',
+                    suffixIcon: ClearFieldButton(
+                      controller: searchController,
+                      onCleared: () => setLocal(() {}),
+                    ),
                   ),
                   onChanged: (_) => setLocal(() {}),
                 ),

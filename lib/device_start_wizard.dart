@@ -9,6 +9,7 @@ import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'control_prefill.dart';
 import 'cost_estimate.dart' show formatMoney;
+import 'responsive.dart';
 
 /// ============================================================================
 ///  START FROM THE COST ESTIMATOR
@@ -274,12 +275,16 @@ class _DeviceStartWizardState extends State<_DeviceStartWizard> {
               child: TextField(
                 controller: _search,
                 autofocus: true,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Search the catalog',
                   hintText: 'model, part number or maker',
-                  prefixIcon: Icon(Icons.search, size: 20),
+                  prefixIcon: const Icon(Icons.search, size: 20),
                   isDense: true,
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: ClearFieldButton(
+                    controller: _search,
+                    onCleared: () => setState(() {}),
+                  ),
                 ),
                 onChanged: (_) => setState(() {}),
               ),

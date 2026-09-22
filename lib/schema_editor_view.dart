@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'side_pane.dart';
 import 'ui_schema.dart';
+import 'responsive.dart';
 
 /// ============================================================================
 ///  SCHEMA EDITOR TAB
@@ -202,6 +203,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
   _SchemaSection _section = _SchemaSection.coverage;
   bool _dirty = false;
   String _search = '';
+  final TextEditingController _searchCtl = TextEditingController();
 
   /// Coverage: the config file being measured against, and which block of it.
   Map<String, dynamic> _template = {};
@@ -226,6 +228,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
   @override
   void dispose() {
     _raw.dispose();
+    _searchCtl.dispose();
     super.dispose();
   }
 
@@ -439,11 +442,16 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
   Widget _searchBox() => Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
         child: TextField(
-          decoration: const InputDecoration(
+          controller: _searchCtl,
+          decoration: InputDecoration(
             isDense: true,
-            prefixIcon: Icon(Icons.search, size: 18),
+            prefixIcon: const Icon(Icons.search, size: 18),
             hintText: 'Search keys',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
+            suffixIcon: ClearFieldButton(
+              controller: _searchCtl,
+              onCleared: () => setState(() => _search = ''),
+            ),
           ),
           onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
         ),

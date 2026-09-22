@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'image_color_picker.dart';
 import 'main.dart' show AccentColorPicker;
 
 /// Deep tones that print well behind white text, for the estimate's accent.
@@ -24,6 +26,41 @@ const List<Color> kEstimateAccentSwatches = [
 /// prints in, the accent color and who prepared it.
 class EstimateSettingsSection extends StatelessWidget {
   const EstimateSettingsSection({super.key});
+
+  Future<void> _pickFromLogo(
+    BuildContext context,
+    AppStateProvider provider,
+    String logoPath,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    Uint8List bytes;
+    try {
+      bytes = await File(logoPath).readAsBytes();
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not read the logo file.')),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    final image = await decodeImageForPicking(bytes);
+    if (!context.mounted) return;
+    if (image == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('The logo is not an image this can read.')),
+      );
+      return;
+    }
+    final picked = await pickColorFromImage(context, bytes);
+    if (picked == null) return;
+    provider.updateSetting(
+      'estimateAccent',
+      (picked.toARGB32() & 0xFFFFFF)
+          .toRadixString(16)
+          .padLeft(6, '0')
+          .toUpperCase(),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +212,8 @@ class EstimateSettingsSection extends StatelessWidget {
         Text('Accent color', style: theme.textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(
-          'Headings, rules and the total band on the PDF.',
+          'Headings, rules and the total band on the PDF, and the title and '
+          'header bands on the Excel reports.',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
@@ -186,6 +224,24 @@ class EstimateSettingsSection extends StatelessWidget {
           autoLabel: 'Default (navy)',
           autoColor: Color(0xFF1F3A5F),
         ),
+        const SizedBox(height: 8),
+        // TAKE THE COLOR OFF THE LOGO, so the report matches the brand.
+        OutlinedButton.icon(
+          key: const ValueKey('estimate_accent_from_logo'),
+          icon: const Icon(Icons.colorize, size: 18),
+          label: const Text('Pick from logo...'),
+          onPressed: logoPath.isEmpty || logoMissing
+              ? null
+              : () => _pickFromLogo(context, provider, logoPath),
+        ),
+        if (logoPath.isEmpty || logoMissing)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Choose a logo above to pick a color from it.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
       ],
     );
   }

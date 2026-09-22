@@ -4,6 +4,7 @@ import 'app_state.dart';
 import 'av_only_notice.dart';
 import 'schema_field_builder.dart';
 import 'search_match.dart';
+import 'responsive.dart';
 
 class SetupWizardView extends StatelessWidget {
   const SetupWizardView({super.key});
@@ -97,10 +98,17 @@ class SetupWizardView extends StatelessWidget {
                       return TextFormField(
                         controller: controller,
                         focusNode: focusNode,
-                        decoration: const InputDecoration(
-                          labelText: 'Search Building (gve_bldg)', 
-                          border: OutlineInputBorder(),
-                          suffixIcon: Icon(Icons.search),
+                        decoration: InputDecoration(
+                          labelText: 'Search Building (gve_bldg)',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: ClearFieldButton(
+                            controller: controller,
+                            onCleared: () {
+                              systemSetup['gve_bldg'] = '';
+                              provider.updateFullRoomName();
+                            },
+                          ),
                         ),
                         onChanged: (val) {
                           // Allow manual overriding if they type an unlisted building

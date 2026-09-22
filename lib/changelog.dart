@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.3.2+5';
+const String kAppVersion = '0.4.1+7';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,65 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.4.1',
+    date: 'September 22, 2026',
+    title: 'Estimate PDF options, shipping and search',
+    changes: [
+      'The estimate PDF title can be changed on the Cost tab - "CTS '
+          'Estimate", "Audio Visual Estimate" or anything else. Left blank it '
+          'still says Estimate.',
+      'Add text or list sections to the Cost tab, each with its own title. '
+          'They print on the PDF above the pricing or below the totals, and '
+          'can be moved up and down. They are in the Excel and text exports '
+          'too, in the same place.',
+      'The Scope of Work and Estimate Notes are now in the Excel and text '
+          'exports of the estimate, as well as on the PDF. Each room tab of '
+          'the project workbook carries the scope, notes and custom sections '
+          'of that room too.',
+      'The accent color chosen for the estimate PDF now colors the title and '
+          'header bands of every Excel report too. Light colors get dark text '
+          'so the bands stay readable.',
+      'Pick from logo, under the accent colors in App Config, opens your logo '
+          'so you can click any spot on it to use that color, or choose from '
+          'its main colors.',
+      'Shipping per item: turn on Shipping on the Equipment card and every '
+          'table - equipment, rack hardware, cabling and other items - gets a '
+          'shipping-per-unit box, for a display or lectern that ships at its '
+          'own price. '
+          'It shows as its own line in the totals, on the PDF and in the '
+          'exports. Tax shipping decides whether tax is charged on it.',
+      'Labor now shows crew hours and total hours on the Cost tab, the PDF, '
+          'the Excel and text exports and the project totals.',
+      'Search boxes have an X to clear them - the catalog, the pickers for '
+          'devices, parts, processors and rates, and the building search.',
+      'Catalog search: when a match is hidden by the category, "My entries '
+          'only" or retired filter, the list says so and offers Show all '
+          'matches.',
+      'Narrow windows: the catalog form wraps instead of pushing Education '
+          'price off the edge, the Cost tab and every page scroll sideways '
+          'with a scrollbar instead of cutting content off, and the tax and '
+          'totals boxes rearrange to fit.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.4.0',
+    date: 'September 21, 2026',
+    title: 'Desktop and Start menu shortcuts',
+    changes: [
+      'When you press Update, the "Update to version …?" notice now offers to '
+          'add a Desktop shortcut and a Start menu shortcut. Each box only '
+          'appears when the app does not have that shortcut yet, and both '
+          'start unticked - nothing is added unless you tick it.',
+      'App Config - App Updates has the same thing as buttons under '
+          'Shortcuts, so a shortcut can be added at any time without waiting '
+          'for an update. Once a shortcut is there the button says so.',
+      'Any shortcut that opens this copy of the app counts, whatever it is '
+          'called. New ones are named Room Config Builder and go in your own '
+          'Desktop and Start menu, so they need no administrator permission. '
+          'A shortcut that cannot be made never stops the update.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.3.2',
     date: 'September 18, 2026',

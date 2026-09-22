@@ -15,6 +15,7 @@ import 'av_flow_view.dart' show iconForAvNode;
 import 'cost_estimate.dart' show formatMoney, trimNumber;
 import 'device_recheck_dialog.dart';
 import 'view_zoom.dart';
+import 'responsive.dart';
 
 /// ============================================================================
 ///  RACK ELEVATIONS
@@ -1380,11 +1381,15 @@ class _AvRackViewState extends State<AvRackView> {
                   TextField(
                     controller: searchController,
                     autofocus: true,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Search the parts list',
-                      prefixIcon: Icon(Icons.search, size: 20),
+                      prefixIcon: const Icon(Icons.search, size: 20),
                       isDense: true,
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: ClearFieldButton(
+                        controller: searchController,
+                        onCleared: () => setLocal(() {}),
+                      ),
                     ),
                     onChanged: (_) => setLocal(() {}),
                   ),

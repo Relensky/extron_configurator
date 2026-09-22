@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'print_mode.dart';
+import 'responsive.dart';
 
 /// A text field that edits live state without losing the cursor.
 ///
@@ -56,6 +57,9 @@ class LiveTextField extends StatefulWidget {
   /// Set with a larger [maxLines] for a box that grows as it is typed in.
   final int? minLines;
 
+  /// Shows an X that empties the box - for search and filter fields.
+  final bool clearable;
+
   const LiveTextField({
     super.key,
     required this.fieldId,
@@ -72,6 +76,7 @@ class LiveTextField extends StatefulWidget {
     this.autofocus = false,
     this.maxLines = 1,
     this.minLines,
+    this.clearable = false,
   });
 
   @override
@@ -164,6 +169,12 @@ class _LiveTextFieldState extends State<LiveTextField> {
       helperText: widget.helper,
       prefixText: widget.prefix,
       suffixText: widget.suffix,
+      suffixIcon: widget.clearable
+          ? ClearFieldButton(
+              controller: _controller,
+              onCleared: () => widget.onChanged(''),
+            )
+          : null,
     ),
     onChanged: widget.onChanged,
     onSubmitted: widget.onSubmitted,

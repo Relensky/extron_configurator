@@ -154,15 +154,18 @@ List<ReportSection> tabReportSections(
       return [...rackSections(av), ...powerSections(av)];
     case AppTab.cost:
       return [
-        ...costReportSections(
-          computeRoomCost(
-            model: av,
-            library: provider.avDeviceLibrary,
-            settings: provider.avCost,
-            rates: provider.laborRates,
-            baseCosts: provider.baseCosts,
-            tier: provider.pricingTier,
+        ...withEstimateSections(
+          costReportSections(
+            computeRoomCost(
+              model: av,
+              library: provider.avDeviceLibrary,
+              settings: provider.avCost,
+              rates: provider.laborRates,
+              baseCosts: provider.baseCosts,
+              tier: provider.pricingTier,
+            ),
           ),
+          provider.avCost,
         ),
         // The devices no control module claims, under the money — the same
         // warning the Cost sheet of the workbook carries, for the same reason:
