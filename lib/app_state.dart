@@ -4810,6 +4810,36 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The line under the title on the PDF. Blank goes back to the room name.
+  void setAvCostDocumentSubtitle(String text) {
+    if (avCost.documentSubtitle == text) return;
+    _pushAvUndo('Estimate subtitle', _costScope, coalesce: 'cost:subtitle');
+    avCost.documentSubtitle = text;
+    notifyListeners();
+  }
+
+  /// Renames one fixed word on the PDF - see [kEstimatePdfWords]. Blank goes
+  /// back to the default.
+  void setAvCostPdfWord(String key, String text) {
+    final trimmed = text.trim();
+    if ((avCost.pdfWords[key] ?? '') == trimmed) return;
+    _pushAvUndo('PDF wording', _costScope, coalesce: 'cost:pdfWord:$key');
+    if (trimmed.isEmpty) {
+      avCost.pdfWords.remove(key);
+    } else {
+      avCost.pdfWords[key] = trimmed;
+    }
+    notifyListeners();
+  }
+
+  /// Puts every word on the PDF back to its default.
+  void resetAvCostPdfWords() {
+    if (avCost.pdfWords.isEmpty) return;
+    _pushAvUndo('PDF wording', _costScope);
+    avCost.pdfWords.clear();
+    notifyListeners();
+  }
+
   /// Adds a titled block to the estimate PDF - see [EstimateSection].
   EstimateSection addAvCostSection({
     String title = '',

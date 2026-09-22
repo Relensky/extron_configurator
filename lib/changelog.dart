@@ -40,6 +40,11 @@ const List<ChangelogEntry> kChangelog = [
       'The estimate PDF title can be changed on the Cost tab - "CTS '
           'Estimate", "Audio Visual Estimate" or anything else. Left blank it '
           'still says Estimate.',
+      'PDF subtitle, beside the title, changes the line printed under it. '
+          'Left blank it shows the room name, as before.',
+      'PDF wording lets you rename the other fixed words on the PDF - the '
+          'section headings, Project, Date, Prepared by, Shipping, Subtotal '
+          'and Total. Reset all puts them back.',
       'Add text or list sections to the Cost tab, each with its own title. '
           'They print on the PDF above the pricing or below the totals, and '
           'can be moved up and down. They are in the Excel and text exports '

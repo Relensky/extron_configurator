@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -810,6 +811,39 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     hint: kDefaultEstimateTitle,
                     clearable: true,
                     onChanged: provider.setAvCostDocumentTitle,
+                  ),
+                ),
+                // The line under it. Blank prints the room name, which is
+                // what the hint shows.
+                SizedBox(
+                  width: 260,
+                  child: LiveTextField(
+                    key: const ValueKey('cost_pdf_subtitle'),
+                    fieldId: 'cost_pdf_subtitle',
+                    initial: settings.documentSubtitle,
+                    label: 'PDF subtitle',
+                    hint: model.roomTitle.isNotEmpty
+                        ? model.roomTitle
+                        : roomFolderName(provider),
+                    clearable: true,
+                    onChanged: provider.setAvCostDocumentSubtitle,
+                  ),
+                ),
+                // Every other fixed word on the PDF.
+                OutlinedButton.icon(
+                  key: const ValueKey('cost_pdf_wording'),
+                  icon: const Icon(Icons.text_fields, size: 18),
+                  label: Text(
+                    settings.pdfWords.isEmpty
+                        ? 'PDF wording...'
+                        : 'PDF wording (${settings.pdfWords.length})...',
+                  ),
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => ChangeNotifierProvider.value(
+                      value: provider,
+                      child: const _PdfWordingDialog(),
+                    ),
                   ),
                 ),
                 ],
@@ -4825,6 +4859,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           scopeOfWork: settings.scopeOfWork,
           notes: settings.notes,
           title: settings.pdfTitle,
+          subtitle: settings.documentSubtitle,
+          words: Map.of(settings.pdfWords),
           sections: List.of(settings.sections),
         ),
         theme: loadEstimatePdfTheme(),
@@ -6062,6 +6098,83 @@ const double kPrintValueInset = 2.0;
 /// Wrapping puts the buttons on a line of their own instead. That is also a
 /// layout the screenshot can carry: the estimate is captured as a picture of
 /// this page, so nothing here may depend on the window being wide.
+/// Renames the fixed words on the estimate PDF - section headings, the
+/// labels over the project and date, the totals. Blank keeps the default.
+class _PdfWordingDialog extends StatefulWidget {
+  const _PdfWordingDialog();
+
+  @override
+  State<_PdfWordingDialog> createState() => _PdfWordingDialogState();
+}
+
+class _PdfWordingDialogState extends State<_PdfWordingDialog> {
+  /// Bumped by Reset so the boxes re-read the defaults.
+  int _revision = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final settings = provider.avCost;
+    final theme = Theme.of(context);
+    final size = MediaQuery.sizeOf(context);
+    return AlertDialog(
+      title: const Text('PDF wording'),
+      content: SizedBox(
+        width: math.min(460, size.width - 120),
+        height: math.min(560, size.height - 220),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'What the estimate PDF says for each of these. Leave a box '
+              'blank to keep the word shown in it. The title and subtitle '
+              'are on the Cost tab itself.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final entry in kEstimatePdfWords.entries)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: LiveTextField(
+                        key: ValueKey('pdf_word_${entry.key}_$_revision'),
+                        fieldId: 'pdf_word_${entry.key}_$_revision',
+                        initial: settings.pdfWords[entry.key] ?? '',
+                        label: entry.value,
+                        hint: entry.value,
+                        clearable: true,
+                        onChanged: (v) =>
+                            provider.setAvCostPdfWord(entry.key, v),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('pdf_wording_reset'),
+          onPressed: settings.pdfWords.isEmpty
+              ? null
+              : () {
+                  provider.resetAvCostPdfWords();
+                  setState(() => _revision++);
+                },
+          child: const Text('Reset all'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
+
 class _CardHeading extends StatelessWidget {
   final String title;
 

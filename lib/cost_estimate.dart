@@ -282,6 +282,24 @@ class EstimateSection {
 /// What the estimate PDF is headed when nothing else has been typed.
 const String kDefaultEstimateTitle = 'Estimate';
 
+/// Every fixed word on the estimate PDF that can be renamed, with what it
+/// says by default. In the order the wording dialog lists them.
+const Map<String, String> kEstimatePdfWords = {
+  'scope': 'Scope of work',
+  'equipment': 'Equipment',
+  'hardware': 'Rack hardware',
+  'cabling': 'Cabling',
+  'labor': 'Labor',
+  'other': 'Other items',
+  'notes': 'Notes',
+  'project': 'Project',
+  'date': 'Date',
+  'preparedBy': 'Prepared by',
+  'shipping': 'Shipping',
+  'subtotal': 'Subtotal',
+  'total': 'Total',
+};
+
 /// The room's estimate settings. Lives in `<config>_av_flow.json` beside the
 /// diagram it prices, because a negotiated price is a fact about this job,
 /// not about the model.
@@ -404,6 +422,19 @@ class RoomCostSettings {
   /// prints [kDefaultEstimateTitle].
   String documentTitle;
 
+  /// The line under the title on the PDF. Blank prints the room name.
+  String documentSubtitle;
+
+  /// Key of [kEstimatePdfWords] -> what the PDF says instead. Only the words
+  /// somebody changed are stored.
+  final Map<String, String> pdfWords;
+
+  /// The PDF's word for [key]: what was typed, or the default.
+  String pdfWord(String key) {
+    final typed = pdfWords[key]?.trim() ?? '';
+    return typed.isNotEmpty ? typed : (kEstimatePdfWords[key] ?? key);
+  }
+
   /// Extra titled blocks printed on the PDF. See [EstimateSection].
   final List<EstimateSection> sections;
 
@@ -427,6 +458,8 @@ class RoomCostSettings {
     this.scopeOfWork = '',
     this.notes = '',
     this.documentTitle = '',
+    this.documentSubtitle = '',
+    Map<String, String>? pdfWords,
     this.showShipping = false,
     this.shippingTaxable = false,
     List<EstimateSection>? sections,
@@ -447,7 +480,8 @@ class RoomCostSettings {
     List<CostLineItem>? extraEquipment,
     List<CostLineItem>? extraHardware,
     List<CostLineItem>? extraCables,
-  }) : sections = sections ?? [],
+  }) : pdfWords = pdfWords ?? {},
+       sections = sections ?? [],
        shippingEach = shippingEach ?? {},
        fees = fees ?? [],
        priceOverrides = priceOverrides ?? {},
@@ -465,6 +499,8 @@ class RoomCostSettings {
       scopeOfWork.trim().isEmpty &&
       notes.trim().isEmpty &&
       documentTitle.trim().isEmpty &&
+      documentSubtitle.trim().isEmpty &&
+      pdfWords.isEmpty &&
       sections.isEmpty &&
       shippingEach.isEmpty &&
       !showShipping &&
@@ -491,6 +527,8 @@ class RoomCostSettings {
     scopeOfWork = '';
     notes = '';
     documentTitle = '';
+    documentSubtitle = '';
+    pdfWords.clear();
     showShipping = false;
     shippingTaxable = false;
     sections.clear();
@@ -518,6 +556,8 @@ class RoomCostSettings {
     if (scopeOfWork.isNotEmpty) 'scopeOfWork': scopeOfWork,
     if (notes.isNotEmpty) 'notes': notes,
     if (documentTitle.isNotEmpty) 'documentTitle': documentTitle,
+    if (documentSubtitle.isNotEmpty) 'documentSubtitle': documentSubtitle,
+    if (pdfWords.isNotEmpty) 'pdfWords': Map<String, String>.of(pdfWords),
     if (sections.isNotEmpty)
       'sections': [for (final section in sections) section.toJson()],
     if (shippingEach.isNotEmpty)
@@ -568,6 +608,14 @@ class RoomCostSettings {
     scopeOfWork = json['scopeOfWork']?.toString() ?? '';
     notes = json['notes']?.toString() ?? '';
     documentTitle = json['documentTitle']?.toString() ?? '';
+    documentSubtitle = json['documentSubtitle']?.toString() ?? '';
+    final words = json['pdfWords'];
+    if (words is Map) {
+      words.forEach((key, value) {
+        final text = value?.toString().trim() ?? '';
+        if (text.isNotEmpty) pdfWords[key.toString()] = text;
+      });
+    }
     showShipping = json['showShipping'] == true;
     shippingTaxable = json['shippingTaxable'] == true;
     for (final section in (json['sections'] as List? ?? [])) {

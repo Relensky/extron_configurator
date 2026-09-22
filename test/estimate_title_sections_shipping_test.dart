@@ -353,4 +353,54 @@ void main() {
     // A light accent gets dark ink.
     expect(XlsxTheme.titleInk('FFEB3B'), '1F1F1F');
   });
+
+  test('the PDF subtitle and renamed words print instead of the defaults',
+      () async {
+    final settings = RoomCostSettings(
+      labor: [LaborLine(id: 'L1', rateId: '', techs: 2, hours: 8)],
+      notes: 'Valid 30 days',
+    );
+    final bytes = await buildEstimatePdf(
+      price(settings),
+      EstimatePdfInfo(
+        roomName: 'Room 101',
+        projectName: 'Refresh',
+        notes: settings.notes,
+        date: DateTime(2026, 9, 22),
+        subtitle: 'Phase 2 Lecture Halls',
+        words: const {
+          'equipment': 'Hardware list',
+          'labor': 'Installation',
+          'notes': 'Terms',
+          'project': 'Job',
+          'total': 'Amount due',
+        },
+      ),
+      compress: false,
+    );
+    final text = words(bytes);
+    expect(text, contains('Phase 2 Lecture Halls'));
+    expect(text, contains('HARDWARE LIST'));
+    expect(text, contains('INSTALLATION'));
+    expect(text, contains('TERMS'));
+    expect(text, contains('JOB'));
+    expect(text, contains('AMOUNT DUE'));
+    expect(text, isNot(contains('EQUIPMENT')));
+    // The footer still says which room it is.
+    expect(text, contains('Room 101'));
+  });
+
+  test('the subtitle and wording survive a save', () {
+    final settings = RoomCostSettings(
+      documentSubtitle: 'Phase 2',
+      pdfWords: {'total': 'Amount due'},
+    );
+    final read = RoomCostSettings()
+      ..readJson(
+        jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>,
+      );
+    expect(read.documentSubtitle, 'Phase 2');
+    expect(read.pdfWord('total'), 'Amount due');
+    expect(read.pdfWord('notes'), 'Notes');
+  });
 }

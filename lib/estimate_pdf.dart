@@ -45,9 +45,23 @@ class EstimatePdfInfo {
   /// Extra titled blocks, printed where each one says.
   final List<EstimateSection> sections;
 
+  /// The line under the title. Blank prints [roomName].
+  final String subtitle;
+
+  /// Key of [kEstimatePdfWords] -> the word printed instead of the default.
+  final Map<String, String> words;
+
+  /// The word for [key]: what was typed, or the default.
+  String word(String key) {
+    final typed = words[key]?.trim() ?? '';
+    return typed.isNotEmpty ? typed : (kEstimatePdfWords[key] ?? key);
+  }
+
   const EstimatePdfInfo({
     this.title = kDefaultEstimateTitle,
     this.sections = const [],
+    this.subtitle = '',
+    this.words = const {},
     this.roomName = '',
     this.projectName = '',
     this.preparedBy = '',
@@ -145,6 +159,9 @@ Future<Uint8List> buildEstimatePdf(
         );
 
   final accent = info.accent ?? defaultEstimateAccent;
+  final subtitle = info.subtitle.trim().isNotEmpty
+      ? info.subtitle.trim()
+      : info.roomName.trim();
   final title = info.title.trim().isEmpty
       ? kDefaultEstimateTitle
       : info.title.trim();
@@ -229,7 +246,9 @@ Future<Uint8List> buildEstimatePdf(
   List<pw.Widget> customSections(EstimateSectionPlace place) => [
     for (final section in info.sections)
       if (section.place == place && !section.isEmpty) ...[
-        sectionTitle(section.title.trim().isEmpty ? 'Notes' : section.title),
+        sectionTitle(
+          section.title.trim().isEmpty ? info.word('notes') : section.title,
+        ),
         ...(section.bulleted
             ? bullets(section.body)
             : paragraphs(section.body)),
@@ -347,7 +366,7 @@ Future<Uint8List> buildEstimatePdf(
     part,
     'Qty',
     'Unit',
-    if (shipping) 'Shipping',
+    if (shipping) info.word('shipping'),
     'Amount',
   ];
 
@@ -379,17 +398,17 @@ Future<Uint8List> buildEstimatePdf(
             child: pw.Column(
               children: [
                 if (estimate.equipment.isNotEmpty)
-                  row('Equipment', estimate.equipmentTotal),
+                  row(info.word('equipment'), estimate.equipmentTotal),
                 if (estimate.hardware.isNotEmpty)
-                  row('Rack hardware', estimate.hardwareTotal),
+                  row(info.word('hardware'), estimate.hardwareTotal),
                 if (estimate.cabling.isNotEmpty)
-                  row('Cabling', estimate.cablingTotal),
-                if (estimate.labor.isNotEmpty) row('Labor', estimate.laborTotal),
+                  row(info.word('cabling'), estimate.cablingTotal),
+                if (estimate.labor.isNotEmpty) row(info.word('labor'), estimate.laborTotal),
                 if (estimate.extras.isNotEmpty)
-                  row('Other items', estimate.extrasTotal),
-                if (shipping) row('Shipping', estimate.shippingTotal),
+                  row(info.word('other'), estimate.extrasTotal),
+                if (shipping) row(info.word('shipping'), estimate.shippingTotal),
                 divider,
-                row('Subtotal', estimate.subtotal, strong: true),
+                row(info.word('subtotal'), estimate.subtotal, strong: true),
                 for (final f in estimate.fees)
                   row(
                     '${f.fee.name.trim().isEmpty ? 'Fee' : f.fee.name} '
@@ -412,7 +431,7 @@ Future<Uint8List> buildEstimatePdf(
               children: [
                 pw.Expanded(
                   child: pw.Text(
-                    'TOTAL',
+                    t(info.word('total').toUpperCase()),
                     style: pw.TextStyle(
                       fontSize: 11,
                       color: PdfColors.white,
@@ -488,10 +507,10 @@ Future<Uint8List> buildEstimatePdf(
                     letterSpacing: 2,
                   ),
                 ),
-                if (info.roomName.trim().isNotEmpty) ...[
+                if (subtitle.isNotEmpty) ...[
                   pw.SizedBox(height: 4),
                   pw.Text(
-                    t(info.roomName),
+                    t(subtitle),
                     textAlign: titleTextAlign,
                     style: pw.TextStyle(fontSize: 13, color: _ink),
                   ),
@@ -511,16 +530,16 @@ Future<Uint8List> buildEstimatePdf(
           if (info.projectName.trim().isNotEmpty)
             pw.Expanded(
               flex: 3,
-              child: detail('Project', [info.projectName]),
+              child: detail(info.word('project'), [info.projectName]),
             ),
           pw.Expanded(
             flex: 2,
-            child: detail('Date', [estimateDateLabel(info.date)]),
+            child: detail(info.word('date'), [estimateDateLabel(info.date)]),
           ),
           if ('${info.preparedBy}${info.preparerContact}'.trim().isNotEmpty)
             pw.Expanded(
               flex: 3,
-              child: detail('Prepared by', [
+              child: detail(info.word('preparedBy'), [
                 info.preparedBy,
                 info.preparerContact,
               ]),
@@ -534,12 +553,12 @@ Future<Uint8List> buildEstimatePdf(
 
   final content = <pw.Widget>[
     if (info.scopeOfWork.trim().isNotEmpty) ...[
-      sectionTitle('Scope of Work'),
+      sectionTitle(info.word('scope')),
       ...paragraphs(info.scopeOfWork),
     ],
     ...customSections(EstimateSectionPlace.beforePricing),
     if (estimate.equipment.isNotEmpty) ...[
-      sectionTitle('Equipment'),
+      sectionTitle(info.word('equipment')),
       table(
         header: partHeader('Model / Part'),
         flex: partFlex,
@@ -548,7 +567,7 @@ Future<Uint8List> buildEstimatePdf(
       ),
     ],
     if (estimate.hardware.isNotEmpty) ...[
-      sectionTitle('Rack Hardware'),
+      sectionTitle(info.word('hardware')),
       table(
         header: partHeader('Model / Part'),
         flex: partFlex,
@@ -557,7 +576,7 @@ Future<Uint8List> buildEstimatePdf(
       ),
     ],
     if (estimate.cabling.isNotEmpty) ...[
-      sectionTitle('Cabling'),
+      sectionTitle(info.word('cabling')),
       table(
         header: partHeader('Part'),
         flex: partFlex,
@@ -566,7 +585,7 @@ Future<Uint8List> buildEstimatePdf(
       ),
     ],
     if (estimate.labor.isNotEmpty) ...[
-      sectionTitle('Labor'),
+      sectionTitle(info.word('labor')),
       table(
         header: const [
           'Description',
@@ -595,7 +614,7 @@ Future<Uint8List> buildEstimatePdf(
       ),
     ],
     if (estimate.extras.isNotEmpty) ...[
-      sectionTitle('Other Items'),
+      sectionTitle(info.word('other')),
       table(
         header: partHeader('Part'),
         flex: partFlex,
@@ -609,7 +628,7 @@ Future<Uint8List> buildEstimatePdf(
       children: [totalsBox()],
     ),
     if (info.notes.trim().isNotEmpty) ...[
-      sectionTitle('Notes'),
+      sectionTitle(info.word('notes')),
       ...paragraphs(info.notes),
     ],
     ...customSections(EstimateSectionPlace.afterTotals),
