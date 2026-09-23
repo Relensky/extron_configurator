@@ -5,6 +5,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'log_viewer_types.dart';
+import 'os_name.dart';
+
+export 'os_name.dart';
 
 const bool logViewerSupported = true;
 
@@ -108,8 +111,33 @@ String machineSummary() {
   final String user = Platform.environment['USERNAME'] ??
       Platform.environment['USER'] ??
       'unknown';
-  return 'Computer: $host · User: $user · '
-      '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
+  return 'Computer: $host · User: $user · ${describeOperatingSystem()}';
+}
+
+String? _osDescription;
+
+/// The operating system as people know it: "Windows 11 Enterprise 25H2
+/// (build 26200.6899)", not the "Windows 10 Enterprise" Dart reports for every
+/// Windows 11 machine. See os_name.dart. Read once and kept: the registry is
+/// asked with one short `reg query`, and the answer does not change while the
+/// app runs.
+String describeOperatingSystem() => _osDescription ??= _describeOs();
+
+String _describeOs() {
+  final String raw = Platform.operatingSystemVersion;
+  if (!Platform.isWindows) return '${Platform.operatingSystem} $raw';
+  Map<String, String> registry = const {};
+  try {
+    final ProcessResult r = Process.runSync('reg', [
+      'query',
+      r'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion',
+    ]);
+    if (r.exitCode == 0) registry = parseRegQuery('${r.stdout}');
+  } catch (_) {
+    // No reg.exe, or not allowed to run it: the build number still decides
+    // between 10 and 11.
+  }
+  return describeWindows(raw, registry);
 }
 
 /// Writes [text] to [path]. Returns why it failed, or null.

@@ -61,6 +61,58 @@ void main() {
     });
   });
 
+  group('the Windows name', () {
+    // What Dart reports on a Windows 11 Enterprise 25H2 machine: the
+    // registry's ProductName still says Windows 10.
+    const raw = '"Windows 10 Enterprise" 10.0 (Build 26200)';
+
+    test('build 22000 and later is Windows 11, with its release', () {
+      expect(
+          describeWindows(raw, const {
+            'ProductName': 'Windows 10 Enterprise',
+            'CurrentBuildNumber': '26200',
+            'DisplayVersion': '25H2',
+            'UBR': '0x1ae3',
+          }),
+          'Windows 11 Enterprise 25H2 (build 26200.6883)');
+    });
+
+    test('without the registry the build number still decides', () {
+      expect(describeWindows(raw, const {}),
+          'Windows 11 Enterprise (build 26200)');
+    });
+
+    test('Windows 10 stays Windows 10', () {
+      expect(
+          describeWindows('"Windows 10 Pro" 10.0 (Build 19045)',
+              const {'DisplayVersion': '22H2'}),
+          'Windows 10 Pro 22H2 (build 19045)');
+    });
+
+    test('reg query output is read', () {
+      const out = '\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT'
+          '\\CurrentVersion\r\n'
+          '    ProductName    REG_SZ    Windows 10 Enterprise\r\n'
+          '    DisplayVersion    REG_SZ    25H2\r\n'
+          '    UBR    REG_DWORD    0x1ae3\r\n';
+      expect(parseRegQuery(out), {
+        'ProductName': 'Windows 10 Enterprise',
+        'DisplayVersion': '25H2',
+        'UBR': '0x1ae3',
+      });
+    });
+
+    test('this machine is described without the Windows 10 mistake', () {
+      final String os = describeOperatingSystem();
+      expect(os, isNotEmpty);
+      final int? build = int.tryParse(
+          RegExp(r'build (\d+)').firstMatch(os)?.group(1) ?? '');
+      if (Platform.isWindows && build != null && build >= 22000) {
+        expect(os, contains('Windows 11'));
+      }
+    });
+  });
+
   test('export names say which app and when', () {
     final now = DateTime(2026, 9, 23, 14, 5);
     expect(suggestedLogExportName('CTS Dashboard', now: now),

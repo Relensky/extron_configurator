@@ -2,6 +2,8 @@
 // with log_viewer_io.dart so both halves of the conditional export match.
 import 'log_viewer_types.dart';
 
+export 'os_name.dart';
+
 const bool logViewerSupported = false;
 
 List<LogFileInfo> listLogFiles(
@@ -15,6 +17,8 @@ LogText readLogText(String path, {int? maxBytes}) =>
     const LogText(text: '', totalBytes: 0, error: 'No log files here.');
 
 String machineSummary() => 'web';
+
+String describeOperatingSystem() => 'web';
 
 String? writeLogExport(String path, String text) =>
     'Saving files is not available here.';

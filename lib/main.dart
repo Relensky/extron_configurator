@@ -14,6 +14,7 @@ import 'app_logger.dart';
 import 'app_snack.dart';
 import 'app_updates.dart';
 import 'log_viewer/log_viewer.dart';
+import 'log_viewer/log_viewer_platform.dart' show describeOperatingSystem;
 import 'updater/update_widgets.dart';
 import 'campus_file.dart';
 import 'recent_files_menu.dart';
@@ -75,7 +76,10 @@ void main() {
   installGlobalErrorHandlers();
   // Marks where each session starts in the log. Crashes the Dart handlers
   // cannot see are logged by windows/runner/crash_log.cpp.
-  unawaited(AppLogger.logInfo('Room Config Builder $kAppVersion started.'));
+  // The OS as people know it: Platform.operatingSystemVersion says "Windows
+  // 10" on every Windows 11 machine. See lib/log_viewer/os_name.dart.
+  unawaited(AppLogger.logInfo(
+      'Room Config Builder $kAppVersion started on ${describeOperatingSystem()}.'));
   runApp(
     ChangeNotifierProvider(
       create: (_) => AppStateProvider(),
