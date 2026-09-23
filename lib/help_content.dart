@@ -1913,11 +1913,22 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'Logs and crash reports',
     section: 'The machinery',
-    where: 'App Config - Open log folder',
+    where: 'App Config - View logs, or Open log folder',
     plain:
         'The app keeps a record of errors and crashes on this computer, so a '
         'problem can be looked into after it happens. It is always on.',
-    keywords: ['log', 'crash', 'error', 'dump', 'support', 'bug report'],
+    keywords: [
+      'log',
+      'crash',
+      'error',
+      'dump',
+      'support',
+      'bug report',
+      'log viewer',
+      'view logs',
+      'export',
+      'copy',
+    ],
     body:
         'Three logs are written to the log folder: deployment_app_error_log.txt '
         'for errors, deployment_app_info_log.txt for everyday events such as '
@@ -1930,6 +1941,12 @@ const List<HelpTopic> kHelpTopics = [
         'If the app stops without closing normally - ended from Task Manager '
         'after it stopped responding, or Windows shutting down while it was '
         'open - the next start adds a line to the error log saying so.\n\n'
+        'View logs, in App Config, opens the log viewer: the three logs, newest '
+        'first, with a search and Problems only to find the part that matters. '
+        'Copy puts this log, what is shown, or all of them on the clipboard to '
+        'paste into a ticket or an email; Export saves the same as a .txt file '
+        'to attach. Both start with the app, its version, the computer and the '
+        'user.\n\n'
         'When reporting a problem, send the error log and the newest crash '
         'dump from around the time it happened.',
   ),

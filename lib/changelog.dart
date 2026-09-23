@@ -35,8 +35,19 @@ const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
     version: '0.4.2',
     date: 'September 23, 2026',
-    title: 'Help can fill the window',
+    title: 'A log viewer, and help that can fill the window',
     changes: [
+      'App Config - View logs opens the log viewer: '
+          'the recent log files, newest first with this session\'s marked, '
+          'and a search and Problems only to '
+          'find the part that matters. The expand button makes it fill the '
+          'window.',
+      'Copy puts this file, what is shown, or all recent logs on the '
+          'clipboard, ready to paste into a ticket, an email or a Teams '
+          'message. Export saves the same as a .txt file to attach. Both '
+          'start with the app, its version, the computer and the user, so '
+          'whoever gets it knows where it came from.',
+
       'Help has an expand button beside the close button: it makes the help '
           'book fill the window instead of stopping at a fixed size, for '
           'reading a long topic or the changelog without scrolling a narrow '

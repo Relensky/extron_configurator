@@ -13,6 +13,7 @@ import 'package:path/path.dart' as path;
 import 'app_logger.dart';
 import 'app_snack.dart';
 import 'app_updates.dart';
+import 'log_viewer/log_viewer.dart';
 import 'updater/update_widgets.dart';
 import 'campus_file.dart';
 import 'recent_files_menu.dart';
@@ -3306,6 +3307,10 @@ class AppSettingsView extends StatelessWidget {
                 }
               },
             ),
+            // Reading them without leaving the app, and getting them to
+            // whoever asked: search, Copy and Export. Crash dumps are binary
+            // and are sent as they are, from the folder.
+            LogViewerButton(config: configuratorLogViewerConfig()),
           ],
         ),
         const SizedBox(height: 10),
@@ -4692,3 +4697,22 @@ class FirstRunSetupDialog extends StatelessWidget {
     );
   }
 }
+
+/// What App Config's log viewer shows: the error, info and migration logs.
+LogViewerConfig configuratorLogViewerConfig() => LogViewerConfig(
+  appName: 'Extron Configurator',
+  version: kAppVersion,
+  sources: [
+    LogSource.folder(
+      AppLogger.logFolder,
+      label: 'Log',
+      include: (name) => name.toLowerCase().endsWith('.txt'),
+    ),
+  ],
+  chooseSavePath: (name) => FilePicker.saveFile(
+    dialogTitle: 'Export logs',
+    fileName: name,
+    type: FileType.custom,
+    allowedExtensions: ['txt'],
+  ),
+);
