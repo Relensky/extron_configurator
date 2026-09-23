@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.4.1+7';
+const String kAppVersion = '0.4.2+8';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,18 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.4.2',
+    date: 'September 23, 2026',
+    title: 'Help can fill the window',
+    changes: [
+      'Help has an expand button beside the close button: it makes the help '
+          'book fill the window instead of stopping at a fixed size, for '
+          'reading a long topic or the changelog without scrolling a narrow '
+          'column. Press it again to go back. The choice is remembered until '
+          'the app closes.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.4.1',
     date: 'September 22, 2026',

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/help_view.dart';
 import 'package:extron_configurator/main.dart';
 
 /// HELP HAS TO BE REACHABLE FROM THE APP, not just exist inside it.
@@ -50,6 +51,42 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('help_book')), findsOneWidget);
+  });
+
+  testWidgets('it expands to fill the window, and remembers it', (
+    tester,
+  ) async {
+    addTearDown(() => helpBookExpanded.value = false);
+    await pumpApp(tester, ready());
+    await tester.tap(find.byKey(const ValueKey('open_help')));
+    await tester.pumpAndSettle();
+
+    Rect book() => tester.getRect(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('help_book')),
+            matching: find.byType(HelpBook),
+          )
+          .first,
+    );
+    expect(book().width, lessThanOrEqualTo(1180));
+
+    await tester.tap(find.byKey(const ValueKey('help_expand')));
+    await tester.pumpAndSettle();
+    expect(book().width, closeTo(1400 - 16, 0.5));
+    expect(book().height, closeTo(900 - 16, 0.5));
+    expect(tester.takeException(), isNull);
+
+    // Closed and opened again, it is still expanded.
+    await tester.tap(find.byKey(const ValueKey('help_close')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open_help')));
+    await tester.pumpAndSettle();
+    expect(book().width, closeTo(1400 - 16, 0.5));
+
+    await tester.tap(find.byKey(const ValueKey('help_expand')));
+    await tester.pumpAndSettle();
+    expect(book().width, lessThanOrEqualTo(1180));
   });
 
   testWidgets('closing it puts back what was underneath', (tester) async {

@@ -35,24 +35,39 @@ Future<void> showHelpBook(BuildContext context, {String initialQuery = ''}) =>
       builder: (_) => HelpBookDialog(initialQuery: initialQuery),
     );
 
+/// Whether the help book fills the window rather than stopping at 1180 x 92%.
+/// Kept for the life of the process, so somebody who expanded it once does not
+/// have to again every time they open it.
+final ValueNotifier<bool> helpBookExpanded = ValueNotifier<bool>(false);
+
 class HelpBookDialog extends StatelessWidget {
   final String initialQuery;
 
   const HelpBookDialog({super.key, this.initialQuery = ''});
 
+  /// The margin left around an expanded book, so it still reads as a dialog
+  /// over the app rather than a page that replaced it.
+  static const double expandedInset = 8;
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    return Dialog(
-      key: const ValueKey('help_book'),
-      insetPadding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 1180,
-          maxHeight: size.height * 0.92,
+    return ValueListenableBuilder<bool>(
+      valueListenable: helpBookExpanded,
+      builder: (context, expanded, child) => Dialog(
+        key: const ValueKey('help_book'),
+        insetPadding: EdgeInsets.all(expanded ? expandedInset : 24),
+        child: ConstrainedBox(
+          constraints: expanded
+              ? BoxConstraints.tightFor(
+                  width: size.width - expandedInset * 2,
+                  height: size.height - expandedInset * 2,
+                )
+              : BoxConstraints(maxWidth: 1180, maxHeight: size.height * 0.92),
+          child: child,
         ),
-        child: HelpBook(initialQuery: initialQuery),
       ),
+      child: HelpBook(initialQuery: initialQuery, canExpand: true),
     );
   }
 }
@@ -61,7 +76,12 @@ class HelpBookDialog extends StatelessWidget {
 class HelpBook extends StatefulWidget {
   final String initialQuery;
 
-  const HelpBook({super.key, this.initialQuery = ''});
+  /// Shows the expand / restore button, which drives [helpBookExpanded]. Only
+  /// meaningful inside [HelpBookDialog]; a tab hosting the book has nothing to
+  /// expand into.
+  final bool canExpand;
+
+  const HelpBook({super.key, this.initialQuery = '', this.canExpand = false});
 
   @override
   State<HelpBook> createState() => _HelpBookState();
@@ -186,6 +206,20 @@ class _HelpBookState extends State<HelpBook> {
                 ),
               ),
               const SizedBox(width: 8),
+              if (widget.canExpand)
+                ValueListenableBuilder<bool>(
+                  valueListenable: helpBookExpanded,
+                  builder: (context, expanded, _) => IconButton(
+                    key: const ValueKey('help_expand'),
+                    tooltip: expanded
+                        ? 'Restore to normal size'
+                        : 'Expand to fill the window',
+                    icon: Icon(
+                      expanded ? Icons.close_fullscreen : Icons.open_in_full,
+                    ),
+                    onPressed: () => helpBookExpanded.value = !expanded,
+                  ),
+                ),
               IconButton(
                 key: const ValueKey('help_close'),
                 tooltip: 'Close',
