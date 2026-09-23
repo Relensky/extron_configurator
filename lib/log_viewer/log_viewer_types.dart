@@ -8,6 +8,10 @@
 //
 // No dart:io in this file or in log_viewer.dart: the file work lives behind
 // log_viewer_platform.dart, so an app with a web build still compiles.
+//
+// No em or en dashes in any string the viewer shows or copies: copied text
+// is pasted into tickets and work orders, where they do not survive (the
+// Extron Configurator's app_language_test enforces it).
 // ============================================================================
 
 /// Somewhere an app keeps log files: a folder and which of its files count,

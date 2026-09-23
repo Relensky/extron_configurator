@@ -141,7 +141,7 @@ String logExportHeader(
 }) {
   final StringBuffer b = StringBuffer()
     ..writeln('=' * 72)
-    ..writeln('${config.appName} ${config.version} — logs')
+    ..writeln('${config.appName} ${config.version} logs')
     ..writeln(platform.machineSummary())
     ..writeln('Exported: ${_when(now ?? DateTime.now())}');
   if (note != null) b.writeln(note);
@@ -368,7 +368,7 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
     final String text = _textFor(take);
     try {
       await Clipboard.setData(ClipboardData(text: text));
-      _say('Copied ${_size(text.length)} — paste it into a ticket, an email '
+      _say('Copied ${_size(text.length)}. Paste it into a ticket, an email '
           'or a message.');
     } catch (e) {
       _say('Could not copy: $e', error: true);
@@ -471,7 +471,7 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh — read the files again',
+            tooltip: 'Refresh: read the files again',
             onPressed: _reload,
           ),
           IconButton(
@@ -644,7 +644,7 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
               ),
               IconButton(
                 icon: const Icon(Icons.vertical_align_bottom),
-                tooltip: 'Go to the end — the newest lines',
+                tooltip: 'Go to the end, the newest lines',
                 onPressed: _jumpToEnd,
               ),
             ],
