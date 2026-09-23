@@ -3,8 +3,9 @@
 //
 //   * [UpdateNoticeHost] wraps the app (MaterialApp.builder) and shows a small
 //     card in the corner when a newer release is in the folder. It never
-//     blocks anything: "Later" hides it for that version, it waits while the
-//     updater is marked userBusy, and nothing installs until the user presses
+//     blocks anything: "Later" hides it for that version, it waits to appear
+//     while the updater is marked userBusy (once up, it stays), and nothing
+//     installs until the user presses
 //     Update and then confirms.
 //   * [UserActivityWatcher] marks the updater busy while someone is typing or
 //     clicking, so neither the checks nor the card land in the middle of it.
@@ -26,7 +27,7 @@ import 'package:flutter/services.dart';
 
 import 'folder_updater.dart';
 
-class UpdateNoticeHost extends StatelessWidget {
+class UpdateNoticeHost extends StatefulWidget {
   final FolderUpdater? updater;
   final Widget child;
 
@@ -42,12 +43,23 @@ class UpdateNoticeHost extends StatelessWidget {
   });
 
   @override
+  State<UpdateNoticeHost> createState() => _UpdateNoticeHostState();
+}
+
+class _UpdateNoticeHostState extends State<UpdateNoticeHost> {
+  /// Whether the card is on screen. userBusy keeps a card from appearing,
+  /// never takes one away: the click on the card's own Update button marks
+  /// the user busy on pointer-down, and hiding the card then swallowed the
+  /// tap, so "Close and Update" was never reached.
+  bool _onScreen = false;
+
+  @override
   Widget build(BuildContext context) {
-    final u = updater;
-    if (u == null) return child;
+    final u = widget.updater;
+    if (u == null) return widget.child;
     return Stack(
       children: [
-        Positioned.fill(child: child),
+        Positioned.fill(child: widget.child),
         ListenableBuilder(
           listenable: u,
           builder: (context, _) {
@@ -55,9 +67,10 @@ class UpdateNoticeHost extends StatelessWidget {
             final started = u.confirming ||
                 u.installFailed ||
                 u.status == UpdateStatus.installing;
-            if (!u.showNotice || ((hidden || u.userBusy) && !started)) {
-              return const SizedBox.shrink();
-            }
+            final heldBack =
+                widget.hidden || (u.userBusy && !_onScreen);
+            _onScreen = u.showNotice && (!heldBack || started);
+            if (!_onScreen) return const SizedBox.shrink();
             return Positioned(
               right: 16,
               bottom: 16,

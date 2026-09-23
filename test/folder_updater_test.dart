@@ -373,6 +373,28 @@ void main() {
       expect(find.text('Update available'), findsOneWidget);
       u.dispose();
     });
+
+    testWidgets('a click on the card does not hide it mid-tap',
+        (tester) async {
+      final u = availableUpdater();
+      final watcher = UserActivityWatcher(u)..start();
+      await tester.pumpWidget(app(u));
+      expect(find.text('Update available'), findsOneWidget);
+
+      // The pointer-down marks the user busy before the tap lands.
+      await tester.tap(find.widgetWithText(FilledButton, 'Update'));
+      await tester.pump();
+      expect(u.userBusy, isTrue);
+      expect(find.text('Update to version 2.0.0?'), findsOneWidget);
+      expect(find.text('Close and Update'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      expect(find.text('Update available'), findsOneWidget,
+          reason: 'already on screen, so busy does not take it away');
+      watcher.dispose();
+      u.dispose();
+    });
   });
 
   // [FEATURE - APP UPDATES]: an update offers Desktop and Start menu
