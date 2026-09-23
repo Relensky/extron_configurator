@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.4.2+8';
+const String kAppVersion = '0.4.3+9';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,22 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.4.3',
+    date: 'September 23, 2026',
+    title: 'The update notice installs again, and Windows 11 in the log',
+    changes: [
+      'Updates: pressing Update on the update notice now goes on to the '
+          '"Close and Update" step. Before, the click itself made the '
+          'notice disappear for two minutes, so an update could only be '
+          'installed from App Config.',
+      'The log, and logs copied or exported from the log viewer, name '
+          'Windows 11 correctly, with its release and build (for example '
+          '"Windows 11 Enterprise 25H2 (build 26200.6899)"). Windows tells '
+          'apps that every Windows 11 machine is Windows 10, so the log said '
+          'Windows 10.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.4.2',
     date: 'September 23, 2026',
