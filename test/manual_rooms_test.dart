@@ -275,10 +275,14 @@ void main() {
       expect(find.text('BSS 214'), findsWidgets);
       expect(readBack(file).manualRooms, isEmpty);
 
-      await onDisk(
-        tester,
-        () => tester.tap(find.byKey(const ValueKey('manual_rooms_save'))),
-      );
+      // Waits for the save itself rather than a fixed pause: on a busy
+      // machine the write can take longer than a few frames.
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const ValueKey('manual_rooms_save')));
+        for (var i = 0; i < 100 && !saved; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+      });
       await tester.pumpAndSettle();
 
       expect(saved, isTrue);

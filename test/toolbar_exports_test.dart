@@ -114,6 +114,21 @@ void main() {
     expect(find.text('Room to Google Sheets'), findsOneWidget);
   });
 
+  testWidgets('switching to the Cost tab puts the PDF on the export menu',
+      (tester) async {
+    // The page registers its exports as it mounts, after the button has been
+    // built - so the menu must decide what to list when it opens.
+    final p = room();
+    p.selectTab(AppTab.devices.index);
+    await pumpApp(tester, p);
+    await tester.pumpAndSettle();
+    p.selectTab(AppTab.cost.index);
+    await tester.pump();
+    await openExport(tester);
+    expect(find.byKey(const ValueKey('export_item_cost_pdf')), findsOneWidget);
+    expect(find.text('Cost estimate as PDF'), findsOneWidget);
+  });
+
   testWidgets('other tabs offer their own tables', (tester) async {
     final p = room();
     p.selectTab(AppTab.devices.index);

@@ -7851,6 +7851,10 @@ class AppStateProvider extends ChangeNotifier {
       // The room now matches the file it came from, so the unsaved-work
       // check has a baseline to compare against.
       markRoomSaved();
+      // THE PROCESSOR THIS ROOM DEPLOYS TO, when the processors list names
+      // exactly one for it - so Upload goes to the right box without anybody
+      // having to pick it. See [matchProcessorForRoom].
+      autoSelectProcessorForRoom();
       // The config half of the recovery check. The sidecars are not in yet, so
       // this pass only reports and never retires — see checkForRoomRecovery.
       checkForRoomRecovery(sidecarsLoaded: false);
@@ -9449,6 +9453,69 @@ class AppStateProvider extends ChangeNotifier {
       '${was.isEmpty ? '' : ' (was $was)'} - a different config is open.',
     );
     notifyListeners();
+  }
+
+  /// A room name as the processors list and a config can both be read:
+  /// `AGYM 129`, `agym-129` and `AGYM_129` are all `AGYM129`.
+  static String _processorKey(String s) =>
+      s.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+  /// The entry in processors.json this room most likely deploys to, or null.
+  ///
+  /// The list names each processor by its room - `AGYM 129` - which is the
+  /// config's building code and room number. Tried in order, and an answer is
+  /// only given when exactly ONE processor matches: the config's own
+  /// gve_bldg + gve_room, then the file name (`AGYM_129_config.json`). A guess
+  /// between two would be a guess about where a config gets uploaded, which
+  /// is the one thing not to guess about.
+  Map<String, dynamic>? matchProcessorForRoom() {
+    if (processors.isEmpty) return null;
+    final entries = [
+      for (final p in processors)
+        if (p is Map) Map<String, dynamic>.from(p),
+    ];
+    Map<String, dynamic>? unique(String key) {
+      if (key.length < 3) return null;
+      final hits = entries
+          .where((p) => _processorKey('${p['roomName'] ?? ''}') == key)
+          .toList();
+      return hits.length == 1 ? hits.single : null;
+    }
+
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is Map) {
+      final bldg = setup['gve_bldg']?.toString().trim() ?? '';
+      final room = setup['gve_room']?.toString().trim() ?? '';
+      if (bldg.isNotEmpty && room.isNotEmpty) {
+        final hit = unique(_processorKey('$bldg$room'));
+        if (hit != null) return hit;
+      }
+    }
+    if (currentConfigPath.isNotEmpty) {
+      final stem = path
+          .basenameWithoutExtension(currentConfigPath)
+          .replaceAll(RegExp(r'[_\- ]?config$', caseSensitive: false), '');
+      final hit = unique(_processorKey(stem));
+      if (hit != null) return hit;
+    }
+    return null;
+  }
+
+  /// Picks the deployment processor for the room just opened, when the
+  /// processors list names exactly one for it. Leaves an existing choice
+  /// alone. Returns the room name it picked, or ''.
+  String autoSelectProcessorForRoom() {
+    if (selectedProcessor != null) return '';
+    final match = matchProcessorForRoom();
+    if (match == null) return '';
+    selectedProcessor = match;
+    final name = match['roomName']?.toString() ?? '';
+    AppLogger.logInfo(
+      'Active Deployment Target set to $name - it matches this room in the '
+      'processors list.',
+    );
+    notifyListeners();
+    return name;
   }
 
   /// Resolves the IP/hostname of the Active Deployment Target for SFTP

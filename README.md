@@ -1018,9 +1018,10 @@ a laptop fails instead of passing.
 
 ## The title bar
 
-**Top row, left:** the **File menu** (☰) - *New* ▸ Room / Project / Campus,
-*Open* ▸ Room / Project / Campus, *Open Recent* ▸ (rooms, projects and
-campuses, opening to the side), and *Download from* / *Upload to processor* -
+**Top row, left:** the **File menu** (☰) - *New* ▸ New Room / New Project / New Campus,
+*Open* ▸ Open Room / Open Project / Open Campus, *Open Recent* ▸ (rooms,
+projects and campuses, each with its folder, opening to the side), and
+*Download Config* / *Upload Config* (to and from the processor) -
 then **Undo**, **Redo**, **History** and the revert to the saved backup, then
 the job and room picker. **Top row, right:** the **Screenshot** menu, the
 **light/dark** toggle, **Help**, and **Settings** in the far corner.

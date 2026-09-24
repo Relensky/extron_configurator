@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
@@ -110,11 +111,58 @@ void main() {
           'file_new_campus']) {
         expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
       }
+      for (final label in ['New Room', 'New Project', 'New Campus',
+          'Download Config', 'Upload Config']) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
       await tester.tap(find.byKey(const ValueKey('file_open')));
       await tester.pumpAndSettle();
       for (final key in ['file_open_room', 'file_open_project',
           'file_open_campus']) {
         expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
+      }
+      for (final label in ['Open Room...', 'Open Project...',
+          'Open Campus...']) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+    });
+
+    testWidgets('every line of the File menu is shown in full',
+        (tester) async {
+      final p = withRecents(midSession: true);
+      // A long name, the case that used to be cut off at the menu's edge.
+      p.recentFiles.remember(RecentKind.room, file('long.json'),
+          name: 'Behavioral And Social Sciences Building Room 103 Lecture');
+      await pump(tester, p);
+
+      /// Every text line inside a menu item, against the item that holds it.
+      void expectAllShownInFull(String where) {
+        // The leaf items only: a submenu's own pop-out counts as its
+        // descendant, so measuring its lines against it would be wrong.
+        for (final button in tester.widgetList(find.byType(MenuItemButton))) {
+          final item = find.byWidget(button);
+          final itemRect = tester.getRect(item);
+          for (final text in tester.widgetList<Text>(
+              find.descendant(of: item, matching: find.byType(Text)))) {
+            final render = tester.renderObject<RenderParagraph>(find
+                .descendant(of: find.byWidget(text), matching: find.byType(RichText)));
+            final full = render.getMaxIntrinsicWidth(double.infinity);
+            final rect = tester.getRect(find.byWidget(text));
+            expect(rect.width, greaterThanOrEqualTo(full - 0.5),
+                reason: '"${text.data}" is squeezed ($where)');
+            expect(rect.left + full, lessThanOrEqualTo(itemRect.right + 0.5),
+                reason: '"${text.data}" runs past its item ($where)');
+          }
+        }
+      }
+
+      await tester.tap(find.byKey(const ValueKey('file_menu')));
+      await tester.pumpAndSettle();
+      expectAllShownInFull('File');
+      for (final sub in ['file_new', 'file_open', 'file_recent']) {
+        await tester.tap(find.byKey(ValueKey(sub)));
+        await tester.pumpAndSettle();
+        expectAllShownInFull(sub);
       }
     });
 
@@ -127,9 +175,11 @@ void main() {
         expect(find.text(heading), findsOneWidget,
             reason: '$heading is what makes it three lists rather than one');
       }
-      expect(find.textContaining('Behavioral Science 103'), findsOneWidget);
-      expect(find.textContaining('Bessey Hall'), findsOneWidget);
-      expect(find.textContaining('Chico campus'), findsOneWidget);
+      expect(find.text('Behavioral Science 103'), findsOneWidget);
+      expect(find.text('Bessey Hall'), findsOneWidget);
+      expect(find.text('Chico campus'), findsOneWidget);
+      // ...each with its whole folder under it.
+      expect(find.text(dir.path), findsNWidgets(3));
     });
 
     testWidgets('a kind nobody has opened is not an empty heading',

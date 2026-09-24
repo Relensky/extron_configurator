@@ -4603,7 +4603,19 @@ class _FileMenu extends StatelessWidget {
         recentItems.add(MenuItemButton(
           leadingIcon: Icon(recentKindIcon(kind), size: 20),
           onPressed: () => openRecentFile(context, kind, entry, onOpenPath),
-          child: Text('${entry.label}  -  ${path.basename(path.dirname(entry.file))}'),
+          // The name, and under it the whole folder - two rooms called
+          // "Conference Room" on two jobs are told apart by where they live.
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(entry.label),
+              Text(
+                path.dirname(entry.file),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
         ));
       }
     }
@@ -4631,10 +4643,10 @@ class _FileMenu extends StatelessWidget {
           key: const ValueKey('file_new'),
           leadingIcon: const Icon(Icons.add_circle_outline, size: 20),
           menuChildren: [
-            item('file_new_room', Icons.note_add, 'Room', onNewRoom),
-            item('file_new_project', Icons.create_new_folder, 'Project',
+            item('file_new_room', Icons.note_add, 'New Room', onNewRoom),
+            item('file_new_project', Icons.create_new_folder, 'New Project',
                 onNewProject),
-            item('file_new_campus', Icons.location_city, 'Campus',
+            item('file_new_campus', Icons.location_city, 'New Campus',
                 onNewCampus),
           ],
           child: const Text('New'),
@@ -4643,11 +4655,11 @@ class _FileMenu extends StatelessWidget {
           key: const ValueKey('file_open'),
           leadingIcon: const Icon(Icons.folder_open, size: 20),
           menuChildren: [
-            item('file_open_room', Icons.meeting_room_outlined, 'Room...',
+            item('file_open_room', Icons.meeting_room_outlined, 'Open Room...',
                 () => onOpen('Open a room config')),
             item('file_open_project', Icons.account_tree_outlined,
-                'Project...', () => onOpen('Open a project')),
-            item('file_open_campus', Icons.location_city, 'Campus...',
+                'Open Project...', () => onOpen('Open a project')),
+            item('file_open_campus', Icons.location_city, 'Open Campus...',
                 () => onOpen('Open a campus')),
           ],
           child: const Text('Open'),
@@ -4666,10 +4678,9 @@ class _FileMenu extends StatelessWidget {
           child: const Text('Open Recent'),
         ),
         const Divider(height: 8),
-        item('file_download', Icons.cloud_download,
-            'Download config.json from processor...', onDownload),
-        item('file_upload', Icons.cloud_upload, 'Upload to processor...',
-            onUpload),
+        item('file_download', Icons.cloud_download, 'Download Config',
+            onDownload),
+        item('file_upload', Icons.cloud_upload, 'Upload Config', onUpload),
       ],
     );
   }
@@ -4764,9 +4775,11 @@ class _ExportFab extends StatelessWidget {
     final hasRoom = hasConfig;
     final hasProject = provider.hasOpenProject;
     final hasCampus = hasProject && provider.projectCampusFile.isNotEmpty;
-    final onCost = tab == AppTab.cost &&
-        hasConfig &&
-        CostEstimateActions.current != null;
+    // The Cost tab's own exports (PDF, Excel, text, clipboard) come from the
+    // page, which registers them as it mounts - a moment AFTER this button is
+    // built. So the menu is only decided when it is opened (see buildItems),
+    // and here "on the Cost tab" is enough.
+    final onCost = tab == AppTab.cost && hasConfig;
     final tabExports = !onCost &&
         _MainDashboardState._tabExports(selectedIndex) &&
         (hasConfig || _MainDashboardState._tabWorksWithoutConfig(selectedIndex));
@@ -4790,60 +4803,67 @@ class _ExportFab extends StatelessWidget {
           ),
         );
 
-    final items = <PopupMenuEntry<String>>[
-      if (hasRoom)
-        item('room_workbook', Icons.meeting_room_outlined,
-            'Export the room', 'Every tab of this room, one .xlsx'),
-      if (hasProject)
-        item('project_workbook', Icons.domain, 'Export the project',
-            'The whole job, one .xlsx'),
-      if (hasCampus)
-        item('campus', Icons.location_city, 'Export the campus',
-            'Opens the campus refresh plan to export it'),
-      if (hasRoom || hasProject) ...[
-        const PopupMenuDivider(),
+    List<PopupMenuEntry<String>> buildItems() {
+      final estimate = onCost && CostEstimateActions.current != null;
+      final items = <PopupMenuEntry<String>>[
         if (hasRoom)
-          item('sheets_room', Icons.table_chart_outlined,
-              'Room to Google Sheets', _sheetsHint(provider)),
+          item('room_workbook', Icons.meeting_room_outlined,
+              'Export the room', 'Every tab of this room, one .xlsx'),
         if (hasProject)
-          item('sheets_project', Icons.table_chart_outlined,
-              'Project to Google Sheets', _sheetsHint(provider)),
-        if (hasRoom)
-          item('publish_room', Icons.cloud_sync_outlined,
-              'Publish the room online',
-              'Into the synced folder other people read from'),
-        if (hasProject)
-          item('publish_project', Icons.cloud_sync_outlined,
-              'Publish the project online',
-              'Into the synced folder other people read from'),
-      ],
-      if (onCost) ...[
-        const PopupMenuDivider(),
-        item('cost_pdf', Icons.picture_as_pdf_outlined,
-            'Cost estimate as PDF', 'The quote, ready to send'),
-        item('cost_xlsx', Icons.grid_on, 'Cost estimate as Excel (.xlsx)',
-            'Every line, to sum and sort'),
-        item('cost_txt', Icons.description_outlined,
-            'Cost estimate as plain text (.txt)', 'For a ticket or a note'),
-        item('cost_copy', Icons.content_copy,
-            'Copy the cost estimate to the clipboard', 'To paste in an email'),
-      ],
-      if (tabExports) ...[
-        const PopupMenuDivider(),
-        item('tab_xlsx', Icons.grid_on, '$tabLabel as a spreadsheet (.xlsx)',
-            'This tab\'s tables'),
-        item('tab_txt', Icons.description_outlined,
-            '$tabLabel as plain text (.txt)', 'This tab\'s tables'),
-        item('tab_copy', Icons.content_copy,
-            'Copy ${tabLabel.toLowerCase()} to the clipboard',
-            'This tab\'s tables'),
-      ],
-    ];
-    // Drop a leading divider when nothing sits above it.
-    while (items.isNotEmpty && items.first is PopupMenuDivider) {
-      items.removeAt(0);
+          item('project_workbook', Icons.domain, 'Export the project',
+              'The whole job, one .xlsx'),
+        if (hasCampus)
+          item('campus', Icons.location_city, 'Export the campus',
+              'Opens the campus refresh plan to export it'),
+        if (hasRoom || hasProject) ...[
+          const PopupMenuDivider(),
+          if (hasRoom)
+            item('sheets_room', Icons.table_chart_outlined,
+                'Room to Google Sheets', _sheetsHint(provider)),
+          if (hasProject)
+            item('sheets_project', Icons.table_chart_outlined,
+                'Project to Google Sheets', _sheetsHint(provider)),
+          if (hasRoom)
+            item('publish_room', Icons.cloud_sync_outlined,
+                'Publish the room online',
+                'Into the synced folder other people read from'),
+          if (hasProject)
+            item('publish_project', Icons.cloud_sync_outlined,
+                'Publish the project online',
+                'Into the synced folder other people read from'),
+        ],
+        if (estimate) ...[
+          const PopupMenuDivider(),
+          item('cost_pdf', Icons.picture_as_pdf_outlined,
+              'Cost estimate as PDF', 'The quote, ready to send'),
+          item('cost_xlsx', Icons.grid_on, 'Cost estimate as Excel (.xlsx)',
+              'Every line, to sum and sort'),
+          item('cost_txt', Icons.description_outlined,
+              'Cost estimate as plain text (.txt)', 'For a ticket or a note'),
+          item('cost_copy', Icons.content_copy,
+              'Copy the cost estimate to the clipboard', 'To paste in an email'),
+        ],
+        if (tabExports) ...[
+          const PopupMenuDivider(),
+          item('tab_xlsx', Icons.grid_on, '$tabLabel as a spreadsheet (.xlsx)',
+              'This tab\'s tables'),
+          item('tab_txt', Icons.description_outlined,
+              '$tabLabel as plain text (.txt)', 'This tab\'s tables'),
+          item('tab_copy', Icons.content_copy,
+              'Copy ${tabLabel.toLowerCase()} to the clipboard',
+              'This tab\'s tables'),
+        ],
+      ];
+      // Drop a leading divider when nothing sits above it.
+      while (items.isNotEmpty && items.first is PopupMenuDivider) {
+        items.removeAt(0);
+      }
+      return items;
     }
-    if (items.isEmpty) return const SizedBox.shrink();
+
+    if (!hasRoom && !hasProject && !onCost && !tabExports) {
+      return const SizedBox.shrink();
+    }
 
     return PopupMenuButton<String>(
       key: const ValueKey('export_menu'),
@@ -4878,7 +4898,7 @@ class _ExportFab extends StatelessWidget {
             await CostEstimateActions.current?.export(context, v.substring(5));
         }
       },
-      itemBuilder: (ctx) => items,
+      itemBuilder: (ctx) => buildItems(),
       child: IgnorePointer(
         child: FloatingActionButton.extended(
           heroTag: 'export_fab',

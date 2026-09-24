@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.1+11';
+const String kAppVersion = '0.5.2+12';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,25 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.2',
+    date: 'September 24, 2026',
+    title: 'Clearer File menu, and the estimate PDF is back on Export',
+    changes: [
+      'The Export button on the Cost tab lists the estimate as PDF, Excel, '
+          'text and clipboard again. They were missing whenever you switched '
+          'to the Cost tab from another page.',
+      'The File menu says what each item does: New Room, New Project, New '
+          'Campus, Open Room..., Open Project..., Open Campus.... Open Recent '
+          'shows each file\'s name with its full folder under it.',
+      'Download and Upload in the File menu are now Download Config and '
+          'Upload Config.',
+      'Opening a room picks its deployment processor automatically when the '
+          'processors list has exactly one for it - matched on the building '
+          'code and room number (AGYM 129), or failing that the file name. '
+          'Two processors with the same name are never guessed between.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.1',
     date: 'September 24, 2026',
