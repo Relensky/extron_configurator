@@ -1029,7 +1029,8 @@ the job and room picker. **Top row, right:** the **Screenshot** menu, the
 **Second row:** the job or room, who else has it open, **Convert**, and **Save**
 (with its menu) in the right-hand corner.
 
-**Settings** opens as a window over the page you were on. The gear again, its
+**Settings** opens as a window filling everything under the title bar, and
+scrolls wherever the pointer is. The gear again, its
 **X**, or **Esc** closes it and puts you back where you were.
 
 **Export** floats in the lower right. It lists what is open - *Export the

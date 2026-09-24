@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.2+12';
+const String kAppVersion = '0.5.3+13';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,21 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.3',
+    date: 'September 24, 2026',
+    title: 'File menu text in full, and Settings fills the window',
+    changes: [
+      'File menu lines no longer lose their last word on Windows (Open '
+          'Project... could show as just "Open"). A menu line never wraps now '
+          'and has a little room to spare.',
+      'The processor transfer windows say Upload Config and Download Config '
+          'too, in the title and on the button, to match the File menu.',
+      'Settings fills the whole window under the title bar, and scrolls with '
+          'the mouse wheel or the scrollbar wherever the pointer is. The gear, '
+          'its X or Esc still close it.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.2',
     date: 'September 24, 2026',

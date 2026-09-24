@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
@@ -168,6 +169,37 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings_close')));
     await tester.pumpAndSettle();
     expect(p.selectedTabIndex, AppTab.project.index);
+  });
+
+  testWidgets('settings fills the window and scrolls from anywhere',
+      (tester) async {
+    final p = fresh();
+    p.newProject(name: 'Bessey Hall');
+    await pump(tester, p);
+    await tester.tap(find.byKey(const ValueKey('banner_app_config')));
+    await tester.pumpAndSettle();
+
+    final screen = tester.getRect(find.byType(Scaffold).first);
+    final window = tester.getRect(find.byKey(const ValueKey('settings_window')));
+    expect(window.width, closeTo(screen.width, 1),
+        reason: 'the settings window is the full width of the app');
+    expect(find.byType(NavRailRow), findsNothing,
+        reason: 'the tab rail steps aside while Settings is open');
+
+    // A wheel turn near the right-hand edge - well outside where the fields
+    // are - still scrolls the page.
+    final list = find.descendant(
+      of: find.byKey(const ValueKey('settings_window')),
+      matching: find.byType(Scrollable),
+    ).first;
+    final before = tester.state<ScrollableState>(list).position.pixels;
+    final edge = Offset(window.right - 8, window.center.dy);
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    pointer.hover(edge);
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, 300)));
+    await tester.pumpAndSettle();
+    expect(tester.state<ScrollableState>(list).position.pixels,
+        greaterThan(before));
   });
 
   testWidgets('the banner names the open job, and says when it is behind '

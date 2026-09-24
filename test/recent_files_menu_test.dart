@@ -156,13 +156,28 @@ void main() {
         }
       }
 
+      /// Never wrapping is what keeps a line from losing its last word on a
+      /// font that measures a fraction of a pixel wider than it lays out.
+      void expectNoneWrap() {
+        for (final button in [
+          ...tester.widgetList(find.byType(MenuItemButton)),
+        ]) {
+          for (final text in tester.widgetList<Text>(find.descendant(
+              of: find.byWidget(button), matching: find.byType(Text)))) {
+            expect(text.softWrap, isFalse, reason: '"${text.data}" can wrap');
+          }
+        }
+      }
+
       await tester.tap(find.byKey(const ValueKey('file_menu')));
       await tester.pumpAndSettle();
       expectAllShownInFull('File');
+      expectNoneWrap();
       for (final sub in ['file_new', 'file_open', 'file_recent']) {
         await tester.tap(find.byKey(ValueKey(sub)));
         await tester.pumpAndSettle();
         expectAllShownInFull(sub);
+        expectNoneWrap();
       }
     });
 

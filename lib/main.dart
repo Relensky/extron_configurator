@@ -975,7 +975,13 @@ class _MainDashboardState extends State<MainDashboard> {
           const SizedBox(width: 4),
         ],
       ),
-      body: Column(
+      // SETTINGS FILLS THE WINDOW under the title bar - the rail and the
+      // page step aside while it is open, and its one scroll view spans the
+      // full width, so the wheel and the scrollbar work wherever the pointer
+      // is. The gear, its X or Esc put the page back. See [_SettingsWindow].
+      body: provider.settingsOpen
+          ? const _SettingsWindow(child: AppSettingsView())
+          : Column(
         children: [
           // The job and the gear, above every tab rather than among them.
           TopLevelBar(
@@ -4142,7 +4148,9 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.isUpload ? 'Direct SFTP Upload' : 'Download Config from Processor'),
+      title: Text(widget.isUpload
+          ? 'Upload Config to Processor'
+          : 'Download Config from Processor'),
       content: SizedBox(
         width: 400,
         child: Column(
@@ -4294,7 +4302,7 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
         ),
         ElevatedButton.icon(
           icon: Icon(widget.isUpload ? Icons.cloud_upload : Icons.cloud_download),
-          label: Text(widget.isUpload ? 'Upload' : 'Download'),
+          label: Text(widget.isUpload ? 'Upload Config' : 'Download Config'),
           onPressed: _isBusy ? null : _startTransfer,
         ),
       ],
@@ -4585,7 +4593,7 @@ class _FileMenu extends StatelessWidget {
           key: ValueKey(key),
           leadingIcon: Icon(icon, size: 20),
           onPressed: onTap,
-          child: Text(label),
+          child: _MenuLabel(label),
         );
 
     final recentItems = <Widget>[];
@@ -4609,8 +4617,8 @@ class _FileMenu extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(entry.label),
-              Text(
+              _MenuLabel(entry.label),
+              _MenuLabel(
                 path.dirname(entry.file),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
@@ -4626,7 +4634,7 @@ class _FileMenu extends StatelessWidget {
           key: const ValueKey('file_recent_clear'),
           leadingIcon: const Icon(Icons.playlist_remove, size: 20),
           onPressed: provider.clearRecentFiles,
-          child: const Text('Clear the list'),
+          child: const _MenuLabel('Clear the list'),
         ));
     }
 
@@ -4649,7 +4657,7 @@ class _FileMenu extends StatelessWidget {
             item('file_new_campus', Icons.location_city, 'New Campus',
                 onNewCampus),
           ],
-          child: const Text('New'),
+          child: const _MenuLabel('New'),
         ),
         SubmenuButton(
           key: const ValueKey('file_open'),
@@ -4662,7 +4670,7 @@ class _FileMenu extends StatelessWidget {
             item('file_open_campus', Icons.location_city, 'Open Campus...',
                 () => onOpen('Open a campus')),
           ],
-          child: const Text('Open'),
+          child: const _MenuLabel('Open'),
         ),
         SubmenuButton(
           key: const ValueKey('file_recent'),
@@ -4671,11 +4679,11 @@ class _FileMenu extends StatelessWidget {
               ? [
                   const MenuItemButton(
                     onPressed: null,
-                    child: Text('Nothing opened or saved yet'),
+                    child: _MenuLabel('Nothing opened or saved yet'),
                   ),
                 ]
               : recentItems,
-          child: const Text('Open Recent'),
+          child: const _MenuLabel('Open Recent'),
         ),
         const Divider(height: 8),
         item('file_download', Icons.cloud_download, 'Download Config',
@@ -4686,9 +4694,35 @@ class _FileMenu extends StatelessWidget {
   }
 }
 
-/// SETTINGS AS A WINDOW. It sits over a dimmed page with its own title bar
-/// and close button; Esc, the X and the gear all close it and put you back on
-/// the page you came from.
+/// One line of the File menu, shown in full.
+///
+/// A menu is exactly as wide as its widest line, measured once - and with the
+/// Windows fonts that measurement can come out a fraction of a pixel short of
+/// what the line then needs. A label allowed to wrap then drops its last word
+/// onto a second line the item has no room for, and "Open Project..." reads
+/// as "Open". So the label never wraps, and carries a little room of its own.
+class _MenuLabel extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+
+  const _MenuLabel(this.text, {this.style});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsetsDirectional.only(end: 12),
+        child: Text(
+          text,
+          style: style,
+          softWrap: false,
+          maxLines: 1,
+          overflow: TextOverflow.visible,
+        ),
+      );
+}
+
+/// SETTINGS AS A WINDOW OVER THE WHOLE APP. It fills everything under the
+/// title bar, with its own title strip and close button; Esc, the X and the
+/// gear all close it and put you back on the page you came from.
 class _SettingsWindow extends StatelessWidget {
   final Widget child;
 
@@ -4704,46 +4738,31 @@ class _SettingsWindow extends StatelessWidget {
       },
       child: Focus(
         autofocus: true,
-        child: ColoredBox(
-          color: theme.colorScheme.scrim.withValues(alpha: 0.18),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1100),
-                child: Material(
-                  key: const ValueKey('settings_window'),
-                  elevation: 12,
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
-                  color: theme.colorScheme.surface,
-                  child: Column(
-                    children: [
-                      Container(
-                        color: theme.colorScheme.surfaceContainerHigh,
-                        padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.settings, size: 20),
-                            const SizedBox(width: 8),
-                            Text('Settings',
-                                style: theme.textTheme.titleMedium),
-                            const Spacer(),
-                            IconButton(
-                              key: const ValueKey('settings_close'),
-                              icon: const Icon(Icons.close),
-                              tooltip: 'Close Settings (Esc)',
-                              onPressed: provider.closeSettings,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(child: child),
-                    ],
-                  ),
+        child: Material(
+          key: const ValueKey('settings_window'),
+          color: theme.colorScheme.surface,
+          child: Column(
+            children: [
+              Container(
+                color: theme.colorScheme.surfaceContainerHigh,
+                padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.settings, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Settings', style: theme.textTheme.titleMedium),
+                    const Spacer(),
+                    IconButton(
+                      key: const ValueKey('settings_close'),
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Close Settings (Esc)',
+                      onPressed: provider.closeSettings,
+                    ),
+                  ],
                 ),
               ),
-            ),
+              Expanded(child: child),
+            ],
           ),
         ),
       ),
