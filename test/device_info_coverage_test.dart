@@ -35,6 +35,8 @@ void main() {
     'extr_dsp_DMP_128_Plus_Series',
     // superseded by extr_switcher_SW_HD_4K_PLUS_Series_v1_1_9_0
     'extr_switcher_SW_HD_4K_Plus_Series_v1_1_5_0',
+    // superseded by pana_vp_VMZx (the same driver, plus the PT-VMZ50/50U)
+    'pana_vp_PT_BMZx1_VMWx1_VMZx1_Series_v1_0_3_0',
   };
 
   /// The families where more than one file can drive the same box, and the one
@@ -49,7 +51,7 @@ void main() {
     'DTP CrossPoint 84 4K': 'extr_matrix_DTP_CrossPoint_82_84_4kSeriesv1872',
     'E868': 'nec_display_E758_E868_E988_v1_0_2_0',
     'VPL-PHZ60': 'sony_vp_VPL_P_Series',
-    'PT-VMZ71': 'pana_vp_PT_BMZx1_VMWx1_VMZx1_Series_v1_0_3_0',
+    'PT-VMZ71': 'pana_vp_VMZx',
   };
 
   setUpAll(() async {

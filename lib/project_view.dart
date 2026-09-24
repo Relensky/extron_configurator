@@ -42,7 +42,6 @@ import 'project_timeline_view.dart';
 import 'project_workbook.dart';
 import 'vendor_pick_dialog.dart' show pickVendorsFromBook;
 import 'vendor_rfq_view.dart';
-import 'workbook_export.dart' show exportProjectWorkbook;
 
 /// ============================================================================
 ///  THE PROJECT TAB
@@ -518,16 +517,6 @@ class _ProjectViewState extends State<ProjectView> {
   //  EXPORTS
   // -------------------------------------------------------------------------
 
-  /// The tab's own Workbook button.
-  ///
-  /// Forwards to the shared flow rather than writing the file here: the
-  /// toolbar can produce the same book from any tab now, and two writers would
-  /// mean two file names and two chances for the sheets to drift.
-  Future<void> _exportWorkbook(
-    AppStateProvider provider,
-    ProjectEstimate estimate,
-  ) => exportProjectWorkbook(context, provider);
-
   /// One .xlsx PER BIDDER, into a folder the user picks.
   ///
   /// A folder rather than a file, because the whole point is that these are
@@ -797,13 +786,8 @@ class _ProjectViewState extends State<ProjectView> {
                 runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  _action(
-                    compact: compact,
-                    icon: Icons.table_view,
-                    label: 'Workbook',
-                    emphasis: _ActionEmphasis.tonal,
-                    onPressed: () => _exportWorkbook(provider, estimate),
-                  ),
+                  // The workbook itself is on the Export button in the lower
+                  // right, with every other way the job leaves the app.
                   _action(
                     compact: compact,
                     icon: Icons.send_outlined,

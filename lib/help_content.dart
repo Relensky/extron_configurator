@@ -1952,7 +1952,7 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'Export menu and Google Sheets',
     section: 'Getting work out',
-    where: 'Export (the share icon at the top right)',
+    where: 'Export (the floating button in the lower right)',
     plain:
         'Every way a document leaves the app in one menu: the workbook, '
         'Google Sheets, the online copy, this tab\'s tables, and on the Cost '
@@ -1967,10 +1967,12 @@ const List<HelpTopic> kHelpTopics = [
         'files this app creates are visible to it. Without a client it saves '
         'the .xlsx and opens Google Sheets for you to upload it (Open > '
         'Upload).\n\n'
-        'The Screenshot button beside Convert is a menu too: the screen as it '
-        'is, or - on the Cost tab - the whole estimate as a dated picture, '
-        'light or dark. Save AV Setup (the diagram and estimate only) is in '
-        'the Save menu.',
+        'The Screenshot button beside the light/dark toggle is a menu too: the '
+        'screen as it is, or - on the Cost tab - the whole estimate as a dated '
+        'picture, light or dark. Save AV Setup (the diagram and estimate '
+        'only) is in the Save menu, in the corner of the second row. New, '
+        'Open, Open Recent and the processor transfers are in the File menu '
+        'in the top-left corner.',
   ),
   HelpTopic(
     title: 'Logs and crash reports',

@@ -1018,16 +1018,24 @@ a laptop fails instead of passing.
 
 ## The title bar
 
-Left to right: **Save** (with its menu) in the far-left corner, then **Undo**,
-**Redo**, **History** and the revert to the saved backup, then **New**, **Open**
-and the recent files, then the job and room picker. At the far right: the
-**Export** menu, the **light/dark** toggle, the **gear** (App Config) and
-**Help** in the corner.
+**Top row, left:** the **File menu** (☰) - *New* ▸ Room / Project / Campus,
+*Open* ▸ Room / Project / Campus, *Open Recent* ▸ (rooms, projects and
+campuses, opening to the side), and *Download from* / *Upload to processor* -
+then **Undo**, **Redo**, **History** and the revert to the saved backup, then
+the job and room picker. **Top row, right:** the **Screenshot** menu, the
+**light/dark** toggle, **Help**, and **Settings** in the far corner.
 
-**Export** is one menu for every way a document leaves the app: the room or
-project workbook, **Upload workbook to Google Sheets**, **Publish online
-copy**, this tab's tables as .xlsx / .txt / clipboard, and - on the Cost tab -
-the estimate as PDF, Excel, text or clipboard.
+**Second row:** the job or room, who else has it open, **Convert**, and **Save**
+(with its menu) in the right-hand corner.
+
+**Settings** opens as a window over the page you were on. The gear again, its
+**X**, or **Esc** closes it and puts you back where you were.
+
+**Export** floats in the lower right. It lists what is open - *Export the
+room*, *Export the project*, *Export the campus* (when the job has one) - each
+once, then Google Sheets and the online copy for the same documents, and the
+page's own tables (on the Cost tab, the estimate as PDF, Excel, text or
+clipboard).
 
 **Google Sheets.** With a Google Cloud OAuth client of type *Desktop app* (Drive
 API enabled) entered under App Config > Google Sheets, the upload signs in once
@@ -1077,8 +1085,8 @@ left rail as though they were:
   what the room belongs to - one level up from every tab in the rail - and the
   banner names the open job beside it, marked *unsaved* when the project has
   edits that are not on disk.
-- **App Config** is the **gear** at the far right of the title bar, beside
-  Help and the light/dark toggle.
+- **App Config** (Settings) is the **gear** at the far right of the title bar,
+  with Help just left of it. It opens as a window and closes back to the page.
 
 The banner sits outside the collapsible pane, so folding the rail away to give
 a drawing the width does not take the way back to the job with it. The rail

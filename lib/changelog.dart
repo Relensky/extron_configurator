@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.0+10';
+const String kAppVersion = '0.5.1+11';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,28 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.1',
+    date: 'September 24, 2026',
+    title: 'A File menu, Settings as a window, and Export in the corner',
+    changes: [
+      'A File menu (the three lines in the top-left corner): New and Open for '
+          'a room, a project or a campus, Open Recent opening to the side, '
+          'and Download from / Upload to the processor.',
+      'Settings opens as a window over the page you were on. Clicking the '
+          'gear again, its X, or Esc closes it and puts you back. The gear is '
+          'the far-right button, with Help just left of it, and the '
+          'screenshot beside the light/dark toggle.',
+      'Save is in the right-hand corner of the second row, beside Convert.',
+      'Export floats in the lower right and lists what is open - the room, '
+          'the project, the campus - each once. The workbook is no longer '
+          'offered twice (the Project tab\'s and AV Flow\'s own workbook '
+          'buttons are gone, and on the Cost tab the estimate is listed once).',
+      'Two tests that failed on Linux/macOS pass everywhere now. The older '
+          'Panasonic PT-VMZ driver copy no longer claims the same models as '
+          'pana_vp_VMZx, which the app was already using for them.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.0',
     date: 'September 24, 2026',

@@ -50,26 +50,20 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  PopupMenuItem<String> item(WidgetTester tester, String value) =>
-      tester.widget<PopupMenuItem<String>>(
-        find.byKey(ValueKey('export_item_$value')),
-      );
-
-  testWidgets('one export menu, in the title bar, on every tab',
+  testWidgets('export floats in the lower right, on every tab',
       (tester) async {
     final p = room();
     await pumpApp(tester, p);
+    final screen = tester.getRect(find.byType(Scaffold).first);
     for (final tab in [AppTab.devices, AppTab.cost, AppTab.racks]) {
       p.selectTab(tab.index);
-      await tester.pump();
-      expect(
-        find.descendant(of: find.byType(AppBar), matching: exportMenu),
-        findsOneWidget,
-      );
-      // The three buttons it replaced are gone.
-      expect(find.byKey(const ValueKey('export_workbook')), findsNothing);
-      expect(find.byKey(const ValueKey('publish_online')), findsNothing);
-      expect(find.byKey(const ValueKey('export_tab_menu')), findsNothing);
+      await tester.pumpAndSettle();
+      expect(exportMenu, findsOneWidget);
+      expect(find.descendant(of: find.byType(AppBar), matching: exportMenu),
+          findsNothing, reason: 'not in the title bar any more');
+      final r = tester.getRect(exportMenu);
+      expect(r.right, greaterThan(screen.right - 60));
+      expect(r.bottom, greaterThan(screen.bottom - 60));
     }
   });
 
@@ -78,10 +72,7 @@ void main() {
       ..settingsLoaded = true
       ..firstRunSetupNeeded = false;
     await pumpApp(tester, p);
-    expect(
-      tester.widget<PopupMenuButton<String>>(exportMenu).enabled,
-      isFalse,
-    );
+    expect(exportMenu, findsNothing);
   });
 
   testWidgets('the catalog exports without a room - it is the price list',
@@ -91,15 +82,15 @@ void main() {
       ..firstRunSetupNeeded = false;
     await pumpApp(tester, p);
     p.selectTab(AppTab.deviceEditor.index);
-    await tester.pump();
-    expect(tester.widget<PopupMenuButton<String>>(exportMenu).enabled, isTrue);
+    await tester.pumpAndSettle();
     await openExport(tester);
-    expect(item(tester, 'tab_xlsx').enabled, isTrue);
-    expect(item(tester, 'workbook').enabled, isFalse);
+    expect(find.byKey(const ValueKey('export_item_tab_xlsx')), findsOneWidget);
+    expect(find.byKey(const ValueKey('export_item_room_workbook')),
+        findsNothing);
   });
 
-  testWidgets('the menu holds the workbook, Google Sheets, publish and the '
-      'tab, and the estimate on the Cost tab', (tester) async {
+  testWidgets('on the Cost tab the estimate is listed once, not twice',
+      (tester) async {
     final p = room();
     p.selectTab(AppTab.cost.index);
     await pumpApp(tester, p);
@@ -107,12 +98,9 @@ void main() {
 
     await openExport(tester);
     for (final v in [
-      'workbook',
-      'google_sheets',
-      'publish',
-      'tab_xlsx',
-      'tab_txt',
-      'tab_copy',
+      'room_workbook',
+      'sheets_room',
+      'publish_room',
       'cost_pdf',
       'cost_xlsx',
       'cost_txt',
@@ -121,18 +109,19 @@ void main() {
       expect(find.byKey(ValueKey('export_item_$v')), findsOneWidget,
           reason: '$v is on the export menu');
     }
-    expect(find.textContaining('spreadsheet (.xlsx)'), findsOneWidget);
-    expect(find.textContaining('Cost estimate'), findsWidgets);
-    expect(find.text('Upload workbook to Google Sheets'), findsOneWidget);
+    // The generic "this tab" lines would repeat the estimate's own.
+    expect(find.byKey(const ValueKey('export_item_tab_xlsx')), findsNothing);
+    expect(find.text('Room to Google Sheets'), findsOneWidget);
   });
 
-  testWidgets('the estimate items are only offered on the Cost tab',
-      (tester) async {
+  testWidgets('other tabs offer their own tables', (tester) async {
     final p = room();
     p.selectTab(AppTab.devices.index);
     await pumpApp(tester, p);
     await openExport(tester);
     expect(find.byKey(const ValueKey('export_item_cost_pdf')), findsNothing);
+    expect(find.byKey(const ValueKey('export_item_tab_xlsx')), findsOneWidget);
+    expect(find.textContaining('spreadsheet (.xlsx)'), findsOneWidget);
   });
 
   testWidgets('the screenshot menu offers the estimate on the Cost tab',

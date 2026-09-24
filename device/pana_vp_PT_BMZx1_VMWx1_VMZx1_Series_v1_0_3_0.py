@@ -11,15 +11,9 @@ import hashlib
 # config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
     "device_type": "projector",
-    "models": [
-        "PT-VMZ51S",
-        "PT-BMZ51",
-        "PT-VMZ41",
-        "PT-VMZ71",
-        "PT-VMZ61",
-        "PT-VMW61",
-        "PT-VMW51",
-    ],
+    # Superseded by pana_vp_VMZx, which drives the same models plus the
+    # PT-VMZ50/50U - so this copy declares none and never competes for them.
+    "models": [],
     "connection": {
         "com_type": "Network",
         "protocol": "TCP",

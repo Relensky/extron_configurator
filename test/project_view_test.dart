@@ -926,7 +926,6 @@ void main() {
       for (final icon in [
         Icons.refresh,
         Icons.flag_outlined,
-        Icons.table_view,
         Icons.send_outlined,
       ]) {
         final button = find.byIcon(icon);
@@ -948,15 +947,14 @@ void main() {
 
       final refresh = tester.getRect(find.text('Refresh'));
       final stands = tester.getRect(find.text('Where it stands'));
-      final workbook = tester.getRect(find.text('Workbook'));
       final rfq = tester.getRect(find.text('Quote requests'));
       final name = tester.getRect(find.byType(TextField).first);
       final panes = tester.getRect(find.byKey(const ValueKey(
           'project_pane_rooms')));
 
       // One row of its own, above the name and the totals.
-      for (final r in [refresh, stands, workbook, rfq]) {
-        expect(r.top, refresh.top, reason: 'all four on the same row');
+      for (final r in [refresh, stands, rfq]) {
+        expect(r.top, refresh.top, reason: 'all three on the same row');
         expect(r.bottom, lessThanOrEqualTo(name.top),
             reason: 'the row sits above the project name');
       }
@@ -966,8 +964,7 @@ void main() {
       // WHAT YOU DO TO THE JOB ON THE LEFT, what you get OUT of it on the
       // right. Refresh is hard against the header's own left edge.
       expect(refresh.left, lessThan(stands.left));
-      expect(stands.right, lessThan(workbook.left));
-      expect(workbook.left, lessThan(rfq.left));
+      expect(stands.right, lessThan(rfq.left));
       final refreshButton =
           tester.getRect(find.byKey(const ValueKey('project_refresh')));
       expect(refreshButton.left, lessThanOrEqualTo(name.left),

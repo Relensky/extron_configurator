@@ -370,9 +370,11 @@ void main() {
     await tester.pump();
 
     final wasOn = p.selectedTabIndex;
-    await tester.tap(find.byKey(const ValueKey('new_menu')));
+    await tester.tap(find.byKey(const ValueKey('file_menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('new_project')));
+    await tester.tap(find.byKey(const ValueKey('file_new')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('file_new_project')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('project_setup_dialog')), findsOneWidget);
@@ -408,9 +410,11 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(const ValueKey('new_menu')));
+    await tester.tap(find.byKey(const ValueKey('file_menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('new_project')));
+    await tester.tap(find.byKey(const ValueKey('file_new')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('file_new_project')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('setup_name')),

@@ -754,7 +754,12 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('asks which one when a room is open inside a job', (
+    Future<void> openExport(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('export_menu')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('names the room and the job separately when both are open', (
       tester,
     ) async {
       final p = AppStateProvider(autoLoadSettings: false)
@@ -764,31 +769,18 @@ void main() {
       p.newProject(name: 'Bessey Hall');
       await pumpApp(tester, p);
 
-      await tester.tap(find.byKey(const ValueKey('export_menu')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('export_item_workbook')));
-      await tester.pumpAndSettle();
-
-      // BOTH are documents somebody means by "the workbook", and the button
-      // used to answer that question by itself, always in favor of the room.
-      expect(
-        find.byKey(const ValueKey('workbook_scope_dialog')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const ValueKey('workbook_scope_room')), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('workbook_scope_project')),
-        findsOneWidget,
-      );
-
-      await tester.tap(find.byKey(const ValueKey('workbook_scope_cancel')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('workbook_scope_dialog')), findsNothing);
+      await openExport(tester);
+      // Each document once - no second "workbook" entry that asks which.
+      expect(find.byKey(const ValueKey('export_item_room_workbook')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('export_item_project_workbook')),
+          findsOneWidget);
+      expect(find.text('Export the room'), findsOneWidget);
+      expect(find.text('Export the project'), findsOneWidget);
     });
 
-    testWidgets('does not ask when only one of them is open', (tester) async {
-      // A room and no job: nothing to choose between, so there is no dialog to
-      // put in the way of the file picker.
+    testWidgets('offers only the room when only a room is open',
+        (tester) async {
       final p = AppStateProvider(autoLoadSettings: false)
         ..roomConfig = {
           'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '103'},
@@ -796,26 +788,17 @@ void main() {
       await pumpApp(tester, p);
 
       expect(p.hasOpenProject, isFalse);
-      await tester.tap(find.byKey(const ValueKey('export_menu')));
-      await tester.pumpAndSettle();
-      final item = tester.widget<PopupMenuItem<String>>(
-        find.byKey(const ValueKey('export_item_workbook')),
-      );
-      expect(item.enabled, isTrue);
-      expect(find.text('This room - every tab, one .xlsx'), findsOneWidget);
+      await openExport(tester);
+      expect(find.byKey(const ValueKey('export_item_room_workbook')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('export_item_project_workbook')),
+          findsNothing);
     });
 
-    testWidgets('is dead only when neither is open', (tester) async {
+    testWidgets('is not shown when nothing is open', (tester) async {
       final p = AppStateProvider(autoLoadSettings: false);
       await pumpApp(tester, p);
-      expect(
-        tester
-            .widget<PopupMenuButton<String>>(
-              find.byKey(const ValueKey('export_menu')),
-            )
-            .enabled,
-        isFalse,
-      );
+      expect(find.byKey(const ValueKey('export_menu')), findsNothing);
     });
   });
 }

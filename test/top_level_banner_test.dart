@@ -74,46 +74,41 @@ void main() {
     // The banner: the job, and the buttons that act on the open document.
     expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
 
-    // The document row keeps what acts on the room in front of you: the
-    // screenshot menu, Convert and the two processor transfers.
-    for (final key in ['screenshot_menu', 'sftp_upload']) {
+    // THE SECOND ROW: Convert, and Save in its right-hand corner.
+    for (final key in ['convert_button', 'save_context', 'save_menu']) {
       expect(
         find.descendant(
           of: find.byType(TopLevelBar),
           matching: find.byKey(ValueKey(key)),
         ),
         findsOneWidget,
-        reason: '$key acts on the open document, so it is on the document row',
+        reason: '$key is on the document row',
       );
     }
+    final banner = tester.getRect(find.byType(TopLevelBar));
+    final saveMenu = tester.getRect(find.descendant(
+      of: find.byType(TopLevelBar),
+      matching: find.byKey(const ValueKey('save_menu')),
+    ));
+    expect(banner.right - saveMenu.right, lessThan(4),
+        reason: 'Save is in the corner of the second row');
 
-    // ...and Open says all three documents it takes.
-    expect(
-      tester
-          .widget<IconButton>(find.byKey(const ValueKey('open_config')))
-          .tooltip,
-      'Open a room config, a project or a campus',
-    );
-
-    // The title bar: the FILE at the left - Save, Undo, Redo, History, the
-    // revert, New and Open - and the APP at the right: the one Export menu,
-    // the light/dark toggle, the gear and Help.
-    const fileKeys = [
-      'save_context',
+    // THE TITLE BAR: the File menu, Undo, Redo and History at the left; the
+    // screenshot, light/dark, Help and Settings at the right.
+    const leftKeys = [
+      'file_menu',
       'toolbar_undo',
       'toolbar_redo',
       'show_history',
       'revert_to_backup',
-      'new_menu',
-      'open_config',
     ];
-    const appKeys = [
-      'export_menu',
+    const rightKeys = [
+      'screenshot_menu',
       'toggle_theme',
-      'banner_app_config',
       'open_help',
+      'banner_app_config',
     ];
-    for (final key in [...fileKeys, ...appKeys]) {
+    for (final key in [...leftKeys, ...rightKeys]) {
       expect(
         find.descendant(
           of: find.byType(AppBar),
@@ -122,14 +117,11 @@ void main() {
         findsOneWidget,
         reason: '$key belongs in the title bar',
       );
-      expect(
-        find.descendant(
-          of: find.byType(TopLevelBar),
-          matching: find.byKey(ValueKey(key)),
-        ),
-        findsNothing,
-        reason: '$key is not also on the document row',
-      );
+    }
+    // Moved: the transfers into the File menu, the exports onto the floating
+    // Export button.
+    for (final key in ['sftp_upload', 'new_menu', 'open_config']) {
+      expect(find.byKey(ValueKey(key)), findsNothing, reason: key);
     }
 
     Rect rectOf(String key) => tester.getRect(find.descendant(
@@ -137,41 +129,23 @@ void main() {
           matching: find.byKey(ValueKey(key)),
         ));
 
-    // SAVE IS THE FAR-LEFT CORNER, then Undo, Redo and History beside it.
     final barLeft = tester.getRect(find.byType(AppBar)).left;
-    expect(rectOf('save_context').left - barLeft, lessThan(16));
-    expect(rectOf('toolbar_undo').left, greaterThan(rectOf('save_context').left));
+    final barRight = tester.getRect(find.byType(AppBar)).right;
+    expect(rectOf('file_menu').left - barLeft, lessThan(16),
+        reason: 'the File menu is the top-left corner');
+    expect(rectOf('toolbar_undo').left, greaterThan(rectOf('file_menu').left));
     expect(rectOf('toolbar_redo').left, greaterThan(rectOf('toolbar_undo').left));
     expect(rectOf('show_history').left, greaterThan(rectOf('toolbar_redo').left));
-    expect(rectOf('new_menu').left, greaterThan(rectOf('show_history').left));
 
-    // HELP IS THE FAR-RIGHT CORNER, the gear beside it, the theme toggle
-    // beside the gear, and Export ahead of those.
-    final barRight = tester.getRect(find.byType(AppBar)).right;
-    expect(barRight - rectOf('open_help').right, lessThan(16));
-    expect(rectOf('banner_app_config').right,
-        lessThan(rectOf('open_help').left + 1));
-    expect(rectOf('toggle_theme').right,
-        lessThan(rectOf('banner_app_config').left + 1));
-    expect(rectOf('export_menu').right,
-        lessThan(rectOf('toggle_theme').left + 1));
-    for (final key in fileKeys) {
-      expect(rectOf(key).right, lessThan(rectOf('export_menu').left),
-          reason: '$key is left of the app block');
-    }
-
-    // ONE "NEW", NOT TWO ICONS THAT BOTH MEAN NEW. The two things there are
-    // to start are named under it rather than left to a hover.
-    await tester.tap(find.byKey(const ValueKey('new_menu')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('new_project')), findsOneWidget);
-    expect(find.byKey(const ValueKey('new_config')), findsOneWidget);
-    expect(find.text('New Project'), findsOneWidget);
-    expect(find.text('New Config'), findsOneWidget);
-    // ...and it is a menu: nothing is started by opening it.
-    await tester.tapAt(const Offset(5, 5));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('new_project')), findsNothing);
+    expect(barRight - rectOf('banner_app_config').right, lessThan(16),
+        reason: 'Settings is the far-right button');
+    expect(rectOf('open_help').right,
+        lessThan(rectOf('banner_app_config').left + 1),
+        reason: 'Help is just left of Settings');
+    expect(rectOf('toggle_theme').right, lessThan(rectOf('open_help').left + 1));
+    expect(rectOf('screenshot_menu').right,
+        lessThan(rectOf('toggle_theme').left + 1),
+        reason: 'the screenshot sits beside the light/dark toggle');
 
     await tester.tap(find.byKey(const ValueKey('banner_project')));
     await tester.pumpAndSettle();
@@ -180,6 +154,20 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('banner_app_config')));
     await tester.pumpAndSettle();
     expect(p.selectedTabIndex, AppTab.appConfig.index);
+    expect(find.byKey(const ValueKey('settings_window')), findsOneWidget);
+
+    // THE GEAR AGAIN CLOSES IT, back to the page it was opened from.
+    await tester.tap(find.byKey(const ValueKey('banner_app_config')));
+    await tester.pumpAndSettle();
+    expect(p.selectedTabIndex, AppTab.project.index);
+    expect(find.byKey(const ValueKey('settings_window')), findsNothing);
+
+    // ...and so does the window's own close button.
+    await tester.tap(find.byKey(const ValueKey('banner_app_config')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings_close')));
+    await tester.pumpAndSettle();
+    expect(p.selectedTabIndex, AppTab.project.index);
   });
 
   testWidgets('the banner names the open job, and says when it is behind '
@@ -220,12 +208,11 @@ void main() {
     // over to the RIGHT of the buttons, parking the corner control 600 pixels
     // from the corner.
     final banner = tester.getRect(find.byType(TopLevelBar));
-    // The LAST control on the banner - the upload to the processor, the end
-    // of the document row now that the exports are in the title bar's menu.
+    // The LAST control on the banner - Save's menu arrow, in the corner.
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('sftp_upload')),
+        matching: find.byKey(const ValueKey('save_menu')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1),
@@ -247,7 +234,7 @@ void main() {
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('sftp_upload')),
+        matching: find.byKey(const ValueKey('save_menu')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1));
@@ -285,9 +272,8 @@ void main() {
 
     expect(find.byKey(const ValueKey('banner_project')), findsNothing);
     expect(find.byKey(const ValueKey('banner_room')), findsNothing);
-    // The way to start one is in the title bar, where the things that BEGIN a
-    // session live.
-    expect(find.byKey(const ValueKey('new_menu')), findsOneWidget);
+    // The way to start one is the File menu in the title bar's corner.
+    expect(find.byKey(const ValueKey('file_menu')), findsOneWidget);
   });
 
   testWidgets('one room and no job says Room, and goes nowhere',

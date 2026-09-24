@@ -37,7 +37,6 @@ import 'room_presets.dart';
 import 'screenshot_tools.dart';
 import 'side_pane.dart';
 import 'stepped_date_picker.dart';
-import 'workbook_export.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -924,13 +923,6 @@ class _AvFlowViewState extends State<AvFlowView>
     }
   }
 
-  /// The whole job in one book: control, AV flow, racks, cost — every sheet
-  /// illustrated, whichever tab the export was pressed on. Shared with the
-  /// Schematic tab; see workbook_export.dart, which walks the diagram tabs to
-  /// capture them and therefore disposes THIS page on the way past.
-  Future<void> _exportWorkbook(AppStateProvider provider) =>
-      exportRoomWorkbook(context, provider);
-
   Future<void> _saveDiagram(AppStateProvider provider) async {
     // A wizard-built session has no file for the sidecar to sit beside yet.
     if (provider.avFlowSidecarPath.isEmpty) {
@@ -1150,15 +1142,10 @@ class _AvFlowViewState extends State<AvFlowView>
             tooltip: 'Export the room report',
             onSelected: (v) => switch (v) {
               'copy' => _copyReportText(provider),
-              'workbook' => _exportWorkbook(provider),
               'preset' => _saveAsRoomPreset(provider),
               _ => _exportReport(provider, v == 'xlsx'),
             },
             itemBuilder: (ctx) => const [
-              PopupMenuItem(
-                value: 'workbook',
-                child: Text('Full room workbook (.xlsx, 5 sheets)'),
-              ),
               PopupMenuItem(
                 value: 'preset',
                 child: Text('Save this room as a room type...'),

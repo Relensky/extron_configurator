@@ -83,8 +83,10 @@ void main() {
   /// keeps the buttons that do something OTHER than write to the open
   /// document — convert it, fetch it from a processor, send it to one, put
   /// back the last save, export it.
+  // Save now sits in the right-hand corner of the SECOND row, beside
+  // Convert - see [TopLevelBar].
   final saveButton = find.descendant(
-    of: find.byType(AppBar),
+    of: find.byType(TopLevelBar),
     matching: find.widgetWithIcon(IconButton, Icons.save),
   );
 

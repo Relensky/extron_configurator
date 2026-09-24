@@ -1737,10 +1737,35 @@ class AppStateProvider extends ChangeNotifier {
     // somebody types and arbitrary the rest of the time. Leaving a page is a
     // boundary somebody actually made, so the step ends there — see
     // [recordUndoPoint].
+    // Where Settings goes back to when it is closed - see [toggleSettings].
+    if (index == AppTab.appConfig.index &&
+        selectedTabIndex != AppTab.appConfig.index &&
+        selectedTabIndex >= 0 &&
+        selectedTabIndex < AppTab.values.length) {
+      _tabBeforeSettings = selectedTabIndex;
+    }
     recordUndoPoint();
     selectedTabIndex = index;
     notifyListeners();
   }
+
+  /// SETTINGS IS A WINDOW YOU OPEN AND CLOSE, not a place you move to. The
+  /// gear opens it over whatever you were doing, and the gear again (or its
+  /// close button, or Esc) puts you back on that page.
+  bool get settingsOpen => selectedTabIndex == AppTab.appConfig.index;
+
+  void toggleSettings() =>
+      settingsOpen ? closeSettings() : selectTab(AppTab.appConfig.index);
+
+  void closeSettings() {
+    if (!settingsOpen) return;
+    final back = _tabBeforeSettings == AppTab.appConfig.index
+        ? AppTab.cost.index
+        : _tabBeforeSettings;
+    selectTab(back);
+  }
+
+  int _tabBeforeSettings = AppTab.cost.index;
 
   /// The last tab that was not the Project tab — where [closeProject] hands
   /// the session back to. Starts at the tab a cold session opens on.

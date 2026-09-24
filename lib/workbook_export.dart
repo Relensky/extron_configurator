@@ -305,9 +305,10 @@ String projectFileStem(BuildingProject project) {
 /// Open > Upload takes the file as it is - the same result, one drag later.
 Future<void> exportWorkbookToGoogleSheets(
   BuildContext context,
-  AppStateProvider provider,
-) async {
-  final scope = await askWorkbookScope(context, provider);
+  AppStateProvider provider, {
+  WorkbookScope? scope,
+}) async {
+  scope ??= await askWorkbookScope(context, provider);
   if (scope == null || !context.mounted) return;
   final messenger = ScaffoldMessenger.of(context);
 

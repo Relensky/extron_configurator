@@ -109,7 +109,9 @@ void main() {
     });
 
     test('the files are named for the config they sit beside', () {
-      const config = r'C:\rooms\BSS103_config.json';
+      // Built with the platform's own separator, so the test reads the same
+      // on Windows and on the Linux/macOS machines CI runs on.
+      final config = path.join('rooms', 'BSS103_config.json');
       expect(
         path.basename(roomSidecarPath(config, RoomSidecarPart.flow)),
         'BSS103_config_av_flow.json',

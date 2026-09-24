@@ -87,39 +87,49 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  group('the title bar', () {
-    testWidgets('Open is still one press, with Recent beside it',
+  group('the File menu', () {
+    Future<void> openRecent(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('file_menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('file_recent')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('has New, Open and Open Recent, each opening to the side',
         (tester) async {
-      // THE POINT OF A SPLIT PAIR. Burying the file dialog inside a menu to
-      // make room for this would cost everybody a click forever to save some
-      // people one.
       await pump(tester, withRecents(midSession: true));
-      expect(find.byKey(const ValueKey('open_config')), findsOneWidget);
-      expect(find.byKey(const ValueKey('open_recent')), findsOneWidget);
-      expect(
-        tester
-            .widget<IconButton>(find.byKey(const ValueKey('open_config')))
-            .onPressed,
-        isNotNull,
-      );
+      await tester.tap(find.byKey(const ValueKey('file_menu')));
+      await tester.pumpAndSettle();
+      for (final key in ['file_new', 'file_open', 'file_recent',
+          'file_download', 'file_upload']) {
+        expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
+      }
+      await tester.tap(find.byKey(const ValueKey('file_new')));
+      await tester.pumpAndSettle();
+      for (final key in ['file_new_room', 'file_new_project',
+          'file_new_campus']) {
+        expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
+      }
+      await tester.tap(find.byKey(const ValueKey('file_open')));
+      await tester.pumpAndSettle();
+      for (final key in ['file_open_room', 'file_open_project',
+          'file_open_campus']) {
+        expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
+      }
     });
 
-    testWidgets('the menu heads the three kinds and lists each under its own',
-        (tester) async {
+    testWidgets('Open Recent heads the three kinds and lists each under its '
+        'own', (tester) async {
       await pump(tester, withRecents(midSession: true));
-      await tester.tap(find.byKey(const ValueKey('open_recent')));
-      await tester.pumpAndSettle();
+      await openRecent(tester);
 
       for (final heading in ['ROOMS', 'PROJECTS', 'CAMPUSES']) {
         expect(find.text(heading), findsOneWidget,
             reason: '$heading is what makes it three lists rather than one');
       }
-      expect(find.text('Behavioral Science 103'), findsOneWidget);
-      expect(find.text('Bessey Hall'), findsOneWidget);
-      expect(find.text('Chico campus'), findsOneWidget);
-      // And the folder beside each, which is what tells two rooms with the
-      // same name on two jobs apart.
-      expect(find.text(dir.path), findsNWidgets(3));
+      expect(find.textContaining('Behavioral Science 103'), findsOneWidget);
+      expect(find.textContaining('Bessey Hall'), findsOneWidget);
+      expect(find.textContaining('Chico campus'), findsOneWidget);
     });
 
     testWidgets('a kind nobody has opened is not an empty heading',
@@ -127,8 +137,7 @@ void main() {
       final p = fresh()..roomConfig = {'SYSTEM_SETUP': {}};
       p.recentFiles.remember(RecentKind.room, file('a.json'), name: 'Room A');
       await pump(tester, p);
-      await tester.tap(find.byKey(const ValueKey('open_recent')));
-      await tester.pumpAndSettle();
+      await openRecent(tester);
 
       expect(find.text('ROOMS'), findsOneWidget);
       expect(find.text('PROJECTS'), findsNothing);
@@ -140,26 +149,19 @@ void main() {
       final p = withRecents(midSession: true);
       final room = p.recentFiles[RecentKind.room].single.file;
       await pump(tester, p);
-      await tester.tap(find.byKey(const ValueKey('open_recent')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('clear_recent')));
+      await openRecent(tester);
+      await tester.tap(find.byKey(const ValueKey('file_recent_clear')));
       await tester.pumpAndSettle();
 
       expect(p.recentFiles.isEmpty, isTrue);
       expect(File(room).existsSync(), isTrue,
           reason: 'forgetting a document is not deleting it');
-      // And the button goes back to saying there is nothing to open.
-      expect(find.byKey(const ValueKey('open_recent')), findsNothing);
-      expect(find.byKey(const ValueKey('open_recent_empty')), findsOneWidget);
     });
 
-    testWidgets('a cold install offers a disabled button that says why',
-        (tester) async {
+    testWidgets('a cold install says there is nothing yet', (tester) async {
       await pump(tester, fresh()..roomConfig = {'SYSTEM_SETUP': {}});
-      final button = tester.widget<IconButton>(
-          find.byKey(const ValueKey('open_recent_empty')));
-      expect(button.onPressed, isNull);
-      expect(button.tooltip, contains('nothing has been opened'));
+      await openRecent(tester);
+      expect(find.text('Nothing opened or saved yet'), findsOneWidget);
     });
   });
 
