@@ -555,6 +555,23 @@ class FolderUpdater extends ChangeNotifier {
     final update = _available;
     final current = _currentVersion;
     if (update == null || current == null) return;
+    // Once only. A double click on "Close and Update" (the button stays live
+    // until the next frame) used to start a second install alongside the
+    // first: two helpers, each waiting for the app to close, each swapping
+    // the files and each starting the app - so it came up twice.
+    if (_installRunning) return;
+    _installRunning = true;
+    try {
+      await _install(update, current);
+    } finally {
+      // Only reached when the install stopped short of closing the app.
+      _installRunning = false;
+    }
+  }
+
+  bool _installRunning = false;
+
+  Future<void> _install(AvailableUpdate update, AppBuildVersion current) async {
     _confirming = false;
     if (!canInstall) {
       _fail('Updates can only be installed from a release build.');

@@ -679,6 +679,38 @@ void main() {
           'old exe');
     }, timeout: const Timeout(Duration(minutes: 2)));
 
+    test('a second helper leaves the update to the first', () async {
+      // Stands in for a helper already at work: holds the same lock.
+      final exePath = '${install.path}\\my_app.exe';
+      final lockName = 'Local\\AppUpdate_'
+          '${exePath.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '_')}';
+      final ready = File('${work.path}\\holder_ready.txt');
+      final holder = await Process.start('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        "\$m = New-Object System.Threading.Mutex(\$false, '$lockName'); "
+            "[void]\$m.WaitOne(); "
+            "Set-Content -LiteralPath '${ready.path.replaceAll("'", "''")}' -Value 1; "
+            'Start-Sleep -Seconds 60',
+      ]);
+      try {
+        final deadline = DateTime.now().add(const Duration(seconds: 30));
+        while (!ready.existsSync() && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        expect(ready.existsSync(), isTrue);
+        final r = await runScript();
+        expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+      } finally {
+        holder.kill();
+      }
+      expect(read('my_app.exe'), 'old exe');
+      expect(File('${work.path}\\last_update.json').existsSync(), isFalse);
+      expect(File('${work.path}\\apply_update.log').readAsStringSync(),
+          contains('Another update helper'));
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
     test('rolls back when a file cannot be replaced', () async {
       // Holding app.so open without delete sharing makes the move fail.
       final lock = File('${install.path}\\data\\app.so')
