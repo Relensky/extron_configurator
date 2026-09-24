@@ -31,6 +31,8 @@ import 'pinned_grid.dart' show gridMetric;
 import 'error_reporting.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
+import 'cost_estimate_actions.dart';
+import 'collab/collab_widgets.dart';
 import 'delivery_locations_dialog.dart';
 import 'vendor_book_dialog.dart';
 import 'device_editor_view.dart';
@@ -803,50 +805,73 @@ class _MainDashboardState extends State<MainDashboard> {
           : AppTab.wizard,
     );
 
-    // THE DOCUMENT'S OWN BUTTONS — everything that acts on the room already in
-    // front of you: convert it, fetch it from a processor, send it to one, put
-    // back the last save, write it.
-    //
-    // Built here because they need this State's methods, but they live on the
-    // banner, beside the job, where the rest of "which document am I working
-    // on" lives — the conversion, the processor transfers and the EXPORTS —
-    // plus the theme toggle and the screenshot, the two app-level buttons that
-    // get pressed while working rather than while setting the app up.
-    //
-    // The title bar keeps two blocks and nothing else: the APP in its left
-    // corner — the gear and Help — and everything that begins, steps, puts
-    // back or writes a FILE at the other end: New, Open, Undo and Redo, the
-    // history, the revert to the saved backup, and Save in the far corner.
-    //
-    // The exports moved down here because they are about the DOCUMENT, not
-    // the app: "give me this as a spreadsheet" is the same kind of question
-    // as "convert this", and it was the odd one out sitting up beside the
-    // theme toggle.
-    //
-    // SAVE IS NOT AMONG THEM. It went back up to the title bar to stand with
-    // New and Open — the three that every other application on the machine
-    // keeps together, and the three a hand reaches for without reading — and
-    // the revert to the last saved backup went up with it, because the file it
-    // puts back is the one Save wrote.
+    final currentTab =
+        (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
+            ? AppTab.values[selectedIndex]
+            : AppTab.wizard;
+    final onCost = currentTab == AppTab.cost && hasConfig;
+
+    // THE DOCUMENT ROW: the screenshot and the buttons that act on the room
+    // in front of you - convert it, fetch it from a processor, send it to one.
+    // The exports went up to the title bar's Export menu, one button for
+    // every way a document leaves the app.
     final documentActions = <Widget>[
-      // THE THEME AND THE SCREENSHOT, at the head of the document row.
-      //
-      // Both are about the APP rather than about the room, and they used to
-      // stand with the gear and Help in the title bar's left corner. They sit
-      // here instead because they are the two of that block a hand actually
-      // reaches for while working — flipping to light to read a drawing in a
-      // bright room, and photographing whatever is on screen to send it on —
-      // and this row is where the eye already is: beside Convert and the
-      // exports, on the strip that names what is open.
-      IconButton(
-        icon: Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
-        tooltip: 'Toggle Theme',
-        onPressed: () => provider.toggleTheme(),
-      ),
-      IconButton(
+      // SCREENSHOT - a menu, because there are two pictures somebody means.
+      // The screen as it is, to annotate and send on; and on the Cost tab, the
+      // whole estimate rendered as a quote (every control hidden, the full
+      // length of it rather than what is scrolled into view). The estimate's
+      // own Screenshot button used to stand on the page beside this one.
+      PopupMenuButton<String>(
+        key: const ValueKey('screenshot_menu'),
         icon: const Icon(Icons.photo_camera),
-        tooltip: 'Screenshot & annotate',
-        onPressed: () => _takeScreenshot(context, selectedIndex),
+        tooltip: onCost
+            ? 'Screenshot - the screen, or the estimate as a picture'
+            : 'Screenshot & annotate',
+        onSelected: (v) {
+          switch (v) {
+            case 'screen':
+              _takeScreenshot(context, selectedIndex);
+            case 'estimate_light':
+              CostEstimateActions.current?.screenshot(Brightness.light);
+            case 'estimate_dark':
+              CostEstimateActions.current?.screenshot(Brightness.dark);
+          }
+        },
+        itemBuilder: (ctx) => [
+          const PopupMenuItem(
+            key: ValueKey('screenshot_screen'),
+            value: 'screen',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.photo_camera),
+              title: Text('Screenshot & annotate'),
+              subtitle: Text('What is on screen now'),
+            ),
+          ),
+          if (onCost && CostEstimateActions.current != null) ...const [
+            PopupMenuDivider(),
+            PopupMenuItem(
+              key: ValueKey('screenshot_estimate_light'),
+              value: 'estimate_light',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.light_mode),
+                title: Text('Estimate as a picture - light'),
+                subtitle: Text('The whole quote, dated, controls hidden'),
+              ),
+            ),
+            PopupMenuItem(
+              key: ValueKey('screenshot_estimate_dark'),
+              value: 'estimate_dark',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.dark_mode),
+                title: Text('Estimate as a picture - dark'),
+                subtitle: Text('For a dark slide deck'),
+              ),
+            ),
+          ],
+        ],
       ),
       // CONVERT: the migration a legacy file needs, on demand. The load
       // already ran the conversion in memory — this is where it gets
@@ -904,93 +929,16 @@ class _MainDashboardState extends State<MainDashboard> {
         },
       ),
       IconButton(
+        key: const ValueKey('sftp_upload'),
         icon: const Icon(Icons.cloud_upload),
         tooltip: 'Upload to Processor (SFTP)',
         onPressed: () {
           showDialog(
             context: context,
-            barrierDismissible: false, 
+            barrierDismissible: false,
             builder: (context) => const ProcessorSftpDialog(isUpload: true),
           );
         },
-      ),
-      // THE WHOLE JOB IN ONE BOOK, from wherever you are standing. It used
-      // to live on two of the twelve tabs, which made "send me the
-      // workbook" a question about which page somebody happened to be on.
-      IconButton(
-        key: const ValueKey('export_workbook'),
-        icon: const Icon(Icons.menu_book),
-        // WHICH book is the button's question to ask, not its answer. A room
-        // open inside a job is the ordinary case and both are documents
-        // somebody means by "the workbook"; see [exportWorkbook].
-        tooltip: switch ((hasConfig, provider.hasOpenProject)) {
-          (false, false) => 'Export a workbook - nothing loaded yet',
-          (true, false) => 'Export the full room workbook - every tab, one '
-              '.xlsx',
-          (false, true) => 'Export the project workbook - the whole job, one '
-              '.xlsx',
-          (true, true) => 'Export a workbook - this room, or the whole job',
-        },
-        onPressed: hasConfig || provider.hasOpenProject
-            ? () => exportWorkbook(context, provider)
-            : null,
-      ),
-      // WHERE OTHER PEOPLE CAN READ IT. The workbook button hands somebody a
-      // file; this puts the same thing in a folder that syncs, under a name
-      // that never changes, so a link sent once keeps opening the current
-      // version. A room and a job publish into the same folder, beside each
-      // other — see online_copy.dart.
-      IconButton(
-        key: const ValueKey('publish_online'),
-        icon: const Icon(Icons.cloud_sync_outlined),
-        tooltip: switch ((hasConfig, provider.hasOpenProject)) {
-          (false, false) => 'Online copy - nothing loaded yet',
-          (true, false) => 'Publish this room where other people can read it',
-          (false, true) => 'Publish this job where other people can read it',
-          (true, true) => 'Publish this room or this job online',
-        },
-        onPressed: hasConfig || provider.hasOpenProject
-            ? () => _publishOnline(context, provider, hasConfig)
-            : null,
-      ),
-      // ...and THIS tab on its own, the three ways a document leaves this
-      // app. Beside the workbook button so the answer to "can I get this
-      // as a spreadsheet" is in the same place on every page.
-      PopupMenuButton<String>(
-        key: const ValueKey('export_tab_menu'),
-        icon: const Icon(Icons.file_download_outlined),
-        tooltip: _tabExportTooltip(selectedIndex, hasConfig),
-        // The catalog is the app's own price list, so it exports with no
-        // room loaded — everything else needs one.
-        enabled: _tabExports(selectedIndex) &&
-            (hasConfig || _tabWorksWithoutConfig(selectedIndex)),
-        onSelected: (v) => exportTabReport(
-          context,
-          provider,
-          AppTab.values[selectedIndex],
-          v,
-        ),
-        itemBuilder: (ctx) => [
-          PopupMenuItem(
-            value: 'xlsx',
-            child: Text(
-              '${_tabExportLabel(selectedIndex)} as a spreadsheet (.xlsx)',
-            ),
-          ),
-          PopupMenuItem(
-            value: 'txt',
-            child: Text(
-              '${_tabExportLabel(selectedIndex)} as plain text (.txt)',
-            ),
-          ),
-          PopupMenuItem(
-            value: 'copy',
-            child: Text(
-              'Copy ${_tabExportLabel(selectedIndex).toLowerCase()} to the '
-              'clipboard',
-            ),
-          ),
-        ],
       ),
     ];
 
@@ -1004,92 +952,130 @@ class _MainDashboardState extends State<MainDashboard> {
 
     final page = Scaffold(
       appBar: AppBar(
-        // THE APP'S OWN CONTROLS, AND THEN WHAT IS ON SCREEN.
+        // THE FILE AT THE LEFT, THE APP AT THE RIGHT.
         //
-        // The gear and Help are about the APPLICATION rather than about the
-        // document, and neither changes as you move between tabs. So they sit
-        // together in the left corner as a fixed block a hand can learn, ahead
-        // of the job — and the other end of the row is left to the FILE: New,
-        // Open, the two step-backwards arrows, the way back to the last save,
-        // and Save itself in the far corner.
+        // Save is the most-pressed button on the bar, so it has the corner a
+        // hand finds without looking - the far left, where the eye starts -
+        // and the steps backwards and forwards stand right beside it, then
+        // the history of what was changed. New, Open and the recent files
+        // follow, then the job and the room picker.
         //
-        // The theme toggle and the screenshot used to stand here too; they are
-        // on the document row now, beside Convert — see [documentActions].
-        //
-        // In the title slot rather than in a leading: an AppBar's leading is
-        // one narrow widget, and these are two.
+        // The other corner is the APPLICATION: one Export menu for every way
+        // a document leaves the app, then the light/dark toggle, the gear and
+        // Help in the far corner. None of those changes with the tab.
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // THE CORNER BLOCK GIVES WAY RATHER THAN OVERFLOWING.
+            // THE FILE BLOCK GIVES WAY RATHER THAN OVERFLOWING.
             //
             // The block is a fixed width, and the title slot is only ever
             // what the actions leave over — so on a window narrow enough (a
             // 600-pixel test harness, a user dragging the frame in) the
             // buttons ran off the end of the bar and painted the striped
             // overflow banner. Flexible lets the block shrink and the scroll
-            // view lets what will not fit be reached anyway; at any width this
-            // app is actually worked at there is room for both and this lays
-            // out exactly as a plain Row would.
+            // view lets what will not fit be reached anyway.
             Flexible(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // APP CONFIG: ONE OF THE ROW UNTIL IT IS THE PAGE YOU ARE ON.
-                    //
-                    // The gear used to be painted the accent while App Config was
-                    // closed, which drew an eye to it over New, Open and Save — and it
-                    // is not more important than any of them. So it takes the bar's
-                    // own ink like its neighbors, and stands out only while you are
-                    // actually standing on App Config, where the color says which tab
-                    // is open rather than advertising a way in.
-                    //
-                    // legibleTone rather than readableOn for that selected accent:
-                    // readableOn hands back the bar's own ink on any theme whose app
-                    // bar IS the accent — Classic is one — which would paint the two
-                    // states the same color and leave them indistinguishable.
-                    // legibleTone keeps the accent's HUE and moves its lightness until
-                    // it reads on the bar, so there is always a difference to see.
+                    // SAVE, AND EVERY OTHER WAY OF SAVING. One button that
+                    // writes whatever document the tab on screen belongs to,
+                    // with a dot when that document is behind its file and a
+                    // menu beside it - see save_actions.dart.
+                    const SaveToolbar(),
+                    // BACK ONE STEP ON WHATEVER THIS PAGE EDITS, driven by the
+                    // same question Save answers. Nothing at all on the pages
+                    // that carry their own pair - see [toolbarUndoTarget].
+                    ToolbarUndoButtons(tab: currentTab),
+                    // WHO CHANGED WHAT, from wherever you are standing.
                     IconButton(
-                      key: const ValueKey('banner_app_config'),
-                      icon: const Icon(Icons.settings),
-                      isSelected: selectedIndex == AppTab.appConfig.index,
-                      selectedIcon: Icon(
-                        Icons.settings,
-                        color: legibleTone(
-                          theme.colorScheme.secondary,
-                          appBarFill,
-                          minRatio: kContrastLarge,
-                        ),
-                      ),
-                      tooltip: 'App Config - file locations, theme, pricing, autosave',
-                      onPressed: () => provider.selectTab(AppTab.appConfig.index),
+                      key: const ValueKey('show_history'),
+                      icon: const Icon(Icons.history),
+                      tooltip: 'History - what has been changed on this room '
+                          'and this job',
+                      onPressed: () => showHistoryDialog(context),
                     ),
-                    // HELP IS A PROPERTY OF THE APP, not of whichever tab is open, so
-                    // it sits beside the gear rather than moving about. See [HelpBook]
-                    // - it opens on its search box, over whatever you were doing, and
-                    // closes again without losing it.
-                    const HelpButton(),
+                    // REVERT TO THE SAVED BACKUP: put back the
+                    // '<name>_previous.json' copy the save took of the file
+                    // beforehand. Not an undo arrow and not called Undo - it
+                    // reads a FILE off disk and replaces the room with it.
+                    IconButton(
+                      key: const ValueKey('revert_to_backup'),
+                      icon: const Icon(Icons.settings_backup_restore),
+                      tooltip: provider.canUndoLastSave
+                          ? 'Revert to the saved backup - replace this room '
+                              'with '
+                              '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
+                              ', the copy taken before the last save. This is '
+                              'not Undo: it discards everything since that '
+                              'save.'
+                          : 'Revert to the saved backup - nothing has been '
+                              'saved over a local file yet',
+                      onPressed: provider.canUndoLastSave
+                          ? () => _undoLastSave(context, provider)
+                          : null,
+                    ),
+                    const SizedBox(
+                      height: 24,
+                      child: VerticalDivider(width: 12),
+                    ),
+                    // ONE "NEW", WITH THE TWO THINGS THERE ARE TO START UNDER
+                    // IT - the project first, because the building comes
+                    // before the room.
+                    PopupMenuButton<String>(
+                      key: const ValueKey('new_menu'),
+                      icon: const Icon(Icons.add_circle_outline),
+                      tooltip: 'New - a project, or a room config',
+                      onSelected: (v) => v == 'project'
+                          ? startNewProject(context, provider)
+                          : _createNewConfig(context, provider),
+                      itemBuilder: (ctx) => const [
+                        PopupMenuItem(
+                          key: ValueKey('new_project'),
+                          value: 'project',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.create_new_folder),
+                            title: Text('New Project'),
+                            subtitle: Text(
+                                'A building, its rooms, and when it is due'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          key: ValueKey('new_config'),
+                          value: 'config',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.note_add),
+                            title: Text('New Config'),
+                            subtitle: Text('One room, from the template'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    // ONE BUTTON, THREE DOCUMENTS - and it says so.
+                    IconButton(
+                      key: const ValueKey('open_config'),
+                      icon: const Icon(Icons.folder_open),
+                      tooltip: 'Open a room config, a project or a campus',
+                      onPressed: () => _openExistingConfig(context, provider),
+                    ),
+                    // AND THE ONES ALREADY OPENED, beside it - see
+                    // recent_files.dart.
+                    RecentFilesButton(
+                      onOpen: (file) =>
+                          _openDocumentAtPath(context, provider, file),
+                    ),
                   ],
                 ),
               ),
             ),
             const SizedBox(width: 12),
-            // THE APP'S OWN NAME GIVES THE SLOT UP TO THE JOB.
-            //
-            // The title slot is whatever New, Open, Save and the rest of the
-            // actions leave over, and it has to hold the job's name, the room
-            // picker and - when the open room is behind its file - a Save
-            // button. 'Room Config Builder' is a third of that on a laptop,
-            // and it is the one thing in the bar nobody has to read: the
-            // window's own title bar and the taskbar both say it, and anybody
-            // looking at this screen knows what application they are in.
-            //
-            // So it shows while there is no job, where the slot is empty
-            // anyway and the app should say what it is - and steps aside the
-            // moment there is one.
+            // THE APP'S OWN NAME GIVES THE SLOT UP TO THE JOB. It shows while
+            // there is no job, where the slot is empty anyway, and steps aside
+            // the moment there is one.
             if (!projectIsOpen(provider)) ...const [
               Flexible(
                 child: Text(
@@ -1102,144 +1088,55 @@ class _MainDashboardState extends State<MainDashboard> {
             const Flexible(child: ProjectRoomPicker()),
           ],
         ),
-        // No inset: the corner block starts in the corner, and an IconButton
-        // brings its own margin with it.
+        // No inset: Save starts in the corner, and an IconButton brings its
+        // own margin with it.
         titleSpacing: 4,
         actions: [
-          // NEW AND OPEN, first and leftmost.
-          //
-          // They start a session rather than acting on the one in progress, so
-          // they sit with the application's own controls rather than with the
-          // buttons that write, convert and transfer whatever is already open.
-          //
-          // ONE "NEW", WITH THE TWO THINGS THERE ARE TO START UNDER IT. A job
-          // is a building and a room is a file, and both begin here — but as
-          // two adjacent icons they were two unlabeled pictures that both
-          // meant "new", which is a choice somebody makes by hovering. A menu
-          // names them: the project first, because that is the order the work
-          // happens in — the building comes before the room, and somebody who
-          // started with the room had no way of knowing there was a job to put
-          // it on without going looking for the Project tab first.
-          PopupMenuButton<String>(
-            key: const ValueKey('new_menu'),
-            icon: const Icon(Icons.add_circle_outline),
-            tooltip: 'New - a project, or a room config',
-            onSelected: (v) => v == 'project'
-                ? startNewProject(context, provider)
-                : _createNewConfig(context, provider),
-            itemBuilder: (ctx) => const [
-              PopupMenuItem(
-                key: ValueKey('new_project'),
-                value: 'project',
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.create_new_folder),
-                  title: Text('New Project'),
-                  subtitle: Text('A building, its rooms, and when it is due'),
-                ),
+          // EVERY WAY A DOCUMENT LEAVES THE APP, IN ONE MENU: the workbook
+          // (room or job), Google Sheets, the online copy, this tab's own
+          // tables, and on the Cost tab the estimate's PDF and spreadsheet.
+          // Three buttons and a menu on two different rows used to answer
+          // "how do I get this out" - now one does.
+          _ExportMenu(
+            selectedIndex: selectedIndex,
+            hasConfig: hasConfig,
+            onPublish: () => _publishOnline(context, provider, hasConfig),
+          ),
+          // LIGHT AND DARK, beside the gear - it is a setting, pressed often
+          // enough to deserve its own button rather than a trip into App
+          // Config.
+          IconButton(
+            key: const ValueKey('toggle_theme'),
+            icon: Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            tooltip: provider.isDarkMode
+                ? 'Switch to light mode'
+                : 'Switch to dark mode',
+            onPressed: () => provider.toggleTheme(),
+          ),
+          // APP CONFIG: ONE OF THE ROW UNTIL IT IS THE PAGE YOU ARE ON. It
+          // takes the bar's own ink like its neighbors, and stands out only
+          // while you are actually standing on App Config. legibleTone keeps
+          // the accent's hue and moves its lightness until it reads on the
+          // bar, so the selected state is always visibly different.
+          IconButton(
+            key: const ValueKey('banner_app_config'),
+            icon: const Icon(Icons.settings),
+            isSelected: selectedIndex == AppTab.appConfig.index,
+            selectedIcon: Icon(
+              Icons.settings,
+              color: legibleTone(
+                theme.colorScheme.secondary,
+                appBarFill,
+                minRatio: kContrastLarge,
               ),
-              PopupMenuItem(
-                key: ValueKey('new_config'),
-                value: 'config',
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.note_add),
-                  title: Text('New Config'),
-                  subtitle: Text('One room, from the template'),
-                ),
-              ),
-            ],
+            ),
+            tooltip: 'App Config - file locations, theme, pricing, autosave',
+            onPressed: () => provider.selectTab(AppTab.appConfig.index),
           ),
-          // ONE BUTTON, THREE DOCUMENTS - and it says so. It has taken a
-          // campus since campus files existed (see [_openExistingConfig],
-          // which sorts the three out by what the file is), but the tooltip
-          // still named two of them, so the only way to learn the third was to
-          // try it and find out. A door that does more than its label admits
-          // is a door nobody opens.
-          IconButton(
-            key: const ValueKey('open_config'),
-            icon: const Icon(Icons.folder_open),
-            tooltip: 'Open a room config, a project or a campus',
-            onPressed: () => _openExistingConfig(context, provider),
-          ),
-          // AND THE ONES ALREADY OPENED, beside it. A split pair, like Save
-          // and its menu: the act on the left, the shortcut to a document
-          // already known on the right. Open itself stays one press — putting
-          // the file dialog inside a menu to make room for this would cost
-          // everybody a click forever to save some people one.
-          //
-          // Three lists, because a room, a job and a campus are three
-          // different questions — see recent_files.dart.
-          RecentFilesButton(
-            onOpen: (file) => _openDocumentAtPath(context, provider, file),
-          ),
-          // BACK ONE STEP ON WHATEVER THIS PAGE EDITS, driven by the same
-          // question the Save button at the end of this row answers. Nothing
-          // at all on the pages that carry their own pair - see
-          // [toolbarUndoTarget].
-          ToolbarUndoButtons(
-            tab: (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
-                ? AppTab.values[selectedIndex]
-                : AppTab.wizard,
-          ),
-          // WHO CHANGED WHAT, from wherever you are standing. It used to be a
-          // pane on the Project tab, which meant looking up what you had just
-          // done on a drawing meant leaving the drawing — so half of what the log
-          // records was the half nobody ever went and read.
-          IconButton(
-            key: const ValueKey('show_history'),
-            icon: const Icon(Icons.history),
-            tooltip: 'History - what has been changed on this room and this job',
-            onPressed: () => showHistoryDialog(context),
-          ),
-          // REVERT TO THE SAVED BACKUP: put back the '<name>_previous.json' copy
-          // the save took of the file beforehand. Enabled only while that backup
-          // belongs to the file currently loaded — see canUndoLastSave.
-          //
-          // NOT AN UNDO ARROW, AND NOT CALLED UNDO. It used to be both, and that
-          // was wrong in a way nobody could see until the app grew a real one:
-          // this reads a FILE off disk and replaces the room with it, which is a
-          // different act from stepping one edit backwards. Somebody who had just
-          // typed a price reached for the undo arrow in the title bar, got this,
-          // and was told "the config already matches the backup" — a true sentence
-          // about a question they had not asked. The step-backwards buttons are
-          // Ctrl+Z, the pair a few buttons to the left of this one, and the
-          // pair on each page that draws; this one is a way back to the last
-          // file, and now looks like one.
-          IconButton(
-            key: const ValueKey('revert_to_backup'),
-            icon: const Icon(Icons.settings_backup_restore),
-            tooltip: provider.canUndoLastSave
-                ? 'Revert to the saved backup - replace this room with '
-                    '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
-                    ', the copy taken before the last save. This is not Undo: it '
-                    'discards everything since that save.'
-                : 'Revert to the saved backup - nothing has been saved over a '
-                    'local file yet',
-            onPressed: provider.canUndoLastSave
-                ? () => _undoLastSave(context, provider)
-                : null,
-          ),
-          // SAVE, AND EVERY OTHER WAY OF SAVING — on the top row.
-          //
-          // One button that writes whatever document the tab on screen belongs
-          // to: the room on the room tabs, the job on the Project tab, the
-          // catalog on the Catalog tab. It carries a dot when that document is
-          // behind its file, and a menu beside it holding Save As, the other
-          // document, Save All to a room folder, and an on-demand backup. See
-          // save_actions.dart for why the three buttons that used to be here
-          // were not enough.
-          //
-          // Up here with New and Open rather than down on the document row,
-          // because those three are what every other application on the
-          // machine puts together and what a hand goes to without reading:
-          // the file you start, the file you open, the file you write.
-          //
-          // AND LAST, IN THE FAR CORNER. It is the most pressed button on the
-          // bar, and a corner is the one place on a row that cannot move: the
-          // controls to its left change what they mean with the tab, but the
-          // end of the row is the end of the row on every page.
-          const SaveToolbar(),
+          // HELP IS A PROPERTY OF THE APP, not of whichever tab is open - the
+          // far corner, beside the gear. See [HelpBook].
+          const HelpButton(),
+          const SizedBox(width: 4),
         ],
       ),
       body: Column(
@@ -1305,15 +1202,17 @@ class _MainDashboardState extends State<MainDashboard> {
             runSave(context, provider, saveScope);
           }
         },
+        // CTRL+SHIFT+S IS SAVE ALL - every open document that is behind its
+        // file, the room and the job together. Save As moved to Ctrl+Alt+S.
         const SingleActivator(LogicalKeyboardKey.keyS,
-            control: true, shift: true): () {
+                control: true, shift: true):
+            () => saveEverything(context, provider),
+        const SingleActivator(LogicalKeyboardKey.keyS,
+            control: true, alt: true): () {
           if (saveScopeSupportsSaveAs(saveScope)) {
             runSave(context, provider, saveScope, saveAs: true);
           }
         },
-        const SingleActivator(LogicalKeyboardKey.keyS,
-                control: true, alt: true):
-            () => saveEverything(context, provider),
         // UNDO AND REDO ON WHATEVER THIS PAGE EDITS, by the same rule the save
         // keys follow: the shortcut acts on the document the tab in front of
         // you belongs to. Every room page now answers that with the ROOM, so
@@ -1329,7 +1228,7 @@ class _MainDashboardState extends State<MainDashboard> {
             control: true, shift: true): () =>
             _undoOnCurrentTab(context, provider, redo: true),
       },
-      child: page,
+      child: CollabNoticeListener(child: page),
     );
   }
 
@@ -1382,14 +1281,6 @@ class _MainDashboardState extends State<MainDashboard> {
       index >= 0 && index < AppTab.values.length
           ? tabExportLabel(AppTab.values[index])
           : 'This tab';
-
-  static String _tabExportTooltip(int index, bool hasConfig) =>
-      !_tabExports(index)
-          ? 'This tab has no tables to export'
-          : (!hasConfig && !_tabWorksWithoutConfig(index))
-              ? 'Export this tab - nothing loaded yet'
-              : 'Export ${_tabExportLabel(index).toLowerCase()} - spreadsheet, '
-                  'plain text or clipboard';
 
   static bool _tabWorksWithoutConfig(int index) =>
       index >= 0 &&
@@ -2201,6 +2092,11 @@ class TopLevelBar extends StatelessWidget {
             // spend most of a session grayed out, and "grayed out" should mean
             // a fainter version of the row's ink and not a color picked
             // against a surface this row is not.
+            // WHO ELSE HAS THIS OPEN - a person icon with their Windows
+            // sign-in name, and a Merge button when one of them has saved.
+            // See collab/collab_widgets.dart.
+            if (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
+              CollabPresenceStrip(tab: AppTab.values[selectedIndex]),
             IconButtonTheme(
               data: IconButtonThemeData(
                 style: ButtonStyle(
@@ -3430,6 +3326,83 @@ class AppSettingsView extends StatelessWidget {
           ),
           initialValue: provider.documentationPath,
           onChanged: (val) => provider.updateSetting('documentationPath', val),
+        ),
+        const SizedBox(height: 20),
+
+        // SPEC SHEETS - one shared folder, so a sheet attached to a catalog
+        // entry on one machine opens on every other. See spec_sheets.dart.
+        TextFormField(
+          key: ValueKey('specSheetFolder_${provider.specSheetFolder}'),
+          decoration: InputDecoration(
+            labelText: 'Spec Sheet Folder (shared)',
+            hintText: provider.effectiveSpecSheetFolder,
+            helperText: 'Blank = "spec_sheets" sub-folder of the Root Folder. '
+                'Point it at a shared folder: the Catalog tab files each sheet '
+                'as <maker>/<model>.pdf and stores the name relative to here.',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder_shared),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                final dir = await FilePicker.getDirectoryPath();
+                if (dir != null) provider.updateSetting('specSheetFolder', dir);
+              },
+            ),
+          ),
+          initialValue: provider.specSheetFolder,
+          onChanged: (val) => provider.updateSetting('specSheetFolder', val),
+        ),
+        const SizedBox(height: 20),
+
+        // EDITING TOGETHER - see collab/collab_controller.dart.
+        SwitchListTile(
+          key: const ValueKey('collab_enabled_switch'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Show who else is editing a shared file'),
+          subtitle: Text(
+            'While a room, project or the catalog is open, a small note in a '
+            '".editing" folder beside it tells other copies of the app you '
+            'have it open (as ${provider.collab.me.user}). Their names appear '
+            'on the banner, and when one of them saves you are offered their '
+            'changes to merge - Save merges them too.',
+          ),
+          value: provider.collabEnabled,
+          onChanged: provider.setCollabEnabled,
+        ),
+        const SizedBox(height: 20),
+
+        // GOOGLE SHEETS - see google_sheets_export.dart.
+        Text('Google Sheets', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Optional. With a Google Cloud OAuth client of type "Desktop app" '
+          '(and the Google Drive API enabled on its project), Export > Upload '
+          'workbook to Google Sheets puts the workbook straight into your '
+          'Drive as a Sheet. Without one, the export saves the .xlsx and opens '
+          'Google Sheets for you to upload it.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          key: const ValueKey('googleClientId_field'),
+          decoration: const InputDecoration(
+            labelText: 'Google OAuth client ID',
+            border: OutlineInputBorder(),
+          ),
+          initialValue: provider.googleClientId,
+          onChanged: (val) => provider.updateSetting('googleClientId', val),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          key: const ValueKey('googleClientSecret_field'),
+          decoration: const InputDecoration(
+            labelText: 'Google OAuth client secret',
+            helperText: 'Desktop-app clients are issued one; it is not a '
+                'password and is stored with the other settings.',
+            border: OutlineInputBorder(),
+          ),
+          initialValue: provider.googleClientSecret,
+          onChanged: (val) => provider.updateSetting('googleClientSecret', val),
         ),
         const SizedBox(height: 20),
 
@@ -4720,3 +4693,133 @@ LogViewerConfig configuratorLogViewerConfig() => LogViewerConfig(
     allowedExtensions: ['txt'],
   ),
 );
+
+/// EVERY WAY A DOCUMENT LEAVES THE APP, AS ONE MENU in the title bar's right
+/// corner.
+///
+/// It replaces three buttons on the document row - the workbook, the online
+/// copy and the per-tab export - and the Cost tab's own Export button, which
+/// between them answered "how do I get this out" in four places. The entries
+/// that do not apply to the page on screen are grayed out rather than hidden,
+/// so the menu reads the same everywhere.
+class _ExportMenu extends StatelessWidget {
+  final int selectedIndex;
+  final bool hasConfig;
+  final VoidCallback onPublish;
+
+  const _ExportMenu({
+    required this.selectedIndex,
+    required this.hasConfig,
+    required this.onPublish,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final hasAny = hasConfig || provider.hasOpenProject;
+    final tab = (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
+        ? AppTab.values[selectedIndex]
+        : AppTab.wizard;
+    final tabExports = _MainDashboardState._tabExports(selectedIndex) &&
+        (hasConfig || _MainDashboardState._tabWorksWithoutConfig(selectedIndex));
+    final tabLabel = _MainDashboardState._tabExportLabel(selectedIndex);
+    final onCost = tab == AppTab.cost && hasConfig;
+
+    // WHICH book is a question the workbook entries ask, not answer - a room
+    // open inside a job is the ordinary case. See [askWorkbookScope].
+    final workbookHint = switch ((hasConfig, provider.hasOpenProject)) {
+      (false, false) => 'Nothing loaded yet',
+      (true, false) => 'This room - every tab, one .xlsx',
+      (false, true) => 'The whole job - one .xlsx',
+      (true, true) => 'This room, or the whole job',
+    };
+
+    PopupMenuItem<String> item(
+      String value,
+      IconData icon,
+      String title,
+      String subtitle, {
+      bool enabled = true,
+    }) =>
+        PopupMenuItem<String>(
+          key: ValueKey('export_item_$value'),
+          value: value,
+          enabled: enabled,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            enabled: enabled,
+            leading: Icon(icon),
+            title: Text(title),
+            subtitle: Text(subtitle),
+          ),
+        );
+
+    return PopupMenuButton<String>(
+      key: const ValueKey('export_menu'),
+      tooltip: 'Export - workbook, Google Sheets, publish, or this tab',
+      icon: const Icon(Icons.ios_share),
+      enabled: hasAny || tabExports,
+      onSelected: (v) async {
+        switch (v) {
+          case 'workbook':
+            await exportWorkbook(context, provider);
+          case 'google_sheets':
+            await exportWorkbookToGoogleSheets(context, provider);
+          case 'publish':
+            onPublish();
+          case 'tab_xlsx':
+          case 'tab_txt':
+          case 'tab_copy':
+            await exportTabReport(context, provider, tab, v.substring(4));
+          case 'cost_pdf':
+          case 'cost_xlsx':
+          case 'cost_txt':
+          case 'cost_copy':
+            await CostEstimateActions.current?.export(context, v.substring(5));
+        }
+      },
+      itemBuilder: (ctx) => [
+        item('workbook', Icons.menu_book, 'Export workbook (.xlsx)',
+            workbookHint,
+            enabled: hasAny),
+        item(
+          'google_sheets',
+          Icons.table_chart_outlined,
+          'Upload workbook to Google Sheets',
+          provider.googleClientId.trim().isEmpty
+              ? 'Save the .xlsx and open Google Sheets to import it'
+              : 'Straight into your Google Drive, as a Sheet',
+          enabled: hasAny,
+        ),
+        item(
+          'publish',
+          Icons.cloud_sync_outlined,
+          'Publish online copy',
+          'Into the synced folder other people read from',
+          enabled: hasAny,
+        ),
+        if (onCost && CostEstimateActions.current != null) ...[
+          const PopupMenuDivider(),
+          item('cost_pdf', Icons.picture_as_pdf_outlined,
+              'Cost estimate as PDF', 'The quote, ready to send'),
+          item('cost_xlsx', Icons.grid_on, 'Cost estimate as Excel (.xlsx)',
+              'Every line, to sum and sort'),
+          item('cost_txt', Icons.description_outlined,
+              'Cost estimate as plain text (.txt)', 'For a ticket or a note'),
+          item('cost_copy', Icons.content_copy,
+              'Copy the cost estimate to the clipboard', 'To paste in an email'),
+        ],
+        const PopupMenuDivider(),
+        item('tab_xlsx', Icons.grid_on, '$tabLabel as a spreadsheet (.xlsx)',
+            'This tab\'s tables', enabled: tabExports),
+        item('tab_txt', Icons.description_outlined,
+            '$tabLabel as plain text (.txt)', 'This tab\'s tables',
+            enabled: tabExports),
+        item('tab_copy', Icons.content_copy,
+            'Copy ${tabLabel.toLowerCase()} to the clipboard',
+            'This tab\'s tables', enabled: tabExports),
+      ],
+    );
+  }
+}

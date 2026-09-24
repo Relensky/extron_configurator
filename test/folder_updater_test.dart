@@ -328,11 +328,24 @@ void main() {
       u.dispose();
     });
 
-    testWidgets('Update asks before closing, and Cancel backs out',
+    testWidgets('the notice and settings offer Close and Update in one click',
         (tester) async {
       final u = availableUpdater();
       await tester.pumpWidget(app(u));
-      await tester.tap(find.widgetWithText(FilledButton, 'Update'));
+      final notice = tester.widget<FilledButton>(
+          find.byKey(const ValueKey('update_close_and_update')));
+      expect(find.text('Close and Update'), findsOneWidget);
+      // Tests are not release builds, so installing is refused up front.
+      expect(notice.onPressed, isNull);
+      expect(find.text('Close and Update to 2.0.0'), findsOneWidget);
+      u.dispose();
+    });
+
+    testWidgets('Options asks before closing, and Cancel backs out',
+        (tester) async {
+      final u = availableUpdater();
+      await tester.pumpWidget(app(u));
+      await tester.tap(find.text('Options...'));
       await tester.pump();
       expect(find.text('Update to version 2.0.0?'), findsOneWidget);
       final close = tester.widget<FilledButton>(
@@ -382,7 +395,7 @@ void main() {
       expect(find.text('Update available'), findsOneWidget);
 
       // The pointer-down marks the user busy before the tap lands.
-      await tester.tap(find.widgetWithText(FilledButton, 'Update'));
+      await tester.tap(find.text('Options...'));
       await tester.pump();
       expect(u.userBusy, isTrue);
       expect(find.text('Update to version 2.0.0?'), findsOneWidget);

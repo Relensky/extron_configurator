@@ -443,6 +443,14 @@ class AvDeviceTemplate {
   /// Empty when nobody has recorded one.
   final String url;
 
+  /// This product's spec sheet: a file name inside the shared spec sheet
+  /// folder (App Config > Spec Sheet Folder), an absolute path, or a web
+  /// address. Stored RELATIVE to the folder whenever it is inside it, so the
+  /// catalog works on every machine that maps the share - see
+  /// spec_sheets.dart. Empty when none has been attached; a file in the
+  /// folder named after the model is still found without one.
+  final String specSheet;
+
   /// How long this product takes to arrive, in calendar days. Null when nobody
   /// has recorded one.
   ///
@@ -513,6 +521,7 @@ class AvDeviceTemplate {
     this.cableSignal,
     this.cableLengthFt = 0,
     this.url = '',
+    this.specSheet = '',
     this.leadTimeDays,
     this.lifeYears = 0,
     this.notes = '',
@@ -585,6 +594,7 @@ class AvDeviceTemplate {
     double? cableLengthFt,
     bool clearCableSignal = false,
     String? url,
+    String? specSheet,
     int? leadTimeDays,
     // Null means "leave it alone" on every other field here, so taking a lead
     // time back OFF an entry needs its own flag.
@@ -612,6 +622,7 @@ class AvDeviceTemplate {
     cableSignal: clearCableSignal ? null : (cableSignal ?? this.cableSignal),
     cableLengthFt: cableLengthFt ?? this.cableLengthFt,
     url: url ?? this.url,
+    specSheet: specSheet ?? this.specSheet,
     leadTimeDays: clearLeadTime ? null : (leadTimeDays ?? this.leadTimeDays),
     lifeYears: lifeYears ?? this.lifeYears,
     notes: notes ?? this.notes,
@@ -638,6 +649,7 @@ class AvDeviceTemplate {
     if (cableSignal != null) 'cableSignal': cableSignal!.name,
     if (cableLengthFt > 0) 'cableLengthFt': cableLengthFt,
     if (url.isNotEmpty) 'url': url,
+    if (specSheet.isNotEmpty) 'specSheet': specSheet,
     if (leadTimeDays != null) 'leadTimeDays': leadTimeDays,
     if (lifeYears > 0) 'lifeYears': lifeYears,
     if (notes.isNotEmpty) 'notes': notes,
@@ -714,6 +726,7 @@ class AvDeviceTemplate {
     // 'link' is read as an alias for the same reason 'watts' and 'cost' are:
     // it is what a hand-written entry tends to say.
     url: (json['url'] ?? json['link'])?.toString() ?? '',
+    specSheet: (json['specSheet'] ?? json['spec_sheet'])?.toString() ?? '',
     // Anything that is not a whole number of days reads as "nobody has asked"
     // rather than as zero: a catalog hand-edited to say "6-8 weeks" must not
     // turn the product into one that is on the shelf.
@@ -1502,6 +1515,43 @@ class AvDeviceLibrary {
       );
       return '';
     }
+  }
+
+  /// True when this copy's own entries differ from the file as it was last
+  /// read or written - edits nobody has saved yet.
+  bool get differsFromBaseline {
+    final mine = {
+      for (final e in _byModel.entries)
+        if (e.value.custom) e.key: e.value,
+    };
+    if (mine.length != _baseline.length) return true;
+    for (final e in mine.entries) {
+      final base = _baseline[e.key];
+      if (base == null) return true;
+      if (!identical(base, e.value) &&
+          jsonEncode(base.toJson()) != jsonEncode(e.value.toJson())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Brings another editor's SAVED changes into this copy now, without
+  /// writing anything - the same field-by-field settling a save does, run on
+  /// demand when the banner says somebody else saved the catalog. Returns how
+  /// many entries were taken from the file.
+  Future<int> pullFromDisk() async {
+    if (filePath.isEmpty || !await File(filePath).exists()) return 0;
+    final adopted = await _reconcileWithDisk(filePath);
+    try {
+      final disk = await readFile(filePath);
+      _baseline
+        ..clear()
+        ..addAll(disk._baseline);
+    } catch (_) {
+      // Unreadable now: keep the old base, and the next save merges again.
+    }
+    return adopted;
   }
 
   /// Folds anybody else's edits into this catalog before it is written over

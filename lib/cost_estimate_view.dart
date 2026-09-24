@@ -1,3 +1,4 @@
+import 'cost_estimate_actions.dart';
 import 'dart:math' as math;
 import 'dart:io';
 
@@ -300,9 +301,39 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// keeps the numbers laid out exactly as they are on screen.
   bool _capturing = false;
 
+  /// Lent to the toolbar while this page is the Cost tab - see
+  /// cost_estimate_actions.dart.
+  late final CostEstimateActions _actions = CostEstimateActions(
+    screenshot: (b) => _screenshot(
+      context.read<AppStateProvider>(),
+      brightness: b,
+    ),
+    export: (ctx, what) {
+      final provider = context.read<AppStateProvider>();
+      return _exportEstimate(
+        ctx,
+        provider,
+        provider.roomCost,
+        provider.avFlowModel,
+        what,
+      );
+    },
+  );
+
+  @override
+  void dispose() {
+    if (identical(CostEstimateActions.current, _actions)) {
+      CostEstimateActions.current = null;
+    }
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
+    // Only the tab's own estimate - a caller pricing some other model is not
+    // what the toolbar means by "the estimate".
+    if (widget.model == null) CostEstimateActions.current = _actions;
     if (widget.debugCaptureBrightness != null) {
       _capturing = true;
       _captureBrightness = widget.debugCaptureBrightness!;
@@ -600,94 +631,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     label: const Text('Base costs'),
                     onPressed: () => showBaseCostsDialog(context, provider),
                   ),
-                  // Two ways round, because the image lands in two kinds of
-                  // document: white for a quote that gets printed or pasted
-                  // into a Word file, dark to sit in a dark deck without a
-                  // slab of white in the middle of it.
-                  PopupMenuButton<Brightness>(
-                    tooltip: 'Save the estimate as an image',
-                    onSelected: (b) => _screenshot(provider, brightness: b),
-                    itemBuilder: (ctx) => const [
-                      PopupMenuItem(
-                        value: Brightness.light,
-                        child: ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(Icons.light_mode, size: 18),
-                          title: Text('Light image'),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: Brightness.dark,
-                        child: ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(Icons.dark_mode, size: 18),
-                          title: Text('Dark image'),
-                        ),
-                      ),
-                    ],
-                    child: IgnorePointer(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(
-                          Icons.photo_camera_outlined,
-                          size: 18,
-                        ),
-                        label: const Text('Screenshot'),
-                        onPressed: () {},
-                      ),
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.save, size: 18),
-                    label: const Text('Save AV Setup'),
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final saved = await provider.saveAvFlow();
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            saved.isEmpty
-                                ? 'Failed to save the estimate.'
-                                : 'Estimate saved with the AV setup: $saved',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  // Three ways out, because an estimate gets read in three
-                  // places: a spreadsheet somebody sums, a text file that goes
-                  // in a ticket, and a paste into an email.
-                  PopupMenuButton<String>(
-                    tooltip: 'Export the estimate',
-                    onSelected: (v) =>
-                        _exportEstimate(context, provider, estimate, model, v),
-                    itemBuilder: (ctx) => const [
-                      PopupMenuItem(
-                        value: 'pdf',
-                        child: Text('PDF estimate (.pdf)'),
-                      ),
-                      PopupMenuItem(
-                        value: 'xlsx',
-                        child: Text('Excel workbook (.xlsx)'),
-                      ),
-                      PopupMenuItem(
-                        value: 'txt',
-                        child: Text('Plain text (.txt)'),
-                      ),
-                      PopupMenuItem(
-                        value: 'copy',
-                        child: Text('Copy text to clipboard'),
-                      ),
-                    ],
-                    child: IgnorePointer(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.ios_share, size: 18),
-                        label: const Text('Export'),
-                        onPressed: () {},
-                      ),
-                    ),
-                  ),
+                  // The picture, Save AV Setup and the exports moved to
+                  // the toolbar's Screenshot, Save and Export menus, which
+                  // offer the estimate's own versions while this tab is on
+                  // screen - see cost_estimate_actions.dart.
                 ] else
                   // The image needs a date on it: a quote nobody can tell the
                   // age of is a quote somebody quotes back at you next year.

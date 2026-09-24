@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -18,6 +19,8 @@ import 'cost_estimate.dart' show trimNumber, formatMoney;
 import 'device_merge.dart';
 import 'equipment_lifecycle.dart' show kDefaultEquipmentLifeYears;
 import 'live_text_field.dart';
+import 'pdf_viewer_dialog.dart';
+import 'spec_sheets.dart';
 import 'responsive.dart';
 import 'side_pane.dart';
 import 'catalog_standards.dart';
@@ -125,6 +128,132 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) _snack('Could not open $text', error: true);
     }
+  }
+
+  // --- spec sheets ----------------------------------------------------------
+
+  /// Points the catalog at the shared spec sheet folder.
+  Future<void> _pickSpecSheetFolder(AppStateProvider provider) async {
+    final picked = await FilePicker.getDirectoryPath(
+      dialogTitle: 'Choose the shared spec sheet folder',
+      initialDirectory: provider.effectiveSpecSheetFolder,
+    );
+    if (picked == null) return;
+    provider.updateSetting('specSheetFolder', picked);
+    if (mounted) setState(() {});
+    _snack('Spec sheets now come from $picked');
+  }
+
+  /// This entry's spec sheet: attach one into the shared folder, open it, or
+  /// type a reference (a file in the folder, a path, or a web address).
+  Widget _specSheetRow(
+    BuildContext context,
+    AvDeviceTemplate entry,
+    String key,
+  ) {
+    final provider = context.read<AppStateProvider>();
+    final theme = Theme.of(context);
+    final folder = provider.effectiveSpecSheetFolder;
+    final resolved = resolveSpecSheet(entry, folder);
+    final isUrl = specSheetIsUrl(resolved);
+    final exists = resolved.isNotEmpty && (isUrl || File(resolved).existsSync());
+    final foundByName = entry.specSheet.trim().isEmpty && exists;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: LiveTextField(
+                key: ValueKey('spec_sheet_${key}_${entry.specSheet}'),
+                fieldId: 'spec_sheet_$key',
+                initial: entry.specSheet,
+                label: 'Spec sheet',
+                hint: foundByName
+                    ? path.relative(resolved, from: folder)
+                    : 'Attach a file, or type a name in the spec sheet folder',
+                onChanged: (v) => setState(
+                  () => _apply(entry.copyWith(specSheet: v.trim())),
+                ),
+              ),
+            ),
+            avRowIcon(
+              Icons.attach_file,
+              'Attach a spec sheet - it is copied into the shared folder',
+              () => _attachSpecSheet(entry, folder),
+            ),
+            avRowIcon(
+              Icons.description_outlined,
+              exists
+                  ? 'Open the spec sheet'
+                  : resolved.isEmpty
+                      ? 'No spec sheet yet'
+                      : 'Not found: $resolved',
+              exists ? () => _openSpecSheet(provider, entry, resolved) : null,
+            ),
+          ],
+        ),
+        if (foundByName || (resolved.isNotEmpty && !exists))
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              foundByName
+                  ? 'Found in the spec sheet folder by its model name.'
+                  : 'The spec sheet named here is not in $folder.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: exists ? theme.disabledColor : theme.colorScheme.error,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _attachSpecSheet(AvDeviceTemplate entry, String folder) async {
+    final picked = await FilePicker.pickFiles(
+      dialogTitle: 'Attach the spec sheet for ${entry.model}',
+      type: FileType.custom,
+      allowedExtensions: kSpecSheetExtensions,
+    );
+    final source = picked?.files.single.path;
+    if (source == null) return;
+    try {
+      final ref = await attachSpecSheet(
+        entry: entry,
+        source: source,
+        folder: folder,
+      );
+      if (!mounted) return;
+      setState(() => _apply(entry.copyWith(specSheet: ref)));
+      _snack('Spec sheet filed as $ref - save the catalog to keep it on the '
+          'entry.');
+    } catch (e) {
+      _snack('The spec sheet could not be copied into $folder: $e',
+          error: true);
+    }
+  }
+
+  Future<void> _openSpecSheet(
+    AppStateProvider provider,
+    AvDeviceTemplate entry,
+    String resolved,
+  ) async {
+    if (specSheetIsUrl(resolved)) return _openUrl(resolved);
+    if (resolved.toLowerCase().endsWith('.pdf')) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => PdfViewerDialog(
+          filePath: resolved,
+          title: '${entry.model} - spec sheet',
+          screenshotStem: '${specSheetSafeName(entry.model)}_spec',
+          onOpenExternally: () => provider.openInDesktop(resolved),
+        ),
+      );
+      return;
+    }
+    final error = await provider.openInDesktop(resolved);
+    if (error != null) _snack(error, error: true);
   }
 
   // --- editing helpers ------------------------------------------------------
@@ -605,6 +734,22 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               // Bounded rather than Expanded: a Wrap gives a child whatever
               // width it asks for, and a long share path would ask for the
               // page. This asks for at most a column of it and ellipsizes.
+              // WHERE THE SPEC SHEETS LIVE - one shared folder for the whole
+              // department, the same way the catalog itself is one shared
+              // file. See spec_sheets.dart. An icon beside the catalog's own
+              // path rather than one more button on the toolbar row above.
+              IconButton(
+                key: const ValueKey('catalog_spec_sheet_folder'),
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.folder_shared_outlined, size: 20),
+                tooltip: 'Spec sheet folder: '
+                    '${provider.effectiveSpecSheetFolder}'
+                    '${provider.specSheetFolder.trim().isEmpty ? '\n(the '
+                        'default under the Root Folder - point it at a shared '
+                        'folder so everybody sees the same sheets)' : ''}'
+                    '\nClick to change it.',
+                onPressed: () => _pickSpecSheetFolder(provider),
+              ),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 460),
                 child: Text(
@@ -1318,6 +1463,8 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        _specSheetRow(context, entry, key),
         const SizedBox(height: 12),
         LiveTextField(
           fieldId: 'notes_$key',

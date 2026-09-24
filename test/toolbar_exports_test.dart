@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -42,18 +43,33 @@ void main() {
     await tester.pump();
   }
 
-  final workbook = find.byKey(const ValueKey('export_workbook'));
-  final tabExport = find.byKey(const ValueKey('export_tab_menu'));
+  final exportMenu = find.byKey(const ValueKey('export_menu'));
 
-  testWidgets('both export buttons are on the toolbar, on every tab',
+  Future<void> openExport(WidgetTester tester) async {
+    await tester.tap(exportMenu);
+    await tester.pumpAndSettle();
+  }
+
+  PopupMenuItem<String> item(WidgetTester tester, String value) =>
+      tester.widget<PopupMenuItem<String>>(
+        find.byKey(ValueKey('export_item_$value')),
+      );
+
+  testWidgets('one export menu, in the title bar, on every tab',
       (tester) async {
     final p = room();
     await pumpApp(tester, p);
     for (final tab in [AppTab.devices, AppTab.cost, AppTab.racks]) {
       p.selectTab(tab.index);
       await tester.pump();
-      expect(workbook, findsOneWidget);
-      expect(tabExport, findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: exportMenu),
+        findsOneWidget,
+      );
+      // The three buttons it replaced are gone.
+      expect(find.byKey(const ValueKey('export_workbook')), findsNothing);
+      expect(find.byKey(const ValueKey('publish_online')), findsNothing);
+      expect(find.byKey(const ValueKey('export_tab_menu')), findsNothing);
     }
   });
 
@@ -62,9 +78,8 @@ void main() {
       ..settingsLoaded = true
       ..firstRunSetupNeeded = false;
     await pumpApp(tester, p);
-    expect(tester.widget<IconButton>(workbook).onPressed, isNull);
     expect(
-      tester.widget<PopupMenuButton<String>>(tabExport).enabled,
+      tester.widget<PopupMenuButton<String>>(exportMenu).enabled,
       isFalse,
     );
   });
@@ -77,21 +92,84 @@ void main() {
     await pumpApp(tester, p);
     p.selectTab(AppTab.deviceEditor.index);
     await tester.pump();
-    expect(tester.widget<PopupMenuButton<String>>(tabExport).enabled, isTrue);
+    expect(tester.widget<PopupMenuButton<String>>(exportMenu).enabled, isTrue);
+    await openExport(tester);
+    expect(item(tester, 'tab_xlsx').enabled, isTrue);
+    expect(item(tester, 'workbook').enabled, isFalse);
   });
 
-  testWidgets('the per-tab menu offers the three ways out', (tester) async {
+  testWidgets('the menu holds the workbook, Google Sheets, publish and the '
+      'tab, and the estimate on the Cost tab', (tester) async {
     final p = room();
     p.selectTab(AppTab.cost.index);
     await pumpApp(tester, p);
-
-    await tester.tap(tabExport);
     await tester.pumpAndSettle();
+
+    await openExport(tester);
+    for (final v in [
+      'workbook',
+      'google_sheets',
+      'publish',
+      'tab_xlsx',
+      'tab_txt',
+      'tab_copy',
+      'cost_pdf',
+      'cost_xlsx',
+      'cost_txt',
+      'cost_copy',
+    ]) {
+      expect(find.byKey(ValueKey('export_item_$v')), findsOneWidget,
+          reason: '$v is on the export menu');
+    }
     expect(find.textContaining('spreadsheet (.xlsx)'), findsOneWidget);
-    expect(find.textContaining('plain text (.txt)'), findsOneWidget);
-    expect(find.textContaining('clipboard'), findsOneWidget);
-    // Named for the tab it is on, so it is obvious what is being exported.
     expect(find.textContaining('Cost estimate'), findsWidgets);
+    expect(find.text('Upload workbook to Google Sheets'), findsOneWidget);
+  });
+
+  testWidgets('the estimate items are only offered on the Cost tab',
+      (tester) async {
+    final p = room();
+    p.selectTab(AppTab.devices.index);
+    await pumpApp(tester, p);
+    await openExport(tester);
+    expect(find.byKey(const ValueKey('export_item_cost_pdf')), findsNothing);
+  });
+
+  testWidgets('the screenshot menu offers the estimate on the Cost tab',
+      (tester) async {
+    final p = room();
+    p.selectTab(AppTab.cost.index);
+    await pumpApp(tester, p);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('screenshot_menu')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('screenshot_screen')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('screenshot_estimate_light')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('screenshot_estimate_dark')), findsOneWidget);
+  });
+
+  testWidgets('Ctrl+Shift+S is Save All', (tester) async {
+    final p = room();
+    await pumpApp(tester, p);
+    p.newProject(name: 'Job');
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    // Save All saves the room as well as the job: a room with no file yet
+    // is what it reaches first, and that asks where to put it - so the
+    // proof here is that it did not take the Save As path for the job
+    // alone. The menu names the key.
+    await tester.tap(find.byKey(const ValueKey('save_menu')));
+    await tester.pumpAndSettle();
+    expect(find.text('Save All'), findsOneWidget);
+    expect(find.text('Ctrl+Shift+S'), findsOneWidget);
+    expect(find.byKey(const ValueKey('save_av_setup')), findsOneWidget);
   });
 
   testWidgets("every page's own report menu offers the clipboard too",

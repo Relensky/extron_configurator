@@ -74,10 +74,9 @@ void main() {
     // The banner: the job, and the buttons that act on the open document.
     expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
 
-    // The exports act on the DOCUMENT — "give me this as a spreadsheet" is
-    // the same kind of question as "convert this" — so they sit on the
-    // document row rather than up beside the theme toggle.
-    for (final key in ['export_workbook', 'export_tab_menu']) {
+    // The document row keeps what acts on the room in front of you: the
+    // screenshot menu, Convert and the two processor transfers.
+    for (final key in ['screenshot_menu', 'sftp_upload']) {
       expect(
         find.descendant(
           of: find.byType(TopLevelBar),
@@ -88,9 +87,7 @@ void main() {
       );
     }
 
-    // ...and Open says all three documents it takes. It has accepted a campus
-    // since campus files existed; a tooltip that named two of them left the
-    // third to be found by accident.
+    // ...and Open says all three documents it takes.
     expect(
       tester
           .widget<IconButton>(find.byKey(const ValueKey('open_config')))
@@ -98,22 +95,25 @@ void main() {
       'Open a room config, a project or a campus',
     );
 
-    // The title bar: the app's own corner — the gear, Help, the theme and the
-    // screenshot, none of which changes with the tab — and, at the other end,
-    // everything that begins, steps, puts back or writes a FILE: New (a menu
-    // over the two things there are to start), Open, Undo and Redo, the
-    // history, the revert to the last saved backup, and Save.
-    for (final key in [
-      'new_menu',
-      'open_config',
+    // The title bar: the FILE at the left - Save, Undo, Redo, History, the
+    // revert, New and Open - and the APP at the right: the one Export menu,
+    // the light/dark toggle, the gear and Help.
+    const fileKeys = [
+      'save_context',
       'toolbar_undo',
       'toolbar_redo',
       'show_history',
       'revert_to_backup',
-      'save_context',
+      'new_menu',
+      'open_config',
+    ];
+    const appKeys = [
+      'export_menu',
+      'toggle_theme',
       'banner_app_config',
       'open_help',
-    ]) {
+    ];
+    for (final key in [...fileKeys, ...appKeys]) {
       expect(
         find.descendant(
           of: find.byType(AppBar),
@@ -132,50 +132,32 @@ void main() {
       );
     }
 
-    // SAVE IS THE FAR CORNER, and the app's own four are the near one. The
-    // most-pressed button on the bar is the one worth being unable to move,
-    // and a corner is the only place on a row that cannot: what sits between
-    // the two ends changes with the tab, the ends do not.
-    final barRight = tester.getRect(find.byType(AppBar)).right;
-    final saveRight = tester
-        .getRect(find.descendant(
+    Rect rectOf(String key) => tester.getRect(find.descendant(
           of: find.byType(AppBar),
-          matching: find.byKey(const ValueKey('save_context')),
-        ))
-        .right;
-    for (final key in ['new_menu', 'open_config', 'toolbar_undo',
-        'toolbar_redo', 'show_history', 'revert_to_backup']) {
-      expect(
-        tester
-            .getRect(find.descendant(
-              of: find.byType(AppBar),
-              matching: find.byKey(ValueKey(key)),
-            ))
-            .right,
-        lessThan(saveRight),
-        reason: '$key belongs to the left of Save',
-      );
-    }
-    // Only the save menu's own arrow is further right than Save itself.
-    expect(barRight - saveRight, lessThan(80));
+          matching: find.byKey(ValueKey(key)),
+        ));
 
-    for (final key in ['banner_app_config', 'open_help']) {
-      expect(
-        tester
-            .getRect(find.descendant(
-              of: find.byType(AppBar),
-              matching: find.byKey(ValueKey(key)),
-            ))
-            .left,
-        lessThan(tester
-            .getRect(find.descendant(
-              of: find.byType(AppBar),
-              matching: find.byKey(const ValueKey('new_menu')),
-            ))
-            .left),
-        reason: '$key is in the left corner, ahead of the job and the file '
-            'buttons',
-      );
+    // SAVE IS THE FAR-LEFT CORNER, then Undo, Redo and History beside it.
+    final barLeft = tester.getRect(find.byType(AppBar)).left;
+    expect(rectOf('save_context').left - barLeft, lessThan(16));
+    expect(rectOf('toolbar_undo').left, greaterThan(rectOf('save_context').left));
+    expect(rectOf('toolbar_redo').left, greaterThan(rectOf('toolbar_undo').left));
+    expect(rectOf('show_history').left, greaterThan(rectOf('toolbar_redo').left));
+    expect(rectOf('new_menu').left, greaterThan(rectOf('show_history').left));
+
+    // HELP IS THE FAR-RIGHT CORNER, the gear beside it, the theme toggle
+    // beside the gear, and Export ahead of those.
+    final barRight = tester.getRect(find.byType(AppBar)).right;
+    expect(barRight - rectOf('open_help').right, lessThan(16));
+    expect(rectOf('banner_app_config').right,
+        lessThan(rectOf('open_help').left + 1));
+    expect(rectOf('toggle_theme').right,
+        lessThan(rectOf('banner_app_config').left + 1));
+    expect(rectOf('export_menu').right,
+        lessThan(rectOf('toggle_theme').left + 1));
+    for (final key in fileKeys) {
+      expect(rectOf(key).right, lessThan(rectOf('export_menu').left),
+          reason: '$key is left of the app block');
     }
 
     // ONE "NEW", NOT TWO ICONS THAT BOTH MEAN NEW. The two things there are
@@ -238,13 +220,12 @@ void main() {
     // over to the RIGHT of the buttons, parking the corner control 600 pixels
     // from the corner.
     final banner = tester.getRect(find.byType(TopLevelBar));
-    // The LAST control on the banner — the per-tab export menu, which is the
-    // end of the document row now that Save, Undo and Help have gone up to the
-    // title bar.
+    // The LAST control on the banner - the upload to the processor, the end
+    // of the document row now that the exports are in the title bar's menu.
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('export_tab_menu')),
+        matching: find.byKey(const ValueKey('sftp_upload')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1),
@@ -266,7 +247,7 @@ void main() {
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('export_tab_menu')),
+        matching: find.byKey(const ValueKey('sftp_upload')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1));

@@ -234,6 +234,17 @@ categories re-prices four hundred rooms. Setting one category at a time from
 the campus report still works and is the right door when somebody is reading
 that report and has an opinion about projectors.
 
+### Spec sheets in a shared folder
+
+The **spec sheet folder** icon (beside the catalog's path on the Catalog tab,
+or App Config > Spec Sheet Folder) points the catalog at one
+shared folder of spec sheets. Each entry's **Spec sheet** line can *attach* a
+file - copied in as `<maker>/<model>.pdf` and stored relative to the folder
+(`specSheet` in `av_devices.json`), so it resolves on every machine however
+the share is mapped - or name a web address. A file already in the folder
+under that naming is found without attaching it. PDFs open in the in-app
+viewer.
+
 ### Merging another engineer's catalog
 
 Two people keep two copies of this file: one has priced the switchers, the
@@ -420,7 +431,10 @@ it. Offered on Equipment, Rack hardware, Cabling and Other items; grayed out on
 a line that already comes off the catalog, and on a counted line, whose price
 belongs to the thing on the diagram.
 
-**Screenshot** renders the estimate as a PNG with every control hidden and the
+**Estimate as a picture** (in the toolbar's Screenshot menu while the Cost tab
+is open - the page no longer carries its own Screenshot, Save AV Setup and
+Export buttons; those live in the toolbar's Screenshot, Save and Export menus)
+renders the estimate as a PNG with every control hidden and the
 page forced light - the image is the quote, not a picture of the app with an
 Export button on it - and stamps the date on it, because a quote nobody can
 tell the age of is one somebody quotes back at you next year.
@@ -1002,6 +1016,58 @@ view - but it is the rare case now rather than the normal one, and the tests
 assert which is which so a regression that quietly brings the scrollbar back on
 a laptop fails instead of passing.
 
+## The title bar
+
+Left to right: **Save** (with its menu) in the far-left corner, then **Undo**,
+**Redo**, **History** and the revert to the saved backup, then **New**, **Open**
+and the recent files, then the job and room picker. At the far right: the
+**Export** menu, the **light/dark** toggle, the **gear** (App Config) and
+**Help** in the corner.
+
+**Export** is one menu for every way a document leaves the app: the room or
+project workbook, **Upload workbook to Google Sheets**, **Publish online
+copy**, this tab's tables as .xlsx / .txt / clipboard, and - on the Cost tab -
+the estimate as PDF, Excel, text or clipboard.
+
+**Google Sheets.** With a Google Cloud OAuth client of type *Desktop app* (Drive
+API enabled) entered under App Config > Google Sheets, the upload signs in once
+through the browser (scope `drive.file` - the app sees only files it created;
+the refresh token lives in the OS keystore) and uploads the workbook as a
+native Google Sheet, then opens it. Without a client it saves the .xlsx and
+opens Google Sheets for you to upload it.
+
+## Editing together
+
+The room (config + sidecars), the project and the catalog can be open on
+several machines at once from a shared or synced folder:
+
+- **Who is in.** Each open document gets a presence note at
+  `<folder>/.editing/<file name>/<user>@<machine>.json`, refreshed every 15 s.
+  Everybody else shows on the banner as an avatar with their **Windows user
+  name**; a pencil means they have unsaved changes. A copy of the app that
+  crashed stops refreshing its note and disappears after ~75 s.
+- **Somebody saved.** The file is watched; when another person saves, a
+  **"<name> saved - Merge"** chip appears and a notice pops up. Merge brings
+  their changes in now.
+- **Three-way merge.** The app remembers the file as it last read or wrote it
+  (the base), so it can tell your changes from theirs. Changes only one side
+  made are merged silently; lists merge row by row (by `id`, `model`, ...); a
+  field both of you changed is shown with both values for you to pick.
+  **Save merges first**, so the second person to save never erases the first.
+- The catalog keeps its own field-by-field merge (below) and uses the same
+  presence and notices.
+
+Everything stays JSON, which is why none of this needs a server - and why the
+file format did not need to change. It can be turned off in App Config.
+
+## Project budget
+
+The Project tab's **Budget** card holds the job's total budget and lines added
+as the job goes (item, category, vendor, amount, *Planned / Committed /
+Spent*). It shows remaining (budget less committed and spent), remaining after
+the planned lines, and how the rooms' estimate compares. Stored in the project
+file as `budget` and `budgetLines`.
+
 ## Where the top-level things live
 
 Two of the app's pages are not views of a room, and they no longer sit in the
@@ -1011,7 +1077,8 @@ left rail as though they were:
   what the room belongs to - one level up from every tab in the rail - and the
   banner names the open job beside it, marked *unsaved* when the project has
   edits that are not on disk.
-- **App Config** is the **gear** at the right of the same banner.
+- **App Config** is the **gear** at the far right of the title bar, beside
+  Help and the light/dark toggle.
 
 The banner sits outside the collapsible pane, so folding the rail away to give
 a drawing the width does not take the way back to the job with it. The rail
@@ -1068,12 +1135,13 @@ beside it opens the rest:
   of one is a file nothing ever reads again.
 - **Save Room** / **Save Project** - the *other* document, so it is never more
   than one menu away from wherever you are standing.
-- **Save Everything** - every open document that is behind its file.
+- **Save All** - every open document that is behind its file.
 - **Save All to a room folder…** - the export described below.
 - **Copy unsaved work now** - writes the recovery copy immediately.
 
-Keyboard: `Ctrl+S` saves the tab's document, `Ctrl+Shift+S` is Save As, and
-`Ctrl+Alt+S` is Save Everything. `Ctrl+S` on a room that has never been saved
+Keyboard: `Ctrl+S` saves the tab's document, `Ctrl+Shift+S` is **Save All**
+(every open document that is behind its file), and `Ctrl+Alt+S` is Save As.
+`Ctrl+S` on a room that has never been saved
 opens the Save As dialog rather than doing nothing, because that is the only
 way such a room *can* be saved.
 
@@ -1241,7 +1309,7 @@ icon cache rather than the build: `ie4uinit.exe -show` clears it.
 
 ## Save All
 
-**Save All**, in the toolbar's save menu, writes the whole job into `<folder>/<room name>/`,
+**Save All to a room folder…**, in the toolbar's save menu, writes the whole job into `<folder>/<room name>/`,
 the room name coming from the wizard. It contains the config, the AV sidecar
 (diagram + estimate), the four-sheet workbook, plain-text device / AV / cost
 reports, PNGs of the control schematic, signal flow and rack elevation, and a

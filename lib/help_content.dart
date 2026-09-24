@@ -895,6 +895,26 @@ const List<HelpTopic> kHelpTopics = [
   //  THE JOB
   // ---------------------------------------------------------------------------
   HelpTopic(
+    title: 'Spec sheets',
+    section: 'The money',
+    where: 'Catalog tab → the shared-folder icon beside the catalog path, and '
+        'the Spec sheet line on each device',
+    plain:
+        'Each catalog device can have its spec sheet attached, kept in one '
+        'shared folder so everybody opens the same sheet.',
+    keywords: ['spec sheet', 'datasheet', 'data sheet', 'pdf', 'cut sheet',
+      'specification', 'shared folder'],
+    body:
+        'Set the Spec Sheet Folder once (Catalog tab or App Config) to a '
+        'shared folder. Attach on a device copies the file into it as '
+        '<maker>/<model>.pdf and stores the name RELATIVE to the folder, so '
+        'the catalog works whether the share is S:\\ on one desk or '
+        '\\\\server\\av on the next.\n\n'
+        'A file already in the folder under that naming is found without '
+        'attaching it. A web address works too. PDFs open in the app\'s own '
+        'viewer.',
+  ),
+  HelpTopic(
     title: 'What a project is',
     section: 'The job',
     where: 'Project tab',
@@ -1418,6 +1438,25 @@ const List<HelpTopic> kHelpTopics = [
   //  THE REFRESH PLAN
   // ---------------------------------------------------------------------------
   HelpTopic(
+    title: 'Project budget',
+    section: 'The job',
+    where: 'Project tab → Budget',
+    plain:
+        'Set what the job has to spend and add lines against it as the job '
+        'goes; the card shows what is left and how the rooms\' estimate '
+        'compares.',
+    keywords: ['budget', 'spend', 'funding', 'allocation', 'remaining',
+      'committed', 'invoice', 'forecast'],
+    body:
+        'Type the total budget, then add a line for each quote, purchase order '
+        'or invoice as it happens. Each line is Planned, Committed or Spent. '
+        'Remaining is the budget less everything committed or spent; '
+        '"Remaining after planned" takes the planned lines off too.\n\n'
+        'The rooms\' estimate is shown beside it, so "are we inside the '
+        'budget" can be asked on day one, before anything is ordered. "Add '
+        'the rooms estimate as planned" drops that figure in as a line.',
+  ),
+  HelpTopic(
     title: 'How old the gear is, and when it falls due',
     section: 'The refresh plan',
     where: 'Lifecycle tab, and Project tab → Lifecycle',
@@ -1911,6 +1950,29 @@ const List<HelpTopic> kHelpTopics = [
   //  THE MACHINERY
   // ---------------------------------------------------------------------------
   HelpTopic(
+    title: 'Export menu and Google Sheets',
+    section: 'Getting work out',
+    where: 'Export (the share icon at the top right)',
+    plain:
+        'Every way a document leaves the app in one menu: the workbook, '
+        'Google Sheets, the online copy, this tab\'s tables, and on the Cost '
+        'tab the estimate as PDF, Excel, text or clipboard.',
+    keywords: ['export', 'google sheets', 'google drive', 'sheets', 'publish',
+      'workbook', 'xlsx', 'pdf', 'upload'],
+    body:
+        'Upload workbook to Google Sheets puts the room or project workbook '
+        'into your Google Drive as a Google Sheet and opens it. It needs a '
+        'Google OAuth client ("Desktop app") entered once under App Config > '
+        'Google Sheets; you sign in with Google the first time, and only '
+        'files this app creates are visible to it. Without a client it saves '
+        'the .xlsx and opens Google Sheets for you to upload it (Open > '
+        'Upload).\n\n'
+        'The Screenshot button beside Convert is a menu too: the screen as it '
+        'is, or - on the Cost tab - the whole estimate as a dated picture, '
+        'light or dark. Save AV Setup (the diagram and estimate only) is in '
+        'the Save menu.',
+  ),
+  HelpTopic(
     title: 'Logs and crash reports',
     section: 'The machinery',
     where: 'App Config - View logs, or Open log folder',
@@ -2200,5 +2262,61 @@ const List<HelpTopic> kHelpTopics = [
         'them at any time. They are named Room Config Builder and go in your '
         'own Desktop and Start menu, and one that cannot be made never stops '
         'the update.',
+  ),
+  HelpTopic(
+    title: 'Editing together',
+    section: 'The machinery',
+    where: 'The banner under the toolbar, on a room, the Project tab or the '
+        'Catalog tab',
+    plain:
+        'Several people can have the same room, project or catalog open from '
+        'a shared folder. Their Windows user names show on the banner, and '
+        'when one of them saves you are offered their changes to merge.',
+    keywords: [
+      'shared',
+      'share',
+      'multiple users',
+      'collaborate',
+      'who is editing',
+      'lock',
+      'merge',
+      'conflict',
+      'onedrive',
+      'network drive',
+      'username',
+    ],
+    body:
+        'While a document is open the app keeps a small note in a ".editing" '
+        'folder beside it saying you have it open, and refreshes it every few '
+        'seconds. Everybody else\'s copy reads those notes: each person shows '
+        'on the banner as a colored circle with their initials and their '
+        'Windows sign-in name. A pencil on the circle means they have changes '
+        'they have not saved yet.\n\n'
+        'When somebody else saves, a "<name> saved - Merge" button appears. '
+        'Merge brings their changes into your copy now. Anything only one of '
+        'you changed goes in without asking; a field you BOTH changed is '
+        'listed with your value and theirs, and you pick which to keep.\n\n'
+        'Save does the same merge on its own before it writes, so the second '
+        'person to press Save never erases the first person\'s work. Lists '
+        'are merged row by row - two people adding rooms, budget lines or '
+        'vendors both keep theirs.\n\n'
+        'The files stay ordinary JSON, which is what makes this work on any '
+        'shared or synced folder with no server. It can be turned off in App '
+        'Config.',
+  ),
+  HelpTopic(
+    title: 'Keyboard shortcuts for saving',
+    section: 'The machinery',
+    where: 'Anywhere',
+    plain:
+        'Ctrl+S saves what you are working on, Ctrl+Shift+S saves everything '
+        'that is open, Ctrl+Alt+S is Save As.',
+    keywords: ['ctrl s', 'shortcut', 'keyboard', 'save all', 'save as',
+      'ctrl shift s'],
+    body:
+        'Ctrl+S saves the document the tab you are on belongs to - the room, '
+        'the project or the catalog. Ctrl+Shift+S is Save All: the room and '
+        'the project together, whichever of them have unsaved changes. '
+        'Ctrl+Alt+S is Save As, for the room or the project.',
   ),
 ];

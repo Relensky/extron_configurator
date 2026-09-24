@@ -34,12 +34,15 @@ import 'labor_rates.dart';
 import 'model_swap.dart' as swap;
 import 'av_flow_swap_dialogs.dart' show applyModelSwap, applyControlSwap;
 import 'project_estimate.dart';
+import 'project_budget.dart';
 import 'project_swap.dart';
 import 'layout_tools.dart';
 import 'room_locations.dart';
 import 'recent_files.dart';
 import 'room_presets.dart';
 import 'room_sidecar.dart';
+import 'collab/collab_controller.dart';
+import 'collab/json_merge.dart' show cloneJson;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'secret_store.dart';
 import 'sftp_client.dart';
@@ -597,6 +600,22 @@ class AppStateProvider extends ChangeNotifier {
   String vendorListFilePath = '';
   String documentationPath = ''; // Folder of per-module PDF manuals (blank = <root>/documentation)
 
+  /// The shared folder product spec sheets live in - one folder the whole
+  /// department points at, so a spec sheet attached to a catalog entry on one
+  /// machine opens on every other. Blank = `<root>/spec_sheets`. See
+  /// spec_sheets.dart.
+  String specSheetFolder = '';
+
+  /// Whether this copy tells others it has a file open, and watches for their
+  /// saves. On unless turned off; see collab/collab_controller.dart.
+  bool collabEnabled = true;
+
+  /// A Google Cloud "Desktop app" OAuth client, for uploading a workbook
+  /// straight into Google Sheets. Blank = the export saves the .xlsx and opens
+  /// Google Sheets' own import instead. See google_sheets_export.dart.
+  String googleClientId = '';
+  String googleClientSecret = '';
+
   // --- Processor connection settings (App Config > Processor Connection) ---
   // Defaults are the Extron standards; editable for nonstandard processors.
   /// The folder OneDrive or Google Drive syncs, remembered for the whole app.
@@ -763,6 +782,12 @@ class AppStateProvider extends ChangeNotifier {
 
   /// PDF manuals folder: explicit choice, else `<root>/documentation`.
   /// Each module's manual is `<module file name>.pdf` in this folder.
+  /// Where spec sheets are kept: the chosen shared folder, else
+  /// `<root>/spec_sheets`.
+  String get effectiveSpecSheetFolder => specSheetFolder.trim().isNotEmpty
+      ? specSheetFolder.trim()
+      : path.join(effectiveRootFolder, 'spec_sheets');
+
   String get effectiveDocumentationPath => documentationPath.isNotEmpty
       ? documentationPath
       : path.join(effectiveRootFolder, 'documentation');
@@ -901,6 +926,10 @@ class AppStateProvider extends ChangeNotifier {
       'deliveryLocationsFilePath': deliveryLocationsFilePath,
       'vendorListFilePath': vendorListFilePath,
       'documentationPath': documentationPath,
+      'specSheetFolder': specSheetFolder,
+      'collabEnabled': collabEnabled,
+      'googleClientId': googleClientId,
+      'googleClientSecret': googleClientSecret,
       'onlineFolder': onlineFolder,
       'sftpUsername': sftpUsername,
       'sftpPort': sftpPort,
@@ -7421,6 +7450,10 @@ class AppStateProvider extends ChangeNotifier {
   /// in-memory stand-in under `flutter test` (which has no platform plugin).
   late final SecretStore _secrets;
 
+  /// The OS keystore, for the few features that keep a credential of their
+  /// own (the Google Sheets sign-in).
+  SecretStore get secretStore => _secrets;
+
   AppStateProvider({bool autoLoadSettings = true, SecretStore? secretStore}) {
     _persistenceEnabled = autoLoadSettings;
     // A test provider gets a memory store unless it asks for a real one, so no
@@ -7435,7 +7468,132 @@ class AppStateProvider extends ChangeNotifier {
     for (final doc in AppDataDocument.values) {
       appDataReplaced(doc);
     }
+    collab = CollabController(enabled: false)
+      ..register(_RoomCollabDoc(this))
+      ..register(_ProjectCollabDoc(this))
+      ..register(_CatalogCollabDoc(this));
     if (autoLoadSettings) _loadSavedSettings();
+  }
+
+  // --- editing together ----------------------------------------------------
+
+  /// Who else has the room, the job or the catalog open, and whether they
+  /// saved it under us. See collab/collab_controller.dart.
+  late final CollabController collab;
+
+  /// Turns the presence notes and the watcher on or off to match
+  /// [collabEnabled]. Only ever on in the real app - a test provider never
+  /// writes presence files beside anybody's documents.
+  void _applyCollabEnabled() {
+    final on = _persistenceEnabled && collabEnabled;
+    if (on == collab.enabled) return;
+    if (on) {
+      collab
+        ..enabled = true
+        ..start();
+    } else {
+      collab.stop();
+      // ignore: unawaited_futures
+      collab.withdrawAll();
+      collab.enabled = false;
+    }
+  }
+
+  void setCollabEnabled(bool value) {
+    collabEnabled = value;
+    _applyCollabEnabled();
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
+  }
+
+  /// The room as one document for a merge: its config and every sidecar,
+  /// in the shape they take on disk.
+  Map<String, dynamic> roomDocumentJson() => {
+        'config': cloneJson(roomConfig),
+        'av': _stripReadmes(
+          cloneJson(mergeRoomSidecar({
+            for (final e in splitRoomSidecar(avFlowAsJson()).entries)
+              e.key: e.value,
+          })),
+        ),
+      };
+
+  /// The same document read off disk, or null when the config cannot be read.
+  Map<String, dynamic>? readRoomDocumentFromDisk() {
+    if (currentConfigPath.isEmpty) return null;
+    try {
+      final file = File(currentConfigPath);
+      if (!file.existsSync()) return null;
+      final config = jsonDecode(file.readAsStringSync());
+      if (config is! Map) return null;
+      Map<String, dynamic>? part(String f) {
+        if (f.isEmpty || !File(f).existsSync()) return null;
+        try {
+          final d = jsonDecode(File(f).readAsStringSync());
+          return d is Map ? Map<String, dynamic>.from(d) : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      final parts = <RoomSidecarPart, Map<String, dynamic>?>{
+        RoomSidecarPart.flow: part(_readableAvFlowSidecar),
+      };
+      final paths = avSidecarPaths;
+      for (final p in RoomSidecarPart.values) {
+        if (p == RoomSidecarPart.flow) continue;
+        parts[p] = part(paths[p] ?? '');
+      }
+      final av = parts.values.every((p) => p == null)
+          ? <String, dynamic>{}
+          : _stripReadmes(cloneJson(mergeRoomSidecar(parts)));
+      return {'config': cloneJson(config), 'av': av};
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Object? _stripReadmes(Object? doc) {
+    if (doc is Map) doc.removeWhere((k, _) => '$k'.startsWith('__'));
+    return doc;
+  }
+
+  /// Puts a merged room in place of the one in memory.
+  void replaceRoomDocument(Object? doc, {required bool clean}) {
+    if (doc is! Map) return;
+    final config = doc['config'];
+    if (config is Map) {
+      roomConfig = Map<String, dynamic>.from(cloneJson(config) as Map);
+    }
+    _clearAvFlowState();
+    final av = doc['av'];
+    if (av is Map && av.isNotEmpty) {
+      _readAvFlowJson(Map<String, dynamic>.from(av));
+    }
+    _avFlowSyncedPath = currentConfigPath;
+    _bumpConfigRevision();
+    if (clean) markRoomSaved();
+    AppLogger.logInfo(clean
+        ? 'Room reloaded from $currentConfigPath with another editor\'s save.'
+        : 'Another editor\'s save to $currentConfigPath merged into this room.');
+    notifyListeners();
+  }
+
+  /// Puts a merged job in place of the one in memory.
+  void replaceProjectDocument(Object? doc, {required bool clean}) {
+    if (doc is! Map) return;
+    project = BuildingProject.fromJson(
+      Map<String, dynamic>.from(cloneJson(doc) as Map),
+    );
+    _projectRooms.clear();
+    projectDirty = !clean;
+    AppLogger.logInfo(clean
+        ? 'Project reloaded from $currentProjectPath with another editor\'s '
+            'save.'
+        : 'Another editor\'s save to $currentProjectPath merged into this '
+            'project.');
+    _projectDocumentReplaced();
   }
 
   /// False on test-constructed providers: never touch app_config.json.
@@ -7490,6 +7648,13 @@ class AppStateProvider extends ChangeNotifier {
       deliveryLocationsFilePath = str('deliveryLocationsFilePath', '');
       vendorListFilePath = str('vendorListFilePath', '');
       documentationPath = str('documentationPath', '');
+      specSheetFolder = str('specSheetFolder', '');
+      collabEnabled = saved['collabEnabled'] is bool
+          ? saved['collabEnabled'] as bool
+          : true;
+      googleClientId = str('googleClientId', '');
+      googleClientSecret = str('googleClientSecret', '');
+      _applyCollabEnabled();
       onlineFolder = str('onlineFolder', '');
       sftpUsername = str('sftpUsername', 'admin');
       sftpPort = str('sftpPort', '22022');
@@ -8516,6 +8681,15 @@ class AppStateProvider extends ChangeNotifier {
       case 'documentationPath':
         documentationPath = value; // PDFs are resolved on demand — no reload
         break;
+      case 'specSheetFolder':
+        specSheetFolder = value; // resolved on demand, like the manuals
+        break;
+      case 'googleClientId':
+        googleClientId = value.trim();
+        break;
+      case 'googleClientSecret':
+        googleClientSecret = value.trim();
+        break;
       case 'sftpUsername':
         sftpUsername = value.trim().isEmpty ? 'admin' : value.trim();
         break;
@@ -8657,6 +8831,7 @@ class AppStateProvider extends ChangeNotifier {
     // its history starts here. Before the notify, so nothing can be told
     // about the new document while the old one's steps are still behind it.
     appDataReplaced(AppDataDocument.catalog);
+    collab.noteInSync(CollabDocKind.catalog);
     notifyListeners();
   }
 
@@ -8766,7 +8941,12 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Writes the device catalog. Returns the file written, or '' on failure.
   Future<String> saveAvDeviceLibrary() async {
-    final saved = await avDeviceLibrary.save(toPath: effectiveAvDevicesPath);
+    final saved = await collab.hold(
+      () => avDeviceLibrary.save(toPath: effectiveAvDevicesPath),
+    );
+    if (saved.isNotEmpty) {
+      collab.noteInSync(CollabDocKind.catalog, saved: true);
+    }
     notifyListeners();
     return saved;
   }
@@ -10520,6 +10700,7 @@ class AppStateProvider extends ChangeNotifier {
       // toolbar's own Save left the room reporting itself as behind its file
       // for the rest of the session.
       markRoomSaved();
+      collab.noteInSync(CollabDocKind.room, saved: true);
       // The work is in its file, so the recovery copy is a copy of nothing —
       // and a copy of nothing is what would be offered back on the next open.
       clearRoomRecovery();
@@ -12751,6 +12932,7 @@ class AppStateProvider extends ChangeNotifier {
       checkForProjectRecovery();
       await rememberRecentFile(RecentKind.project, file, name: project.name);
       _projectDocumentReplaced();
+      collab.noteInSync(CollabDocKind.project);
       return '';
     } catch (e, stack) {
       AppLogger.logError('Failed to open the project $file', e, stack);
@@ -12861,6 +13043,7 @@ class AppStateProvider extends ChangeNotifier {
       await project.save(target);
       currentProjectPath = target;
       projectDirty = false;
+      collab.noteInSync(CollabDocKind.project, saved: true);
       clearProjectRecovery();
       // Including a Save As, which is how a job ends up in a different folder:
       // the list follows the file the session is now working from.
@@ -12906,6 +13089,65 @@ class AppStateProvider extends ChangeNotifier {
     // called on every keystroke in four different boxes. The currency is the
     // one field here that money on the estimate was actually formatted with.
     _projectChanged(repricing: currency != null && currency.isNotEmpty);
+  }
+
+  // --- the budget ------------------------------------------------------------
+
+  /// Sets what the job has to spend. See project_budget.dart.
+  void setProjectBudget(double amount) {
+    final next = amount.isNaN || amount < 0 ? 0.0 : amount;
+    if ((next - project.budget).abs() < 1e-9) return;
+    project.budget = next;
+    _logProjectEdit(
+      itemKey: 'budget',
+      itemName: project.name,
+      field: 'Budget',
+      summary: formatMoney(next, project.currency),
+      coalesce: true,
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Adds a line to the budget; returns its id.
+  String addBudgetLine([BudgetLine? line]) {
+    final added = line ?? BudgetLine.create();
+    project.budgetLines.add(added);
+    _logProjectEdit(
+      itemKey: added.id,
+      itemName: added.item.isEmpty ? 'Budget line' : added.item,
+      field: 'Budget',
+      summary: 'line added',
+    );
+    _projectChanged(repricing: false);
+    return added.id;
+  }
+
+  void updateBudgetLine(BudgetLine line) {
+    final i = project.budgetLines.indexWhere((l) => l.id == line.id);
+    if (i < 0) return;
+    project.budgetLines[i] = line;
+    _logProjectEdit(
+      itemKey: line.id,
+      itemName: line.item.isEmpty ? 'Budget line' : line.item,
+      field: 'Budget line',
+      summary: '${kBudgetStatusLabels[line.status]} '
+          '${formatMoney(line.amount, project.currency)}',
+      coalesce: true,
+    );
+    _projectChanged(repricing: false);
+  }
+
+  void removeBudgetLine(String id) {
+    final i = project.budgetLines.indexWhere((l) => l.id == id);
+    if (i < 0) return;
+    final gone = project.budgetLines.removeAt(i);
+    _logProjectEdit(
+      itemKey: id,
+      itemName: gone.item.isEmpty ? 'Budget line' : gone.item,
+      field: 'Budget',
+      summary: 'line removed',
+    );
+    _projectChanged(repricing: false);
   }
 
   /// Sets the share of what the job installs it means to hold spare.
@@ -15978,6 +16220,8 @@ class AppStateProvider extends ChangeNotifier {
   void markRoomSaved() {
     _forgetRoomFingerprint();
     _savedRoomFingerprint = _roomFingerprint();
+    // The files and the room agree, so they are the base of the next merge.
+    collab.noteInSync(CollabDocKind.room);
   }
 
   /// True when the room in memory differs from the files it came from.
@@ -16509,6 +16753,7 @@ class AppStateProvider extends ChangeNotifier {
   void dispose() {
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
+    collab.dispose();
     super.dispose();
   }
 
@@ -17267,4 +17512,121 @@ class ConfigDelta {
         return '$label - ${show(after)} would go back to ${show(before)}';
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+//  THE THREE DOCUMENTS PEOPLE EDIT TOGETHER, as the collab controller sees them
+// ---------------------------------------------------------------------------
+
+class _RoomCollabDoc extends CollabDocument {
+  final AppStateProvider p;
+  _RoomCollabDoc(this.p);
+
+  @override
+  CollabDocKind get kind => CollabDocKind.room;
+
+  @override
+  String get filePath => p.currentConfigPath;
+
+  @override
+  List<String> get watchedFiles => [
+        p.currentConfigPath,
+        if (p.currentConfigPath.isNotEmpty) ...p.avSidecarPaths.values,
+      ];
+
+  @override
+  bool get isDirty => p.roomHasUnsavedChanges;
+
+  @override
+  Object? readDisk() => p.readRoomDocumentFromDisk();
+
+  @override
+  Object? current() => p.roomDocumentJson();
+
+  @override
+  void apply(Object? doc, {required bool clean}) =>
+      p.replaceRoomDocument(doc, clean: clean);
+}
+
+class _ProjectCollabDoc extends CollabDocument {
+  final AppStateProvider p;
+  _ProjectCollabDoc(this.p);
+
+  @override
+  CollabDocKind get kind => CollabDocKind.project;
+
+  @override
+  String get filePath => p.currentProjectPath;
+
+  @override
+  bool get isDirty => p.projectDirty;
+
+  @override
+  Object? readDisk() {
+    final f = p.currentProjectPath;
+    if (f.isEmpty) return null;
+    try {
+      final file = File(f);
+      if (!file.existsSync()) return null;
+      final doc = jsonDecode(file.readAsStringSync());
+      return doc is Map ? cloneJson(doc) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Object? current() => cloneJson(p.project.toJson());
+
+  @override
+  void apply(Object? doc, {required bool clean}) =>
+      p.replaceProjectDocument(doc, clean: clean);
+}
+
+/// The catalog settles its own merges field by field - see
+/// [AvDeviceLibrary.pullFromDisk] - so this only tells the controller where
+/// the file is and whether it moved.
+class _CatalogCollabDoc extends CollabDocument {
+  final AppStateProvider p;
+  _CatalogCollabDoc(this.p);
+
+  @override
+  CollabDocKind get kind => CollabDocKind.catalog;
+
+  @override
+  String get filePath => p.avDeviceLibrary.filePath;
+
+  @override
+  bool get isDirty => p.avDeviceLibrary.differsFromBaseline;
+
+  @override
+  Object? readDisk() {
+    final f = filePath;
+    if (f.isEmpty) return null;
+    try {
+      final file = File(f);
+      if (!file.existsSync()) return null;
+      return jsonDecode(file.readAsStringSync());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Never equal to the file: the catalog in memory carries the built-ins
+  /// too. A save of ours is recognized by [CollabController.noteInSync].
+  @override
+  Object? current() => null;
+
+  @override
+  bool get mergesItself => true;
+
+  @override
+  Future<int> pullFromDisk() async {
+    final adopted = await p.avDeviceLibrary.pullFromDisk();
+    p.avDeviceLibraryChanged();
+    return adopted;
+  }
+
+  @override
+  void apply(Object? doc, {required bool clean}) {}
 }

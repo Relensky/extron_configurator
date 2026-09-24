@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:extron_configurator/cost_estimate_actions.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/contrast.dart';
 import 'package:extron_configurator/av_device_library.dart';
@@ -254,12 +255,14 @@ void main() {
       expect(paper().computeLuminance(), lessThan(0.2));
     });
 
-    testWidgets('the button offers both ways round', (tester) async {
+    testWidgets('the page lends both ways round to the toolbar',
+        (tester) async {
+      // The page's own Screenshot button went up to the toolbar's Screenshot
+      // menu, which offers "Estimate as a picture - light / dark" while this
+      // page is mounted. The page hands the toolbar the capture to run.
       await pump(tester, room());
-      await tester.tap(find.byType(PopupMenuButton<Brightness>));
-      await tester.pumpAndSettle();
-      expect(find.text('Light image'), findsOneWidget);
-      expect(find.text('Dark image'), findsOneWidget);
+      expect(find.byType(PopupMenuButton<Brightness>), findsNothing);
+      expect(CostEstimateActions.current, isNotNull);
     });
   });
   // ---------------------------------------------------------------------------

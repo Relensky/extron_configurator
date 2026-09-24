@@ -1,8 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
+import 'package:url_launcher/url_launcher.dart';
+
+import 'app_logger.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
@@ -10,6 +14,7 @@ import 'av_flow_view.dart' show buildAvFlowModel;
 import 'diagram_capture.dart';
 import 'building_project.dart';
 import 'export_tools.dart';
+import 'google_sheets_export.dart';
 import 'project_workbook.dart';
 import 'room_workbook.dart';
 
@@ -127,11 +132,24 @@ Future<void> exportWorkbook(
   BuildContext context,
   AppStateProvider provider,
 ) async {
+  final scope = await askWorkbookScope(context, provider);
+  if (scope == null || !context.mounted) return;
+  return scope == WorkbookScope.room
+      ? exportRoomWorkbook(context, provider)
+      : exportProjectWorkbook(context, provider);
+}
+
+/// Which workbook: the room, the job, or - with both open - whichever the
+/// person picks. Null when nothing is open or the question was canceled.
+Future<WorkbookScope?> askWorkbookScope(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
   final hasRoom = provider.roomConfig.isNotEmpty;
   final hasProject = provider.hasOpenProject;
-
-  if (!hasProject) return exportRoomWorkbook(context, provider);
-  if (!hasRoom) return exportProjectWorkbook(context, provider);
+  if (!hasRoom && !hasProject) return null;
+  if (!hasProject) return WorkbookScope.room;
+  if (!hasRoom) return WorkbookScope.project;
 
   final scope = await showDialog<WorkbookScope>(
     context: context,
@@ -189,10 +207,7 @@ Future<void> exportWorkbook(
     ),
   );
 
-  if (scope == null || !context.mounted) return;
-  return scope == WorkbookScope.room
-      ? exportRoomWorkbook(context, provider)
-      : exportProjectWorkbook(context, provider);
+  return scope;
 }
 
 /// The building as one .xlsx.
@@ -276,4 +291,136 @@ String projectFileStem(BuildingProject project) {
       .trim()
       .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
       .replaceAll(RegExp(r'\s+'), '_');
+}
+
+// ---------------------------------------------------------------------------
+//  GOOGLE SHEETS
+// ---------------------------------------------------------------------------
+
+/// The same workbook, uploaded as a Google Sheet.
+///
+/// With a Google client set up in App Config this signs in (once) and uploads
+/// the book straight into the person's Drive, converted to a Sheet, and opens
+/// it. Without one it saves the .xlsx and opens Google Sheets, whose
+/// Open > Upload takes the file as it is - the same result, one drag later.
+Future<void> exportWorkbookToGoogleSheets(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  final scope = await askWorkbookScope(context, provider);
+  if (scope == null || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+
+  final uploader = GoogleSheetsUploader(
+    clientId: provider.googleClientId,
+    clientSecret: provider.googleClientSecret,
+    secrets: provider.secretStore,
+  );
+
+  if (!uploader.configured) {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('google_sheets_setup_dialog'),
+        title: const Text('Upload to Google Sheets'),
+        content: const SizedBox(
+          width: 480,
+          child: Text(
+            'Direct upload needs a Google client, set once under App Config > '
+            'Google Sheets.\n\n'
+            'Without one, the workbook is saved as an .xlsx and Google Sheets '
+            'opens in your browser: choose Open (the folder icon) > Upload and '
+            'drop the file in. Google converts it to a Sheet with every tab '
+            'intact.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('google_sheets_save_and_open'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save .xlsx and open Google Sheets'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !context.mounted) return;
+    if (scope == WorkbookScope.room) {
+      await exportRoomWorkbook(context, provider);
+    } else {
+      await exportProjectWorkbook(context, provider);
+    }
+    await launchUrl(kGoogleSheetsHome, mode: LaunchMode.externalApplication);
+    return;
+  }
+
+  showTimedSnackBar(
+    messenger,
+    const SnackBar(
+      duration: Duration(seconds: 4),
+      content: Text('Building the workbook for Google Sheets...'),
+    ),
+  );
+
+  try {
+    final Uint8List bytes;
+    final String title;
+    if (scope == WorkbookScope.room) {
+      provider.ensureAvFlowForCurrentConfig();
+      final shots = await captureDiagramTabs(provider);
+      bytes = Uint8List.fromList(buildRoomWorkbookBytes(
+        provider: provider,
+        av: buildAvFlowModel(provider),
+        controlPng: shots.schematic,
+        avFlowPng: shots.avFlow,
+        rackPng: shots.racks,
+        floorPlanSheets: shots.floorPlanSheets,
+        cablingPng: shots.cabling,
+      ));
+      title = roomFileStem(provider, 'room_workbook').replaceAll('_', ' ');
+    } else {
+      final estimate = provider.priceProject();
+      if (estimate.rooms.isEmpty) {
+        showTimedSnackBar(
+          messenger,
+          const SnackBar(
+            content: Text('Add some rooms first - there is nothing to write.'),
+          ),
+        );
+        return;
+      }
+      bytes = Uint8List.fromList(buildProjectWorkbookBytes(
+        estimate: estimate,
+        library: provider.avDeviceLibrary,
+        baseCosts: provider.baseCosts,
+        tier: provider.pricingTier,
+      ));
+      title = '${projectFileStem(provider.project)}_project'
+          .replaceAll('_', ' ');
+    }
+
+    final result = await uploader.upload(bytes, title);
+    AppLogger.logInfo('Workbook uploaded to Google Sheets: ${result.url}');
+    await launchUrl(Uri.parse(result.url), mode: LaunchMode.externalApplication);
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text('Uploaded to Google Sheets as "$title" - it is open in '
+            'your browser.'),
+      ),
+    );
+  } catch (e) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text('The upload to Google Sheets failed: $e'),
+        backgroundColor: snackErrorFillOn(messenger),
+      ),
+    );
+  }
 }

@@ -764,7 +764,9 @@ void main() {
       p.newProject(name: 'Bessey Hall');
       await pumpApp(tester, p);
 
-      await tester.tap(find.byKey(const ValueKey('export_workbook')));
+      await tester.tap(find.byKey(const ValueKey('export_menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('export_item_workbook')));
       await tester.pumpAndSettle();
 
       // BOTH are documents somebody means by "the workbook", and the button
@@ -794,20 +796,26 @@ void main() {
       await pumpApp(tester, p);
 
       expect(p.hasOpenProject, isFalse);
-      final button = tester.widget<IconButton>(
-        find.byKey(const ValueKey('export_workbook')),
+      await tester.tap(find.byKey(const ValueKey('export_menu')));
+      await tester.pumpAndSettle();
+      final item = tester.widget<PopupMenuItem<String>>(
+        find.byKey(const ValueKey('export_item_workbook')),
       );
-      expect(button.onPressed, isNotNull);
-      expect(button.tooltip, contains('room workbook'));
+      expect(item.enabled, isTrue);
+      expect(find.text('This room - every tab, one .xlsx'), findsOneWidget);
     });
 
     testWidgets('is dead only when neither is open', (tester) async {
       final p = AppStateProvider(autoLoadSettings: false);
       await pumpApp(tester, p);
-      final button = tester.widget<IconButton>(
-        find.byKey(const ValueKey('export_workbook')),
+      expect(
+        tester
+            .widget<PopupMenuButton<String>>(
+              find.byKey(const ValueKey('export_menu')),
+            )
+            .enabled,
+        isFalse,
       );
-      expect(button.onPressed, isNull);
     });
   });
 }

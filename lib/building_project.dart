@@ -1,3 +1,4 @@
+import 'project_budget.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -2662,6 +2663,14 @@ class BuildingProject {
   /// Counters behind [nextRoomId] / [nextVendorId], persisted so ids stay
   /// unique across sessions — a reused id would re-point somebody's hand
   /// vendor tags at a different room.
+  /// What the department has to spend on this job. 0 = not set. See
+  /// project_budget.dart.
+  double budget;
+
+  /// What has been planned, committed or spent against [budget], filled in as
+  /// the job goes.
+  List<BudgetLine> budgetLines;
+
   int _roomCounter;
   int _manualRoomCounter;
   int _vendorCounter;
@@ -2717,7 +2726,10 @@ class BuildingProject {
     int responsibilityCounter = 0,
     int poCounter = 0,
     int deliveryCounter = 0,
+    this.budget = 0,
+    List<BudgetLine>? budgetLines,
   }) : rooms = rooms ?? [],
+       budgetLines = budgetLines ?? [],
        manualRooms = manualRooms ?? [],
        vendors = vendors ?? [],
        rfqs = rfqs ?? [],
@@ -2764,6 +2776,8 @@ class BuildingProject {
       plans.isEmpty &&
       purchaseOrders.isEmpty &&
       deliveries.isEmpty &&
+      budget == 0 &&
+      budgetLines.isEmpty &&
       onlineFolder.trim().isEmpty &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
@@ -4218,6 +4232,9 @@ class BuildingProject {
       'deliveries': [for (final d in deliveries) d.toJson()],
     if (history.isNotEmpty)
       'history': [for (final h in history) h.toJson()],
+    if (budget != 0) 'budget': budget,
+    if (budgetLines.isNotEmpty)
+      'budgetLines': [for (final b in budgetLines) b.toJson()],
     'roomCounter': _roomCounter,
     if (_manualRoomCounter > 0) 'manualRoomCounter': _manualRoomCounter,
     'vendorCounter': _vendorCounter,
@@ -4488,6 +4505,16 @@ class BuildingProject {
     }
 
     final project = BuildingProject(
+      budget: () {
+        final raw = json['budget'];
+        return raw is num
+            ? raw.toDouble()
+            : double.tryParse(raw?.toString() ?? '') ?? 0.0;
+      }(),
+      budgetLines: [
+        for (final b in (json['budgetLines'] as List? ?? []))
+          if (b is Map) BudgetLine.fromJson(Map<String, dynamic>.from(b)),
+      ],
       name: json['name']?.toString() ?? '',
       building: json['building']?.toString() ?? '',
       // 'jobNumber' is what this was called before the app settled on
@@ -4683,6 +4710,8 @@ class BuildingProject {
     responsibilityCounter: _responsibilityCounter,
     poCounter: _poCounter,
     deliveryCounter: _deliveryCounter,
+    budget: budget,
+    budgetLines: List<BudgetLine>.from(budgetLines),
   );
 }
 

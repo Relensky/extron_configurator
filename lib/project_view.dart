@@ -24,6 +24,7 @@ import 'name_colors.dart';
 import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
 import 'project_briefing_dialog.dart';
+import 'project_budget_view.dart';
 import 'project_deliveries_view.dart';
 import 'online_copy_dialog.dart';
 import 'project_estimate.dart';
@@ -1550,6 +1551,18 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
               ),
             ),
           ],
+        ),
+      ),
+    ),
+    // THE BUDGET, above the rooms: the number the job has to come in under,
+    // what has gone against it so far, and what the rooms come to. See
+    // project_budget_view.dart.
+    SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+      sliver: SliverToBoxAdapter(
+        child: ProjectBudgetCard(
+          estimateTotal: estimate.grandTotal,
+          currency: estimate.currency,
         ),
       ),
     ),

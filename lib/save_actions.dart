@@ -1,3 +1,5 @@
+import 'collab/collab_controller.dart';
+import 'collab/collab_widgets.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -172,6 +174,38 @@ Future<bool> runSave(
   // its own step here, so "back to how it was when I saved" is one press
   // rather than a guess about where the last pause fell.
   provider.recordUndoPoint();
+
+  // SOMEBODY ELSE MAY HAVE SAVED THIS FILE SINCE WE READ IT. Their changes
+  // are folded in first - anything you both changed is put to you - so the
+  // save that follows writes both people's work rather than only yours. A
+  // Save As writes a new file, so there is nobody else's to keep.
+  final collabKind = switch (scope) {
+    SaveScope.room => CollabDocKind.room,
+    SaveScope.project => CollabDocKind.project,
+    _ => null,
+  };
+  if (collabKind != null && !saveAs) {
+    if (!await reconcileBeforeSave(context, provider, collabKind)) {
+      showTimedSnackBar(
+        messenger,
+        const SnackBar(
+          content: Text('Save canceled - nothing was written.'),
+        ),
+      );
+      return false;
+    }
+    if (!context.mounted) return false;
+  }
+  return provider.collab.hold(() => _runSave(context, provider, scope, saveAs));
+}
+
+Future<bool> _runSave(
+  BuildContext context,
+  AppStateProvider provider,
+  SaveScope scope,
+  bool saveAs,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
 
   switch (scope) {
     case SaveScope.room:
@@ -1488,7 +1522,25 @@ class SaveToolbar extends StatelessWidget {
                   icon: Icons.save_as,
                   label: 'Save $noun As…',
                   hint: 'Write it to a new file and work from that one',
-                  shortcut: 'Ctrl+Shift+S',
+                  shortcut: 'Ctrl+Alt+S',
+                ),
+              ),
+            // THE DIAGRAM AND THE ESTIMATE ON THEIR OWN - what the Cost tab's
+            // "Save AV Setup" button used to do. The room's Save writes these
+            // too; this writes only the sidecars and leaves config.json alone.
+            if (scope == SaveScope.room)
+              PopupMenuItem(
+                key: const ValueKey('save_av_setup'),
+                value: 'save_av',
+                enabled: provider.currentConfigPath.isNotEmpty,
+                child: _MenuLine(
+                  icon: Icons.request_quote_outlined,
+                  label: 'Save AV Setup',
+                  hint: provider.currentConfigPath.isEmpty
+                      ? 'Save the room once first - the AV setup is kept '
+                          'beside its file'
+                      : 'The diagram, racks and cost estimate only - '
+                          'config.json is left as it is',
                 ),
               ),
             const PopupMenuDivider(),
@@ -1517,9 +1569,9 @@ class SaveToolbar extends StatelessWidget {
               value: 'save_everything',
               child: _MenuLine(
                 icon: Icons.done_all,
-                label: 'Save Everything',
+                label: 'Save All',
                 hint: 'Every open document that is behind its file',
-                shortcut: 'Ctrl+Alt+S',
+                shortcut: 'Ctrl+Shift+S',
               ),
             ),
             const PopupMenuDivider(),
@@ -1563,6 +1615,24 @@ class SaveToolbar extends StatelessWidget {
         await runSave(context, provider, SaveScope.room);
       case 'save_project':
         await runSave(context, provider, SaveScope.project);
+      case 'save_av':
+        final messenger = ScaffoldMessenger.of(context);
+        final saved = await provider.collab.hold(provider.saveAvFlow);
+        // Our own write - the file is the base of the next merge now.
+        if (saved.isNotEmpty) {
+          provider.collab.noteInSync(CollabDocKind.room, saved: true);
+        }
+        showTimedSnackBar(
+          messenger,
+          SnackBar(
+            content: Text(
+              saved.isEmpty
+                  ? 'Failed to save the AV setup.'
+                  : 'AV setup and estimate saved: $saved',
+            ),
+            backgroundColor: saved.isEmpty ? snackErrorFillOn(messenger) : null,
+          ),
+        );
       case 'save_everything':
         await saveEverything(context, provider);
       case 'save_all_folder':

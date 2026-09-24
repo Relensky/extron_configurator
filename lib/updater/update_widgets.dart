@@ -205,10 +205,25 @@ class _UpdateCardState extends State<_UpdateCard> {
       title = 'Update available';
       body = '${u.appName} ${available.version} is ready to install. '
           'You have ${u.currentVersion}.';
+      // ONE CLICK: Close and Update downloads, closes and reopens on the new
+      // version straight away (unsaved work is still asked about first - see
+      // confirmClose). Options... is the step that also offers shortcuts.
       actions = [
         TextButton(onPressed: u.dismissNotice, child: const Text('Later')),
-        FilledButton(onPressed: u.requestInstall, child: const Text('Update')),
+        TextButton(
+          key: const ValueKey('update_options'),
+          onPressed: u.requestInstall,
+          child: const Text('Options...'),
+        ),
+        FilledButton(
+          key: const ValueKey('update_close_and_update'),
+          onPressed: u.canInstall ? () => unawaited(u.install()) : null,
+          child: const Text('Close and Update'),
+        ),
       ];
+      if (!u.canInstall) {
+        body = '$body\nUpdates can only be installed from a release build.';
+      }
     } else {
       return const SizedBox.shrink();
     }
@@ -551,12 +566,22 @@ class _UpdateSettingsSectionState extends State<UpdateSettingsSection> {
                     label: const Text('Check Now'),
                     onPressed: busy ? null : () => unawaited(u.checkNow()),
                   ),
-                  if (u.available != null)
+                  if (u.available != null) ...[
+                    // One click: closes, installs and reopens.
                     FilledButton.icon(
+                      key: const ValueKey('settings_close_and_update'),
                       icon: const Icon(Icons.system_update_alt, size: 18),
-                      label: Text('Update to ${u.available!.version}'),
-                      onPressed: busy ? null : u.requestInstall,
+                      label: Text(
+                          'Close and Update to ${u.available!.version}'),
+                      onPressed: busy || !u.canInstall
+                          ? null
+                          : () => unawaited(u.install()),
                     ),
+                    OutlinedButton(
+                      onPressed: busy ? null : u.requestInstall,
+                      child: Text('Update to ${u.available!.version}'),
+                    ),
+                  ],
                 ],
               ),
             ),

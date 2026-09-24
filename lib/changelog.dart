@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.4.3+9';
+const String kAppVersion = '0.5.0+10';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,45 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.0',
+    date: 'September 24, 2026',
+    title: 'Editing together, a tidier toolbar, budgets and Google Sheets',
+    changes: [
+      'Several people can have the same room, project or catalog open from a '
+          'shared folder. Everybody else who has it open shows on the banner '
+          'with their Windows user name (a pencil means they have unsaved '
+          'changes). When one of them saves, a "<name> saved - Merge" button '
+          'brings their changes in; anything you both changed is listed for '
+          'you to pick. Save merges first too, so the second person to save '
+          'never erases the first. Can be turned off in App Config.',
+      'The files stay JSON - that is what makes the merge work on any shared '
+          'or synced folder. config.json is exported exactly as before.',
+      'Title bar: Save is now at the far left, with Undo, Redo and History '
+          'beside it. Export, the light/dark toggle, Settings and Help are at '
+          'the far right.',
+      'One Export menu replaces the workbook, publish and per-tab export '
+          'buttons, and on the Cost tab it also holds the estimate as PDF, '
+          'Excel, text or clipboard. The Cost tab\'s own Screenshot, Save AV '
+          'Setup and Export buttons moved into the toolbar\'s Screenshot, '
+          'Save and Export menus.',
+      'Upload workbook to Google Sheets (Export menu): straight into your '
+          'Google Drive as a Sheet once a Google client is set in App Config, '
+          'otherwise it saves the .xlsx and opens Google Sheets to upload it.',
+      'Catalog spec sheets: set a shared Spec Sheet Folder, attach a sheet to '
+          'any device (filed as <maker>/<model>.pdf) and open it from the '
+          'catalog. Sheets named after the model are found automatically.',
+      'Project budget: set a total budget on the Project tab and add planned, '
+          'committed and spent lines as the job goes, with remaining and the '
+          'rooms estimate shown beside it.',
+      'Keyboard: Ctrl+S saves, Ctrl+Shift+S is Save All, Ctrl+Alt+S is Save '
+          'As.',
+      'Updates install in one click: the update notice and App Config both '
+          'have Close and Update, which closes the app, installs and opens it '
+          'again (you are still asked about unsaved work first). Options... '
+          'on the notice is the old step that also offers shortcuts.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.4.3',
     date: 'September 23, 2026',

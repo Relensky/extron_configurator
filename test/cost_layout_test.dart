@@ -169,12 +169,14 @@ void main() {
 
     // Wrapped onto a second line rather than pushed off the card — which is
     // the whole difference between this and what it replaced.
+    // Screenshot, Save AV Setup and Export are the toolbar's menus now, not
+    // buttons on the card - see cost_estimate_actions.dart.
+    for (final gone in const ['Screenshot', 'Save AV Setup', 'Export']) {
+      expect(find.text(gone), findsNothing, reason: '$gone moved to the toolbar');
+    }
     for (final label in const [
       'Labor rates',
       'Base costs',
-      'Screenshot',
-      'Save AV Setup',
-      'Export',
     ]) {
       expect(find.text(label), findsOneWidget, reason: '$label is on the card');
       expect(
