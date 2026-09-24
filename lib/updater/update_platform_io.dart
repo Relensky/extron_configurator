@@ -939,6 +939,13 @@ function Save-Result(\$ok, \$message) {
     ConvertTo-Json | Set-Content -LiteralPath \$resultFile -Encoding UTF8
 }
 function Start-App {
+  # Already open (the user started it again while waiting): a second copy
+  # would only be a duplicate window.
+  if (@(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+      try { \$_.Path -eq \$exePath } catch { \$false } }).Count -gt 0) {
+    Log 'The app is already running; not starting another copy.'
+    return
+  }
   if (\$elevated) {
     # Explorer starts it as the signed-in user, not as administrator.
     Start-Process -FilePath explorer.exe -ArgumentList ('"' + \$exePath + '"')
@@ -959,6 +966,27 @@ function Invoke-WithRetry([scriptblock]\$action) {
 }
 
 Set-Content -LiteralPath (Join-Path \$workDir 'helper_started.txt') -Value \$appPid
+
+# One helper per app at a time. Two helpers both waiting for the app to close
+# would both swap the files and both start it, so it opened twice.
+\$lockName = 'Local\\AppUpdate_' + (\$exePath.ToLowerInvariant() -replace '[^a-z0-9]', '_')
+\$otherHelper = \$false
+try {
+  \$lock = New-Object System.Threading.Mutex(\$false, \$lockName)
+  \$otherHelper = -not \$lock.WaitOne(0)
+} catch [System.Threading.AbandonedMutexException] {
+  # The last helper died holding it; it is ours now.
+} catch [System.UnauthorizedAccessException] {
+  # Held by a helper running as another user (administrator).
+  \$otherHelper = \$true
+} catch {
+  # No lock to be had (a very long path); carry on without one.
+}
+if (\$otherHelper) {
+  Log "Another update helper is already running for \$exePath; leaving it to that one."
+  exit 0
+}
+
 Log "Updating \$exePath from \$fromVersion to \$toVersion"
 
 try { Wait-Process -Id \$appPid -Timeout 120 -ErrorAction SilentlyContinue } catch { }
