@@ -1,3 +1,4 @@
+import 'install_windows.dart';
 import 'project_budget.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -2671,6 +2672,10 @@ class BuildingProject {
   /// the job goes.
   List<BudgetLine> budgetLines;
 
+  /// When each room can be worked on - free stretches picked off the class
+  /// schedule. See install_windows.dart.
+  List<InstallWindow> installWindows;
+
   int _roomCounter;
   int _manualRoomCounter;
   int _vendorCounter;
@@ -2728,8 +2733,10 @@ class BuildingProject {
     int deliveryCounter = 0,
     this.budget = 0,
     List<BudgetLine>? budgetLines,
+    List<InstallWindow>? installWindows,
   }) : rooms = rooms ?? [],
        budgetLines = budgetLines ?? [],
+       installWindows = installWindows ?? [],
        manualRooms = manualRooms ?? [],
        vendors = vendors ?? [],
        rfqs = rfqs ?? [],
@@ -2778,6 +2785,7 @@ class BuildingProject {
       deliveries.isEmpty &&
       budget == 0 &&
       budgetLines.isEmpty &&
+      installWindows.isEmpty &&
       onlineFolder.trim().isEmpty &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
@@ -4235,6 +4243,8 @@ class BuildingProject {
     if (budget != 0) 'budget': budget,
     if (budgetLines.isNotEmpty)
       'budgetLines': [for (final b in budgetLines) b.toJson()],
+    if (installWindows.isNotEmpty)
+      'installWindows': [for (final w in installWindows) w.toJson()],
     'roomCounter': _roomCounter,
     if (_manualRoomCounter > 0) 'manualRoomCounter': _manualRoomCounter,
     'vendorCounter': _vendorCounter,
@@ -4515,6 +4525,10 @@ class BuildingProject {
         for (final b in (json['budgetLines'] as List? ?? []))
           if (b is Map) BudgetLine.fromJson(Map<String, dynamic>.from(b)),
       ],
+      installWindows: [
+        for (final w in (json['installWindows'] as List? ?? []))
+          if (w is Map) ?InstallWindow.fromJson(Map<String, dynamic>.from(w)),
+      ],
       name: json['name']?.toString() ?? '',
       building: json['building']?.toString() ?? '',
       // 'jobNumber' is what this was called before the app settled on
@@ -4712,6 +4726,7 @@ class BuildingProject {
     deliveryCounter: _deliveryCounter,
     budget: budget,
     budgetLines: List<BudgetLine>.from(budgetLines),
+    installWindows: List<InstallWindow>.from(installWindows),
   );
 }
 

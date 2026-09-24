@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.3+13';
+const String kAppVersion = '0.5.4+14';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,28 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.4',
+    date: 'September 24, 2026',
+    title: 'Install windows from the class schedule, and screenshot sizing',
+    changes: [
+      'Project > Timeline has an Install windows card. Find install windows '
+          'reads the Facilities class schedule export (the same '
+          'FacilitiesLinkClassScheduleDaily.csv the CTS-Dashboard uses) and '
+          'lists, for each room on the job, when it is free: the stretches '
+          'between classes and the whole days with nothing booked (breaks, '
+          'the weeks between terms).',
+      'Choose the date range, how long a window has to be, the working day, '
+          'and whether weekends count. Click a window to put it on the '
+          'timeline; click it again to take it off. The windows are saved '
+          'with the project.',
+      'The schedule file is set in Settings (Class Schedule) or from the '
+          'finder itself.',
+      'Screenshot annotation window, matching the CTS-Dashboard: the title '
+          'and Copy / Save PNG / close stay on the top row at any window size, '
+          'and only the drawing tools wrap underneath.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.3',
     date: 'September 24, 2026',

@@ -1078,6 +1078,18 @@ Spent*). It shows remaining (budget less committed and spent), remaining after
 the planned lines, and how the rooms' estimate compares. Stored in the project
 file as `budget` and `budgetLines`.
 
+## Install windows (the class schedule)
+
+**Project > Timeline > Install windows > Find install windows...** reads the
+Facilities class schedule export - `FacilitiesLinkClassScheduleDaily.csv`, the
+same file the CTS-Dashboard reads (Settings > Class Schedule; blank = that name
+in the Root Folder) - and lists, per room on the job, when the room is free:
+the stretches between classes and whole days with nothing booked. Rooms are
+matched on building code + room number (`BSS 103`); online/TBA sections are
+ignored. Pick the date range, minimum length, working hours and whether
+weekends count, then click a window to put it on the timeline (click again to
+remove). Picked windows are stored in the project file as `installWindows`.
+
 ## Where the top-level things live
 
 Two of the app's pages are not views of a room, and they no longer sit in the

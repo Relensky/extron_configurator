@@ -3217,6 +3217,37 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        // THE CLASS SCHEDULE - where install windows are read from. See
+        // class_schedule.dart.
+        TextFormField(
+          key: ValueKey('classSchedulePath_${provider.classSchedulePath}'),
+          decoration: InputDecoration(
+            labelText: 'Class Schedule (Facilities export .csv)',
+            hintText: provider.effectiveClassSchedulePath,
+            helperText: 'FacilitiesLinkClassScheduleDaily.csv - the same file '
+                'the CTS-Dashboard reads. Used by Project > Timeline > Find '
+                'install windows. Blank = that name in the Root Folder.',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.upload_file),
+              tooltip: 'Select File',
+              onPressed: () async {
+                final picked = await FilePicker.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: const ['csv'],
+                );
+                final file = picked?.files.single.path;
+                if (file != null) {
+                  provider.updateSetting('classSchedulePath', file);
+                }
+              },
+            ),
+          ),
+          initialValue: provider.classSchedulePath,
+          onChanged: (val) => provider.updateSetting('classSchedulePath', val),
+        ),
+        const SizedBox(height: 20),
+
         // EDITING TOGETHER - see collab/collab_controller.dart.
         SwitchListTile(
           key: const ValueKey('collab_enabled_switch'),

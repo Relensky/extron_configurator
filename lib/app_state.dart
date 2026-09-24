@@ -35,6 +35,9 @@ import 'model_swap.dart' as swap;
 import 'av_flow_swap_dialogs.dart' show applyModelSwap, applyControlSwap;
 import 'project_estimate.dart';
 import 'project_budget.dart';
+import 'class_schedule.dart';
+import 'install_windows.dart';
+import 'project_schedule.dart' show formatScheduleDate;
 import 'project_swap.dart';
 import 'layout_tools.dart';
 import 'room_locations.dart';
@@ -606,6 +609,11 @@ class AppStateProvider extends ChangeNotifier {
   /// spec_sheets.dart.
   String specSheetFolder = '';
 
+  /// The Facilities class schedule export - FacilitiesLinkClassScheduleDaily.csv,
+  /// the same file the CTS-Dashboard reads. Blank = that name in the Root
+  /// Folder. See class_schedule.dart.
+  String classSchedulePath = '';
+
   /// Whether this copy tells others it has a file open, and watches for their
   /// saves. On unless turned off; see collab/collab_controller.dart.
   bool collabEnabled = true;
@@ -927,6 +935,7 @@ class AppStateProvider extends ChangeNotifier {
       'vendorListFilePath': vendorListFilePath,
       'documentationPath': documentationPath,
       'specSheetFolder': specSheetFolder,
+      'classSchedulePath': classSchedulePath,
       'collabEnabled': collabEnabled,
       'googleClientId': googleClientId,
       'googleClientSecret': googleClientSecret,
@@ -7674,6 +7683,7 @@ class AppStateProvider extends ChangeNotifier {
       vendorListFilePath = str('vendorListFilePath', '');
       documentationPath = str('documentationPath', '');
       specSheetFolder = str('specSheetFolder', '');
+      classSchedulePath = str('classSchedulePath', '');
       collabEnabled = saved['collabEnabled'] is bool
           ? saved['collabEnabled'] as bool
           : true;
@@ -8712,6 +8722,10 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'specSheetFolder':
         specSheetFolder = value; // resolved on demand, like the manuals
+        break;
+      case 'classSchedulePath':
+        classSchedulePath = value;
+        classSchedule = ClassScheduleIndex.empty; // re-read on next use
         break;
       case 'googleClientId':
         googleClientId = value.trim();
@@ -13181,6 +13195,64 @@ class AppStateProvider extends ChangeNotifier {
     // called on every keystroke in four different boxes. The currency is the
     // one field here that money on the estimate was actually formatted with.
     _projectChanged(repricing: currency != null && currency.isNotEmpty);
+  }
+
+  // --- the class schedule and install windows --------------------------------
+
+  /// The class schedule, read when first needed. Empty until then, or when
+  /// the file is missing.
+  ClassScheduleIndex classSchedule = ClassScheduleIndex.empty;
+
+  /// Where the schedule is read from.
+  String get effectiveClassSchedulePath => classSchedulePath.trim().isNotEmpty
+      ? classSchedulePath.trim()
+      : path.join(effectiveRootFolder, 'FacilitiesLinkClassScheduleDaily.csv');
+
+  /// Reads the schedule (again). Returns the error to show, or ''.
+  Future<String> loadClassSchedule() async {
+    final file = effectiveClassSchedulePath;
+    if (!File(file).existsSync()) {
+      classSchedule = ClassScheduleIndex.empty;
+      notifyListeners();
+      return 'No class schedule at $file';
+    }
+    try {
+      classSchedule = await ClassScheduleIndex.load(file);
+      AppLogger.logInfo(
+        'Class schedule read from $file: ${classSchedule.roomCount} rooms.',
+      );
+      notifyListeners();
+      return '';
+    } catch (e, stack) {
+      AppLogger.logError('Failed to read the class schedule $file', e, stack);
+      return 'The class schedule could not be read: $e';
+    }
+  }
+
+  /// Puts a free stretch on the job's timeline.
+  void addInstallWindow(InstallWindow window) {
+    project.installWindows.add(window);
+    project.installWindows.sort((a, b) => a.start.compareTo(b.start));
+    _logProjectEdit(
+      itemKey: window.id,
+      itemName: window.roomLabel,
+      field: 'Install window',
+      summary: 'added ${formatScheduleDate(window.day)} ${window.timeLabel}',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  void removeInstallWindow(String id) {
+    final i = project.installWindows.indexWhere((w) => w.id == id);
+    if (i < 0) return;
+    final gone = project.installWindows.removeAt(i);
+    _logProjectEdit(
+      itemKey: id,
+      itemName: gone.roomLabel,
+      field: 'Install window',
+      summary: 'removed ${formatScheduleDate(gone.day)} ${gone.timeLabel}',
+    );
+    _projectChanged(repricing: false);
   }
 
   // --- the budget ------------------------------------------------------------

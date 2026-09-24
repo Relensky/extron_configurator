@@ -82,9 +82,14 @@ void main() {
           bytes.getUint8(i + 2));
     }
 
-    // Just right of the title, which is bar and nothing else; and low on the
-    // canvas, below the picture.
-    return (at(title.right + 6, title.center.dy), at(450, 470));
+    // Just right of the title, which is bar and nothing else; and in the
+    // canvas's own padding at its bottom-left corner - the dialog is inset
+    // 24 px and the canvas pads 12 - where the picture never reaches however
+    // tall the bar above it is.
+    return (
+      at(title.right + 6, title.center.dy),
+      at(24 + 6, window.height - 24 - 6),
+    );
   }
 
   testWidgets('in a dark theme the bar is dark', (tester) async {

@@ -11,6 +11,7 @@ import 'building_project.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart' show formatMoney, trimNumber;
 import 'hover_chart.dart';
+import 'install_window_finder.dart' show InstallWindowsCard;
 import 'name_colors.dart' show projectRfqColor;
 import 'project_deliveries_view.dart' show PoFileButtons, showPoPartsDialog;
 import 'equipment_lifecycle.dart'
@@ -477,6 +478,8 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
     // drawn - at which point the parts arrive and the order dates with them.
     if (provider.project.manualRooms.isEmpty) {
       return const [
+        // When each room can be worked on - see install_window_finder.dart.
+        SliverToBoxAdapter(child: InstallWindowsCard()),
         SliverFillRemaining(
           hasScrollBody: false,
           child: Center(
@@ -494,7 +497,10 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
         ),
       ];
     }
-    return _lifecycleSlivers(context, estimate, schedule);
+    return [
+      const SliverToBoxAdapter(child: InstallWindowsCard()),
+      ..._lifecycleSlivers(context, estimate, schedule),
+    ];
   }
 
   return [
@@ -511,6 +517,9 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
     SliverToBoxAdapter(
       child: _TimelineSummary(schedule: schedule, provider: provider),
     ),
+    // WHEN EACH ROOM CAN BE WORKED ON, off the class schedule - see
+    // install_window_finder.dart.
+    const SliverToBoxAdapter(child: InstallWindowsCard()),
     SliverToBoxAdapter(
       child: _ReminderBar(estimate: estimate, schedule: schedule),
     ),

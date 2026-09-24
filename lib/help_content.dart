@@ -1457,6 +1457,27 @@ const List<HelpTopic> kHelpTopics = [
         'the rooms estimate as planned" drops that figure in as a line.',
   ),
   HelpTopic(
+    title: 'Install windows',
+    section: 'The job',
+    where: 'Project tab → Timeline → Install windows → Find install windows...',
+    plain:
+        'When each room on the job is free to work in, read off the class '
+        'schedule. Click a free window to put it on the timeline.',
+    keywords: ['install window', 'class schedule', 'free time', 'gap',
+      'calendar', 'when is the room free', 'facilities', 'cts dashboard'],
+    body:
+        'Reads the Facilities class schedule export '
+        '(FacilitiesLinkClassScheduleDaily.csv, the same file the CTS-Dashboard '
+        'uses; set it in Settings or from the finder). For each room on the job '
+        'it lists the stretches between classes and the whole days with nothing '
+        'booked, between the dates you choose and no shorter than the length '
+        'you pick. Online and TBA sections are ignored.\n\n'
+        'Click a window to add it to the job; it shows on the Timeline pane '
+        'and is saved with the project. Click it again, or the X on the '
+        'timeline, to take it off. A room the schedule does not know is marked '
+        'with a question mark and shows as free every day.',
+  ),
+  HelpTopic(
     title: 'How old the gear is, and when it falls due',
     section: 'The refresh plan',
     where: 'Lifecycle tab, and Project tab → Lifecycle',

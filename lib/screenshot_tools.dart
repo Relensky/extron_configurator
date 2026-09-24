@@ -801,152 +801,176 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
           // every tool, color and button stays on screen and pressable at any
           // width. The widest group sets the narrowest window this bar
           // survives - keep them small.
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // TITLE AND WAYS OUT NEVER MOVE. "Annotate Screenshot" holds the
+          // top-left corner and Copy / Save PNG / close hold the top-right
+          // at any width; only the drawing tools below them wrap. Each tool
+          // group is an unbreakable Row, so a group that will not fit drops
+          // to the next line whole.
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.photo_camera_outlined, size: 18),
-                  SizedBox(width: 8),
-                  Text('Annotate Screenshot',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                ],
-              ),
-              // The five that leave a mark.
-              Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _toolButton(AnnotationTool.pen, Icons.edit, 'Pen'),
-                  _toolButton(AnnotationTool.highlighter, Icons.border_color,
-                      'Highlighter'),
-                  _toolButton(AnnotationTool.arrow, Icons.north_east, 'Arrow'),
-                  _toolButton(AnnotationTool.rect,
-                      Icons.check_box_outline_blank, 'Rectangle'),
-                  _toolButton(AnnotationTool.text, Icons.text_fields,
-                      'Text (click to place)'),
-                ],
-              ),
-              // The two that draw nothing: the pointer picks a mark up to
-              // move, recolor or retype it (see [_selected]), the hand moves
-              // the picture itself (see [_dragPicture]).
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _toolButton(AnnotationTool.select, Icons.near_me_outlined,
-                      'Select - move, recolor or retype a mark'),
-                  _toolButton(AnnotationTool.pan, Icons.pan_tool_outlined,
-                      'Move the picture'),
-                ],
-              ),
-              // One group, so the eight colors never split across two lines
-              // and read as two palettes.
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: _palette.map(_colorSwatch).toList(),
-              ),
-              // Stroke width, and Clear all - destructive, so it sits with the
-              // tools rather than beside Save.
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.line_weight, size: 16),
-                  SizedBox(
-                    width: 110,
-                    child: Slider(
-                      value: _strokeWidth,
-                      min: 2,
-                      max: 20,
-                      // Resizes the held mark as well - see [_colorSwatch].
-                      onChanged: (val) => setState(() {
-                        _strokeWidth = val;
-                        _selected?.strokeWidth = val;
-                      }),
+                  const Icon(Icons.photo_camera_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Annotate Screenshot',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  IconButton(
-                    key: const ValueKey('annotation_clear'),
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    tooltip: 'Clear all annotations',
-                    onPressed: _annotations.isEmpty
-                        ? null
-                        : () => setState(() {
-                              _annotations.clear();
-                              _undoneAnnotations.clear();
-                              _selected = null;
-                            }),
+                  // The ways out, pinned top-right.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // THE OTHER PLACE A SCREENSHOT GOES. Half of these end up
+                      // pasted into a ticket or an email rather than kept as a
+                      // file.
+                      OutlinedButton.icon(
+                        key: const ValueKey('annotation_copy'),
+                        onPressed: _saving ? null : _copy,
+                        icon: const Icon(Icons.copy_all_outlined, size: 16),
+                        label: const Text('Copy'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: _saving ? null : _save,
+                        icon: _saving
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.save, size: 16),
+                        label: const Text('Save PNG'),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Close without saving',
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              // Undo is grabbed the instant a stroke goes wrong; Redo because
-              // an undo that cannot be reconsidered is one people are wary of
-              // pressing. Edit text lights only for a label - double-clicking
-              // does the same, but a gesture is not an affordance. Delete
-              // takes the one mark in hand, which is what Undo cannot reach.
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  IconButton(
-                    key: const ValueKey('annotation_undo'),
-                    icon: const Icon(Icons.undo, size: 20),
-                    tooltip: _annotations.isEmpty
-                        ? 'Nothing to undo - no marks on this picture yet'
-                        : 'Undo the last mark drawn on this picture',
-                    onPressed: _annotations.isEmpty ? null : _undoAnnotation,
+                  // The five that leave a mark.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _toolButton(AnnotationTool.pen, Icons.edit, 'Pen'),
+                      _toolButton(AnnotationTool.highlighter,
+                          Icons.border_color, 'Highlighter'),
+                      _toolButton(
+                          AnnotationTool.arrow, Icons.north_east, 'Arrow'),
+                      _toolButton(AnnotationTool.rect,
+                          Icons.check_box_outline_blank, 'Rectangle'),
+                      _toolButton(AnnotationTool.text, Icons.text_fields,
+                          'Text (click to place)'),
+                    ],
                   ),
-                  IconButton(
-                    key: const ValueKey('annotation_redo'),
-                    icon: const Icon(Icons.redo, size: 20),
-                    tooltip: _undoneAnnotations.isEmpty
-                        ? 'Nothing to redo - nothing has been undone'
-                        : 'Redo the mark that was undone',
-                    onPressed:
-                        _undoneAnnotations.isEmpty ? null : _redoAnnotation,
+                  // The two that draw nothing: the pointer picks a mark up to
+                  // move, recolor or retype it (see [_selected]), the hand moves
+                  // the picture itself (see [_dragPicture]).
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _toolButton(AnnotationTool.select, Icons.near_me_outlined,
+                          'Select - move, recolor or retype a mark'),
+                      _toolButton(AnnotationTool.pan, Icons.pan_tool_outlined,
+                          'Move the picture'),
+                    ],
                   ),
-                  IconButton(
-                    key: const ValueKey('annotation_edit_text'),
-                    icon: const Icon(Icons.edit_note, size: 20),
-                    tooltip: 'Edit the selected text',
-                    onPressed: _selected?.tool == AnnotationTool.text
-                        ? () => _editSelectedText()
-                        : null,
+                  // One group, so the eight colors never split across two lines
+                  // and read as two palettes.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _palette.map(_colorSwatch).toList(),
                   ),
-                  IconButton(
-                    key: const ValueKey('annotation_delete_selected'),
-                    icon: const Icon(Icons.backspace_outlined, size: 18),
-                    tooltip: 'Delete the selected mark',
-                    onPressed: _selected == null ? null : _deleteSelected,
+                  // Stroke width, and Clear all - destructive, so it sits with the
+                  // tools rather than beside Save.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.line_weight, size: 16),
+                      SizedBox(
+                        width: 110,
+                        child: Slider(
+                          value: _strokeWidth,
+                          min: 2,
+                          max: 20,
+                          // Resizes the held mark as well - see [_colorSwatch].
+                          onChanged: (val) => setState(() {
+                            _strokeWidth = val;
+                            _selected?.strokeWidth = val;
+                          }),
+                        ),
+                      ),
+                      IconButton(
+                        key: const ValueKey('annotation_clear'),
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        tooltip: 'Clear all annotations',
+                        onPressed: _annotations.isEmpty
+                            ? null
+                            : () => setState(() {
+                                  _annotations.clear();
+                                  _undoneAnnotations.clear();
+                                  _selected = null;
+                                }),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              // The ways out, together and last.
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  OutlinedButton.icon(
-                    key: const ValueKey('annotation_copy'),
-                    onPressed: _saving ? null : _copy,
-                    icon: const Icon(Icons.copy_all_outlined, size: 16),
-                    label: const Text('Copy'),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: _saving ? null : _save,
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.save, size: 16),
-                    label: const Text('Save PNG'),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Close without saving',
-                    onPressed: () => Navigator.of(context).pop(),
+                  // Undo is grabbed the instant a stroke goes wrong; Redo because
+                  // an undo that cannot be reconsidered is one people are wary of
+                  // pressing. Edit text lights only for a label - double-clicking
+                  // does the same, but a gesture is not an affordance. Delete
+                  // takes the one mark in hand, which is what Undo cannot reach.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        key: const ValueKey('annotation_undo'),
+                        icon: const Icon(Icons.undo, size: 20),
+                        tooltip: _annotations.isEmpty
+                            ? 'Nothing to undo - no marks on this picture yet'
+                            : 'Undo the last mark drawn on this picture',
+                        onPressed:
+                            _annotations.isEmpty ? null : _undoAnnotation,
+                      ),
+                      IconButton(
+                        key: const ValueKey('annotation_redo'),
+                        icon: const Icon(Icons.redo, size: 20),
+                        tooltip: _undoneAnnotations.isEmpty
+                            ? 'Nothing to redo - nothing has been undone'
+                            : 'Redo the mark that was undone',
+                        onPressed:
+                            _undoneAnnotations.isEmpty ? null : _redoAnnotation,
+                      ),
+                      IconButton(
+                        key: const ValueKey('annotation_edit_text'),
+                        icon: const Icon(Icons.edit_note, size: 20),
+                        tooltip: 'Edit the selected text',
+                        onPressed: _selected?.tool == AnnotationTool.text
+                            ? () => _editSelectedText()
+                            : null,
+                      ),
+                      IconButton(
+                        key: const ValueKey('annotation_delete_selected'),
+                        icon: const Icon(Icons.backspace_outlined, size: 18),
+                        tooltip: 'Delete the selected mark',
+                        onPressed: _selected == null ? null : _deleteSelected,
+                      ),
+                    ],
                   ),
                 ],
               ),
