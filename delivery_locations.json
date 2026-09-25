@@ -1,0 +1,20 @@
+{
+  "__readme": "Delivery and storage locations for the Room Config Builder. One entry per place a truck can deliver to or gear can be held at; the name is what gets written onto a delivery row, and the address is looked up here rather than typed onto every row. Put this file on a shared drive to give the whole shop one set of names. A delivery can still be logged to a place that is not on this list.",
+  "locations": [
+    {
+      "id": "mlib_045",
+      "name": "MLIB 045",
+      "use": "storage"
+    },
+    {
+      "id": "mlib_027a",
+      "name": "MLIB 027a",
+      "use": "both"
+    },
+    {
+      "id": "mlib_031",
+      "name": "MLIB 031",
+      "use": "both"
+    }
+  ]
+}

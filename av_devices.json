@@ -85809,6 +85809,7 @@
       "rackUnits": 0,
       "price": 700.0,
       "educationPrice": 399.0,
+      "neverControlled": true,
       "notes": "All-in-one bring-your-own-device conferencing bar: camera, mics and speakers in one, joined to a laptop over USB.",
       "ports": [
         {
@@ -100386,6 +100387,51 @@
           "label": "LAN",
           "signal": "network",
           "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "BE75FX-H",
+      "manufacturer": "Samsung",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 1300.0,
+      "educationPrice": 986.0,
+      "ports": [
+        {
+          "id": "port_1790113107986300",
+          "label": "HDMI IN 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "port_1790113126730388",
+          "label": "HDMI IN 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "port_1790113127330619",
+          "label": "HDMI IN 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "port_1790113153563255",
+          "label": "ETHERNET IN",
+          "signal": "network",
+          "direction": "input",
           "side": "left"
         },
         {

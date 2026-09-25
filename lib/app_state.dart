@@ -10574,7 +10574,7 @@ class AppStateProvider extends ChangeNotifier {
         final allowedMatch =
             RegExp("['\"]AllowedValues['\"]\\s*:\\s*\\[").firstMatch(block);
         if (allowedMatch != null) {
-          final listEnd = block.indexOf(']', allowedMatch.end);
+          final listEnd = _listEndAt(block, allowedMatch.end);
           if (listEnd != -1) {
             final listText = block.substring(allowedMatch.end, listEnd);
             final values = RegExp("['\"]([^'\"]+)['\"]")
@@ -10653,6 +10653,25 @@ class AppStateProvider extends ChangeNotifier {
         ? RegExp("['\"]([^'\"]+)['\"]\\s*:")
         : RegExp(":\\s*['\"]([^'\"]+)['\"]");
     return pattern.allMatches(block).map((m) => m.group(1)!).toList();
+  }
+
+  /// Index of the ']' that closes a list whose contents start at [start],
+  /// skipping any inside quotes - state names carry brackets of their own
+  /// ('Zoom [AV]', 'Dot by Dot [PC]'), and the first bare ']' would cut the
+  /// list off at the first of them. -1 when the list never closes.
+  static int _listEndAt(String text, int start) {
+    String? quote;
+    for (int i = start; i < text.length; i++) {
+      final ch = text[i];
+      if (quote != null) {
+        if (ch == quote) quote = null;
+      } else if (ch == "'" || ch == '"') {
+        quote = ch;
+      } else if (ch == ']') {
+        return i;
+      }
+    }
+    return -1;
   }
 
   /// Returns the text of the balanced {...} block whose opening brace is at

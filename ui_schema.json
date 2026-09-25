@@ -404,6 +404,7 @@
       "speaker_mute": true,
       "speaker_mute_method": "volume",
       "speaker_unmute_volume": null,
+      "aspect_ratio": null,
       "source_follow": true,
       "source_fixed": null,
       "source_overrides": {},
@@ -582,6 +583,14 @@
         "label": "Input",
         "addIfMissing": true,
         "description": "Input the projector subscribe status follows. The options are read live from the selected Python module's 'Input' command dictionary, so only states that module actually supports are offered (manual typing still allowed). In a share room this is the COMBINED-mode input - the leg of the room's distribution that reaches this screen - and input_individual is what it shows in individual mode."
+      },
+      "aspect_ratio": {
+        "type": "module_states",
+        "moduleCommand": "AspectRatio",
+        "label": "Aspect Ratio (aspect_ratio)",
+        "addIfMissing": true,
+        "helperText": "Blank/absent = leave the device's aspect alone",
+        "description": "Aspect ratio the processor sets on THIS display every time it reports On, followed by an AspectRatio update so the reply is logged. The options are read live from the selected Python module's 'AspectRatio' command, so only states that driver supports are offered - e.g. 'Dot by Dot [PC]' on the Sharp LC series. Left blank the processor never touches the aspect. A module with no AspectRatio set command, or a value it does not list, is logged on the processor and skipped rather than guessed at."
       },
       "device_role": {
         "type": "dropdown",

@@ -207,6 +207,7 @@
         "speaker_mute": true,
         "speaker_mute_method": "volume",
         "speaker_unmute_volume": null,
+        "aspect_ratio": null,
         "user": "root",
         "warm_up_time": null,
         "cool_down_time": null
@@ -240,6 +241,7 @@
         "speaker_mute": true,
         "speaker_mute_method": "volume",
         "speaker_unmute_volume": null,
+        "aspect_ratio": null,
         "warm_up_time": null,
         "cool_down_time": null
     },
@@ -275,6 +277,7 @@
         "speaker_mute": true,
         "speaker_mute_method": "volume",
         "speaker_unmute_volume": null,
+        "aspect_ratio": null,
         "user": "root",
         "warm_up_time": null,
         "cool_down_time": null
@@ -311,6 +314,7 @@
         "speaker_mute": true,
         "speaker_mute_method": "volume",
         "speaker_unmute_volume": null,
+        "aspect_ratio": null,
         "user": "root",
         "warm_up_time": null,
         "cool_down_time": null

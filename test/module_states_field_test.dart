@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -118,5 +120,23 @@ void main() {
 
     expect(isRed(tester), isFalse);
     expect(helperOf(tester), contains('not found in'));
+  });
+
+  // The Sharp LC driver lists its aspect states inline, and several carry
+  // brackets of their own. Reading the list up to the first bare ']' cut it
+  // off inside 'Zoom [AV]', so 'Dot by Dot [PC]' was flagged as missing.
+  test('AllowedValues with brackets inside the state names parse whole',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('module_states');
+    addTearDown(() => dir.delete(recursive: true));
+    await File('${dir.path}${Platform.pathSeparator}bracket_states.py')
+        .writeAsString("self.Commands = {\n"
+            "    'AspectRatio': { 'Status': {}, 'AllowedValues': "
+            "['Side Bar', 'Zoom [AV]', 'Dot by Dot [PC]', 'Auto']},\n"
+            "}\n");
+
+    final p = AppStateProvider(autoLoadSettings: false)..modulesPath = dir.path;
+    expect(await p.getStatesForModuleCommand('bracket_states', 'AspectRatio'),
+        ['Side Bar', 'Zoom [AV]', 'Dot by Dot [PC]', 'Auto']);
   });
 }
