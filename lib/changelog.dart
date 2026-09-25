@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.6+16';
+const String kAppVersion = '0.5.7+17';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -33,6 +33,20 @@ class ChangelogEntry {
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
+    version: '0.5.7',
+    date: 'September 25, 2026',
+    title: 'Fits a scaled display, and a setup program',
+    changes: [
+      'Display scaling: the window now always opens inside the screen. At 125% or 150% scaling its default size was larger than a laptop screen, so it opened with its bottom and right edge out of sight.',
+      'Device Editor: the "Pick a model" note scrolls instead of running off '
+          'the bottom of a short window.',
+      'Setup program: the app can now be installed for everyone into '
+          'Program Files, with optional Start menu and desktop shortcuts. '
+          'Settings, recovery copies and logs stay in each user\'s '
+          '%APPDATA%\\RoomConfigBuilder as before.',
+    ],
+  ),
+  ChangelogEntry(
     version: '0.5.6',
     date: 'September 25, 2026',
     title: 'Screenshot and export the install window timeline',
@@ -46,6 +60,11 @@ const List<ChangelogEntry> kChangelog = [
       'Export saves the timeline as Excel (.xlsx) or plain text, or copies '
           'it: the planned install windows first, then each room\'s classes '
           'and free windows day by day.',
+      'The preset estimate notes now also say what is excluded: electrical, '
+          'conduit, raceway, patching and painting (arranged through '
+          'Facilities Management Services), and new or repaired network '
+          'jacks (a Telecommunications Services request). Estimates '
+          'that already have notes keep them.',
     ],
   ),
   ChangelogEntry(

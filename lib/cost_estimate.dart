@@ -209,8 +209,23 @@ const String kDefaultEstimateNotes =
     'final product selection, availability, shipping costs, and applicable '
     'taxes. The miscellaneous materials allowance is intended to cover '
     'cables, surge protection, and other minor installation materials that '
-    'may be required. Any additional work or materials beyond the scope '
-    'described above may result in additional costs.';
+    'may be required.\n'
+    '\n'
+    'This estimate does not include electrical, construction, or finish '
+    'work, such as adding or relocating power outlets, installing conduit or '
+    'surface raceway (Wiremold), patching, or painting. Where that work is '
+    'needed it must be arranged through Facilities Management Services '
+    '(FMS) and will be billed separately.\n'
+    '\n'
+    'This estimate assumes that existing network jacks and building cabling '
+    'are active, correctly labeled, and in good working order. Jacks that '
+    'need to be added, repaired, relocated, or activated will require a '
+    'separate Telecommunications Services (TSRV) request at additional '
+    'cost.\n'
+    '\n'
+    'Any additional work or materials beyond the scope described above, or '
+    'site conditions discovered during installation, may result in '
+    'additional costs.';
 
 /// Where a custom section prints on the estimate PDF.
 enum EstimateSectionPlace {

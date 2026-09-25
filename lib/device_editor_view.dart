@@ -903,11 +903,13 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     final theme = Theme.of(context);
     final entry = _selected(library);
     if (entry == null) {
+      // Scrolls rather than overflowing when the pane is short - a laptop
+      // screen at 125% display scaling leaves little height here.
       return Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 Icons.inventory_2_outlined,
