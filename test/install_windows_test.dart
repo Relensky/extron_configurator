@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/class_schedule.dart';
 import 'package:extron_configurator/install_window_finder.dart';
 import 'package:extron_configurator/install_windows.dart';
+import 'package:extron_configurator/screenshot_tools.dart';
 
 /// Install windows: when each room on the job is free, read off the
 /// Facilities class schedule (the CTS-Dashboard's export), and the ones
@@ -263,5 +265,90 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('install_view_list')));
     await tester.pumpAndSettle();
     expect(find.text('10:15 am - 2:00 pm'), findsWidgets);
+  });
+
+  testWidgets('the timeline exports and screenshots', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    String? copied;
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String?;
+      }
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..classSchedule = ClassScheduleIndex.parse(csv);
+    p.newProject(name: 'Job');
+    final room = p.addProjectManualRoom(name: 'BSS 103');
+    // Monday 1 Feb 2027, 10:15 - 2:00, picked.
+    p.addInstallWindow(InstallWindow.create(
+      roomId: room.id,
+      roomLabel: 'BSS 103',
+      day: DateTime(2027, 2, 1),
+      startMinutes: 10 * 60 + 15,
+      endMinutes: 14 * 60,
+    ));
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showInstallWindowFinder(context,
+                    from: DateTime(2027, 2, 1)),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('install_finder_export')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('install_export_copy')));
+    await tester.pumpAndSettle();
+    expect(copied, isNotNull);
+    expect(copied, contains('Install windows - Job'));
+    expect(copied, contains('Planned install windows'));
+    expect(copied, contains('SOCI 101'));
+    expect(copied, contains('Intro Sociology'));
+    expect(copied, contains('Planned install window'));
+    expect(copied, contains('Free all day'), reason: 'Tue 2 Feb is free');
+
+    // The view is remembered for the session; the picture is of the timeline.
+    await tester.tap(find.byKey(const ValueKey('install_view_timeline')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('install_finder_screenshot')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('install_capture_annotate')),
+        findsOneWidget);
+    expect(find.text('Timeline screenshot'), findsOneWidget);
+    // The picture carries no how-to text: it goes to people outside the app.
+    final picture = find.byType(ZoomablePicturePreview);
+    expect(
+      find.descendant(
+          of: picture.first, matching: find.textContaining('Click')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: picture.first, matching: find.text('SOCI 101')),
+      findsWidgets,
+    );
+    await tester.tap(find.byKey(const ValueKey('install_capture_close')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('install_capture_annotate')),
+        findsNothing);
   });
 }

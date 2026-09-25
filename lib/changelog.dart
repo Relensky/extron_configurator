@@ -48,6 +48,10 @@ const List<ChangelogEntry> kChangelog = [
           'between them in green, like the debugger\'s Room Timeline. Click '
           'a free block to put it on the job; it turns solid. Runs of free '
           'days share one row. The List view is still there.',
+      'Find install windows has a screenshot button and an Export menu. The '
+          'screenshot is the whole timeline, every room and day, ready to '
+          'copy or annotate and save. Export saves every class, free window '
+          'and planned window as Excel or text, or copies it.',
       'Find install windows is quicker with long date ranges and several '
           'rooms: each room\'s days are worked out once per change of '
           'settings, and only the rows on screen are built.',

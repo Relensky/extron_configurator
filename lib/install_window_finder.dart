@@ -1,13 +1,20 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'class_schedule.dart';
 import 'install_windows.dart';
 import 'project_schedule.dart' show formatScheduleDate;
+import 'report_tools.dart';
+import 'screenshot_tools.dart';
+import 'xlsx_writer.dart';
 
 /// ============================================================================
 ///  FINDING INSTALL WINDOWS - the job's rooms against the class schedule
@@ -142,6 +149,12 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
     );
   }
 
+  /// The days on screen for [r]: all of them, or only the free ones.
+  List<RoomDay> _shownDays(InstallRoom r, ClassScheduleIndex schedule) {
+    final days = _roomDays(r, schedule);
+    return _wholeDaysOnly ? days.where((d) => d.free).toList() : days;
+  }
+
   Future<void> _pickDate(bool start) async {
     final picked = await showDatePicker(
       context: context,
@@ -249,6 +262,53 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
           tooltip: 'Close',
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            key: const ValueKey('install_finder_screenshot'),
+            icon: const Icon(Icons.photo_camera_outlined),
+            tooltip: 'Screenshot the whole timeline (copy or annotate & save)',
+            onPressed: _selected.isEmpty
+                ? null
+                : () => _showCapture(rooms, addedFor),
+          ),
+          PopupMenuButton<String>(
+            key: const ValueKey('install_finder_export'),
+            tooltip: 'Export',
+            enabled: _selected.isNotEmpty,
+            icon: const Icon(Icons.ios_share),
+            onSelected: (v) => _export(v, rooms, provider),
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                key: ValueKey('install_export_xlsx'),
+                value: 'xlsx',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.grid_on),
+                  title: Text('Save for Excel (.xlsx)'),
+                ),
+              ),
+              PopupMenuItem(
+                key: ValueKey('install_export_txt'),
+                value: 'txt',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.description_outlined),
+                  title: Text('Save as plain text (.txt)'),
+                ),
+              ),
+              PopupMenuItem(
+                key: ValueKey('install_export_copy'),
+                value: 'copy',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.content_copy),
+                  title: Text('Copy to the clipboard'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -413,8 +473,7 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
     final out = <_Item>[];
     for (final r in rooms) {
       if (!_selected.contains(r.id)) continue;
-      var days = _roomDays(r, schedule);
-      if (_wholeDaysOnly) days = days.where((d) => d.free).toList();
+      final days = _shownDays(r, schedule);
       final windows = days.fold(0, (n, d) => n + d.gaps.length);
       final sections = {for (final d in days) ...d.classes}.length;
       out.add(_RoomHeader(r, sections, windows));
@@ -473,6 +532,7 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
     required double chartW,
     required InstallWindow? Function(InstallRoom, InstallGap) addedFor,
     required AppStateProvider provider,
+    bool picture = false,
   }) {
     final theme = Theme.of(context);
     switch (item) {
@@ -487,8 +547,9 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
               Text(
                 '$sections class section${sections == 1 ? '' : 's'} meet '
                 'here in this range · $windows window'
-                '${windows == 1 ? '' : 's'}. Click a window to put it on '
-                'the timeline.',
+                '${windows == 1 ? '' : 's'}'
+                // The picture is read outside the app.
+                '${picture ? '' : '. Click a window to put it on the timeline'}.',
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -508,6 +569,287 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
       case _FreeRun(:final room, :final days):
         return _freeRunRow(room, days, addedFor, provider);
     }
+  }
+
+  // --- screenshot and export ------------------------------------------------
+
+  String get _rangeLabel =>
+      '${formatScheduleDate(_from)} to ${formatScheduleDate(_to)}';
+
+  String _reportTitle(AppStateProvider provider) {
+    final job = provider.project.name.trim();
+    return 'Install windows${job.isEmpty ? '' : ' - $job'} - $_rangeLabel';
+  }
+
+  String _fileStem(AppStateProvider provider) {
+    final job = provider.project.name.trim();
+    return '${job.isEmpty ? 'project' : job}_install_windows_'
+            '${_from.toIso8601String().split('T').first}'
+        .replaceAll(RegExp(r'[^\w\-]+'), '_');
+  }
+
+  /// The picked windows first, then one section per room with every class
+  /// and free window in time order.
+  List<ReportSection> _reportSections(
+      List<InstallRoom> rooms, AppStateProvider provider) {
+    final schedule = provider.classSchedule;
+    final picked = <String>{
+      for (final w in provider.project.installWindows)
+        _slotKey(w.roomId, w.day, w.startMinutes, w.endMinutes),
+    };
+    String day(DateTime d) => _weekdays[d.weekday - 1];
+    final shown = [for (final r in rooms) if (_selected.contains(r.id)) r];
+    final planned = [
+      for (final w in provider.project.installWindows)
+        if (shown.any((r) => r.id == w.roomId)) w,
+    ]..sort((a, b) => a.start.compareTo(b.start));
+
+    List<List<String>> roomRows(InstallRoom r) {
+      final rows = <List<String>>[];
+      for (final d in _shownDays(r, schedule)) {
+        final date = formatScheduleDate(d.day);
+        final events = <(int, List<String>)>[
+          for (final c in d.classes)
+            (
+              c.startMinutes,
+              [
+                date,
+                day(d.day),
+                'Class',
+                formatScheduleMinutes(c.startMinutes),
+                formatScheduleMinutes(c.endMinutes),
+                _hm(c.endMinutes - c.startMinutes),
+                c.courseLabel,
+                c.title,
+                c.term,
+              ],
+            ),
+          for (final g in d.gaps)
+            (
+              g.startMinutes,
+              [
+                date,
+                day(d.day),
+                picked.contains(
+                        _slotKey(r.id, g.day, g.startMinutes, g.endMinutes))
+                    ? 'Planned install window'
+                    : g.wholeDay
+                        ? 'Free all day'
+                        : 'Free',
+                formatScheduleMinutes(g.startMinutes),
+                formatScheduleMinutes(g.endMinutes),
+                _hm(g.minutes),
+                '',
+                '',
+                '',
+              ],
+            ),
+        ]..sort((a, b) => a.$1.compareTo(b.$1));
+        rows.addAll([for (final e in events) e.$2]);
+      }
+      return rows;
+    }
+
+    return [
+      if (planned.isNotEmpty)
+        (
+          title: 'Planned install windows',
+          header: const ['Room', 'Date', 'Day', 'Start', 'End', 'Length'],
+          rows: [
+            for (final w in planned)
+              [
+                w.roomLabel,
+                formatScheduleDate(w.day),
+                day(w.day),
+                w.wholeDay ? 'All day' : formatScheduleMinutes(w.startMinutes),
+                w.wholeDay ? '' : formatScheduleMinutes(w.endMinutes),
+                _hm(w.endMinutes - w.startMinutes),
+              ],
+          ],
+        ),
+      for (final r in shown)
+        (
+          title: r.label,
+          header: const [
+            'Date', 'Day', 'Type', 'Start', 'End', 'Length', 'Class', //
+            'Title', 'Term',
+          ],
+          rows: roomRows(r),
+        ),
+    ];
+  }
+
+  Future<void> _export(
+      String what, List<InstallRoom> rooms, AppStateProvider provider) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    final title = _reportTitle(provider);
+    final sections = _reportSections(rooms, provider);
+    if (what == 'copy') {
+      await Clipboard.setData(
+          ClipboardData(text: renderTextReport(title, sections)));
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Install windows copied to the clipboard.')));
+      return;
+    }
+    final ext = what == 'xlsx' ? 'xlsx' : 'txt';
+    String? file = await FilePicker.saveFile(
+      dialogTitle: 'Save install windows',
+      fileName: '${_fileStem(provider)}.$ext',
+      type: FileType.custom,
+      allowedExtensions: [ext],
+    );
+    if (file == null) return;
+    if (!file.toLowerCase().endsWith('.$ext')) file += '.$ext';
+    try {
+      if (ext == 'xlsx') {
+        await File(file).writeAsBytes(buildXlsx([
+          buildStackedReportSheet(
+            sheetName: 'Install windows',
+            title: title,
+            sections: sections,
+          ),
+        ]));
+      } else {
+        await File(file).writeAsString(renderTextReport(title, sections));
+      }
+      showSavedSnackBar(
+        messenger: messenger,
+        theme: theme,
+        provider: provider,
+        message: 'Install windows saved as ${path.basename(file)}',
+        savedPath: file,
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('Failed to save the install windows: $e'),
+        backgroundColor: snackErrorFillOn(messenger),
+      ));
+    }
+  }
+
+  /// The whole timeline - every room and day, unscrolled - in a preview
+  /// with Copy Image and Annotate & Save, like the app's other pictures.
+  Future<void> _showCapture(List<InstallRoom> rooms,
+      InstallWindow? Function(InstallRoom, InstallGap) addedFor) async {
+    final provider = context.read<AppStateProvider>();
+    final items = _items(rooms, provider.classSchedule);
+    final boundaryKey = GlobalKey();
+    const width = 1400.0;
+    // A long range makes a tall picture: keep it inside what a GPU texture
+    // can hold.
+    final ratio = (16000 / (items.length * 46 + 200)).clamp(0.75, 2.0);
+    final fileName = '${_fileStem(provider)}.png';
+    final title = _reportTitle(provider);
+    final subtitle = '$_rangeLabel · ${_selected.length} room'
+        '${_selected.length == 1 ? '' : 's'} · generated ${reportTimestamp()}';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final isDark = theme.brightness == Brightness.dark;
+        Future<void> copy() async {
+          final bytes = await captureBoundary(boundaryKey, pixelRatio: ratio);
+          if (!dialogContext.mounted) return;
+          await copyPictureToClipboard(dialogContext, bytes,
+              what: 'The timeline');
+        }
+
+        void annotate() => captureAndAnnotate(dialogContext, boundaryKey,
+            defaultFileName: fileName, pixelRatio: ratio);
+
+        return Dialog(
+          insetPadding: const EdgeInsets.all(24),
+          child: Column(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: isDark ? Colors.black26 : Colors.grey[200],
+              // Narrow windows get icon-only buttons so they still fit.
+              child: LayoutBuilder(builder: (context, c) {
+                final compact = c.maxWidth < 700;
+                return Row(children: [
+                  const Icon(Icons.photo_camera_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('Timeline screenshot',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  if (compact) ...[
+                    IconButton(
+                        icon: const Icon(Icons.copy),
+                        tooltip: 'Copy Image',
+                        onPressed: copy),
+                    IconButton(
+                        icon: const Icon(Icons.draw),
+                        tooltip: 'Annotate & Save PNG',
+                        onPressed: annotate),
+                  ] else ...[
+                    OutlinedButton.icon(
+                      key: const ValueKey('install_capture_copy'),
+                      onPressed: copy,
+                      icon: const Icon(Icons.copy, size: 16),
+                      label: const Text('Copy Image'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      key: const ValueKey('install_capture_annotate'),
+                      onPressed: annotate,
+                      icon: const Icon(Icons.draw, size: 16),
+                      label: const Text('Annotate & Save PNG'),
+                    ),
+                  ],
+                  IconButton(
+                    key: const ValueKey('install_capture_close'),
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                  ),
+                ]);
+              }),
+            ),
+            Expanded(
+              child: ZoomablePicturePreview(
+                keyPrefix: 'install_capture',
+                backdrop: isDark ? Colors.black45 : Colors.grey[350],
+                child: RepaintBoundary(
+                  key: boundaryKey,
+                  // A picture: its windows are not buttons.
+                  child: IgnorePointer(
+                    child: Container(
+                      width: width + 40,
+                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(title,
+                              style: theme.textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold)),
+                          Text(subtitle, style: theme.textTheme.bodySmall),
+                          const SizedBox(height: 8),
+                          if (_sessionTimeline) const _Legend(picture: true),
+                          for (final item in items)
+                            _buildItem(
+                              item,
+                              chartW: width - _labelW,
+                              addedFor: addedFor,
+                              provider: provider,
+                              picture: true,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ]),
+        );
+      },
+    );
   }
 
   // --- list view -------------------------------------------------------------
@@ -940,7 +1282,10 @@ class _GapBlock extends StatelessWidget {
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend();
+  /// Worded for a screenshot, which is read outside the app.
+  final bool picture;
+
+  const _Legend({this.picture = false});
 
   @override
   Widget build(BuildContext context) {
@@ -969,8 +1314,9 @@ class _Legend extends StatelessWidget {
       children: [
         swatch(cls, cls, 'Class'),
         swatch(_freeFill(isDark), _freeInk(isDark).withValues(alpha: 0.45),
-            'Free - click to add'),
-        swatch(scheme.primary, scheme.primary, 'On the timeline'),
+            picture ? 'Free' : 'Free - click to add'),
+        swatch(scheme.primary, scheme.primary,
+            picture ? 'Planned install window' : 'On the timeline'),
       ],
     );
   }
