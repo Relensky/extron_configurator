@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.5+15';
+const String kAppVersion = '0.5.6+16';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -33,6 +33,22 @@ class ChangelogEntry {
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
+    version: '0.5.6',
+    date: 'September 25, 2026',
+    title: 'Screenshot and export the install window timeline',
+    changes: [
+      'Find install windows has a screenshot button and an Export menu at '
+          'the top right.',
+      'The screenshot is the whole timeline, every room and every day in '
+          'the range rather than just what is on screen, ready to copy or to '
+          'annotate and save as a PNG. It is titled with the job and the '
+          'dates, and carries no how-to text.',
+      'Export saves the timeline as Excel (.xlsx) or plain text, or copies '
+          'it: the planned install windows first, then each room\'s classes '
+          'and free windows day by day.',
+    ],
+  ),
+  ChangelogEntry(
     version: '0.5.5',
     date: 'September 25, 2026',
     title: 'Install window timeline, and the corner buttons tuck away',
@@ -48,10 +64,6 @@ const List<ChangelogEntry> kChangelog = [
           'between them in green, like the debugger\'s Room Timeline. Click '
           'a free block to put it on the job; it turns solid. Runs of free '
           'days share one row. The List view is still there.',
-      'Find install windows has a screenshot button and an Export menu. The '
-          'screenshot is the whole timeline, every room and day, ready to '
-          'copy or annotate and save. Export saves every class, free window '
-          'and planned window as Excel or text, or copies it.',
       'Find install windows is quicker with long date ranges and several '
           'rooms: each room\'s days are worked out once per change of '
           'settings, and only the rows on screen are built.',
