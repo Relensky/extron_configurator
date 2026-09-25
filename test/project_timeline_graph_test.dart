@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:extron_configurator/building_project.dart';
+import 'package:extron_configurator/install_windows.dart';
 import 'package:extron_configurator/project_estimate.dart';
+import 'package:extron_configurator/project_workbook.dart';
 import 'package:extron_configurator/project_schedule.dart';
 import 'package:extron_configurator/project_timeline_view.dart';
 
@@ -263,6 +265,45 @@ void main() {
     testWidgets('draws nothing when the job has only one date', (tester) async {
       await pump(tester, job());
       expect(find.byKey(const ValueKey('timeline_date_graph')), findsNothing);
+    });
+  });
+
+  group('install windows', () {
+    InstallWindow window(DateTime day) => InstallWindow.create(
+      roomId: 'r1',
+      roomLabel: 'BSS 103 - Lecture Hall',
+      day: day,
+      startMinutes: 9 * 60,
+      endMinutes: 12 * 60,
+    );
+
+    testWidgets('an install window is on the rail with its room number', (
+      tester,
+    ) async {
+      final it = job();
+      it.project.installWindows.add(window(DateTime(2026, 3, 2)));
+      await pump(tester, it);
+      expect(find.byKey(const ValueKey('timeline_date_graph')), findsOneWidget);
+      expect(mark('Install - BSS 103'), findsOneWidget);
+    });
+
+    test('the workbook timeline lists the install windows', () {
+      final it = job();
+      it.project.installWindows.add(window(DateTime(2026, 3, 2)));
+      final sections = projectTimelineSections(
+        estimateOf(it.project, [part('Projection screen')]),
+        asOf: asOf,
+      );
+      final windows = sections.singleWhere(
+        (s) => s.title.startsWith('Install windows'),
+      );
+      expect(windows.rows.single, [
+        formatScheduleDate(DateTime(2026, 3, 2)),
+        'Mon',
+        'BSS 103 - Lecture Hall',
+        '9:00 am - 12:00 pm',
+        '',
+      ]);
     });
   });
 }

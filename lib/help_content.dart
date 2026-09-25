@@ -1481,8 +1481,10 @@ const List<HelpTopic> kHelpTopics = [
         '(every room and day, not just what is on screen) to copy or '
         'annotate and save. Export saves the classes, free windows and '
         'planned windows as Excel or text, or copies them.\n\n'
-        'Click a window to add it to the job; it shows on the Timeline pane '
-        'and is saved with the project. Click it again, or the X on the '
+        'Click a window to add it to the job; it shows on the Timeline pane, '
+        'as "Install - <room number>" on the dates line, and in the Order '
+        'Timeline sheet of the project workbook, and is saved with the '
+        'project. Click it again, or the X on the '
         'timeline, to take it off. A room the schedule does not know is marked '
         'with a question mark and shows as free every day.',
   ),

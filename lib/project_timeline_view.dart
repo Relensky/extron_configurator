@@ -477,10 +477,18 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
     // header still sets the job's date, and both survive the first room being
     // drawn - at which point the parts arrive and the order dates with them.
     if (provider.project.manualRooms.isEmpty) {
-      return const [
+      return [
+        // Draws only once there is a date on it, e.g. an install window.
+        SliverToBoxAdapter(
+          child: ProjectDateGraph(
+            schedule: schedule,
+            project: provider.project,
+            currency: estimate.currency,
+          ),
+        ),
         // When each room can be worked on - see install_window_finder.dart.
-        SliverToBoxAdapter(child: InstallWindowsCard()),
-        SliverFillRemaining(
+        const SliverToBoxAdapter(child: InstallWindowsCard()),
+        const SliverFillRemaining(
           hasScrollBody: false,
           child: Center(
             child: Padding(
@@ -2349,6 +2357,9 @@ class _ProjectDateGraphState extends State<ProjectDateGraph>
       b.write('|${track.deadline}|${track.completion}');
     }
     b.write('|${schedule.deadline}|${project.rfqs.length}');
+    for (final w in project.installWindows) {
+      b.write('|${w.id}');
+    }
     return b.toString();
   }
 
@@ -2651,6 +2662,19 @@ class _ProjectDateGraphState extends State<ProjectDateGraph>
             out.add((date: on, label: '$name awarded', color: tint));
           }
       }
+    }
+
+    // Install windows picked off the class schedule, one card per room per
+    // day - see install_window_finder.dart.
+    for (final w in project.installWindows) {
+      out.add((
+        date: w.day,
+        label: 'Install - ${w.roomCode}',
+        // The finder's free-time green.
+        color: theme.brightness == Brightness.dark
+            ? Colors.greenAccent
+            : Colors.green[800]!,
+      ));
     }
 
     // The same date under the same name twice is one card, not two on top of

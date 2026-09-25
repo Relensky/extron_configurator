@@ -539,6 +539,31 @@ List<ReportSection> masterPartsSections(
   return sections;
 }
 
+/// The install windows put on the job, earliest first. Empty when there are
+/// none.
+List<ReportSection> installWindowSections(BuildingProject project) {
+  final windows = [...project.installWindows]
+    ..sort((a, b) => a.start.compareTo(b.start));
+  if (windows.isEmpty) return const [];
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return [
+    (
+      title: 'Install windows (${windows.length})',
+      header: const ['Date', 'Day', 'Room', 'Time', 'Notes'],
+      rows: [
+        for (final w in windows)
+          [
+            formatScheduleDate(w.day),
+            weekdays[w.day.weekday - 1],
+            w.roomLabel,
+            w.timeLabel,
+            w.notes,
+          ],
+      ],
+    ),
+  ];
+}
+
 /// When each part has to be ordered, and what cannot be scheduled yet.
 ///
 /// The Core Components list says what to buy; this says when. Kept as its own
@@ -618,6 +643,8 @@ List<ReportSection> projectTimelineSections(
       ],
     ));
   }
+
+  sections.addAll(installWindowSections(estimate.project));
 
   // STILL TO BUY. A part already on order has no trip to purchasing left to
   // schedule, and leaving it here would put a date in front of somebody for an
@@ -1786,6 +1813,14 @@ Uint8List buildProjectWorkbookBytes({
       sheetName: tab(kProjectTimelineSheet),
       title: '$title - when to order',
       sections: projectTimelineSections(estimate, asOf: stamp),
+      generated: stamp,
+    ));
+  } else if (estimate.project.installWindows.isNotEmpty) {
+    // No parts to order, but install windows still go out on the sheet.
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kProjectTimelineSheet),
+      title: '$title - install windows',
+      sections: installWindowSections(estimate.project),
       generated: stamp,
     ));
   }

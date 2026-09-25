@@ -44,6 +44,12 @@ const List<ChangelogEntry> kChangelog = [
           'Program Files, with optional Start menu and desktop shortcuts. '
           'Settings, recovery copies and logs stay in each user\'s '
           '%APPDATA%\\RoomConfigBuilder as before.',
+      'Install windows added from Find install windows show on Project > '
+          'Timeline\'s dates line as "Install - <room number>", including on '
+          'a job with no parts yet.',
+      'The project workbook\'s Order Timeline sheet lists the install '
+          'windows: date, day, room, time and notes. A job with install '
+          'windows and no parts still gets the sheet.',
     ],
   ),
   ChangelogEntry(

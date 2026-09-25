@@ -58,6 +58,12 @@ class InstallWindow {
         wholeDay: wholeDay,
       );
 
+  /// The room number alone - "BUTTE 101" out of "BUTTE 101 - Lecture Hall".
+  String get roomCode {
+    final code = roomLabel.split(' - ').first.trim();
+    return code.isEmpty ? roomLabel : code;
+  }
+
   DateTime get start => day.add(Duration(minutes: startMinutes));
   DateTime get end => day.add(Duration(minutes: endMinutes));
 
