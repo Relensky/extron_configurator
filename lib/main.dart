@@ -798,19 +798,33 @@ class _MainDashboardState extends State<MainDashboard> {
         theme.appBarTheme.backgroundColor ?? theme.colorScheme.primary;
 
     final page = Scaffold(
-      // EVERY WAY A DOCUMENT LEAVES THE APP, on one button that floats in the
-      // lower right - the room, the job or the campus, whichever are open.
-      floatingActionButton: _ExportFab(
-        selectedIndex: selectedIndex,
-        hasConfig: hasConfig,
+      // THE LOWER RIGHT CORNER: the screenshot, and under it every way a
+      // document leaves the app. Both fade and shrink until the pointer
+      // comes near, so they do not sit over the page's last rows.
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!provider.settingsOpen)
+            _FadeUntilHovered(
+              child: _ScreenshotFab(
+                onCost: onCost,
+                onScreen: () => _takeScreenshot(context, selectedIndex),
+              ),
+            ),
+          _ExportFab(
+            selectedIndex: selectedIndex,
+            hasConfig: hasConfig,
+          ),
+        ],
       ),
       appBar: AppBar(
         // THE FILE MENU AND THE STEPS AT THE LEFT, THE APP AT THE RIGHT.
         //
         // The hamburger holds everything that starts, opens or transfers a
         // document; Undo, Redo and the history sit beside it. The far corner
-        // is the application: the screenshot and the light/dark toggle, Help,
-        // and Settings in the corner itself.
+        // is the application: the light/dark toggle, Help, and Settings in
+        // the corner itself. The screenshot floats above Export.
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -887,61 +901,6 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
         titleSpacing: 4,
         actions: [
-          // SCREENSHOT - a menu, because there are two pictures somebody
-          // means: the screen as it is, and on the Cost tab the whole
-          // estimate rendered as a dated quote.
-          PopupMenuButton<String>(
-            key: const ValueKey('screenshot_menu'),
-            icon: const Icon(Icons.photo_camera),
-            tooltip: onCost
-                ? 'Screenshot - the screen, or the estimate as a picture'
-                : 'Screenshot & annotate',
-            onSelected: (v) {
-              switch (v) {
-                case 'screen':
-                  _takeScreenshot(context, selectedIndex);
-                case 'estimate_light':
-                  CostEstimateActions.current?.screenshot(Brightness.light);
-                case 'estimate_dark':
-                  CostEstimateActions.current?.screenshot(Brightness.dark);
-              }
-            },
-            itemBuilder: (ctx) => [
-              const PopupMenuItem(
-                key: ValueKey('screenshot_screen'),
-                value: 'screen',
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.photo_camera),
-                  title: Text('Screenshot & annotate'),
-                  subtitle: Text('What is on screen now'),
-                ),
-              ),
-              if (onCost && CostEstimateActions.current != null) ...const [
-                PopupMenuDivider(),
-                PopupMenuItem(
-                  key: ValueKey('screenshot_estimate_light'),
-                  value: 'estimate_light',
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.light_mode),
-                    title: Text('Estimate as a picture - light'),
-                    subtitle: Text('The whole quote, dated, controls hidden'),
-                  ),
-                ),
-                PopupMenuItem(
-                  key: ValueKey('screenshot_estimate_dark'),
-                  value: 'estimate_dark',
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.dark_mode),
-                    title: Text('Estimate as a picture - dark'),
-                    subtitle: Text('For a dark slide deck'),
-                  ),
-                ),
-              ],
-            ],
-          ),
           IconButton(
             key: const ValueKey('toggle_theme'),
             icon: Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
@@ -4801,6 +4760,114 @@ class _SettingsWindow extends StatelessWidget {
   }
 }
 
+/// Faded and shrunk into its lower-right corner until the pointer is over
+/// it. The hover area stays full size, so it grows back as the pointer
+/// arrives rather than once it lands on the smaller button.
+class _FadeUntilHovered extends StatefulWidget {
+  final Widget child;
+
+  const _FadeUntilHovered({required this.child});
+
+  @override
+  State<_FadeUntilHovered> createState() => _FadeUntilHoveredState();
+}
+
+class _FadeUntilHoveredState extends State<_FadeUntilHovered> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const duration = Duration(milliseconds: 150);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedOpacity(
+        opacity: _hover ? 1 : 0.45,
+        duration: duration,
+        child: AnimatedScale(
+          scale: _hover ? 1 : 0.8,
+          alignment: Alignment.bottomRight,
+          duration: duration,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+/// SCREENSHOT, floating above Export - a menu, because there are two
+/// pictures somebody means: the screen as it is, and on the Cost tab the
+/// whole estimate rendered as a dated quote.
+class _ScreenshotFab extends StatelessWidget {
+  final bool onCost;
+  final VoidCallback onScreen;
+
+  const _ScreenshotFab({required this.onCost, required this.onScreen});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      key: const ValueKey('screenshot_menu'),
+      tooltip: onCost
+          ? 'Screenshot - the screen, or the estimate as a picture'
+          : 'Screenshot & annotate',
+      position: PopupMenuPosition.over,
+      onSelected: (v) {
+        switch (v) {
+          case 'screen':
+            onScreen();
+          case 'estimate_light':
+            CostEstimateActions.current?.screenshot(Brightness.light);
+          case 'estimate_dark':
+            CostEstimateActions.current?.screenshot(Brightness.dark);
+        }
+      },
+      itemBuilder: (ctx) => [
+        const PopupMenuItem(
+          key: ValueKey('screenshot_screen'),
+          value: 'screen',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.photo_camera),
+            title: Text('Screenshot & annotate'),
+            subtitle: Text('What is on screen now'),
+          ),
+        ),
+        if (onCost && CostEstimateActions.current != null) ...const [
+          PopupMenuDivider(),
+          PopupMenuItem(
+            key: ValueKey('screenshot_estimate_light'),
+            value: 'estimate_light',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.light_mode),
+              title: Text('Estimate as a picture - light'),
+              subtitle: Text('The whole quote, dated, controls hidden'),
+            ),
+          ),
+          PopupMenuItem(
+            key: ValueKey('screenshot_estimate_dark'),
+            value: 'estimate_dark',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.dark_mode),
+              title: Text('Estimate as a picture - dark'),
+              subtitle: Text('For a dark slide deck'),
+            ),
+          ),
+        ],
+      ],
+      child: IgnorePointer(
+        child: FloatingActionButton(
+          heroTag: 'screenshot_fab',
+          onPressed: () {},
+          child: const Icon(Icons.photo_camera),
+        ),
+      ),
+    );
+  }
+}
+
 /// EXPORT, AS A BUTTON FLOATING IN THE LOWER RIGHT.
 ///
 /// It lists what is actually open: the room's workbook when a room is, the
@@ -4915,7 +4982,7 @@ class _ExportFab extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return PopupMenuButton<String>(
+    final menu = PopupMenuButton<String>(
       key: const ValueKey('export_menu'),
       tooltip: 'Export',
       position: PopupMenuPosition.over,
@@ -4957,6 +5024,12 @@ class _ExportFab extends StatelessWidget {
           label: const Text('Export'),
         ),
       ),
+    );
+    // The gap to the screenshot above goes with the button, so the
+    // screenshot drops into the corner when there is nothing to export.
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: _FadeUntilHovered(child: menu),
     );
   }
 

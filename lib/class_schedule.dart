@@ -289,15 +289,30 @@ class InstallGap {
           '${formatScheduleMinutes(endMinutes)}';
 }
 
-/// The free stretches in a room between [from] and [to] (inclusive days),
-/// inside the working day [dayStart]..[dayEnd] (minutes after midnight),
-/// no shorter than [minMinutes].
+/// One day in a room: the classes that meet in it and the free stretches.
+class RoomDay {
+  final DateTime day;
+
+  /// Sorted by start time.
+  final List<ScheduledClass> classes;
+
+  /// The windows long enough to count, in time order.
+  final List<InstallGap> gaps;
+
+  const RoomDay(this.day, this.classes, this.gaps);
+
+  bool get free => classes.isEmpty;
+}
+
+/// A room's days between [from] and [to] (inclusive), with the free
+/// stretches inside the working day [dayStart]..[dayEnd] (minutes after
+/// midnight) no shorter than [minMinutes].
 ///
 /// A day with no classes at all is one whole-day window. [skipWeekends]
 /// leaves Saturdays and Sundays out when they have no classes - most installs
 /// are planned into weekdays, and a list with every weekend on it buries the
 /// breaks between terms, which are the windows worth finding.
-List<InstallGap> findInstallGaps(
+List<RoomDay> findRoomDays(
   List<ScheduledClass> classes, {
   required DateTime from,
   required DateTime to,
@@ -306,42 +321,81 @@ List<InstallGap> findInstallGaps(
   int minMinutes = 120,
   bool skipWeekends = true,
 }) {
-  final gaps = <InstallGap>[];
-  var day = DateTime(from.year, from.month, from.day);
+  final first = DateTime(from.year, from.month, from.day);
   final last = DateTime(to.year, to.month, to.day);
-  while (!day.isAfter(last)) {
-    final busy = [
-      for (final c in classes)
-        if (c.meetsOn(day))
-          (
-            c.startMinutes.clamp(dayStart, dayEnd),
-            c.endMinutes.clamp(dayStart, dayEnd),
-          ),
-    ]..sort((a, b) => a.$1.compareTo(b.$1));
 
-    final weekend = day.weekday >= DateTime.saturday;
-    if (busy.isEmpty) {
-      if (!(weekend && skipWeekends)) {
-        gaps.add(InstallGap(
+  // Bucket once by weekday, keeping only sections that run in the range, so
+  // each day checks a handful of classes instead of every term's.
+  final byWeekday = List.generate(7, (_) => <ScheduledClass>[]);
+  for (final c in classes) {
+    if (c.endDate.isBefore(first) || c.startDate.isAfter(last)) continue;
+    for (var w = 0; w < 7; w++) {
+      if (c.days.contains(const ['M', 'T', 'W', 'R', 'F', 'S', 'U'][w])) {
+        byWeekday[w].add(c);
+      }
+    }
+  }
+  for (final list in byWeekday) {
+    list.sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+  }
+
+  final out = <RoomDay>[];
+  for (var day = first;
+      !day.isAfter(last);
+      day = DateTime(day.year, day.month, day.day + 1)) {
+    final meeting = [
+      for (final c in byWeekday[day.weekday - 1])
+        if (!day.isBefore(c.startDate) && !day.isAfter(c.endDate)) c,
+    ];
+    if (meeting.isEmpty) {
+      if (skipWeekends && day.weekday >= DateTime.saturday) continue;
+      out.add(RoomDay(day, meeting, [
+        InstallGap(
           day: day,
           startMinutes: dayStart,
           endMinutes: dayEnd,
           wholeDay: true,
-        ));
-      }
-    } else {
-      var cursor = dayStart;
-      for (final (s, e) in busy) {
-        if (s - cursor >= minMinutes) {
-          gaps.add(InstallGap(day: day, startMinutes: cursor, endMinutes: s));
-        }
-        if (e > cursor) cursor = e;
-      }
-      if (dayEnd - cursor >= minMinutes) {
-        gaps.add(InstallGap(day: day, startMinutes: cursor, endMinutes: dayEnd));
-      }
+        ),
+      ]));
+      continue;
     }
-    day = DateTime(day.year, day.month, day.day + 1);
+    final gaps = <InstallGap>[];
+    var cursor = dayStart;
+    for (final c in meeting) {
+      final s = c.startMinutes.clamp(dayStart, dayEnd);
+      final e = c.endMinutes.clamp(dayStart, dayEnd);
+      if (s - cursor >= minMinutes) {
+        gaps.add(InstallGap(day: day, startMinutes: cursor, endMinutes: s));
+      }
+      if (e > cursor) cursor = e;
+    }
+    if (dayEnd - cursor >= minMinutes) {
+      gaps.add(InstallGap(day: day, startMinutes: cursor, endMinutes: dayEnd));
+    }
+    out.add(RoomDay(day, meeting, gaps));
   }
-  return gaps;
+  return out;
 }
+
+/// Just the free stretches of [findRoomDays], in order.
+List<InstallGap> findInstallGaps(
+  List<ScheduledClass> classes, {
+  required DateTime from,
+  required DateTime to,
+  int dayStart = 7 * 60,
+  int dayEnd = 22 * 60,
+  int minMinutes = 120,
+  bool skipWeekends = true,
+}) =>
+    [
+      for (final d in findRoomDays(
+        classes,
+        from: from,
+        to: to,
+        dayStart: dayStart,
+        dayEnd: dayEnd,
+        minMinutes: minMinutes,
+        skipWeekends: skipWeekends,
+      ))
+        ...d.gaps,
+    ];

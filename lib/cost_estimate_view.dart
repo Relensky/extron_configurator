@@ -6067,8 +6067,8 @@ class _PdfWordingDialogState extends State<_PdfWordingDialog> {
     return AlertDialog(
       title: const Text('PDF wording'),
       content: SizedBox(
-        width: math.min(460, size.width - 120),
-        height: math.min(560, size.height - 220),
+        width: math.min(620, size.width - 120),
+        height: math.min(640, size.height - 220),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -6081,6 +6081,8 @@ class _PdfWordingDialogState extends State<_PdfWordingDialog> {
             const SizedBox(height: 12),
             Expanded(
               child: ListView(
+                // Room on the right for the scrollbar, clear of the boxes.
+                padding: const EdgeInsets.only(right: 16),
                 children: [
                   for (final entry in kEstimatePdfWords.entries)
                     Padding(

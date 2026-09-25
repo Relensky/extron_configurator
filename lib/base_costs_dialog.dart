@@ -96,7 +96,7 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
       content: SizedBox(
         // Wide enough for both tiers plus a readable note column; the single
         // price card fitted in 760 and two do not.
-        width: 900,
+        width: 940,
         height: 480,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,12 +138,15 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
                     style: theme.textTheme.labelSmall,
                   ),
                 ),
-                const SizedBox(width: 34),
+                const SizedBox(width: 34 + 16),
               ],
             ),
             const Divider(),
             Expanded(
               child: ListView(
+                // Room on the right for the scrollbar, clear of the delete
+                // buttons.
+                padding: const EdgeInsets.only(right: 16),
                 children: [
                   for (final cost in book.costs)
                     Padding(

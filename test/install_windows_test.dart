@@ -118,6 +118,29 @@ void main() {
     });
   });
 
+  test('each day carries its classes as well as its windows', () {
+    final idx = ClassScheduleIndex.parse(csv);
+    // Mon 1 - Tue 2 Feb 2027, with a section from another range ignored.
+    final days = findRoomDays(
+      idx.classesIn('BSS 103'),
+      from: DateTime(2027, 2, 1),
+      to: DateTime(2027, 2, 2),
+    );
+    expect(days, hasLength(2));
+    expect([for (final c in days.first.classes) c.courseLabel],
+        ['SOCI 101', 'SOCI 202']);
+    expect(days.first.gaps, hasLength(3));
+    expect(days.last.free, isTrue);
+    expect(days.last.gaps.single.wholeDay, isTrue);
+    // Before the term starts nothing meets.
+    final before = findRoomDays(
+      idx.classesIn('BSS 103'),
+      from: DateTime(2027, 1, 18),
+      to: DateTime(2027, 1, 22),
+    );
+    expect(before.every((d) => d.free), isTrue);
+  });
+
   test('install windows survive the project file', () {
     final p = BuildingProject(name: 'Job');
     p.installWindows.add(InstallWindow.create(
@@ -187,5 +210,58 @@ void main() {
     await tester.pumpAndSettle();
     final w = p.project.installWindows.single;
     expect(find.byKey(ValueKey('install_window_${w.id}')), findsOneWidget);
+  });
+
+  testWidgets('the timeline draws classes as blocks and adds a free one',
+      (tester) async {
+    tester.view.physicalSize = const Size(1600, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..classSchedule = ClassScheduleIndex.parse(csv);
+    p.newProject(name: 'Job');
+    final room = p.addProjectManualRoom(name: 'BSS 103');
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showInstallWindowFinder(context,
+                    from: DateTime(2027, 2, 1)),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('install_view_timeline')));
+    await tester.pumpAndSettle();
+
+    // Monday 1 Feb: both classes drawn, and the 10:15 - 2:00 gap clickable.
+    expect(find.text('SOCI 101'), findsWidgets);
+    expect(find.text('SOCI 202'), findsWidgets);
+    final gap = find.byKey(ValueKey(
+        'install_gap_${room.id}_${DateTime(2027, 2, 1).toIso8601String()}_${10 * 60 + 15}'));
+    expect(gap, findsOneWidget);
+    await tester.tap(gap);
+    await tester.pumpAndSettle();
+    final w = p.project.installWindows.single;
+    expect((w.startMinutes, w.endMinutes), (10 * 60 + 15, 14 * 60));
+
+    await tester.tap(gap);
+    await tester.pumpAndSettle();
+    expect(p.project.installWindows, isEmpty);
+
+    // The List view lists the same gap as a chip.
+    await tester.tap(find.byKey(const ValueKey('install_view_list')));
+    await tester.pumpAndSettle();
+    expect(find.text('10:15 am - 2:00 pm'), findsWidgets);
   });
 }

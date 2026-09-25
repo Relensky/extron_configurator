@@ -1462,7 +1462,8 @@ const List<HelpTopic> kHelpTopics = [
     where: 'Project tab → Timeline → Install windows → Find install windows...',
     plain:
         'When each room on the job is free to work in, read off the class '
-        'schedule. Click a free window to put it on the timeline.',
+        'schedule, drawn as a timeline of classes and free time. Click a '
+        'free window to put it on the timeline.',
     keywords: ['install window', 'class schedule', 'free time', 'gap',
       'calendar', 'when is the room free', 'facilities', 'cts dashboard'],
     body:
@@ -1472,6 +1473,10 @@ const List<HelpTopic> kHelpTopics = [
         'it lists the stretches between classes and the whole days with nothing '
         'booked, between the dates you choose and no shorter than the length '
         'you pick. Online and TBA sections are ignored.\n\n'
+        'The Timeline view draws each day as a row: classes are colored '
+        'blocks (hover for the course and times) and free stretches are '
+        'green. Several free days in a row share one row. The List view '
+        'lists the same windows by day.\n\n'
         'Click a window to add it to the job; it shows on the Timeline pane '
         'and is saved with the project. Click it again, or the X on the '
         'timeline, to take it off. A room the schedule does not know is marked '

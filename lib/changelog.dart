@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.4+14';
+const String kAppVersion = '0.5.5+15';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,29 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.5',
+    date: 'September 25, 2026',
+    title: 'Install window timeline, and the corner buttons tuck away',
+    changes: [
+      'The screenshot button floats in the lower right corner, just above '
+          'Export, and drops into the corner itself when there is nothing '
+          'to export. It has left the title bar.',
+      'Screenshot and Export fade and shrink into the corner until the '
+          'pointer comes near, so they no longer sit over the last rows of '
+          'a page. Each wakes up on its own.',
+      'Find install windows has a Timeline view (the default): each day is a '
+          'row with its classes drawn as blocks and the free stretches '
+          'between them in green, like the debugger\'s Room Timeline. Click '
+          'a free block to put it on the job; it turns solid. Runs of free '
+          'days share one row. The List view is still there.',
+      'Find install windows is quicker with long date ranges and several '
+          'rooms: each room\'s days are worked out once per change of '
+          'settings, and only the rows on screen are built.',
+      'PDF wording and Base costs windows are wider, and their scrollbar '
+          'sits beside the boxes instead of over them.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.4',
     date: 'September 24, 2026',

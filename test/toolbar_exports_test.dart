@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,6 +45,7 @@ void main() {
   }
 
   final exportMenu = find.byKey(const ValueKey('export_menu'));
+  final screenshotMenu = find.byKey(const ValueKey('screenshot_menu'));
 
   Future<void> openExport(WidgetTester tester) async {
     await tester.tap(exportMenu);
@@ -64,7 +66,53 @@ void main() {
       final r = tester.getRect(exportMenu);
       expect(r.right, greaterThan(screen.right - 60));
       expect(r.bottom, greaterThan(screen.bottom - 60));
+      // The screenshot floats just above it, right edges lined up.
+      final shot = tester.getRect(screenshotMenu);
+      expect(shot.bottom, lessThanOrEqualTo(r.top));
+      expect(r.top - shot.bottom, lessThan(24));
+      expect((shot.right - r.right).abs(), lessThan(2));
     }
+  });
+
+  testWidgets('with nothing to export the screenshot takes the corner',
+      (tester) async {
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..settingsLoaded = true
+      ..firstRunSetupNeeded = false;
+    await pumpApp(tester, p);
+    final screen = tester.getRect(find.byType(Scaffold).first);
+    expect(exportMenu, findsNothing);
+    final shot = tester.getRect(screenshotMenu);
+    expect(shot.right, greaterThan(screen.right - 60));
+    expect(shot.bottom, greaterThan(screen.bottom - 60));
+  });
+
+  testWidgets('the corner buttons fade and shrink until hovered',
+      (tester) async {
+    final p = room();
+    await pumpApp(tester, p);
+    await tester.pumpAndSettle();
+    double opacityOf(Finder f) => tester
+        .widget<AnimatedOpacity>(
+            find.ancestor(of: f, matching: find.byType(AnimatedOpacity)).first)
+        .opacity;
+    final small = tester.getRect(screenshotMenu);
+    expect(opacityOf(screenshotMenu), lessThan(1));
+    expect(opacityOf(exportMenu), lessThan(1));
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(screenshotMenu));
+    await tester.pumpAndSettle();
+    expect(opacityOf(screenshotMenu), 1);
+    expect(tester.getRect(screenshotMenu).width, greaterThan(small.width));
+    expect(opacityOf(exportMenu), lessThan(1),
+        reason: 'each button wakes on its own');
+
+    await mouse.moveTo(Offset.zero);
+    await tester.pumpAndSettle();
+    expect(opacityOf(screenshotMenu), lessThan(1));
   });
 
   testWidgets('with nothing loaded there is nothing to export', (tester) async {

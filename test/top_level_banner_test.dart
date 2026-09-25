@@ -94,8 +94,8 @@ void main() {
     expect(banner.right - saveMenu.right, lessThan(4),
         reason: 'Save is in the corner of the second row');
 
-    // THE TITLE BAR: the File menu, Undo, Redo and History at the left; the
-    // screenshot, light/dark, Help and Settings at the right.
+    // THE TITLE BAR: the File menu, Undo, Redo and History at the left;
+    // light/dark, Help and Settings at the right.
     const leftKeys = [
       'file_menu',
       'toolbar_undo',
@@ -104,7 +104,6 @@ void main() {
       'revert_to_backup',
     ];
     const rightKeys = [
-      'screenshot_menu',
       'toggle_theme',
       'open_help',
       'banner_app_config',
@@ -120,7 +119,7 @@ void main() {
       );
     }
     // Moved: the transfers into the File menu, the exports onto the floating
-    // Export button.
+    // Export button, the screenshot above it.
     for (final key in ['sftp_upload', 'new_menu', 'open_config']) {
       expect(find.byKey(ValueKey(key)), findsNothing, reason: key);
     }
@@ -144,9 +143,14 @@ void main() {
         lessThan(rectOf('banner_app_config').left + 1),
         reason: 'Help is just left of Settings');
     expect(rectOf('toggle_theme').right, lessThan(rectOf('open_help').left + 1));
-    expect(rectOf('screenshot_menu').right,
-        lessThan(rectOf('toggle_theme').left + 1),
-        reason: 'the screenshot sits beside the light/dark toggle');
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byKey(const ValueKey('screenshot_menu')),
+      ),
+      findsNothing,
+      reason: 'the screenshot floats above Export',
+    );
 
     await tester.tap(find.byKey(const ValueKey('banner_project')));
     await tester.pumpAndSettle();
