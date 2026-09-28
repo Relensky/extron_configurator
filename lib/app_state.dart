@@ -11028,7 +11028,30 @@ class AppStateProvider extends ChangeNotifier {
       // The dialog hands back exactly what was typed, so a name entered without
       // an extension would land as a file Windows can't associate with JSON.
       if (!outputFile.toLowerCase().endsWith('.json')) outputFile += '.json';
+      return await saveRoomConfigTo(outputFile);
+    } catch (e, stack) {
+      AppLogger.logError("Failed to export room configuration", e, stack);
+      return false;
+    }
+  }
 
+  /// The file name a room is offered under - `ARTS_111_config.json`.
+  String get defaultRoomConfigFileName {
+    final systemSetup = roomConfig['SYSTEM_SETUP'] ?? {};
+    final gveBldg = systemSetup['gve_bldg'] ?? 'UNKNOWN_BLDG';
+    final gveRoom = systemSetup['gve_room'] ?? 'UNKNOWN_ROOM';
+    return '${bldgAbbreviation(gveBldg.toString())}_${gveRoom}_config.json';
+  }
+
+  /// Saves the open room to [outputFile] with no dialog, and makes it the
+  /// room's working file. What [exportRoomConfig] does once it has a path.
+  Future<bool> saveRoomConfigTo(String outputFile) async {
+    pendingRawEditorCommit?.call();
+    if (roomConfig.isEmpty) {
+      AppLogger.logError("Cannot export: Config is empty.");
+      return false;
+    }
+    try {
       final targetFile = File(outputFile);
       final encoder = const JsonEncoder.withIndent('    ');
       
@@ -13277,7 +13300,10 @@ class AppStateProvider extends ChangeNotifier {
   // --- the budget ------------------------------------------------------------
 
   /// Sets what the job has to spend. See project_budget.dart.
+  ///
+  /// Nothing happens while it is locked - see [setProjectBudgetLocked].
   void setProjectBudget(double amount) {
+    if (project.budgetLocked) return;
     final next = amount.isNaN || amount < 0 ? 0.0 : amount;
     if ((next - project.budget).abs() < 1e-9) return;
     project.budget = next;
@@ -13289,6 +13315,108 @@ class AppStateProvider extends ChangeNotifier {
       coalesce: true,
     );
     _projectChanged(repricing: false);
+  }
+
+  /// Locks the budget as the job's fixed maximum, or unlocks it to change.
+  void setProjectBudgetLocked(bool locked) {
+    if (project.budgetLocked == locked) return;
+    project.budgetLocked = locked;
+    _logProjectEdit(
+      itemKey: 'budget',
+      itemName: project.name,
+      field: 'Budget',
+      summary: locked ? 'locked' : 'unlocked',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Sets a room's priority, who pays for it and its target price. Pass
+  /// [manualId] for a line item or [roomId] for a drawn room. Returns the
+  /// message to show - '' when it went in.
+  ///
+  /// A target that would take the rooms' targets over the budget is refused,
+  /// saying how much is free: money can move between rooms, the total cannot
+  /// grow past the maximum.
+  String setRoomFunding({
+    String manualId = '',
+    String roomId = '',
+    int? priority,
+    String? funding,
+    double? targetPrice,
+  }) {
+    final line = manualId.isEmpty
+        ? null
+        : project.manualRooms.where((r) => r.id == manualId).firstOrNull;
+    final room = roomId.isEmpty
+        ? null
+        : project.rooms.where((r) => r.id == roomId).firstOrNull;
+    if (line == null && room == null) return 'That room is no longer on the job.';
+    final name = line?.name ?? projectRoomLogName(room!.id);
+
+    if (targetPrice != null) {
+      final next = targetPrice.isNaN || targetPrice < 0 ? 0.0 : targetPrice;
+      final was = line?.targetPrice ?? room!.targetPrice;
+      // An excluded room does not count, so its target cannot overspend.
+      final counts = line != null || room!.included;
+      final total = project.targetTotal - (counts ? was : 0) + next;
+      if (counts &&
+          project.budget > 0 &&
+          next > was &&
+          total > project.budget + 0.005) {
+        final free = project.budget - project.targetTotal;
+        return 'That is over the budget. '
+            '${formatMoney(free < 0 ? 0 : free, project.currency)} is free - '
+            'take it from another room first.';
+      }
+      targetPrice = next;
+    }
+
+    if (line != null) {
+      project.updateManualRoom(
+        line.copyWith(
+          priority: priority,
+          funding: funding?.trim(),
+          targetPrice: targetPrice,
+        ),
+      );
+    } else {
+      final at = project.rooms.indexWhere((r) => r.id == roomId);
+      project.rooms[at] = room!.copyWith(
+        priority: priority,
+        funding: funding?.trim(),
+        targetPrice: targetPrice,
+      );
+    }
+    final key = line != null ? 'manual:$manualId' : 'room:$roomId';
+    if (priority != null) {
+      _logProjectEdit(
+        itemKey: key,
+        itemName: name,
+        field: 'Priority',
+        summary: priority > 0 ? 'priority $priority' : 'not prioritized',
+        coalesce: true,
+      );
+    }
+    if (funding != null) {
+      _logProjectEdit(
+        itemKey: key,
+        itemName: name,
+        field: 'Funding',
+        summary: funding.trim().isEmpty ? 'cleared' : funding.trim(),
+        coalesce: true,
+      );
+    }
+    if (targetPrice != null) {
+      _logProjectEdit(
+        itemKey: key,
+        itemName: name,
+        field: 'Target price',
+        summary: formatMoney(targetPrice, project.currency),
+        coalesce: true,
+      );
+    }
+    _projectChanged(repricing: false);
+    return '';
   }
 
   /// Adds a line to the budget; returns its id.
@@ -13547,6 +13675,68 @@ class AppStateProvider extends ChangeNotifier {
     return room;
   }
 
+  /// Adds a pasted list of room names as line items, one per line. Returns
+  /// how many went on and the names skipped because the job already has them.
+  ///
+  /// Each room's building code joins the job's buildings, so pasting rooms
+  /// from five buildings makes a five-building job.
+  ///
+  /// With [groupsArePriorities], each blank-line-separated group is the next
+  /// priority after the highest the job already has. Targets that would go
+  /// over the budget are left off and named in [overBudget].
+  ({int added, List<String> skipped, List<String> overBudget})
+  addProjectManualRoomList(String text, {bool groupsArePriorities = false}) {
+    String key(String name) =>
+        name.trim().toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
+    final onJob = <String>{
+      for (final r in project.manualRooms) key(r.name),
+      for (final r in project.rooms) key(r.fallbackName),
+    };
+    final skipped = <String>[];
+    final overBudget = <String>[];
+    var added = 0;
+    final firstPriority = [
+      for (final r in project.manualRooms) r.priority,
+      for (final r in project.rooms) r.priority,
+    ].fold(0, (a, b) => a > b ? a : b);
+    for (final row in parseRoomRows(text)) {
+      final name = row.name;
+      if (onJob.contains(key(name))) {
+        skipped.add(name);
+        continue;
+      }
+      var target = row.targetPrice;
+      if (target > 0 &&
+          project.budget > 0 &&
+          project.targetTotal + target > project.budget + 0.005) {
+        overBudget.add(name);
+        target = 0;
+      }
+      final added0 = project.addManualRoom(name: name);
+      final room = added0.copyWith(
+        roomType: row.roomType,
+        funding: row.funding,
+        targetPrice: target,
+        priority: groupsArePriorities ? firstPriority + row.group : 0,
+      );
+      project.updateManualRoom(room);
+      _logProjectEdit(
+        itemKey: 'manual:${room.id}',
+        itemName: room.name,
+        field: 'Line item',
+        summary: 'added to the plan',
+      );
+      final code = buildingCodeOfRoom(name);
+      if (code.isNotEmpty &&
+          !project.buildings.any((b) => b.toUpperCase() == code)) {
+        project.buildings.add(code);
+      }
+      added++;
+    }
+    if (added > 0) _projectChanged();
+    return (added: added, skipped: skipped, overBudget: overBudget);
+  }
+
   /// Writes a changed line item back onto the job - a date, a life, a figure.
   ///
   /// Logged by WHAT MOVED rather than as "edited", because those three fields
@@ -13708,6 +13898,12 @@ class AppStateProvider extends ChangeNotifier {
 
     final error = addRoomToProject(configPath, label: line.name.trim());
     if (error.isNotEmpty) return error;
+    // Its place in the priorities and its money come with it.
+    project.rooms.last = project.rooms.last.copyWith(
+      priority: line.priority,
+      funding: line.funding,
+      targetPrice: line.targetPrice,
+    );
 
     project.removeManualRoom(manualId);
     _logProjectEdit(

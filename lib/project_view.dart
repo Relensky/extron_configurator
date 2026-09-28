@@ -20,6 +20,7 @@ import 'control_gaps.dart' show ControlGap;
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'manual_room_lines.dart';
+import 'project_funding_view.dart';
 import 'name_colors.dart';
 import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
@@ -1111,7 +1112,8 @@ class _ProjectViewState extends State<ProjectView> {
     final building = LiveTextField(
       fieldId: 'project_bldg_${provider.currentProjectPath}',
       initial: provider.project.building,
-      label: 'Building',
+      label: 'Buildings',
+      hint: 'ARTS, HOLT',
       onChanged: (v) => provider.setProjectField(building: v),
     );
     final job = LiveTextField(
@@ -1524,6 +1526,7 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
                 // rather than buried, because on those jobs it is the only
                 // one of the three that does anything.
                 const AddManualRoomLineButton(),
+                const PasteRoomListButton(),
               ],
             ),
             const SizedBox(height: 6),
@@ -1550,6 +1553,13 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
         ),
       ),
     ),
+    // Which rooms go first and what each is allowed. See
+    // project_funding_view.dart.
+    if (projectHasFunding(provider))
+      const SliverPadding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
+        sliver: SliverToBoxAdapter(child: ProjectFundingCard()),
+      ),
     // A JOB CAN BE ALL LINE ITEMS. An empty room list used to be the end of
     // this pane, which read as "there is nothing on this job" on the exact
     // jobs where there are thirty-four rooms on a refresh plan - they simply

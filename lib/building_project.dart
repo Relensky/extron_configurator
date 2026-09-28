@@ -2060,6 +2060,21 @@ class ManualRoom {
   /// [buildManualRoomLifecycle].
   final List<ManualRoomItem> equipment;
 
+  /// Which priority group it is in, 1 first. 0 is not prioritized.
+  final int priority;
+
+  /// The room type it is built as - a preset's source name, '1 Proj 1 Cam 1
+  /// Mic'. Empty falls back to the one in the notes; see [sourceType].
+  final String roomType;
+
+  /// Who pays for it - 'Central', 'Dept'. Free text.
+  final String funding;
+
+  /// The money set aside for this room out of the job's budget. 0 is none.
+  /// Not [replacementCost]: that is what the room would cost, this is what it
+  /// is allowed.
+  final double targetPrice;
+
   const ManualRoom({
     required this.id,
     required this.name,
@@ -2069,6 +2084,10 @@ class ManualRoom {
     this.category = '',
     this.notes = '',
     this.equipment = const [],
+    this.priority = 0,
+    this.roomType = '',
+    this.funding = '',
+    this.targetPrice = 0,
   });
 
   /// How many boxes the survey found, counting a quantity of two as two.
@@ -2084,6 +2103,10 @@ class ManualRoom {
     String? category,
     String? notes,
     List<ManualRoomItem>? equipment,
+    int? priority,
+    String? roomType,
+    String? funding,
+    double? targetPrice,
   }) => ManualRoom(
     id: id,
     name: name ?? this.name,
@@ -2094,6 +2117,10 @@ class ManualRoom {
     category: category ?? this.category,
     notes: notes ?? this.notes,
     equipment: equipment ?? this.equipment,
+    priority: priority ?? this.priority,
+    roomType: roomType ?? this.roomType,
+    funding: funding ?? this.funding,
+    targetPrice: targetPrice ?? this.targetPrice,
   );
 
   Map<String, dynamic> toJson() => {
@@ -2106,6 +2133,10 @@ class ManualRoom {
     if (notes.trim().isNotEmpty) 'notes': notes.trim(),
     if (equipment.isNotEmpty)
       'equipment': [for (final item in equipment) item.toJson()],
+    if (priority > 0) 'priority': priority,
+    if (roomType.trim().isNotEmpty) 'roomType': roomType.trim(),
+    if (funding.trim().isNotEmpty) 'funding': funding.trim(),
+    if (targetPrice > 0) 'targetPrice': targetPrice,
   };
 
   /// The room TYPE this estimate was priced against, off the master refresh
@@ -2120,6 +2151,7 @@ class ManualRoom {
   /// Anything after the type is an annotation the importer added about the
   /// master sheet ('last update unknown'), so it stops at the separator.
   String get sourceType {
+    if (roomType.trim().isNotEmpty) return roomType.trim();
     final match = RegExp(r'RYG estimate for (.+)$').firstMatch(notes.trim());
     if (match == null) return '';
     return match.group(1)!.split('·').first.trim();
@@ -2137,6 +2169,10 @@ class ManualRoom {
       for (final item in (json['equipment'] as List<dynamic>? ?? const []))
         if (item is Map<String, dynamic>) ManualRoomItem.fromJson(item),
     ],
+    priority: (json['priority'] as num?)?.toInt() ?? 0,
+    roomType: json['roomType']?.toString() ?? '',
+    funding: json['funding']?.toString() ?? '',
+    targetPrice: (json['targetPrice'] as num?)?.toDouble() ?? 0,
   );
 }
 
@@ -2171,12 +2207,21 @@ class ProjectRoomRef {
   /// Free text on the row — "phase 2", "waiting on the ceiling survey".
   final String notes;
 
+  /// The same three a line item carries - see [ManualRoom.priority] - so a
+  /// line built into a room keeps its place and its money.
+  final int priority;
+  final String funding;
+  final double targetPrice;
+
   const ProjectRoomRef({
     required this.id,
     required this.configPath,
     this.label = '',
     this.included = true,
     this.notes = '',
+    this.priority = 0,
+    this.funding = '',
+    this.targetPrice = 0,
   });
 
   ProjectRoomRef copyWith({
@@ -2184,12 +2229,18 @@ class ProjectRoomRef {
     String? label,
     bool? included,
     String? notes,
+    int? priority,
+    String? funding,
+    double? targetPrice,
   }) => ProjectRoomRef(
     id: id,
     configPath: configPath ?? this.configPath,
     label: label ?? this.label,
     included: included ?? this.included,
     notes: notes ?? this.notes,
+    priority: priority ?? this.priority,
+    funding: funding ?? this.funding,
+    targetPrice: targetPrice ?? this.targetPrice,
   );
 
   /// The name to show before the room has been read off disk — the label if
@@ -2207,6 +2258,9 @@ class ProjectRoomRef {
     if (label.isNotEmpty) 'label': label,
     if (!included) 'included': false,
     if (notes.isNotEmpty) 'notes': notes,
+    if (priority > 0) 'priority': priority,
+    if (funding.trim().isNotEmpty) 'funding': funding.trim(),
+    if (targetPrice > 0) 'targetPrice': targetPrice,
   };
 
   factory ProjectRoomRef.fromJson(Map<String, dynamic> json) => ProjectRoomRef(
@@ -2215,6 +2269,9 @@ class ProjectRoomRef {
     label: json['label']?.toString() ?? '',
     included: json['included'] != false,
     notes: json['notes']?.toString() ?? '',
+    priority: (json['priority'] as num?)?.toInt() ?? 0,
+    funding: json['funding']?.toString() ?? '',
+    targetPrice: (json['targetPrice'] as num?)?.toDouble() ?? 0,
   );
 }
 
@@ -2386,15 +2443,110 @@ class ProjectSpare {
 //  THE PROJECT
 // ---------------------------------------------------------------------------
 
+/// A typed list of buildings, 'ARTS, holt ,ARTS', as ['ARTS', 'holt']:
+/// trimmed, blanks dropped, repeats dropped ignoring case.
+List<String> splitBuildingList(String value) {
+  final out = <String>[];
+  final seen = <String>{};
+  for (final part in value.split(',')) {
+    final code = part.trim();
+    if (code.isEmpty || !seen.add(code.toUpperCase())) continue;
+    out.add(code);
+  }
+  return out;
+}
+
+/// One row of a pasted room list - see [parseRoomRows].
+typedef RoomListRow = ({
+  String name,
+
+  /// Which blank-line-separated group it was in, 1 first.
+  int group,
+  String roomType,
+  String funding,
+  double targetPrice,
+});
+
+/// A pasted room list, one room per line, as rows.
+///
+/// Columns after the name are tab separated, as a spreadsheet pastes them,
+/// and read by what they look like: a figure is the target price, 'Central'
+/// or 'Dept' is who pays, anything else is the room type. A run of blank
+/// lines starts the next group. Repeats are dropped ignoring case and spacing.
+List<RoomListRow> parseRoomRows(String text) {
+  final out = <RoomListRow>[];
+  final seen = <String>{};
+  var group = 1;
+  var gap = false;
+  for (final line in const LineSplitter().convert(text)) {
+    final cells = line.split('\t').map((c) => c.trim()).toList();
+    final name = cells.first.replaceAll(RegExp(r'\s+'), ' ');
+    if (name.isEmpty) {
+      gap = true;
+      continue;
+    }
+    if (gap && out.isNotEmpty) group++;
+    gap = false;
+    if (!seen.add(name.toUpperCase())) continue;
+    var roomType = '';
+    var funding = '';
+    var target = 0.0;
+    for (final cell in cells.skip(1)) {
+      if (cell.isEmpty) continue;
+      final money = RegExp(r'^\$?\s*([\d,]+(\.\d+)?)$').firstMatch(cell);
+      if (money != null) {
+        target = double.parse(money.group(1)!.replaceAll(',', ''));
+      } else if (const {'central', 'dept'}.contains(cell.toLowerCase())) {
+        funding = cell;
+      } else {
+        roomType = cell;
+      }
+    }
+    out.add((
+      name: name,
+      group: group,
+      roomType: roomType,
+      funding: funding,
+      targetPrice: target,
+    ));
+  }
+  return out;
+}
+
+/// Just the names from [parseRoomRows].
+List<String> parseRoomList(String text) =>
+    [for (final row in parseRoomRows(text)) row.name];
+
+/// The building code at the front of a room name - 'ARTS' from 'ARTS 306A' -
+/// or '' when the name does not start with one.
+String buildingCodeOfRoom(String name) {
+  final match = RegExp(
+    r'^([A-Za-z]{2,6})[\s-]+[\w.-]+$',
+  ).firstMatch(name.trim());
+  return match == null ? '' : match.group(1)!.toUpperCase();
+}
+
 /// A building's worth of rooms, quoted as one job.
 class BuildingProject {
   /// What the job is called on the front of the quote.
   String name;
 
-  /// The building, as a code from buildings.json or as a name typed in. Not
-  /// resolved here: the project is written and read with no app around it, and
-  /// a code that cannot be looked up should still come back out unchanged.
-  String building;
+  /// The buildings on the job, as codes from buildings.json or names typed
+  /// in. Not resolved here: the project is written and read with no app
+  /// around it, and a code that cannot be looked up should still come back out
+  /// unchanged.
+  ///
+  /// A list because a refresh is often one crew across several buildings.
+  final List<String> buildings;
+
+  /// The buildings as one line, 'ARTS, HOLT' - what every title and sheet
+  /// header reads.
+  String get building => buildings.join(', ');
+
+  /// Sets the list from one typed line, split on commas.
+  set building(String value) => buildings
+    ..clear()
+    ..addAll(splitBuildingList(value));
 
   /// The number this job is filed under - what a PO, an invoice and a
   /// timesheet all quote back. Called a PROJECT number rather than a job
@@ -2668,6 +2820,10 @@ class BuildingProject {
   /// project_budget.dart.
   double budget;
 
+  /// The budget is the fixed maximum and is not edited by accident. Unlocking
+  /// it is a deliberate step. See [targetTotal].
+  bool budgetLocked;
+
   /// What has been planned, committed or spent against [budget], filled in as
   /// the job goes.
   List<BudgetLine> budgetLines;
@@ -2690,7 +2846,8 @@ class BuildingProject {
 
   BuildingProject({
     this.name = '',
-    this.building = '',
+    String building = '',
+    List<String>? buildings,
     this.projectNumber = '',
     this.stakeholder = '',
     this.notes = '',
@@ -2732,9 +2889,11 @@ class BuildingProject {
     int poCounter = 0,
     int deliveryCounter = 0,
     this.budget = 0,
+    this.budgetLocked = false,
     List<BudgetLine>? budgetLines,
     List<InstallWindow>? installWindows,
-  }) : rooms = rooms ?? [],
+  }) : buildings = buildings ?? splitBuildingList(building),
+       rooms = rooms ?? [],
        budgetLines = budgetLines ?? [],
        installWindows = installWindows ?? [],
        manualRooms = manualRooms ?? [],
@@ -2796,6 +2955,13 @@ class BuildingProject {
   /// The rooms that count toward the total.
   List<ProjectRoomRef> get includedRooms =>
       [for (final r in rooms) if (r.included) r];
+
+  /// The money set aside for rooms so far: every line item's target and every
+  /// included room's. Held to [budget] - see
+  /// AppStateProvider.setRoomFunding.
+  double get targetTotal =>
+      manualRooms.fold(0.0, (sum, r) => sum + r.targetPrice) +
+      includedRooms.fold(0.0, (sum, r) => sum + r.targetPrice);
 
   String nextRoomId() => 'room${++_roomCounter}';
 
@@ -4184,7 +4350,9 @@ class BuildingProject {
         'room sits under the same folder.',
     'version': 1,
     'name': name,
+    // The joined line for anything that only reads 'building'.
     'building': building,
+    if (buildings.length > 1) 'buildings': buildings,
     if (projectNumber.isNotEmpty) 'projectNumber': projectNumber,
     if (stakeholder.isNotEmpty) 'stakeholder': stakeholder,
     if (notes.isNotEmpty) 'notes': notes,
@@ -4241,6 +4409,7 @@ class BuildingProject {
     if (history.isNotEmpty)
       'history': [for (final h in history) h.toJson()],
     if (budget != 0) 'budget': budget,
+    if (budgetLocked) 'budgetLocked': true,
     if (budgetLines.isNotEmpty)
       'budgetLines': [for (final b in budgetLines) b.toJson()],
     if (installWindows.isNotEmpty)
@@ -4521,6 +4690,7 @@ class BuildingProject {
             ? raw.toDouble()
             : double.tryParse(raw?.toString() ?? '') ?? 0.0;
       }(),
+      budgetLocked: json['budgetLocked'] == true,
       budgetLines: [
         for (final b in (json['budgetLines'] as List? ?? []))
           if (b is Map) BudgetLine.fromJson(Map<String, dynamic>.from(b)),
@@ -4530,7 +4700,14 @@ class BuildingProject {
           if (w is Map) ?InstallWindow.fromJson(Map<String, dynamic>.from(w)),
       ],
       name: json['name']?.toString() ?? '',
-      building: json['building']?.toString() ?? '',
+      // A file with one building never had the list; its 'building' is kept
+      // whole, since an old typed name may hold a comma.
+      buildings: json['buildings'] is List
+          ? splitBuildingList((json['buildings'] as List).join(','))
+          : [
+              if ((json['building']?.toString() ?? '').trim().isNotEmpty)
+                json['building'].toString().trim(),
+            ],
       // 'jobNumber' is what this was called before the app settled on
       // "project" for the thing a building is quoted as. Read under both
       // names, written under the new one - so the old key retires as each
@@ -4680,7 +4857,7 @@ class BuildingProject {
   /// the entries themselves are immutable.
   BuildingProject clone() => BuildingProject(
     name: name,
-    building: building,
+    buildings: List<String>.from(buildings),
     projectNumber: projectNumber,
     stakeholder: stakeholder,
     notes: notes,
@@ -4725,6 +4902,7 @@ class BuildingProject {
     poCounter: _poCounter,
     deliveryCounter: _deliveryCounter,
     budget: budget,
+    budgetLocked: budgetLocked,
     budgetLines: List<BudgetLine>.from(budgetLines),
     installWindows: List<InstallWindow>.from(installWindows),
   );

@@ -534,6 +534,10 @@ class _ManualRoomFormState extends State<ManualRoomForm> {
                     // see [ManualRoom.equipment] - and correcting a date on a
                     // budget screen is not a statement that the room is empty.
                     equipment: widget.existing?.equipment ?? const [],
+                    priority: widget.existing?.priority ?? 0,
+                    roomType: widget.existing?.roomType ?? '',
+                    funding: widget.existing?.funding ?? '',
+                    targetPrice: widget.existing?.targetPrice ?? 0,
                   ),
                 ),
           child: Text(widget.existing == null ? 'Add' : 'Save'),

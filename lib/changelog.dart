@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.7+17';
+const String kAppVersion = '0.5.8+18';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,32 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.8',
+    date: 'September 28, 2026',
+    title: 'Several buildings, priorities and funding on a project',
+    changes: [
+      'Project > Buildings takes more than one building, separated by '
+          'commas: "ARTS, HOLT, PAC".',
+      'Paste a room list... on Project > Rooms adds one line item per line. '
+          'Blank lines and repeats are skipped, and each room\'s building '
+          'code is added to the job\'s buildings. Build or Swap on a line '
+          'turns it into a real room when you get to it.',
+      'Paste a room list... also reads spreadsheet columns: room type, '
+          'Central or Dept, and a target price. Blank lines between groups '
+          'can set priority 1, 2, 3 and so on.',
+      'Project > Rooms has a Priorities and funding card: rooms grouped by '
+          'priority with a subtotal for each, and the source and target price '
+          'of every room. The budget is the maximum. Money can move between '
+          'rooms, but a target that would go over the maximum is refused.',
+      'The maximum can be locked. Unlocking it asks first, and the Budget '
+          'card shows it with a lock while it is locked.',
+      'Build all from room types... on the line items builds a room file '
+          'for each line from its room type\'s preset, in the project\'s '
+          'folder, and puts it on the job in place of the line. A line keeps '
+          'its priority, source and target when it becomes a room.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.7',
     date: 'September 25, 2026',

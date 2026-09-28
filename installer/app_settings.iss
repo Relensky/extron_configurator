@@ -25,13 +25,27 @@ Source: "..\buildings.json"; DestDir: "{app}"; Flags: ignoreversion skipifsource
 Source: "..\config.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\delivery_locations.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\key_map.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; The AV Flow tab's rules. Save them from the Flow Rules tab into the repo
+; root to ship them; without the file the app uses its built-in rules.
+Source: "..\av_flow_rules.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\labor_rates.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\processors.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\ui_schema.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\vendor_list.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\Room_Config_Builder_Guide.pdf"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\Revised 11.25.25_Personnel Billing Rates 25-26_CSUEU.pdf"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "..\device\*"; DestDir: "{app}\device"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Excludes: ".mypy_cache,__pycache__"
+; The ControlScript device modules, from the ControlScript-Template repo
+; checked out beside this one. They go in {app}\devices - the folder the app
+; scans when Settings names no Modules Path (effectiveModulesPath). No
+; skipifsourcedoesntexist: a build without the modules must fail, not ship
+; an app with none. convert_modules_drop_in_then_run.py is a tool, not a
+; module.
+Source: "..\..\ControlScript-Template\base\assets\src\modules\device\*"; DestDir: "{app}\devices"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".mypy_cache,__pycache__,convert_modules_drop_in_then_run.py"
 Source: "..\documentation\*"; DestDir: "{app}\documentation"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "..\room_presets\*"; DestDir: "{app}\room_presets"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "..\RYG campus\*"; DestDir: "{app}\RYG campus"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+
+[InstallDelete]
+; Older setups installed the modules to {app}\device, which the app
+; never looked in.
+Type: filesandordirs; Name: "{app}\device"

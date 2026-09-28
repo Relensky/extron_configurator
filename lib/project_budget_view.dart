@@ -82,6 +82,24 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                 const SizedBox(width: 8),
                 Text('Budget', style: theme.textTheme.titleMedium),
                 const Spacer(),
+                // The fixed maximum - unlocked on Priorities and funding.
+                if (project.budgetLocked)
+                  Tooltip(
+                    message: 'Locked. Unlock it on Priorities and funding',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.lock, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          money(project.budget),
+                          key: const ValueKey('project_budget_locked'),
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
+                  )
+                else
                 SizedBox(
                   width: 200,
                   child: LiveTextField(

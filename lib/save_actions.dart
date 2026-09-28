@@ -725,7 +725,10 @@ Future<bool> buildRoomFromLineItem(
   // save so the file picker's suggested name is the room's.
   final where = splitLineItemName(
     line.name,
-    fallbackBuilding: provider.project.building,
+    // Only a one-building job can supply a building the name leaves out.
+    fallbackBuilding: provider.project.buildings.length == 1
+        ? provider.project.buildings.single
+        : '',
   );
   provider.setRoomIdentity(building: where.building, room: where.room);
 
@@ -1851,4 +1854,152 @@ Future<int> attachDrawnRooms(
     ),
   );
   return done;
+}
+
+// ---------------------------------------------------------------------------
+//  EVERY LINE ITEM AT ONCE
+// ---------------------------------------------------------------------------
+
+/// What building a batch of line items came to.
+typedef BuiltRooms = ({
+  List<String> built,
+
+  /// Lines with no room type, or one no preset is called.
+  List<String> noRoomType,
+
+  /// Lines whose file name is already taken in the folder. Never overwritten.
+  List<String> fileExists,
+  List<String> failed,
+});
+
+/// Builds a room file in [folder] for each of [lines] from its room type's
+/// preset, and swaps it in for the line. No dialogs, so the open room is
+/// replaced - the caller asks first.
+///
+/// A line with no matching preset, or whose file already exists, is left on
+/// the plan and reported.
+Future<BuiltRooms> buildLineItemRooms(
+  AppStateProvider provider,
+  List<ManualRoom> lines,
+  String folder,
+) async {
+  final built = <String>[];
+  final noRoomType = <String>[];
+  final fileExists = <String>[];
+  final failed = <String>[];
+  final multiBuilding = provider.project.buildings.length != 1;
+
+  for (final line in lines) {
+    final preset = provider.presetForSourceName(line.sourceType);
+    if (preset == null) {
+      noRoomType.add(line.name);
+      continue;
+    }
+    if (!await provider.createNewConfig()) {
+      failed.add(line.name);
+      continue;
+    }
+    provider.setRoomMode(RoomMode.full);
+    // The room number first, so the preset's jacks are numbered for it.
+    final where = splitLineItemName(
+      line.name,
+      fallbackBuilding: multiBuilding ? '' : provider.project.buildings.single,
+    );
+    provider.setRoomIdentity(building: where.building, room: where.room);
+    provider.applyRoomPreset(preset, jackPrefix: roomJackPrefix(provider));
+    buildControlSideForPreset(provider, preset);
+
+    final file = path.join(folder, provider.defaultRoomConfigFileName);
+    if (File(file).existsSync()) {
+      fileExists.add(line.name);
+      continue;
+    }
+    if (!await provider.saveRoomConfigTo(file)) {
+      failed.add(line.name);
+      continue;
+    }
+    final error = provider.swapManualRoomForConfig(line.id, file);
+    if (error.isNotEmpty) {
+      failed.add('${line.name} ($error)');
+      continue;
+    }
+    built.add(line.name);
+  }
+  return (
+    built: built,
+    noRoomType: noRoomType,
+    fileExists: fileExists,
+    failed: failed,
+  );
+}
+
+/// Builds every line item on the open job into a room file, next to the
+/// project file. See [buildLineItemRooms].
+Future<void> buildAllLineItemRooms(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  final lines = List<ManualRoom>.from(provider.project.manualRooms);
+  if (lines.isEmpty) return;
+  final folder = provider.currentProjectPath.isEmpty
+      ? ''
+      : path.dirname(provider.currentProjectPath);
+  if (folder.isEmpty) {
+    showTimedSnackBar(
+      ScaffoldMessenger.of(context),
+      const SnackBar(
+        content: Text(
+          'Save the project first. The rooms are saved in its folder.',
+        ),
+      ),
+    );
+    return;
+  }
+  final typed = lines.where((l) => l.sourceType.isNotEmpty).length;
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Build rooms from the line items?'),
+      content: Text(
+        '$typed of ${lines.length} line item${lines.length == 1 ? '' : 's'} '
+        'have a room type. Each becomes a room file in $folder, built from '
+        'its preset, and replaces its line on the job. Lines without a room '
+        'type stay as they are, and no existing file is overwritten.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Build'),
+        ),
+      ],
+    ),
+  );
+  if (go != true || !context.mounted) return;
+  if (!await confirmLeavingRoom(context, provider)) return;
+  if (!context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+
+  final result = await buildLineItemRooms(provider, lines, folder);
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      duration: const Duration(seconds: 8),
+      content: Text(
+        [
+          '${result.built.length} room${result.built.length == 1 ? '' : 's'} '
+              'built.',
+          if (result.noRoomType.isNotEmpty)
+            'No room type: ${result.noRoomType.join(', ')}.',
+          if (result.fileExists.isNotEmpty)
+            'File already there: ${result.fileExists.join(', ')}.',
+          if (result.failed.isNotEmpty)
+            'Failed: ${result.failed.join(', ')}.',
+        ].join(' '),
+      ),
+    ),
+  );
 }

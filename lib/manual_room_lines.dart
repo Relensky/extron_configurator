@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_device_library.dart' show PricingTier;
-import 'building_project.dart' show ManualRoom;
+import 'building_project.dart' show ManualRoom, parseRoomRows;
 import 'contrast.dart' show errorTextOn;
 import 'cost_estimate.dart' show formatMoney;
 import 'equipment_lifecycle.dart' show kRoomRefreshCategory;
@@ -14,7 +14,8 @@ import 'manual_room_equipment.dart' show manualRoomEquipmentSummary;
 import 'manual_room_equipment_dialog.dart' show showManualRoomEquipment;
 import 'manual_rooms_dialog.dart' show showManualRoomForm;
 import 'project_schedule.dart' show formatScheduleDate;
-import 'save_actions.dart' show attachDrawnRooms, buildRoomFromLineItem;
+import 'save_actions.dart'
+    show attachDrawnRooms, buildAllLineItemRooms, buildRoomFromLineItem;
 
 /// ============================================================================
 ///  THE PLAN AS LINE ITEMS
@@ -180,6 +181,11 @@ String manualRoomLineFacts(
       )
       .price;
   return [
+    if (room.priority > 0) 'Priority ${room.priority}',
+    if (room.funding.trim().isNotEmpty) room.funding.trim(),
+    if (room.targetPrice > 0)
+      'target ${formatMoney(room.targetPrice, currency)}',
+    if (room.roomType.trim().isNotEmpty) room.roomType.trim(),
     room.installedOn == null
         ? 'no date'
         : 'last done ${formatScheduleDate(room.installedOn!)}',
@@ -300,6 +306,130 @@ class AddManualRoomLineButton extends StatelessWidget {
   }
 }
 
+/// Adds a pasted list of rooms as line items, one per line. Each can then be
+/// built or swapped into a real room as the work reaches it.
+Future<void> pasteRoomList(BuildContext context) async {
+  final provider = context.read<AppStateProvider>();
+  final asked = await showDialog<({String text, bool groups})>(
+    context: context,
+    builder: (_) => const _PasteRoomListDialog(),
+  );
+  if (asked == null || !context.mounted) return;
+  final result = provider.addProjectManualRoomList(
+    asked.text,
+    groupsArePriorities: asked.groups,
+  );
+  showTimedSnackBar(
+    ScaffoldMessenger.of(context),
+    SnackBar(
+      duration: const Duration(seconds: 5),
+      content: Text(
+        [
+          '${result.added} line item${result.added == 1 ? '' : 's'} added.',
+          if (result.skipped.isNotEmpty)
+            'Already on the job: ${result.skipped.join(', ')}.',
+          if (result.overBudget.isNotEmpty)
+            'Over the budget, so no target set: '
+                '${result.overBudget.join(', ')}.',
+        ].join(' '),
+      ),
+    ),
+  );
+}
+
+class _PasteRoomListDialog extends StatefulWidget {
+  const _PasteRoomListDialog();
+
+  @override
+  State<_PasteRoomListDialog> createState() => _PasteRoomListDialogState();
+}
+
+class _PasteRoomListDialogState extends State<_PasteRoomListDialog> {
+  final _text = TextEditingController();
+  bool _groups = true;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = parseRoomRows(_text.text);
+    final count = rows.length;
+    final groups = rows.isEmpty ? 0 : rows.last.group;
+    return AlertDialog(
+      title: const Text('Paste a list of rooms'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+          key: const ValueKey('room_list_text'),
+          controller: _text,
+          autofocus: true,
+          minLines: 10,
+          maxLines: 18,
+          onChanged: (_) => setState(() {}),
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'ARTS 111\t1 Projector\tCentral\t\$19,049',
+            helperText: 'One room per line. Pasted spreadsheet columns can '
+                'add the room type, Central or Dept, and a target price. '
+                'Each building code joins the job.',
+            helperMaxLines: 3,
+          ),
+        ),
+            CheckboxListTile(
+              key: const ValueKey('room_list_groups'),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _groups,
+              onChanged: (v) => setState(() => _groups = v ?? false),
+              title: Text(
+                groups > 1
+                    ? 'Blank lines separate priorities ($groups groups)'
+                    : 'Blank lines separate priorities',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('room_list_add'),
+          onPressed: count == 0
+              ? null
+              : () => Navigator.pop(context, (
+                  text: _text.text,
+                  groups: _groups,
+                )),
+          child: Text('Add $count room${count == 1 ? '' : 's'}'),
+        ),
+      ],
+    );
+  }
+}
+
+/// The button that opens [pasteRoomList].
+class PasteRoomListButton extends StatelessWidget {
+  const PasteRoomListButton({super.key});
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    key: const ValueKey('line_item_paste_list'),
+    onPressed: () => pasteRoomList(context),
+    icon: const Icon(Icons.format_list_bulleted_add, size: 18),
+    label: const Text('Paste a room list…'),
+  );
+}
+
 /// One line item as a card, for the job's room list.
 ///
 /// It sits under the drawn rooms and looks deliberately unlike them: a room
@@ -368,14 +498,17 @@ class ManualRoomLinesHeading extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        // Wrapped, so the buttons drop a line on a narrow window rather than
+        // overflowing it.
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Expanded(
-              child: Text(
-                'LINE ITEMS: $count room${count == 1 ? '' : 's'} with no config',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+            Text(
+              'LINE ITEMS: $count room${count == 1 ? '' : 's'} with no config',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             // THE PLAN CATCHING UP WITH THE WORK. Eighteen months in, half
@@ -390,6 +523,15 @@ class ManualRoomLinesHeading extends StatelessWidget {
               icon: const Icon(Icons.playlist_add_check_circle_outlined,
                   size: 18),
               label: const Text('Attach rooms already drawn...'),
+            ),
+            OutlinedButton.icon(
+              key: const ValueKey('line_item_build_all'),
+              onPressed: () => buildAllLineItemRooms(
+                context,
+                context.read<AppStateProvider>(),
+              ),
+              icon: const Icon(Icons.construction_outlined, size: 18),
+              label: const Text('Build all from room types...'),
             ),
           ],
         ),
