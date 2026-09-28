@@ -599,17 +599,6 @@ List<ReportSection> masterPartsSections(
     for (final r in estimate.rooms) r.ref.id: r.codeName,
   };
 
-  /// "BSS 101 ×2, BSS 103 ×4" — which rooms the units are for.
-  ///
-  /// This is the column that makes a merged list checkable. Eighteen switchers
-  /// is a number a vendor can quote; it is not a number a project manager can
-  /// verify against a delivery, or split across two phases, without knowing
-  /// where they go.
-  String rooms(MasterPartLine line) => [
-    for (final id in line.roomIdsByQty())
-      '${roomNames[id] ?? id} ×${trimNumber(line.qtyByRoom[id] ?? 0)}',
-  ].join(', ');
-
   String unit(MasterPartLine line) {
     if (line.unpriced) return 'not priced';
     if (!line.priceVaries) return formatMoney(line.unitPrice, currency);
@@ -650,7 +639,8 @@ List<ReportSection> masterPartsSections(
         // Blank on everything that is driven, and on everything that was never
         // going to be. A column of "OK" would be a column nobody reads.
         if (includeVendorColumn) 'Control',
-        'Rooms',
+        // Where each part goes is the Parts by Room tab: a list of thirty
+        // rooms in one cell is a sentence, not a column.
       ],
       rows: [
         for (final l in lines)
@@ -668,7 +658,6 @@ List<ReportSection> masterPartsSections(
             if (includeVendorColumn) l.vendor?.name ?? '',
             if (includeVendorColumn) kRfqTagSourceLabels[l.tagSource] ?? '',
             if (includeVendorColumn) _controlNote(l, roomNames),
-            rooms(l),
           ],
       ],
     ));
@@ -693,6 +682,47 @@ List<ReportSection> masterPartsSections(
   ));
 
   return sections;
+}
+
+/// The tab that says where each part goes - see [partsByRoomSections].
+const String kProjectPartsByRoomSheet = 'Parts by Room';
+
+/// Every part on the job against every room: one row per part, one column
+/// per room with how many go there, and the total. Read down a column for
+/// what a room gets, across a row for where a part goes. Blank, not 0, where
+/// a room gets none.
+List<ReportSection> partsByRoomSections(ProjectEstimate estimate) {
+  final rooms = [
+    for (final r in estimate.rooms)
+      if (r.ref.included && r.ok) r,
+  ];
+  if (estimate.master.isEmpty || rooms.isEmpty) return const [];
+  return [
+    for (final kind in MasterPartKind.values)
+      if (estimate.master.any((l) => l.kind == kind))
+        (
+          title: kMasterPartKindLabels[kind]!,
+          header: [
+            'Part',
+            'Model',
+            for (final r in rooms) r.codeName,
+            'Total',
+          ],
+          rows: [
+            for (final l in estimate.master)
+              if (l.kind == kind)
+                [
+                  l.description,
+                  l.model,
+                  for (final r in rooms)
+                    (l.qtyByRoom[r.ref.id] ?? 0) > 0
+                        ? l.qtyByRoom[r.ref.id]!
+                        : '',
+                  l.qty,
+                ],
+          ],
+        ),
+  ];
 }
 
 /// The install windows put on the job, earliest first. Empty when there are
@@ -1976,6 +2006,15 @@ Uint8List buildProjectWorkbookBytes({
       sections: master,
       generated: stamp,
     ));
+    final byRoom = partsByRoomSections(estimate);
+    if (byRoom.isNotEmpty) {
+      sheets.add(buildStackedReportSheet(
+        sheetName: tab(kProjectPartsByRoomSheet),
+        title: '$title - parts by room',
+        sections: byRoom,
+        generated: stamp,
+      ));
+    }
   }
 
   // Purchasing works down this in date order and does not care which vendor

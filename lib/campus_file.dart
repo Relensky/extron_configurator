@@ -210,6 +210,19 @@ class CampusStampResult {
 /// disk is stale by definition - there may be unsaved work in front of it - and
 /// writing underneath it would either lose that work or be lost by it. The
 /// caller sets the pointer on the in-memory job instead.
+/// True when [file] is a room config rather than a project: it has the
+/// SYSTEM_SETUP block every room has and no project has. A campus can hold
+/// either.
+bool isRoomConfigFile(String file) {
+  if (file.toLowerCase().endsWith(kProjectFileSuffix)) return false;
+  try {
+    final doc = jsonDecode(File(file).readAsStringSync());
+    return doc is Map && doc['SYSTEM_SETUP'] is Map;
+  } catch (_) {
+    return false;
+  }
+}
+
 Future<CampusStampResult> stampCampusIntoProjects({
   required String campusPath,
   required Iterable<String> projects,
@@ -221,6 +234,8 @@ Future<CampusStampResult> stampCampusIntoProjects({
 
   for (final job in projects) {
     if (skip.trim().isNotEmpty && path.equals(job, skip)) continue;
+    // A room has no campus pointer, and must never be rewritten as a project.
+    if (isRoomConfigFile(job)) continue;
     try {
       final project = await BuildingProject.load(job);
       final stored = BuildingProject.storeCampusPath(campusPath, job);

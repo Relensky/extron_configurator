@@ -112,7 +112,7 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialog) => AlertDialog(
-          title: Text('What does priority $priority buy?'),
+          title: Text('What does priority $priority replace?'),
           content: SizedBox(
             width: 420,
             child: Column(
@@ -120,9 +120,11 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Pick the categories bought for these rooms. Everything else '
-                  'in them is listed as furnished by existing, at no cost. '
-                  'Pick none to buy everything.',
+                  'Pick the categories this priority replaces. Everything '
+                  'else in its rooms is existing equipment that stays: it is '
+                  'left off the project and its exports, and the room files '
+                  'still list it. Pick none to replace everything.',
+
                 ),
                 const SizedBox(height: 12),
                 if (offered.isEmpty)
@@ -402,8 +404,10 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                         icon: const Icon(Icons.shopping_cart_outlined, size: 16),
                         label: Text(
                           project.buysOnlyFor(p).isEmpty
-                              ? 'Buys everything'
-                              : 'Buys only ${project.buysOnlyFor(p).join(', ')}',
+                              ? 'Replaces everything'
+                              : 'Replaces only '
+                                    '${project.buysOnlyFor(p).join(', ')}',
+
                         ),
                       ),
                     const SizedBox(width: 12),

@@ -237,6 +237,8 @@ void main() {
         // Every line of every room, linking to the room tabs.
         'All Items',
         'Core Components',
+        // Where each part goes, a column per room.
+        'Parts by Room',
         // When to buy it and what is spared: two questions the parts list
         // cannot answer in a column, read by different people.
         'Order Timeline',
@@ -270,9 +272,13 @@ void main() {
       final master = sheetNamed(archive, 'Core Components');
 
       expect(master, contains('60-1439-13'));
-      // Two rooms, one line, and the breakdown that makes it checkable.
-      expect(master, contains('Bessey 101 ×1, Bessey 103 ×1'));
       expect(master, contains('Extron Direct'));
+      // Two rooms, one line - and where it goes is a column per room on its
+      // own tab, not a sentence under the part.
+      expect(master, isNot(contains('×')));
+      final byRoom = sheetNamed(archive, kProjectPartsByRoomSheet);
+      expect(byRoom, contains('Bessey 101'));
+      expect(byRoom, contains('Bessey 103'));
     });
 
     test('rooms that would clip to the same tab name are numbered', () {
@@ -649,7 +655,7 @@ void main() {
     test('the which-rooms column reads BSS 101', () {
       final archive = ZipDecoder()
           .decodeBytes(buildProjectWorkbookBytes(estimate: codedJob()));
-      final sheet = sheetNamed(archive, 'Core Components');
+      final sheet = sheetNamed(archive, kProjectPartsByRoomSheet);
 
       expect(sheet, contains('BSS 101'));
       expect(
@@ -684,7 +690,10 @@ void main() {
       // than the column coming out blank.
       final archive = ZipDecoder()
           .decodeBytes(buildProjectWorkbookBytes(estimate: job()));
-      expect(sheetNamed(archive, 'Core Components'), contains('Bessey 101'));
+      expect(
+        sheetNamed(archive, kProjectPartsByRoomSheet),
+        contains('Bessey 101'),
+      );
     });
   });
 
@@ -761,6 +770,7 @@ void main() {
         // Every line of every room, linking to the room tabs.
         'All Items',
         'Core Components',
+        'Parts by Room',
         'Order Timeline',
         'Spares',
         kProjectPurchasingSheet,
@@ -887,6 +897,7 @@ void main() {
         // Every line of every room, linking to the room tabs.
         'All Items',
         'Core Components',
+        'Parts by Room',
         'Order Timeline',
         'Spares',
         // A record about the JOB, so it sits with the job's own sheets rather

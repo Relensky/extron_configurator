@@ -415,6 +415,15 @@ class RoomCostSettings {
   /// decision is made at: the cat6 is somebody else's and the HDMI is not.
   final Map<String, String> furnishedLines;
 
+  /// Line keys left off this estimate as existing equipment that stays where
+  /// it is - not bought, not installed. Counted with [CostEstimate.excludedLines]
+  /// like a device marked existing on the drawing.
+  ///
+  /// NEVER SAVED. A project that replaces only some categories sets it on a
+  /// copy when it prices the room, so the room's own file still lists
+  /// everything. See scopeToCategories in project_estimate.dart.
+  final Set<String> outOfScope = {};
+
   /// Cabling LINE KEY -> extra runs to buy beyond what the diagram shows.
   /// Spares are a decision, not a diagram fact, so they live here rather than
   /// being inferred: "three more HDMI leads because two always go missing" is
@@ -1272,7 +1281,7 @@ CostEstimate computeRoomCost({
     // Drawn but not bought. Off the estimate entirely rather than listed at
     // zero: a line of nothing on a quote is a question, and the count below
     // answers it once instead of once per row.
-    if (group.excludeFromCost) {
+    if (group.excludeFromCost || settings.outOfScope.contains(group.key)) {
       excludedLines++;
       excludedDevices += group.qty;
       continue;
@@ -1790,6 +1799,15 @@ CostEstimate computeRoomCost({
   final extras = [
     for (final item in settings.items) extraLine(item, ''),
   ];
+
+  // Existing equipment the job leaves in place - see [outOfScope].
+  if (settings.outOfScope.isNotEmpty) {
+    for (final lines in [hardware, cabling, extras]) {
+      final before = lines.length;
+      lines.removeWhere((l) => settings.outOfScope.contains(l.key));
+      excludedLines += before - lines.length;
+    }
+  }
 
   // --- shipping, per unit, on the lines it was typed against --------------
   //  Only while the column is on: switching it off takes shipping off the

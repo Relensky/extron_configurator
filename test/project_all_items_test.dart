@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/building_project.dart';
+import 'package:extron_configurator/cost_estimate.dart';
 import 'package:extron_configurator/project_estimate.dart';
 import 'package:extron_configurator/project_workbook.dart';
 import 'package:extron_configurator/save_actions.dart';
@@ -58,25 +59,41 @@ void main() {
       e.rooms.firstWhere((r) => r.name == name);
 
   group('a priority that buys only projectors', () {
-    test('everything else in its rooms is furnished by existing', () {
+    test('only the projectors are on the job; the rest stays as existing',
+        () {
+      final full = room(price(), 'HOLT 171').estimate!;
       provider.setPriorityBuysOnly(2, ['Projector']);
       final holt = room(price(), 'HOLT 171').estimate!;
 
-      final projectors =
-          holt.equipment.where((l) => l.category == 'Projector').toList();
-      expect(projectors, isNotEmpty);
-      expect(projectors.every((l) => !l.furnished), isTrue);
-      expect(projectors.every((l) => l.total > 0), isTrue);
+      expect(holt.equipment, isNotEmpty);
+      expect(holt.equipment.every((l) => l.category == 'Projector'), isTrue);
+      expect(holt.equipment.every((l) => l.total > 0), isTrue);
+      expect(holt.hardware, isEmpty);
+      expect(holt.cabling, isEmpty);
+      expect(holt.extras, isEmpty);
+      // Counted and said, not silently dropped.
+      expect(holt.excludedLines, greaterThan(0));
+      expect(
+        holt.excludedLines,
+        full.equipment.length +
+            full.hardware.length +
+            full.cabling.length +
+            full.extras.length -
+            holt.equipment.length,
+      );
+    });
 
-      final others = [
-        ...holt.equipment.where((l) => l.category != 'Projector'),
-        ...holt.hardware,
-        ...holt.cabling,
-      ];
-      expect(others, isNotEmpty);
-      expect(others.every((l) => l.furnishedBy == kFurnishedByExisting),
-          isTrue);
-      expect(others.every((l) => l.total == 0), isTrue);
+    test('the room on its own still lists everything', () {
+      provider.setPriorityBuysOnly(2, ['Projector']);
+      final loaded = readRoomFromDisk(
+        path.join(dir.path, 'HOLT_171_config.json'),
+      );
+      final own = computeRoomCost(
+        model: loaded.model,
+        library: provider.avDeviceLibrary,
+        settings: loaded.settings,
+      );
+      expect(own.equipment.any((l) => l.category != 'Projector'), isTrue);
     });
 
     test('rooms at other priorities buy everything', () {
@@ -122,10 +139,9 @@ void main() {
           .where((r) => r[1] is XlsxLink && r[1].text == 'HOLT 171');
       expect(holtRows, isNotEmpty);
       expect((holtRows.first[1] as XlsxLink).sheet, 'HOLT 171');
-      expect(
-        holtRows.map((r) => r.last),
-        contains('Furnished by $kFurnishedByExisting'),
-      );
+      // Only what the priority replaces is on the master list.
+      expect(holtRows.every((r) => r[3] == 'Equipment'), isTrue);
+      expect(holtRows.map((r) => r[4]).toSet(), {'PT-VMZ62BU8'});
 
       final totals = sections.last.rows;
       expect(totals.any((r) => '${r.first}'.startsWith('YOLO 999')), isTrue);

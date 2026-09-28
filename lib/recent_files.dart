@@ -209,6 +209,26 @@ class RecentFiles {
     return list.length != before;
   }
 
+  /// How many entries point at a file that is no longer there.
+  int get missingCount => [
+    for (final kind in RecentKind.values)
+      for (final entry in _lists[kind]!)
+        if (!entry.stillThere) entry,
+  ].length;
+
+  /// Drops every entry whose file has been moved or deleted, and keeps the
+  /// rest. Returns how many went.
+  int forgetMissing() {
+    var gone = 0;
+    for (final kind in RecentKind.values) {
+      final list = _lists[kind]!;
+      final before = list.length;
+      list.removeWhere((entry) => !entry.stillThere);
+      gone += before - list.length;
+    }
+    return gone;
+  }
+
   /// Empties one list, or all three when [kind] is left out. Returns true when
   /// there was anything to empty.
   bool clear([RecentKind? kind]) {

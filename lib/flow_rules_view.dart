@@ -6,6 +6,7 @@ import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'flow_rules.dart';
 import 'side_pane.dart';
+import 'responsive.dart' show kFloatingButtonClearance;
 
 /// ============================================================================
 ///  FLOW RULES TAB
@@ -315,7 +316,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                   ),
                 )
               : ListView(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, kFloatingButtonClearance),
                   children: rows,
                 ),
         ),

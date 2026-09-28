@@ -102,3 +102,9 @@ class ClearFieldButton extends StatelessWidget {
     );
   }
 }
+
+/// Room left at the bottom of every page for the Screenshot and Export
+/// buttons that float over the lower right. Without it the last row's
+/// right-hand buttons, a delete or an edit, can sit under them with no way
+/// to scroll clear. The buttons' own height plus the Scaffold's margin.
+const double kFloatingButtonClearance = 150;

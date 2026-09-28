@@ -13,6 +13,8 @@ import 'package:extron_configurator/building_project.dart'
 import 'package:extron_configurator/save_actions.dart' show isProjectFile;
 import 'package:extron_configurator/main.dart'
     show RoomConfigApp, TopLevelBar, roomModeBannerFill;
+import 'package:extron_configurator/campus_lifecycle_view.dart'
+    show showNewCampus;
 import 'package:extron_configurator/nav_rail.dart';
 
 /// ============================================================================
@@ -732,16 +734,35 @@ void main() {
   //  below it, so "where am I" and "how do I get out of here" have one answer
   //  each rather than three.
 
-  testWidgets('a job offers the campus over it', (tester) async {
+  testWidgets('a job is not a campus; it offers one only once it is on one',
+      (tester) async {
     final p = fresh();
     await pump(tester, p);
-    // Nothing to compare across a campus until there is a job on it.
     expect(find.byKey(const ValueKey('banner_campus_open')), findsNothing);
 
+    // A job on its own is not a campus, and nothing offers to make it one.
     p.newProject(name: 'Bessey Hall');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('banner_campus_open')), findsNothing);
+
+    // Put on a campus somebody saved, it offers the way up to it.
+    final dir = Directory.systemTemp.createTempSync('banner_campus_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final campus = File(path.join(dir.path, 'North_campus.json'))
+      ..writeAsStringSync('{"kind": "campus", "projects": []}');
+    p.currentProjectPath = path.join(dir.path, 'Bessey_project.json');
+    p.setProjectCampusFile(campus.path);
     await tester.pump();
     expect(find.byKey(const ValueKey('banner_campus_open')), findsOneWidget);
   });
+
+  /// Opens a new, empty campus the way File > New Campus does.
+  Future<void> openNewCampus(WidgetTester tester) async {
+    // ignore: unawaited_futures
+    showNewCampus(tester.element(find.byType(Scaffold).first));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+  }
 
   testWidgets('the campus says it is the campus, and closes down to the job',
       (tester) async {
@@ -749,9 +770,7 @@ void main() {
     p.newProject(name: 'Bessey Hall');
     await pump(tester, p);
 
-    await tester.tap(find.byKey(const ValueKey('banner_campus_open')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await openNewCampus(tester);
 
     // The mode control now reads CAMPUS, in the same shape and size the
     // banner's own uses one level down.
@@ -799,9 +818,7 @@ void main() {
         ),
       );
       await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('banner_campus_open')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await openNewCampus(tester);
 
       expect(find.byKey(const ValueKey('banner_campus')), findsOneWidget);
       // Every control still there, whichever shape it is in.

@@ -5,6 +5,7 @@ import 'package:path/path.dart' as path;
 import 'app_logger.dart';
 import 'app_state.dart';
 import 'building_project.dart';
+import 'campus_file.dart' show isRoomConfigFile;
 import 'equipment_lifecycle.dart';
 import 'project_estimate.dart';
 
@@ -252,7 +253,17 @@ Future<CampusLifecycle> readCampus({
   for (final file in projectPaths) {
     final fallback = path.basenameWithoutExtension(file);
     try {
-      final project = await BuildingProject.load(file);
+      // A room on its own is priced and aged as a job of one room.
+      final project = isRoomConfigFile(file)
+          ? BuildingProject(
+              name: () {
+                final room = readRoomFromDisk(file);
+                final code = room.roomCode.trim();
+                return code.isNotEmpty ? code : fallback;
+              }(),
+              rooms: [ProjectRoomRef(id: 'room1', configPath: file)],
+            )
+          : await BuildingProject.load(file);
       final estimate = computeProjectEstimate(
         project: project,
         projectPath: file,

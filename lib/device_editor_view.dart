@@ -907,7 +907,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
       // screen at 125% display scaling leaves little height here.
       return Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.fromLTRB(32, 32, 32, kFloatingButtonClearance),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -934,7 +934,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     final key = AvDeviceLibrary.normalizeModel(entry.model);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, kFloatingButtonClearance),
       children: [
         Row(
           children: [

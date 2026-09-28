@@ -21,7 +21,7 @@ class SetupWizardView extends StatelessWidget {
     final systemSetup = config['SYSTEM_SETUP'];
 
     return ListView(
-      padding: const EdgeInsets.all(32.0),
+      padding: const EdgeInsets.fromLTRB(32, 32, 32, kFloatingButtonClearance),
       children: [
         Row(
           children: [

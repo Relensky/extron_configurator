@@ -678,7 +678,7 @@ class DeviceConfigurationForm extends StatelessWidget {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, kFloatingButtonClearance),
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

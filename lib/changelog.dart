@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.9+19';
+const String kAppVersion = '0.5.10+20';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,28 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.10',
+    date: 'September 28, 2026',
+    title: 'Campuses you build, and replace-only priorities',
+    changes: [
+      'A priority set to replace only some categories now leaves the rest of '
+          'its rooms off the project entirely: not bought, not installed, and '
+          'not on the project export. The room files still list everything, '
+          'and the totals say how many lines were left off as existing.',
+      'Project workbook: where each part goes is now the Parts by Room tab, '
+          'one column per room with the quantity, instead of a long "Rooms:" '
+          'line under every part on Core Components.',
+      'The Screenshot and Export buttons no longer cover the last rows of a '
+          'page. Every page scrolls far enough to clear them.',
+      'A project is no longer treated as a campus. File > New Campus starts '
+          'empty, and a campus can hold rooms as well as projects. The Campus '
+          'button on a project appears only once it is on a saved campus, and '
+          'opening a campus no longer changes the open project.',
+      'Open Recent and the start screen have Remove missing files, which '
+          'forgets only the files that were moved or deleted.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.9',
     date: 'September 28, 2026',

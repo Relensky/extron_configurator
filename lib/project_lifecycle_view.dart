@@ -501,7 +501,10 @@ class _CampusButton extends StatelessWidget {
   const _CampusButton();
 
   @override
-  Widget build(BuildContext context) => OutlinedButton.icon(
+  Widget build(BuildContext context) =>
+      context.watch<AppStateProvider>().projectCampusFile.isEmpty
+      ? const SizedBox.shrink()
+      : OutlinedButton.icon(
     key: const ValueKey('lifecycle_campus'),
     onPressed: () => showCampusLifecycle(context),
     icon: const Icon(Icons.location_city, size: 18),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'config_maintenance.dart';
 import 'schema_field_builder.dart';
+import 'responsive.dart' show kFloatingButtonClearance;
 
 /// SCHEMA-DRIVEN: every field on this tab is now rendered from the loaded
 /// UiSchema (ui_schema.json). Add a new key to config.json + an entry in
@@ -57,7 +58,7 @@ class SystemSettingsView extends StatelessWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(32.0),
+      padding: const EdgeInsets.fromLTRB(32, 32, 32, kFloatingButtonClearance),
       itemCount: rows.length,
       itemBuilder: (context, index) {
         final row = rows[index];

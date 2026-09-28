@@ -83,13 +83,19 @@ String recentWhen(DateTime when, {DateTime? now}) {
 
 /// What a menu line or a panel row picked.
 class _RecentChoice {
-  const _RecentChoice.file(this.kind, this.entry);
+  const _RecentChoice.file(this.kind, this.entry) : missingOnly = false;
   const _RecentChoice.clear()
       : kind = null,
-        entry = null;
+        entry = null,
+        missingOnly = false;
+  const _RecentChoice.clearMissing()
+      : kind = null,
+        entry = null,
+        missingOnly = true;
 
   final RecentKind? kind;
   final RecentFile? entry;
+  final bool missingOnly;
 }
 
 /// The title bar's Open Recent - a menu beside the folder button.
@@ -132,6 +138,10 @@ class RecentFilesButton extends StatelessWidget {
           'and campuses this app opened or saved',
       onSelected: (choice) {
         final entry = choice.entry;
+        if (choice.missingOnly) {
+          provider.clearMissingRecentFiles();
+          return;
+        }
         if (entry == null) {
           provider.clearRecentFiles();
           return;
@@ -167,9 +177,28 @@ class RecentFilesButton extends StatelessWidget {
             );
           }
         }
-        items
-          ..add(const PopupMenuDivider())
-          ..add(
+        final missing = recents.missingCount;
+        items.add(const PopupMenuDivider());
+        if (missing > 0) {
+          items.add(
+            PopupMenuItem<_RecentChoice>(
+              key: const ValueKey('clear_recent_missing'),
+              value: const _RecentChoice.clearMissing(),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                leading: const Icon(Icons.link_off, size: 18),
+                title: Text('Remove missing files ($missing)'),
+                subtitle: Text(
+                  'Forgets the ones moved or deleted. The rest stay.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.disabledColor),
+                ),
+              ),
+            ),
+          );
+        }
+        items.add(
             PopupMenuItem<_RecentChoice>(
               key: const ValueKey('clear_recent'),
               value: const _RecentChoice.clear(),
@@ -294,6 +323,12 @@ class RecentFilesPanel extends StatelessWidget {
           children: [
             Text('Recent files', style: theme.textTheme.titleMedium),
             const SizedBox(width: 12),
+            if (recents.missingCount > 0)
+              TextButton(
+                key: const ValueKey('start_recent_clear_missing'),
+                onPressed: () => provider.clearMissingRecentFiles(),
+                child: Text('Remove missing (${recents.missingCount})'),
+              ),
             TextButton(
               key: const ValueKey('start_recent_clear'),
               onPressed: () => provider.clearRecentFiles(),

@@ -11,6 +11,7 @@ import 'app_state.dart';
 import 'assumed_cycle_bar.dart';
 import 'av_flow_model.dart' show formatEquipmentDate;
 import 'building_project.dart' show kProjectFileSuffix;
+import 'project_room_picker.dart' show confirmLeavingRoom;
 import 'campus_file.dart';
 import 'campus_lifecycle.dart';
 import 'manual_rooms_dialog.dart';
@@ -95,21 +96,17 @@ Future<void> showCampusLifecycle(BuildContext context) async {
     }
   }
   if (!context.mounted) return;
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => Dialog.fullscreen(
-      child: _CampusView(
-        // THE OPEN JOB IS ALREADY ON IT. Opening a campus view from a project
-        // and then being asked to go and find that same project on disk is a
-        // step nobody should have to take.
-        initial: provider.currentProjectPath.isEmpty
-            ? const []
-            : [provider.currentProjectPath],
-      ),
-    ),
-  );
+  await showNewCampus(context);
 }
+
+/// A new, empty campus. A campus is a file somebody builds by adding rooms
+/// and projects to it, so nothing is put on it for them - not even the open
+/// job.
+Future<void> showNewCampus(BuildContext context) => showDialog<void>(
+  context: context,
+  barrierDismissible: false,
+  builder: (_) => Dialog.fullscreen(child: _CampusView(initial: const [])),
+);
 
 /// Opens the campus SAVED AT [file] - the list of jobs somebody assembled once
 /// and named, re-read off disk so the plan is today's.
@@ -128,7 +125,8 @@ Future<void> showCampusLifecycleFile(
   // repointing somebody's estate because they glanced at another one is the
   // sort of quiet edit nobody would think to look for. Saving a campus is how
   // that is changed on purpose - see [_CampusViewState._saveCampus].
-  rememberCampusOnOpenProject(context, campus);
+  // Opening a campus does not change the open job. It learns which campus
+  // it is on only when a campus with it on is saved.
   rememberCampusAsRecent(context, campus);
   await showDialog<void>(
     context: context,
@@ -221,6 +219,10 @@ class _CampusViewState extends State<_CampusView> {
   /// comes through here, so none of them can disagree about what is being
   /// assumed.
   CampusLifecycle? get _campus => _read?.onCycle(_cycle);
+
+  /// Which files on the sheet are rooms rather than projects, as of the last
+  /// read. A room has no line items to type in.
+  Set<String> _roomFiles = const {};
 
   // -------------------------------------------------------------------------
   //  UNDO FOR THE ASSEMBLY
@@ -317,9 +319,14 @@ class _CampusViewState extends State<_CampusView> {
     setState(() => _reading = true);
     final provider = context.read<AppStateProvider>();
     final campus = await readCampus(provider: provider, projectPaths: _paths);
+    final rooms = {
+      for (final p in _paths)
+        if (isRoomConfigFile(p)) p,
+    };
     if (!mounted) return;
     setState(() {
       _read = campus;
+      _roomFiles = rooms;
       _reading = false;
     });
   }
@@ -349,7 +356,7 @@ class _CampusViewState extends State<_CampusView> {
 
   Future<void> _addFiles() async {
     final picked = await FilePicker.pickFiles(
-      dialogTitle: 'Which projects belong to this campus?',
+      dialogTitle: 'Which rooms and projects belong to this campus?',
       allowMultiple: true,
       type: FileType.custom,
       allowedExtensions: const ['json'],
@@ -532,7 +539,6 @@ class _CampusViewState extends State<_CampusView> {
     try {
       final campus = await CampusFile.load(file);
       if (!mounted) return;
-      rememberCampusOnOpenProject(context, campus);
       rememberCampusAsRecent(context, campus);
       setState(() {
         _paths
@@ -610,6 +616,29 @@ class _CampusViewState extends State<_CampusView> {
   /// unsaved-work prompt would move the pane of the job somebody chose to KEEP.
   Future<void> _openJob(String file, {String pane = ''}) async {
     final provider = context.read<AppStateProvider>();
+    // A room on the campus opens as the room.
+    if (_roomFiles.contains(file)) {
+      if (!await confirmLeavingRoom(context, provider)) return;
+      if (!mounted) return;
+      if (!await provider.openConfigAtPath(file)) {
+        if (!mounted) return;
+        showTimedSnackBar(
+          ScaffoldMessenger.of(context),
+          SnackBar(
+            content: Text(
+              provider.lastOpenError.isNotEmpty
+                  ? provider.lastOpenError
+                  : '${path.basename(file)} could not be opened.',
+            ),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+      provider.selectTab(AppTab.cost.index);
+      Navigator.of(context).pop();
+      return;
+    }
     if (!await confirmLeavingProject(context, provider)) return;
     if (!mounted) return;
     final opened = await openProjectAtPath(context, provider, file);
@@ -1129,6 +1158,7 @@ class _CampusViewState extends State<_CampusView> {
                         onRemove: _remove,
                         onOpen: _openJob,
                         onManualRooms: _manualRooms,
+                        roomFiles: _roomFiles,
                       ),
                     ],
                     if (campus.failed.isNotEmpty) ...[
@@ -2174,11 +2204,15 @@ class _JobList extends StatelessWidget {
   /// Types rooms into one of them - see [_CampusViewState._manualRooms].
   final void Function(String path, String name) onManualRooms;
 
+  /// The rows that are single rooms, which have no line items to add.
+  final Set<String> roomFiles;
+
   const _JobList({
     required this.campus,
     required this.onRemove,
     required this.onOpen,
     required this.onManualRooms,
+    this.roomFiles = const {},
   });
 
   @override
@@ -2238,7 +2272,7 @@ class _JobList extends StatelessWidget {
                 // The way from the overview into the job it is about. Only
                 // on a job that could be read - a file that failed to open
                 // as a campus entry will not open as a project either.
-                if (j.error.isEmpty)
+                if (j.error.isEmpty && !roomFiles.contains(j.path))
                   IconButton(
                     key: ValueKey('campus_rooms_${path.basename(j.path)}'),
                     tooltip: 'Rooms with no config: add them to this building '

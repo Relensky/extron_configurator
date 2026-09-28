@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'changelog.dart';
 import 'help_content.dart';
+import 'responsive.dart' show kFloatingButtonClearance;
 
 /// ============================================================================
 ///  THE HELP BOOK, ON SCREEN
@@ -342,7 +343,7 @@ class _HelpBookState extends State<HelpBook> {
     final muted = theme.colorScheme.onSurfaceVariant;
     return SingleChildScrollView(
       key: const ValueKey('help_changelog'),
-      padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, kFloatingButtonClearance),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -421,7 +422,7 @@ class _HelpBookState extends State<HelpBook> {
 
     return SingleChildScrollView(
       key: ValueKey('help_page_${topic.title}'),
-      padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, kFloatingButtonClearance),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -558,7 +558,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                     key,
             ];
             return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, kFloatingButtonClearance),
               itemCount: visible.length,
               itemBuilder: (context, index) {
                 final key = visible[index];
@@ -672,7 +672,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                   ),
                 )
               : ListView(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, kFloatingButtonClearance),
                   children: [
                     for (final key in keys)
                       if (_matchesSearch(key) && !key.startsWith('__'))
@@ -770,7 +770,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
         const SizedBox(height: 8),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, kFloatingButtonClearance),
             children: [
               for (final pattern in patterns) ...[
                 Padding(
@@ -822,7 +822,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
         const SizedBox(height: 8),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, kFloatingButtonClearance),
             children: [
               for (final t in schema.deviceTypes)
                 Card(
@@ -1007,7 +1007,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
         _header(theme),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, kFloatingButtonClearance),
             children: [
               _defaultsGroup(
                 theme,
@@ -1239,7 +1239,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
         const SizedBox(height: 8),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, kFloatingButtonClearance),
             children: [
               for (int i = 0; i < rules.length; i++)
                 Card(

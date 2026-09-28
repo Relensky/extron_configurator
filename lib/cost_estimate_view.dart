@@ -592,7 +592,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       child: MinWidthScroll(
         minWidth: _costPageMinWidth(settings.showShipping),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, kFloatingButtonClearance),
           children: cardsIn(context),
         ),
       ),

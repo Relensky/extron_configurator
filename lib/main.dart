@@ -20,7 +20,7 @@ import 'campus_file.dart';
 import 'recent_files.dart' show RecentKind;
 import 'recent_files_menu.dart';
 import 'campus_lifecycle_view.dart'
-    show showCampusLifecycle, showCampusLifecycleFile;
+    show showCampusLifecycle, showCampusLifecycleFile, showNewCampus;
 import 'responsive.dart';
 import 'app_state.dart';
 import 'changelog.dart';
@@ -837,7 +837,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     _FileMenu(
                       onNewRoom: () => _createNewConfig(context, provider),
                       onNewProject: () => startNewProject(context, provider),
-                      onNewCampus: () => showCampusLifecycle(context),
+                      onNewCampus: () => showNewCampus(context),
                       onOpen: (title) =>
                           _openExistingConfig(context, provider, title: title),
                       onOpenPath: (file) =>
@@ -1807,6 +1807,12 @@ class TopLevelBar extends StatelessWidget {
               // is reached from here rather than only from a button inside the
               // Lifecycle pane, so the three levels read as three levels:
               // campus over project over room, each with its own way out.
+              // Only on a job that is on a saved campus: a campus is a file
+              // somebody builds, never the job itself.
+              if (context
+                  .watch<AppStateProvider>()
+                  .projectCampusFile
+                  .isNotEmpty)
               TextButton.icon(
                 key: const ValueKey('banner_campus_open'),
                 icon: const Icon(Icons.location_city, size: 18),

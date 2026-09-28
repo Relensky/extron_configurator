@@ -21,6 +21,7 @@ import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'manual_room_lines.dart';
 import 'project_funding_view.dart';
+import 'responsive.dart' show kFloatingButtonClearance;
 import 'name_colors.dart';
 import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
@@ -674,6 +675,10 @@ class _ProjectViewState extends State<ProjectView> {
             _ProjectPane.todo => todoSlivers(context, estimate),
             _ProjectPane.notes => notesSlivers(context, estimate),
           },
+          // Clear of the floating Screenshot and Export buttons.
+          const SliverToBoxAdapter(
+            child: SizedBox(height: kFloatingButtonClearance),
+          ),
         ],
       ),
     );

@@ -1048,6 +1048,16 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Empties one list, or all three when [kind] is left out.
+  /// Forgets the recent files that have been moved or deleted, keeping the
+  /// rest. Returns how many went.
+  Future<int> clearMissingRecentFiles() async {
+    final gone = recentFiles.forgetMissing();
+    if (gone == 0) return 0;
+    notifyListeners();
+    await _persistSettings();
+    return gone;
+  }
+
   Future<void> clearRecentFiles([RecentKind? kind]) async {
     if (!recentFiles.clear(kind)) return;
     notifyListeners();

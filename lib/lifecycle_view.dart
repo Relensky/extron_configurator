@@ -15,6 +15,7 @@ import 'project_lifecycle_view.dart'
 import 'pinned_grid.dart' show gridMetric;
 import 'project_estimate.dart' show roomCodeFromConfig;
 import 'stepped_date_picker.dart';
+import 'responsive.dart' show kFloatingButtonClearance;
 
 /// ============================================================================
 ///  THE ROOM'S LIFECYCLE TAB
@@ -299,7 +300,10 @@ class _LifecycleViewState extends State<LifecycleView> {
                 ),
               ),
           ],
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          // Clear of the floating Screenshot and Export buttons.
+          const SliverToBoxAdapter(
+            child: SizedBox(height: kFloatingButtonClearance),
+          ),
         ],
       ),
     );
