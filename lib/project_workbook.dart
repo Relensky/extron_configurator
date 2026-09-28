@@ -43,6 +43,162 @@ import 'xlsx_writer.dart';
 /// The fixed sheets, in workbook order. Vendor and room tabs follow.
 const List<String> kProjectWorkbookSheets = ['Summary', 'Core Components'];
 
+/// Every priced line in every room on one sheet, each room linked to its own
+/// tab. Second in the book, after the Summary.
+const String kProjectAllItemsSheet = 'All Items';
+
+/// The master price list: every line of every room that counts, then each
+/// room's total against its target. Room names link to [roomTabs] (ref id ->
+/// tab name); a room with no tab is plain text.
+List<ReportSection> allItemsSections(
+  ProjectEstimate estimate, {
+  Map<String, String> roomTabs = const {},
+}) {
+  final project = estimate.project;
+  final currency = estimate.currency;
+  XlsxMoney cash(double v) => money(v, currency);
+  dynamic roomCell(ProjectRoomCost room) {
+    final tab = roomTabs[room.ref.id];
+    return tab == null ? room.name : XlsxLink(text: room.name, sheet: tab);
+  }
+
+  String priority(int p) => p > 0 ? '$p' : '';
+  final counted = [
+    for (final r in estimate.rooms)
+      if (r.ref.included && r.ok) r,
+  ]..sort((a, b) {
+      int rank(int p) => p > 0 ? p : 1 << 20;
+      return rank(a.ref.priority).compareTo(rank(b.ref.priority));
+    });
+
+  final items = <List<dynamic>>[];
+  for (final room in counted) {
+    final e = room.estimate!;
+    for (final (section, lines) in [
+      ('Equipment', e.equipment),
+      ('Rack hardware', e.hardware),
+      ('Cabling', e.cabling),
+      ('Other items', e.extras),
+    ]) {
+      for (final line in lines) {
+        // The item first: the sheet builder never moves column 0 out of the
+        // grid, and a long description anywhere else would be.
+        items.add([
+          line.description,
+          roomCell(room),
+          priority(room.ref.priority),
+          section,
+          line.model,
+          line.partNumber,
+          line.qty,
+          cash(line.unitPrice),
+          cash(line.total),
+          priceFromLabel(line),
+        ]);
+      }
+    }
+    if (e.laborTotal > 0) {
+      items.add([
+        'Labor, ${trimNumber(e.laborHours)} hrs',
+        roomCell(room),
+        priority(room.ref.priority),
+        'Labor',
+        '',
+        '',
+        '',
+        '',
+        cash(e.laborTotal),
+        '',
+      ]);
+    }
+  }
+
+  final lines = [...project.manualRooms]..sort((a, b) {
+      int rank(int p) => p > 0 ? p : 1 << 20;
+      return rank(a.priority).compareTo(rank(b.priority));
+    });
+  final hasTargets = project.targetTotal > 0;
+  var total = 0.0;
+  final totals = <List<dynamic>>[
+    for (final room in counted)
+      () {
+        total += room.total;
+        return [
+          roomCell(room),
+          priority(room.ref.priority),
+          room.ref.funding,
+          if (hasTargets) ...[
+            room.ref.targetPrice > 0 ? cash(room.ref.targetPrice) : '',
+          ],
+          cash(room.equipmentTotal),
+          cash(room.laborTotal),
+          cash(room.total),
+          if (hasTargets) ...[
+            room.ref.targetPrice > 0
+                ? cash(room.ref.targetPrice - room.total)
+                : '',
+          ],
+        ];
+      }(),
+    for (final line in lines)
+      [
+        '${line.name} (line item, no config)',
+        priority(line.priority),
+        line.funding,
+        if (hasTargets) ...[
+          line.targetPrice > 0 ? cash(line.targetPrice) : '',
+        ],
+        '',
+        '',
+        '',
+        if (hasTargets) '',
+      ],
+    [
+      'Total',
+      '',
+      '',
+      if (hasTargets) ...[cash(project.targetTotal)],
+      '',
+      '',
+      cash(total),
+      if (hasTargets) ...[cash(project.targetTotal - total)],
+    ],
+  ];
+
+  return [
+    (
+      title: 'Every item, every room',
+      header: const [
+        'Item',
+        'Room',
+        'Priority',
+        'Section',
+        'Model',
+        'Part number',
+        'Qty',
+        'Unit price',
+        'Extended',
+        'Price from',
+      ],
+      rows: items,
+    ),
+    (
+      title: 'Room totals',
+      header: [
+        'Room',
+        'Priority',
+        'Source',
+        if (hasTargets) 'Target',
+        'Equipment',
+        'Labor',
+        'Room total',
+        if (hasTargets) 'Target less total',
+      ],
+      rows: totals,
+    ),
+  ];
+}
+
 /// The building-wide control-gap sheet, added only when there is something on
 /// it. Named here so the tests and the tab-order check can agree on it.
 const String kProjectControlSheet = 'Control Gaps';
@@ -1795,6 +1951,23 @@ Uint8List buildProjectWorkbookBytes({
     ),
   ];
 
+  // THE ROOM TABS ARE NAMED NOW, so the master list can link to them. They
+  // are still written last, after every other sheet.
+  final allItemsTab = tab(kProjectAllItemsSheet);
+  final roomTabs = <String, String>{
+    for (final room in estimate.rooms)
+      if (room.ok && costReportSections(room.estimate!).isNotEmpty)
+        room.ref.id: tab(room.name),
+  };
+  if (roomTabs.isNotEmpty || estimate.project.manualRooms.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: allItemsTab,
+      title: '$title - all items',
+      sections: allItemsSections(estimate, roomTabs: roomTabs),
+      generated: stamp,
+    ));
+  }
+
   final master = masterPartsSections(estimate);
   if (master.isNotEmpty) {
     sheets.add(buildStackedReportSheet(
@@ -1964,14 +2137,35 @@ Uint8List buildProjectWorkbookBytes({
   for (final room in estimate.rooms) {
     if (!room.ok) continue;
     final priced = costReportSections(room.estimate!);
-    if (priced.isEmpty) continue;
+    final tabName = roomTabs[room.ref.id];
+    if (priced.isEmpty || tabName == null) continue;
     sheets.add(buildStackedReportSheet(
-      sheetName: tab(room.name),
+      sheetName: tabName,
       title: room.ref.included
           ? room.name
           : '${room.name} - EXCLUDED from the project total',
-      // The room's scope, notes and custom sections, as on its own exports.
-      sections: withEstimateSections(priced, room.room.settings),
+      // The way back to the master list, then the room's scope, notes and
+      // custom sections, as on its own exports.
+      sections: [
+        (
+          title: 'Go to',
+          header: const ['', ''],
+          rows: [
+            [
+              XlsxLink(text: 'All items (every room)', sheet: allItemsTab),
+              '',
+            ],
+            [
+              XlsxLink(
+                text: 'Summary',
+                sheet: sheets.first.name,
+              ),
+              '',
+            ],
+          ],
+        ),
+        ...withEstimateSections(priced, room.room.settings),
+      ],
       generated: stamp,
     ));
   }

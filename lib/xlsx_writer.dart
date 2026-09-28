@@ -119,6 +119,25 @@ class XlsxMoney {
   String toString() => text;
 }
 
+/// A cell that jumps to another tab in the same book when clicked - the room
+/// name on the master list, the way back on each room's tab.
+///
+/// [text] is what the cell says and what a plain-text report prints.
+class XlsxLink {
+  final String text;
+
+  /// The tab it goes to, by its final (settled) name.
+  final String sheet;
+
+  const XlsxLink({required this.text, required this.sheet});
+
+  /// The target in the form Excel's hyperlink `location` takes.
+  String get location => "'${sheet.replaceAll("'", "''")}'!A1";
+
+  @override
+  String toString() => text;
+}
+
 /// A cell whose FILL says whose it is.
 ///
 /// The responsibility matrix is read by WHOSE NAME IS ON THE LINE, and on
@@ -552,7 +571,14 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
       '<xf fontId="1" fillId="3" applyFont="1" applyFill="1" applyAlignment="1" xfId="0">$wrapAlign</xf>'
       '<xf fillId="4" applyFill="1" applyAlignment="1" xfId="0">$wrapAlign</xf>';
 
-  final int cellXfCount = firstTintStyle + tints.length;
+  /// The one style every link cell uses: blue and underlined, as a link
+  /// reads everywhere else. Only declared in a book that has a link, so every
+  /// other book keeps the styles it always had.
+  final bool anyLink = sheets.any(
+    (s) => s.rows.any((row) => row.any((v) => v is XlsxLink)),
+  );
+  final int linkStyle = firstTintStyle + tints.length;
+  final int cellXfCount = linkStyle + (anyLink ? 1 : 0);
 
   // --- xl/styles.xml ---
   // fonts:  0 normal, 1 bold, 2 bold white
@@ -563,11 +589,12 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
       '$numFmts'
-      '<fonts count="${3 + tints.length}">'
+      '<fonts count="${3 + tints.length + (anyLink ? 1 : 0)}">'
       '<font><sz val="11"/><name val="Calibri"/></font>'
       '<font><b/><sz val="11"/><name val="Calibri"/></font>'
       '<font><b/><sz val="12"/><color rgb="FF${XlsxTheme.titleInk(accent)}"/><name val="Calibri"/></font>'
       '$tintFonts'
+      '${anyLink ? '<font><u/><sz val="11"/><color rgb="FF0563C1"/><name val="Calibri"/></font>' : ''}'
       '</fonts>'
       '<fills count="${5 + tints.length}">'
       '<fill><patternFill patternType="none"/></fill>'
@@ -588,6 +615,7 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
       '$moneyXfs'
       '$wrapXfs'
       '$tintXfs'
+      '${anyLink ? '<xf fontId="${3 + tints.length}" applyFont="1" xfId="0"/>' : ''}'
       '</cellXfs>'
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
       '</styleSheet>'));
@@ -925,6 +953,7 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
       body.write('</cols>');
     }
 
+    final links = <String, XlsxLink>{};
     body.write('<sheetData>');
     for (int r = 0; r < sheet.rows.length; r++) {
       final int style = sheet.rowStyles[r] ?? XlsxRowStyle.normal;
@@ -947,7 +976,12 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
           continue;
         }
         if (value == null) continue;
-        if (value is XlsxTint) {
+        if (value is XlsxLink) {
+          links[ref] = value;
+          body.write(
+              '<c r="$ref" s="$linkStyle" t="inlineStr">'
+              '<is><t xml:space="preserve">${esc(value.text)}</t></is></c>');
+        } else if (value is XlsxTint) {
           // Its own fill and its own ink, whatever band the row is in.
           body.write(
               '<c r="$ref" s="${tintStyle(value)}" t="inlineStr">'
@@ -976,6 +1010,17 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
         body.write('<mergeCell ref="${range.toUpperCase()}"/>');
       }
       body.write('</mergeCells>');
+    }
+
+    // Links within the book: a location and no relationship. After
+    // mergeCells and before drawing, as CT_Worksheet orders them.
+    if (links.isNotEmpty) {
+      body.write('<hyperlinks>');
+      links.forEach((ref, link) {
+        body.write('<hyperlink ref="$ref" location="${esc(link.location)}" '
+            'display="${esc(link.text)}"/>');
+      });
+      body.write('</hyperlinks>');
     }
 
     String drawingTag = '';

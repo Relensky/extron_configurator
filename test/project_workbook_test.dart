@@ -234,6 +234,8 @@ void main() {
 
       expect(tabNames(archive), [
         'Summary',
+        // Every line of every room, linking to the room tabs.
+        'All Items',
         'Core Components',
         // When to buy it and what is spared: two questions the parts list
         // cannot answer in a column, read by different people.
@@ -756,6 +758,8 @@ void main() {
 
       expect(tabNames(archive), [
         'Summary',
+        // Every line of every room, linking to the room tabs.
+        'All Items',
         'Core Components',
         'Order Timeline',
         'Spares',
@@ -880,6 +884,8 @@ void main() {
 
       expect(tabNames(archive), [
         'Summary',
+        // Every line of every room, linking to the room tabs.
+        'All Items',
         'Core Components',
         'Order Timeline',
         'Spares',

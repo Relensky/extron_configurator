@@ -1219,6 +1219,37 @@ List<ProjectPlan> missingProjectPlans(ProjectEstimate estimate) => [
         if (!projectPlanIsPresent(plan, estimate.projectPath)) plan,
     ];
 
+/// Who a line outside a priority's categories is furnished by.
+const String kFurnishedByExisting = 'existing';
+
+/// [settings] with every line of [estimate] whose category is not in
+/// [buysOnly] marked furnished by existing, or null when that changes
+/// nothing. A line already furnished by somebody keeps who it was.
+RoomCostSettings? furnishOutsideCategories(
+  CostEstimate estimate,
+  RoomCostSettings settings,
+  List<String> buysOnly,
+) {
+  final bought = {for (final c in buysOnly) c.trim().toLowerCase()};
+  final keys = [
+    for (final line in [
+      ...estimate.equipment,
+      ...estimate.hardware,
+      ...estimate.cabling,
+      ...estimate.extras,
+    ])
+      if (!line.furnished &&
+          !bought.contains(line.category.trim().toLowerCase()))
+        line.key,
+  ];
+  if (keys.isEmpty) return null;
+  final copy = RoomCostSettings()..readJson(settings.toJson());
+  for (final key in keys) {
+    copy.furnishedLines[key] = kFurnishedByExisting;
+  }
+  return copy;
+}
+
 /// Prices every room in [project] and rolls the result up.
 ///
 /// [rooms] lets a caller supply rooms it has already read — the view re-prices
@@ -1258,7 +1289,7 @@ ProjectEstimate computeProjectEstimate({
       continue;
     }
 
-    final estimate = computeRoomCost(
+    var estimate = computeRoomCost(
       model: room.model,
       library: library,
       settings: room.settings,
@@ -1266,6 +1297,27 @@ ProjectEstimate computeProjectEstimate({
       baseCosts: baseCosts,
       tier: tier,
     );
+    // A priority that buys only some categories: the rest of the room is
+    // already there. Priced again with those lines furnished, so they stay
+    // listed at no cost. The room's own file is not touched.
+    final buysOnly = project.buysOnlyFor(ref.priority);
+    if (buysOnly.isNotEmpty) {
+      final scoped = furnishOutsideCategories(
+        estimate,
+        room.settings,
+        buysOnly,
+      );
+      if (scoped != null) {
+        estimate = computeRoomCost(
+          model: room.model,
+          library: library,
+          settings: scoped,
+          rates: rates,
+          baseCosts: baseCosts,
+          tier: tier,
+        );
+      }
+    }
 
     // Only a room that actually counts can make the book mixed-currency: an
     // excluded alternate quoted in euros is not a problem with this total.

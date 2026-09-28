@@ -1556,9 +1556,11 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
     // Which rooms go first and what each is allowed. See
     // project_funding_view.dart.
     if (projectHasFunding(provider))
-      const SliverPadding(
-        padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
-        sliver: SliverToBoxAdapter(child: ProjectFundingCard()),
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        sliver: SliverToBoxAdapter(
+          child: ProjectFundingCard(estimate: estimate),
+        ),
       ),
     // A JOB CAN BE ALL LINE ITEMS. An empty room list used to be the end of
     // this pane, which read as "there is nothing on this job" on the exact

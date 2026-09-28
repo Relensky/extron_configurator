@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.8+18';
+const String kAppVersion = '0.5.9+19';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,22 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.9',
+    date: 'September 28, 2026',
+    title: 'Projector-only priorities, and an All Items sheet',
+    changes: [
+      'A priority can buy only some categories, e.g. priority 5 buys only '
+          'Projector. Use the Buys button on its heading under Priorities and '
+          'funding. Everything else in those rooms is listed as "Furnished by '
+          'existing" at no cost, and the room files are not changed.',
+      'The project workbook, in Excel and Google Sheets, has an All Items '
+          'sheet after the Summary: every priced line in every room, then '
+          'each room\'s total against its target. Room names link to the '
+          'room\'s own tab, and each room tab links back to All Items and the '
+          'Summary.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.8',
     date: 'September 28, 2026',

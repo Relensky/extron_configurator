@@ -2824,6 +2824,12 @@ class BuildingProject {
   /// it is a deliberate step. See [targetTotal].
   bool budgetLocked;
 
+  /// Priority -> the only catalog categories bought for its rooms, e.g.
+  /// {5: ['Projector']}. Everything else in those rooms is already there and
+  /// is listed as furnished by existing at no cost. A priority not in the map
+  /// buys everything. See [buysOnlyFor].
+  final Map<int, List<String>> priorityBuysOnly;
+
   /// What has been planned, committed or spent against [budget], filled in as
   /// the job goes.
   List<BudgetLine> budgetLines;
@@ -2890,9 +2896,11 @@ class BuildingProject {
     int deliveryCounter = 0,
     this.budget = 0,
     this.budgetLocked = false,
+    Map<int, List<String>>? priorityBuysOnly,
     List<BudgetLine>? budgetLines,
     List<InstallWindow>? installWindows,
   }) : buildings = buildings ?? splitBuildingList(building),
+       priorityBuysOnly = priorityBuysOnly ?? {},
        rooms = rooms ?? [],
        budgetLines = budgetLines ?? [],
        installWindows = installWindows ?? [],
@@ -2955,6 +2963,11 @@ class BuildingProject {
   /// The rooms that count toward the total.
   List<ProjectRoomRef> get includedRooms =>
       [for (final r in rooms) if (r.included) r];
+
+  /// The only categories bought for a room at [priority], or empty when it
+  /// buys everything. See [priorityBuysOnly].
+  List<String> buysOnlyFor(int priority) =>
+      priority > 0 ? priorityBuysOnly[priority] ?? const [] : const [];
 
   /// The money set aside for rooms so far: every line item's target and every
   /// included room's. Held to [budget] - see
@@ -4410,6 +4423,10 @@ class BuildingProject {
       'history': [for (final h in history) h.toJson()],
     if (budget != 0) 'budget': budget,
     if (budgetLocked) 'budgetLocked': true,
+    if (priorityBuysOnly.isNotEmpty)
+      'priorityBuysOnly': {
+        for (final e in priorityBuysOnly.entries) '${e.key}': e.value,
+      },
     if (budgetLines.isNotEmpty)
       'budgetLines': [for (final b in budgetLines) b.toJson()],
     if (installWindows.isNotEmpty)
@@ -4691,6 +4708,15 @@ class BuildingProject {
             : double.tryParse(raw?.toString() ?? '') ?? 0.0;
       }(),
       budgetLocked: json['budgetLocked'] == true,
+      priorityBuysOnly: {
+        if (json['priorityBuysOnly'] is Map)
+          for (final e in (json['priorityBuysOnly'] as Map).entries)
+            if (int.tryParse(e.key.toString()) != null && e.value is List)
+              int.parse(e.key.toString()): [
+                for (final c in e.value as List)
+                  if (c.toString().trim().isNotEmpty) c.toString().trim(),
+              ],
+      },
       budgetLines: [
         for (final b in (json['budgetLines'] as List? ?? []))
           if (b is Map) BudgetLine.fromJson(Map<String, dynamic>.from(b)),
@@ -4903,6 +4929,9 @@ class BuildingProject {
     deliveryCounter: _deliveryCounter,
     budget: budget,
     budgetLocked: budgetLocked,
+    priorityBuysOnly: {
+      for (final e in priorityBuysOnly.entries) e.key: List.of(e.value),
+    },
     budgetLines: List<BudgetLine>.from(budgetLines),
     installWindows: List<InstallWindow>.from(installWindows),
   );

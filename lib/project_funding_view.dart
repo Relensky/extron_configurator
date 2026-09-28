@@ -5,6 +5,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'cost_estimate.dart' show formatMoney;
 import 'live_text_field.dart';
+import 'project_estimate.dart' show ProjectEstimate;
 
 /// ============================================================================
 ///  PRIORITIES AND FUNDING
@@ -39,7 +40,11 @@ bool projectHasFunding(AppStateProvider provider) {
 }
 
 class ProjectFundingCard extends StatefulWidget {
-  const ProjectFundingCard({super.key});
+  /// The priced job, for the categories each priority's rooms hold. Null
+  /// offers only the ones already chosen.
+  final ProjectEstimate? estimate;
+
+  const ProjectFundingCard({super.key, this.estimate});
 
   @override
   State<ProjectFundingCard> createState() => _ProjectFundingCardState();
@@ -79,6 +84,87 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
         backgroundColor: snackErrorFillOn(messenger),
       ),
     );
+  }
+
+  /// The catalog categories in the rooms at [priority], for choosing what it
+  /// buys.
+  List<String> _categoriesFor(int priority) {
+    final found = <String>{};
+    for (final room in widget.estimate?.rooms ?? const []) {
+      final estimate = room.estimate;
+      if (room.ref.priority != priority || estimate == null) continue;
+      for (final line in [
+        ...estimate.equipment,
+        ...estimate.hardware,
+        ...estimate.cabling,
+        ...estimate.extras,
+      ]) {
+        if (line.category.trim().isNotEmpty) found.add(line.category.trim());
+      }
+    }
+    return found.toList()..sort();
+  }
+
+  Future<void> _chooseBuys(AppStateProvider provider, int priority) async {
+    final chosen = {...provider.project.buysOnlyFor(priority)};
+    final offered = {..._categoriesFor(priority), ...chosen}.toList()..sort();
+    final picked = await showDialog<Set<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialog) => AlertDialog(
+          title: Text('What does priority $priority buy?'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pick the categories bought for these rooms. Everything else '
+                  'in them is listed as furnished by existing, at no cost. '
+                  'Pick none to buy everything.',
+                ),
+                const SizedBox(height: 12),
+                if (offered.isEmpty)
+                  const Text(
+                    'None of these rooms has a config with priced equipment '
+                    'yet.',
+                  )
+                else
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final c in offered)
+                        FilterChip(
+                          key: ValueKey('buys_$c'),
+                          label: Text(c),
+                          selected: chosen.contains(c),
+                          onSelected: (on) => setDialog(
+                            () => on ? chosen.add(c) : chosen.remove(c),
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('buys_save'),
+              onPressed: () => Navigator.pop(dialogContext, chosen),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    provider.setPriorityBuysOnly(priority, picked.toList()..sort());
   }
 
   Future<void> _toggleLock(AppStateProvider provider) async {
@@ -309,6 +395,18 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                         style: theme.textTheme.titleSmall,
                       ),
                     ),
+                    if (p > 0)
+                      TextButton.icon(
+                        key: ValueKey('funding_buys_$p'),
+                        onPressed: () => _chooseBuys(provider, p),
+                        icon: const Icon(Icons.shopping_cart_outlined, size: 16),
+                        label: Text(
+                          project.buysOnlyFor(p).isEmpty
+                              ? 'Buys everything'
+                              : 'Buys only ${project.buysOnlyFor(p).join(', ')}',
+                        ),
+                      ),
+                    const SizedBox(width: 12),
                     Text(
                       money(
                         rooms

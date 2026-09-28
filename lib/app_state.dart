@@ -13330,6 +13330,30 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
+  /// Sets the only categories bought for rooms at [priority]; empty buys
+  /// everything. See [BuildingProject.priorityBuysOnly].
+  void setPriorityBuysOnly(int priority, List<String> categories) {
+    if (priority <= 0) return;
+    final next = [
+      for (final c in categories)
+        if (c.trim().isNotEmpty) c.trim(),
+    ];
+    final was = project.buysOnlyFor(priority);
+    if (was.join('|') == next.join('|')) return;
+    if (next.isEmpty) {
+      project.priorityBuysOnly.remove(priority);
+    } else {
+      project.priorityBuysOnly[priority] = next;
+    }
+    _logProjectEdit(
+      itemKey: 'priority:$priority',
+      itemName: 'Priority $priority',
+      field: 'Buys',
+      summary: next.isEmpty ? 'everything' : 'only ${next.join(', ')}',
+    );
+    _projectChanged();
+  }
+
   /// Sets a room's priority, who pays for it and its target price. Pass
   /// [manualId] for a line item or [roomId] for a drawn room. Returns the
   /// message to show - '' when it went in.
