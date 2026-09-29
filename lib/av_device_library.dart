@@ -502,6 +502,11 @@ class AvDeviceTemplate {
   /// Built-in entries stay false so a later app build can still improve them.
   final bool custom;
 
+  /// True when somebody added this entry in the app, rather than it coming
+  /// with the catalog. What "yours" and My entries only mean: [custom] is
+  /// every entry in av_devices.json, shipped ones included.
+  final bool addedByUser;
+
   const AvDeviceTemplate({
     required this.model,
     this.manufacturer = '',
@@ -527,6 +532,7 @@ class AvDeviceTemplate {
     this.notes = '',
     required this.ports,
     this.custom = false,
+    this.addedByUser = false,
   });
 
   /// True when this entry is a length of cable rather than a box.
@@ -603,6 +609,7 @@ class AvDeviceTemplate {
     String? notes,
     List<AvPort>? ports,
     bool? custom,
+    bool? addedByUser,
   }) => AvDeviceTemplate(
     model: model ?? this.model,
     manufacturer: manufacturer ?? this.manufacturer,
@@ -628,10 +635,12 @@ class AvDeviceTemplate {
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
     custom: custom ?? this.custom,
+    addedByUser: addedByUser ?? this.addedByUser,
   );
 
   Map<String, dynamic> toJson() => {
     'model': model,
+    if (addedByUser) 'addedByUser': true,
     if (manufacturer.isNotEmpty) 'manufacturer': manufacturer,
     if (partNumber.isNotEmpty) 'partNumber': partNumber,
     if (category.isNotEmpty) 'category': category,
@@ -741,6 +750,7 @@ class AvDeviceTemplate {
         if (p is Map) AvPort.fromJson(Map<String, dynamic>.from(p)),
     ],
     custom: custom,
+    addedByUser: json['addedByUser'] == true,
   );
 }
 
@@ -1355,11 +1365,18 @@ class AvDeviceLibrary {
   /// [normalizePowerInlets] for why it cannot happen here.
   void upsert(AvDeviceTemplate template, {String previousModel = ''}) {
     if (template.model.trim().isEmpty) return;
+    // Added in the app when there was no entry under either name; an edit
+    // keeps whatever the entry was.
+    final was = _byModel[_norm(template.model)] ??
+        (previousModel.isEmpty ? null : _byModel[_norm(previousModel)]);
     if (previousModel.isNotEmpty &&
         _norm(previousModel) != _norm(template.model)) {
       _byModel.remove(_norm(previousModel));
     }
-    _byModel[_norm(template.model)] = template.copyWith(custom: true);
+    _byModel[_norm(template.model)] = template.copyWith(
+      custom: true,
+      addedByUser: was == null || was.addedByUser,
+    );
     _invalidate();
   }
 

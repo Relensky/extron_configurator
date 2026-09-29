@@ -139,6 +139,16 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                   summary.forecastRemaining,
                   color: forecastOver ? theme.colorScheme.error : null,
                 ),
+                // What is left once the rooms are bought as estimated.
+                if (summary.hasBudget)
+                  figure(
+                    'Remaining after rooms estimate',
+                    summary.estimateHeadroom,
+                    key: 'project_budget_after_estimate',
+                    color: summary.estimateHeadroom < 0
+                        ? theme.colorScheme.error
+                        : null,
+                  ),
               ],
             ),
             if (summary.hasBudget) ...[

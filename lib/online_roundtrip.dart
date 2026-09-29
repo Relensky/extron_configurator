@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 
 import 'building_project.dart';
-import 'cost_estimate.dart' show trimNumber;
+import 'cost_estimate.dart' show formatMoney, trimNumber;
+import 'project_estimate.dart' show MasterPartLine;
 import 'xlsx_reader.dart';
 import 'xlsx_writer.dart';
 
@@ -40,6 +41,128 @@ import 'xlsx_writer.dart';
 ///  spreadsheet programs disagree about, and text is what both of them hand
 ///  back unchanged. See the note at the head of xlsx_reader.dart.
 /// ============================================================================
+
+/// The master parts list, read back for its names, models, part numbers and
+/// unit prices. See [readMasterEdits].
+const String kMasterSheet = 'Core Components';
+
+/// The short, stable id a Core Components row carries, from the part's
+/// master key: 'P' and a hash, because the key itself is too long to sit in
+/// a column. The same part gets the same id on every publish.
+String masterRowId(String key) {
+  var h = 0x811c9dc5;
+  for (final c in key.codeUnits) {
+    h ^= c;
+    h = (h * 0x01000193) & 0xffffffff;
+  }
+  return 'P${h.toRadixString(36).toUpperCase()}';
+}
+
+/// One part as it came back off Core Components, with only what changed set.
+typedef MasterEdit = ({
+  /// The part's master key.
+  String key,
+
+  /// What the part was called before, for the list of changes.
+  String label,
+  String? name,
+  String? model,
+  String? partNumber,
+  double? unitPrice,
+});
+
+/// What changed on the Core Components sheet against [master], by row id.
+///
+/// A row whose id the job does not know is skipped: it is a part that has
+/// left the job, or a line somebody typed, and neither is a price for
+/// anything. A price that is not a number is left alone and reported.
+List<MasterEdit> readMasterEdits(
+  Map<String, List<List<String>>> sheets,
+  List<MasterPartLine> master,
+  List<String> problems,
+) {
+  final grid = sheets[kMasterSheet];
+  if (grid == null) return const [];
+  final byId = {for (final l in master) masterRowId(l.key): l};
+  final out = <MasterEdit>[];
+  Map<String, int>? cols;
+  String cell(List<String> row, String name) {
+    final c = cols![name];
+    return c == null || c >= row.length ? '' : row[c].trim();
+  }
+
+  for (final row in grid) {
+    if (row.isEmpty) continue;
+    // Each section has its own header row.
+    if (row.contains('Row id') && row.first.trim() == 'Part') {
+      cols = {for (var i = 0; i < row.length; i++) row[i].trim(): i};
+      continue;
+    }
+    if (cols == null) continue;
+    final line = byId[cell(row, 'Row id')];
+    if (line == null) continue;
+
+    final name = cell(row, 'Part');
+    final model = cell(row, 'Model');
+    final part = cell(row, 'Part number');
+    final rawPrice = cell(row, 'Unit price');
+    double? price;
+    if (rawPrice.isNotEmpty) {
+      final parsed = double.tryParse(
+        rawPrice.replaceAll(RegExp(r'[^0-9.\-]'), ''),
+      );
+      // A range ('$100-$120') or 'not priced' that nobody changed is not a
+      // price, and says nothing.
+      if (parsed != null && !rawPrice.contains('-')) {
+        final unchanged = !line.unpriced &&
+            !line.priceVaries &&
+            (parsed - line.unitPrice).abs() <= 0.005;
+        if (!unchanged) price = parsed;
+      } else if (rawPrice != 'not priced' && !rawPrice.contains('-')) {
+        problems.add(
+          '${line.description}: the unit price reads "$rawPrice", which is '
+          'not a number - left as it was.',
+        );
+      }
+    }
+    final edit = (
+      key: line.key,
+      label: line.description,
+      name: name.isNotEmpty && name != line.description.trim() ? name : null,
+      model: model.isNotEmpty && model != line.model.trim() ? model : null,
+      partNumber: part != line.partNumber.trim() ? part : null,
+      unitPrice: price,
+    );
+    if (edit.name != null ||
+        edit.model != null ||
+        edit.partNumber != null ||
+        edit.unitPrice != null) {
+      out.add(edit);
+    }
+  }
+  return out;
+}
+
+/// What a part change off Core Components could also do to the catalog.
+enum CatalogOfferKind { price, partNumber, addModel }
+
+/// One thing the catalog could take from a pulled change, for the person to
+/// tick or leave.
+typedef CatalogOffer = ({
+  CatalogOfferKind kind,
+
+  /// The catalog entry it is about - for [CatalogOfferKind.addModel], the new
+  /// model.
+  String model,
+
+  /// The model the job has now.
+  String from,
+  String? partNumber,
+  double? price,
+
+  /// The part, as the list shows it.
+  String label,
+});
 
 /// The delivery log, as a form somebody can fill in.
 const String kEditableDeliveriesSheet = 'Deliveries (edit)';
@@ -281,6 +404,9 @@ typedef OnlineImport = ({
   List<ParsedDelivery> deliveries,
   List<ParsedPo> pos,
 
+  /// What changed on Core Components - see [readMasterEdits].
+  List<MasterEdit> master,
+
   /// Anything that could not be understood, in the words a person can act on:
   /// 'Row del4: "next Tuesday" is not a date (2026-04-20), left as it was.'
   ///
@@ -305,17 +431,21 @@ OnlineImport readOnlineEdits(
   Map<String, String> roomIdsByName = const {},
   Map<String, String> vendorIdsByName = const {},
   BuildingProject? against,
+  /// The job's parts, for reading Core Components back.
+  List<MasterPartLine> master = const [],
 }) {
   final problems = <String>[];
   final sheets = readXlsxSheets(bytes);
   final hasDeliveries = sheets.containsKey(kEditableDeliveriesSheet);
   final hasPos = sheets.containsKey(kEditablePosSheet);
+  final masterEdits = readMasterEdits(sheets, master, problems);
   if (!hasDeliveries && !hasPos) {
     return (
       deliveries: const [],
       pos: const [],
-      problems: const [],
-      wrongFile: true,
+      master: masterEdits,
+      problems: problems,
+      wrongFile: !sheets.containsKey(kMasterSheet),
     );
   }
 
@@ -473,6 +603,7 @@ OnlineImport readOnlineEdits(
   return (
     deliveries: deliveries,
     pos: pos,
+    master: masterEdits,
     problems: problems,
     wrongFile: false,
   );
@@ -514,6 +645,22 @@ typedef OnlineChange = ({
 /// frightened of.
 List<OnlineChange> onlineChanges(BuildingProject project, OnlineImport read) {
   final out = <OnlineChange>[];
+
+  for (final m in read.master) {
+    out.add((
+      kind: 'part',
+      id: m.key,
+      name: m.label,
+      what: [
+        if (m.name != null) 'Name: ${m.name}',
+        if (m.model != null) 'Model: ${m.model}',
+        if (m.partNumber != null)
+          'Part number: ${m.partNumber!.isEmpty ? '(blank)' : m.partNumber}',
+        if (m.unitPrice != null)
+          'Unit price: ${formatMoney(m.unitPrice!, project.currency)}',
+      ].join(', '),
+    ));
+  }
 
   for (final d in read.deliveries) {
     final name = d.itemName.trim().isEmpty ? 'a delivery' : d.itemName.trim();

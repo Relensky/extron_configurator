@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'contrast.dart';
+import 'cost_estimate.dart' show formatMoney;
 import 'online_copy.dart';
 import 'online_roundtrip.dart';
 
@@ -462,6 +463,89 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
 /// typing arriving in your job: a list of exactly what it would change,
 /// checked once, is the difference between a feature people use and one they
 /// are right to be frightened of. Nothing here is written until Apply.
+/// "Also update the catalog?" after a pull changed parts on the job.
+class _CatalogOffersDialog extends StatefulWidget {
+  final List<CatalogOffer> offers;
+  final String currency;
+
+  const _CatalogOffersDialog({required this.offers, required this.currency});
+
+  @override
+  State<_CatalogOffersDialog> createState() => _CatalogOffersDialogState();
+}
+
+class _CatalogOffersDialogState extends State<_CatalogOffersDialog> {
+  late final Set<int> _ticked = {
+    for (var i = 0; i < widget.offers.length; i++) i,
+  };
+
+  String _describe(CatalogOffer o) => switch (o.kind) {
+    CatalogOfferKind.price =>
+      '${o.model}: price ${formatMoney(o.price ?? 0, widget.currency)}',
+    CatalogOfferKind.partNumber =>
+      '${o.model}: part number '
+          '${(o.partNumber ?? '').isEmpty ? '(blank)' : o.partNumber}',
+    CatalogOfferKind.addModel =>
+      'Add ${o.model} to the catalog, copied from ${o.from}, and swap it in '
+          'across the job'
+          '${o.price == null ? '' : ' at ${formatMoney(o.price!, widget.currency)}'}',
+  };
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    key: const ValueKey('catalog_offers_dialog'),
+    title: const Text('Update the catalog too?'),
+    content: SizedBox(
+      width: 560,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'The job has these changes now. Ticked ones also go into the '
+            'catalog, so other jobs and new rooms use them.',
+          ),
+          const SizedBox(height: 8),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (var i = 0; i < widget.offers.length; i++)
+                  CheckboxListTile(
+                    key: ValueKey('catalog_offer_$i'),
+                    dense: true,
+                    value: _ticked.contains(i),
+                    onChanged: (v) => setState(
+                      () => v == true ? _ticked.add(i) : _ticked.remove(i),
+                    ),
+                    title: Text(_describe(widget.offers[i])),
+                    subtitle: Text(widget.offers[i].label),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        key: const ValueKey('catalog_offers_skip'),
+        onPressed: () => Navigator.pop(context, const <CatalogOffer>[]),
+        child: const Text('Just this job'),
+      ),
+      FilledButton(
+        key: const ValueKey('catalog_offers_apply'),
+        onPressed: _ticked.isEmpty
+            ? null
+            : () => Navigator.pop(context, [
+                for (final i in _ticked.toList()..sort()) widget.offers[i],
+              ]),
+        child: const Text('Update the catalog'),
+      ),
+    ],
+  );
+}
+
 class _ImportReviewDialog extends StatefulWidget {
   final AppStateProvider provider;
   final OnlineImport read;
@@ -486,7 +570,37 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
 
   Future<void> _apply() async {
     setState(() => _busy = true);
-    final touched = widget.provider.applyOnlineImport(widget.read);
+    final provider = widget.provider;
+    // Worked out first, while the parts still go by the keys the workbook
+    // knew them by.
+    final offers = provider.catalogOffersFor(widget.read.master);
+    var touched = provider.applyOnlineImport(widget.read);
+    touched += await provider.applyMasterEdits(widget.read.master);
+    if (!mounted) return;
+    // THE CATALOG IS ASKED ABOUT, not written. The pull changed this job;
+    // whether every job should follow is a separate decision.
+    if (offers.isNotEmpty) {
+      final chosen = await showDialog<List<CatalogOffer>>(
+        context: context,
+        builder: (_) => _CatalogOffersDialog(
+          offers: offers,
+          currency: provider.project.currency,
+        ),
+      );
+      if (chosen != null && chosen.isNotEmpty) {
+        final error = await provider.applyCatalogOffers(chosen);
+        if (error.isNotEmpty && mounted) {
+          final messenger = ScaffoldMessenger.of(context);
+          showTimedSnackBar(
+            messenger,
+            SnackBar(
+              content: Text('The catalog could not be saved: $error'),
+              backgroundColor: snackErrorFillOn(messenger),
+            ),
+          );
+        }
+      }
+    }
     if (!mounted) return;
     Navigator.of(context).pop(touched);
   }

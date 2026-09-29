@@ -275,7 +275,9 @@ class _RoomMenu extends StatelessWidget {
         );
       },
       itemBuilder: (ctx) => [
-        for (final ref in rooms)
+        // Alphabetical by the code on the door, not the order they were added.
+        for (final ref in [...rooms]
+          ..sort((a, b) => compareRoomNames(names.codeFor(a), names.codeFor(b))))
           PopupMenuItem(
             value: ref.id,
             child: ListTile(

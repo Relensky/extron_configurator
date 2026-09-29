@@ -183,9 +183,10 @@ void main() {
       final caption = rectOf(tester, find.text(pair.$1).first);
       final box = rectOf(tester, textInside(pair.$2));
       // The printed cell on the DRAWN row of the same column.
+      // A drawn line's Qty is a box now too.
       final printed = rectOf(
         tester,
-        find.text(pair.$3 ? '×1' : 'Display'),
+        pair.$3 ? textInside('eqpqty_drawn_') : find.text('Display'),
       );
       double edge(Rect r) => pair.$3 ? r.right : r.left;
       expect(edge(caption), moreOrLessEquals(edge(box), epsilon: 0.5),

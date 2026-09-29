@@ -308,16 +308,23 @@ class AddManualRoomLineButton extends StatelessWidget {
 
 /// Adds a pasted list of rooms as line items, one per line. Each can then be
 /// built or swapped into a real room as the work reaches it.
-Future<void> pasteRoomList(BuildContext context) async {
+///
+/// [priority] opens it aimed at that priority - the Add rooms button on a
+/// priority's heading. Left out, blank lines start new priorities.
+Future<void> pasteRoomList(BuildContext context, {int? priority}) async {
   final provider = context.read<AppStateProvider>();
-  final asked = await showDialog<({String text, bool groups})>(
+  final asked = await showDialog<({String text, int target})>(
     context: context,
-    builder: (_) => const _PasteRoomListDialog(),
+    builder: (_) => _PasteRoomListDialog(
+      highest: provider.projectHighestPriority,
+      target: priority ?? kPasteByGroups,
+    ),
   );
   if (asked == null || !context.mounted) return;
   final result = provider.addProjectManualRoomList(
     asked.text,
-    groupsArePriorities: asked.groups,
+    groupsArePriorities: asked.target == kPasteByGroups,
+    priority: asked.target == kPasteByGroups ? null : asked.target,
   );
   showTimedSnackBar(
     ScaffoldMessenger.of(context),
@@ -337,8 +344,17 @@ Future<void> pasteRoomList(BuildContext context) async {
   );
 }
 
+/// "Blank lines start new priorities", as the paste's target.
+const int kPasteByGroups = -1;
+
 class _PasteRoomListDialog extends StatefulWidget {
-  const _PasteRoomListDialog();
+  /// The highest priority on the job, so the next one can be offered.
+  final int highest;
+
+  /// Where the rooms go: [kPasteByGroups], 0 for none, or a priority.
+  final int target;
+
+  const _PasteRoomListDialog({required this.highest, required this.target});
 
   @override
   State<_PasteRoomListDialog> createState() => _PasteRoomListDialogState();
@@ -346,7 +362,7 @@ class _PasteRoomListDialog extends StatefulWidget {
 
 class _PasteRoomListDialogState extends State<_PasteRoomListDialog> {
   final _text = TextEditingController();
-  bool _groups = true;
+  late int _target = widget.target;
 
   @override
   void dispose() {
@@ -359,8 +375,13 @@ class _PasteRoomListDialogState extends State<_PasteRoomListDialog> {
     final rows = parseRoomRows(_text.text);
     final count = rows.length;
     final groups = rows.isEmpty ? 0 : rows.last.group;
+    // Existing priorities, then the next new one.
+    final next = [widget.highest + 1, if (_target > widget.highest) _target]
+        .reduce((a, b) => a > b ? a : b);
     return AlertDialog(
-      title: const Text('Paste a list of rooms'),
+      title: Text(
+        _target > 0 ? 'Add rooms to priority $_target' : 'Add rooms',
+      ),
       content: SizedBox(
         width: 460,
         child: Column(
@@ -376,23 +397,37 @@ class _PasteRoomListDialogState extends State<_PasteRoomListDialog> {
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
             hintText: 'ARTS 111\t1 Projector\tCentral\t\$19,049',
-            helperText: 'One room per line. Pasted spreadsheet columns can '
-                'add the room type, Central or Dept, and a target price. '
-                'Each building code joins the job.',
+            helperText: 'One room per line - type one or paste a list. '
+                'Spreadsheet columns can add the room type, Central or Dept, '
+                'and a target price. Each building code joins the job.',
             helperMaxLines: 3,
           ),
         ),
-            CheckboxListTile(
-              key: const ValueKey('room_list_groups'),
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: _groups,
-              onChanged: (v) => setState(() => _groups = v ?? false),
-              title: Text(
-                groups > 1
-                    ? 'Blank lines separate priorities ($groups groups)'
-                    : 'Blank lines separate priorities',
-              ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              key: const ValueKey('room_list_target'),
+              initialValue: _target,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Put them in'),
+              items: [
+                DropdownMenuItem(
+                  value: kPasteByGroups,
+                  child: Text(
+                    groups > 1
+                        ? 'New priorities, split by blank lines ($groups)'
+                        : 'New priorities, split by blank lines',
+                  ),
+                ),
+                for (var p = 1; p <= widget.highest; p++)
+                  DropdownMenuItem(value: p, child: Text('Priority $p')),
+                for (var p = widget.highest + 1; p <= next; p++)
+                  DropdownMenuItem(
+                    value: p,
+                    child: Text('Priority $p (new)'),
+                  ),
+                const DropdownMenuItem(value: 0, child: Text('No priority')),
+              ],
+              onChanged: (v) => setState(() => _target = v ?? _target),
             ),
           ],
         ),
@@ -408,7 +443,7 @@ class _PasteRoomListDialogState extends State<_PasteRoomListDialog> {
               ? null
               : () => Navigator.pop(context, (
                   text: _text.text,
-                  groups: _groups,
+                  target: _target,
                 )),
           child: Text('Add $count room${count == 1 ? '' : 's'}'),
         ),

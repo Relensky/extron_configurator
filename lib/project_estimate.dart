@@ -165,7 +165,47 @@ class LoadedRoom {
 /// estimate, and reading them would mean a project rollup could fail on a
 /// missing PNG. If costing ever grows to read one of them, it is added here
 /// and the doc comment stops being true, which is the point of saying it.
-LoadedRoom readRoomFromDisk(String configPath) {
+/// [readRoomFromDisk] with the files read in the background first, so a job
+/// of thirty rooms on a network share does not freeze the window while it
+/// opens. The parse is the same one.
+Future<LoadedRoom> readRoomFromDiskAsync(String configPath) async {
+  final texts = <String, String>{};
+  Future<void> fetch(String file) async {
+    if (file.isEmpty) return;
+    try {
+      final f = File(file);
+      if (await f.exists()) texts[file] = await f.readAsString();
+    } catch (_) {
+      // Left out; the parse reports it the way a sync read would.
+    }
+  }
+
+  await fetch(configPath);
+  if (configPath.isNotEmpty) {
+    final paths = roomSidecarPaths(configPath);
+    for (final part in RoomSidecarPart.values) {
+      await fetch(paths[part] ?? '');
+    }
+    await fetch(path.join(
+      path.dirname(configPath),
+      '${path.basenameWithoutExtension(configPath)}_avflow.json',
+    ));
+  }
+  return readRoomFromDisk(configPath, read: (file) => texts[file]);
+}
+
+/// [read] supplies a file's text, or null when it is absent - see
+/// [readRoomFromDiskAsync]. Left out, the files are read from disk here.
+LoadedRoom readRoomFromDisk(
+  String configPath, {
+  String? Function(String file)? read,
+}) {
+  String? text(String file) {
+    if (read != null) return read(file);
+    final f = File(file);
+    return f.existsSync() ? f.readAsStringSync() : null;
+  }
+
   LoadedRoom failed(String why) => LoadedRoom(
     configPath: configPath,
     title: '',
@@ -183,14 +223,19 @@ LoadedRoom readRoomFromDisk(String configPath) {
   );
 
   if (configPath.isEmpty) return failed('No file chosen for this room.');
-  final configFile = File(configPath);
-  if (!configFile.existsSync()) {
+  final String? configText;
+  try {
+    configText = text(configPath);
+  } catch (e) {
+    return failed('The config could not be read: $e');
+  }
+  if (configText == null) {
     return failed('The config is not at $configPath.');
   }
 
   Map<String, dynamic> config;
   try {
-    final doc = jsonDecode(configFile.readAsStringSync());
+    final doc = jsonDecode(configText);
     if (doc is! Map) throw const FormatException('Root is not an object.');
     config = Map<String, dynamic>.from(doc);
   } catch (e) {
@@ -208,9 +253,11 @@ LoadedRoom readRoomFromDisk(String configPath) {
   // written before the sidecar split — one file holding every key — reads
   // here exactly as it does there, with no version check.
   Map<String, dynamic>? readPart(String file) {
-    if (file.isEmpty || !File(file).existsSync()) return null;
+    if (file.isEmpty) return null;
     try {
-      final doc = jsonDecode(File(file).readAsStringSync());
+      final raw = text(file);
+      if (raw == null) return null;
+      final doc = jsonDecode(raw);
       if (doc is! Map) return null;
       return Map<String, dynamic>.from(doc);
     } catch (e) {
@@ -1235,7 +1282,10 @@ RoomCostSettings? scopeToCategories(
       ...estimate.cabling,
       ...estimate.extras,
     ])
-      if (!bought.contains(line.category.trim().toLowerCase())) line.key,
+      // A category or one item by its model.
+      if (!bought.contains(line.category.trim().toLowerCase()) &&
+          !bought.contains(line.model.trim().toLowerCase()))
+        line.key,
   ];
   if (keys.isEmpty) return null;
   return RoomCostSettings()
@@ -1294,12 +1344,32 @@ ProjectEstimate computeProjectEstimate({
     // already there and stays. Priced again without those lines, so the job
     // shows only what it replaces. The room's own file is not touched.
     final buysOnly = project.buysOnlyFor(ref.priority);
-    if (buysOnly.isNotEmpty) {
-      final scoped = scopeToCategories(
-        estimate,
-        room.settings,
-        buysOnly,
-      );
+    final addOns = project.addOnsFor(ref.priority);
+    if (buysOnly.isNotEmpty || addOns.isNotEmpty) {
+      var scoped = buysOnly.isEmpty
+          ? null
+          : scopeToCategories(estimate, room.settings, buysOnly);
+      // The priority's add-ons, quoted for this room like a line typed on its
+      // Cost tab. After the scope is worked out, so an add-on is never taken
+      // back off as existing.
+      if (addOns.isNotEmpty) {
+        scoped ??= RoomCostSettings()..readJson(room.settings.toJson());
+        for (var i = 0; i < addOns.length; i++) {
+          final a = addOns[i];
+          final t = library.templateForModel(a.model);
+          scoped.extraEquipment.add(
+            CostLineItem(
+              id: 'addon:${ref.priority}:$i',
+              description: a.description.trim().isNotEmpty
+                  ? a.description.trim()
+                  : a.model,
+              category: t?.category ?? '',
+              qty: a.qty,
+              catalogModel: a.model,
+            ),
+          );
+        }
+      }
       if (scoped != null) {
         estimate = computeRoomCost(
           model: room.model,

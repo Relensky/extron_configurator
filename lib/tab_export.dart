@@ -236,7 +236,7 @@ List<ReportSection> _catalogSections(AppStateProvider provider) {
             e.lifeYears == 0 ? '' : '${e.lifeYears}',
             [
               if (e.retired) 'retired',
-              if (e.custom) 'local',
+              if (e.addedByUser) 'added by you',
             ].join(', '),
           ],
       ],

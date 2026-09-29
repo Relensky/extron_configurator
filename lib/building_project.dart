@@ -2443,6 +2443,10 @@ class ProjectSpare {
 //  THE PROJECT
 // ---------------------------------------------------------------------------
 
+/// An item quoted for every room at a priority, on top of what the rooms
+/// have: two ceiling speakers per room in a projector-only refresh.
+typedef PriorityAddOn = ({String model, String description, double qty});
+
 /// A typed list of buildings, 'ARTS, holt ,ARTS', as ['ARTS', 'holt']:
 /// trimmed, blanks dropped, repeats dropped ignoring case.
 List<String> splitBuildingList(String value) {
@@ -2516,6 +2520,21 @@ List<RoomListRow> parseRoomRows(String text) {
 /// Just the names from [parseRoomRows].
 List<String> parseRoomList(String text) =>
     [for (final row in parseRoomRows(text)) row.name];
+
+/// Room names in the order a person reads them: 'ARTS 9' before 'ARTS 105',
+/// 'ARTS 306' before 'ARTS 306A', ignoring case.
+int compareRoomNames(String a, String b) {
+  final parts = RegExp(r'\d+|\D+');
+  final x = parts.allMatches(a.trim().toUpperCase()).map((m) => m[0]!).toList();
+  final y = parts.allMatches(b.trim().toUpperCase()).map((m) => m[0]!).toList();
+  for (var i = 0; i < x.length && i < y.length; i++) {
+    final nx = int.tryParse(x[i]);
+    final ny = int.tryParse(y[i]);
+    final c = nx != null && ny != null ? nx.compareTo(ny) : x[i].compareTo(y[i]);
+    if (c != 0) return c;
+  }
+  return x.length.compareTo(y.length);
+}
 
 /// The building code at the front of a room name - 'ARTS' from 'ARTS 306A' -
 /// or '' when the name does not start with one.
@@ -2830,6 +2849,11 @@ class BuildingProject {
   /// buys everything. See [buysOnlyFor].
   final Map<int, List<String>> priorityBuysOnly;
 
+  /// Priority -> items quoted for each of its rooms besides what the rooms
+  /// have. On the project's quote only; the room files are not changed. See
+  /// [addOnsFor].
+  final Map<int, List<PriorityAddOn>> priorityAddOns;
+
   /// What has been planned, committed or spent against [budget], filled in as
   /// the job goes.
   List<BudgetLine> budgetLines;
@@ -2897,10 +2921,12 @@ class BuildingProject {
     this.budget = 0,
     this.budgetLocked = false,
     Map<int, List<String>>? priorityBuysOnly,
+    Map<int, List<PriorityAddOn>>? priorityAddOns,
     List<BudgetLine>? budgetLines,
     List<InstallWindow>? installWindows,
   }) : buildings = buildings ?? splitBuildingList(building),
        priorityBuysOnly = priorityBuysOnly ?? {},
+       priorityAddOns = priorityAddOns ?? {},
        rooms = rooms ?? [],
        budgetLines = budgetLines ?? [],
        installWindows = installWindows ?? [],
@@ -2966,6 +2992,9 @@ class BuildingProject {
 
   /// The only categories bought for a room at [priority], or empty when it
   /// buys everything. See [priorityBuysOnly].
+  List<PriorityAddOn> addOnsFor(int priority) =>
+      priority > 0 ? priorityAddOns[priority] ?? const [] : const [];
+
   List<String> buysOnlyFor(int priority) =>
       priority > 0 ? priorityBuysOnly[priority] ?? const [] : const [];
 
@@ -4427,6 +4456,19 @@ class BuildingProject {
       'priorityBuysOnly': {
         for (final e in priorityBuysOnly.entries) '${e.key}': e.value,
       },
+    if (priorityAddOns.isNotEmpty)
+      'priorityAddOns': {
+        for (final e in priorityAddOns.entries)
+          '${e.key}': [
+            for (final a in e.value)
+              {
+                'model': a.model,
+                if (a.description.trim().isNotEmpty)
+                  'description': a.description.trim(),
+                'qty': a.qty,
+              },
+          ],
+      },
     if (budgetLines.isNotEmpty)
       'budgetLines': [for (final b in budgetLines) b.toJson()],
     if (installWindows.isNotEmpty)
@@ -4708,6 +4750,20 @@ class BuildingProject {
             : double.tryParse(raw?.toString() ?? '') ?? 0.0;
       }(),
       budgetLocked: json['budgetLocked'] == true,
+      priorityAddOns: {
+        if (json['priorityAddOns'] is Map)
+          for (final e in (json['priorityAddOns'] as Map).entries)
+            if (int.tryParse(e.key.toString()) != null && e.value is List)
+              int.parse(e.key.toString()): [
+                for (final a in e.value as List)
+                  if (a is Map && (a['model']?.toString() ?? '').isNotEmpty)
+                    (
+                      model: a['model'].toString(),
+                      description: a['description']?.toString() ?? '',
+                      qty: (a['qty'] as num?)?.toDouble() ?? 1,
+                    ),
+              ],
+      },
       priorityBuysOnly: {
         if (json['priorityBuysOnly'] is Map)
           for (final e in (json['priorityBuysOnly'] as Map).entries)
@@ -4931,6 +4987,9 @@ class BuildingProject {
     budgetLocked: budgetLocked,
     priorityBuysOnly: {
       for (final e in priorityBuysOnly.entries) e.key: List.of(e.value),
+    },
+    priorityAddOns: {
+      for (final e in priorityAddOns.entries) e.key: List.of(e.value),
     },
     budgetLines: List<BudgetLine>.from(budgetLines),
     installWindows: List<InstallWindow>.from(installWindows),

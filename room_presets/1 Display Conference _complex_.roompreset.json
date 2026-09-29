@@ -133,7 +133,7 @@
     {
       "id": "N3",
       "label": "Touch Panel: 7\"",
-      "model": "TLP Pro 725",
+      "model": "TLP Pro 835T Black",
       "x": 340.0,
       "y": 120.0,
       "fromConfig": false,
@@ -141,9 +141,9 @@
       "location": "LOC_1",
       "ports": [
         {
-          "id": "lan_xtp",
-          "label": "LAN/ XTP",
-          "signal": "hdbaset",
+          "id": "lan_poe",
+          "label": "LAN PoE",
+          "signal": "network",
           "direction": "bidirectional",
           "side": "left"
         },
@@ -159,7 +159,7 @@
     {
       "id": "N4",
       "label": "Switcher: 42",
-      "model": "DTP3 CrossPoint 42",
+      "model": "DTP3 CrossPoint 42 USB",
       "x": 1000.0,
       "y": 270.0,
       "fromConfig": false,

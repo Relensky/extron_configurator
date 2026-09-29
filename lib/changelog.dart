@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.10+20';
+const String kAppVersion = '0.5.16+26';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,106 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.16',
+    date: 'September 28, 2026',
+    title: 'Core Components comes back, and priority add-ons',
+    changes: [
+      'Online copy: pulling it back now reads Core Components too. A '
+          'changed unit price becomes this job\'s price for that part in '
+          'every room that has it, a changed name renames those devices, and '
+          'a changed model is swapped in across the job. You are then asked '
+          'whether to also update the catalog (price, part number, or a new '
+          'model).',
+      'Publish-on-save no longer writes over a workbook whose Core '
+          'Components has edits nobody has pulled; it holds and asks, as it '
+          'already did for deliveries and purchase orders.',
+      'Priorities: Replaces only can name items as well as categories, and '
+          'take anything from the catalog. Add-ons quote extra items for '
+          'every room at a priority - two speakers per room, say - on the '
+          'project quote, without changing the room files.',
+      'A cost line whose devices share a name shows it once, not once per '
+          'device.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.15',
+    date: 'September 28, 2026',
+    title: 'Summary crew hours linked',
+    changes: [
+      'Project workbook: the Summary\'s crew hours and total labor hours '
+          'add up each room\'s Labor section too.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.14',
+    date: 'September 28, 2026',
+    title: 'Summary totals linked, and rooms by priority',
+    changes: [
+      'Project workbook: the Summary\'s Rooms table reads each room tab\'s '
+          'totals, and its Building total adds up the rooms that count.',
+      'Priorities and funding: each priority has Add rooms, there is an Add '
+          'priority button for the next one, and each room has a button to '
+          'take it off the job. Rooms can be typed or pasted straight into '
+          'any priority, an existing one or a new one.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.13',
+    date: 'September 28, 2026',
+    title: 'Workbook totals as formulas, and editable quantities',
+    changes: [
+      'Project workbook: each room\'s part names, models and part numbers '
+          'also read from Core Components, and every total is a formula - '
+          'the room totals, fees, tax, Parts total and the All Items room '
+          'totals - so an edit on Core Components carries all the way '
+          'through.',
+      'Cost tab: Qty can be typed on every line, drawn ones included. The '
+          'drawing keeps its own count, shown in the box until a quantity is '
+          'typed; clear it to follow the drawing again.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.12',
+    date: 'September 28, 2026',
+    title: 'Master-list prices, faster project open, one doc cam',
+    changes: [
+      'Project workbook: each room\'s unit prices, and those on All Items, '
+          'read from the part\'s row on Core Components. Change a price there '
+          'in Excel or Google Sheets and every room with that part follows. '
+          'A room priced differently keeps its own figure.',
+      'Opening a project reads its rooms in the background with a progress '
+          'bar, instead of the window freezing while a large job loads.',
+      'A room type\'s document camera is no longer drawn twice when the room '
+          'is opened.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.11',
+    date: 'September 28, 2026',
+    title: 'Room sorting, parts by room, and updated room types',
+    changes: [
+      'Find install windows: the rooms are a drop-down checklist, with '
+          'Select all and Deselect all, in alphabetical order.',
+      'The title bar\'s room picker lists rooms alphabetically by room code.',
+      'Project > Rooms can be sorted by order added, room name or priority.',
+      'Project > Equipment has a By room view: each room\'s parts, with '
+          'quantity, unit price and a room total.',
+      'The Budget card shows what remains after the rooms\' estimate.',
+      'The three 2 Display room types have one APC in the rack and a SurgeX '
+          'SX-DPP-102 behind each display, instead of three APC units.',
+      'Catalog prices filled in from the RYG estimates sheet for 15 models '
+          'that had none, including the Sony display, the Shure mics and the '
+          'AVer cameras.',
+      'Room types now use the DTP CrossPoint 82 4K IPCP Q SA switcher, the '
+          'DTP3 CrossPoint 42 USB, and the tabletop TLP Pro 835T and 1035T '
+          'touch panels. The 42 USB, 835T and 1035T are new in the catalog, '
+          'and the 82 4K Q has current prices.',
+      'Device Editor: entries that come with the catalog are no longer '
+          'marked as yours. Yours, and My entries only, now mean entries you '
+          'added in the app.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.10',
     date: 'September 28, 2026',

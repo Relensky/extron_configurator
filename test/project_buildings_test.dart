@@ -269,4 +269,60 @@ ARTS 111
       expect(provider.avNodes, isNotEmpty);
     });
   });
+
+  group('adding and removing by priority', () {
+    AppStateProvider job() {
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.newProject(name: 'Refresh');
+      p.addProjectManualRoomList(
+        'ARTS 111\nARTS 112\n\nGLNN 104',
+        groupsArePriorities: true,
+      );
+      return p;
+    }
+
+    test('rooms go into an existing priority, whatever the blank lines say',
+        () {
+      final p = job();
+      expect(p.projectHighestPriority, 2);
+      p.addProjectManualRoomList('HOLT 170\n\nHOLT 171', priority: 1);
+      final byName = {for (final r in p.project.manualRooms) r.name: r};
+      expect(byName['HOLT 170']!.priority, 1);
+      expect(byName['HOLT 171']!.priority, 1);
+      expect(p.projectHighestPriority, 2);
+    });
+
+    test('and into a new one', () {
+      final p = job();
+      p.addProjectManualRoomList('PAC 134', priority: 3);
+      expect(p.project.manualRooms.last.priority, 3);
+      expect(p.projectHighestPriority, 3);
+    });
+
+    test('taking a room out of a priority leaves it on the job', () {
+      final p = job();
+      final glnn = p.project.manualRooms.last;
+      expect(p.setRoomFunding(manualId: glnn.id, priority: 0), isEmpty);
+      expect(p.project.manualRooms.last.priority, 0);
+      expect(p.projectHighestPriority, 1);
+    });
+
+    test('a drawn room taken off the job comes back with Undo', () {
+      final p = job();
+      final dir = Directory.systemTemp.createTempSync('priority_undo_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final file = File(path.join(dir.path, 'ARTS_111_config.json'))
+        ..writeAsStringSync('{"SYSTEM_SETUP": {}}');
+      p.swapManualRoomForConfig(p.project.manualRooms.first.id, file.path);
+      final id = p.project.rooms.single.id;
+      // Two separate edits, as two clicks seconds apart are.
+      p.recordUndoPoint();
+
+      p.removeRoomFromProject(id);
+      expect(p.project.rooms, isEmpty);
+      p.undoProject();
+      expect(p.project.rooms.map((r) => r.id), [id]);
+      expect(p.project.rooms.single.priority, 1);
+    });
+  });
 }

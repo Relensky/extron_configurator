@@ -1040,15 +1040,47 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         hover: _rowIdentity(line),
                         color: mutedInk(context, theme),
                       ),
-                      // Qty: what the diagram counts, or the quantity typed
-                      // on a line that is not drawn. Only the typed one can be
-                      // nudged — the drawn count is the drawing's to say, and
-                      // the row buys more of it through Spares.
+                      // Qty: always editable. On a drawn line it is how many
+                      // the quote buys; the drawing keeps its own count, shown
+                      // in the box when the two differ. Cleared, it follows
+                      // the drawing again.
                       extra == null
-                          ? _CellText(
-                              '×${trimNumber(line.drawnQty)}',
-                              numeric: true,
-                              stepper: true,
+                          ? Tooltip(
+                              message: line.onDiagram == null
+                                  ? 'The diagram counts '
+                                        '${trimNumber(line.drawnQty)}'
+                                  : 'The diagram counts '
+                                        '${trimNumber(line.onDiagram!)}. '
+                                        'Clear the box to follow it.',
+                              child: _qtyStepper(
+                                value: line.drawnQty,
+                                what: line.description.trim().isEmpty
+                                    ? 'this line'
+                                    : line.description.trim(),
+                                onChanged: (qty) => provider.setAvEquipmentQty(
+                                  line.key,
+                                  qty,
+                                  drawn: line.onDiagram ?? line.drawnQty,
+                                ),
+                                field: LiveTextField(
+                                  key: ValueKey('eqpqty_drawn_${line.key}'),
+                                  fieldId: 'eqpqty_drawn_${line.key}',
+                                  initial: line.onDiagram == null
+                                      ? ''
+                                      : trimNumber(line.drawnQty),
+                                  // The diagram's count, until one is typed.
+                                  hint: trimNumber(
+                                    line.onDiagram ?? line.drawnQty,
+                                  ),
+                                  hintIsValue: true,
+                                  numeric: true,
+                                  onChanged: (v) => provider.setAvEquipmentQty(
+                                    line.key,
+                                    v.trim().isEmpty ? null : double.tryParse(v),
+                                    drawn: line.onDiagram ?? line.drawnQty,
+                                  ),
+                                ),
+                              ),
                             )
                           : _qtyStepper(
                               value: extra.qty,
@@ -1085,8 +1117,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           ? _qtyStepper(
                               value: line.spareQty,
                               what: line.description.trim().isEmpty
-                                  ? 'this line'
-                                  : line.description.trim(),
+                                  ? 'spare'
+                                  : 'spare ${line.description.trim()}',
                               onChanged: (qty) =>
                                   provider.setAvEquipmentSpares(line.key, qty),
                               field: LiveTextField(

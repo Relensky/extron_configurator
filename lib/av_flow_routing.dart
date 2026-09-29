@@ -1353,12 +1353,38 @@ RoutingPlan planRoutingFromConfig(
     return free;
   }
 
+  /// Boxes already standing in for a source key this pass, by node id.
+  final claimedSources = <String>{};
+
+  /// The box already on the canvas that IS this source, when it was put there
+  /// some other way - a room type's 'Document Camera (DC-13)' is the room's
+  /// document camera, and drawing the rule's generic 'Document Camera' beside
+  /// it put two on the drawing and on the quote. A model that starts with
+  /// the rule's model counts; the key's own box, if drawn, still wins.
+  AvNode? existingSourceFor(FlowBoxRule rule) {
+    final own = avAutoNodeId(rule.configKey);
+    if (nodesById.containsKey(own)) return null;
+    final wanted = _flatten(rule.model);
+    if (wanted.isEmpty) return null;
+    for (final n in provider.avNodes) {
+      if (n.isJackField || n.id.startsWith(kAvAutoNodeIdPrefix)) continue;
+      if (claimedSources.contains(n.id)) continue;
+      if (!_flatten(n.model).startsWith(wanted)) continue;
+      claimedSources.add(n.id);
+      return n;
+    }
+    return null;
+  }
+
   for (final rule in rules.sourceBoxes) {
     if (_handledElsewhere.contains(rule.configKey)) continue;
     final value = setup[rule.configKey]?.toString().trim() ?? '';
     if (value.isEmpty || dismissed(rule.configKey)) continue;
     if (skipLaptopPlate(rule.configKey)) continue;
     final node = laptopNodeFor(rule) ??
+        (kFlowLaptopPlateKeys.contains(rule.configKey)
+            ? null
+            : existingSourceFor(rule)) ??
         place(_specOf(rule), avAutoNodeId(rule.configKey), onLeft: true);
     routeSource(rule.configKey, node);
   }

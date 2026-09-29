@@ -152,6 +152,17 @@ typedef RoomUndoStep = ({RoomUndoSource source, AppTab? tab});
 /// to a programmed room. The drawings, racks and costs all still work.
 enum RoomMode { full, estimate }
 
+/// How Project > Rooms lists the rooms: in the order they were added (the
+/// order the quote reads in), by room name, or by priority.
+enum ProjectRoomSort {
+  added('Order added'),
+  name('Room name'),
+  priority('Priority');
+
+  final String label;
+  const ProjectRoomSort(this.label);
+}
+
 /// 'avOnly' is what the same mode was called before it became estimate-only.
 RoomMode roomModeFromName(String? name) {
   final n = name?.trim().toLowerCase();
@@ -5419,6 +5430,21 @@ class AppStateProvider extends ChangeNotifier {
       avCost.equipmentSpares.remove(lineKey);
     } else {
       avCost.equipmentSpares[lineKey] = qty;
+    }
+    notifyListeners();
+  }
+
+  /// Sets how many of a drawn line the quote buys, before spares. Null, or
+  /// the diagram's own count, goes back to following the diagram.
+  void setAvEquipmentQty(String lineKey, double? qty, {required double drawn}) {
+    final clear = qty == null || qty < 0 || (qty - drawn).abs() < 1e-9;
+    if (clear && !avCost.qtyOverrides.containsKey(lineKey)) return;
+    if (!clear && avCost.qtyOverrides[lineKey] == qty) return;
+    _pushAvUndo('Quantity', _costScope, coalesce: 'cost:qty:$lineKey');
+    if (clear) {
+      avCost.qtyOverrides.remove(lineKey);
+    } else {
+      avCost.qtyOverrides[lineKey] = qty;
     }
     notifyListeners();
   }
@@ -13074,13 +13100,31 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Opens a project file. Returns the error to show, or '' on success.
+  /// Rooms read against the total while a project opens, or null when none
+  /// is opening. What the progress bar on the way in reads.
+  final ValueNotifier<(int, int)?> projectOpenProgress = ValueNotifier(null);
+
   Future<String> openProject(String file) async {
     try {
-      project = await BuildingProject.load(file);
+      final loaded = await BuildingProject.load(file);
+      // EVERY ROOM READ FIRST, in the background. Pricing the job reads them
+      // otherwise, one after another on the window's own thread, and on a
+      // share that is a freeze of several seconds with nothing on screen.
+      final read = <String, LoadedRoom>{};
+      projectOpenProgress.value = (0, loaded.rooms.length);
+      for (final ref in loaded.rooms) {
+        read[ref.id] = await readRoomFromDiskAsync(
+          BuildingProject.resolvePath(ref.configPath, file),
+        );
+        projectOpenProgress.value = (read.length, loaded.rooms.length);
+      }
+      project = loaded;
       currentProjectPath = file;
       projectDirty = false;
       _projectStarted = true;
-      _projectRooms.clear();
+      _projectRooms
+        ..clear()
+        ..addAll(read);
       AppLogger.logInfo(
         'Project "${project.name}" opened from $file '
         '(${project.rooms.length} rooms, ${project.vendors.length} vendors).',
@@ -13095,6 +13139,8 @@ class AppStateProvider extends ChangeNotifier {
     } catch (e, stack) {
       AppLogger.logError('Failed to open the project $file', e, stack);
       return '$e';
+    } finally {
+      projectOpenProgress.value = null;
     }
   }
 
@@ -13360,6 +13406,32 @@ class AppStateProvider extends ChangeNotifier {
       itemName: 'Priority $priority',
       field: 'Buys',
       summary: next.isEmpty ? 'everything' : 'only ${next.join(', ')}',
+    );
+    _projectChanged();
+  }
+
+  /// Sets the items quoted for every room at [priority] besides what the
+  /// rooms have. Empty clears them.
+  void setPriorityAddOns(int priority, List<PriorityAddOn> addOns) {
+    if (priority <= 0) return;
+    final next = [
+      for (final a in addOns)
+        if (a.model.trim().isNotEmpty && a.qty > 0) a,
+    ];
+    if (next.isEmpty) {
+      if (project.priorityAddOns.remove(priority) == null) return;
+    } else {
+      project.priorityAddOns[priority] = next;
+    }
+    _logProjectEdit(
+      itemKey: 'priority:$priority',
+      itemName: 'Priority $priority',
+      field: 'Add-ons',
+      summary: next.isEmpty
+          ? 'none'
+          : next
+                .map((a) => '${trimNumber(a.qty)} x ${a.description.isEmpty ? a.model : a.description}')
+                .join(', '),
     );
     _projectChanged();
   }
@@ -13655,6 +13727,25 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  /// How Project > Rooms is sorted, for this session.
+  ProjectRoomSort projectRoomSort = ProjectRoomSort.added;
+
+  /// Whether Project > Equipment lists the parts room by room rather than
+  /// merged across the job, for this session.
+  bool projectPartsByRoom = false;
+
+  void setProjectPartsByRoom(bool byRoom) {
+    if (byRoom == projectPartsByRoom) return;
+    projectPartsByRoom = byRoom;
+    notifyListeners();
+  }
+
+  void setProjectRoomSort(ProjectRoomSort sort) {
+    if (sort == projectRoomSort) return;
+    projectRoomSort = sort;
+    notifyListeners();
+  }
+
   /// Moves a room up or down the list — the order the quote reads in.
   void moveProjectRoom(String roomId, int delta) {
     final from = project.rooms.indexWhere((r) => r.id == roomId);
@@ -13709,6 +13800,12 @@ class AppStateProvider extends ChangeNotifier {
     return room;
   }
 
+  /// The highest priority any room on the job is in, or 0.
+  int get projectHighestPriority => [
+    for (final r in project.manualRooms) r.priority,
+    for (final r in project.rooms) r.priority,
+  ].fold(0, (a, b) => a > b ? a : b);
+
   /// Adds a pasted list of room names as line items, one per line. Returns
   /// how many went on and the names skipped because the job already has them.
   ///
@@ -13719,7 +13816,12 @@ class AppStateProvider extends ChangeNotifier {
   /// priority after the highest the job already has. Targets that would go
   /// over the budget are left off and named in [overBudget].
   ({int added, List<String> skipped, List<String> overBudget})
-  addProjectManualRoomList(String text, {bool groupsArePriorities = false}) {
+  addProjectManualRoomList(
+    String text, {
+    bool groupsArePriorities = false,
+    /// Every row into this priority, whatever the blank lines say. 0 is none.
+    int? priority,
+  }) {
     String key(String name) =>
         name.trim().toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
     final onJob = <String>{
@@ -13751,7 +13853,8 @@ class AppStateProvider extends ChangeNotifier {
         roomType: row.roomType,
         funding: row.funding,
         targetPrice: target,
-        priority: groupsArePriorities ? firstPriority + row.group : 0,
+        priority: priority ??
+            (groupsArePriorities ? firstPriority + row.group : 0),
       );
       project.updateManualRoom(room);
       _logProjectEdit(
@@ -14223,6 +14326,7 @@ class AppStateProvider extends ChangeNotifier {
         for (final v in project.vendors) v.name.trim().toLowerCase(): v.id,
       },
       against: project,
+      master: estimate.master,
     );
     return (read: read, changes: onlineChanges(project, read));
   }
@@ -14263,6 +14367,7 @@ class AppStateProvider extends ChangeNotifier {
       final changes = onlineChanges(project, (
         deliveries: [d],
         pos: const <ParsedPo>[],
+        master: const <MasterEdit>[],
         problems: const <String>[],
         wrongFile: false,
       ));
@@ -14326,6 +14431,7 @@ class AppStateProvider extends ChangeNotifier {
       final changes = onlineChanges(project, (
         deliveries: const <ParsedDelivery>[],
         pos: [po],
+        master: const <MasterEdit>[],
         problems: const <String>[],
         wrongFile: false,
       ));
@@ -14356,6 +14462,318 @@ class AppStateProvider extends ChangeNotifier {
 
     if (touched > 0) _projectChanged(repricing: false);
     return touched;
+  }
+
+  // --- Core Components, read back -------------------------------------------
+  //
+  //  A name, model, part number or price changed on the published workbook's
+  //  master list. It applies to THIS JOB: a price becomes this part's price in
+  //  every room on the job that has it, a name renames those devices, and a
+  //  model that is in the catalog is swapped in across the job. What could
+  //  also go to the catalog is offered afterwards - see [catalogOffersFor].
+
+  /// The master line [key] names on the job as it prices now.
+  MasterPartLine? _masterLine(String key) =>
+      priceProject().master.where((l) => l.key == key).firstOrNull;
+
+  /// Each room that has part [key], with that part's line key there and the
+  /// kind of line it is.
+  List<({ProjectRoomCost room, String lineKey, MasterPartKind kind})>
+  _roomsWithPart(String key) {
+    final out = <({ProjectRoomCost room, String lineKey, MasterPartKind kind})>[];
+    for (final room in priceProject().rooms) {
+      final e = room.estimate;
+      if (e == null) continue;
+      for (final (kind, lines) in [
+        (MasterPartKind.equipment, e.equipment),
+        (MasterPartKind.hardware, e.hardware),
+        (MasterPartKind.cabling, e.cabling),
+        (MasterPartKind.other, e.extras),
+      ]) {
+        for (final line in lines) {
+          final k = masterPartKey(
+            kind: kind.name,
+            partNumber: line.partNumber,
+            model: line.model,
+            manufacturer: line.manufacturer,
+            description: line.description,
+          );
+          if (k == key) out.add((room: room, lineKey: line.key, kind: kind));
+        }
+      }
+    }
+    return out;
+  }
+
+  /// Rewrites one of a closed room's JSON files through [edit], keeping the
+  /// indent it was written with.
+  Future<bool> _editRoomFile(
+    String file,
+    void Function(Map<String, dynamic> doc) edit,
+  ) async {
+    try {
+      final f = File(file);
+      final text = await f.exists() ? await f.readAsString() : '{}';
+      final doc = Map<String, dynamic>.from(jsonDecode(text) as Map);
+      edit(doc);
+      final indent = RegExp(r'\n( +)"').firstMatch(text)?.group(1) ?? '  ';
+      await writeFileSafely(
+        file,
+        JsonEncoder.withIndent(indent).convert(doc),
+      );
+      return true;
+    } catch (e, stack) {
+      AppLogger.logError('Could not update $file from the online copy', e, stack);
+      return false;
+    }
+  }
+
+  /// Sets part [key]'s price and name in every room on the job that has it.
+  /// Returns how many rooms changed.
+  Future<int> _setPartInRooms(
+    String key, {
+    double? price,
+    String? name,
+    required String label,
+  }) async {
+    var rooms = 0;
+    for (final hit in _roomsWithPart(key)) {
+      final absolute = BuildingProject.resolvePath(
+        hit.room.ref.configPath,
+        currentProjectPath,
+      );
+      final isOpen =
+          currentConfigPath.isNotEmpty && _samePath(absolute, currentConfigPath);
+      // The drawn devices a name belongs to, for equipment.
+      final nodeIds = hit.kind == MasterPartKind.equipment
+          ? [
+              for (final g in groupDevices(hit.room.room.model))
+                if (g.key == hit.lineKey)
+                  for (final n in g.nodes) n.id,
+            ]
+          : const <String>[];
+
+      if (isOpen) {
+        if (price != null) {
+          _pushAvUndo('Price from the online copy', _costScope);
+          avCost.priceOverrides[hit.lineKey] = price;
+        }
+        if (name != null) {
+          for (final id in nodeIds) {
+            final node = avNodeById(id);
+            if (node != null) {
+              updateAvNode(node.copyWith(label: name), recordUndo: false);
+            }
+          }
+          if (hit.kind == MasterPartKind.other) {
+            final i = avCost.items.indexWhere((it) => it.id == hit.lineKey);
+            if (i >= 0) {
+              avCost.items[i] = avCost.items[i].copyWith(description: name);
+            }
+          }
+        }
+        rooms++;
+        continue;
+      }
+
+      final paths = roomSidecarPaths(absolute);
+      var changed = false;
+      if (price != null || (name != null && hit.kind == MasterPartKind.other)) {
+        changed |= await _editRoomFile(paths[RoomSidecarPart.cost] ?? '', (doc) {
+          final cost = Map<String, dynamic>.from(
+            (doc['cost'] as Map?) ?? const {},
+          );
+          if (price != null) {
+            final overrides = Map<String, dynamic>.from(
+              (cost['priceOverrides'] as Map?) ?? const {},
+            );
+            overrides[hit.lineKey] = price;
+            cost['priceOverrides'] = overrides;
+          }
+          if (name != null && hit.kind == MasterPartKind.other) {
+            cost['items'] = [
+              for (final it in (cost['items'] as List? ?? const []))
+                if (it is Map && it['id'] == hit.lineKey)
+                  {...it, 'description': name}
+                else
+                  it,
+            ];
+          }
+          doc['cost'] = cost;
+        });
+      }
+      if (name != null && nodeIds.isNotEmpty) {
+        final ids = nodeIds.toSet();
+        changed |= await _editRoomFile(paths[RoomSidecarPart.flow] ?? '', (doc) {
+          doc['nodes'] = [
+            for (final n in (doc['nodes'] as List? ?? const []))
+              if (n is Map && ids.contains(n['id'])) {...n, 'label': name} else n,
+          ];
+        });
+      }
+      if (changed) rooms++;
+    }
+    if (rooms > 0) {
+      _logProjectEdit(
+        itemKey: 'part:$key',
+        itemName: label,
+        field: 'From the online copy',
+        summary: '${[
+          if (price != null) 'price ${formatMoney(price, project.currency)}',
+          if (name != null) 'named $name',
+        ].join(', ')} in $rooms room${rooms == 1 ? '' : 's'}',
+      );
+    }
+    _projectRooms.clear();
+    _projectEstimate = null;
+    notifyListeners();
+    return rooms;
+  }
+
+  /// The key part [line] goes by once it is [model].
+  String _keyAs(MasterPartLine line, AvDeviceTemplate model) => masterPartKey(
+    kind: line.kind.name,
+    partNumber: model.partNumber,
+    model: model.model,
+    manufacturer: model.manufacturer,
+    description: line.description,
+  );
+
+  /// Applies what came back off Core Components to this job. Returns how many
+  /// parts changed.
+  ///
+  /// The model goes first: swapping it changes the part's key, and the price
+  /// and name are then set on the part it has become.
+  Future<int> applyMasterEdits(List<MasterEdit> edits) async {
+    var touched = 0;
+    for (final e in edits) {
+      final line = _masterLine(e.key);
+      if (line == null) continue;
+      var key = e.key;
+      if (e.model != null) {
+        final template = avDeviceLibrary.templateForModel(e.model!);
+        // A model the catalog does not have is offered for the catalog
+        // afterwards; see [catalogOffersFor].
+        if (template != null && line.model.trim().isNotEmpty) {
+          final plan = planProjectModelSwap(line.model, template);
+          if (!plan.isEmpty) {
+            applyProjectModelSwap(plan);
+            touched++;
+          }
+          key = _keyAs(line, template);
+        }
+      }
+      if (e.unitPrice != null || e.name != null) {
+        final rooms = await _setPartInRooms(
+          key,
+          price: e.unitPrice,
+          name: e.name,
+          label: e.label,
+        );
+        if (rooms > 0) touched++;
+      }
+    }
+    return touched;
+  }
+
+  /// What of [edits] could also go into the catalog, for the person to tick.
+  /// Worked out BEFORE the edits are applied, while the parts still go by
+  /// the keys the workbook knew them by.
+  List<CatalogOffer> catalogOffersFor(List<MasterEdit> edits) {
+    final out = <CatalogOffer>[];
+    for (final e in edits) {
+      final line = _masterLine(e.key);
+      if (line == null || line.model.trim().isEmpty) continue;
+      final now = avDeviceLibrary.templateForModel(line.model);
+      final wanted = e.model == null
+          ? now
+          : avDeviceLibrary.templateForModel(e.model!);
+      if (e.model != null && wanted == null && now != null) {
+        out.add((
+          kind: CatalogOfferKind.addModel,
+          model: e.model!,
+          from: line.model,
+          partNumber: e.partNumber,
+          price: e.unitPrice,
+          label: e.label,
+        ));
+        continue;
+      }
+      final target = wanted?.model ?? line.model;
+      if (e.unitPrice != null && wanted != null) {
+        out.add((
+          kind: CatalogOfferKind.price,
+          model: target,
+          from: line.model,
+          partNumber: null,
+          price: e.unitPrice,
+          label: e.label,
+        ));
+      }
+      if (e.partNumber != null && wanted != null) {
+        out.add((
+          kind: CatalogOfferKind.partNumber,
+          model: target,
+          from: line.model,
+          partNumber: e.partNumber,
+          price: null,
+          label: e.label,
+        ));
+      }
+    }
+    return out;
+  }
+
+  /// Writes the ticked [offers] into the catalog and saves it. A new model is
+  /// copied from the one it replaces, then swapped in across the job with the
+  /// price and part number that came with it. Returns the error, or ''.
+  Future<String> applyCatalogOffers(List<CatalogOffer> offers) async {
+    if (offers.isEmpty) return '';
+    final swaps = <CatalogOffer>[];
+    for (final o in offers) {
+      switch (o.kind) {
+        case CatalogOfferKind.price:
+          final t = avDeviceLibrary.templateForModel(o.model);
+          if (t == null || o.price == null) continue;
+          avDeviceLibrary.upsert(
+            pricingTier == PricingTier.education
+                ? t.copyWith(educationPrice: o.price)
+                : t.copyWith(price: o.price),
+          );
+        case CatalogOfferKind.partNumber:
+          final t = avDeviceLibrary.templateForModel(o.model);
+          if (t == null) continue;
+          avDeviceLibrary.upsert(t.copyWith(partNumber: o.partNumber ?? ''));
+        case CatalogOfferKind.addModel:
+          final base = avDeviceLibrary.templateForModel(o.from);
+          if (base == null) continue;
+          var added = base.copyWith(
+            model: o.model,
+            partNumber: o.partNumber ?? base.partNumber,
+          );
+          if (o.price != null) {
+            added = pricingTier == PricingTier.education
+                ? added.copyWith(educationPrice: o.price)
+                : added.copyWith(price: o.price);
+          }
+          // A new entry, so it is marked as one somebody added.
+          avDeviceLibrary.upsert(added);
+          swaps.add(o);
+      }
+    }
+    // The file written, or '' when it could not be.
+    final saved = await saveAvDeviceLibrary();
+    final error = saved.isEmpty ? 'the catalog file could not be written' : '';
+    for (final o in swaps) {
+      final template = avDeviceLibrary.templateForModel(o.model);
+      if (template == null) continue;
+      final plan = planProjectModelSwap(o.from, template);
+      if (!plan.isEmpty) applyProjectModelSwap(plan);
+    }
+    _projectRooms.clear();
+    _projectEstimate = null;
+    notifyListeners();
+    return error;
   }
 
   /// Remembers the folder everything publishes into, for the whole app.
@@ -16953,6 +17371,32 @@ class AppStateProvider extends ChangeNotifier {
       deviceCountMap: uiSchema.deviceCountMap,
       moduleForModel: moduleForModel,
     );
+  }
+
+  /// Reads every room on the open job into the cache in the background, so
+  /// the first price of a big job does not freeze the window. [onProgress]
+  /// hears rooms read against the total.
+  Future<void> preloadProjectRooms({
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final refs = [
+      for (final ref in project.rooms)
+        if (!_projectRooms.containsKey(ref.id)) ref,
+    ];
+    var done = 0;
+    onProgress?.call(0, refs.length);
+    for (final ref in refs) {
+      final absolute =
+          BuildingProject.resolvePath(ref.configPath, currentProjectPath);
+      final room = await readRoomFromDiskAsync(absolute);
+      // Skipped if the job changed while it was reading.
+      if (project.rooms.any((r) => r.id == ref.id)) {
+        _projectRooms[ref.id] = room;
+      }
+      onProgress?.call(++done, refs.length);
+    }
+    _projectEstimate = null;
+    notifyListeners();
   }
 
   // --- swapping a product across the building ------------------------------

@@ -112,7 +112,13 @@ Set<int> proseColumnsOf(ReportSection section) {
     for (final row in section.rows) {
       if (c >= row.length) continue;
       final cell = row[c];
-      if (cell == null || cell is num || cell is XlsxMoney) continue;
+      if (cell == null ||
+          cell is num ||
+          cell is XlsxMoney ||
+          cell is XlsxFormula ||
+          cell is XlsxNumberFormula) {
+        continue;
+      }
       for (final line in cell.toString().split('\n')) {
         if (line.length > longest) longest = line.length;
       }

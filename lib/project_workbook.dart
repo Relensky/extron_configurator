@@ -43,6 +43,613 @@ import 'xlsx_writer.dart';
 /// The fixed sheets, in workbook order. Vendor and room tabs follow.
 const List<String> kProjectWorkbookSheets = ['Summary', 'Core Components'];
 
+/// A part's cells on the master sheet, as references a room's line reads:
+/// its name, model, part number and - when it has one price - unit price.
+typedef MasterCellRefs = ({
+  String name,
+  String model,
+  String part,
+  String? unit,
+});
+
+/// [MasterCellRefs] by master key.
+typedef MasterPriceCells = Map<String, MasterCellRefs>;
+
+/// A sheet name as a formula writes it.
+String _sheetRef(String name) => "'${name.replaceAll("'", "''")}'";
+
+/// Text read from another cell. `&""` keeps a blank cell blank rather than
+/// showing it as 0.
+XlsxTextFormula _textFrom(String ref, Object? cached) =>
+    XlsxTextFormula('$ref&""', cached?.toString() ?? '');
+
+/// Finds each part's row on the built master [sheet], makes its Extended a
+/// formula of its own Qty and Unit price, and returns where every part's
+/// cells are.
+///
+/// Read off the BUILT sheet, not worked out from the sections: the builder
+/// can lift a long column out of the grid, which moves every column after it.
+MasterPriceCells _linkMasterSheet(XlsxSheet sheet, ProjectEstimate estimate) {
+  final out = <String, MasterCellRefs>{};
+  final tab = _sheetRef(sheet.name);
+  var r = 0;
+  for (final kind in MasterPartKind.values) {
+    final lines = [for (final l in estimate.master) if (l.kind == kind) l];
+    if (lines.isEmpty) continue;
+    // This kind's header row.
+    int name = -1, model = -1, part = -1, qty = -1, unit = -1, ext = -1;
+    for (; r < sheet.rows.length; r++) {
+      final row = sheet.rows[r];
+      unit = row.indexWhere((c) => c == 'Unit price');
+      if (unit < 0) continue;
+      name = row.indexWhere((c) => c == 'Part');
+      model = row.indexWhere((c) => c == 'Model');
+      part = row.indexWhere((c) => c == 'Part number');
+      qty = row.indexWhere((c) => c == 'Qty');
+      ext = row.indexWhere((c) => c == 'Extended');
+      r++;
+      break;
+    }
+    if ([name, model, part, qty, unit, ext].any((i) => i < 0)) return out;
+    String at(int col) => '${xlsxColumnLetter(col)}${r + 1}';
+    for (final l in lines) {
+      while (r < sheet.rows.length &&
+          (sheet.rows[r].isEmpty || sheet.rows[r].first != l.description)) {
+        r++;
+      }
+      if (r >= sheet.rows.length) return out;
+      final row = sheet.rows[r];
+      final priced = row[unit] is XlsxMoney;
+      if (priced && row[ext] is XlsxMoney) {
+        row[ext] = XlsxFormula('${at(qty)}*${at(unit)}', row[ext] as XlsxMoney);
+      }
+      out[l.key] = (
+        name: '$tab!${at(name)}',
+        model: '$tab!${at(model)}',
+        part: '$tab!${at(part)}',
+        unit: priced ? '$tab!${at(unit)}' : null,
+      );
+      r++;
+    }
+  }
+  return out;
+}
+
+/// The master cells [line] in a room reads from, or null when it is not on
+/// the master list. [MasterCellRefs.unit] is null when the line keeps its own
+/// price: somebody else furnishes it, or the room prices it differently.
+MasterCellRefs? _masterCellFor(
+  ProjectEstimate estimate,
+  MasterPriceCells cells,
+  MasterPartKind kind,
+  CostLine line,
+) {
+  if (line.qty <= 0) return null;
+  final key = masterPartKey(
+    kind: kind.name,
+    partNumber: line.partNumber,
+    model: line.model,
+    manufacturer: line.manufacturer,
+    description: line.description,
+  );
+  final refs = cells[key];
+  if (refs == null) return null;
+  final master = estimate.master.firstWhere((m) => m.key == key);
+  final samePrice = refs.unit != null &&
+      !line.furnished &&
+      (master.unitPrice - line.unitPrice).abs() <= 0.005;
+  return (
+    name: refs.name,
+    model: refs.model,
+    part: refs.part,
+    unit: samePrice ? refs.unit : null,
+  );
+}
+
+/// One row of a room or All Items sheet, with its cells reading from the
+/// master list. -1 skips a column the section does not have.
+List<dynamic> _linkRow(
+  List<dynamic> row,
+  MasterCellRefs refs,
+  CostLine line, {
+  required int name,
+  required int model,
+  required int part,
+  required int unit,
+  required int ext,
+}) {
+  final out = [...row];
+  // The spare split is written into the name, so that one keeps its own.
+  if (name >= 0 && line.spareQty <= 0) {
+    out[name] = _textFrom(refs.name, out[name]);
+  }
+  if (model >= 0) out[model] = _textFrom(refs.model, out[model]);
+  if (part >= 0) out[part] = _textFrom(refs.part, out[part]);
+  final price = refs.unit;
+  if (price != null &&
+      unit >= 0 &&
+      ext >= 0 &&
+      out[unit] is XlsxMoney &&
+      out[ext] is XlsxMoney) {
+    out[unit] = XlsxFormula(price, out[unit] as XlsxMoney);
+    out[ext] = XlsxFormula(
+      '${trimNumber(line.qty)}*$price',
+      out[ext] as XlsxMoney,
+    );
+  }
+  return out;
+}
+
+/// [sections] from one room's cost sheet, with each line reading its name,
+/// model, part number and price from the master list where it can.
+List<ReportSection> _linkRoomSections(
+  List<ReportSection> sections,
+  CostEstimate estimate,
+  ProjectEstimate project,
+  MasterPriceCells cells,
+) {
+  final byTitle = <String, (MasterPartKind, List<CostLine>)>{
+    'Equipment': (MasterPartKind.equipment, estimate.equipment),
+    'Rack Hardware': (MasterPartKind.hardware, estimate.hardware),
+    'Cabling': (MasterPartKind.cabling, estimate.cabling),
+    'Other Items': (MasterPartKind.other, estimate.extras),
+  };
+  return [
+    for (final s in sections)
+      () {
+        final match = byTitle[s.title];
+        if (match == null) return s;
+        final (kind, lines) = match;
+        if (lines.length != s.rows.length) return s;
+        final rows = <List<dynamic>>[
+          for (var i = 0; i < lines.length; i++)
+            () {
+              final refs = _masterCellFor(project, cells, kind, lines[i]);
+              if (refs == null) return s.rows[i];
+              return _linkRow(
+                s.rows[i],
+                refs,
+                lines[i],
+                name: 0,
+                model: s.header.indexOf('Model'),
+                part: s.header.indexOf('Part number'),
+                unit: s.header.indexOf('Unit price'),
+                ext: s.header.indexOf('Extended'),
+              );
+            }(),
+        ];
+        return (title: s.title, header: s.header, rows: rows);
+      }(),
+  ];
+}
+
+// ---------------------------------------------------------------------------
+//  TOTALS AS FORMULAS
+// ---------------------------------------------------------------------------
+//  A price edited on the master list changes the lines; these make the sums
+//  under them follow too.
+
+/// Where a section's figures are on a built sheet: its Extended column and
+/// the first and last data rows (0-based), or null when it is not there.
+({int col, int first, int last})? _sectionRange(
+  XlsxSheet sheet,
+  String title, {
+  String column = 'Extended',
+}) {
+  for (var r = 0; r < sheet.rows.length - 1; r++) {
+    final row = sheet.rows[r];
+    if (sheet.rowStyles[r] != XlsxRowStyle.title) continue;
+    if (row.isEmpty || row.first != title) continue;
+    final col = sheet.rows[r + 1].indexOf(column);
+    if (col < 0) return null;
+    var last = -1;
+    for (var i = r + 2; i < sheet.rows.length; i++) {
+      if (sheet.rowStyles[i] == XlsxRowStyle.title) break;
+      final cells = sheet.rows[i];
+      if (cells.every((c) => c == null || c.toString().isEmpty)) break;
+      last = i;
+    }
+    if (last < 0) return null;
+    return (col: col, first: r + 2, last: last);
+  }
+  return null;
+}
+
+String _cell(int col, int row) => '${xlsxColumnLetter(col)}${row + 1}';
+
+String? _sumOf(XlsxSheet sheet, String title) {
+  final s = _sectionRange(sheet, title);
+  if (s == null) return null;
+  return 'SUM(${_cell(s.col, s.first)}:${_cell(s.col, s.last)})';
+}
+
+/// The key/value rows of [title] on a built sheet, by label, with the column
+/// the amounts are in.
+({int col, Map<String, int> rows})? _keyValueRows(
+  XlsxSheet sheet,
+  String title,
+) {
+  for (var r = 0; r < sheet.rows.length - 1; r++) {
+    if (sheet.rowStyles[r] != XlsxRowStyle.title) continue;
+    if (sheet.rows[r].isEmpty || sheet.rows[r].first != title) continue;
+    final rows = <String, int>{};
+    for (var i = r + 2; i < sheet.rows.length; i++) {
+      if (sheet.rowStyles[i] == XlsxRowStyle.title) break;
+      final cells = sheet.rows[i];
+      if (cells.isEmpty || cells.first.toString().isEmpty) break;
+      rows.putIfAbsent(cells.first.toString(), () => i);
+    }
+    return (col: 1, rows: rows);
+  }
+  return null;
+}
+
+/// Replaces the money in [row], [col] with [formula], keeping its figure.
+void _setFormula(XlsxSheet sheet, int row, int col, String formula) {
+  final cells = sheet.rows[row];
+  if (col >= cells.length) return;
+  final value = cells[col];
+  final cached = value is XlsxMoney
+      ? value
+      : value is XlsxFormula
+      ? value.cached
+      : null;
+  if (cached == null) return;
+  cells[col] = XlsxFormula(formula, cached);
+}
+
+/// Where a room's own totals are, for the sheets that sum rooms.
+typedef RoomTotalRefs = ({
+  String? equipment,
+  String? hardware,
+  String? cabling,
+  String? extras,
+  String? labor,
+  String? shipping,
+  String? fees,
+  String? tax,
+  String? total,
+
+  /// Formulas adding the room's crew hours and total labor hours.
+  String? crewHours,
+  String? laborHours,
+});
+
+const RoomTotalRefs _noRoomTotals = (
+  equipment: null,
+  hardware: null,
+  cabling: null,
+  extras: null,
+  labor: null,
+  shipping: null,
+  fees: null,
+  tax: null,
+  total: null,
+  crewHours: null,
+  laborHours: null,
+);
+
+/// Makes the Totals block on a built room [sheet] add up its own lines, and
+/// returns where the room's figures are.
+RoomTotalRefs _formulaRoomTotals(XlsxSheet sheet, CostEstimate e) {
+  final totals = _keyValueRows(sheet, 'Totals');
+  if (totals == null) return _noRoomTotals;
+  final col = totals.col;
+  final tab = _sheetRef(sheet.name);
+  String? at(String label) {
+    final r = totals.rows[label];
+    return r == null ? null : _cell(col, r);
+  }
+
+  int? rowStarting(String prefix) {
+    for (final entry in totals.rows.entries) {
+      if (entry.key.startsWith(prefix)) return entry.value;
+    }
+    return null;
+  }
+
+  void set(String label, String? formula) {
+    final r = totals.rows[label];
+    if (r != null && formula != null) _setFormula(sheet, r, col, formula);
+  }
+
+  set('Equipment', _sumOf(sheet, 'Equipment'));
+  set('Rack hardware', _sumOf(sheet, 'Rack Hardware'));
+  set('Cabling', _sumOf(sheet, 'Cabling'));
+  set('Other items', _sumOf(sheet, 'Other Items'));
+  final laborRow = rowStarting('Labor');
+  final laborSum = _sumOf(sheet, 'Labor');
+  if (laborRow != null && laborSum != null) {
+    _setFormula(sheet, laborRow, col, laborSum);
+  }
+  final labor = laborRow == null ? null : _cell(col, laborRow);
+
+  final parts = [
+    at('Equipment'),
+    at('Rack hardware'),
+    at('Cabling'),
+    labor,
+    at('Other items'),
+    at('Shipping'),
+  ].whereType<String>().toList();
+  const subtotalLabel = 'Subtotal (before fees and tax)';
+  final subtotal = at(subtotalLabel);
+  if (subtotal != null && parts.isNotEmpty) {
+    set(subtotalLabel, parts.join('+'));
+  }
+
+  // The fees follow the subtotal in order, each a percentage of it.
+  final feeCells = <String>[];
+  final taxableFeeCells = <String>[];
+  var taxableFeesStatic = 0.0;
+  final subRow = totals.rows[subtotalLabel];
+  if (subRow != null && subtotal != null) {
+    for (var i = 0; i < e.fees.length; i++) {
+      final r = subRow + 1 + i;
+      final f = e.fees[i];
+      _setFormula(
+        sheet,
+        r,
+        col,
+        'ROUND($subtotal*${trimNumber(f.fee.percent)}/100,2)',
+      );
+      feeCells.add(_cell(col, r));
+      if (f.fee.taxable) {
+        taxableFeeCells.add(_cell(col, r));
+        taxableFeesStatic += f.amount;
+      }
+    }
+  }
+  if (feeCells.length > 1) set('Fees total', feeCells.join('+'));
+
+  String? tax;
+  final taxableRow = totals.rows['Taxable amount'];
+  if (taxableRow != null) {
+    // What the sheet cannot see - taxed labor, shipping and other items - is
+    // carried as the figure it was.
+    final fixed = e.taxableBase -
+        e.equipmentTotal -
+        e.hardwareTotal -
+        e.cablingTotal -
+        taxableFeesStatic;
+    final taxable = [
+      at('Equipment'),
+      at('Rack hardware'),
+      at('Cabling'),
+      ...taxableFeeCells,
+    ].whereType<String>().toList();
+    _setFormula(
+      sheet,
+      taxableRow,
+      col,
+      [...taxable, if (fixed.abs() > 0.005) fixed.toStringAsFixed(2)]
+          .join('+'),
+    );
+    final taxRow = taxableRow + 1;
+    _setFormula(
+      sheet,
+      taxRow,
+      col,
+      'ROUND(${_cell(col, taxableRow)}*${trimNumber(e.taxPercent)}/100,2)',
+    );
+    tax = _cell(col, taxRow);
+  }
+  final total = at('TOTAL');
+  if (total != null && subtotal != null) {
+    set('TOTAL', [subtotal, ...feeCells, ?tax].join('+'));
+  }
+
+  String? on(String? cell) => cell == null ? null : '$tab!$cell';
+  String? hoursSum(String column) {
+    final s = _sectionRange(sheet, 'Labor', column: column);
+    if (s == null) return null;
+    return 'SUM($tab!${_cell(s.col, s.first)}:${_cell(s.col, s.last)})';
+  }
+
+  return (
+    equipment: on(at('Equipment')),
+    hardware: on(at('Rack hardware')),
+    cabling: on(at('Cabling')),
+    extras: on(at('Other items')),
+    labor: on(labor),
+    shipping: on(at('Shipping')),
+    fees: on(
+      feeCells.isEmpty
+          ? null
+          : feeCells.length == 1
+          ? feeCells.single
+          : at('Fees total'),
+    ),
+    tax: on(tax),
+    total: on(total),
+    crewHours: hoursSum('Crew hours'),
+    laborHours: hoursSum('Total hours'),
+  );
+}
+
+/// Makes the Summary's Rooms table read each room's own totals, and its
+/// Building total add up the rooms that count.
+void _formulaSummaryTotals(
+  XlsxSheet sheet,
+  ProjectEstimate estimate,
+  Map<String, String> roomTabs,
+  Map<String, RoomTotalRefs> byTab,
+) {
+  final s = _sectionRange(sheet, 'Rooms', column: 'Room total');
+  if (s == null) return;
+  final header = sheet.rows[s.first - 1];
+  int colOf(String name) => header.indexOf(name);
+  final columns = <String, String? Function(RoomTotalRefs)>{
+    'Equipment': (t) => t.equipment,
+    'Rack hardware': (t) => t.hardware,
+    'Cabling': (t) => t.cabling,
+    'Other items': (t) => t.extras,
+    'Labor': (t) => t.labor,
+    'Shipping': (t) => t.shipping,
+    'Fees': (t) => t.fees,
+    'Tax': (t) => t.tax,
+    'Room total': (t) => t.total,
+  };
+
+  // Row by room name, rooms in the order the table lists them.
+  final counted = <String, List<String>>{
+    for (final name in columns.keys) name: [],
+  };
+  var r = s.first;
+  for (final room in estimate.rooms) {
+    while (r <= s.last && sheet.rows[r].first != room.name) {
+      r++;
+    }
+    if (r > s.last) break;
+    final tab = roomTabs[room.ref.id];
+    final refs = tab == null ? null : byTab[tab];
+    if (refs != null) {
+      columns.forEach((name, pick) {
+        final c = colOf(name);
+        final ref = pick(refs);
+        if (c >= 0 && ref != null) _setFormula(sheet, r, c, ref);
+      });
+      final e = room.estimate;
+      void hours(String column, String? formula, double value) {
+        final c = colOf(column);
+        if (c < 0 || formula == null) return;
+        sheet.rows[r][c] = XlsxNumberFormula(formula, value, trimNumber(value));
+      }
+
+      if (e != null) {
+        hours('Crew hrs', refs.crewHours, e.laborCrewHours);
+        hours('Total labor hrs', refs.laborHours, e.laborHours);
+      }
+    }
+    // The building's figures are the rooms that count - excluded alternates
+    // and rooms that could not be read stay out, as they do in the app.
+    if (room.ok && room.ref.included) {
+      for (final name in columns.keys) {
+        final c = colOf(name);
+        if (c >= 0) counted[name]!.add(_cell(c, r));
+      }
+    }
+    r++;
+  }
+
+  final building = _keyValueRows(sheet, 'Building total');
+  if (building == null) return;
+  String? sumOf(String column) {
+    final cells = counted[column]!;
+    return cells.isEmpty ? null : cells.join('+');
+  }
+
+  void set(String label, String? formula) {
+    final row = building.rows[label];
+    if (row != null && formula != null) {
+      _setFormula(sheet, row, building.col, formula);
+    }
+  }
+
+  int? rowStarting(String prefix) {
+    for (final e in building.rows.entries) {
+      if (e.key.startsWith(prefix)) return e.value;
+    }
+    return null;
+  }
+
+  String? at(String label) {
+    final row = building.rows[label];
+    return row == null ? null : _cell(building.col, row);
+  }
+
+  set('Equipment', sumOf('Equipment'));
+  set('Rack hardware', sumOf('Rack hardware'));
+  set('Cabling', sumOf('Cabling'));
+  set('Other items', sumOf('Other items'));
+  final parts = [
+    at('Equipment'),
+    at('Rack hardware'),
+    at('Cabling'),
+    at('Other items'),
+  ].whereType<String>().toList();
+  if (parts.isNotEmpty) set('Parts subtotal', parts.join('+'));
+  final laborRow = rowStarting('Labor');
+  final labor = sumOf('Labor');
+  if (laborRow != null && labor != null) {
+    _setFormula(sheet, laborRow, building.col, labor);
+  }
+  set('Shipping', sumOf('Shipping'));
+  set('Fees', sumOf('Fees'));
+  set('Tax', sumOf('Tax'));
+  set('PROJECT TOTAL', sumOf('Room total'));
+}
+
+/// Makes Core Components' Parts total add up the sections above it.
+void _formulaMasterTotals(XlsxSheet sheet) {
+  final totals = _keyValueRows(sheet, 'Parts total');
+  if (totals == null) return;
+  final kinds = <String>[];
+  for (final kind in MasterPartKind.values) {
+    final label = kMasterPartKindLabels[kind]!;
+    final r = totals.rows[label];
+    final sum = _sumOf(sheet, label);
+    if (r == null || sum == null) continue;
+    _setFormula(sheet, r, totals.col, sum);
+    kinds.add(_cell(totals.col, r));
+  }
+  final all = totals.rows['ALL PARTS'];
+  if (all != null && kinds.isNotEmpty) {
+    _setFormula(sheet, all, totals.col, kinds.join('+'));
+  }
+}
+
+/// Makes All Items' Room totals read each room's own totals, and its Total
+/// row add them up.
+void _formulaAllItemsTotals(
+  XlsxSheet sheet,
+  Map<String, RoomTotalRefs> byTab,
+) {
+  final s = _sectionRange(sheet, 'Room totals', column: 'Room total');
+  if (s == null) return;
+  final header = sheet.rows[s.first - 1];
+  final equipment = header.indexOf('Equipment');
+  final labor = header.indexOf('Labor');
+  final roomTotal = s.col;
+  final target = header.indexOf('Target');
+  final less = header.indexOf('Target less total');
+  for (var r = s.first; r <= s.last; r++) {
+    final room = sheet.rows[r].first;
+    if (room is XlsxLink) {
+      final refs = byTab[room.sheet];
+      if (refs == null) continue;
+      if (equipment >= 0 && refs.equipment != null) {
+        _setFormula(sheet, r, equipment, refs.equipment!);
+      }
+      if (labor >= 0 && refs.labor != null) {
+        _setFormula(sheet, r, labor, refs.labor!);
+      }
+      if (refs.total != null) _setFormula(sheet, r, roomTotal, refs.total!);
+      if (target >= 0 && less >= 0) {
+        _setFormula(
+          sheet,
+          r,
+          less,
+          '${_cell(target, r)}-${_cell(roomTotal, r)}',
+        );
+      }
+    } else if (room == 'Total') {
+      String sum(int col) =>
+          'SUM(${_cell(col, s.first)}:${_cell(col, r - 1)})';
+      if (target >= 0) _setFormula(sheet, r, target, sum(target));
+      _setFormula(sheet, r, roomTotal, sum(roomTotal));
+      if (target >= 0 && less >= 0) {
+        _setFormula(
+          sheet,
+          r,
+          less,
+          '${_cell(target, r)}-${_cell(roomTotal, r)}',
+        );
+      }
+    }
+  }
+}
+
 /// Every priced line in every room on one sheet, each room linked to its own
 /// tab. Second in the book, after the Summary.
 const String kProjectAllItemsSheet = 'All Items';
@@ -53,6 +660,7 @@ const String kProjectAllItemsSheet = 'All Items';
 List<ReportSection> allItemsSections(
   ProjectEstimate estimate, {
   Map<String, String> roomTabs = const {},
+  MasterPriceCells masterCells = const {},
 }) {
   final project = estimate.project;
   final currency = estimate.currency;
@@ -81,9 +689,16 @@ List<ReportSection> allItemsSections(
       ('Other items', e.extras),
     ]) {
       for (final line in lines) {
+        final kind = switch (section) {
+          'Equipment' => MasterPartKind.equipment,
+          'Rack hardware' => MasterPartKind.hardware,
+          'Cabling' => MasterPartKind.cabling,
+          _ => MasterPartKind.other,
+        };
+        final refs = _masterCellFor(estimate, masterCells, kind, line);
         // The item first: the sheet builder never moves column 0 out of the
         // grid, and a long description anywhere else would be.
-        items.add([
+        final row = [
           line.description,
           roomCell(room),
           priority(room.ref.priority),
@@ -94,7 +709,21 @@ List<ReportSection> allItemsSections(
           cash(line.unitPrice),
           cash(line.total),
           priceFromLabel(line),
-        ]);
+        ];
+        items.add(
+          refs == null
+              ? row
+              : _linkRow(
+                  row,
+                  refs,
+                  line,
+                  name: 0,
+                  model: 4,
+                  part: 5,
+                  unit: 7,
+                  ext: 8,
+                ),
+        );
       }
     }
     if (e.laborTotal > 0) {
@@ -641,6 +1270,10 @@ List<ReportSection> masterPartsSections(
         if (includeVendorColumn) 'Control',
         // Where each part goes is the Parts by Room tab: a list of thirty
         // rooms in one cell is a sentence, not a column.
+        //
+        // What the online copy's pull reads a row back by - see
+        // [readMasterEdits]. Leave it alone and edit the rest.
+        'Row id',
       ],
       rows: [
         for (final l in lines)
@@ -652,12 +1285,15 @@ List<ReportSection> masterPartsSections(
             l.qty,
             l.hasSpares ? l.spareQty : '',
             l.hasSpares ? l.drawnQty : '',
-            unit(l),
+            // A number where the part has one price, so the rooms can read
+            // it from here - see [_linkMasterSheet].
+            l.unpriced || l.priceVaries ? unit(l) : cash(l.unitPrice),
             cash(l.total),
             if (includeVendorColumn) l.rfq?.name ?? 'UNTAGGED',
             if (includeVendorColumn) l.vendor?.name ?? '',
             if (includeVendorColumn) kRfqTagSourceLabels[l.tagSource] ?? '',
             if (includeVendorColumn) _controlNote(l, roomNames),
+            masterRowId(l.key),
           ],
       ],
     ));
@@ -1989,23 +2625,82 @@ Uint8List buildProjectWorkbookBytes({
       if (room.ok && costReportSections(room.estimate!).isNotEmpty)
         room.ref.id: tab(room.name),
   };
-  if (roomTabs.isNotEmpty || estimate.project.manualRooms.isNotEmpty) {
-    sheets.add(buildStackedReportSheet(
-      sheetName: allItemsTab,
-      title: '$title - all items',
-      sections: allItemsSections(estimate, roomTabs: roomTabs),
+  // THE MASTER LIST IS LAID OUT FIRST, so every room's lines can read their
+  // price off it: change a price there and it changes in every room. It is
+  // still placed after All Items.
+  final master = masterPartsSections(estimate);
+  final masterSheet = master.isEmpty
+      ? null
+      : buildStackedReportSheet(
+          sheetName: tab(kProjectWorkbookSheets[1]),
+          title: '$title - core components list',
+          sections: master,
+          generated: stamp,
+        );
+  final MasterPriceCells masterCells = masterSheet == null
+      ? const {}
+      : _linkMasterSheet(masterSheet, estimate);
+  if (masterSheet != null) _formulaMasterTotals(masterSheet);
+
+  // THE ROOM TABS ARE LAID OUT HERE TOO, so All Items can read each room's
+  // own totals. They are still written last, after every other sheet.
+  final summaryTab = sheets.first.name;
+  final roomSheets = <XlsxSheet>[];
+  final roomTotals = <String, RoomTotalRefs>{};
+  // Every room that priced, including the excluded ones: an alternate that is
+  // out of the total is still work somebody did and still gets read.
+  for (final room in estimate.rooms) {
+    if (!room.ok) continue;
+    final priced = costReportSections(room.estimate!);
+    final tabName = roomTabs[room.ref.id];
+    if (priced.isEmpty || tabName == null) continue;
+    final sheet = buildStackedReportSheet(
+      sheetName: tabName,
+      title: room.ref.included
+          ? room.name
+          : '${room.name} - EXCLUDED from the project total',
+      // The way back to the master list, then the room's scope, notes and
+      // custom sections, as on its own exports.
+      sections: [
+        (
+          title: 'Go to',
+          header: const ['', ''],
+          rows: [
+            [
+              XlsxLink(text: 'All items (every room)', sheet: allItemsTab),
+              '',
+            ],
+            [XlsxLink(text: 'Summary', sheet: summaryTab), ''],
+          ],
+        ),
+        ...withEstimateSections(
+          _linkRoomSections(priced, room.estimate!, estimate, masterCells),
+          room.room.settings,
+        ),
+      ],
       generated: stamp,
-    ));
+    );
+    roomTotals[tabName] = _formulaRoomTotals(sheet, room.estimate!);
+    roomSheets.add(sheet);
   }
 
-  final master = masterPartsSections(estimate);
-  if (master.isNotEmpty) {
-    sheets.add(buildStackedReportSheet(
-      sheetName: tab(kProjectWorkbookSheets[1]),
-      title: '$title - core components list',
-      sections: master,
+  if (roomTabs.isNotEmpty || estimate.project.manualRooms.isNotEmpty) {
+    final allItems = buildStackedReportSheet(
+      sheetName: allItemsTab,
+      title: '$title - all items',
+      sections: allItemsSections(
+        estimate,
+        roomTabs: roomTabs,
+        masterCells: masterCells,
+      ),
       generated: stamp,
-    ));
+    );
+    _formulaAllItemsTotals(allItems, roomTotals);
+    sheets.add(allItems);
+  }
+
+  if (masterSheet != null) {
+    sheets.add(masterSheet);
     final byRoom = partsByRoomSections(estimate);
     if (byRoom.isNotEmpty) {
       sheets.add(buildStackedReportSheet(
@@ -2171,43 +2866,8 @@ Uint8List buildProjectWorkbookBytes({
     sheets.add(buildEditablePosSheet(estimate.project));
   }
 
-  // Every room that priced, including the excluded ones: an alternate that is
-  // out of the total is still work somebody did and still gets read.
-  for (final room in estimate.rooms) {
-    if (!room.ok) continue;
-    final priced = costReportSections(room.estimate!);
-    final tabName = roomTabs[room.ref.id];
-    if (priced.isEmpty || tabName == null) continue;
-    sheets.add(buildStackedReportSheet(
-      sheetName: tabName,
-      title: room.ref.included
-          ? room.name
-          : '${room.name} - EXCLUDED from the project total',
-      // The way back to the master list, then the room's scope, notes and
-      // custom sections, as on its own exports.
-      sections: [
-        (
-          title: 'Go to',
-          header: const ['', ''],
-          rows: [
-            [
-              XlsxLink(text: 'All items (every room)', sheet: allItemsTab),
-              '',
-            ],
-            [
-              XlsxLink(
-                text: 'Summary',
-                sheet: sheets.first.name,
-              ),
-              '',
-            ],
-          ],
-        ),
-        ...withEstimateSections(priced, room.room.settings),
-      ],
-      generated: stamp,
-    ));
-  }
+  _formulaSummaryTotals(sheets.first, estimate, roomTabs, roomTotals);
+  sheets.addAll(roomSheets);
 
   return buildXlsx(sheets);
 }

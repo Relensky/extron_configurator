@@ -80,14 +80,14 @@ CATALOG = {
     'Network Switch': 'TL-SG108PE',
     'PDU: 1x Switched 1x Surge': 'AP7900B',
     'Projector + Mount': 'PT-VMZ62BU8',
-    'Switcher: 82': 'DTP2 CrossPoint 82 IPCP SA',
+    'Switcher: 82': 'DTP CrossPoint 82 4K IPCP Q SA',
     'Switcher: 84': 'DTP CrossPoint 84 4K IPCP Q SA',
     'Switcher: 108': 'DTP CrossPoint 108 4K IPCP Q SA LL',
     # The Equipment tab spells this with two spaces and one room-type
     # sheet with one. Both normalize to the single-space form.
-    'Switcher: 42': 'DTP3 CrossPoint 42',
-    'Touch Panel: 10"': 'TLP Pro 1025',
-    'Touch Panel: 7"': 'TLP Pro 725',
+    'Switcher: 42': 'DTP3 CrossPoint 42 USB',
+    'Touch Panel: 10"': 'TLP Pro 1035T Black',
+    'Touch Panel: 7"': 'TLP Pro 835T Black',
     'USB Toggle': 'Toggle',
     'USB-C to HDMI + Cable': 'USB-C HD 101',
     'Wireless Mirroring': 'ShareLink Pro 2000',
@@ -176,6 +176,17 @@ WHERE = {
     'Video Conferencing Bar: BYD': 'LOC_2',
 }
 DEFAULT_LOCATION = 'LOC_4'   # the rack, which is where the rest of it lives
+
+# ---------------------------------------------------------------------------
+#  POWER BEHIND THE DISPLAYS
+# ---------------------------------------------------------------------------
+#  The sheet prices a switched PDU per display in these room types. The rack
+#  keeps one APC; the ones behind the displays are SurgeX units.
+SURGEX_FOR_DISPLAYS = {
+    '2 Display', '2 Display 1 Cam 1 Mic', '2 Display 2 Cam Multimic',
+}
+PDU_ROW = 'PDU: 1x Switched 1x Surge'
+SURGEX_MODEL = 'SX-DPP-102'
 
 
 def norm(s):
@@ -308,13 +319,34 @@ def build(xlsx, out_dir, dry_run):
                 missing['%s (%s)' % (model, row)] += 1
                 continue
             where = WHERE.get(row, DEFAULT_LOCATION)
+            surgex = (sheet in SURGEX_FOR_DISPLAYS and row == PDU_ROW
+                      and qty > 1 and SURGEX_MODEL in catalog)
             for n in range(qty):
+                if surgex and n > 0:
+                    # One APC in the rack, then a SurgeX behind each display.
+                    seq += 1
+                    slot = column['LOC_2']
+                    column['LOC_2'] += 1
+                    sx = catalog[SURGEX_MODEL]
+                    nodes.append({
+                        'id': 'N%d' % seq,
+                        'label': 'SurgeX: Display %d' % n,
+                        'model': SURGEX_MODEL,
+                        'x': 120.0 + 220.0 * 2,
+                        'y': 120.0 + 150.0 * slot,
+                        'fromConfig': False,
+                        'rackUnits': sx.get('rackUnits', 0) or 0,
+                        'location': 'LOC_2',
+                        'ports': sx.get('ports', []),
+                    })
+                    continue
                 seq += 1
                 slot = column[where]
                 column[where] += 1
                 nodes.append({
                     'id': 'N%d' % seq,
-                    'label': row if qty == 1 else '%s %d' % (row, n + 1),
+                    'label': (row if qty == 1 or surgex
+                              else '%s %d' % (row, n + 1)),
                     'model': model,
                     'x': 120.0 + 220.0 * int(where[-1]),
                     'y': 120.0 + 150.0 * slot,

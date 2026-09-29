@@ -278,7 +278,7 @@
     },
     {
       "id": "N7",
-      "label": "PDU: 1x Switched 1x Surge 1",
+      "label": "PDU: 1x Switched 1x Surge",
       "model": "AP7900B",
       "x": 1000.0,
       "y": 570.0,
@@ -360,13 +360,13 @@
     },
     {
       "id": "N8",
-      "label": "PDU: 1x Switched 1x Surge 2",
-      "model": "AP7900B",
-      "x": 1000.0,
-      "y": 720.0,
+      "label": "SurgeX: Display 1",
+      "model": "SX-DPP-102",
+      "x": 560.0,
+      "y": 420.0,
       "fromConfig": false,
-      "rackUnits": 1,
-      "location": "LOC_4",
+      "rackUnits": 0,
+      "location": "LOC_2",
       "ports": [
         {
           "id": "out_pwr_1",
@@ -381,55 +381,6 @@
           "signal": "power",
           "direction": "output",
           "side": "right"
-        },
-        {
-          "id": "out_pwr_3",
-          "label": "OUTLET 3",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_pwr_4",
-          "label": "OUTLET 4",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_pwr_5",
-          "label": "OUTLET 5",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_pwr_6",
-          "label": "OUTLET 6",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_pwr_7",
-          "label": "OUTLET 7",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_pwr_8",
-          "label": "OUTLET 8",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
         },
         {
           "id": "in_power",
@@ -442,13 +393,13 @@
     },
     {
       "id": "N9",
-      "label": "PDU: 1x Switched 1x Surge 3",
-      "model": "AP7900B",
-      "x": 1000.0,
-      "y": 870.0,
+      "label": "SurgeX: Display 2",
+      "model": "SX-DPP-102",
+      "x": 560.0,
+      "y": 570.0,
       "fromConfig": false,
-      "rackUnits": 1,
-      "location": "LOC_4",
+      "rackUnits": 0,
+      "location": "LOC_2",
       "ports": [
         {
           "id": "out_pwr_1",
@@ -463,55 +414,6 @@
           "signal": "power",
           "direction": "output",
           "side": "right"
-        },
-        {
-          "id": "out_pwr_3",
-          "label": "OUTLET 3",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_pwr_4",
-          "label": "OUTLET 4",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_pwr_5",
-          "label": "OUTLET 5",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_pwr_6",
-          "label": "OUTLET 6",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_pwr_7",
-          "label": "OUTLET 7",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_pwr_8",
-          "label": "OUTLET 8",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
         },
         {
           "id": "in_power",
@@ -525,7 +427,7 @@
     {
       "id": "N10",
       "label": "Touch Panel: 7\"",
-      "model": "TLP Pro 725",
+      "model": "TLP Pro 835T Black",
       "x": 340.0,
       "y": 270.0,
       "fromConfig": false,
@@ -533,9 +435,9 @@
       "location": "LOC_1",
       "ports": [
         {
-          "id": "lan_xtp",
-          "label": "LAN/ XTP",
-          "signal": "hdbaset",
+          "id": "lan_poe",
+          "label": "LAN PoE",
+          "signal": "network",
           "direction": "bidirectional",
           "side": "left"
         },

@@ -458,7 +458,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   List<AvDeviceTemplate> _filtered(AvDeviceLibrary library) {
     final narrowed = library.all.where((t) {
       if (!_showRetired && t.retired) return false;
-      if (_customOnly && !t.custom) return false;
+      if (_customOnly && !t.addedByUser) return false;
       if (_categoryFilter.isNotEmpty && t.category != _categoryFilter) {
         return false;
       }
@@ -842,9 +842,10 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           dense: true,
           selected: key == _selectedKey,
           leading: Icon(
-            t.custom ? Icons.edit_note : Icons.inventory_2_outlined,
+            t.addedByUser ? Icons.edit_note : Icons.inventory_2_outlined,
             size: 20,
-            color: t.custom ? theme.colorScheme.primary : theme.disabledColor,
+            color:
+                t.addedByUser ? theme.colorScheme.primary : theme.disabledColor,
           ),
           title: Text(
             t.model,
@@ -3055,7 +3056,7 @@ class _DuplicatePartsDialogState extends State<_DuplicatePartsDialog> {
       if (t.educationPrice > 0) '${formatMoney(t.educationPrice)} edu',
       if (t.ports.isNotEmpty) describePorts(t.ports),
       if (t.rackUnits > 0) '${t.rackUnits}U',
-      if (t.custom) 'yours',
+      if (t.addedByUser) 'yours',
     ];
     return bits.isEmpty ? 'nothing recorded' : bits.join(' · ');
   }

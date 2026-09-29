@@ -968,7 +968,9 @@
           "direction": "bidirectional",
           "side": "left"
         }
-      ]
+      ],
+      "price": 120.0,
+      "educationPrice": 120.0
     },
     {
       "model": "Cam570",
@@ -1005,7 +1007,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 2100.0,
+      "educationPrice": 2100.0
     },
     {
       "model": "PTZ310",
@@ -1225,7 +1229,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 2000.0,
+      "educationPrice": 2000.0
     },
     {
       "model": "TR311",
@@ -1468,7 +1474,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 3300.0,
+      "educationPrice": 3300.0
     },
     {
       "model": "AverMedia USB Interface",
@@ -1524,7 +1532,9 @@
           "direction": "output",
           "side": "right"
         }
-      ]
+      ],
+      "price": 110.0,
+      "educationPrice": 110.0
     },
     {
       "model": "Network switch",
@@ -23114,7 +23124,7 @@
       "partNumber": "60-1583-92",
       "category": "Switcher",
       "rackUnits": 2,
-      "price": 11580.0,
+      "price": 12740.0,
       "notes": "8x2 Seamless 4K Scaling Presentation Matrix Switcher - 2 x 50 Watt Stereo Amp, AV LAN",
       "ports": [
         {
@@ -23432,7 +23442,8 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "educationPrice": 7389.2
     },
     {
       "model": "DTP CrossPoint 82 4K IPCP Q SA LL",
@@ -36289,7 +36300,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 6716.0,
+      "educationPrice": 6716.0
     },
     {
       "model": "DTP2 CrossPoint 82 IPCP SA LL",
@@ -37069,7 +37082,91 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 3126.0,
+      "educationPrice": 3126.0
+    },
+    {
+      "model": "DTP3 CrossPoint 42 USB",
+      "manufacturer": "Extron",
+      "partNumber": "60-1925-02",
+      "category": "Switcher",
+      "rackUnits": 0,
+      "notes": "4x2 4K/60 Seamless Scaling Matrix Switcher - 4x2 Scaling Matrix Switcher",
+      "ports": [
+        {
+          "id": "usb_c_60w_1",
+          "label": "USB-C 60W 1",
+          "signal": "usbC",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_4",
+          "label": "HDMI 4",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_cec",
+          "label": "HDMI/CEC",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "dtp3out",
+          "label": "DTP3OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_cec_2",
+          "label": "HDMI/CEC 2",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_3",
+          "label": "AUDIO 3",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 6590.0,
+      "educationPrice": 3822.2
     },
     {
       "model": "DTP3 CrossPoint 622",
@@ -75831,6 +75928,32 @@
       ]
     },
     {
+      "model": "TLP Pro 1035T Black",
+      "manufacturer": "Extron",
+      "partNumber": "60-1999-02",
+      "category": "Control processor",
+      "rackUnits": 0,
+      "price": 3740.0,
+      "educationPrice": 2169.2,
+      "notes": "10\" tabletop TouchLink Pro touchpanel, black.",
+      "ports": [
+        {
+          "id": "lan_poe",
+          "label": "LAN PoE",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "TLP Pro 1025T White",
       "manufacturer": "Extron",
       "partNumber": "60-1565-13",
@@ -76880,6 +77003,32 @@
           "side": "bottom"
         }
       ]
+    },
+    {
+      "model": "TLP Pro 835T Black",
+      "manufacturer": "Extron",
+      "partNumber": "60-1997-02",
+      "category": "Control processor",
+      "rackUnits": 0,
+      "notes": "8\" tabletop TouchLink Pro touchpanel, black.",
+      "ports": [
+        {
+          "id": "lan_poe",
+          "label": "LAN PoE",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 2930.0,
+      "educationPrice": 1699.4
     },
     {
       "model": "TLP Pro 725T White",
@@ -85650,7 +85799,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 402.0,
+      "educationPrice": 402.0
     },
     {
       "model": "VIA GO",
@@ -103049,7 +103200,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 3500.0,
+      "educationPrice": 3500.0
     },
     {
       "model": "MXWAPXD2",
@@ -103142,7 +103295,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 2900.0,
+      "educationPrice": 2900.0
     },
     {
       "model": "FW-50BZ40L",
@@ -104038,7 +104193,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 1350.0,
+      "educationPrice": 1350.0
     },
     {
       "model": "FW-85BZ30L",
@@ -105026,7 +105183,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 60.0,
+      "educationPrice": 60.0
     },
     {
       "model": "AV Bridge",
@@ -105149,7 +105308,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 2479.0,
+      "educationPrice": 2479.0
     },
     {
       "model": "MRX7-D",
@@ -105207,7 +105368,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 3382.0,
+      "educationPrice": 3382.0
     },
     {
       "model": "RoomCast",
@@ -105237,7 +105400,9 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "price": 420.0,
+      "educationPrice": 420.0
     }
   ]
 }

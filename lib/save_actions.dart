@@ -1009,7 +1009,27 @@ Future<bool> openProjectAtPath(
   String file,
 ) async {
   final messenger = ScaffoldMessenger.of(context);
-  final error = await provider.openProject(file);
+  // A progress bar while the rooms are read, rather than a window that
+  // stops answering. Closed by the open finishing, never by a click.
+  final finished = ValueNotifier(false);
+  final closed = showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _ProjectOpeningDialog(
+      name: path.basenameWithoutExtension(file),
+      progress: provider.projectOpenProgress,
+      finished: finished,
+    ),
+  );
+  final String error;
+  try {
+    error = await provider.openProject(file);
+  } finally {
+    // The dialog closes itself on this, even if it had not appeared yet.
+    finished.value = true;
+  }
+  await closed;
+  finished.dispose();
   if (error.isNotEmpty) {
     showTimedSnackBar(
       messenger,
@@ -1033,6 +1053,66 @@ Future<bool> openProjectAtPath(
     await showProjectBriefing(context, provider);
   }
   return true;
+}
+
+/// "Opening Refresh... reading rooms 12 of 30", with a bar.
+class _ProjectOpeningDialog extends StatelessWidget {
+  final String name;
+  final ValueNotifier<(int, int)?> progress;
+
+  /// Set when the open is over; the dialog then closes itself.
+  final ValueNotifier<bool> finished;
+
+  const _ProjectOpeningDialog({
+    required this.name,
+    required this.progress,
+    required this.finished,
+  });
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: finished,
+    builder: (context, done, child) {
+      if (done) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          // Only while it is on top, so a second rebuild cannot close
+          // whatever is underneath it.
+          if (context.mounted && ModalRoute.of(context)?.isCurrent == true) {
+            Navigator.of(context).pop();
+          }
+        });
+      }
+      return PopScope(canPop: false, child: child!);
+    },
+    child: _body(),
+  );
+
+  Widget _body() => AlertDialog(
+    key: const ValueKey('project_opening'),
+    title: Text('Opening $name'),
+    content: SizedBox(
+      width: 360,
+      child: ValueListenableBuilder<(int, int)?>(
+        valueListenable: progress,
+        builder: (_, value, _) {
+          final (done, total) = value ?? (0, 0);
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LinearProgressIndicator(value: total == 0 ? null : done / total),
+              const SizedBox(height: 10),
+              Text(
+                total == 0
+                    ? 'Reading the project...'
+                    : 'Reading rooms $done of $total',
+              ),
+            ],
+          );
+        },
+      ),
+    ),
+  );
 }
 
 // SAVE ALL — everything the JOB has produced, a folder per room.

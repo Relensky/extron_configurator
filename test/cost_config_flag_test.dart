@@ -376,7 +376,15 @@ void main() {
       await pump(tester, p);
 
       // Drawn, spares and total, the way the cabling table reads.
-      expect(find.text('×1'), findsWidgets);
+      // The Qty box shows the drawing's count until one is typed.
+      expect(p.avCost.qtyOverrides, isEmpty);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('eqpqty_drawn_model:powerlite l630u')),
+          matching: find.text('1'),
+        ),
+        findsWidgets,
+      );
       expect(find.text('3'), findsWidgets);
       expect(p.avNodes, hasLength(1),
           reason: 'a spare is bought, not drawn - nothing was added to the '

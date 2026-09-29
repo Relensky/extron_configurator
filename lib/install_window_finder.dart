@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'building_project.dart' show compareRoomNames;
 import 'class_schedule.dart';
 import 'install_windows.dart';
 import 'project_schedule.dart' show formatScheduleDate;
@@ -54,7 +55,8 @@ List<InstallRoom> projectInstallRooms(AppStateProvider provider) {
   for (final m in provider.project.manualRooms) {
     out.add(InstallRoom(id: m.id, code: m.name, label: m.name));
   }
-  return out;
+  // Alphabetical, so a room is found by its name on a list of thirty.
+  return out..sort((a, b) => compareRoomNames(a.label, b.label));
 }
 
 /// Timeline or List, kept for the session.
@@ -129,6 +131,65 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
     for (final r in projectInstallRooms(provider)) {
       if (provider.classSchedule.hasRoom(r.code)) _selected.add(r.id);
     }
+  }
+
+  void _selectAll(List<InstallRoom> rooms, bool on) => setState(() {
+    _selected.clear();
+    if (on) _selected.addAll(rooms.map((r) => r.id));
+  });
+
+  /// The rooms as a drop-down checklist. It stays open while rooms are
+  /// ticked, so picking six of thirty is six clicks rather than six menus.
+  Widget _roomPicker(List<InstallRoom> rooms, ClassScheduleIndex schedule) {
+    return MenuAnchor(
+      menuChildren: [
+        MenuItemButton(
+          key: const ValueKey('install_rooms_menu_all'),
+          closeOnActivate: false,
+          leadingIcon: const Icon(Icons.done_all, size: 18),
+          onPressed: () => _selectAll(rooms, true),
+          child: const Text('Select all'),
+        ),
+        MenuItemButton(
+          key: const ValueKey('install_rooms_menu_none'),
+          closeOnActivate: false,
+          leadingIcon: const Icon(Icons.remove_done, size: 18),
+          onPressed: () => _selectAll(rooms, false),
+          child: const Text('Deselect all'),
+        ),
+        const Divider(height: 1),
+        for (final r in rooms)
+          CheckboxMenuButton(
+            key: ValueKey('install_room_${r.id}'),
+            closeOnActivate: false,
+            value: _selected.contains(r.id),
+            onChanged: (v) => setState(
+              () => v == true ? _selected.add(r.id) : _selected.remove(r.id),
+            ),
+            trailingIcon: schedule.hasRoom(r.code)
+                ? null
+                : Tooltip(
+                    message: '${r.code} is not in the class schedule - it '
+                        'shows as free every day.',
+                    child: const Icon(Icons.help_outline, size: 16),
+                  ),
+            child: Text(r.label),
+          ),
+      ],
+      builder: (context, controller, _) => OutlinedButton.icon(
+        key: const ValueKey('install_rooms_menu'),
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+        icon: const Icon(Icons.meeting_room_outlined, size: 18),
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Rooms: ${_selected.length} of ${rooms.length}'),
+            const Icon(Icons.arrow_drop_down, size: 20),
+          ],
+        ),
+      ),
+    );
   }
 
   List<RoomDay> _roomDays(InstallRoom r, ClassScheduleIndex schedule) {
@@ -409,23 +470,23 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
             child: Wrap(
               spacing: 8,
               runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                for (final r in rooms)
-                  FilterChip(
-                    key: ValueKey('install_room_${r.id}'),
-                    label: Text(r.label),
-                    avatar: schedule.hasRoom(r.code)
-                        ? null
-                        : const Icon(Icons.help_outline, size: 16),
-                    tooltip: schedule.hasRoom(r.code)
-                        ? null
-                        : '${r.code} is not in the class schedule - it '
-                            'shows as free every day.',
-                    selected: _selected.contains(r.id),
-                    onSelected: (v) => setState(
-                      () => v ? _selected.add(r.id) : _selected.remove(r.id),
-                    ),
-                  ),
+                _roomPicker(rooms, schedule),
+                TextButton(
+                  key: const ValueKey('install_rooms_all'),
+                  onPressed: _selected.length == rooms.length
+                      ? null
+                      : () => _selectAll(rooms, true),
+                  child: const Text('Select all'),
+                ),
+                TextButton(
+                  key: const ValueKey('install_rooms_none'),
+                  onPressed: _selected.isEmpty
+                      ? null
+                      : () => _selectAll(rooms, false),
+                  child: const Text('Deselect all'),
+                ),
               ],
             ),
           ),

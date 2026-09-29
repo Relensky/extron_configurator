@@ -1444,7 +1444,29 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
   // The rooms with no config file behind them - see manual_room_lines.dart.
   // Off the project rather than off the estimate: they are not priced from
   // parts, so the estimate has nothing to say about them.
-  final lines = provider.project.manualRooms;
+  // Sorted as asked; the order added is the quote's own order.
+  final sort = context.watch<AppStateProvider>().projectRoomSort;
+  int byPriority(int a, int b) =>
+      (a > 0 ? a : 1 << 20).compareTo(b > 0 ? b : 1 << 20);
+  final rooms = [...estimate.rooms];
+  final lines = [...provider.project.manualRooms];
+  switch (sort) {
+    case ProjectRoomSort.added:
+      break;
+    case ProjectRoomSort.name:
+      rooms.sort((a, b) => compareRoomNames(a.name, b.name));
+      lines.sort((a, b) => compareRoomNames(a.name, b.name));
+    case ProjectRoomSort.priority:
+      rooms.sort((a, b) {
+        final p = byPriority(a.ref.priority, b.ref.priority);
+        return p != 0 ? p : compareRoomNames(a.name, b.name);
+      });
+      lines.sort((a, b) {
+        final p = byPriority(a.priority, b.priority);
+        return p != 0 ? p : compareRoomNames(a.name, b.name);
+      });
+  }
+  final movable = sort == ProjectRoomSort.added;
 
   return [
     SliverToBoxAdapter(
@@ -1532,6 +1554,31 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
                 // one of the three that does anything.
                 const AddManualRoomLineButton(),
                 const PasteRoomListButton(),
+                // How the list below is ordered.
+                // A set width, so large text shortens the label rather than
+                // pushing the control off a narrow window.
+                SizedBox(
+                  width: 190,
+                  child: DropdownButton<ProjectRoomSort>(
+                    key: const ValueKey('project_room_sort'),
+                    value: sort,
+                    isExpanded: true,
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      for (final s in ProjectRoomSort.values)
+                        DropdownMenuItem(
+                          value: s,
+                          child: Text(
+                            'Sort: ${s.label}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (s) {
+                      if (s != null) provider.setProjectRoomSort(s);
+                    },
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -1594,13 +1641,14 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           sliver: SliverList.separated(
-            itemCount: estimate.rooms.length,
+            itemCount: rooms.length,
             separatorBuilder: (_, _) => const SizedBox(height: 6),
             itemBuilder: (context, index) => _RoomRow(
-              room: estimate.rooms[index],
+              room: rooms[index],
               currency: estimate.currency,
-              isFirst: index == 0,
-              isLast: index == estimate.rooms.length - 1,
+              // Moving a room only means something in the order added.
+              isFirst: !movable || index == 0,
+              isLast: !movable || index == rooms.length - 1,
             ),
           ),
         ),
@@ -2638,6 +2686,140 @@ const String kSparedFilter = '<spared>';
 const String kNoSpareFilter = '<no-spare>';
 
 /// The core components list, as slivers for the tab's one scroll view.
+/// The Equipment pane room by room: a card per room, in the Rooms pane's
+/// order, with that room's share of each part [shown] and what it comes to.
+/// The search and the filter chips narrow it the same as the merged list.
+List<Widget> _partsByRoomSlivers(
+  BuildContext context,
+  ProjectEstimate estimate,
+  List<MasterPartLine> shown,
+) {
+  final theme = Theme.of(context);
+  final sort = context.watch<AppStateProvider>().projectRoomSort;
+  int rank(int p) => p > 0 ? p : 1 << 20;
+  final rooms = [
+    for (final r in estimate.rooms)
+      if (r.ok && r.ref.included) r,
+  ];
+  switch (sort) {
+    case ProjectRoomSort.added:
+      break;
+    case ProjectRoomSort.name:
+      rooms.sort((a, b) => compareRoomNames(a.name, b.name));
+    case ProjectRoomSort.priority:
+      rooms.sort((a, b) {
+        final p = rank(a.ref.priority).compareTo(rank(b.ref.priority));
+        return p != 0 ? p : compareRoomNames(a.name, b.name);
+      });
+  }
+  String money(double v) => formatMoney(v, estimate.currency);
+  final muted = theme.textTheme.bodySmall?.copyWith(
+    color: theme.colorScheme.onSurfaceVariant,
+  );
+
+  final cards = <Widget>[];
+  for (final room in rooms) {
+    final lines = [
+      for (final l in shown)
+        if ((l.qtyByRoom[room.ref.id] ?? 0) > 0) l,
+    ];
+    if (lines.isEmpty) continue;
+    final total = lines.fold(
+      0.0,
+      (s, l) => s + l.qtyByRoom[room.ref.id]! * l.unitPrice,
+    );
+    cards.add(
+      Card(
+        key: ValueKey('parts_room_${room.ref.id}'),
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(room.name, style: theme.textTheme.titleSmall),
+                  ),
+                  if (room.ref.priority > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Text('Priority ${room.ref.priority}',
+                          style: muted),
+                    ),
+                  Text(money(total), style: theme.textTheme.titleSmall),
+                ],
+              ),
+              const Divider(height: 12),
+              for (final l in lines)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 44,
+                        child: Text(
+                          '${trimNumber(l.qtyByRoom[room.ref.id]!)} x',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(l.description,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          [l.model, l.partNumber]
+                              .where((s) => s.trim().isNotEmpty)
+                              .join('  ·  '),
+                          style: muted,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 100,
+                        child: Text(
+                          l.unpriced ? 'not priced' : money(l.unitPrice),
+                          textAlign: TextAlign.right,
+                          style: muted,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 110,
+                        child: Text(
+                          money(l.qtyByRoom[room.ref.id]! * l.unitPrice),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  return [
+    SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      sliver: cards.isEmpty
+          ? const SliverToBoxAdapter(
+              child: Text('No parts match in any room.'),
+            )
+          : SliverList.separated(
+              itemCount: cards.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (_, i) => cards[i],
+            ),
+    ),
+  ];
+}
+
 List<Widget> partsSlivers(
   BuildContext context, {
   required ProjectEstimate estimate,
@@ -2798,6 +2980,7 @@ List<Widget> partsSlivers(
   for (final l in estimate.master) {
     if (l.hasControlGap) controlGapParts++;
   }
+  final byRoom = context.watch<AppStateProvider>().projectPartsByRoom;
 
   return [
     SliverToBoxAdapter(
@@ -2821,6 +3004,20 @@ List<Widget> partsSlivers(
                 spacing: 6,
                 runSpacing: 6,
                 children: [
+                  // The whole job's list, or the same parts room by room. In
+                  // the wrapping row, so it drops a line on a narrow window.
+                  SegmentedButton<bool>(
+                    key: const ValueKey('project_parts_by_room'),
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('All parts')),
+                      ButtonSegment(value: true, label: Text('By room')),
+                    ],
+                    selected: {byRoom},
+                    onSelectionChanged: (v) => context
+                        .read<AppStateProvider>()
+                        .setProjectPartsByRoom(v.first),
+                  ),
                   filterChip('All (${estimate.master.length})', ''),
                   for (final p in estimate.packages)
                     if (!p.isUntagged)
@@ -2918,6 +3115,8 @@ List<Widget> partsSlivers(
           ),
         ),
       )
+    else if (byRoom)
+      ..._partsByRoomSlivers(context, estimate, shown)
     else ...[
       // WHAT IS TICKED, AND WHAT CAN BE DONE TO IT. Above the headings rather
       // than floating over the list: it appears and disappears as rows are

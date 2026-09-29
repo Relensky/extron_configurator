@@ -119,6 +119,49 @@ class XlsxMoney {
   String toString() => text;
 }
 
+/// A money cell worked out by a formula - a room's unit price read off the
+/// master list, so changing it there changes it in every room.
+///
+/// [cached] is the figure it comes to now: what shows before the sheet
+/// recalculates, what a plain-text report prints, and what sets the format.
+class XlsxFormula {
+  /// Without the leading '=', e.g. `'Core Components'!H12`.
+  final String formula;
+  final XlsxMoney cached;
+
+  const XlsxFormula(this.formula, this.cached);
+
+  @override
+  String toString() => cached.text;
+}
+
+/// A plain number worked out by a formula - hours, not money. [cached] is
+/// what it comes to now; [text] is how a text report prints it.
+class XlsxNumberFormula {
+  /// Without the leading '='.
+  final String formula;
+  final double cached;
+  final String text;
+
+  const XlsxNumberFormula(this.formula, this.cached, this.text);
+
+  @override
+  String toString() => text;
+}
+
+/// A text cell worked out by a formula - a room's part name read off the
+/// master list. [cached] is what it says now.
+class XlsxTextFormula {
+  /// Without the leading '='.
+  final String formula;
+  final String cached;
+
+  const XlsxTextFormula(this.formula, this.cached);
+
+  @override
+  String toString() => cached;
+}
+
 /// A cell that jumps to another tab in the same book when clicked - the room
 /// name on the master list, the way back on each room's tab.
 ///
@@ -481,8 +524,13 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
   for (final sheet in sheets) {
     for (final row in sheet.rows) {
       for (final value in row) {
-        if (value is XlsxMoney && !currencies.contains(value.symbol)) {
-          currencies.add(value.symbol);
+        final symbol = value is XlsxMoney
+            ? value.symbol
+            : value is XlsxFormula
+            ? value.cached.symbol
+            : null;
+        if (symbol != null && !currencies.contains(symbol)) {
+          currencies.add(symbol);
         }
       }
     }
@@ -670,6 +718,8 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
       if (col < 0 || col >= cells.length) return null;
       final value = cells[col];
       if (value is XlsxMoney) return value.value;
+      if (value is XlsxFormula) return value.cached.value;
+      if (value is XlsxNumberFormula) return value.cached;
       if (value is num) return value.toDouble();
       return null;
     }
@@ -933,7 +983,13 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
       if (sheet.rowStyles[r] == XlsxRowStyle.title) continue;
       for (int c = 0; c < cells.length; c++) {
         final cell = cells[c];
-        if (cell == null || cell is num || cell is XlsxMoney) continue;
+        if (cell == null ||
+            cell is num ||
+            cell is XlsxMoney ||
+            cell is XlsxFormula ||
+            cell is XlsxNumberFormula) {
+          continue;
+        }
         final ref = '${colLetter(c)}${r + 1}';
         if (swallowed.contains(ref) || spills.contains(ref)) continue;
         final text = cell.toString();
@@ -990,6 +1046,19 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
           // Its own style id: the row's banding plus the currency format.
           body.write(
               '<c r="$ref" s="${moneyStyle(value.symbol, style)}"><v>${value.value}</v></c>');
+        } else if (value is XlsxNumberFormula) {
+          body.write('<c r="$ref"$styleAttr><f>${esc(value.formula)}</f>'
+              '<v>${value.cached}</v></c>');
+        } else if (value is XlsxTextFormula) {
+          final String cellStyle =
+              wrapped.contains(ref) ? ' s="${wrapStyle(style)}"' : styleAttr;
+          body.write(
+              '<c r="$ref"$cellStyle t="str"><f>${esc(value.formula)}</f>'
+              '<v>${esc(value.cached)}</v></c>');
+        } else if (value is XlsxFormula) {
+          body.write(
+              '<c r="$ref" s="${moneyStyle(value.cached.symbol, style)}">'
+              '<f>${esc(value.formula)}</f><v>${value.cached.value}</v></c>');
         } else if (value is num) {
           body.write('<c r="$ref"$styleAttr><v>$value</v></c>');
         } else {

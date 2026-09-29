@@ -163,8 +163,9 @@ void main() {
       final key = priced(p).equipment
           .firstWhere((l) => l.model == 'Display X')
           .key;
-      final plus = find.byTooltip('One more Display');
-      final minus = find.byTooltip('One fewer Display');
+      // The Spares stepper; the Qty one beside it is 'One more Display'.
+      final plus = find.byTooltip('One more spare Display');
+      final minus = find.byTooltip('One fewer spare Display');
       expect(plus, findsOneWidget);
       // Nothing to take away yet: the drawing owns the count, and the row
       // cannot buy minus one.
@@ -173,7 +174,7 @@ void main() {
       IconButton buttonLabeled(String tooltip) => tester
           .widgetList<IconButton>(find.byType(IconButton))
           .firstWhere((b) => b.tooltip == tooltip);
-      expect(buttonLabeled('One fewer Display').onPressed, isNull);
+      expect(buttonLabeled('One fewer spare Display').onPressed, isNull);
 
       await tester.tap(plus);
       await tester.pumpAndSettle();

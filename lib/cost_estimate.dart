@@ -380,6 +380,10 @@ class RoomCostSettings {
   /// a spare 86" display and a spare switcher are two decisions at two prices.
   final Map<String, double> equipmentSpares;
 
+  /// Line key -> how many the quote buys, before spares, when that is not
+  /// what the diagram counts. The drawing is left alone; the quantity is.
+  final Map<String, double> qtyOverrides;
+
   /// SIGNAL AND LENGTH -> the catalog entry that length is bought as, when
   /// somebody has said which one rather than letting the catalog decide. See
   /// [cableEntryKey].
@@ -499,6 +503,7 @@ class RoomCostSettings {
     List<LaborLine>? labor,
     Map<String, double>? cableSpares,
     Map<String, String>? cableEntries,
+    Map<String, double>? qtyOverrides,
     Map<String, double>? equipmentSpares,
     Map<String, String>? furnishedLines,
     List<CostLineItem>? extraEquipment,
@@ -514,6 +519,7 @@ class RoomCostSettings {
        cableSpares = cableSpares ?? {},
        cableEntries = cableEntries ?? {},
        equipmentSpares = equipmentSpares ?? {},
+       qtyOverrides = qtyOverrides ?? {},
        furnishedLines = furnishedLines ?? {},
        extraEquipment = extraEquipment ?? [],
        extraHardware = extraHardware ?? [],
@@ -536,6 +542,7 @@ class RoomCostSettings {
       labor.isEmpty &&
       cableSpares.isEmpty &&
       cableEntries.isEmpty &&
+      qtyOverrides.isEmpty &&
       equipmentSpares.isEmpty &&
       furnishedLines.isEmpty &&
       extraEquipment.isEmpty &&
@@ -564,6 +571,7 @@ class RoomCostSettings {
     cableSpares.clear();
     cableEntries.clear();
     equipmentSpares.clear();
+    qtyOverrides.clear();
     furnishedLines.clear();
     extraEquipment.clear();
     extraHardware.clear();
@@ -602,6 +610,8 @@ class RoomCostSettings {
       'cableEntries': Map<String, String>.of(cableEntries),
     if (equipmentSpares.isNotEmpty)
       'equipmentSpares': Map<String, double>.of(equipmentSpares),
+    if (qtyOverrides.isNotEmpty)
+      'qtyOverrides': Map<String, double>.of(qtyOverrides),
     if (furnishedLines.isNotEmpty)
       'furnishedLines': Map<String, String>.of(furnishedLines),
     if (extraEquipment.isNotEmpty)
@@ -700,6 +710,14 @@ class RoomCostSettings {
         equipmentSpares[key.toString()] = qty;
       });
     }
+    final quoted = json['qtyOverrides'];
+    if (quoted is Map) {
+      quoted.forEach((key, value) {
+        final qty = (value as num?)?.toDouble();
+        if (qty == null || qty < 0) return;
+        qtyOverrides[key.toString()] = qty;
+      });
+    }
     final furnished = json['furnishedLines'];
     if (furnished is Map) {
       furnished.forEach((key, value) {
@@ -760,8 +778,12 @@ class DeviceGroup {
   /// Comma-joined because this is also a line on the estimate PAGE, where a
   /// four-line cell would push the row apart. The pack list wants one name
   /// per line and builds that itself from [nodes].
-  String get label =>
-      nodes.length == 1 ? first.label : nodes.map((n) => n.label).join(', ');
+  ///
+  /// Each name once: seven displays all called 'Display' are one 'Display',
+  /// not the word seven times.
+  String get label => nodes.length == 1
+      ? first.label
+      : {for (final n in nodes) n.label}.join(', ');
 
   String get notes => nodes
       .map((n) => n.note)
@@ -990,8 +1012,13 @@ class CostLine {
   /// diagram counts. 0 on every line but a device group with a spares figure.
   final double spareQty;
 
-  /// What the diagram itself counts — [qty] less [spareQty].
+  /// What the quote buys before spares — [qty] less [spareQty]. The
+  /// diagram's own count unless a quantity was typed; see [onDiagram].
   double get drawnQty => qty - spareQty;
+
+  /// What the diagram counts, when a typed quantity overrides it; null when
+  /// the line follows the diagram.
+  final double? onDiagram;
 
   /// The manufacturer's ordering code, off the catalog entry. Carried on the
   /// line rather than looked up when the report is written, so the number on
@@ -1037,6 +1064,7 @@ class CostLine {
     this.source = PriceSource.none,
     this.spare = false,
     this.spareQty = 0,
+    this.onDiagram,
     this.furnishedBy,
     this.shippingEach = 0,
   });
@@ -1055,6 +1083,7 @@ class CostLine {
     source: source,
     spare: spare,
     spareQty: spareQty,
+    onDiagram: onDiagram,
     furnishedBy: furnishedBy,
     shippingEach: each,
   );
@@ -1343,7 +1372,9 @@ CostEstimate computeRoomCost({
     // for a room with three drawn is the same product at the same price, and
     // splitting it out is how a quote ends up with two prices for one box.
     final spares = settings.equipmentSpares[group.key] ?? 0;
-    final qty = group.qty + (spares > 0 ? spares : 0.0);
+    // A typed quantity stands in for the diagram's count.
+    final quoted = settings.qtyOverrides[group.key];
+    final qty = (quoted ?? group.qty) + (spares > 0 ? spares : 0.0);
     // A line somebody else is furnishing is not an unpriced line: it has no
     // figure on this quote BY DECISION, and counting it as a hole would leave
     // the page reporting work to do that is already done.
@@ -1365,6 +1396,7 @@ CostEstimate computeRoomCost({
         category: category,
         qty: qty,
         spareQty: spares > 0 ? spares : 0,
+        onDiagram: quoted == null ? null : group.qty.toDouble(),
         unitPrice: price,
         source: source,
         furnishedBy: furnishedBy,

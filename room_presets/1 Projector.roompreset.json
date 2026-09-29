@@ -93,164 +93,227 @@
     {
       "id": "N2",
       "label": "Switcher: 82",
-      "model": "DTP2 CrossPoint 82 IPCP SA",
+      "model": "DTP CrossPoint 82 4K IPCP Q SA",
       "x": 1000.0,
       "y": 120.0,
       "fromConfig": false,
-      "rackUnits": 0,
+      "rackUnits": 2,
       "location": "LOC_4",
       "ports": [
         {
-          "id": "dp_001",
-          "label": "DP 001",
-          "signal": "displayPort",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_002",
-          "label": "HDMI 002",
+          "id": "hdmi_1",
+          "label": "HDMI 1",
           "signal": "hdmi",
           "direction": "input",
           "side": "left"
         },
         {
-          "id": "hdmi_003",
-          "label": "HDMI 003",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_004",
-          "label": "HDMI 004",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_005",
-          "label": "HDMI 005",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_006",
-          "label": "HDMI 006",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "dtp_in_007",
-          "label": "DTP IN 007",
-          "signal": "hdbaset",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "dtp_in_008",
-          "label": "DTP IN 008",
-          "signal": "hdbaset",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "aux_audio",
-          "label": "AUX AUDIO",
+          "id": "audio_1",
+          "label": "AUDIO 1",
           "signal": "analogAudio",
           "direction": "input",
           "side": "left"
         },
         {
-          "id": "mic_line_001",
-          "label": "MIC/LINE 001",
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_2",
+          "label": "AUDIO 2",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_3",
+          "label": "AUDIO 3",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_4",
+          "label": "HDMI 4",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_4",
+          "label": "AUDIO 4",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_5",
+          "label": "HDMI 5",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_5",
+          "label": "AUDIO 5",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_6",
+          "label": "HDMI 6",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_6",
+          "label": "AUDIO 6",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "dtp_in_1",
+          "label": "DTP IN 1",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "rs_232_ir_1",
+          "label": "RS-232/IR 1",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_in_2",
+          "label": "DTP IN 2",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "rs_232_ir_2",
+          "label": "RS-232/IR 2",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_1",
+          "label": "MIC/LINE 1",
           "signal": "micLine",
           "direction": "input",
           "side": "left"
         },
         {
-          "id": "mic_line_002",
-          "label": "MIC/LINE 002",
+          "id": "mic_line_2",
+          "label": "MIC/LINE 2",
           "signal": "micLine",
           "direction": "input",
           "side": "left"
         },
         {
-          "id": "audio",
-          "label": "AUDIO",
-          "signal": "analogAudio",
+          "id": "mic_line_3",
+          "label": "MIC/LINE 3",
+          "signal": "micLine",
           "direction": "input",
           "side": "left"
         },
         {
-          "id": "ir_serial_1",
-          "label": "IR/SERIAL 1",
-          "signal": "ir",
+          "id": "mic_line_4",
+          "label": "MIC/LINE 4",
+          "signal": "micLine",
           "direction": "input",
           "side": "left"
         },
         {
-          "id": "ir_serial_2",
-          "label": "IR/SERIAL 2",
-          "signal": "ir",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "ebus",
-          "label": "eBUS",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_loop",
-          "label": "HDMI LOOP",
+          "id": "hdmi_001a",
+          "label": "HDMI 001A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
-          "id": "hdmi_cec_001",
-          "label": "HDMI/CEC 001",
+          "id": "hdmi_002a",
+          "label": "HDMI 002A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
-          "id": "dtp_out_002",
-          "label": "DTP OUT 002",
+          "id": "dtp_out_1",
+          "label": "DTP OUT 1",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
         },
         {
-          "id": "ir_dtp",
-          "label": "IR DTP",
+          "id": "rs_232_ir_3",
+          "label": "RS-232/IR 3",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_out_2",
+          "label": "DTP OUT 2",
           "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_4",
+          "label": "RS-232/IR 4",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "s_pdif",
+          "label": "S/PDIF",
+          "signal": "digitalAudio",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "sa_out_8_4",
           "label": "SA OUT 8Ω/4Ω",
-          "signal": "analogAudio",
+          "signal": "speaker",
           "direction": "output",
           "side": "right"
         },
         {
-          "id": "audio_1",
+          "id": "audio_1_2",
           "label": "AUDIO 1",
           "signal": "analogAudio",
           "direction": "output",
           "side": "right"
         },
         {
-          "id": "audio_2",
+          "id": "audio_2_2",
           "label": "AUDIO 2",
           "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "dmp_exp",
+          "label": "DMP EXP",
+          "signal": "network",
           "direction": "output",
           "side": "right"
         },
@@ -286,6 +349,27 @@
           "id": "relay_3",
           "label": "RELAY 3",
           "signal": "other",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "ir_serial_1",
+          "label": "IR/SERIAL 1",
+          "signal": "ir",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "ir_serial_2",
+          "label": "IR/SERIAL 2",
+          "signal": "ir",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "ebus",
+          "label": "eBUS",
+          "signal": "analogAudio",
           "direction": "output",
           "side": "right"
         },
@@ -336,7 +420,7 @@
     {
       "id": "N3",
       "label": "Touch Panel: 7\"",
-      "model": "TLP Pro 725",
+      "model": "TLP Pro 835T Black",
       "x": 340.0,
       "y": 120.0,
       "fromConfig": false,
@@ -344,9 +428,9 @@
       "location": "LOC_1",
       "ports": [
         {
-          "id": "lan_xtp",
-          "label": "LAN/ XTP",
-          "signal": "hdbaset",
+          "id": "lan_poe",
+          "label": "LAN PoE",
+          "signal": "network",
           "direction": "bidirectional",
           "side": "left"
         },
