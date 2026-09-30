@@ -167,6 +167,7 @@ List<ReportSection> tabReportSections(
             ),
           ),
           provider.avCost,
+          notice: provider.estimateNotice,
         ),
         // The devices no control module claims, under the money — the same
         // warning the Cost sheet of the workbook carries, for the same reason:

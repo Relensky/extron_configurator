@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/procurement_log.dart';
-import 'package:extron_configurator/project_procurement_view.dart';
 import 'package:extron_configurator/xlsx_writer.dart';
 
 /// The AV procurement log issued to the contractor.
@@ -58,5 +57,15 @@ void main() {
     expect(sections.first.rows, hasLength(2));
     expect(sections.first.rows.first[4], 'Submitted to DPR');
     expect(buildXlsx([procurementLogSheet('HIL', [entry])]), isNotEmpty);
+  });
+
+  test('a date can be typed several ways', () {
+    for (final typed in [
+      '2027-03-10', '3/10/2027', '3/10/27', '10 Mar 2027', 'March 10, 2027',
+    ]) {
+      expect(parseTypedDate(typed), DateTime(2027, 3, 10), reason: typed);
+    }
+    expect(parseTypedDate('2/30/2027'), isNull);
+    expect(parseTypedDate('soon'), isNull);
   });
 }

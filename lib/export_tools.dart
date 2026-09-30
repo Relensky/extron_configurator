@@ -195,7 +195,11 @@ Future<ProjectExport> saveProjectFolder({
           // quote gets signed off on its own, so the warning has to travel
           // with it rather than living only on an AV report nobody opened.
           [
-            ...withEstimateSections(costSections, provider.avCost),
+            ...withEstimateSections(
+              costSections,
+              provider.avCost,
+              notice: provider.estimateNotice,
+            ),
             ...driverGapSections(provider, av),
           ],
           generated: generated,

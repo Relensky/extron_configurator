@@ -469,6 +469,39 @@ void main() {
     });
   });
 
+  group('the procurement log', () {
+    Future<AppStateProvider> opened(WidgetTester tester) async {
+      final p = withProject();
+      expect(p.fillProcurementFromRooms(p.priceProject()), greaterThan(0));
+      await pump(tester, p, width: 3000);
+      await tester.tap(find.byKey(const ValueKey('project_pane_procurement')));
+      await tester.pumpAndSettle();
+      return p;
+    }
+
+    testWidgets('is a grid that zooms', (tester) async {
+      await opened(tester);
+      expect(find.byKey(const ValueKey('procurement_grid')), findsOneWidget);
+      expect(find.text('Bessey 101  ·  2 lines'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('procurement_zoom_in')));
+      await tester.pumpAndSettle();
+      expect(find.text('125%'), findsOneWidget);
+    });
+
+    testWidgets('a date can be typed into its cell', (tester) async {
+      final p = await opened(tester);
+      final id = p.project.procurement.first.id;
+      await tester.tap(find.byKey(ValueKey('procurement_p6_$id')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, '3/10/2027');
+      await tester.tap(find.byKey(const ValueKey('procurement_date_save')));
+      await tester.pumpAndSettle();
+      final entry = p.project.procurement.first;
+      expect(entry.p6Start, DateTime(2027, 3, 10));
+      expect(entry.requiredOnSite, DateTime(2027, 3, 6));
+    });
+  });
+
   group('packages', () {
     testWidgets('a new package lands at the top of the list', (tester) async {
       final p = withProject();

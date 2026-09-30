@@ -1018,6 +1018,7 @@ class AppStateProvider extends ChangeNotifier {
       'estimateLogoSide': estimateLogoSide,
       'estimateAccent': estimateAccent,
       'estimatePreparedBy': estimatePreparedBy,
+      'estimateNotice': estimateNotice,
       'estimatePreparerContact': estimatePreparerContact,
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
       'confirmBeforeDelete': confirmBeforeDelete,
@@ -1354,6 +1355,10 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Who the estimate PDF says prepared it.
   String estimatePreparedBy = '';
+
+  /// The terms every room estimate goes out with, printed as its Notice.
+  /// Not on the project workbook.
+  String estimateNotice = kDefaultEstimateNotes;
 
   /// Optional line under the preparer's name - an email or phone number.
   String estimatePreparerContact = '';
@@ -4999,16 +5004,6 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Puts the standard qualifications into the Estimate Notes of a new
-  /// estimate. Does nothing when the box already says something, so
-  /// converting or reopening a room never writes over what was typed there.
-  void applyDefaultEstimateNotes() {
-    final next = withStandardEstimateNotes(avCost.notes);
-    if (next == avCost.notes) return;
-    avCost.notes = next;
-    notifyListeners();
-  }
-
   void setAvCostNotes(String text) {
     if (avCost.notes == text) return;
     _pushAvUndo('Estimate notes', _costScope, coalesce: 'cost:notes');
@@ -6550,14 +6545,14 @@ class AppStateProvider extends ChangeNotifier {
     // overlay it, so this hands back exactly that document.
     _readAvFlowJson(mergeRoomSidecar(parts));
     _moveLooseRoomImages();
-    // The standard terms, in their current wording, on a room that has an
-    // estimate. Before the room is marked saved, so it does not show as an
-    // unsaved change; the next save writes it. Not in the shared reader: an
-    // undo must put back exactly what was there.
-    if (parts[RoomSidecarPart.cost] != null ||
-        mergeRoomSidecar(parts)['cost'] != null) {
-      avCost.notes = withStandardEstimateNotes(avCost.notes);
-    }
+    // The standard terms now print as the notice from Settings, so they are
+    // taken out of a room's own notes. Before the room is marked saved, so it
+    // does not show as an unsaved change; the next save writes it. Not in the
+    // shared reader: an undo must put back exactly what was there.
+    avCost.notes = stripStandardEstimateNotes(
+      avCost.notes,
+      notice: estimateNotice,
+    );
 
     final found = [
       for (final part in RoomSidecarPart.values)
@@ -7911,6 +7906,9 @@ class AppStateProvider extends ChangeNotifier {
       estimateAccent = str('estimateAccent', '');
       XlsxTheme.accentHex = estimateAccent;
       estimatePreparedBy = str('estimatePreparedBy', '');
+      estimateNotice = saved['estimateNotice'] is String
+          ? saved['estimateNotice'] as String
+          : kDefaultEstimateNotes;
       estimatePreparerContact = str('estimatePreparerContact', '');
       fillDeviceDefaultsOnLoad = saved['fillDeviceDefaultsOnLoad'] is bool
           ? saved['fillDeviceDefaultsOnLoad']
@@ -9114,6 +9112,9 @@ class AppStateProvider extends ChangeNotifier {
         estimateAccent = value; // RRGGBB hex, or '' = built-in navy
         // The Excel reports take the same accent as the PDF.
         XlsxTheme.accentHex = value;
+        break;
+      case 'estimateNotice':
+        estimateNotice = value;
         break;
       case 'estimatePreparedBy':
         estimatePreparedBy = value;

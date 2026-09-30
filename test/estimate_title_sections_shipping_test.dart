@@ -307,12 +307,17 @@ void main() {
       ['', 'Painting'],
     ]);
     expect(all.length, priced.length + 4);
-    // Nothing typed: no scope, and the notes are the standard terms, which
-    // every estimate carries.
+    // Nothing typed: no scope and no notes. The standard terms print as the
+    // notice, when one is passed.
     final bare = withEstimateSections(priced, RoomCostSettings());
-    expect(bare.take(priced.length), priced);
-    expect(bare.length, priced.length + 1);
-    expect(bare.last.title, 'Notes');
+    expect(bare, priced);
+    final noticed = withEstimateSections(
+      priced,
+      RoomCostSettings(),
+      notice: kDefaultEstimateNotes,
+    );
+    expect(noticed.length, priced.length + 1);
+    expect(noticed.last.title, 'Notice');
 
     final text = renderTextReport('Room 101', all);
     expect(text.indexOf('Deliverables'), lessThan(text.indexOf('Totals')));

@@ -26,6 +26,7 @@ import 'control_prefill_dialog.dart';
 import 'av_only_notice.dart';
 import 'cost_estimate.dart';
 import 'estimate_pdf.dart';
+import 'estimate_settings_section.dart' show showEstimateNoticeDialog;
 import 'export_tools.dart';
 import 'labor_rates.dart';
 import 'labor_rates_dialog.dart';
@@ -527,6 +528,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       if (!_capturing) ...[
         const SizedBox(height: 12),
         _addSectionBar(context, provider),
+      ],
+      // The terms, from Settings: the same on every estimate, so they are
+      // not typed into each room's notes.
+      if (!_capturing || provider.estimateNotice.trim().isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _noticeCard(context, provider),
       ],
     ];
 
@@ -4868,7 +4875,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // is a room that cannot be commissioned when it arrives.
     final sections = [
       // The custom sections sit where the PDF prints them.
-      ...withEstimateSections(priced, provider.avCost),
+      ...withEstimateSections(
+        priced,
+        provider.avCost,
+        notice: provider.estimateNotice,
+      ),
       ...driverGapSections(provider, model),
     ];
 
@@ -4965,8 +4976,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           logoOnLeft: provider.estimateLogoSide == 'left',
           accent: estimateAccentColor(provider.estimateAccent),
           scopeOfWork: settings.scopeOfWork,
-          // Every estimate goes out with the standard terms on it.
-          notes: withStandardEstimateNotes(settings.notes),
+          notes: stripStandardEstimateNotes(
+            settings.notes,
+            notice: provider.estimateNotice,
+          ),
+          // Every estimate goes out with the notice from Settings.
+          notice: provider.estimateNotice,
           title: settings.pdfTitle,
           subtitle: settings.documentSubtitle,
           words: Map.of(settings.pdfWords),
@@ -4999,6 +5014,42 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   }
 
   /// A free-text card - the scope of work or the notes. Prints as plain text.
+  /// The notice from Settings, shown as it prints, with the way to edit it.
+  Widget _noticeCard(BuildContext context, AppStateProvider provider) {
+    final theme = Theme.of(context);
+    final notice = provider.estimateNotice.trim();
+    return Card(
+      key: const ValueKey('cost_notice'),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(child: _CardHeading(title: 'Notice')),
+                if (!_capturing)
+                  TextButton.icon(
+                    key: const ValueKey('cost_notice_edit'),
+                    onPressed: () => showEstimateNoticeDialog(context),
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Edit for every estimate'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              notice.isEmpty ? 'No notice. Set one in App Config.' : notice,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: notice.isEmpty ? mutedInk(context, theme) : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _textCard(
     BuildContext context, {
     required String title,

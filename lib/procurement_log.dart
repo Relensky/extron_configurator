@@ -1,6 +1,7 @@
 import 'building_project.dart' show addDays, formatIsoDate, parseIsoDate;
 import 'project_schedule.dart' show formatScheduleDate;
 import 'report_tools.dart';
+import 'xlsx_writer.dart' show XlsxSheet;
 
 /// ============================================================================
 ///  THE AV PROCUREMENT LOG
@@ -315,3 +316,21 @@ List<ReportSection> procurementLogSections(List<ProcurementEntry> entries) => [
       rows: [for (final e in group.entries) procurementRow(e)],
     ),
 ];
+
+/// The tab the log is written on, in its own file and in the workbook.
+const String kProcurementLogSheet = 'AV Procurement Log';
+
+/// The log as a spreadsheet for the contractor.
+XlsxSheet procurementLogSheet(
+  String projectName,
+  List<ProcurementEntry> entries, {
+  String sheetName = kProcurementLogSheet,
+  DateTime? generated,
+}) => buildStackedReportSheet(
+  sheetName: sheetName,
+  title: projectName.trim().isEmpty
+      ? kProcurementLogSheet
+      : '${projectName.trim()} - $kProcurementLogSheet',
+  sections: procurementLogSections(entries),
+  generated: generated,
+);

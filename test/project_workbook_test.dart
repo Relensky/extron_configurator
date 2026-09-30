@@ -10,6 +10,7 @@ import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/cost_estimate.dart';
 import 'package:extron_configurator/labor_rates.dart';
+import 'package:extron_configurator/procurement_log.dart';
 import 'package:extron_configurator/project_estimate.dart';
 import 'package:extron_configurator/project_workbook.dart';
 
@@ -178,6 +179,28 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('the project workbook', () {
+    test('carries the procurement log, as its own export writes it', () {
+      final estimate = job();
+      estimate.project.procurement.add(
+        const ProcurementEntry(
+          id: 'proc1',
+          company: 'OFCI',
+          room: 'Bessey 101',
+          device: 'Extron SF 228T Plus',
+          status: ProcurementStatus.submitted,
+          statusTo: 'DPR',
+        ),
+      );
+      final archive = ZipDecoder().decodeBytes(
+        buildProjectWorkbookBytes(estimate: estimate),
+      );
+      expect(tabNames(archive), contains(kProcurementLogSheet));
+      final sheet = sheetNamed(archive, kProcurementLogSheet);
+      expect(sheet, contains('Submitted to DPR'));
+      // Not linked to Core Components: it is an issued document of its own.
+      expect(sheet, isNot(contains('<f>HYPERLINK')));
+    });
+
     test('a room tab carries the scope, notes and sections of that room', () {
       final archive = ZipDecoder().decodeBytes(buildProjectWorkbookBytes(
         estimate: job(

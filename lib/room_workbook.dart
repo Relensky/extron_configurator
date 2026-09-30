@@ -177,6 +177,7 @@ Uint8List buildRoomWorkbookBytes({
             'No devices on the diagram to price.',
           ),
           provider.avCost,
+          notice: provider.estimateNotice,
         ),
         // The devices the control system cannot drive, under the money. The
         // Cost sheet is the one that gets printed and signed on its own, and a

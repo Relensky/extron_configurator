@@ -2,20 +2,26 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:extron_configurator/cost_estimate.dart';
 
-/// Every estimate goes out with the standard terms on it.
+/// The standard terms print as the estimate's Notice, not in its notes.
 void main() {
-  test('blank notes become the terms', () {
-    expect(withStandardEstimateNotes(''), kDefaultEstimateNotes);
-    expect(withStandardEstimateNotes('  \n'), kDefaultEstimateNotes);
-  });
-
   test('the terms carry the 60-day validity and the approval wording', () {
     expect(kDefaultEstimateNotes, contains('good for 60 days'));
     expect(kDefaultEstimateNotes, contains('arranged through FMS'));
     expect(kDefaultEstimateNotes, contains('separate TSRV request'));
   });
 
-  test('the earlier wording is brought up to date, around what was added', () {
+  test('the terms are taken out of a room\'s notes, around what was typed', () {
+    expect(stripStandardEstimateNotes(kDefaultEstimateNotes), '');
+    expect(
+      stripStandardEstimateNotes(
+        'Install over spring break.\n\n$kDefaultEstimateNotes',
+      ),
+      'Install over spring break.',
+    );
+    expect(stripStandardEstimateNotes('Lift needed.'), 'Lift needed.');
+  });
+
+  test('the earlier wording comes out too', () {
     const older =
         'Equipment costs are preliminary estimates and may vary depending on '
         'final product selection, availability, shipping costs, and applicable '
@@ -38,25 +44,34 @@ void main() {
         'Any additional work or materials beyond the scope described above, or '
         'site conditions discovered during installation, may result in '
         'additional costs.';
-    final out = withStandardEstimateNotes('Lift needed.\n\n$older');
-    expect(out, 'Lift needed.\n\n$kDefaultEstimateNotes');
+    expect(stripStandardEstimateNotes('Lift needed.\n\n$older'), 'Lift needed.');
   });
 
-  test('notes somebody wrote are kept, with the terms after them', () {
+  test('a notice set in Settings comes out of the notes as well', () {
     expect(
-      withStandardEstimateNotes('Install over spring break.'),
-      'Install over spring break.\n\n$kDefaultEstimateNotes',
+      stripStandardEstimateNotes('Mine.\n\nOur terms.', notice: 'Our terms.'),
+      'Mine.',
     );
   });
 
-  test('notes that already carry the terms are left alone', () {
-    final notes = 'Intro.\n\n$kDefaultEstimateNotes';
-    expect(withStandardEstimateNotes(notes), notes);
+  test('room exports print the notice under its own heading', () {
+    final sections = withEstimateSections(
+      const [],
+      RoomCostSettings(notes: 'Night work.\n\n$kDefaultEstimateNotes'),
+      notice: kDefaultEstimateNotes,
+    );
+    final notes = sections.firstWhere((s) => s.title == 'Notes');
+    expect(notes.rows.expand((r) => r).join(' ').trim(), 'Night work.');
+    final notice = sections.firstWhere((s) => s.title == 'Notice');
+    expect(notice.rows.expand((r) => r).join(' '), contains('60 days'));
   });
 
-  test('the exported notes section carries the terms', () {
-    final sections = withEstimateSections(const [], RoomCostSettings());
-    final notes = sections.firstWhere((s) => s.title == 'Notes');
-    expect(notes.rows.expand((r) => r).join(' '), contains('60 days'));
+  test('the project workbook leaves the notice off', () {
+    final sections = withEstimateSections(
+      const [],
+      RoomCostSettings(notes: kDefaultEstimateNotes),
+    );
+    expect(sections.where((s) => s.title == 'Notice'), isEmpty);
+    expect(sections.where((s) => s.title == 'Notes'), isEmpty);
   });
 }

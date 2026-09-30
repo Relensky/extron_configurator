@@ -2,7 +2,7 @@ import 'package:path/path.dart' as path;
 
 import 'name_colors.dart' show nameSheetTint, normalizedName;
 import 'report_tools.dart';
-import 'xlsx_writer.dart' show XlsxTint;
+import 'xlsx_writer.dart' show XlsxSheet, XlsxTint;
 
 /// ============================================================================
 ///  WHO FURNISHES IT, WHO INSTALLS IT
@@ -732,4 +732,31 @@ List<ReportSection> responsibilityMatrixSections(
   }
 
   return sections;
+}
+
+/// The matrix as one workbook sheet - the same sheet whether it is exported
+/// from the Responsibility page or written into the project workbook. Null
+/// when there is nothing on the matrix.
+XlsxSheet? responsibilityMatrixSheet(
+  List<ResponsibilityItem> items, {
+  required String projectName,
+  required List<({String id, String name})> roomNames,
+  Map<String, int> partyColors = const {},
+  String sheetName = 'Responsibility',
+  DateTime? generated,
+}) {
+  final sections = responsibilityMatrixSections(
+    items,
+    roomNames: roomNames,
+    partyColors: partyColors,
+  );
+  if (sections.isEmpty) return null;
+  return buildStackedReportSheet(
+    sheetName: sheetName,
+    title: projectName.trim().isEmpty
+        ? 'Roles and responsibilities'
+        : '${projectName.trim()} - roles and responsibilities',
+    sections: sections,
+    generated: generated,
+  );
 }

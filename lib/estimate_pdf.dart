@@ -39,6 +39,9 @@ class EstimatePdfInfo {
   final String scopeOfWork;
   final String notes;
 
+  /// The terms from Settings, printed last under their own heading.
+  final String notice;
+
   /// The heading, e.g. 'CTS Estimate'. Blank prints [kDefaultEstimateTitle].
   final String title;
 
@@ -72,6 +75,7 @@ class EstimatePdfInfo {
     this.accent,
     this.scopeOfWork = '',
     this.notes = '',
+    this.notice = '',
   });
 }
 
@@ -632,6 +636,10 @@ Future<Uint8List> buildEstimatePdf(
       ...paragraphs(info.notes),
     ],
     ...customSections(EstimateSectionPlace.afterTotals),
+    if (info.notice.trim().isNotEmpty) ...[
+      sectionTitle(info.word('notice')),
+      ...paragraphs(info.notice),
+    ],
   ];
 
   doc.addPage(

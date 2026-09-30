@@ -44,7 +44,7 @@ void main() {
     // TALL ENOUGH TO HOLD THE WHOLE TAB. The list builds lazily, so a
     // measurement of a row still below the fold is a measurement of a widget
     // that does not exist - and these are questions about seven rows at once.
-    tester.view.physicalSize = const Size(1600, 4200);
+    tester.view.physicalSize = const Size(1600, 5200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 

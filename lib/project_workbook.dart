@@ -11,6 +11,7 @@ import 'online_roundtrip.dart';
 import 'project_estimate.dart';
 import 'project_schedule.dart';
 import 'report_tools.dart';
+import 'procurement_log.dart';
 import 'responsibility_matrix.dart';
 import 'schedule_workbook.dart';
 import 'xlsx_writer.dart';
@@ -2857,23 +2858,30 @@ Uint8List buildProjectWorkbookBytes({
   // with the contractor off the same document the quantities are read from,
   // and a matrix that only exists as a separate file is one that goes out of
   // step with the rooms the moment either changes.
-  final matrix = responsibilityMatrixSections(
+  //
+  // THE SAME SHEET the Responsibility page exports, so the two copies match.
+  final matrix = responsibilityMatrixSheet(
     estimate.project.responsibility,
+    projectName: estimate.project.name,
     roomNames: estimate.project.responsibilityRoomColumns(
       names: estimate.roomCodeNames,
     ),
-    // The same color per party the pane and the picture use, so one workbook
-    // does not disagree with the copy that was issued from beside it.
     partyColors: estimate.project.partyColors,
+    sheetName: tab(kProjectResponsibilitySheet),
+    generated: stamp,
   );
-  if (matrix.isNotEmpty) {
-    sheets.add(buildStackedReportSheet(
-      sheetName: tab(kProjectResponsibilitySheet),
-      title: '$title - roles and responsibilities',
-      sections: matrix,
-      generated: stamp,
-    ));
-  }
+  if (matrix != null) sheets.add(matrix);
+
+  // The contractor's procurement log, as its own export writes it.
+  final procurement = estimate.project.procurement.isEmpty
+      ? null
+      : procurementLogSheet(
+          estimate.project.name,
+          estimate.project.procurement,
+          sheetName: tab(kProcurementLogSheet),
+          generated: stamp,
+        );
+  if (procurement != null) sheets.add(procurement);
 
   // The job AFTER this one: what is already in the building, and the year it
   // has to come out. On the workbook because that is the document a budget
@@ -2960,6 +2968,8 @@ Uint8List buildProjectWorkbookBytes({
   if (masterSheet != null && masterCells.isNotEmpty) {
     for (final sheet in sheets) {
       if (identical(sheet, masterSheet) || forms.contains(sheet)) continue;
+      // Issued documents in their own right: kept as their own exports.
+      if (identical(sheet, matrix) || identical(sheet, procurement)) continue;
       _linkPartTables(sheet, estimate, masterCells);
     }
   }

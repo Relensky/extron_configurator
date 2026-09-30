@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.24+34';
+const String kAppVersion = '0.5.25+35';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,27 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.25',
+    date: 'September 30, 2026',
+    title: 'Estimate notice; procurement log in the workbook',
+    changes: [
+      'The Procurement page zooms and scrolls both ways with the device '
+          'column held in view. The column headings are colored boxes of one '
+          'size, and company, status and install phase show as colored '
+          'labels. Each date can be typed or picked from a calendar, in the '
+          'grid or in the line editor.',
+      'The project workbook has an AV Procurement Log sheet, the same as the '
+          'Procurement page exports.',
+      "The project workbook's Responsibility sheet is the same as the one the "
+          'Responsibility page exports.',
+      'The standard terms are now the Estimate Notice, set in App Config and '
+          "shown in their own box on the Cost tab, apart from the room's own "
+          'notes. Room estimates print it last, on the PDF and in Excel; the '
+          'project workbook leaves it off. Rooms that had the terms in their '
+          'notes have them taken out when opened.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.24',
     date: 'September 30, 2026',

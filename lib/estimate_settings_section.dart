@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'file_dialogs.dart';
 import 'app_state.dart';
+import 'cost_estimate.dart' show kDefaultEstimateNotes;
 import 'image_color_picker.dart';
 import 'main.dart' show AccentColorPicker;
 
@@ -109,6 +110,8 @@ class EstimateSettingsSection extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 16),
+        const EstimateNoticeField(),
         const SizedBox(height: 16),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -247,3 +250,82 @@ class EstimateSettingsSection extends StatelessWidget {
     );
   }
 }
+
+/// The notice every room estimate goes out with, edited in place, with the
+/// standard terms one press away.
+class EstimateNoticeField extends StatefulWidget {
+  const EstimateNoticeField({super.key});
+
+  @override
+  State<EstimateNoticeField> createState() => _EstimateNoticeFieldState();
+}
+
+class _EstimateNoticeFieldState extends State<EstimateNoticeField> {
+  late final TextEditingController _text = TextEditingController(
+    text: context.read<AppStateProvider>().estimateNotice,
+  );
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final isDefault = provider.estimateNotice == kDefaultEstimateNotes;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          key: const ValueKey('estimate_notice'),
+          controller: _text,
+          minLines: 4,
+          maxLines: 14,
+          decoration: const InputDecoration(
+            labelText: 'Estimate notice',
+            helperText: 'Printed as the Notice on every room estimate, PDF '
+                'and Excel. Not on the project workbook. Blank prints none.',
+            border: OutlineInputBorder(),
+            alignLabelWithHint: true,
+          ),
+          onChanged: (v) => provider.updateSetting('estimateNotice', v),
+        ),
+        const SizedBox(height: 6),
+        TextButton.icon(
+          key: const ValueKey('estimate_notice_reset'),
+          onPressed: isDefault
+              ? null
+              : () {
+                  _text.text = kDefaultEstimateNotes;
+                  provider.updateSetting(
+                    'estimateNotice',
+                    kDefaultEstimateNotes,
+                  );
+                },
+          icon: const Icon(Icons.restore, size: 18),
+          label: const Text('Reset to the standard terms'),
+        ),
+      ],
+    );
+  }
+}
+
+/// The notice, edited from the Cost tab. The same setting as App Config's.
+Future<void> showEstimateNoticeDialog(BuildContext context) => showDialog(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    title: const Text('Estimate notice'),
+    content: const SizedBox(
+      width: 640,
+      child: SingleChildScrollView(child: EstimateNoticeField()),
+    ),
+    actions: [
+      FilledButton(
+        onPressed: () => Navigator.of(ctx).pop(),
+        child: const Text('Done'),
+      ),
+    ],
+  ),
+);

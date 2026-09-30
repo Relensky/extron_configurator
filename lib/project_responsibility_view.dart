@@ -2737,8 +2737,9 @@ Future<void> _exportSpreadsheet(
   List<({String id, String name})> columns,
 ) async {
   final provider = context.read<AppStateProvider>();
-  final sections = responsibilityMatrixSections(
+  final sheet = responsibilityMatrixSheet(
     project.responsibility,
+    projectName: project.name,
     roomNames: columns,
     // The colors travel with the document. This copy is the one the
     // contractor prices from, and a party that is blue on the screen it was
@@ -2746,7 +2747,7 @@ Future<void> _exportSpreadsheet(
     // the reader is concerned.
     partyColors: project.partyColors,
   );
-  if (sections.isEmpty) return;
+  if (sheet == null) return;
 
   final stem = project.name.trim().isEmpty
       ? 'project'
@@ -2763,15 +2764,7 @@ Future<void> _exportSpreadsheet(
 
   try {
     await File(target).writeAsBytes(
-      buildXlsx([
-        buildStackedReportSheet(
-          sheetName: 'Responsibility',
-          title: project.name.trim().isEmpty
-              ? 'Roles and responsibilities'
-              : '${project.name} - roles and responsibilities',
-          sections: sections,
-        ),
-      ]),
+      buildXlsx([sheet]),
     );
     if (context.mounted) {
       showSavedFileSnack(

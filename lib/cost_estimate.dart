@@ -196,14 +196,10 @@ const Map<CostEquipmentSort, String> kCostEquipmentSortLabels = {
   CostEquipmentSort.manufacturer: 'Manufacturer',
 };
 
-/// The qualifications every estimate goes out with, put into [notes] when a
-/// new estimate room is made.
-///
-/// They are the terms of the number rather than a description of the room, so
-/// they are the same on every estimate and nobody should have to remember to
-/// type them. Editable afterwards like anything else in the box - this is a
-/// starting point, not a fixed footer - and only ever filled in when the notes
-/// are empty, so it never writes over what somebody wrote.
+/// The standard terms every estimate goes out with: the preset for the
+/// estimate notice in Settings, printed under its own Notice heading on room
+/// estimates. Rooms saved by earlier builds carry them in their notes; see
+/// [stripStandardEstimateNotes].
 const String kDefaultEstimateNotes =
     'Equipment costs are preliminary estimates and may vary depending on '
     'final product selection, availability, shipping costs, and applicable '
@@ -255,18 +251,22 @@ const String _kPreviousEstimateNotes =
     'site conditions discovered during installation, may result in '
     'additional costs.';
 
-/// [notes] with the standard terms on it, which every estimate goes out with.
-///
-/// Blank notes become the terms; the earlier wording is replaced with the
-/// current one; notes somebody wrote are kept and the terms follow them.
-String withStandardEstimateNotes(String notes) {
-  final norm = notes.replaceAll('\r\n', '\n');
-  if (norm.trim().isEmpty) return kDefaultEstimateNotes;
-  if (norm.contains(kDefaultEstimateNotes)) return notes;
-  if (norm.contains(_kPreviousEstimateNotes)) {
-    return norm.replaceFirst(_kPreviousEstimateNotes, kDefaultEstimateNotes);
+/// [notes] without the standard terms, which now print as the notice from
+/// Settings rather than as part of each room's notes. [notice] is taken out
+/// too, when a room's notes carry the one set in Settings.
+String stripStandardEstimateNotes(String notes, {String notice = ''}) {
+  final original = notes.replaceAll('\r\n', '\n');
+  var norm = original;
+  for (final terms in [
+    kDefaultEstimateNotes,
+    _kPreviousEstimateNotes,
+    notice.replaceAll('\r\n', '\n'),
+  ]) {
+    if (terms.trim().isEmpty) continue;
+    norm = norm.replaceAll(terms, '');
   }
-  return '${norm.trimRight()}\n\n$kDefaultEstimateNotes';
+  if (norm == original) return notes;
+  return norm.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
 }
 
 /// Where a custom section prints on the estimate PDF.
@@ -349,6 +349,7 @@ const Map<String, String> kEstimatePdfWords = {
   'labor': 'Labor',
   'other': 'Other items',
   'notes': 'Notes',
+  'notice': 'Notice',
   'project': 'Project',
   'date': 'Date',
   'preparedBy': 'Prepared by',
@@ -2107,11 +2108,13 @@ List<ReportSection> estimateSectionReports(
 ];
 
 /// [priced] with the scope of work, the notes and the custom sections around
-/// it, in the order the PDF prints them.
+/// it, in the order the PDF prints them. [notice] prints after the notes;
+/// the project workbook leaves it off.
 List<ReportSection> withEstimateSections(
   List<ReportSection> priced,
-  RoomCostSettings settings,
-) {
+  RoomCostSettings settings, {
+  String notice = '',
+}) {
   List<ReportSection> text(String title, String body) => body.trim().isEmpty
       ? const []
       : estimateSectionReports(
@@ -2125,11 +2128,12 @@ List<ReportSection> withEstimateSections(
       EstimateSectionPlace.beforePricing,
     ),
     ...priced,
-    ...text('Notes', withStandardEstimateNotes(settings.notes)),
+    ...text('Notes', stripStandardEstimateNotes(settings.notes, notice: notice)),
     ...estimateSectionReports(
       settings.sections,
       EstimateSectionPlace.afterTotals,
     ),
+    ...text('Notice', notice),
   ];
 }
 
