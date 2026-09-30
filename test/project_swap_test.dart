@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -230,7 +231,7 @@ void main() {
     return project;
   }
 
-  ProjectSwapPlan planFor(
+  Future<ProjectSwapPlan> planFor(
     BuildingProject project, {
     String from = 'PowerLite L630U',
     String to = 'PT-MZ682BU8',
@@ -245,8 +246,9 @@ void main() {
     openConfigPath: openConfigPath,
   );
 
-  ProjectSwapResult apply(ProjectSwapPlan plan) => applyProjectSwap(
-    plan: plan,
+  Future<ProjectSwapResult> apply(FutureOr<ProjectSwapPlan> plan) async =>
+      applyProjectSwap(
+    plan: await plan,
     moduleForModel: moduleForModel,
     deviceCountMap: countMap,
   );
@@ -259,12 +261,12 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('planning a swap', () {
-    test('finds the product in every room and writes nothing', () {
+    test('finds the product in every room and writes nothing', () async {
       final a = writeRoom('a', name: 'Room A');
       final b = writeRoom('b', name: 'Room B');
       final before = File(a).readAsStringSync();
 
-      final plan = planFor(projectOver([a, b]));
+      final plan = await planFor(projectOver([a, b]));
 
       expect(plan.affectedRooms, hasLength(2));
       expect(plan.boxes, 2);
@@ -272,7 +274,7 @@ void main() {
       expect(File(a).readAsStringSync(), before, reason: 'planning is a read');
     });
 
-    test('a room without the product is not an affected room', () {
+    test('a room without the product is not an affected room', () async {
       final a = writeRoom('a', name: 'Has one');
       final b = writeRoom(
         'b',
@@ -280,38 +282,38 @@ void main() {
         projectorModel: 'PT-MZ682BU8',
       );
 
-      final plan = planFor(projectOver([a, b]));
+      final plan = await planFor(projectOver([a, b]));
 
       expect(plan.affectedRooms, hasLength(1));
       expect(plan.affectedRooms.single.roomName, 'Has one');
     });
 
-    test('counts the runs that carry and the ones that get dropped', () {
+    test('counts the runs that carry and the ones that get dropped', () async {
       // The VGA run lands on a connector the new projector does not have.
       final a = writeRoom('a', name: 'Room A', vgaRun: true);
 
-      final plan = planFor(projectOver([a]));
+      final plan = await planFor(projectOver([a]));
 
       expect(plan.carried, 1, reason: 'the HDMI run moves across');
       expect(plan.dropped, 1, reason: 'the VGA run has nowhere to go');
     });
 
-    test('says when the new product has no driver', () {
+    test('says when the new product has no driver', () async {
       final a = writeRoom('a', name: 'Room A');
 
-      final plan = planFor(projectOver([a]));
+      final plan = await planFor(projectOver([a]));
 
       expect(plan.newModule, isEmpty);
       expect(plan.blocks, 1);
       expect(plan.losesModule, isTrue);
     });
 
-    test('says when the rack height changes', () {
+    test('says when the rack height changes', () async {
       final a = writeRoom('a', name: 'Room A');
-      expect(planFor(projectOver([a])).anyRackHeightChanged, isTrue);
+      expect((await planFor(projectOver([a]))).anyRackHeightChanged, isTrue);
     });
 
-    test('an unreadable room is carried on the plan, not skipped silently', () {
+    test('an unreadable room is carried on the plan, not skipped silently', () async {
       final a = writeRoom('a', name: 'Room A');
       final project = projectOver([a]);
       project.rooms.add(ProjectRoomRef(
@@ -319,17 +321,17 @@ void main() {
         configPath: 'gone_config.json',
       ));
 
-      final plan = planFor(project);
+      final plan = await planFor(project);
 
       expect(plan.failedRooms, hasLength(1));
       expect(plan.affectedRooms, hasLength(1));
     });
 
-    test('marks the room that is open in the editor', () {
+    test('marks the room that is open in the editor', () async {
       final a = writeRoom('a', name: 'Room A');
       final b = writeRoom('b', name: 'Room B');
 
-      final plan = planFor(projectOver([a, b]), openConfigPath: a);
+      final plan = await planFor(projectOver([a, b]), openConfigPath: a);
 
       expect(plan.affectedRooms.first.isOpenRoom, isTrue);
       expect(plan.affectedRooms.last.isOpenRoom, isFalse);
@@ -341,11 +343,11 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('applying a swap', () {
-    test('moves the box in every room', () {
+    test('moves the box in every room', () async {
       final a = writeRoom('a', name: 'Room A');
       final b = writeRoom('b', name: 'Room B');
 
-      final result = apply(planFor(projectOver([a, b])));
+      final result = await apply(planFor(projectOver([a, b])));
 
       expect(result.rooms, 2);
       expect(result.boxes, 2);
@@ -359,10 +361,10 @@ void main() {
       }
     });
 
-    test('renames only the model-shaped part of the label', () {
+    test('renames only the model-shaped part of the label', () async {
       final a = writeRoom('a', name: 'Room A');
 
-      apply(planFor(projectOver([a])));
+      await apply(planFor(projectOver([a])));
 
       final node = readRoomFromDisk(a)
           .model
@@ -371,10 +373,39 @@ void main() {
       expect(node.label, 'Projector 1 - PT-MZ682BU8');
     });
 
-    test('carries the runs it can and removes the ones it cannot', () {
+    test('a given name goes on every box and control block', () async {
+      final a = writeRoom('a', name: 'Room A');
+      final b = writeRoom('b', name: 'Room B');
+
+      await applyProjectSwap(
+        plan: await planFor(projectOver([a, b])),
+        moduleForModel: moduleForModel,
+        deviceCountMap: countMap,
+        label: 'Main Projector',
+      );
+
+      for (final config in [a, b]) {
+        final node = readRoomFromDisk(config)
+            .model
+            .nodes
+            .firstWhere((n) => n.id.contains('PROJ'));
+        expect(node.label, 'Main Projector');
+        expect((readJson(config)['PROJECTORDEVICE_1'] as Map)['name'],
+            'Main Projector');
+      }
+    });
+
+    test('the plan lists the names the boxes would get', () async {
+      final a = writeRoom('a', name: 'Room A');
+      final b = writeRoom('b', name: 'Room B');
+      expect((await planFor(projectOver([a, b]))).labels,
+          ['Projector 1 - PT-MZ682BU8']);
+    });
+
+    test('carries the runs it can and removes the ones it cannot', () async {
       final a = writeRoom('a', name: 'Room A', vgaRun: true);
 
-      final result = apply(planFor(projectOver([a])));
+      final result = await apply(planFor(projectOver([a])));
 
       expect(result.carried, 1);
       expect(result.dropped, 1);
@@ -385,10 +416,10 @@ void main() {
     });
 
     test('points the control block at the new model and CLEARS the module '
-        'when nothing claims it', () {
+        'when nothing claims it', () async {
       final a = writeRoom('a', name: 'Room A');
 
-      apply(planFor(projectOver([a])));
+      await apply(planFor(projectOver([a])));
 
       final block = readJson(a)['PROJECTORDEVICE_1'] as Map;
       expect(block['model'], 'PT-MZ682BU8');
@@ -401,7 +432,7 @@ void main() {
       expect(block['port'], '4352');
     });
 
-    test('sets the module when one does claim the new model', () {
+    test('sets the module when one does claim the new model', () async {
       final a = writeRoom(
         'a',
         name: 'Room A',
@@ -409,8 +440,8 @@ void main() {
         module: '',
       );
 
-      applyProjectSwap(
-        plan: planProjectSwap(
+      await applyProjectSwap(
+        plan: await planProjectSwap(
           project: projectOver([a]),
           projectPath: path.join(dir.path, 'job_project.json'),
           fromModel: 'PT-MZ682BU8',
@@ -428,10 +459,10 @@ void main() {
     });
 
     test('a box with no config block behind it still swaps on the drawing',
-        () {
+        () async {
       final a = writeRoom('a', name: 'Room A', projectorIsConfigDevice: false);
 
-      final result = apply(planFor(projectOver([a])));
+      final result = await apply(planFor(projectOver([a])));
 
       expect(result.boxes, 1);
       expect(result.blocks, 0, reason: 'there is no block to update');
@@ -445,11 +476,11 @@ void main() {
       );
     });
 
-    test('leaves everything else in the sidecar alone', () {
+    test('leaves everything else in the sidecar alone', () async {
       final a = writeRoom('a', name: 'Room A');
       final flow = path.join(dir.path, 'a_config_av_flow.json');
 
-      apply(planFor(projectOver([a])));
+      await apply(planFor(projectOver([a])));
 
       final doc = readJson(flow);
       expect(doc['__readme'], 'left alone by the swap');
@@ -462,11 +493,11 @@ void main() {
     });
 
     test('the open room is skipped so the editor and the disk cannot '
-        'disagree', () {
+        'disagree', () async {
       final a = writeRoom('a', name: 'Open room');
       final b = writeRoom('b', name: 'Other room');
 
-      final result = apply(planFor(projectOver([a, b]), openConfigPath: a));
+      final result = await apply(planFor(projectOver([a, b]), openConfigPath: a));
 
       expect(result.rooms, 1, reason: 'only the closed room was written');
       expect(
@@ -488,16 +519,16 @@ void main() {
       );
     });
 
-    test('one unwritable room does not stop the others', () {
+    test('one unwritable room does not stop the others', () async {
       final a = writeRoom('a', name: 'Room A');
       final b = writeRoom('b', name: 'Room B');
-      final plan = planFor(projectOver([a, b]));
+      final plan = await planFor(projectOver([a, b]));
 
       // The room goes away between the plan and the apply — the share dropped
       // out, somebody renamed it. The other room must still go.
       File(a).deleteSync();
 
-      final result = apply(plan);
+      final result = await apply(plan);
 
       expect(result.failures, hasLength(1));
       expect(result.rooms, 1);
@@ -511,9 +542,56 @@ void main() {
       );
     });
 
-    test('re-reads rather than writing back a stale plan', () {
+    test('counts rooms as it goes, planning and writing', () async {
+      final configs = [
+        for (var i = 0; i < 6; i++) writeRoom('r$i', name: 'Room $i'),
+      ];
+      final seen = <(int, int)>[];
+      final plan = await planProjectSwap(
+        project: projectOver(configs),
+        projectPath: path.join(dir.path, 'job_project.json'),
+        fromModel: 'PowerLite L630U',
+        template: catalog().templateForModel('PT-MZ682BU8')!,
+        moduleForModel: moduleForModel,
+        deviceCountMap: countMap,
+        onProgress: (d, t) => seen.add((d, t)),
+      );
+      expect(seen.first, (0, 6));
+      expect(seen.last, (6, 6));
+      expect([for (final r in plan.rooms) r.roomName],
+          [for (var i = 0; i < 6; i++) 'Room $i'],
+          reason: 'in the project\'s order, however they finished');
+
+      seen.clear();
+      final result = await applyProjectSwap(
+        plan: plan,
+        moduleForModel: moduleForModel,
+        deviceCountMap: countMap,
+        onProgress: (d, t) => seen.add((d, t)),
+      );
+      expect(seen.last, (6, 6));
+      expect(result.boxes, 6);
+    });
+
+    test('a box keeps what the swap does not own', () async {
       final a = writeRoom('a', name: 'Room A');
-      final plan = planFor(projectOver([a]));
+      final flow = path.join(dir.path, 'a_config_av_flow.json');
+      final doc = readJson(flow);
+      (doc['nodes'] as List).first['futureField'] = 'kept';
+      (doc['nodes'] as List).last['futureField'] = 'kept too';
+      File(flow).writeAsStringSync(jsonEncode(doc));
+
+      await apply(planFor(projectOver([a])));
+
+      final nodes = readJson(flow)['nodes'] as List;
+      // The switcher was not swapped, so it is written back exactly.
+      expect(nodes.last['futureField'], 'kept too');
+      expect(nodes.first['model'], 'PT-MZ682BU8');
+    });
+
+    test('re-reads rather than writing back a stale plan', () async {
+      final a = writeRoom('a', name: 'Room A');
+      final plan = await planFor(projectOver([a]));
 
       // The room gains a second projector after the plan was made.
       final flow = path.join(dir.path, 'a_config_av_flow.json');
@@ -521,7 +599,7 @@ void main() {
       (doc['nodes'] as List).add(projector('extra', 'Projector 2').toJson());
       File(flow).writeAsStringSync(jsonEncode(doc));
 
-      final result = apply(plan);
+      final result = await apply(plan);
 
       // Both are swapped, because the write reads the room as it is now — and
       // the box added in between is still there rather than being erased by a
@@ -539,6 +617,129 @@ void main() {
   // -------------------------------------------------------------------------
   //  THE ARITHMETIC, ON ITS OWN
   // -------------------------------------------------------------------------
+
+  group('renaming without swapping', () {
+    Future<List<RoomSwapPlan>> planRename(BuildingProject project,
+            {String openConfigPath = '',
+            void Function(int, int)? onProgress}) =>
+        planProjectRename(
+          project: project,
+          projectPath: path.join(dir.path, 'job_project.json'),
+          model: 'PowerLite L630U',
+          deviceCountMap: countMap,
+          openConfigPath: openConfigPath,
+          onProgress: onProgress,
+        );
+
+    Future<ProjectSwapResult> rename(List<RoomSwapPlan> rooms,
+            {void Function(int, int)? onProgress}) =>
+        applyProjectRename(
+          rooms: rooms,
+          model: 'PowerLite L630U',
+          label: 'Main Projector',
+          deviceCountMap: countMap,
+          onProgress: onProgress,
+        );
+
+    test('lists the rooms and their current names, writing nothing', () async {
+      final a = writeRoom('a', name: 'Room A');
+      final b = writeRoom('b', name: 'Room B', projectorModel: 'PT-MZ682BU8');
+      final before = File(a).readAsStringSync();
+
+      final rooms = await planRename(projectOver([a, b]));
+
+      expect([for (final r in rooms) if (r.affected) r.roomName], ['Room A']);
+      expect(rooms.first.labels, ['Projector 1 - PowerLite L630U']);
+      expect(rooms.first.blocks, 1);
+      expect(File(a).readAsStringSync(), before);
+    });
+
+    test('an unreadable room is on the plan, in its place', () async {
+      final a = writeRoom('a', name: 'Room A');
+      final project = projectOver([a]);
+      project.rooms.insert(
+        0,
+        ProjectRoomRef(id: project.nextRoomId(), configPath: 'gone_config.json'),
+      );
+
+      final rooms = await planRename(project);
+
+      expect(rooms.first.ok, isFalse);
+      expect(rooms.last.affected, isTrue);
+    });
+
+    test('names every box and block, and leaves the model and runs alone',
+        () async {
+      final a = writeRoom('a', name: 'Room A', vgaRun: true);
+      final b = writeRoom('b', name: 'Room B');
+      final project = projectOver([a, b]);
+
+      final result = await rename(await planRename(project));
+
+      expect(result.rooms, 2);
+      expect(result.boxes, 2);
+      expect(result.blocks, 2);
+      for (final config in [a, b]) {
+        final room = readRoomFromDisk(config);
+        final node = room.model.nodes.firstWhere((n) => n.id.contains('PROJ'));
+        expect(node.label, 'Main Projector');
+        expect(node.model, 'PowerLite L630U');
+        final block = readJson(config)['PROJECTORDEVICE_1'] as Map;
+        expect(block['name'], 'Main Projector');
+        expect(block['module'], 'modules.device.epson_l630u');
+      }
+      expect(readRoomFromDisk(a).model.cables, hasLength(2));
+      expect(readRoomFromDisk(a).model.nodes.firstWhere((n) => n.id == 'sw1')
+          .label, 'Switcher');
+      // The rest of the drawing file is as it was.
+      final flow = readJson(readRoomFromDisk(a).flowPath);
+      expect(flow['__readme'], 'left alone by the swap');
+    });
+
+    test('counts rooms as it goes, reading and writing', () async {
+      final configs = [
+        for (var i = 0; i < 6; i++) writeRoom('r$i', name: 'Room $i'),
+      ];
+      final seen = <(int, int)>[];
+
+      final rooms = await planRename(
+        projectOver(configs),
+        onProgress: (d, t) => seen.add((d, t)),
+      );
+      expect(seen.first, (0, 6));
+      expect(seen.last, (6, 6));
+
+      seen.clear();
+      await rename(rooms, onProgress: (d, t) => seen.add((d, t)));
+      expect(seen.last, (6, 6));
+    });
+
+    test('a room already named that is not written again', () async {
+      final a = writeRoom('a', name: 'Room A');
+      final project = projectOver([a]);
+      await rename(await planRename(project));
+      final flowPath = readRoomFromDisk(a).flowPath;
+      final stamps = [
+        File(a).lastModifiedSync(),
+        File(flowPath).lastModifiedSync(),
+      ];
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      await rename(await planRename(project));
+
+      expect(File(a).lastModifiedSync(), stamps[0]);
+      expect(File(flowPath).lastModifiedSync(), stamps[1]);
+    });
+
+    test('the open room is left for the editor', () async {
+      final a = writeRoom('a', name: 'Room A');
+      final before = File(a).readAsStringSync();
+
+      await rename(await planRename(projectOver([a]), openConfigPath: a));
+
+      expect(File(a).readAsStringSync(), before);
+    });
+  });
 
   group('the swap arithmetic', () {
     test('a run with one end orphaned is dropped, not half-moved', () {
@@ -575,6 +776,36 @@ void main() {
       expect(renamedForModel('Proj - L630', 'L630', 'PT-MZ682'),
           'Proj - PT-MZ682');
     });
+
+    test('a Dell makes a confidence monitor a PC monitor, and back', () {
+      expect(renamedForMaker('Confidence monitor 2', 'Dell'), 'PC monitor 2');
+      expect(renamedForMaker('PC monitor', 'Panasonic'), 'Confidence monitor');
+      expect(renamedForMaker('PC monitor', 'Extron', category: 'Switcher'),
+          'PC monitor');
+      expect(renamedForMaker('Projector 1', 'Dell'), 'Projector 1');
+    });
+
+    test('swapping a confidence monitor to a Dell renames it', () {
+      const dell = AvDeviceTemplate(
+        model: 'Dell Monitor',
+        manufacturer: 'Dell',
+        category: 'Display',
+        ports: [],
+      );
+      final plan = planModelSwap(
+        node: AvNode(
+          id: 'AVSOURCE_OUTPUT_MONITOR_1',
+          label: 'Confidence monitor',
+          model: 'Confidence Monitor',
+          pos: Offset.zero,
+          ports: const [],
+        ),
+        cables: const [],
+        template: dell,
+        config: const {},
+      );
+      expect(plan.node.label, 'PC monitor');
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -604,7 +835,7 @@ void main() {
       );
     });
 
-    test('a swap onto a model nothing drives puts it on the list', () {
+    test('a swap onto a model nothing drives puts it on the list', () async {
       final a = writeRoom('a', name: 'Room A');
       expect(
         priceWith(projectOver([a]))
@@ -614,7 +845,7 @@ void main() {
         reason: 'not yet swapped',
       );
 
-      apply(planFor(projectOver([a])));
+      await apply(planFor(projectOver([a])));
 
       final after = priceWith(projectOver([a]));
       final gap = after.controlGaps
@@ -623,12 +854,12 @@ void main() {
       expect(gap.room.name, 'Room A');
     });
 
-    test('the master list says which rooms a part is undriven in', () {
+    test('the master list says which rooms a part is undriven in', () async {
       final a = writeRoom('a', name: 'Room A');
       final b = writeRoom('b', name: 'Room B');
       final project = projectOver([a, b]);
 
-      apply(planFor(project));
+      await apply(planFor(project));
 
       final estimate = priceWith(project);
       final line = estimate.master

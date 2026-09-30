@@ -24,6 +24,7 @@ import 'campus_lifecycle_view.dart'
     show showCampusLifecycle, showCampusLifecycleFile, showNewCampus;
 import 'responsive.dart';
 import 'app_state.dart';
+import 'cost_estimate.dart' show trimNumber;
 import 'changelog.dart';
 import 'av_device_library.dart';
 import 'av_only_notice.dart';
@@ -2717,6 +2718,24 @@ class AppSettingsView extends StatelessWidget {
                 initialValue: provider.currencySymbol,
                 onChanged: (val) =>
                     provider.updateSetting('currencySymbol', val),
+              ),
+            ),
+            SizedBox(
+              width: 200,
+              child: TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Default tax rate',
+                  helperText: 'New projects start with it',
+                  suffixText: '%',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.defaultTaxPercent == 0
+                    ? ''
+                    : trimNumber(provider.defaultTaxPercent),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (val) =>
+                    provider.updateSetting('defaultTaxPercent', val),
               ),
             ),
             Column(

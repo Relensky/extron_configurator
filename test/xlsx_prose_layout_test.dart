@@ -58,15 +58,17 @@ void main() {
       // prose from nowhere.
       final at = rows.indexWhere((r) => r.isNotEmpty && r[0] == 'Projection screen');
       expect(rows[at].take(3), ['Projection screen', 'Owner', 2]);
-      expect(rows[at + 1][0], 'What the work is:  $work');
+      expect(rows[at + 1][0], 'What the work is');
+      expect(rows[at + 1][1].toString(), work);
     });
 
     test('is written across the sheet rather than down one column', () {
       final sheet = sheetOf([matrix()]);
       final at = sheet.rows.indexWhere(
-        (r) => r.isNotEmpty && r[0].toString().startsWith('What the work is:'),
+        (r) => r.isNotEmpty && r[0] == 'What the work is',
       );
-      expect(sheet.merges, contains('A${at + 1}:D${at + 1}'));
+      // From B, so column A can stay frozen.
+      expect(sheet.merges, contains('B${at + 1}:D${at + 1}'));
     });
 
     // The whole point: the columns left behind are the width of what is in
@@ -86,7 +88,7 @@ void main() {
       final xml = sheetXml([sheetOf([matrix()])]);
       final sheet = sheetOf([matrix()]);
       final at = sheet.rows.indexWhere(
-        (r) => r.isNotEmpty && r[0].toString().startsWith('What the work is:'),
+        (r) => r.isNotEmpty && r[0] == 'What the work is',
       );
       // Wrapped, and given the height its wrapped lines need: Excel does not
       // auto-fit a file it did not write, so without both the sentence is one
@@ -109,8 +111,7 @@ void main() {
         'Cat 6a',
         40,
       ]);
-      // Nothing lifted means nothing merged but the captions: the sheet's
-      // title, its stamp, and the section's own name over its band.
+      // Nothing lifted means nothing merged: column A stays frozen.
       expect(sheetOf([
         (
           title: 'Runs',
@@ -119,7 +120,7 @@ void main() {
             ['SCRSW_1', 'Cat 6a', 40],
           ],
         ),
-      ]).merges, ['A1:E1', 'A2:E2', 'A4:C4']);
+      ]).merges, isEmpty);
     });
 
     // A row is named by its first column. Lifting that one out would leave a

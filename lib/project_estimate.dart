@@ -167,24 +167,62 @@ class LoadedRoom {
 /// [readRoomFromDisk] with the files read in the background first, so a job
 /// of thirty rooms on a network share does not freeze the window while it
 /// opens. The parse is the same one.
-Future<LoadedRoom> readRoomFromDiskAsync(String configPath) async {
-  final texts = <String, String>{};
-  Future<void> fetch(String file) async {
-    if (file.isEmpty) return;
+Future<LoadedRoom> readRoomFromDiskAsync(
+  String configPath, {
+  /// Only these parts are read; the rest read as absent. All when null.
+  Set<RoomSidecarPart>? parts,
+}) async {
+  final texts = <String, String?>{};
+  Future<bool> fetch(String file) async {
+    if (file.isEmpty) return false;
     try {
       final f = File(file);
-      if (await f.exists()) texts[file] = await f.readAsString();
+      if (!await f.exists()) {
+        texts[file] = null;
+        return false;
+      }
+      texts[file] = await f.readAsString();
+      return true;
     } catch (_) {
       // Left out; the parse reports it the way a sync read would.
+      texts[file] = null;
+      return false;
     }
   }
 
   await fetch(configPath);
-  for (final file in _roomPartCandidates(configPath).values.expand((f) => f)) {
-    await fetch(file);
+  // Each part from the first place it is found, as the parse takes it - no
+  // probing the older places once the current one answers.
+  for (final entry in _roomPartCandidates(configPath).entries) {
+    if (parts != null && !parts.contains(entry.key)) {
+      for (final file in entry.value) {
+        texts[file] = null;
+      }
+      continue;
+    }
+    for (final file in entry.value) {
+      if (await fetch(file)) break;
+    }
   }
-  return readRoomFromDisk(configPath, read: (file) => texts[file]);
+  return readRoomFromDisk(configPath, read: (file) {
+    if (texts.containsKey(file)) return texts[file];
+    // Only reached when an earlier place held a file that would not parse.
+    try {
+      final f = File(file);
+      return f.existsSync() ? f.readAsStringSync() : null;
+    } catch (_) {
+      return null;
+    }
+  });
 }
+
+/// Where a room's [part] may be, first choice first.
+List<String> roomPartCandidates(String configPath, RoomSidecarPart part) =>
+    _roomPartCandidates(configPath)[part] ?? const [];
+
+/// Where a room's drawing may be, first choice first.
+List<String> roomFlowCandidates(String configPath) =>
+    roomPartCandidates(configPath, RoomSidecarPart.flow);
 
 /// Where each part may be, first choice first: the room's folder, then loose
 /// beside the config where an older build wrote it. The flow part also takes
@@ -1320,8 +1358,12 @@ ProjectEstimate computeProjectEstimate({
   /// anyway would put every device in the building on the list.
   Map<String, String> deviceCountMap = const {},
   String Function(String model)? moduleForModel,
+
+  /// The app's tax rate, for a job that has not set its own.
+  double defaultTaxPercent = 0,
 }) {
   final currency = project.currency.isEmpty ? r'$' : project.currency;
+  final baseTax = project.taxPercent ?? defaultTaxPercent;
 
   // --- price each room -----------------------------------------------------
   final costed = <ProjectRoomCost>[];
@@ -1335,11 +1377,19 @@ ProjectEstimate computeProjectEstimate({
       costed.add(ProjectRoomCost(ref: ref, room: room));
       continue;
     }
+    // The room may be cached or live, so it is not touched: the job's rate
+    // goes on a copy.
+    final settings =
+        room.settings.ownTaxRate || room.settings.taxPercent == baseTax
+            ? room.settings
+            : (RoomCostSettings()
+                ..readJson(room.settings.toJson())
+                ..taxPercent = baseTax);
 
     var estimate = computeRoomCost(
       model: room.model,
       library: library,
-      settings: room.settings,
+      settings: settings,
       rates: rates,
       baseCosts: baseCosts,
       tier: tier,
@@ -1352,12 +1402,12 @@ ProjectEstimate computeProjectEstimate({
     if (buysOnly.isNotEmpty || addOns.isNotEmpty) {
       var scoped = buysOnly.isEmpty
           ? null
-          : scopeToCategories(estimate, room.settings, buysOnly);
+          : scopeToCategories(estimate, settings, buysOnly);
       // The priority's add-ons, quoted for this room like a line typed on its
       // Cost tab. After the scope is worked out, so an add-on is never taken
       // back off as existing.
       if (addOns.isNotEmpty) {
-        scoped ??= RoomCostSettings()..readJson(room.settings.toJson());
+        scoped ??= RoomCostSettings()..readJson(settings.toJson());
         for (var i = 0; i < addOns.length; i++) {
           final a = addOns[i];
           final t = library.templateForModel(a.model);

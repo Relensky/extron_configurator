@@ -153,6 +153,45 @@ void main() {
       final flag = flagFor('model:powerlite l630u');
       expect(iconOf(tester, flag), Icons.check_circle_outline);
     });
+
+    Future<void> addThenRemove(
+      WidgetTester tester,
+      AppStateProvider p,
+      String choice,
+    ) async {
+      await pump(tester, p);
+      await tester.tap(flagFor('model:powerlite l630u'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add to the room config'));
+      await tester.pumpAndSettle();
+      await tester.tap(flagFor('model:powerlite l630u'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(choice));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('cost_delete_confirm_go')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('can be taken back out, and stays on the diagram',
+        (tester) async {
+      final p = room();
+      await addThenRemove(tester, p, 'Not part of the room config');
+
+      expect(p.roomConfig['PROJECTORDEVICE_1'], isNull);
+      expect(p.roomConfig['SYSTEM_SETUP']['dev_projectors'], '0');
+      final node =
+          p.avNodes.singleWhere((n) => n.model == 'PowerLite L630U');
+      expect(node.id, startsWith('AVNODE_'));
+      expect(node.fromConfig, isFalse);
+      expect(node.excludeFromControl, isTrue);
+      expect(
+        iconOf(tester, flagFor('model:powerlite l630u')),
+        Icons.link_off,
+      );
+      // The snackbar's own timer.
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+    });
   });
 
   group('a line quoted on this page', () {

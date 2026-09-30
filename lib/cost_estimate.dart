@@ -363,7 +363,15 @@ const Map<String, String> kEstimatePdfWords = {
 class RoomCostSettings {
   String currency;
   String taxLabel;
+
+  /// The rate the room is taxed at. Follows the project's rate (or the app's
+  /// default) unless [ownTaxRate] - see [followBaseTax].
   double taxPercent;
+
+  /// True when the room set its own rate, 0 included, instead of following
+  /// the base one.
+  bool ownTaxRate;
+
   final List<CostFee> fees;
 
   /// Line key (see [DeviceGroup.key]) -> the unit price for THIS room,
@@ -537,6 +545,8 @@ class RoomCostSettings {
     this.currency = r'$',
     this.taxLabel = 'Sales tax',
     this.taxPercent = 0,
+    // A rate given here is the room's own, as in an older file.
+    bool? ownTaxRate,
     this.includeCabling = true,
     this.equipmentSort = CostEquipmentSort.standard,
     List<CostFee>? fees,
@@ -551,7 +561,8 @@ class RoomCostSettings {
     List<CostLineItem>? extraEquipment,
     List<CostLineItem>? extraHardware,
     List<CostLineItem>? extraCables,
-  }) : pdfWords = pdfWords ?? {},
+  }) : ownTaxRate = ownTaxRate ?? taxPercent > 0,
+       pdfWords = pdfWords ?? {},
        sections = sections ?? [],
        shippingEach = shippingEach ?? {},
        fees = fees ?? [],
@@ -576,7 +587,7 @@ class RoomCostSettings {
       sections.isEmpty &&
       shippingEach.isEmpty &&
       !showShipping &&
-      taxPercent == 0 &&
+      !ownTaxRate &&
       equipmentSort == CostEquipmentSort.standard &&
       fees.isEmpty &&
       priceOverrides.isEmpty &&
@@ -595,6 +606,7 @@ class RoomCostSettings {
     currency = r'$';
     taxLabel = 'Sales tax';
     taxPercent = 0;
+    ownTaxRate = false;
     includeCabling = true;
     equipmentSort = CostEquipmentSort.standard;
     scopeOfWork = '';
@@ -620,10 +632,16 @@ class RoomCostSettings {
     extraCables.clear();
   }
 
+  /// Puts the base rate on a room that has none of its own.
+  void followBaseTax(double base) {
+    if (!ownTaxRate) taxPercent = base;
+  }
+
   Map<String, dynamic> toJson() => {
     'currency': currency,
     'taxLabel': taxLabel,
     'taxPercent': taxPercent,
+    'taxOwn': ownTaxRate,
     'includeCabling': includeCabling,
     if (equipmentSort != CostEquipmentSort.standard)
       'equipmentSort': equipmentSort.name,
@@ -669,6 +687,11 @@ class RoomCostSettings {
     currency = json['currency']?.toString() ?? r'$';
     taxLabel = json['taxLabel']?.toString() ?? 'Sales tax';
     taxPercent = (json['taxPercent'] as num?)?.toDouble() ?? 0;
+    // Older files have no flag: a rate above 0 was typed for the room, and 0
+    // was never set.
+    ownTaxRate = json.containsKey('taxOwn')
+        ? json['taxOwn'] == true
+        : taxPercent > 0;
     // Absent in files written before cabling was priced. On is the right
     // default there too: the cable types ship unpriced, so an older room gains
     // a cabling section that says what it needs and reports it as not yet

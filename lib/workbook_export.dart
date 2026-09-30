@@ -246,9 +246,11 @@ Future<void> exportProjectWorkbook(
       picked.toLowerCase().endsWith('.xlsx') ? picked : '$picked.xlsx';
 
   try {
+    final classSchedule = await provider.classScheduleForExport();
     await File(target).writeAsBytes(
       buildProjectWorkbookBytes(
         estimate: estimate,
+        classSchedule: classSchedule,
         // The catalog and the base card price the replacement plan's sheet.
         // The estimate carries neither, so they are handed over here where
         // there is a provider.
@@ -394,8 +396,10 @@ Future<void> exportWorkbookToGoogleSheets(
         );
         return;
       }
+      final classSchedule = await provider.classScheduleForExport();
       bytes = Uint8List.fromList(buildProjectWorkbookBytes(
         estimate: estimate,
+        classSchedule: classSchedule,
         library: provider.avDeviceLibrary,
         baseCosts: provider.baseCosts,
         tier: provider.pricingTier,

@@ -353,6 +353,9 @@ void applyControlSwap(
   Iterable<String> deviceKeys,
   String model, {
   bool applyDefaults = false,
+
+  /// A name to give every block outright; '' keeps the model-part rename.
+  String name = '',
 }) {
   final module = provider.moduleForModel(model);
   // HIGHEST NUMBER FIRST. A block that changes family is removed from the one
@@ -384,7 +387,12 @@ void applyControlSwap(
       model,
       applyDefaults: applyDefaults,
     );
-    if (moved.isNotEmpty) continue;
+    if (moved.isNotEmpty) {
+      if (name.trim().isNotEmpty) {
+        provider.updateDeviceValue(moved, 'name', name.trim());
+      }
+      continue;
+    }
 
     if (module.isEmpty) {
       provider.setModelWithoutModule(key, model);
@@ -393,7 +401,11 @@ void applyControlSwap(
     } else {
       provider.keepSettingsSwitchModule(key, model);
     }
-    provider.renameDeviceForModel(key, was, model);
+    if (name.trim().isNotEmpty) {
+      provider.updateDeviceValue(key, 'name', name.trim());
+    } else {
+      provider.renameDeviceForModel(key, was, model);
+    }
   }
 }
 
@@ -439,6 +451,9 @@ ModelSwapResult applyModelSwap(
   /// False for the second and later boxes of a multi-unit swap, so the whole
   /// swap is one press of Undo rather than one per box.
   bool recordUndo = true,
+
+  /// A name to give the box outright; '' keeps the model-part rename.
+  String label = '',
 }) {
   // The arithmetic is in model_swap.dart, shared with the project's
   // swap-across-every-room. This half is only the writing: through the
@@ -448,6 +463,7 @@ ModelSwapResult applyModelSwap(
     cables: provider.avCables,
     template: template,
     config: provider.roomConfig,
+    label: label,
   );
 
   provider.updateAvNode(plan.node, recordUndo: recordUndo);

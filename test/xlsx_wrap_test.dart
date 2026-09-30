@@ -136,4 +136,53 @@ void main() {
       expect(text, contains('SCRSW_1  Cat 6a'));
     });
   });
+
+  group('XlsxWrapped', () {
+    XlsxSheet summary() => buildStackedReportSheet(
+      sheetName: 'Summary',
+      title: 'Job',
+      generated: DateTime(2026, 1, 2),
+      sections: [
+        (
+          title: 'Project',
+          header: const ['', ''],
+          rows: [
+            ['Building', const XlsxWrapped('ARTS, HOLT, SCIENCE, LIBRARY')],
+            [const ReportParagraph('Notes', 'Work nights only.')],
+          ],
+        ),
+        (
+          title: 'Rooms',
+          header: const ['Room', 'Equipment', 'Labor', 'Tax'],
+          rows: [
+            ['ARTS 101', 100, 200, 10],
+          ],
+        ),
+      ],
+    );
+
+    test('wraps in its column without widening it', () {
+      final xml = sheetXml([summary()]);
+      // Rows: title, stamp, blank, band, header, Building = row 6.
+      expect(xml, contains('<c r="B6" s="5"'));
+      expect(xml, contains('<row r="6" ht='));
+      expect(xml, contains('<col min="2" max="2" width="12.0"'));
+    });
+
+    test('a paragraph is labeled in A and merged across from B', () {
+      final sheet = summary();
+      expect(sheet.rows[6].first, 'Notes');
+      expect(sheet.rows[6][1].toString(), 'Work nights only.');
+      expect(sheet.merges, ['B7:D7']);
+      expect(sheetXml([sheet]), contains('<c r="B7" s="9"'),
+          reason: 'wrapped, in the zebra band');
+    });
+
+    test('the title wraps in A and column A is frozen', () {
+      final xml = sheetXml([summary()]);
+      expect(xml, contains('<pane xSplit="1" topLeftCell="B1"'));
+      expect(xml, contains('<c r="A1" s="7"'), reason: 'wrapped title band');
+      expect(xml, isNot(contains('<mergeCell ref="A')));
+    });
+  });
 }

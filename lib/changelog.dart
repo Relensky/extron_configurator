@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.21+31';
+const String kAppVersion = '0.5.24+34';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,70 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.24',
+    date: 'September 30, 2026',
+    title: 'Procurement log; a project tax rate; frozen room column',
+    changes: [
+      'Workbook sheets keep column A - the room or item name - in view when '
+          'scrolling right, in Excel and in Google Sheets. The title wraps in '
+          'column A instead of being merged across, and a note or a long '
+          'sentence is labeled in column A with its text across the rest of '
+          'the row.',
+      "On the workbook's Summary, a long list of buildings wraps in column B.",
+      'A tax rate can be set for the whole project, beside the project number, '
+          'and every room uses it unless the room sets its own. Settings has '
+          'a default tax rate that new projects start with. Clearing a '
+          "room's tax rate puts it back on the project's.",
+      "On the Cost tab, a line that is in the room config has a menu on its "
+          'tick: "Not part of the room config" or "This product never needs '
+          'a module" removes its device block and keeps it on the diagram and '
+          'the estimate.',
+      'The workbook\'s list of things to check before sending, and the '
+          'warnings on the Project tab, say "1 part has" and "5 parts have" '
+          'instead of "5 parts has" or "part(s)".',
+      'The Project tab has a Procurement page: the AV procurement log for '
+          'the contractor, room by room, with the status of each submittal '
+          'and who it went to ("Submitted to DPR"), install phase, lead time, '
+          'P6 dates and the date required on site. Fill it from the rooms or '
+          'add lines by hand, and export it as a spreadsheet.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.23',
+    date: 'September 30, 2026',
+    title: 'Class schedule in the workbook; progress on job-wide edits',
+    changes: [
+      'The project workbook has a Class Schedule tab when install windows are '
+          'on the timeline: a chart of the windows by date for each room, each '
+          "room's week in half-hour slots with its classes and windows, and "
+          'the classes meeting in those rooms.',
+      'Part names on the room tabs, All Items, Parts by Room, the order '
+          'timeline, spares, purchasing and vendor tabs link to their row on '
+          'Core Components, and read their model and price from it.',
+      'Swapping a confidence monitor to a Dell model names it a PC monitor.',
+      'Swapping, renaming or pricing a part in every room shows a progress bar '
+          'and no longer holds up the window while the rooms are read and '
+          'written. Each room reads only the files the change needs.',
+      'The room lists in the swap and rename previews leave room for the '
+          'scrollbar.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.22',
+    date: 'September 30, 2026',
+    title: 'Rename on swap; a log file per day',
+    changes: [
+      'Swapping a part across the project can rename it too: a name typed '
+          'in the swap preview goes on every swapped box and its control '
+          'device, in every room.',
+      'A new Rename button beside Swap on the project parts list names every '
+          'box on that product, in every room, without changing the model.',
+      'The session log starts a new file when the date changes, so an app '
+          'left open overnight keeps each day\'s activity in its own file. '
+          'The old file ends cleanly and the new one names it.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.21',
     date: 'September 29, 2026',

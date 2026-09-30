@@ -262,6 +262,30 @@ void main() {
       }
       expect(linked, greaterThan(10));
     });
+
+    test('part names jump to their row on Core Components', () {
+      final archive =
+          ZipDecoder().decodeBytes(buildProjectWorkbookBytes(estimate: price()));
+      String file(String name) =>
+          utf8.decode(archive.findFile(name)!.content as List<int>);
+      final names = RegExp(r'<sheet name="([^"]+)"')
+          .allMatches(file('xl/workbook.xml'))
+          .map((m) => m.group(1)!)
+          .toList();
+      String sheet(String name) =>
+          file('xl/worksheets/sheet${names.indexOf(name) + 1}.xml');
+
+      final back = RegExp(r'''location="'Core Components'!A\d+"''');
+      for (final tab in [
+        'LANG 300',
+        kProjectAllItemsSheet,
+        kProjectPartsByRoomSheet,
+      ]) {
+        expect(back.allMatches(sheet(tab)).length, greaterThan(1),
+            reason: '$tab links its parts back');
+      }
+      expect(back.hasMatch(sheet('Core Components')), isFalse);
+    });
   });
 
   group('the workbook adds itself up', () {
@@ -471,6 +495,7 @@ void main() {
           {'id': 'f2', 'name': 'Freight', 'percent': 2.5, 'taxable': false},
         ]
         ..['taxPercent'] = 7.25
+        ..['taxOwn'] = true
         // Two crews, so the Summary's hours have something to add up.
         ..['labor'] = [
           {'id': 'l1', 'customRate': 95, 'techs': 2, 'hours': 6, 'taxable': false},

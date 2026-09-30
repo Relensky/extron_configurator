@@ -273,6 +273,7 @@ Future<CampusLifecycle> readCampus({
         tier: provider.pricingTier,
         deviceCountMap: provider.uiSchema.deviceCountMap,
         moduleForModel: provider.moduleForModel,
+        defaultTaxPercent: provider.defaultTaxPercent,
       );
       jobs.add((
         path: file,

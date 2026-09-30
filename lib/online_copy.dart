@@ -6,6 +6,7 @@ import 'package:path/path.dart' as path;
 import 'av_device_library.dart';
 import 'base_costs.dart';
 import 'building_project.dart';
+import 'class_schedule.dart' show ClassScheduleIndex;
 import 'online_index.dart';
 import 'project_estimate.dart';
 import 'project_workbook.dart';
@@ -190,6 +191,7 @@ Future<OnlineCopyResult> writeOnlineCopy({
   required AvDeviceLibrary library,
   required BaseCostBook baseCosts,
   PricingTier tier = PricingTier.msrp,
+  ClassScheduleIndex? classSchedule,
   bool includeProjectFile = true,
   /// The project file's own path — what the index joins this job to its campus
   /// and its rooms by. See online_index.dart.
@@ -236,6 +238,7 @@ Future<OnlineCopyResult> writeOnlineCopy({
           library: library,
           baseCosts: baseCosts,
           tier: tier,
+          classSchedule: classSchedule,
           generated: stamp,
           // The published copy is the one that comes back: it carries the two
           // sheets somebody can type in. See online_roundtrip.dart.

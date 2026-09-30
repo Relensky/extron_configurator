@@ -22,7 +22,7 @@ import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'manual_room_lines.dart';
 import 'project_funding_view.dart';
-import 'responsive.dart' show kFloatingButtonClearance;
+import 'responsive.dart' show ClearFieldButton, kFloatingButtonClearance;
 import 'name_colors.dart';
 import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
@@ -35,6 +35,7 @@ import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
 import 'project_plans_view.dart';
 import 'project_pricing.dart';
+import 'project_procurement_view.dart';
 import 'project_responsibility_view.dart';
 import 'project_room_picker.dart';
 import 'project_schedule.dart';
@@ -99,6 +100,8 @@ enum _ProjectPane {
   // Whose job each piece of scope is. After the money and the calendar,
   // because it is the document that gets agreed once the job is real.
   responsibility('Responsibility', Icons.handshake_outlined),
+  // The contractor's schedule of AV kit and where each submittal is.
+  procurement('Procurement', Icons.assignment_turned_in_outlined),
   vendors('Packages', Icons.local_shipping),
   todo('To do', Icons.checklist),
   notes('Notes', Icons.sticky_note_2_outlined);
@@ -672,6 +675,7 @@ class _ProjectViewState extends State<ProjectView> {
             ),
             _ProjectPane.responsibility =>
               responsibilitySlivers(context, estimate),
+            _ProjectPane.procurement => procurementSlivers(context, estimate),
             _ProjectPane.vendors => vendorsSlivers(context, estimate),
             _ProjectPane.todo => todoSlivers(context, estimate),
             _ProjectPane.notes => notesSlivers(context, estimate),
@@ -1128,6 +1132,20 @@ class _ProjectViewState extends State<ProjectView> {
       label: 'Project number',
       onChanged: (v) => provider.setProjectField(projectNumber: v),
     );
+    // Every room's rate unless the room sets its own. Blank is the app's.
+    final taxRate = provider.project.taxPercent;
+    final tax = LiveTextField(
+      fieldId: 'project_tax_${provider.currentProjectPath}',
+      initial: taxRate == null ? '' : trimNumber(taxRate),
+      label: 'Tax rate',
+      hint: trimNumber(provider.defaultTaxPercent),
+      hintIsValue: true,
+      suffix: '%',
+      numeric: true,
+      onChanged: (v) => provider.setProjectTaxPercent(
+        v.trim().isEmpty ? null : double.tryParse(v) ?? 0,
+      ),
+    );
     // WHO THE JOB IS FOR, beside what it is called. It goes out on the
     // workbook's first sheet and on every quote request, and until it was here
     // the only way to set it was through the API - a field on a document
@@ -1156,6 +1174,8 @@ class _ProjectViewState extends State<ProjectView> {
           SizedBox(width: 160, child: building),
           const SizedBox(width: 8),
           SizedBox(width: 140, child: job),
+          const SizedBox(width: 8),
+          SizedBox(width: 100, child: tax),
         ],
       );
     }
@@ -1172,6 +1192,8 @@ class _ProjectViewState extends State<ProjectView> {
             Expanded(child: building),
             const SizedBox(width: 8),
             Expanded(child: job),
+            const SizedBox(width: 8),
+            SizedBox(width: 100, child: tax),
           ],
         ),
       ],
@@ -1180,15 +1202,26 @@ class _ProjectViewState extends State<ProjectView> {
 
   String _warningTooltip(ProjectEstimate estimate) => [
     if (estimate.failedRooms > 0)
-      '${estimate.failedRooms} room(s) could not be read - the total is short.',
+      estimate.failedRooms == 1
+          ? '1 room could not be read - the total is short.'
+          : '${estimate.failedRooms} rooms could not be read - the total is '
+                'short.',
     if (estimate.unpricedParts > 0)
-      '${estimate.unpricedParts} part(s) have no price anywhere.',
+      estimate.unpricedParts == 1
+          ? '1 part has no price anywhere.'
+          : '${estimate.unpricedParts} parts have no price anywhere.',
     if (estimate.untaggedParts > 0)
-      '${estimate.untaggedParts} part(s) are tagged to no vendor - they are on '
-          'no order as things stand.',
+      estimate.untaggedParts == 1
+          ? '1 part is tagged to no vendor - it is on no order as things '
+                'stand.'
+          : '${estimate.untaggedParts} parts are tagged to no vendor - they '
+                'are on no order as things stand.',
     if (estimate.undrivenDevices > 0)
-      '${estimate.undrivenDevices} device(s) have no control module - quoted, '
-          'but they will not commission as they stand.',
+      estimate.undrivenDevices == 1
+          ? '1 device has no control module - quoted, but it will not '
+                'commission as it stands.'
+          : '${estimate.undrivenDevices} devices have no control module - '
+                'quoted, but they will not commission as they stand.',
     if (estimate.mixedCurrency)
       'Rooms are quoted in different currencies and are being added anyway.',
   ].join('\n');
@@ -1330,8 +1363,19 @@ Future<void> showPartPriceDialog(
     return;
   }
 
-  final result =
-      await priceAcrossProject(provider: provider, line: line, price: price);
+  if (!context.mounted) return;
+  final result = await _withProgress(
+    context,
+    title: 'Pricing ${line.description} in every room',
+    verb: 'Writing',
+    work: (report) => priceAcrossProject(
+      provider: provider,
+      line: line,
+      price: price,
+      onProgress: report,
+    ),
+  );
+  if (result == null) return;
   final parts = [
     if (result.roomsWritten > 0)
       '${result.roomsWritten} room'
@@ -2148,23 +2192,27 @@ class _RoomRowState extends State<_RoomRow> {
     );
   }
 
+  static String _lines(int n) => '$n line${n == 1 ? '' : 's'}';
+
   static List<String> _roomFlags(ProjectRoomCost room) {
     final e = room.estimate!;
     return [
       if (room.room.isEmpty) 'Nothing drawn in this room yet.',
       if (e.unpricedLines > 0)
-        '${e.unpricedLines} line(s) have no price - this room\'s total is '
-            'short.',
+        '${_lines(e.unpricedLines)} ${e.unpricedLines == 1 ? 'has' : 'have'} '
+            'no price - this room\'s total is short.',
       if (e.unratedLabor > 0)
-        '${e.unratedLabor} labor line(s) have no rate on the rate card.',
+        '${e.unratedLabor} labor ${e.unratedLabor == 1 ? 'line has' : 'lines have'} '
+            'no rate on the rate card.',
       if (e.estimatedLines > 0)
-        '${e.estimatedLines} line(s) priced off the base-cost card - '
+        '${_lines(e.estimatedLines)} priced off the base-cost card - '
             'budgetary, not quoted.',
       if (e.otherTierLines > 0)
-        '${e.otherTierLines} line(s) could only be priced at the other '
+        '${_lines(e.otherTierLines)} could only be priced at the other '
             'pricing tier.',
       if (e.excludedLines > 0)
-        '${e.excludedLines} line(s) are drawn but deliberately not bought.',
+        '${_lines(e.excludedLines)} ${e.excludedLines == 1 ? 'is' : 'are'} '
+            'drawn but deliberately not bought.',
     ];
   }
 
@@ -3602,6 +3650,7 @@ class _PartsHeaderRow extends StatelessWidget {
           fixed('Order by', 132, PartSortKey.orderBy),
           const SizedBox(width: 40),
           const SizedBox(width: 40),
+          const SizedBox(width: 40),
         ],
       ),
     );
@@ -4280,6 +4329,19 @@ class _PartRow extends StatelessWidget {
                     )
                   : const SizedBox(),
             ),
+            SizedBox(
+              width: 40,
+              child: line.kind == MasterPartKind.equipment
+                  ? IconButton(
+                      key: ValueKey('project_rename_${line.key}'),
+                      tooltip: 'Rename this product in every room that has it',
+                      icon: const Icon(Icons.drive_file_rename_outline,
+                          size: 18),
+                      onPressed: () =>
+                          renamePartAcrossProject(context, provider, line),
+                    )
+                  : const SizedBox(),
+            ),
           ],
         ),
       ),
@@ -4576,8 +4638,17 @@ Future<void> swapPartAcrossProject(
     return;
   }
 
-  final plan = provider.planProjectModelSwap(line.model, template);
-  if (!context.mounted) return;
+  final plan = await _withProgress(
+    context,
+    title: 'Finding ${line.model} in every room',
+    verb: 'Reading',
+    work: (report) => provider.planProjectModelSwap(
+      line.model,
+      template,
+      onProgress: report,
+    ),
+  );
+  if (plan == null || !context.mounted) return;
 
   if (plan.isEmpty) {
     showTimedSnackBar(
@@ -4595,14 +4666,26 @@ Future<void> swapPartAcrossProject(
     return;
   }
 
-  final go = await showDialog<bool>(
+  // The name every swapped box ends up with; null when it was cancelled.
+  final label = await showDialog<String>(
     context: context,
     builder: (ctx) => _SwapPreviewDialog(plan: plan),
   );
-  if (go != true || !context.mounted) return;
+  if (label == null || !context.mounted) return;
 
-  final result = provider.applyProjectModelSwap(plan);
-  if (!context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final errorFill = snackErrorFill(context);
+  final result = await _withProgress(
+    context,
+    title: 'Swapping ${line.model} for ${template.model}',
+    verb: 'Writing',
+    work: (report) => provider.applyProjectModelSwap(
+      plan,
+      label: label,
+      onProgress: report,
+    ),
+  );
+  if (result == null) return;
 
   final rooms = result.disk.rooms + (result.openRoomBoxes > 0 ? 1 : 0);
   final boxes = result.disk.boxes + result.openRoomBoxes;
@@ -4616,22 +4699,345 @@ Future<void> swapPartAcrossProject(
           '${result.disk.failures.first}',
   ];
   showTimedSnackBar(
-    ScaffoldMessenger.of(context),
+    messenger,
     SnackBar(
       duration: const Duration(seconds: 8),
       content: Text(parts.join('  ·  ')),
-      backgroundColor: result.disk.failures.isEmpty ? null : snackErrorFill(context),
+      backgroundColor: result.disk.failures.isEmpty ? null : errorFill,
     ),
   );
 }
 
+/// Naming every box on one product the same thing, in every room that has
+/// it, without changing the product.
+Future<void> renamePartAcrossProject(
+  BuildContext context,
+  AppStateProvider provider,
+  MasterPartLine line,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  if (line.model.trim().isEmpty) {
+    showTimedSnackBar(
+      messenger,
+      const SnackBar(
+        duration: Duration(seconds: 5),
+        content: Text(
+          'This line has no model on it, so there is nothing to match in the '
+          'other rooms. Set a model on the device first.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  final rooms = await _withProgress(
+    context,
+    title: 'Finding ${line.model} in every room',
+    verb: 'Reading',
+    work: (report) =>
+        provider.planProjectRename(line.model, onProgress: report),
+  );
+  if (rooms == null) return;
+  final affected = [for (final r in rooms) if (r.affected) r];
+  final failed = [for (final r in rooms) if (!r.ok) r];
+  if (affected.isEmpty) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text(
+          failed.isEmpty
+              ? 'No room on this project has a ${line.model} on its drawing.'
+              : 'Nothing to rename - and ${failed.length} room(s) could not '
+                    'be read, so they were not checked.',
+        ),
+      ),
+    );
+    return;
+  }
+  if (!context.mounted) return;
+
+  final label = await showDialog<String>(
+    context: context,
+    builder: (ctx) => _RenamePreviewDialog(
+      model: line.model,
+      rooms: affected,
+      failed: failed,
+    ),
+  );
+  if (label == null || label.isEmpty || !context.mounted) return;
+
+  final errorFill = snackErrorFill(context);
+  final result = await _withProgress(
+    context,
+    title: 'Renaming ${line.model}',
+    verb: 'Writing',
+    work: (report) => provider.applyProjectRename(
+      rooms,
+      line.model,
+      label,
+      onProgress: report,
+    ),
+  );
+  if (result == null) return;
+  final roomCount = result.disk.rooms + (result.openRoomBoxes > 0 ? 1 : 0);
+  final boxes = result.disk.boxes + result.openRoomBoxes;
+  final parts = <String>[
+    '$boxes box(es) renamed "$label" across $roomCount room(s)',
+    if (result.openRoomBoxes > 0)
+      'the open room changed in memory - save it to keep the change',
+    if (result.disk.failures.isNotEmpty)
+      '${result.disk.failures.length} room(s) failed: '
+          '${result.disk.failures.first}',
+  ];
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      duration: const Duration(seconds: 8),
+      content: Text(parts.join('  ·  ')),
+      backgroundColor: result.disk.failures.isEmpty ? null : errorFill,
+    ),
+  );
+}
+
+/// Runs [work] behind a dialog with a bar that says how many rooms are done,
+/// so a long job on the share does not look frozen. Null when [context] went
+/// away before it could start.
+Future<T?> _withProgress<T>(
+  BuildContext context, {
+  required String title,
+  required String verb,
+  required Future<T> Function(void Function(int done, int total) report) work,
+}) async {
+  if (!context.mounted) return null;
+  final progress = ValueNotifier<(int, int)>((0, 0));
+  final navigator = Navigator.of(context);
+  var open = true;
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        key: const ValueKey('project_progress'),
+        title: Text(title),
+        content: SizedBox(
+          width: 360,
+          child: ValueListenableBuilder<(int, int)>(
+            valueListenable: progress,
+            builder: (_, value, _) {
+              final (done, total) = value;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  LinearProgressIndicator(
+                    value: total == 0 ? null : done / total,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(total == 0
+                      ? '$verb rooms...'
+                      : '$verb rooms: $done of $total'),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    ),
+  ).whenComplete(() => open = false);
+  try {
+    return await work((done, total) => progress.value = (done, total));
+  } finally {
+    if (open) navigator.pop();
+    progress.dispose();
+  }
+}
+
+/// Which rooms a rename touches, and the name to give them. Pops the name, or
+/// null when cancelled.
+class _RenamePreviewDialog extends StatefulWidget {
+  final String model;
+  final List<RoomSwapPlan> rooms;
+  final List<RoomSwapPlan> failed;
+  const _RenamePreviewDialog({
+    required this.model,
+    required this.rooms,
+    required this.failed,
+  });
+
+  @override
+  State<_RenamePreviewDialog> createState() => _RenamePreviewDialogState();
+}
+
+class _RenamePreviewDialogState extends State<_RenamePreviewDialog> {
+  late final TextEditingController _name;
+  late final List<String> _labels;
+
+  @override
+  void initState() {
+    super.initState();
+    _labels = {for (final r in widget.rooms) ...r.labels}.toList();
+    _name = TextEditingController(
+      text: _labels.length == 1 ? _labels.single : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final error = errorTextOn(theme.colorScheme, theme.cardColor);
+    final boxes = widget.rooms.fold(0, (s, r) => s + r.boxes);
+    final name = _name.text.trim();
+    // Nothing to do when every box already has the name typed.
+    final unchanged = _labels.length == 1 && _labels.single == name;
+
+    return AlertDialog(
+      title: Text('Rename ${widget.model} across the project'),
+      content: SizedBox(
+        width: 620,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$boxes box(es) in ${widget.rooms.length} room(s). The model '
+              'stays as it is.',
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('project_rename_name'),
+              controller: _name,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Name in every room',
+                helperText:
+                    _labels.length > 1 ? 'Now: ${_labels.join(', ')}' : null,
+                helperMaxLines: 3,
+                suffixIcon: ClearFieldButton(
+                  controller: _name,
+                  onCleared: () => setState(() {}),
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 8),
+            Flexible(
+              child: SingleChildScrollView(
+                // Room for the scrollbar, clear of the counts.
+                padding: const EdgeInsets.only(right: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final room in widget.rooms)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                room.isOpenRoom
+                                    ? '${room.roomName}  (open)'
+                                    : room.roomName,
+                                style: theme.textTheme.bodyMedium,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text(
+                              '${room.boxes} box'
+                              '${room.boxes == 1 ? '' : 'es'}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            if (widget.failed.isNotEmpty) ...[
+              const Divider(),
+              Text(
+                '${widget.failed.length} room(s) could not be read and keep '
+                'their names: '
+                '${widget.failed.map((r) => r.roomName).join(', ')}.',
+                style: theme.textTheme.bodySmall?.copyWith(color: error),
+              ),
+            ],
+            const Divider(),
+            Text(
+              "This writes to the room files directly. There is no "
+              "project-wide undo - a room's own Undo only covers the room "
+              "open in the editor.",
+              style: theme.textTheme.bodySmall?.copyWith(color: error),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('project_rename_apply'),
+          onPressed: name.isEmpty || unchanged
+              ? null
+              : () => Navigator.pop(context, name),
+          child: Text('Rename $boxes box(es)'),
+        ),
+      ],
+    );
+  }
+}
+
 /// What the swap is about to do, room by room, before it does it.
-class _SwapPreviewDialog extends StatelessWidget {
+///
+/// Pops the name to give every swapped box — '' to leave each box's own name
+/// with only its model part renamed — or null when cancelled.
+class _SwapPreviewDialog extends StatefulWidget {
   final ProjectSwapPlan plan;
   const _SwapPreviewDialog({required this.plan});
 
   @override
+  State<_SwapPreviewDialog> createState() => _SwapPreviewDialogState();
+}
+
+class _SwapPreviewDialogState extends State<_SwapPreviewDialog> {
+  late final TextEditingController _name;
+  late final String _prefill;
+
+  ProjectSwapPlan get plan => widget.plan;
+
+  @override
+  void initState() {
+    super.initState();
+    // Prefilled when every box would come out with the same name anyway, so
+    // an edit here is an edit of that name. Otherwise blank: one name typed
+    // over "Projector 1" and "Projector 2" is a choice somebody has to make.
+    final labels = plan.labels;
+    _prefill = labels.length == 1 ? labels.single : '';
+    _name = TextEditingController(text: _prefill);
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final labels = plan.labels;
     final theme = Theme.of(context);
     final surface = theme.dialogTheme.backgroundColor ??
         theme.colorScheme.surfaceContainerHigh;
@@ -4685,9 +5091,29 @@ class _SwapPreviewDialog extends StatelessWidget {
               '${plan.boxes} box(es) in ${plan.affectedRooms.length} room(s).',
               style: theme.textTheme.titleSmall,
             ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('project_swap_name'),
+              controller: _name,
+              decoration: InputDecoration(
+                labelText: 'Name in every room',
+                hintText: "Leave blank to keep each box's own name",
+                helperText: labels.length > 1
+                    ? 'Now: ${labels.join(', ')}'
+                    : null,
+                helperMaxLines: 3,
+                suffixIcon: ClearFieldButton(
+                  controller: _name,
+                  onCleared: () => setState(() {}),
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
             const SizedBox(height: 8),
             Flexible(
               child: SingleChildScrollView(
+                // Room for the scrollbar, clear of the counts.
+                padding: const EdgeInsets.only(right: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -4779,12 +5205,17 @@ class _SwapPreviewDialog extends StatelessWidget {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context, false),
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         FilledButton(
           key: const ValueKey('project_swap_apply'),
-          onPressed: () => Navigator.pop(context, true),
+          // Untouched is '' - the usual rename, which also leaves the control
+          // blocks' own names alone.
+          onPressed: () => Navigator.pop(
+            context,
+            _name.text.trim() == _prefill ? '' : _name.text.trim(),
+          ),
           child: Text('Swap ${plan.boxes} box(es)'),
         ),
       ],

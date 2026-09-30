@@ -4,6 +4,7 @@ import 'dart:io';
 import 'app_logger.dart';
 import 'app_state.dart' show activeDeviceKeysIn;
 import 'av_device_library.dart';
+import 'av_flow_model.dart';
 import 'building_project.dart';
 import 'model_swap.dart';
 import 'project_estimate.dart';
@@ -80,6 +81,9 @@ class RoomSwapPlan {
   /// in memory rather than written.
   final bool isOpenRoom;
 
+  /// What each swapped box would be named afterwards, with no name given.
+  final List<String> labels;
+
   const RoomSwapPlan({
     required this.ref,
     required this.roomName,
@@ -91,6 +95,7 @@ class RoomSwapPlan {
     this.rackHeightChanged = false,
     this.error = '',
     this.isOpenRoom = false,
+    this.labels = const [],
   });
 
   bool get ok => error.isEmpty;
@@ -144,14 +149,22 @@ class ProjectSwapPlan {
   bool get losesModule => newModule.isEmpty && blocks > 0;
   bool get anyRackHeightChanged =>
       affectedRooms.any((r) => r.rackHeightChanged);
+
+  /// Every distinct name the swapped boxes would carry afterwards.
+  List<String> get labels => {
+        for (final r in affectedRooms) ...r.labels,
+      }.toList();
 }
 
 /// Works out what swapping [fromModel] to [template] would do to every room on
 /// the project. Nothing is written.
 ///
+/// Only each room's config and drawing are read, in the background and a few
+/// rooms at a time; [onProgress] hears rooms done against the total.
+///
 /// [openConfigPath] is the room currently in the editor, so its row can be
 /// marked and its files left alone — pass '' when no room is open.
-ProjectSwapPlan planProjectSwap({
+Future<ProjectSwapPlan> planProjectSwap({
   required BuildingProject project,
   required String projectPath,
   required String fromModel,
@@ -159,44 +172,37 @@ ProjectSwapPlan planProjectSwap({
   required String Function(String model) moduleForModel,
   required Map<String, String> deviceCountMap,
   String openConfigPath = '',
-  Map<String, LoadedRoom>? rooms,
-}) {
+  void Function(int done, int total)? onProgress,
+}) async {
   final needle = fromModel.trim().toLowerCase();
-  final plans = <RoomSwapPlan>[];
 
-  for (final ref in project.rooms) {
+  final plans = await _pooled(project.rooms, (ref) async {
     final absolute = BuildingProject.resolvePath(ref.configPath, projectPath);
-    final room = rooms?[ref.id] ?? readRoomFromDisk(absolute);
-    final name = ref.label.trim().isNotEmpty
-        ? ref.label.trim()
-        : room.title.trim().isNotEmpty
-            ? room.title.trim()
-            : ref.fallbackName;
+    final files = await _readRoomFiles(absolute);
+    final name = _roomName(ref, files.config);
 
-    if (!room.ok) {
-      plans.add(RoomSwapPlan(
+    if (files.error.isNotEmpty) {
+      return RoomSwapPlan(
         ref: ref,
         roomName: name,
         configPath: absolute,
-        error: room.error,
-      ));
-      continue;
+        error: files.error,
+      );
     }
 
     final matches = [
-      for (final n in room.model.nodes)
-        if (n.model.trim().toLowerCase() == needle) n,
+      for (final raw in _boxesOn(files.flow, needle))
+        AvNode.fromJson(Map<String, dynamic>.from(raw)),
     ];
     if (matches.isEmpty) {
-      plans.add(
-        RoomSwapPlan(ref: ref, roomName: name, configPath: absolute),
-      );
-      continue;
+      return RoomSwapPlan(ref: ref, roomName: name, configPath: absolute);
     }
+    final cables = _cablesOn(files.flow, {for (final n in matches) n.id});
 
     var carried = 0;
     var dropped = 0;
     var heightChanged = false;
+    final labels = <String>[];
     // Each box is planned against the cables as they stand, then the results
     // are added up. Two boxes of the same model in one room cannot both claim
     // the same run — a cable has one end on each — so there is no double
@@ -204,24 +210,25 @@ ProjectSwapPlan planProjectSwap({
     for (final node in matches) {
       final plan = planModelSwap(
         node: node,
-        cables: room.model.cables,
+        cables: cables,
         template: template,
-        config: room.config,
+        config: files.config,
       );
       carried += plan.carried;
       dropped += plan.dropped.length;
       if (plan.rackHeightChanged(node)) heightChanged = true;
+      labels.add(plan.node.label);
     }
 
     // Which of those boxes have a control block behind them. Only live device
     // sections count: a stale DISPLAYDEVICE_4 in a room whose count says three
     // is not part of the room and must not be rewritten.
-    final live = activeDeviceKeysIn(room.config, deviceCountMap).toSet();
+    final live = activeDeviceKeysIn(files.config, deviceCountMap).toSet();
     final blocks = matches
-        .where((n) => live.contains(n.id) && room.config[n.id] is Map)
+        .where((n) => live.contains(n.id) && files.config[n.id] is Map)
         .length;
 
-    plans.add(RoomSwapPlan(
+    return RoomSwapPlan(
       ref: ref,
       roomName: name,
       configPath: absolute,
@@ -230,10 +237,11 @@ ProjectSwapPlan planProjectSwap({
       dropped: dropped,
       blocks: blocks,
       rackHeightChanged: heightChanged,
+      labels: labels,
       isOpenRoom: openConfigPath.isNotEmpty &&
           _samePath(openConfigPath, absolute),
-    ));
-  }
+    );
+  }, onProgress: onProgress);
 
   return ProjectSwapPlan(
     fromModel: fromModel,
@@ -253,7 +261,7 @@ typedef ProjectSwapResult = ({
   List<String> failures,
 });
 
-/// Applies [plan] to every affected room's files.
+/// Applies [plan] to every affected room's files, a few rooms at a time.
 ///
 /// The room marked [RoomSwapPlan.isOpenRoom] is SKIPPED — the caller applies
 /// that one through the provider so the editor and the disk cannot disagree.
@@ -261,56 +269,61 @@ typedef ProjectSwapResult = ({
 /// A room that fails to write is reported and the rest still go: a share that
 /// dropped out halfway through a nine-room swap should leave eight rooms done
 /// and one named, not nine rooms in an unknown state.
-ProjectSwapResult applyProjectSwap({
+///
+/// A non-empty [label] names every swapped box, and its control block, that.
+Future<ProjectSwapResult> applyProjectSwap({
   required ProjectSwapPlan plan,
   required String Function(String model) moduleForModel,
   required Map<String, String> deviceCountMap,
-}) {
-  var rooms = 0;
-  var boxes = 0;
-  var carried = 0;
-  var dropped = 0;
-  var blocks = 0;
-  final failures = <String>[];
+  String label = '',
+  void Function(int done, int total)? onProgress,
+}) async {
+  final todo = [
+    for (final r in plan.affectedRooms)
+      if (!r.isOpenRoom) r,
+  ];
 
-  for (final room in plan.affectedRooms) {
-    if (room.isOpenRoom) continue;
+  final results = await _pooled(todo, (room) async {
     try {
-      final done = _swapInRoomFiles(
+      final done = await _swapInRoomFiles(
         room: room,
         template: plan.to,
         fromModel: plan.fromModel,
         moduleForModel: moduleForModel,
         deviceCountMap: deviceCountMap,
+        label: label,
       );
-      rooms++;
-      boxes += done.boxes;
-      carried += done.carried;
-      dropped += done.dropped;
-      blocks += done.blocks;
       AppLogger.logInfo(
         'Project swap: ${room.roomName} - ${done.boxes} box(es) moved from '
         '"${plan.fromModel}" to "${plan.to.model}", ${done.carried} run(s) '
         'carried, ${done.dropped} dropped, ${done.blocks} control block(s) '
         'updated.',
       );
+      return (done: done, error: '');
     } catch (e, stack) {
       AppLogger.logError(
         'Project swap could not write ${room.configPath}',
         e,
         stack,
       );
-      failures.add('${room.roomName} - $e');
+      return (
+        done: (boxes: 0, carried: 0, dropped: 0, blocks: 0),
+        error: '${room.roomName} - $e',
+      );
     }
-  }
+  }, onProgress: onProgress);
 
+  final ok = [for (final r in results) if (r.error.isEmpty) r.done];
   return (
-    rooms: rooms,
-    boxes: boxes,
-    carried: carried,
-    dropped: dropped,
-    blocks: blocks,
-    failures: failures,
+    rooms: ok.length,
+    boxes: ok.fold(0, (s, d) => s + d.boxes),
+    carried: ok.fold(0, (s, d) => s + d.carried),
+    dropped: ok.fold(0, (s, d) => s + d.dropped),
+    blocks: ok.fold(0, (s, d) => s + d.blocks),
+    failures: [
+      for (final r in results)
+        if (r.error.isNotEmpty) r.error,
+    ],
   );
 }
 
@@ -323,94 +336,328 @@ const JsonEncoder _encoder = JsonEncoder.withIndent('    ');
 /// Rewrites one room's diagram file and config in place.
 ///
 /// Re-reads rather than trusting the plan's copy: the plan may have been built
-/// against a cached read minutes ago, and a room edited in between must not be
+/// against a read minutes ago, and a room edited in between must not be
 /// written back from a stale picture. The read here is the one that counts.
-({int boxes, int carried, int dropped, int blocks}) _swapInRoomFiles({
+///
+/// The drawing is edited as the JSON it is: the swapped boxes and the runs on
+/// them are replaced, everything else in the file is written back as found.
+Future<({int boxes, int carried, int dropped, int blocks})> _swapInRoomFiles({
   required RoomSwapPlan room,
   required AvDeviceTemplate template,
   required String fromModel,
   required String Function(String model) moduleForModel,
   required Map<String, String> deviceCountMap,
-}) {
-  final loaded = readRoomFromDisk(room.configPath);
-  if (!loaded.ok) throw StateError(loaded.error);
-  if (loaded.flowPath.isEmpty) {
-    // No diagram file: nothing on the drawing to swap. Not an error — a room
-    // can be config-only — but there is also nothing to do.
-    return (boxes: 0, carried: 0, dropped: 0, blocks: 0);
-  }
+  String label = '',
+}) async {
+  final files = await _readRoomFiles(room.configPath);
+  if (files.error.isNotEmpty) throw StateError(files.error);
+  final flow = files.flow;
+  // No diagram file: nothing on the drawing to swap. Not an error — a room
+  // can be config-only — but there is also nothing to do.
+  if (flow == null) return (boxes: 0, carried: 0, dropped: 0, blocks: 0);
 
   final needle = fromModel.trim().toLowerCase();
   final matches = [
-    for (final n in loaded.model.nodes)
-      if (n.model.trim().toLowerCase() == needle) n,
+    for (final raw in _boxesOn(flow, needle))
+      AvNode.fromJson(Map<String, dynamic>.from(raw)),
   ];
-  if (matches.isEmpty) {
-    return (boxes: 0, carried: 0, dropped: 0, blocks: 0);
-  }
+  if (matches.isEmpty) return (boxes: 0, carried: 0, dropped: 0, blocks: 0);
 
   // --- the drawing ---------------------------------------------------------
-  final nodesById = {for (final n in loaded.model.nodes) n.id: n};
-  final cablesById = {for (final c in loaded.model.cables) c.id: c};
+  final swapped = <String, AvNode>{};
+  final cablesById = {
+    for (final c in _cablesOn(flow, {for (final n in matches) n.id})) c.id: c,
+  };
+  final moved = <String, AvCable>{};
   final removed = <String>{};
-  var carried = 0;
 
   for (final node in matches) {
     final plan = planModelSwap(
       node: node,
       cables: cablesById.values,
       template: template,
-      config: loaded.config,
+      config: files.config,
+      label: label,
     );
-    nodesById[node.id] = plan.node;
+    swapped[node.id] = plan.node;
     for (final entry in plan.moved.entries) {
       cablesById[entry.key] = entry.value;
-      carried++;
+      moved[entry.key] = entry.value;
     }
     removed.addAll(plan.dropped);
   }
-  for (final id in removed) {
-    cablesById.remove(id);
-  }
 
-  // The flow file as it sits on disk, with only the two keys the swap owns
-  // replaced. Everything else in it — the colors, the room mode, the
-  // backdrop, and on a pre-split room the racks and plans and estimate too —
-  // is written back byte-identical.
-  final flowFile = File(loaded.flowPath);
-  final flowDoc = Map<String, dynamic>.from(
-    jsonDecode(flowFile.readAsStringSync()) as Map,
-  );
-  flowDoc['nodes'] = [
-    // The diagram's own order, not the map's: a rewritten file whose boxes
-    // come back shuffled is a diff nobody can read.
-    for (final n in loaded.model.nodes) nodesById[n.id]!.toJson(),
+  // The diagram's own order, so a rewritten file is a diff somebody can read.
+  flow['nodes'] = [
+    for (final n in (flow['nodes'] as List? ?? const []))
+      if (n is Map && swapped.containsKey(n['id']))
+        swapped[n['id']]!.toJson()
+      else
+        n,
   ];
-  flowDoc['cables'] = [
-    for (final c in loaded.model.cables)
-      if (cablesById.containsKey(c.id)) cablesById[c.id]!.toJson(),
+  flow['cables'] = [
+    for (final c in (flow['cables'] as List? ?? const []))
+      if (c is Map && removed.contains(c['id']))
+        ...const []
+      else if (c is Map && moved.containsKey(c['id']))
+        moved[c['id']]!.toJson()
+      else
+        c,
   ];
-  writeFileSafelySync(flowFile.path, _encoder.convert(flowDoc));
+  await writeFileSafely(files.flowPath, _encoder.convert(flow));
 
   // --- the control side ----------------------------------------------------
-  final live = activeDeviceKeysIn(loaded.config, deviceCountMap).toSet();
+  final live = activeDeviceKeysIn(files.config, deviceCountMap).toSet();
   var blocks = 0;
   for (final node in matches) {
     if (!live.contains(node.id)) continue;
-    final block = loaded.config[node.id];
+    final block = files.config[node.id];
     if (block is! Map) continue;
-    swapControlBlock(block, template.model, moduleForModel);
+    swapControlBlock(block, template.model, moduleForModel, name: label);
     blocks++;
   }
   if (blocks > 0) {
-    writeFileSafelySync(room.configPath, _encoder.convert(loaded.config));
+    await writeFileSafely(room.configPath, _encoder.convert(files.config));
   }
 
   return (
     boxes: matches.length,
-    carried: carried,
+    carried: moved.length,
     dropped: removed.length,
     blocks: blocks,
+  );
+}
+
+// ---------------------------------------------------------------------------
+//  READING A ROOM FOR A PROJECT-WIDE EDIT
+// ---------------------------------------------------------------------------
+//  Only the config and the drawing are read - a swap or a rename touches
+//  nothing else - in the background and a few rooms at a time, so a
+//  thirty-room job on the share neither freezes the window nor waits on one
+//  room after another.
+
+/// How many rooms are read or written at once.
+const int _poolWidth = 4;
+
+/// The two files a project-wide edit touches, as read.
+typedef _RoomFiles = ({
+  Map<String, dynamic> config,
+  String flowPath,
+  Map<String, dynamic>? flow,
+  String error,
+});
+
+Future<_RoomFiles> _readRoomFiles(String configPath) async {
+  _RoomFiles failed(String why) =>
+      (config: const {}, flowPath: '', flow: null, error: why);
+  final Map<String, dynamic> config;
+  try {
+    final file = File(configPath);
+    if (!await file.exists()) return failed('The config is not at $configPath.');
+    final doc = jsonDecode(await file.readAsString());
+    if (doc is! Map) return failed('The config could not be read.');
+    config = Map<String, dynamic>.from(doc);
+  } catch (e) {
+    return failed('The config could not be read: $e');
+  }
+  for (final path in roomFlowCandidates(configPath)) {
+    try {
+      final file = File(path);
+      if (!await file.exists()) continue;
+      final doc = jsonDecode(await file.readAsString());
+      if (doc is! Map) continue;
+      return (
+        config: config,
+        flowPath: path,
+        flow: Map<String, dynamic>.from(doc),
+        error: '',
+      );
+    } catch (e) {
+      AppLogger.logError('Project edit could not read $path', e);
+    }
+  }
+  return (config: config, flowPath: '', flow: null, error: '');
+}
+
+/// What the project calls a room: its label, else the config's title.
+String _roomName(ProjectRoomRef ref, Map<String, dynamic> config) {
+  final setup = config['SYSTEM_SETUP'];
+  final title =
+      (setup is Map ? setup['gui_full_room_name']?.toString() : null)?.trim() ??
+          '';
+  return ref.label.trim().isNotEmpty
+      ? ref.label.trim()
+      : title.isNotEmpty
+          ? title
+          : ref.fallbackName;
+}
+
+/// The drawing's boxes on [needle] (a lower-cased model), as their JSON.
+List<Map> _boxesOn(Map<String, dynamic>? flow, String needle) => [
+      for (final n in (flow?['nodes'] as List? ?? const []))
+        if (n is Map &&
+            (n['id']?.toString() ?? '').isNotEmpty &&
+            (n['model']?.toString() ?? '').trim().toLowerCase() == needle)
+          n,
+    ];
+
+/// The drawing's runs with an end on one of [nodeIds].
+List<AvCable> _cablesOn(Map<String, dynamic>? flow, Set<String> nodeIds) => [
+      for (final c in (flow?['cables'] as List? ?? const []))
+        if (c is Map &&
+            (c['id']?.toString() ?? '').isNotEmpty &&
+            (nodeIds.contains(c['fromNode']) ||
+                nodeIds.contains(c['toNode'])))
+          AvCable.fromJson(Map<String, dynamic>.from(c)),
+    ];
+
+/// [work] over [items], [_poolWidth] at a time, results in [items]' order.
+Future<List<R>> _pooled<T, R>(
+  List<T> items,
+  Future<R> Function(T item) work, {
+  void Function(int done, int total)? onProgress,
+}) async {
+  final out = List<R?>.filled(items.length, null);
+  var next = 0;
+  var done = 0;
+  onProgress?.call(0, items.length);
+  Future<void> lane() async {
+    while (next < items.length) {
+      final i = next++;
+      out[i] = await work(items[i]);
+      onProgress?.call(++done, items.length);
+    }
+  }
+
+  await Future.wait([
+    for (var i = 0; i < _poolWidth && i < items.length; i++) lane(),
+  ]);
+  return out.cast<R>();
+}
+
+// ---------------------------------------------------------------------------
+//  RENAMING WITHOUT SWAPPING
+// ---------------------------------------------------------------------------
+//  Read as the swap reads - see [_readRoomFiles] - and the boxes edited as
+//  the JSON they are, so nothing but the label moves.
+
+/// Every room that has a box on [model], with its current names in
+/// [RoomSwapPlan.labels]. Nothing is written; the model is not touched.
+///
+/// Unreadable rooms are kept on the list, as for a swap.
+Future<List<RoomSwapPlan>> planProjectRename({
+  required BuildingProject project,
+  required String projectPath,
+  required String model,
+  required Map<String, String> deviceCountMap,
+  String openConfigPath = '',
+  void Function(int done, int total)? onProgress,
+}) {
+  final needle = model.trim().toLowerCase();
+  return _pooled(project.rooms, (ref) async {
+    final absolute = BuildingProject.resolvePath(ref.configPath, projectPath);
+    final files = await _readRoomFiles(absolute);
+    final name = _roomName(ref, files.config);
+    if (files.error.isNotEmpty) {
+      return RoomSwapPlan(
+        ref: ref,
+        roomName: name,
+        configPath: absolute,
+        error: files.error,
+      );
+    }
+
+    final boxes = _boxesOn(files.flow, needle);
+    final ids = [for (final n in boxes) n['id'].toString()];
+    final live = activeDeviceKeysIn(files.config, deviceCountMap).toSet();
+    return RoomSwapPlan(
+      ref: ref,
+      roomName: name,
+      configPath: absolute,
+      nodeIds: ids,
+      blocks: ids
+          .where((id) => live.contains(id) && files.config[id] is Map)
+          .length,
+      labels: [for (final n in boxes) n['label']?.toString() ?? ''],
+      isOpenRoom: openConfigPath.isNotEmpty &&
+          _samePath(openConfigPath, absolute),
+    );
+  }, onProgress: onProgress);
+}
+
+/// Names every box on [model], and its control block, [label] in each of
+/// [rooms]' files. The open room is skipped, as for a swap. A file is only
+/// written when something in it changes.
+Future<ProjectSwapResult> applyProjectRename({
+  required List<RoomSwapPlan> rooms,
+  required String model,
+  required String label,
+  required Map<String, String> deviceCountMap,
+  void Function(int done, int total)? onProgress,
+}) async {
+  final needle = model.trim().toLowerCase();
+  final name = label.trim();
+  final todo = [
+    for (final r in rooms)
+      if (r.affected && !r.isOpenRoom && name.isNotEmpty) r,
+  ];
+
+  final results = await _pooled(todo, (room) async {
+    try {
+      // Re-read, as the swap does: the plan may be stale.
+      final files = await _readRoomFiles(room.configPath);
+      if (files.error.isNotEmpty) throw StateError(files.error);
+      final boxes = _boxesOn(files.flow, needle);
+      if (boxes.isEmpty) return (boxes: 0, blocks: 0, error: '');
+
+      if (boxes.any((n) => n['label'] != name)) {
+        for (final n in boxes) {
+          n['label'] = name;
+        }
+        await writeFileSafely(files.flowPath, _encoder.convert(files.flow));
+      }
+
+      final live = activeDeviceKeysIn(files.config, deviceCountMap).toSet();
+      var blocks = 0;
+      var configChanged = false;
+      for (final n in boxes) {
+        final id = n['id'].toString();
+        final block = files.config[id];
+        if (!live.contains(id) || block is! Map) continue;
+        blocks++;
+        if (block['name'] == name) continue;
+        block['name'] = name;
+        configChanged = true;
+      }
+      if (configChanged) {
+        await writeFileSafely(room.configPath, _encoder.convert(files.config));
+      }
+
+      AppLogger.logInfo(
+        'Project rename: ${room.roomName} - ${boxes.length} "$model" '
+        'box(es) named "$name".',
+      );
+      return (boxes: boxes.length, blocks: blocks, error: '');
+    } catch (e, stack) {
+      AppLogger.logError(
+        'Project rename could not write ${room.configPath}',
+        e,
+        stack,
+      );
+      return (boxes: 0, blocks: 0, error: '${room.roomName} - $e');
+    }
+  }, onProgress: onProgress);
+
+  return (
+    rooms: results.where((r) => r.error.isEmpty && r.boxes > 0).length,
+    boxes: results.fold(0, (s, r) => s + r.boxes),
+    carried: 0,
+    dropped: 0,
+    blocks: results.fold(0, (s, r) => s + r.blocks),
+    failures: [
+      for (final r in results)
+        if (r.error.isNotEmpty) r.error,
+    ],
   );
 }
 

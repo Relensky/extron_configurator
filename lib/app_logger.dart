@@ -157,7 +157,8 @@ class AppLogger {
         Directory(folder).createSync(recursive: true);
         _folderReady = true;
       }
-      final stamp = DateTime.now()
+      final now = clock();
+      final stamp = now
           .toIso8601String()
           .replaceAll(':', '-')
           .replaceAll('T', '_')
@@ -166,6 +167,7 @@ class AppLogger {
       final file = File(path.join(folder, 'session_log_${stamp}_$pid.txt'));
       _file = file;
       _raf = file.openSync(mode: FileMode.append);
+      _fileDay = _dayOf(now);
       _auditPreviousSession(Directory(folder), file);
       _writeHeader();
       purgeOldLogs(Directory(folder), keep: file);
@@ -211,6 +213,53 @@ class AppLogger {
     } catch (_) {}
     _raf = null;
     _file = null;
+  }
+
+  // --- a new file each day -------------------------------------------------
+  //
+  // A session left open overnight kept one file for as long as it ran, and
+  // "what happened this morning" meant scrolling past all of yesterday. The
+  // first line of a new local day ends the old file cleanly (so the next
+  // launch's audit does not call it a crash) and opens a fresh one with the
+  // full header. The heartbeat writes every minute, so the switch happens
+  // within a minute of midnight even when nothing else is going on.
+
+  /// Where "now" comes from for stamps, file names and the day a file
+  /// belongs to. Tests move it forward to cross midnight on demand.
+  @visibleForTesting
+  static DateTime Function() clock = DateTime.now;
+
+  /// The local calendar day [_file] was opened on.
+  static DateTime? _fileDay;
+
+  static DateTime _dayOf(DateTime t) => DateTime(t.year, t.month, t.day);
+
+  static void _rollOverIfNewDay(DateTime now) {
+    final day = _fileDay;
+    final previous = _file;
+    if (_raf == null || day == null || previous == null) return;
+    final today = _dayOf(now);
+    if (today == day) return;
+    // Set first: every line below goes through _emit, which calls back here.
+    _fileDay = today;
+    _always('New day - the log continues in a new file');
+    _always(cleanExitMarker);
+    try {
+      _raf?.flushSync();
+      _raf?.closeSync();
+    } catch (_) {}
+    _raf = null;
+    _file = null;
+    _ensureOpen();
+    _always('Continued from the log of the day before: ${previous.path}',
+        category: 'CONFIG');
+    if (_openScopes.isNotEmpty) {
+      _always(
+        'Still open from the previous log: '
+        '${_openScopes.map((s) => s.label).join(' > ')}',
+        category: 'SCOPE',
+      );
+    }
   }
 
   // --- audit and retention -------------------------------------------------
@@ -378,7 +427,9 @@ class AppLogger {
   /// crash and lifecycle records.
   static void _emit(String message, String category, {bool force = false}) {
     _ensureOpen();
-    final line = '[${logTimestamp(DateTime.now())}] [$category] $message\n';
+    final now = clock();
+    _rollOverIfNewDay(now);
+    final line = '[${logTimestamp(now)}] [$category] $message\n';
     if (!message.startsWith('heartbeat ')) {
       lastMessage =
           message.length > 200 ? '${message.substring(0, 200)}...' : message;

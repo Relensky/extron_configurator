@@ -34,12 +34,15 @@ import 'xlsx_writer.dart' show XlsxTheme;
 import 'labor_rates.dart';
 import 'model_swap.dart' as swap;
 import 'av_flow_swap_dialogs.dart' show applyModelSwap, applyControlSwap;
+import 'procurement_log.dart';
 import 'project_estimate.dart';
 import 'project_budget.dart';
 import 'class_schedule.dart';
 import 'install_windows.dart';
 import 'project_schedule.dart' show formatScheduleDate;
 import 'project_swap.dart';
+import 'project_swap.dart' as project_swap
+    show applyProjectRename, planProjectRename;
 import 'layout_tools.dart';
 import 'room_locations.dart';
 import 'recent_files.dart';
@@ -1009,6 +1012,7 @@ class AppStateProvider extends ChangeNotifier {
       'classicSecondary': classicSecondary,
       'textScale': textScale,
       'currencySymbol': currencySymbol,
+      'defaultTaxPercent': defaultTaxPercent,
       'pricingTier': pricingTier.name,
       'estimateLogoPath': estimateLogoPath,
       'estimateLogoSide': estimateLogoSide,
@@ -1321,6 +1325,16 @@ class AppStateProvider extends ChangeNotifier {
   /// symbol per estimate is how two quotes for the same building end up
   /// reading differently.
   String currencySymbol = r'$';
+
+  /// The tax rate a new project starts with, and the one a room outside any
+  /// project uses. Both can set their own.
+  double defaultTaxPercent = 0;
+
+  /// The rate a room without its own is taxed at: the open project's when
+  /// the room is on it, the app's otherwise.
+  double get baseTaxPercent => openProjectRoom != null
+      ? project.taxPercent ?? defaultTaxPercent
+      : defaultTaxPercent;
 
   /// Which of a catalog entry's two prices the estimates use. See
   /// [PricingTier]; app-wide for the same reason as the symbol, and switchable
@@ -4960,9 +4974,21 @@ class AppStateProvider extends ChangeNotifier {
               ? 'cost:tax:label'
               : '',
     );
-    if (percent != null) avCost.taxPercent = math.max(0, percent);
+    if (percent != null) {
+      avCost.taxPercent = math.max(0, percent);
+      avCost.ownTaxRate = true;
+    }
     if (label != null) avCost.taxLabel = label;
     if (currency != null && currency.isNotEmpty) avCost.currency = currency;
+    notifyListeners();
+  }
+
+  /// Puts the room back on the project's (or the app's) tax rate.
+  void clearAvCostOwnTax() {
+    if (!avCost.ownTaxRate) return;
+    _pushAvUndo('Tax rate', _costScope);
+    avCost.ownTaxRate = false;
+    avCost.followBaseTax(baseTaxPercent);
     notifyListeners();
   }
 
@@ -7874,6 +7900,10 @@ class AppStateProvider extends ChangeNotifier {
       classicSecondary = str('classicSecondary', '');
       textScale = double.tryParse(str('textScale', '')) ?? 1.0;
       currencySymbol = str('currencySymbol', r'$');
+      defaultTaxPercent = math.max(
+        0,
+        double.tryParse(str('defaultTaxPercent', '')) ?? 0,
+      );
       pricingTier = pricingTierFromName(str('pricingTier', ''));
       estimateLogoPath = str('estimateLogoPath', '');
       estimateLogoSide =
@@ -9067,6 +9097,9 @@ class AppStateProvider extends ChangeNotifier {
         // open room follows the setting immediately rather than after a
         // reload.
         avCost.currency = currencySymbol;
+        break;
+      case 'defaultTaxPercent':
+        defaultTaxPercent = math.max(0, double.tryParse(value.trim()) ?? 0);
         break;
       case 'pricingTier':
         pricingTier = pricingTierFromName(value);
@@ -11795,6 +11828,42 @@ class AppStateProvider extends ChangeNotifier {
   /// Returns the keys that actually went - a key naming no block is ignored
   /// rather than treated as an error, because the caller is usually working
   /// from a list that a previous removal may already have covered.
+  /// Takes drawn boxes out of the room config but keeps them on the diagram
+  /// and the estimate. Each box keyed to a block gets a plain node id first,
+  /// so the block's removal and renumbering leave it alone. [notControlled]
+  /// also marks every box as not driven by this system.
+  ///
+  /// Returns the blocks removed.
+  List<String> detachAvNodesFromConfig(
+    Iterable<String> nodeIds, {
+    bool notControlled = false,
+  }) {
+    _pushAvUndo('Remove from room config', _flowScope);
+    final blocks = <String>[];
+    for (final id in nodeIds.toList()) {
+      var node = avNodeById(id);
+      if (node == null) continue;
+      if (roomConfig[id] is Map) {
+        String next;
+        do {
+          _avNodeCounter++;
+          next = 'AVNODE_$_avNodeCounter';
+        } while (avNodeById(next) != null);
+        if (!rekeyAvNode(id, next)) continue;
+        blocks.add(id);
+        node = avNodeById(next)!;
+      }
+      final index = avNodes.indexWhere((n) => n.id == node!.id);
+      avNodes[index] = node.copyWith(
+        fromConfig: false,
+        excludeFromControl: notControlled ? true : null,
+      );
+    }
+    final removed = removeDeviceBlocks(blocks);
+    notifyListeners();
+    return removed;
+  }
+
   List<String> removeDeviceBlocks(Iterable<String> sectionKeys) {
     final setup = roomConfig['SYSTEM_SETUP'];
     if (setup is! Map) return const [];
@@ -13408,6 +13477,7 @@ class AppStateProvider extends ChangeNotifier {
       name: name,
       building: building,
       currency: currencySymbol,
+      taxPercent: defaultTaxPercent,
     );
     seedStarterPackages(project);
     // And the companies the shop buys from, off the shared list, so the first
@@ -13623,6 +13693,14 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: currency != null && currency.isNotEmpty);
   }
 
+  /// The job's tax rate; null goes back to the app's default.
+  void setProjectTaxPercent(double? percent) {
+    final next = percent == null ? null : math.max(0.0, percent);
+    if (next == project.taxPercent) return;
+    project.taxPercent = next;
+    _projectChanged();
+  }
+
   // --- the class schedule and install windows --------------------------------
 
   /// The class schedule, read when first needed. Empty until then, or when
@@ -13656,6 +13734,14 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Puts a free stretch on the job's timeline.
+  /// The class schedule for a workbook's Class Schedule tab: read now if it
+  /// has not been, and null when the job has no install windows to show.
+  Future<ClassScheduleIndex?> classScheduleForExport() async {
+    if (project.installWindows.isEmpty) return null;
+    if (classSchedule.isEmpty) await loadClassSchedule();
+    return classSchedule;
+  }
+
   void addInstallWindow(InstallWindow window) {
     project.installWindows.add(window);
     project.installWindows.sort((a, b) => a.start.compareTo(b.start));
@@ -14603,6 +14689,7 @@ class AppStateProvider extends ChangeNotifier {
       library: avDeviceLibrary,
       baseCosts: baseCosts,
       tier: pricingTier,
+      classSchedule: await classScheduleForExport(),
       includeProjectFile: includeProjectFile,
       at: at,
     );
@@ -14986,9 +15073,9 @@ class AppStateProvider extends ChangeNotifier {
         // A model the catalog does not have is offered for the catalog
         // afterwards; see [catalogOffersFor].
         if (template != null && line.model.trim().isNotEmpty) {
-          final plan = planProjectModelSwap(line.model, template);
+          final plan = await planProjectModelSwap(line.model, template);
           if (!plan.isEmpty) {
-            applyProjectModelSwap(plan);
+            await applyProjectModelSwap(plan);
             touched++;
           }
           key = _keyAs(line, template);
@@ -15098,8 +15185,8 @@ class AppStateProvider extends ChangeNotifier {
     for (final o in swaps) {
       final template = avDeviceLibrary.templateForModel(o.model);
       if (template == null) continue;
-      final plan = planProjectModelSwap(o.from, template);
-      if (!plan.isEmpty) applyProjectModelSwap(plan);
+      final plan = await planProjectModelSwap(o.from, template);
+      if (!plan.isEmpty) await applyProjectModelSwap(plan);
     }
     _projectRooms.clear();
     _projectEstimate = null;
@@ -15926,6 +16013,102 @@ class AppStateProvider extends ChangeNotifier {
       item.copyWith(furnishedBy: furnishedBy, installedBy: installedBy),
     );
     _projectChanged(repricing: false);
+  }
+
+  // --- the AV procurement log -------------------------------------------------
+
+  ProcurementEntry addProcurementEntry([ProcurementEntry? from]) {
+    final entry = (from ?? const ProcurementEntry(id: '')).copyWith();
+    final added = ProcurementEntry.fromJson({
+      ...entry.toJson(),
+      'id': project.nextProcurementId(),
+    });
+    project.procurement.add(added);
+    _logProjectEdit(
+      itemKey: 'procurement:${added.id}',
+      itemName: added.device.isEmpty ? 'Procurement line' : added.device,
+      field: 'Procurement log',
+      summary: 'added',
+    );
+    _projectChanged(repricing: false);
+    return added;
+  }
+
+  void updateProcurementEntry(ProcurementEntry entry) {
+    final i = project.procurement.indexWhere((e) => e.id == entry.id);
+    if (i < 0) return;
+    final before = project.procurement[i];
+    project.procurement[i] = entry;
+    _logProjectEdit(
+      itemKey: 'procurement:${entry.id}',
+      itemName: entry.device.isEmpty ? 'Procurement line' : entry.device,
+      field: 'Procurement log',
+      summary: before.statusText != entry.statusText
+          ? (entry.statusText.isEmpty ? 'status cleared' : entry.statusText)
+          : 'updated',
+      coalesce: true,
+    );
+    _projectChanged(repricing: false);
+  }
+
+  void removeProcurementEntry(String id) {
+    final i = project.procurement.indexWhere((e) => e.id == id);
+    if (i < 0) return;
+    final was = project.procurement.removeAt(i);
+    _logProjectEdit(
+      itemKey: 'procurement:$id',
+      itemName: was.device.isEmpty ? 'Procurement line' : was.device,
+      field: 'Procurement log',
+      summary: 'removed',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Adds a line for every piece of equipment and hardware on the job's rooms
+  /// that the log does not already carry. Returns how many were added.
+  int fillProcurementFromRooms(ProjectEstimate estimate) {
+    String key(String room, String device) =>
+        '${room.trim().toLowerCase()}|${device.trim().toLowerCase()}';
+    final have = {
+      for (final e in project.procurement) key(e.room, e.device),
+    };
+    var added = 0;
+    for (final room in estimate.rooms) {
+      final costs = room.estimate;
+      if (costs == null || !room.ref.included) continue;
+      for (final line in [...costs.equipment, ...costs.hardware]) {
+        final device = [
+          line.manufacturer.trim(),
+          line.model.trim().isNotEmpty ? line.model.trim() : line.description,
+        ].where((s) => s.isNotEmpty).join(' ');
+        if (device.isEmpty || !have.add(key(room.codeName, device))) continue;
+        final leadDays = project.partLeadTimes[line.key];
+        project.procurement.add(
+          ProcurementEntry(
+            id: project.nextProcurementId(),
+            company: kProcurementCompanies.first,
+            room: room.codeName,
+            device: device,
+            description: line.description.trim().isNotEmpty
+                ? line.description.trim()
+                : line.category,
+            leadTime: leadDays == null ? '' : trimNumber(leadDays / 7),
+            notes: line.qty == 1 ? '' : 'Qty ${trimNumber(line.qty)}',
+          ),
+        );
+        added++;
+      }
+    }
+    if (added > 0) {
+      _logProjectEdit(
+        itemKey: 'procurement',
+        itemName: 'Procurement log',
+        field: 'Procurement log',
+        summary: '$added line${added == 1 ? '' : 's'} added from the rooms',
+      );
+      _projectChanged(repricing: false);
+    }
+    return added;
   }
 
   void removeResponsibilityItem(String id) {
@@ -17640,6 +17823,9 @@ class AppStateProvider extends ChangeNotifier {
     // And what the room tabs derive — the AV model, the cabling sheet, the
     // estimate — for the same reason again. See [_avFlowModel].
     _forgetRoomDerived();
+    // A room on the base tax rate follows it here, so every export of the
+    // room reads the rate the Cost tab shows.
+    avCost.followBaseTax(baseTaxPercent);
     // AND THE UNDO HISTORIES, for the third time and the same reason. These
     // only start a clock — the document is encoded once the typing stops, not
     // once per keystroke. See undo_history.dart.
@@ -17701,6 +17887,7 @@ class AppStateProvider extends ChangeNotifier {
       // live, and which python module claims a model.
       deviceCountMap: uiSchema.deviceCountMap,
       moduleForModel: moduleForModel,
+      defaultTaxPercent: defaultTaxPercent,
     );
   }
 
@@ -17734,10 +17921,11 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Works out what swapping [fromModel] to [template] would do to every room
   /// on the project. Writes nothing — see [applyProjectModelSwap].
-  ProjectSwapPlan planProjectModelSwap(
+  Future<ProjectSwapPlan> planProjectModelSwap(
     String fromModel,
-    AvDeviceTemplate template,
-  ) {
+    AvDeviceTemplate template, {
+    void Function(int done, int total)? onProgress,
+  }) {
     // Deliberately a FRESH read. A plan is shown to somebody who is about to
     // authorize writing to nine files, and showing it off a cache that could
     // be minutes old would be showing them a picture of a building that no
@@ -17751,22 +17939,29 @@ class AppStateProvider extends ChangeNotifier {
       moduleForModel: moduleForModel,
       deviceCountMap: uiSchema.deviceCountMap,
       openConfigPath: currentConfigPath,
+      onProgress: onProgress,
     );
   }
 
-  /// Carries out [plan].
+  /// Carries out [plan]. A non-empty [label] names every swapped box that.
   ///
   /// Every room but the open one is written on disk. The OPEN one is applied
   /// through the normal in-memory path instead, so it lands on the undo stack
   /// like any other swap and the editor and the file cannot disagree — writing
   /// its files here would put the swap on disk and leave the old model in
   /// memory, ready for the next Save to quietly undo it.
-  ({ProjectSwapResult disk, int openRoomBoxes, bool openRoomDirty})
-  applyProjectModelSwap(ProjectSwapPlan plan) {
-    final disk = applyProjectSwap(
+  Future<({ProjectSwapResult disk, int openRoomBoxes, bool openRoomDirty})>
+  applyProjectModelSwap(
+    ProjectSwapPlan plan, {
+    String label = '',
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final disk = await applyProjectSwap(
       plan: plan,
       moduleForModel: moduleForModel,
       deviceCountMap: uiSchema.deviceCountMap,
+      label: label,
+      onProgress: onProgress,
     );
 
     var openBoxes = 0;
@@ -17776,10 +17971,16 @@ class AppStateProvider extends ChangeNotifier {
         final node = avNodeById(id);
         if (node == null) continue;
         // One undo entry for the whole swap, not one per box.
-        applyModelSwap(this, node, plan.to, recordUndo: openBoxes == 0);
+        applyModelSwap(
+          this,
+          node,
+          plan.to,
+          recordUndo: openBoxes == 0,
+          label: label,
+        );
         openBoxes++;
       }
-      applyControlSwap(this, room.nodeIds, plan.to.model);
+      applyControlSwap(this, room.nodeIds, plan.to.model, name: label);
     }
 
     // Whatever was just written is not what the cache holds.
@@ -17790,6 +17991,55 @@ class AppStateProvider extends ChangeNotifier {
       openRoomBoxes: openBoxes,
       openRoomDirty: openBoxes > 0,
     );
+  }
+
+  /// Every room with a box on [model], for renaming them all. Writes nothing.
+  Future<List<RoomSwapPlan>> planProjectRename(
+    String model, {
+    void Function(int done, int total)? onProgress,
+  }) {
+    _projectRooms.clear();
+    return project_swap.planProjectRename(
+      project: project,
+      projectPath: currentProjectPath,
+      model: model,
+      deviceCountMap: uiSchema.deviceCountMap,
+      openConfigPath: currentConfigPath,
+      onProgress: onProgress,
+    );
+  }
+
+  /// Names every box on [model] [label] across [rooms]. The open room is
+  /// renamed in memory, as one undo entry, so the next Save keeps it.
+  Future<({ProjectSwapResult disk, int openRoomBoxes})> applyProjectRename(
+    List<RoomSwapPlan> rooms,
+    String model,
+    String label, {
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final disk = await project_swap.applyProjectRename(
+      rooms: rooms,
+      model: model,
+      label: label,
+      deviceCountMap: uiSchema.deviceCountMap,
+      onProgress: onProgress,
+    );
+
+    var openBoxes = 0;
+    for (final room in rooms) {
+      if (!room.isOpenRoom) continue;
+      for (final id in room.nodeIds) {
+        final node = avNodeById(id);
+        if (node == null) continue;
+        updateAvNode(node.copyWith(label: label), recordUndo: openBoxes == 0);
+        openBoxes++;
+        if (roomConfig[id] is Map) updateDeviceValue(id, 'name', label);
+      }
+    }
+
+    _projectRooms.clear();
+    notifyListeners();
+    return (disk: disk, openRoomBoxes: openBoxes);
   }
 
   /// Every manufacturer and category the catalog knows, for the vendor rule

@@ -439,9 +439,9 @@ void main() {
   //  fit wraps INSIDE its button. The switcher measures instead of guessing.
 
   group('the pane switcher never wraps a label', () {
-    testWidgets('a window wide enough for nine labels keeps them, one line '
+    testWidgets('a window wide enough for every label keeps them, one line '
         'each', (tester) async {
-      await pump(tester, withProject(), width: 2600);
+      await pump(tester, withProject(), width: 3000);
 
       final longest = find.byKey(
         const ValueKey('project_pane_responsibility'),
@@ -721,11 +721,16 @@ void main() {
     await pump(tester, p);
 
     final template = p.avDeviceLibrary.templateForModel('DTP2 T 202')!;
-    final plan = p.planProjectModelSwap('DTP2 T 211', template);
+    // Real file reads and writes, so outside the test's fake clock.
+    final plan = (await tester.runAsync(
+      () => p.planProjectModelSwap('DTP2 T 211', template),
+    ))!;
     expect(plan.affectedRooms, hasLength(2));
     expect(plan.affectedRooms.first.isOpenRoom, isTrue);
 
-    final result = p.applyProjectModelSwap(plan);
+    final result = (await tester.runAsync(
+      () => p.applyProjectModelSwap(plan),
+    ))!;
 
     expect(result.openRoomBoxes, 1);
     expect(result.openRoomDirty, isTrue);

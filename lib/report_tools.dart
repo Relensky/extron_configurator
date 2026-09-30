@@ -22,6 +22,18 @@ typedef ReportSection = ({
   List<List<dynamic>> rows,
 });
 
+/// A row that is a paragraph: [label] in column A, [text] wrapped across the
+/// rest of the sheet. Written as a row of this one cell.
+class ReportParagraph {
+  final String label;
+  final String text;
+
+  const ReportParagraph(this.label, this.text);
+
+  @override
+  String toString() => label.isEmpty ? text : '$label:  $text';
+}
+
 /// When a report was produced, as it is stamped on every one of them.
 ///
 /// A report with no date on it is a report nobody can tell is out of date —
@@ -143,8 +155,8 @@ Set<int> proseColumnsOf(ReportSection section) {
 ///
 /// A SENTENCE IS NOT A COLUMN. Wherever a column holds prose — what the work
 /// is, a note, a description that runs to a line and a half — it is lifted out
-/// of the grid and written under its row, merged across the sheet and labeled
-/// with the heading it came from. The reason is what it does to everything
+/// of the grid and written under its row: the heading it came from in column
+/// A, the sentence merged across the rest of the sheet. The reason is what it does to everything
 /// ELSE on the row: a column sized to a hundred-character sentence is a column
 /// the two-character quantities beside it are stranded at the left-hand edge
 /// of, and the reader is left scrolling sideways past one paragraph to reach
@@ -170,10 +182,9 @@ XlsxSheet buildStackedReportSheet({
   final rows = <List<dynamic>>[];
   final rowStyles = <int, int>{};
   final overflowRows = <int>{};
-  // The title band and the stamp under it, both written across the sheet: a
-  // caption is not a value in column A, and left as one it set that column's
-  // width for every short cell below it.
-  final merges = <String>['A1:E1', 'A2:E2'];
+  // NOTHING IS MERGED ACROSS COLUMN A. Column A is frozen, and Google Sheets
+  // will not freeze a column that a merged cell runs out of.
+  final merges = <String>[];
   final int reportWidth = sections.fold(1, (w, s) => math.max(w, widthOf(s)));
 
   /// The columns a lifted sentence is written across. At least two, or the
@@ -181,12 +192,23 @@ XlsxSheet buildStackedReportSheet({
   /// it for every short value underneath.
   final int proseSpan = math.max(reportWidth, 2);
 
-  // Row 1 carries the room and nothing else, merged across A:E so the title
-  // band reads as one cell instead of a value stuck in column A. Row 2 says
-  // when the sheet was produced, plainly, below the band rather than in it.
-  rows.add(pad([title], reportWidth));
+  // Row 1 is the title, wrapped in column A. Row 2 says when the sheet was
+  // produced; it runs over the empty cells beside it rather than sizing A.
+  rows.add(pad([XlsxWrapped(title)], reportWidth));
   rowStyles[0] = XlsxRowStyle.title;
-  rows.add(pad(['Generated ${reportTimestamp(generated)}'], reportWidth));
+  overflowRows.add(rows.length);
+  rows.add(['Generated ${reportTimestamp(generated)}']);
+
+  /// A paragraph row: the label in A, the text wrapped across B onwards.
+  void paragraph(String label, String text) {
+    if (proseSpan > 2) {
+      merges.add(
+        'B${rows.length + 1}:'
+        '${xlsxColumnLetter(proseSpan - 1)}${rows.length + 1}',
+      );
+    }
+    rows.add(pad([label, XlsxWrapped(text)], proseSpan));
+  }
 
   for (final s in sections) {
     final bool twoColumn = s.header.length == 2;
@@ -206,14 +228,8 @@ XlsxSheet buildStackedReportSheet({
 
     rows.add([]);
     rowStyles[rows.length] = XlsxRowStyle.title;
-    // The section's name written across its band, the way the sheet's own
-    // title is. Left in column A it is a caption Excel clips at that column's
-    // edge, and 'Roles and Responsi' is not the name of anything.
-    if (band >= 2) {
-      merges.add(
-        'A${rows.length + 1}:${xlsxColumnLetter(band - 1)}${rows.length + 1}',
-      );
-    }
+    // The section's name runs across its band: the band's other cells are
+    // written blank, so it is not clipped at column A's edge.
     rows.add(pad([s.title], band));
     rowStyles[rows.length] = XlsxRowStyle.header;
     rows.add(pad(
@@ -222,6 +238,11 @@ XlsxSheet buildStackedReportSheet({
       final row = s.rows[i];
       final int style = i.isOdd ? XlsxRowStyle.zebra : XlsxRowStyle.normal;
       if (i.isOdd) rowStyles[rows.length] = XlsxRowStyle.zebra;
+      if (row.length == 1 && row.first is ReportParagraph) {
+        final p = row.first as ReportParagraph;
+        paragraph(p.label, p.text);
+        continue;
+      }
       if (twoColumn) overflowRows.add(rows.length);
       rows.add(
           pad([for (final c in kept) c < row.length ? row[c] : ''], band));
@@ -236,11 +257,7 @@ XlsxSheet buildStackedReportSheet({
         // The continuation row takes its parent's banding, so the pair reads
         // as one row rather than as a row and a stray line under it.
         if (style != XlsxRowStyle.normal) rowStyles[rows.length] = style;
-        merges.add(
-          'A${rows.length + 1}:'
-          '${xlsxColumnLetter(proseSpan - 1)}${rows.length + 1}',
-        );
-        rows.add(pad([head.isEmpty ? text : '$head:  $text'], proseSpan));
+        paragraph(head, text);
       }
     }
   }
@@ -252,6 +269,7 @@ XlsxSheet buildStackedReportSheet({
     overflowRows: overflowRows,
     merges: merges,
     image: imageBuilder?.call(rows.length + 1),
+    freezeColumns: 1,
   );
 }
 

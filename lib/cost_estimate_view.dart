@@ -735,16 +735,26 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 ),
                 SizedBox(
                   width: 130,
+                  // Blank follows the project's rate, shown behind the box.
                   child: LiveTextField(
                     fieldId: 'taxPercent',
-                    initial: settings.taxPercent == 0
-                        ? ''
-                        : trimNumber(settings.taxPercent),
+                    initial: settings.ownTaxRate
+                        ? trimNumber(settings.taxPercent)
+                        : '',
                     label: 'Tax rate',
+                    hint: trimNumber(provider.baseTaxPercent),
+                    hintIsValue: true,
+                    helper: settings.ownTaxRate
+                        ? 'This room only'
+                        : provider.openProjectRoom != null
+                            ? 'Project rate'
+                            : 'Default rate',
                     suffix: '%',
                     numeric: true,
-                    onChanged: (v) =>
-                        provider.setAvCostTax(percent: double.tryParse(v) ?? 0),
+                    onChanged: (v) => v.trim().isEmpty
+                        ? provider.clearAvCostOwnTax()
+                        : provider.setAvCostTax(
+                            percent: double.tryParse(v) ?? 0),
                   ),
                 ),
                 // WHAT THE PDF IS HEADED. 'CTS Estimate', 'Audio Visual
@@ -2820,12 +2830,61 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final neverControlled = provider.avModelNeverControlled(catalogModel);
 
     if (configKey.isNotEmpty) {
-      return KeyedSubtree(
+      // In the config, with the two ways back out of it.
+      return SizedBox(
         key: slot,
-        child: avRowIcon(
-          Icons.check_circle_outline,
-          'In the room config as $configKey',
-          null,
+        width: kRowIconWidth,
+        child: Tooltip(
+          message: 'In the room config as $configKey',
+          child: PopupMenuButton<String>(
+            icon: Icon(
+              Icons.check_circle_outline,
+              size: 18,
+              color: mutedInk(context, theme),
+            ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 320, maxWidth: 460),
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'nocontrol',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.link_off, size: 18),
+                  title: Text('Not part of the room config'),
+                  subtitle: Text(
+                    'Removes its device block. It stays on the quote and the '
+                    'diagram, and is not reported as missing.',
+                  ),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'nevercontrol',
+                enabled: catalogModel.trim().isNotEmpty,
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.block, size: 18),
+                  title: const Text('This product never needs a module'),
+                  subtitle: Text(
+                    catalogModel.trim().isEmpty
+                        ? 'Only a line with a catalog model can be marked.'
+                        : 'Removes its device block, and saves to the CATALOG '
+                              'that no room needs a module for a '
+                              '$catalogModel.',
+                  ),
+                ),
+              ),
+            ],
+            onSelected: (choice) => _removeLineFromConfig(
+              context,
+              provider,
+              line,
+              nodes,
+              neverNeedsModule: choice == 'nevercontrol',
+              catalogModel: catalogModel,
+            ),
+          ),
         ),
       );
     }
@@ -3000,6 +3059,74 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           _addLineToConfig(context, provider, line, model, extra: extra);
         },
       ),
+      ),
+    );
+  }
+
+  /// Takes a drawn line's device blocks out of the room config, keeping its
+  /// boxes on the diagram and the quote.
+  Future<void> _removeLineFromConfig(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLine line,
+    List<AvNode> nodes, {
+    required bool neverNeedsModule,
+    required String catalogModel,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final what = line.description.trim().isEmpty
+        ? 'this line'
+        : line.description.trim();
+    final blocks = [
+      for (final n in nodes)
+        if (provider.roomConfig[n.id] is Map) n.id,
+    ];
+    final ok = await _confirmDelete(
+      context,
+      title: 'Remove $what from the room config?',
+      detail: [
+        '${blocks.length} device block${blocks.length == 1 ? '' : 's'} '
+            '(${blocks.join(', ')}) ${blocks.length == 1 ? 'is' : 'are'} '
+            'removed, with ${blocks.length == 1 ? 'its' : 'their'} addresses '
+            'and module, and the rest of the family is renumbered.',
+        'It stays on the diagram and the estimate.',
+        if (neverNeedsModule)
+          'The catalog is marked so no room asks for a module for a '
+              '$catalogModel.',
+        'The room config is not on the Undo history - save the room before '
+            'doing this if the blocks matter.',
+      ],
+      action: 'Remove',
+    );
+    if (!ok) return;
+
+    if (neverNeedsModule &&
+        !provider.avModelNeverControlled(catalogModel)) {
+      final result =
+          await provider.setModelNeverControlled(catalogModel, true);
+      if (!result.ok) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: snackErrorFillOn(messenger),
+          ),
+        );
+        return;
+      }
+    }
+    final removed = provider.detachAvNodesFromConfig(
+      nodes.map((n) => n.id),
+      notControlled: !neverNeedsModule,
+    );
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(
+          '$what taken out of the room config - '
+          '${removed.length} device block${removed.length == 1 ? '' : 's'} '
+          'removed',
+        ),
+        duration: const Duration(seconds: 5),
       ),
     );
   }
@@ -3449,6 +3576,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     BuildContext context, {
     required String title,
     required List<String> detail,
+    String action = 'Delete',
   }) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -3480,7 +3608,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               foregroundColor: Theme.of(ctx).colorScheme.onError,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete'),
+            child: Text(action),
           ),
         ],
       ),

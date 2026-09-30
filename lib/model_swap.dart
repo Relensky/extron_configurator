@@ -79,6 +79,10 @@ ModelSwapPlan planModelSwap({
   /// Why the unit came out — 'failed', 'end of life', 'room refresh'. Kept
   /// with the outgoing unit; see [EquipmentSwap].
   String swapReason = '',
+
+  /// A name to give the box outright, in place of the model-part rename.
+  /// '' keeps the rename.
+  String label = '',
 }) {
   final swapped = withOutletNames(
     withPowerInlet(template.ports, template.powerInput),
@@ -117,7 +121,19 @@ ModelSwapPlan planModelSwap({
     // that name is what the schematic, the pack list and the person on site
     // all read. Only the model part moves; "Projector 1 - " is what this room
     // calls the position, and the position has not changed.
-    label: renamedForModel(node.label, node.model, template.model),
+    label: label.trim().isNotEmpty
+        ? label.trim()
+        // Maker first: "Confidence monitor" also matches the placeholder
+        // model's name, and would otherwise become the Dell's model name.
+        : renamedForModel(
+            renamedForMaker(
+              node.label,
+              template.manufacturer,
+              category: template.category,
+            ),
+            node.model,
+            template.model,
+          ),
     ports: swapped,
     rackUnits: template.rackUnits,
     powerWatts: template.powerWatts,
@@ -190,6 +206,28 @@ String renamedForModel(String name, String oldModel, String newModel) {
   return name.replaceAll(pattern, replacement);
 }
 
+/// [name] with "Confidence monitor" read as "PC monitor" when [manufacturer]
+/// is Dell, and back again for any other display. A Dell on the lectern is a
+/// plain computer monitor, not a commercial display.
+String renamedForMaker(
+  String name,
+  String manufacturer, {
+  String category = 'Display',
+}) {
+  final dell = manufacturer.trim().toLowerCase() == 'dell';
+  if (!dell && category.trim().toLowerCase() != 'display') return name;
+  final from = RegExp(
+    dell ? r'\bconfidence monitor\b' : r'\bpc monitor\b',
+    caseSensitive: false,
+  );
+  return name.replaceAllMapped(from, (m) {
+    final first = m.group(0)!.startsWith(RegExp('[A-Z]'));
+    return dell
+        ? (first ? 'PC monitor' : 'pc monitor')
+        : (first ? 'Confidence monitor' : 'confidence monitor');
+  });
+}
+
 // ---------------------------------------------------------------------------
 //  THE CONTROL SIDE
 // ---------------------------------------------------------------------------
@@ -232,8 +270,11 @@ enum ControlSwapOutcome {
 ControlSwapOutcome swapControlBlock(
   Map<dynamic, dynamic> block,
   String model,
-  String Function(String model) moduleForModel,
-) {
+  String Function(String model) moduleForModel, {
+
+  /// A name to give the block outright; '' keeps the model-part rename.
+  String name = '',
+}) {
   final was = block['model']?.toString().trim() ?? '';
   block['model'] = model;
 
@@ -243,9 +284,13 @@ ControlSwapOutcome swapControlBlock(
       : ControlSwapOutcome.moduleMatched;
   block['module'] = module;
 
-  final name = block['name']?.toString() ?? '';
-  final renamed = renamedForModel(name, was, model);
-  if (renamed != name) block['name'] = renamed;
+  if (name.trim().isNotEmpty) {
+    block['name'] = name.trim();
+  } else {
+    final current = block['name']?.toString() ?? '';
+    final renamed = renamedForModel(current, was, model);
+    if (renamed != current) block['name'] = renamed;
+  }
 
   return outcome;
 }

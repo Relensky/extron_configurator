@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'av_device_library.dart';
 import 'base_costs.dart';
 import 'building_project.dart';
+import 'class_schedule.dart' show ClassScheduleIndex;
 import 'control_gaps.dart';
 import 'cost_estimate.dart';
 import 'equipment_lifecycle.dart';
@@ -11,6 +12,7 @@ import 'project_estimate.dart';
 import 'project_schedule.dart';
 import 'report_tools.dart';
 import 'responsibility_matrix.dart';
+import 'schedule_workbook.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -50,6 +52,10 @@ typedef MasterCellRefs = ({
   String model,
   String part,
   String? unit,
+
+  /// The master sheet and the part's name cell on it, for a link back.
+  String sheet,
+  String cell,
 });
 
 /// [MasterCellRefs] by master key.
@@ -62,6 +68,67 @@ String _sheetRef(String name) => "'${name.replaceAll("'", "''")}'";
 /// showing it as 0.
 XlsxTextFormula _textFrom(String ref, Object? cached) =>
     XlsxTextFormula('$ref&""', cached?.toString() ?? '');
+
+/// A part's name that reads from, and jumps to, its row on the master list.
+XlsxLink _nameLink(MasterCellRefs refs, Object? cached) => XlsxLink(
+      text: cached?.toString() ?? '',
+      sheet: refs.sheet,
+      cell: refs.cell,
+      formula: '${refs.name}&""',
+    );
+
+/// Links every other part table in the book back to the master list: each
+/// part's name jumps to its row there, and its model and single unit price
+/// read from it. Tables are found by a first column headed Part or Item, and
+/// a row by its name - a name two parts share is left alone.
+void _linkPartTables(
+  XlsxSheet sheet,
+  ProjectEstimate estimate,
+  MasterPriceCells cells,
+) {
+  final byName = <String, List<MasterPartLine>>{};
+  for (final l in estimate.master) {
+    if (!cells.containsKey(l.key)) continue;
+    (byName[l.description] ??= []).add(l);
+  }
+  List<dynamic>? header;
+  for (var r = 0; r < sheet.rows.length; r++) {
+    final style = sheet.rowStyles[r];
+    final row = sheet.rows[r];
+    if (style == XlsxRowStyle.title) {
+      header = null;
+      continue;
+    }
+    if (style == XlsxRowStyle.header) {
+      header = row.isNotEmpty && (row.first == 'Part' || row.first == 'Item')
+          ? row
+          : null;
+      continue;
+    }
+    if (header == null || row.isEmpty) continue;
+    final first = row.first;
+    if (first is! String) continue;
+    final matches = byName[first];
+    if (matches == null || matches.length != 1) continue;
+    final line = matches.single;
+    final refs = cells[line.key]!;
+    row[0] = _nameLink(refs, first);
+
+    final model = header.indexOf('Model');
+    if (model > 0 && model < row.length && row[model] == line.model) {
+      row[model] = _textFrom(refs.model, line.model);
+    }
+    final unit = header.indexOf('Unit price');
+    final price = refs.unit;
+    if (price != null &&
+        unit > 0 &&
+        unit < row.length &&
+        row[unit] is XlsxMoney &&
+        ((row[unit] as XlsxMoney).value - line.unitPrice).abs() <= 0.005) {
+      row[unit] = XlsxFormula(price, row[unit] as XlsxMoney);
+    }
+  }
+}
 
 /// Finds each part's row on the built master [sheet], makes its Extended a
 /// formula of its own Qty and Unit price, and returns where every part's
@@ -108,6 +175,8 @@ MasterPriceCells _linkMasterSheet(XlsxSheet sheet, ProjectEstimate estimate) {
         model: '$tab!${at(model)}',
         part: '$tab!${at(part)}',
         unit: priced ? '$tab!${at(unit)}' : null,
+        sheet: sheet.name,
+        cell: at(name),
       );
       r++;
     }
@@ -143,6 +212,8 @@ MasterCellRefs? _masterCellFor(
     model: refs.model,
     part: refs.part,
     unit: samePrice ? refs.unit : null,
+    sheet: refs.sheet,
+    cell: refs.cell,
   );
 }
 
@@ -161,7 +232,7 @@ List<dynamic> _linkRow(
   final out = [...row];
   // The spare split is written into the name, so that one keeps its own.
   if (name >= 0 && line.spareQty <= 0) {
-    out[name] = _textFrom(refs.name, out[name]);
+    out[name] = _nameLink(refs, out[name]);
   }
   if (model >= 0) out[model] = _textFrom(refs.model, out[model]);
   if (part >= 0) out[part] = _textFrom(refs.part, out[part]);
@@ -878,7 +949,9 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
       header: const ['', ''],
       rows: [
         if (project.name.trim().isNotEmpty) ['Project', project.name],
-        if (project.building.trim().isNotEmpty) ['Building', project.building],
+        // Wrapped in column B: a campus job's list of buildings runs long.
+        if (project.building.trim().isNotEmpty)
+          ['Building', XlsxWrapped(project.building)],
         if (project.projectNumber.trim().isNotEmpty)
           ['Project number', project.projectNumber],
         if (project.stakeholder.trim().isNotEmpty)
@@ -909,7 +982,8 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
             '${project.rooms.length - estimate.costedRooms.length} '
                 '(excluded or unreadable - see Rooms below)',
           ],
-        if (project.notes.trim().isNotEmpty) ['Notes', project.notes],
+        if (project.notes.trim().isNotEmpty)
+          [ReportParagraph('Notes', project.notes.trim())],
       ],
     ),
     (
@@ -1128,16 +1202,34 @@ String _roomStatus(ProjectRoomCost room) {
     if (room.room.isEmpty) 'nothing drawn yet',
     if (e.unpricedLines > 0)
       '${e.unpricedLines} line${e.unpricedLines == 1 ? '' : 's'} unpriced',
-    if (e.unratedLabor > 0) '${e.unratedLabor} labor line at no rate',
+    if (e.unratedLabor > 0)
+      '${e.unratedLabor} labor line${e.unratedLabor == 1 ? '' : 's'} at no '
+          'rate',
     if (e.estimatedLines > 0) '${e.estimatedLines} at base cost (budgetary)',
     if (e.otherTierLines > 0) '${e.otherTierLines} priced at the other tier',
     if (e.excludedLines > 0) '${e.excludedLines} drawn but not bought',
     if (room.controlGaps.isNotEmpty)
-      '${room.controlGaps.fold(0, (s, g) => s + g.qty)} device(s) with no '
-          'control module',
+      () {
+        final n = room.controlGaps.fold(0, (s, g) => s + g.qty);
+        return '$n device${n == 1 ? '' : 's'} with no control module';
+      }(),
     if (room.ref.notes.trim().isNotEmpty) room.ref.notes.trim(),
   ];
   return notes.join('; ');
+}
+
+/// The devices with no driver, counted and said in the right number.
+String _undrivenWarning(ProjectEstimate estimate) {
+  final devices = estimate.undrivenDevices;
+  final rooms =
+      estimate.controlGaps.map((g) => g.room.ref.id).toSet().length;
+  final one = devices == 1;
+  return '$devices device${one ? '' : 's'} across $rooms '
+      'room${rooms == 1 ? '' : 's'} ${one ? 'has' : 'have'} no control '
+      'module. ${one ? 'It is' : 'They are'} quoted and '
+      '${one ? 'it' : 'they'} will not commission as '
+      '${one ? 'it stands' : 'they stand'} - see the $kProjectControlSheet '
+      'sheet.';
 }
 
 /// The things that should stop a quote going out, in the order they matter.
@@ -1149,15 +1241,18 @@ List<String> _projectWarnings(ProjectEstimate estimate) {
   if (estimate.failedRooms > 0)
     '${estimate.failedRooms} room${estimate.failedRooms == 1 ? '' : 's'} '
         'could not be read, so the project total is short by whatever '
-        'they cost. See the Rooms table.',
+        '${estimate.failedRooms == 1 ? 'it costs' : 'they cost'}. See the '
+        'Rooms table.',
   if (estimate.mixedCurrency)
     'Rooms in this project are quoted in different currencies. The totals '
         'add them as though they were the same one - fix the room currencies '
         'before relying on any figure here.',
   if (estimate.unpricedParts > 0)
     '${estimate.unpricedParts} part${estimate.unpricedParts == 1 ? '' : 's'} '
-        'on the master list has no price anywhere. The total is short by '
-        'whatever they cost.',
+        'on the master list '
+        '${estimate.unpricedParts == 1 ? 'has' : 'have'} no price anywhere. '
+        'The total is short by whatever '
+        '${estimate.unpricedParts == 1 ? 'it costs' : 'they cost'}.',
   if (estimate.untaggedParts > 0)
     '${estimate.untaggedParts} part'
         '${estimate.untaggedParts == 1 ? ' is' : 's are'} in no buying '
@@ -1169,11 +1264,7 @@ List<String> _projectWarnings(ProjectEstimate estimate) {
   // building that arrives on site and cannot be commissioned, and the quote is
   // the document that actually gets read before that happens.
   if (estimate.undrivenDevices > 0)
-    '${estimate.undrivenDevices} device'
-        '${estimate.undrivenDevices == 1 ? '' : 's'} across '
-        '${estimate.controlGaps.map((g) => g.room.ref.id).toSet().length} '
-        'room(s) have no control module. They are quoted and they will not '
-        'commission as they stand - see the $kProjectControlSheet sheet.',
+    _undrivenWarning(estimate),
   // Not a mistake, and not something the app should decide — but a building
   // where nothing at all is spared is a building where the first failure is
   // paid for out of a budget that has already closed, and nobody was ever
@@ -2219,6 +2310,7 @@ List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
 List<ReportSection> projectControlGapSections(ProjectEstimate estimate) {
   if (estimate.controlGaps.isEmpty) return const [];
 
+  String devices(int n) => '$n device${n == 1 ? '' : 's'}';
   final byKind = <ControlGapKind, int>{};
   for (final entry in estimate.controlGaps) {
     byKind[entry.gap.kind] = (byKind[entry.gap.kind] ?? 0) + entry.gap.qty;
@@ -2250,29 +2342,31 @@ List<ReportSection> projectControlGapSections(ProjectEstimate estimate) {
         if ((byKind[ControlGapKind.moduleUnset] ?? 0) > 0)
           [
             'Pick the module',
-            '${byKind[ControlGapKind.moduleUnset]} device(s) - a module '
+            '${devices(byKind[ControlGapKind.moduleUnset]!)} - a module '
                 'already claims the model; the field is just empty.',
           ],
         if ((byKind[ControlGapKind.noModuleClaims] ?? 0) > 0)
           [
             'No driver exists',
-            '${byKind[ControlGapKind.noModuleClaims]} device(s) - write or '
+            '${devices(byKind[ControlGapKind.noModuleClaims]!)} - write or '
                 'import a module, or mark the product as never controlled on '
                 'the Catalog tab if it genuinely has no interface.',
           ],
         if ((byKind[ControlGapKind.noModel] ?? 0) > 0)
           [
             'Choose a model',
-            '${byKind[ControlGapKind.noModel]} device(s) have no model, so '
-                'nothing can be matched to them.',
+            byKind[ControlGapKind.noModel] == 1
+                ? '1 device has no model, so nothing can be matched to it.'
+                : '${byKind[ControlGapKind.noModel]} devices have no model, '
+                      'so nothing can be matched to them.',
           ],
         if ((byKind[ControlGapKind.notDrawn] ?? 0) > 0)
           [
             'In the config, not on the drawing',
-            '${byKind[ControlGapKind.notDrawn]} device(s) - undriven and not '
+            '${devices(byKind[ControlGapKind.notDrawn]!)} - undriven and not '
                 'on the signal flow either.',
           ],
-        ['Total', '${estimate.undrivenDevices} device(s)'],
+        ['Total', devices(estimate.undrivenDevices)],
       ],
     ),
   ];
@@ -2567,6 +2661,10 @@ Uint8List buildProjectWorkbookBytes({
   /// form sheets on every export would invite edits into files nothing is
   /// ever going to pick up.
   bool editable = false,
+
+  /// The class schedule, for the Class Schedule tab written when the job has
+  /// install windows. Without it the windows are still charted.
+  ClassScheduleIndex? classSchedule,
 }) {
   final stamp = generated ?? DateTime.now();
   final title = _projectTitle(estimate.project);
@@ -2703,6 +2801,20 @@ Uint8List buildProjectWorkbookBytes({
     ));
   }
 
+  // When each room is free, beside when its parts are due.
+  final classes = classScheduleSections(
+    estimate.project,
+    classSchedule ?? ClassScheduleIndex.empty,
+  );
+  if (classes.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kClassScheduleSheet),
+      title: '$title - class schedule and install windows',
+      sections: classes,
+      generated: stamp,
+    ));
+  }
+
   // Its own sheet rather than a block at the foot of the parts list: "what is
   // not spared" is a list of things that are NOT on the order, and a table of
   // absences buried under a table of purchases is a table nobody reads.
@@ -2829,16 +2941,28 @@ Uint8List buildProjectWorkbookBytes({
   // THE FORM, at the end. It is the sheet somebody TYPES in rather than one
   // they read, so it sits after everything that gets read — and after the
   // package tabs, which are what a reader is usually looking for.
-  if (editable) {
-    sheets.add(buildEditableDeliveriesSheet(
-      estimate.project,
-      roomNames: estimate.roomCodeNames,
-    ));
-    sheets.add(buildEditablePosSheet(estimate.project));
-  }
+  final forms = <XlsxSheet>[
+    if (editable) ...[
+      buildEditableDeliveriesSheet(
+        estimate.project,
+        roomNames: estimate.roomCodeNames,
+      ),
+      buildEditablePosSheet(estimate.project),
+    ],
+  ];
+  sheets.addAll(forms);
 
   _formulaSummaryTotals(sheets.first, estimate, roomTabs, roomTotals);
   sheets.addAll(roomSheets);
+
+  // Every other part table points back at the master list too. Not the
+  // master itself, and not the forms, which are read back as typed.
+  if (masterSheet != null && masterCells.isNotEmpty) {
+    for (final sheet in sheets) {
+      if (identical(sheet, masterSheet) || forms.contains(sheet)) continue;
+      _linkPartTables(sheet, estimate, masterCells);
+    }
+  }
 
   return buildXlsx(sheets);
 }

@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 import 'room_sidecar.dart' show roomStem;
 
 import 'av_device_library.dart' show AvDeviceLibrary;
+import 'procurement_log.dart';
 import 'responsibility_matrix.dart';
 import 'safe_write.dart';
 
@@ -2590,6 +2591,10 @@ class BuildingProject {
   /// added (see ProjectEstimate.mixedCurrency).
   String currency;
 
+  /// The tax rate every room on the job starts from, or null for the app's
+  /// default. A room can still set its own.
+  double? taxPercent;
+
   final List<ProjectRoomRef> rooms;
 
   // -------------------------------------------------------------------------
@@ -2794,6 +2799,10 @@ class BuildingProject {
   /// and is what somebody scanning the list expects.
   final List<ProjectPo> purchaseOrders;
 
+  /// The AV procurement log issued to the contractor - see
+  /// [ProcurementEntry].
+  final List<ProcurementEntry> procurement;
+
   /// Everything that has ARRIVED, one row per lot - see [ProjectDelivery].
   /// Empty on a job nobody is tracking deliveries on, which behaves exactly as
   /// it did before this existed.
@@ -2883,6 +2892,7 @@ class BuildingProject {
     this.stakeholder = '',
     this.notes = '',
     this.currency = r'$',
+    this.taxPercent,
     List<ProjectRoomRef>? rooms,
     this.campusFile = '',
     this.onlineFolder = '',
@@ -2906,6 +2916,7 @@ class BuildingProject {
     this.spareCoverTarget = kSuggestedSpareCover,
     List<ProjectPlan>? plans,
     List<ProjectPo>? purchaseOrders,
+    List<ProcurementEntry>? procurement,
     List<ProjectDelivery>? deliveries,
     List<ProjectEdit>? history,
     int roomCounter = 0,
@@ -2946,6 +2957,7 @@ class BuildingProject {
        spares = spares ?? [],
        plans = plans ?? [],
        purchaseOrders = purchaseOrders ?? [],
+       procurement = procurement ?? [],
        deliveries = deliveries ?? [],
        history = history ?? [],
        _roomCounter = roomCounter,
@@ -2976,6 +2988,7 @@ class BuildingProject {
       spares.isEmpty &&
       plans.isEmpty &&
       purchaseOrders.isEmpty &&
+      procurement.isEmpty &&
       deliveries.isEmpty &&
       budget == 0 &&
       budgetLines.isEmpty &&
@@ -3494,6 +3507,16 @@ class BuildingProject {
     } else {
       partyColors[key] = color;
     }
+  }
+
+  /// A fresh id for a procurement line.
+  String nextProcurementId() {
+    var best = 0;
+    for (final e in procurement) {
+      final n = int.tryParse(e.id.replaceFirst('proc', ''));
+      if (n != null && n > best) best = n;
+    }
+    return 'proc${best + 1}';
   }
 
   ResponsibilityItem? responsibilityById(String id) {
@@ -4400,6 +4423,7 @@ class BuildingProject {
     if (stakeholder.isNotEmpty) 'stakeholder': stakeholder,
     if (notes.isNotEmpty) 'notes': notes,
     'currency': currency,
+    if (taxPercent != null) 'taxPercent': taxPercent,
     'rooms': [for (final r in rooms) r.toJson()],
     // Which sheet this job is on - see [campusFile]. Written only when there
     // is one, so a job that has never been on a campus does not grow a key
@@ -4447,6 +4471,8 @@ class BuildingProject {
     if (plans.isNotEmpty) 'plans': [for (final p in plans) p.toJson()],
     if (purchaseOrders.isNotEmpty)
       'purchaseOrders': [for (final p in purchaseOrders) p.toJson()],
+    if (procurement.isNotEmpty)
+      'procurement': [for (final e in procurement) e.toJson()],
     if (deliveries.isNotEmpty)
       'deliveries': [for (final d in deliveries) d.toJson()],
     if (history.isNotEmpty)
@@ -4806,6 +4832,7 @@ class BuildingProject {
       currency: json['currency']?.toString().isNotEmpty == true
           ? json['currency'].toString()
           : r'$',
+      taxPercent: (json['taxPercent'] as num?)?.toDouble(),
       rooms: rooms,
       campusFile: json['campusFile']?.toString().trim() ?? '',
       onlineFolder: json['onlineFolder']?.toString().trim() ?? '',
@@ -4849,6 +4876,11 @@ class BuildingProject {
       }(),
       plans: plans,
       purchaseOrders: purchaseOrders,
+      procurement: [
+        for (final entry in (json['procurement'] as List? ?? []))
+          if (entry is Map)
+            ProcurementEntry.fromJson(Map<String, dynamic>.from(entry)),
+      ],
       deliveries: deliveries,
       history: history,
       spareCounter: [
@@ -4945,6 +4977,7 @@ class BuildingProject {
     stakeholder: stakeholder,
     notes: notes,
     currency: currency,
+    taxPercent: taxPercent,
     rooms: List<ProjectRoomRef>.from(rooms),
     campusFile: campusFile,
     onlineFolder: onlineFolder,
@@ -4971,6 +5004,7 @@ class BuildingProject {
     // each one is rebuilt with its own copy of its notes, or an undo would
     // hand back rows that share their note lists with the ones it replaced.
     purchaseOrders: [for (final p in purchaseOrders) p.copyWith()],
+    procurement: List<ProcurementEntry>.from(procurement),
     deliveries: [for (final d in deliveries) d.copyWith()],
     history: List<ProjectEdit>.from(history),
     roomCounter: _roomCounter,

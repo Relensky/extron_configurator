@@ -6,6 +6,7 @@ import 'app_logger.dart';
 import 'app_state.dart';
 import 'av_device_library.dart';
 import 'building_project.dart';
+import 'cost_estimate.dart' show RoomCostSettings;
 import 'project_estimate.dart';
 import 'room_sidecar.dart';
 
@@ -61,19 +62,14 @@ Future<ProjectPriceResult> priceAcrossProject({
   required AppStateProvider provider,
   required MasterPartLine line,
   required double price,
+  void Function(int done, int total)? onProgress,
 }) async {
-  var written = 0;
   var openRoomChanged = false;
-  final failures = <String>[];
+  final todo = <({ProjectRoomRef ref, String path, Set<String> keys})>[];
 
   for (final ref in provider.project.rooms) {
     final keys = line.lineKeysByRoom[ref.id];
     if (keys == null || keys.isEmpty) continue; // not in this room
-
-    final absolute = BuildingProject.resolvePath(
-      ref.configPath,
-      provider.currentProjectPath,
-    );
 
     // THE OPEN ROOM IS NOT A FILE, it is what somebody is looking at. Writing
     // its file underneath the editor would be overwritten by the next save and
@@ -85,20 +81,43 @@ Future<ProjectPriceResult> priceAcrossProject({
       openRoomChanged = true;
       continue;
     }
+    todo.add((
+      ref: ref,
+      path: BuildingProject.resolvePath(
+        ref.configPath,
+        provider.currentProjectPath,
+      ),
+      keys: keys.toSet(),
+    ));
+  }
 
-    try {
-      _writeOverrides(absolute, keys, price);
-      written++;
-      AppLogger.logInfo(
-        'Project price: ${ref.fallbackName} - ${line.description} set to '
-        '$price on ${keys.length} line(s).',
-      );
-    } catch (e, stack) {
-      AppLogger.logError('Could not price ${line.description} in $absolute', e,
-          stack);
-      failures.add('${ref.fallbackName} - $e');
+  // A few rooms at a time, in the background, so a big job on the share
+  // neither freezes the window nor waits on one room after another.
+  var next = 0;
+  var done = 0;
+  var written = 0;
+  final failures = <String>[];
+  onProgress?.call(0, todo.length);
+  Future<void> lane() async {
+    while (next < todo.length) {
+      final room = todo[next++];
+      try {
+        await _writeOverrides(room.path, room.keys, price);
+        written++;
+        AppLogger.logInfo(
+          'Project price: ${room.ref.fallbackName} - ${line.description} set '
+          'to $price on ${room.keys.length} line(s).',
+        );
+      } catch (e, stack) {
+        AppLogger.logError(
+            'Could not price ${line.description} in ${room.path}', e, stack);
+        failures.add('${room.ref.fallbackName} - $e');
+      }
+      onProgress?.call(++done, todo.length);
     }
   }
+
+  await Future.wait([for (var i = 0; i < 4 && i < todo.length; i++) lane()]);
 
   // Whatever those rooms said a moment ago is not what they say now.
   provider.refreshProjectRooms();
@@ -109,41 +128,62 @@ Future<ProjectPriceResult> priceAcrossProject({
   );
 }
 
+/// The first of [files] that reads as a JSON object, or null.
+Future<Map<String, dynamic>?> _firstDoc(List<String> files) async {
+  for (final path in files) {
+    try {
+      final file = File(path);
+      if (!await file.exists()) continue;
+      final doc = jsonDecode(await file.readAsString());
+      if (doc is Map) return Map<String, dynamic>.from(doc);
+    } catch (e) {
+      AppLogger.logError('Project price could not read $path', e);
+    }
+  }
+  return null;
+}
+
 /// Adds [price] under every key in [keys] to the room's cost sidecar.
 ///
 /// Read-modify-write of that one file, so nothing else about the room is
-/// touched — not the config, not the drawing, not the racks. A room whose cost
-/// lives in an old single-file document gets a companion `_cost.json`, which is
-/// what the merge on the way back in already prefers.
-void _writeOverrides(String configPath, Set<String> keys, double price) {
+/// touched — not the config, not the drawing, not the racks. The cost is read
+/// where the room keeps it: its cost sidecar, or in a room that predates the
+/// split, the drawing file that held the whole document. That room gets a
+/// companion `_cost.json`, which is what the merge on the way back in already
+/// prefers.
+Future<void> _writeOverrides(
+  String configPath,
+  Set<String> keys,
+  double price,
+) async {
   if (configPath.isEmpty) throw StateError('this room has no file');
-  if (!File(configPath).existsSync()) {
+  if (!await File(configPath).exists()) {
     throw StateError('the config is not at $configPath');
   }
 
   // Written, so filed where the room is written now.
   moveRoomFilesIntoFolder(configPath);
 
-  // What the room says now, through the same reader the estimate uses, so an
-  // old-format room is understood exactly as it is elsewhere.
-  final loaded = readRoomFromDisk(configPath);
-  if (loaded.error.isNotEmpty) throw StateError(loaded.error);
+  var cost =
+      (await _firstDoc(roomPartCandidates(configPath, RoomSidecarPart.cost)))?[
+          'cost'];
+  cost ??= (await _firstDoc(roomFlowCandidates(configPath)))?['cost'];
 
-  final settings = loaded.settings;
+  final settings = RoomCostSettings();
+  if (cost is Map) settings.readJson(Map<String, dynamic>.from(cost));
   for (final key in keys) {
     settings.priceOverrides[key] = price;
   }
 
   final target = roomSidecarPath(configPath, RoomSidecarPart.cost);
   const encoder = JsonEncoder.withIndent('  ');
-  File(target)
-    ..createSync(recursive: true)
-    ..writeAsStringSync(encoder.convert({
-      '__readme': 'This room\'s cost estimate: tax, fees, labor, quoted prices '
-          'and the lines added by hand. The rates and base costs it draws on '
-          'are shared files in the Root Folder, not here.',
-      'cost': settings.toJson(),
-    }));
+  await Directory(File(target).parent.path).create(recursive: true);
+  await File(target).writeAsString(encoder.convert({
+    '__readme': "This room's cost estimate: tax, fees, labor, quoted prices "
+        'and the lines added by hand. The rates and base costs it draws on '
+        'are shared files in the Root Folder, not here.',
+    'cost': settings.toJson(),
+  }));
 }
 
 /// Writes [price] into the catalog entry for [line]'s model, creating the

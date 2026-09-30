@@ -135,6 +135,32 @@ void main() {
       expect(next, isNot(contains('DID NOT EXIT CLEANLY')));
     });
 
+    test('a session left open past midnight moves to a new file', () async {
+      var now = DateTime(2026, 9, 29, 23, 59, 30);
+      AppLogger.clock = () => now;
+      addTearDown(() => AppLogger.clock = DateTime.now);
+      AppLogger.logFolderForTest = dir.path;
+
+      await AppLogger.logInfo('before midnight');
+      final first = AppLogger.sessionLogPath;
+      now = DateTime(2026, 9, 30, 0, 0, 12);
+      await AppLogger.logInfo('after midnight');
+      final second = AppLogger.sessionLogPath;
+
+      expect(second, isNot(first));
+      expect(path.basename(second), startsWith('session_log_2026-09-30_'));
+      final old = File(first).readAsStringSync();
+      expect(old, contains('before midnight'));
+      expect(old, isNot(contains('after midnight')));
+      expect(old.trimRight(), endsWith(AppLogger.cleanExitMarker),
+          reason: 'otherwise the next launch reports yesterday as a crash');
+      final fresh = File(second).readAsStringSync();
+      expect(fresh, contains('App version: '));
+      expect(fresh, contains(first));
+      expect(fresh, contains('after midnight'));
+      expect(fresh, isNot(contains('DID NOT EXIT CLEANLY')));
+    });
+
     test('logs older than 30 days are removed, newer ones kept', () {
       final old = File(path.join(dir.path, 'session_log_old_1.txt'))
         ..writeAsStringSync('x')

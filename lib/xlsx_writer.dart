@@ -172,10 +172,22 @@ class XlsxLink {
   /// The tab it goes to, by its final (settled) name.
   final String sheet;
 
-  const XlsxLink({required this.text, required this.sheet});
+  /// The cell it lands on there.
+  final String cell;
+
+  /// When set, the cell's text is worked out by this formula (without the
+  /// leading '=') and [text] is what it comes to now.
+  final String? formula;
+
+  const XlsxLink({
+    required this.text,
+    required this.sheet,
+    this.cell = 'A1',
+    this.formula,
+  });
 
   /// The target in the form Excel's hyperlink `location` takes.
-  String get location => "'${sheet.replaceAll("'", "''")}'!A1";
+  String get location => "'${sheet.replaceAll("'", "''")}'!$cell";
 
   @override
   String toString() => text;
@@ -211,6 +223,17 @@ class XlsxTint {
   });
 
   /// What sorts the column widths, and what a text report prints.
+  @override
+  String toString() => text;
+}
+
+/// Text word-wrapped to the width it is given - its column, or the block it
+/// is merged across - without sizing that column itself.
+class XlsxWrapped {
+  final String text;
+
+  const XlsxWrapped(this.text);
+
   @override
   String toString() => text;
 }
@@ -355,6 +378,9 @@ class XlsxSheet {
   /// Charts drawn from this sheet's own cells. Empty on a sheet of tables.
   final List<XlsxChart> charts;
 
+  /// Columns kept in view when scrolling right. 0 freezes nothing.
+  final int freezeColumns;
+
   XlsxSheet({
     required this.name,
     required this.rows,
@@ -364,6 +390,7 @@ class XlsxSheet {
     this.merges = const [],
     this.image,
     this.charts = const [],
+    this.freezeColumns = 0,
   });
 }
 
@@ -920,6 +947,7 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
         final ref = '${colLetter(c)}${r + 1}';
         if (sheet.rowStyles[r] == XlsxRowStyle.title) continue;
         if (spanning.contains(ref)) continue;
+        if (cell is XlsxWrapped) continue;
         // The excluded cell of an overflow row is only excused when it is
         // TEXT: text spills into the empty cells to its right, but a number
         // too wide for its column comes out as ###, so figures always size.
@@ -970,6 +998,29 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
       return total;
     }
 
+    /// [linesIn], breaking at spaces the way Excel's word wrap does.
+    int wordLinesIn(String text, double room) {
+      final across = room.floor().clamp(1, 400);
+      var total = 0;
+      for (final line in text.split('\n')) {
+        var lines = 1;
+        var used = 0;
+        for (final word in line.split(' ')) {
+          final need = used == 0 ? word.length : used + 1 + word.length;
+          if (need <= across) {
+            used = need;
+          } else {
+            // A new line, and a word wider than the cell breaks mid-word.
+            final spans = (word.length / across).ceil();
+            lines += used == 0 ? spans - 1 : spans;
+            used = word.length - (spans - 1) * across;
+          }
+        }
+        total += lines;
+      }
+      return total;
+    }
+
     // Row index -> how many lines its tallest cell needs, now that every
     // column's width is settled.
     final Map<int, int> rowLines = {};
@@ -980,9 +1031,10 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
       // A title row is a CAPTION over the band under it, not a value in a
       // column: it spills right across its own empty cells, and wrapping it
       // would break a section heading over two lines inside its band.
-      if (sheet.rowStyles[r] == XlsxRowStyle.title) continue;
+      final bool titleRow = sheet.rowStyles[r] == XlsxRowStyle.title;
       for (int c = 0; c < cells.length; c++) {
         final cell = cells[c];
+        if (titleRow && cell is! XlsxWrapped) continue;
         if (cell == null ||
             cell is num ||
             cell is XlsxMoney ||
@@ -994,10 +1046,27 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
         if (swallowed.contains(ref) || spills.contains(ref)) continue;
         final text = cell.toString();
         final room = roomFor(r, c);
+        if (cell is XlsxWrapped) {
+          final lines = wordLinesIn(text, room);
+          wrapped.add(ref);
+          if (lines > (rowLines[r] ?? 1)) rowLines[r] = lines;
+          continue;
+        }
         final lines = linesIn(text, room);
         if (lines > 1 && cell is! XlsxTint) wrapped.add(ref);
         if (lines > (rowLines[r] ?? 1)) rowLines[r] = lines;
       }
+    }
+    // sheetViews comes before cols in CT_Worksheet.
+    if (sheet.freezeColumns > 0) {
+      final topLeft = '${colLetter(sheet.freezeColumns)}1';
+      body.write(
+        '<sheetViews><sheetView workbookViewId="0">'
+        '<pane xSplit="${sheet.freezeColumns}" topLeftCell="$topLeft" '
+        'activePane="topRight" state="frozen"/>'
+        '<selection pane="topRight" activeCell="$topLeft" sqref="$topLeft"/>'
+        '</sheetView></sheetViews>',
+      );
     }
     if (widths.isNotEmpty) {
       body.write('<cols>');
@@ -1032,11 +1101,20 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
           continue;
         }
         if (value == null) continue;
+        // A blank in a title band keeps the band's fill but holds no value,
+        // so the caption beside it runs across instead of being cut off.
+        if (style == XlsxRowStyle.title && value is String && value.isEmpty) {
+          body.write('<c r="$ref"$styleAttr/>');
+          continue;
+        }
         if (value is XlsxLink) {
           links[ref] = value;
-          body.write(
-              '<c r="$ref" s="$linkStyle" t="inlineStr">'
-              '<is><t xml:space="preserve">${esc(value.text)}</t></is></c>');
+          final formula = value.formula;
+          body.write(formula == null
+              ? '<c r="$ref" s="$linkStyle" t="inlineStr">'
+                  '<is><t xml:space="preserve">${esc(value.text)}</t></is></c>'
+              : '<c r="$ref" s="$linkStyle" t="str"><f>${esc(formula)}</f>'
+                  '<v>${esc(value.text)}</v></c>');
         } else if (value is XlsxTint) {
           // Its own fill and its own ink, whatever band the row is in.
           body.write(
