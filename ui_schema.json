@@ -296,7 +296,9 @@
     "input_sub_switcher": "",
     "sub_switch_switcher": "2",
     "startup_time": null,
-    "shutdown_time": null
+    "shutdown_time": null,
+    "power_audio_input": "",
+    "power_audio_output": ""
   },
   "section_defaults": {
     "__readme": [
@@ -950,6 +952,16 @@
     },
     "output_audio_ald": {
       "description": "Switcher output feeding the Assisted Listening system. It gets the same audio tie as output_audio on every source change and at startup, so the ALD hears whatever the room hears. Blank in a room without one. Non-digits are stripped, so '4A' reaches the switcher as 4."
+    },
+    "power_audio_input": {
+      "label": "Startup/Shutdown Audio Input (power_audio_input)",
+      "helperText": "Blank = off. Matrix switchers only.",
+      "description": "Switcher input that is always tied to audio at system startup and shutdown, whatever source the panel lands on. Sent as an Audio-only tie to power_audio_output (or output_audio when that is blank). At startup it is sent after the default PC selection, so it wins over the PC audio tie; the next source button pressed re-ties the audio output as normal. Not sent on a restore after a power outage. Skipped with a log warning on a scaler or a display-routed room. Non-digits are stripped, so '5A' reaches the switcher as 5."
+    },
+    "power_audio_output": {
+      "label": "Startup/Shutdown Audio Output (power_audio_output)",
+      "helperText": "Blank = use output_audio.",
+      "description": "Switcher output that power_audio_input is tied to at startup and shutdown. Leave it blank to use the room's program audio output (output_audio). Only read when power_audio_input is set. Non-digits are stripped, so '4A' reaches the switcher as 4."
     },
     "gui_demo_mode": {
       "type": "bool",

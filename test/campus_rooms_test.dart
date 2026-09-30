@@ -39,7 +39,7 @@ void main() {
     // HOLT 171 goes on the campus by itself, off the project.
     provider.removeRoomFromProject(provider.project.rooms.last.id);
     expect(await provider.saveProject(), isEmpty);
-    roomFile = path.join(dir.path, 'HOLT_171_config.json');
+    roomFile = path.join(dir.path, 'HOLT_171', 'config.json');
   });
 
   tearDown(() {

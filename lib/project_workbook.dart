@@ -1218,15 +1218,6 @@ List<ReportSection> masterPartsSections(
 }) {
   final currency = estimate.currency;
   XlsxMoney cash(double v) => money(v, currency);
-  // THE CODE, NOT THE NAME - 'BSS 103', not 'Behavioral and Social Science
-  // 103'. This column repeats a room once per part, so a full building name
-  // makes it the widest column on the sheet and pushes the figures off the
-  // page; the code is what is on the door, on the packing label and on every
-  // other document the job produces. See [ProjectRoomCost.codeName], which
-  // falls back to the name when a room has no code to show.
-  final roomNames = {
-    for (final r in estimate.rooms) r.ref.id: r.codeName,
-  };
 
   String unit(MasterPartLine line) {
     if (line.unpriced) return 'not priced';
@@ -1265,9 +1256,8 @@ List<ReportSection> masterPartsSections(
         // supplying this line yet.
         if (includeVendorColumn) 'Vendor',
         if (includeVendorColumn) 'Tagged',
-        // Blank on everything that is driven, and on everything that was never
-        // going to be. A column of "OK" would be a column nobody reads.
-        if (includeVendorColumn) 'Control',
+        // Products only. Devices with no control module are on the Control
+        // Gaps sheet.
         // Where each part goes is the Parts by Room tab: a list of thirty
         // rooms in one cell is a sentence, not a column.
         //
@@ -1292,7 +1282,6 @@ List<ReportSection> masterPartsSections(
             if (includeVendorColumn) l.rfq?.name ?? 'UNTAGGED',
             if (includeVendorColumn) l.vendor?.name ?? '',
             if (includeVendorColumn) kRfqTagSourceLabels[l.tagSource] ?? '',
-            if (includeVendorColumn) _controlNote(l, roomNames),
             masterRowId(l.key),
           ],
       ],
@@ -2216,24 +2205,6 @@ List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
   ));
 
   return sections;
-}
-
-/// What the master list's Control column says for one part: nothing when every
-/// one of them has a driver, otherwise how many do not and where.
-///
-/// The rooms are named rather than counted. "3 undriven" is a number somebody
-/// has to go and investigate; "no module: Bessey 101 ×2, Bessey 105 ×1" is a
-/// list they can work through.
-String _controlNote(MasterPartLine line, Map<String, String> roomNames) {
-  if (!line.hasControlGap) return '';
-  final where = line.undrivenByRoom.entries.toList()
-    ..sort((a, b) {
-      final byQty = b.value.compareTo(a.value);
-      return byQty != 0 ? byQty : a.key.compareTo(b.key);
-    });
-  return 'no module: ${[
-    for (final e in where) '${roomNames[e.key] ?? e.key} ×${e.value}',
-  ].join(', ')}';
 }
 
 /// Every device on the job that no control module will drive, room by room.

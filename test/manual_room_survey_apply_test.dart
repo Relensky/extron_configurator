@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' show Offset, Size;
+import 'package:material_ui/material_ui.dart' show Offset, Size;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:extron_configurator/av_device_library.dart';

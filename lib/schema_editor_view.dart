@@ -1,9 +1,10 @@
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
@@ -485,7 +486,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
             icon: const Icon(Icons.folder_open, size: 18),
             label: const Text('Another config file'),
             onPressed: () async {
-              final picked = await FilePicker.pickFiles(
+              final picked = await pickFilesCompat(
                   type: FileType.custom, allowedExtensions: ['json']);
               final chosen = picked?.files.single.path;
               if (chosen != null && mounted) _loadTemplate(chosen);

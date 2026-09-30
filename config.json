@@ -511,6 +511,8 @@
         "disable_inactivity_timer": false,
         "startup_time": null,
         "shutdown_time": null,
+        "power_audio_input": "",
+        "power_audio_output": "",
         "annex_mute_channels": "Left,Right",
         "annex_mute_label": "Annex",
         "annex_mute_output": "1",

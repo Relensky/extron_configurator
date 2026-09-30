@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -110,11 +110,14 @@ void main() {
       expect(p.avCost.notes, contains('beyond the scope described above'));
     });
 
-    test('notes somebody already wrote are left alone', () {
+    test('notes somebody already wrote are kept, with the terms after them', () {
       final p = room();
       p.setAvCostNotes('Quoted at the November price.');
       p.applyDefaultEstimateNotes();
-      expect(p.avCost.notes, 'Quoted at the November price.');
+      expect(
+        p.avCost.notes,
+        'Quoted at the November price.\n\n$kDefaultEstimateNotes',
+      );
     });
 
     test('edits can be undone', () {

@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 
 import 'json_merge.dart';
 import 'presence.dart';
+import '../app_logger.dart';
 
 /// ============================================================================
 ///  SEVERAL PEOPLE, ONE SHARED FOLDER
@@ -129,6 +130,9 @@ class CollabController extends ChangeNotifier {
   int _held = 0;
   final _notices = StreamController<CollabNotice>.broadcast();
 
+  /// Documents whose last check failed, so an outage is logged once.
+  final Set<CollabDocKind> _failing = {};
+
   CollabController({CollabIdentity? identity, this.enabled = false})
       : me = identity ?? CollabIdentity.current();
 
@@ -167,7 +171,20 @@ class CollabController extends ChangeNotifier {
     try {
       final at = now ?? DateTime.now();
       for (final doc in _docs.values) {
-        changed |= await _tickOne(doc, at);
+        try {
+          changed |= await _tickOne(doc, at);
+          _failing.remove(doc.kind);
+        } catch (e) {
+          // The share dropped out. Logged once per outage, not every five
+          // seconds for as long as it lasts; the next tick tries again.
+          if (_failing.add(doc.kind)) {
+            AppLogger.logError(
+              'Could not check who else has the ${collabDocNoun(doc.kind)} '
+              'open; will keep trying',
+              e,
+            );
+          }
+        }
       }
     } finally {
       _ticking = false;

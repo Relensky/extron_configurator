@@ -11,7 +11,7 @@ import 'dart:typed_data';
 import 'package:extron_configurator/updater/folder_updater.dart';
 import 'package:extron_configurator/updater/update_platform_io.dart';
 import 'package:extron_configurator/updater/update_widgets.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

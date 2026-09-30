@@ -89,7 +89,7 @@ void main() {
     test('the room on its own still lists everything', () {
       provider.setPriorityBuysOnly(2, ['Projector']);
       final loaded = readRoomFromDisk(
-        path.join(dir.path, 'HOLT_171_config.json'),
+        path.join(dir.path, 'HOLT_171', 'config.json'),
       );
       final own = computeRoomCost(
         model: loaded.model,
@@ -106,7 +106,7 @@ void main() {
     });
 
     test('the room file itself is not changed', () {
-      final cost = File(path.join(dir.path, 'HOLT_171_config_cost.json'));
+      final cost = File(path.join(dir.path, 'HOLT_171', 'room_files', 'HOLT_171_cost.json'));
       final before = cost.readAsStringSync();
       provider.setPriorityBuysOnly(2, ['Projector']);
       price();
@@ -140,7 +140,7 @@ void main() {
         isFalse,
       );
       // On the project only.
-      final flow = File(path.join(dir.path, 'HOLT_171_config_cost.json'))
+      final flow = File(path.join(dir.path, 'HOLT_171', 'room_files', 'HOLT_171_cost.json'))
           .readAsStringSync();
       expect(flow, isNot(contains('Ceiling speakers')));
       // And kept with the job.
@@ -463,7 +463,7 @@ void main() {
     });
 
     test('fees and tax follow the lines too', () {
-      final costFile = File(path.join(dir.path, 'HOLT_171_config_cost.json'));
+      final costFile = File(path.join(dir.path, 'HOLT_171', 'room_files', 'HOLT_171_cost.json'));
       final doc = jsonDecode(costFile.readAsStringSync()) as Map<String, dynamic>;
       final cost = Map<String, dynamic>.from(doc['cost'] as Map)
         ..['fees'] = [
@@ -592,7 +592,7 @@ void main() {
       expect(await provider.applyMasterEdits(review.read.master), 1);
 
       // The room open in the editor takes it in memory, to be saved with it.
-      expect(provider.currentConfigPath, endsWith('HOLT_171_config.json'));
+      expect(provider.currentConfigPath, endsWith(path.join('HOLT_171', 'config.json')));
       expect(provider.avCost.priceOverrides.values, contains(3500));
       expect(
         provider.avNodes
@@ -604,7 +604,7 @@ void main() {
       // A closed room takes it on disk: the price and the name.
       for (final room in ['LANG_300']) {
         final cost = jsonDecode(
-          File(path.join(dir.path, '${room}_config_cost.json'))
+          File(path.join(dir.path, room, 'room_files', '${room}_cost.json'))
               .readAsStringSync(),
         );
         expect(
@@ -613,7 +613,7 @@ void main() {
           reason: room,
         );
         final flow = jsonDecode(
-          File(path.join(dir.path, '${room}_config_av_flow.json'))
+          File(path.join(dir.path, room, 'room_files', '${room}_av_flow.json'))
               .readAsStringSync(),
         );
         expect(
@@ -639,6 +639,38 @@ void main() {
         ),
       ));
       expect(again.read.master, isEmpty);
+    });
+
+    test('a row published under an older key is still found by its model',
+        () {
+      final estimate = price();
+      final projector = estimate.master
+          .firstWhere((l) => l.model == 'PT-VMZ62BU8');
+      // The id the part would have had before the catalog changed its key.
+      final changed = edited(
+        buildProjectWorkbookBytes(estimate: estimate),
+        masterRowId(projector.key),
+        {'A': 'Laser projector', 'M': 'PSTALE'},
+      );
+
+      final review = provider.reviewOnlineImport(Uint8List.fromList(changed));
+      expect(review.read.master.single.name, 'Laser projector');
+      expect(review.read.problems, isEmpty);
+    });
+
+    test('a row that matches nothing is reported, not passed over', () {
+      final estimate = price();
+      final projector = estimate.master
+          .firstWhere((l) => l.model == 'PT-VMZ62BU8');
+      final changed = edited(
+        buildProjectWorkbookBytes(estimate: estimate),
+        masterRowId(projector.key),
+        {'A': 'Gone', 'C': 'NOPE-1', 'M': 'PSTALE'},
+      );
+
+      final review = provider.reviewOnlineImport(Uint8List.fromList(changed));
+      expect(review.read.master, isEmpty);
+      expect(review.read.problems.single, contains('Gone'));
     });
 
     test('a save does not publish over an edited Core Components', () async {

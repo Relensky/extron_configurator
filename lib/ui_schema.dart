@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as path;
 
+import 'shared_json.dart';
 import 'app_logger.dart';
 import 'config_dictionary.dart';
 
@@ -1308,6 +1309,7 @@ class UiSchema {
         }
         schema.applyJsonMap(doc);
         schema.rawDoc = jsonDecode(jsonEncode(doc)) as Map<String, dynamic>;
+        rememberSharedJson(candidate, doc);
         schema.source = candidate;
         AppLogger.logInfo(
             'UI schema loaded from $candidate (${schema.fieldCount} field definitions).');

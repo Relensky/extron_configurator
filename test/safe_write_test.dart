@@ -30,6 +30,8 @@ void main() {
     final file = path.join(dir.path, 'room.json');
     File(file).writeAsStringSync('{"old": true}');
     // Something in the way of the new copy: the write cannot happen.
+    safeWriteTempNameForTest = (f) => '$f.saving';
+    addTearDown(() => safeWriteTempNameForTest = null);
     Directory('$file.saving').createSync();
     await expectLater(writeFileSafely(file, '{"new": true}'), throwsA(anything));
     expect(File(file).readAsStringSync(), '{"old": true}');
@@ -40,6 +42,9 @@ void main() {
     File(file).writeAsStringSync('{"old": true}');
     writeFileSafelySync(file, '{"new": true}');
     expect(File(file).readAsStringSync(), '{"new": true}');
-    expect(File('$file.saving').existsSync(), isFalse);
+    expect(
+      dir.listSync().where((e) => e.path.endsWith('.saving')),
+      isEmpty,
+    );
   });
 }

@@ -461,9 +461,9 @@ void main() {
     // The room's document is written across several files now, and the
     // estimate has one of its own — so "send me the cost estimate" is one
     // file rather than the whole room.
-    expect(File(p.join(dir.path, 'BSS103_config_av_flow.json')).existsSync(),
+    expect(File(p.join(dir.path, 'BSS103_config', 'BSS103_config_av_flow.json')).existsSync(),
         isTrue);
-    final sidecar = File(p.join(dir.path, 'BSS103_config_cost.json'));
+    final sidecar = File(p.join(dir.path, 'BSS103_config', 'BSS103_config_cost.json'));
     expect(sidecar.existsSync(), isTrue,
         reason: 'the cost estimate is part of the project');
     final cost = jsonDecode(sidecar.readAsStringSync())['cost'] as Map;

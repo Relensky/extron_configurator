@@ -1,9 +1,10 @@
+import 'file_dialogs.dart';
 import 'cost_estimate_actions.dart';
 import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as path;
@@ -4754,7 +4755,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     }
 
     final ext = what == 'xlsx' ? 'xlsx' : 'txt';
-    String? outputFile = await FilePicker.saveFile(
+    String? outputFile = await saveFileCompat(
       dialogTitle: 'Save Cost Estimate',
       fileName: '${roomFileStem(provider, 'cost_estimate')}.$ext',
       type: FileType.custom,
@@ -4812,7 +4813,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final logoPath = provider.estimateLogoPath;
     final logo = readEstimateLogo(logoPath);
 
-    String? outputFile = await FilePicker.saveFile(
+    String? outputFile = await saveFileCompat(
       dialogTitle: 'Save Estimate PDF',
       fileName: '${roomFileStem(provider, 'estimate')}.pdf',
       type: FileType.custom,
@@ -4836,7 +4837,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           logoOnLeft: provider.estimateLogoSide == 'left',
           accent: estimateAccentColor(provider.estimateAccent),
           scopeOfWork: settings.scopeOfWork,
-          notes: settings.notes,
+          // Every estimate goes out with the standard terms on it.
+          notes: withStandardEstimateNotes(settings.notes),
           title: settings.pdfTitle,
           subtitle: settings.documentSubtitle,
           words: Map.of(settings.pdfWords),

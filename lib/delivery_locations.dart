@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'shared_json.dart';
 import 'app_logger.dart';
-import 'safe_write.dart';
 
 /// ============================================================================
 ///  DELIVERY LOCATIONS
@@ -289,6 +289,7 @@ class DeliveryLocationBook {
         );
       }
       final doc = jsonDecode(await file.readAsString());
+      rememberSharedJson(path, doc);
       if (doc is! Map) throw const FormatException('Root must be an object.');
       final book = DeliveryLocationBook(filePath: path, source: path);
       for (final entry in (doc['locations'] as List? ?? [])) {
@@ -325,14 +326,18 @@ class DeliveryLocationBook {
     }
   }
 
+  /// True when the last save merged in somebody else's changes, so this copy
+  /// should be read again. See shared_json.dart.
+  bool lastSaveTookTheirs = false;
+
   /// Writes the list. Returns the file written, or '' on failure.
   Future<String> save({String toPath = ''}) async {
     final target = toPath.isNotEmpty ? toPath : filePath;
     if (target.isEmpty) return '';
     try {
-      const encoder = JsonEncoder.withIndent('  ');
-      await File(target).parent.create(recursive: true);
-      await writeFileSafely(target, encoder.convert(toJson()));
+      // Merged with whatever somebody else saved since this copy read it.
+      lastSaveTookTheirs =
+          (await saveSharedJson(target, toJson())).tookTheirs;
       filePath = target;
       source = target;
       AppLogger.logInfo('Delivery locations saved to $target.');

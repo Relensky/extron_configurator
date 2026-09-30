@@ -76,9 +76,20 @@ void main() {
         ],
       );
 
-  test('the sidecar path sits next to the working config', () {
+  test('the sidecar path sits in the room folder beside the config', () {
     expect(openedOn(configPath).avFlowSidecarPath,
-        path.join(dir.path, 'BSS103_config_av_flow.json'));
+        path.join(dir.path, 'BSS103_config', 'BSS103_config_av_flow.json'));
+  });
+
+  test('a loose sidecar from before room folders is still read', () async {
+    final seed = openedOn(configPath)..addAvNode(switcher());
+    final saved = await seed.saveAvFlow();
+    File(saved).renameSync(path.join(dir.path, 'BSS103_config_av_flow.json'));
+
+    final p = openedOn(configPath);
+    expect(p.hasSavedAvFlow, isTrue);
+    p.loadAvFlowForCurrentConfig();
+    expect(p.avNodeById('SWITCHERDEVICE_1')!.label, 'Switcher');
   });
 
   test('a round trip preserves devices, connectors, cables and racks',
@@ -321,8 +332,10 @@ void main() {
   });
 
   group('the rename from <config>_avflow.json', () {
-    String legacyPath() => path.join(dir.path, 'BSS103_config_avflow.json');
-    String currentPath() => path.join(dir.path, 'BSS103_config_av_flow.json');
+    String legacyPath() =>
+        path.join(dir.path, 'BSS103_config', 'BSS103_config_avflow.json');
+    String currentPath() =>
+        path.join(dir.path, 'BSS103_config', 'BSS103_config_av_flow.json');
 
     Future<void> writeLegacy() async {
       final seed = openedOn(configPath)..addAvNode(switcher());

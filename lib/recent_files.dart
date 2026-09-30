@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+import 'room_sidecar.dart' show roomStem;
 
 /// ============================================================================
 ///  THE FILES THIS APP HAS OPENED OR WRITTEN
@@ -89,7 +90,7 @@ class RecentFile {
     final trimmed = name.trim();
     return trimmed.isNotEmpty
         ? trimmed
-        : path.basenameWithoutExtension(file);
+        : roomStem(file);
   }
 
   /// The folder it sits in - the half that tells two rooms with the same name

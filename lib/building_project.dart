@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+import 'room_sidecar.dart' show roomStem;
 
 import 'av_device_library.dart' show AvDeviceLibrary;
 import 'responsibility_matrix.dart';
@@ -2248,7 +2249,7 @@ class ProjectRoomRef {
   /// room ("BSS_101_config.json").
   String get fallbackName {
     if (label.trim().isNotEmpty) return label.trim();
-    final base = path.basenameWithoutExtension(configPath);
+    final base = roomStem(configPath);
     return base.isEmpty ? configPath : base;
   }
 

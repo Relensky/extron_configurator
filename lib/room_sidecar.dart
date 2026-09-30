@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:path/path.dart' as path;
 
 /// ============================================================================
@@ -178,15 +180,343 @@ const Map<RoomSidecarPart, String> _kReadme = {
           'anything back.',
 };
 
-/// `<dir>/<config base>_<suffix>.json` for [part], or '' with no config file.
-String roomSidecarPath(String configPath, RoomSidecarPart part) {
+// ---------------------------------------------------------------------------
+//  THE ROOM'S FOLDER
+// ---------------------------------------------------------------------------
+//  Only the config sits in the folder the rooms, projects and campuses share.
+//  Everything else a room writes - its parts, the control schematic, the save
+//  and conversion backups, the change log, imported pictures - lives in a
+//  folder beside it named for the config: `BSS103.json` -> `BSS103\`.
+//
+//  Older rooms have those files loose beside the config. [moveRoomFilesIntoFolder]
+//  moves them in when the room is opened, and the readers fall back to the
+//  loose copies for a room that has not been opened since.
+//
+//  The current layout is a folder per room, named for the room, holding the
+//  processor's `config.json` and a `room_files` folder for everything else:
+//  `ARTS_111\config.json`, `ARTS_111\room_files\ARTS_111_av_flow.json`. A
+//  room in the older `ARTS_111_config.json` shape is moved into it on open -
+//  see [migrateRoomToFolderLayout].
+
+/// The name the processor reads its config under.
+const String kRoomConfigFileName = 'config.json';
+
+/// The folder beside a `config.json` that holds the rest of the room.
+const String kRoomFilesFolder = 'room_files';
+
+/// True when [configPath] is a `config.json` in its own room folder.
+bool isFolderLayoutConfig(String configPath) =>
+    configPath.isNotEmpty &&
+    path.basename(configPath).toLowerCase() == kRoomConfigFileName;
+
+/// The room's name on disk: the folder for a `config.json`, else the file
+/// name - `ARTS_111\config.json` and `ARTS_111_config.json` -> `ARTS_111` and
+/// `ARTS_111_config`.
+String roomStem(String configPath) {
+  if (configPath.isEmpty) return '';
+  if (isFolderLayoutConfig(configPath)) {
+    final folder = path.basename(path.dirname(configPath));
+    if (folder.isNotEmpty && folder != '.') return folder;
+  }
+  return path.basenameWithoutExtension(configPath);
+}
+
+/// The file name to show for a room: `ARTS_111\config.json` for a
+/// `config.json`, since every room has one, else the file name.
+String roomConfigDisplayName(String configPath) {
+  if (!isFolderLayoutConfig(configPath)) return path.basename(configPath);
+  final folder = path.basename(path.dirname(configPath));
+  if (folder.isEmpty || folder == '.') return path.basename(configPath);
+  return path.join(folder, path.basename(configPath));
+}
+
+/// `<dir>\<name>\config.json` - where a room called [name] is saved in [dir].
+String roomConfigPathIn(String dir, String name) =>
+    path.join(dir, name, kRoomConfigFileName);
+
+/// The folder-layout path for a room saved as [chosen]: a picked
+/// `ARTS_111_config.json` becomes `ARTS_111\config.json` beside it, or the
+/// `config.json` of the `ARTS_111` folder it was picked inside. A path that
+/// already is a `config.json` is returned as it is.
+String folderLayoutPathFor(String chosen) {
+  if (chosen.isEmpty || isFolderLayoutConfig(chosen)) return chosen;
+  final dir = path.dirname(chosen);
+  final name = folderNameForLegacyRoom(chosen);
+  if (path.basename(dir).toLowerCase() == name.toLowerCase()) {
+    return path.join(dir, kRoomConfigFileName);
+  }
+  return roomConfigPathIn(dir, name);
+}
+
+/// `ARTS_111_config.json` -> `ARTS_111`: the file name without the
+/// `_config` every saved room carries.
+String folderNameForLegacyRoom(String configPath) {
+  final stem = path.basenameWithoutExtension(configPath);
+  final trimmed =
+      stem.replaceAll(RegExp(r'[_\- ]?config$', caseSensitive: false), '');
+  return trimmed.isEmpty ? stem : trimmed;
+}
+
+/// The folder a room's companion files live in, or '' with no config file:
+/// `<room folder>\room_files` for a `config.json`, `<dir>\<config base>` for
+/// an older room.
+String roomFolderPath(String configPath) {
+  if (configPath.isEmpty) return '';
+  if (isFolderLayoutConfig(configPath)) {
+    return path.join(path.dirname(configPath), kRoomFilesFolder);
+  }
+  return path.join(
+    path.dirname(configPath),
+    path.basenameWithoutExtension(configPath),
+  );
+}
+
+/// Creates the room's folder when it is missing. Called before any write.
+void ensureRoomFolder(String configPath) {
+  final folder = roomFolderPath(configPath);
+  if (folder.isEmpty) return;
+  final dir = Directory(folder);
+  if (!dir.existsSync()) dir.createSync(recursive: true);
+}
+
+/// `<room folder>/<config base>_<suffix>` - [suffix] carries its extension.
+String roomFilePath(String configPath, String suffix) {
+  if (configPath.isEmpty) return '';
+  return path.join(
+    roomFolderPath(configPath),
+    '${roomStem(configPath)}_$suffix',
+  );
+}
+
+/// Where [roomFilePath] was before rooms had folders: beside the config.
+String legacyRoomFilePath(String configPath, String suffix) {
   if (configPath.isEmpty) return '';
   return path.join(
     path.dirname(configPath),
-    '${path.basenameWithoutExtension(configPath)}'
-        '_${kRoomSidecarSuffix[part]}.json',
+    '${roomStem(configPath)}_$suffix',
   );
 }
+
+/// [roomFilePath] when it exists, else the loose copy beside the config when
+/// that exists, else ''. For readers that must not move anything.
+String readableRoomFilePath(String configPath, String suffix) {
+  final current = roomFilePath(configPath, suffix);
+  if (current.isNotEmpty && File(current).existsSync()) return current;
+  final legacy = legacyRoomFilePath(configPath, suffix);
+  if (legacy.isNotEmpty && File(legacy).existsSync()) return legacy;
+  return '';
+}
+
+/// True when [dir] is a room's folder: a config of the same name sits beside
+/// it, or it is the `room_files` beside a `config.json`. Folder scans for
+/// rooms skip these - the backups in them look like rooms.
+bool isRoomFolder(String dir) {
+  final normal = path.normalize(dir);
+  if (File('$normal.json').existsSync()) return true;
+  return path.basename(normal).toLowerCase() == kRoomFilesFolder &&
+      File(path.join(path.dirname(normal), kRoomConfigFileName)).existsSync();
+}
+
+/// Every companion a room names after its config, suffix and extension.
+/// Pictures and the `_old_config.json` backup are named otherwise and moved
+/// by their own callers.
+List<String> get kRoomCompanionSuffixes => [
+  for (final part in RoomSidecarPart.values) '${kRoomSidecarSuffix[part]}.json',
+  // Pre-rename flow and schematic files.
+  'avflow.json',
+  'schematic.json',
+  'control_schematic.json',
+  'previous.json',
+  'backup_log.txt',
+];
+
+/// Moves [file] into [folder] unless a file of that name is already there.
+/// Returns true when it moved.
+bool moveIntoRoomFolder(String file, String folder) {
+  final f = File(file);
+  if (!f.existsSync()) return false;
+  final target = path.join(folder, path.basename(file));
+  if (File(target).existsSync()) return false;
+  Directory(folder).createSync(recursive: true);
+  try {
+    f.renameSync(target);
+  } on FileSystemException {
+    // Locked against a rename (a sync client): copy, then drop the original.
+    f.copySync(target);
+    try {
+      f.deleteSync();
+    } catch (_) {}
+  }
+  return true;
+}
+
+/// Moves an older room's loose companions from beside [configPath] into its
+/// folder. A file already in the folder wins and the loose one is left alone.
+/// Returns the names moved.
+List<String> moveRoomFilesIntoFolder(String configPath) {
+  if (configPath.isEmpty) return const [];
+  final folder = roomFolderPath(configPath);
+  final moved = <String>[];
+  for (final suffix in kRoomCompanionSuffixes) {
+    final loose = legacyRoomFilePath(configPath, suffix);
+    try {
+      if (moveIntoRoomFolder(loose, folder)) moved.add(path.basename(loose));
+    } catch (_) {
+      // Left where it is; the readers still find it there.
+    }
+  }
+  return moved;
+}
+
+/// Pictures a room imported are named for it; these are the ones an older
+/// build left loose beside the config.
+const Set<String> _kRoomPictureExtensions = {
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.pdf', //
+};
+
+/// Moves [entity] to [target] unless something is already there. Returns
+/// true when it moved.
+bool _moveEntity(FileSystemEntity entity, String target) {
+  if (FileSystemEntity.typeSync(target) != FileSystemEntityType.notFound) {
+    return false;
+  }
+  try {
+    entity.renameSync(target);
+  } on FileSystemException {
+    if (entity is! File) return false;
+    // Locked against a rename (a sync client): copy, then drop the original.
+    entity.copySync(target);
+    try {
+      entity.deleteSync();
+    } catch (_) {}
+  }
+  return true;
+}
+
+/// Moves everything in [from] into [to], renaming the room's own parts from
+/// [oldStem] to [newStem]. Pictures keep their names - the plans name them.
+/// Anything that would land on an existing file is left where it is.
+void _moveRoomFolderContents(
+  Directory from,
+  String to,
+  String oldStem,
+  String newStem,
+) {
+  if (!from.existsSync()) return;
+  final prefix = '${oldStem.toLowerCase()}_';
+  final companions = {for (final s in kRoomCompanionSuffixes) s.toLowerCase()};
+  for (final entity in from.listSync(followLinks: false)) {
+    // The destination itself when the old folder is the new room's folder.
+    if (path.equals(entity.path, to)) continue;
+    var name = path.basename(entity.path);
+    final lower = name.toLowerCase();
+    if (lower == kRoomConfigFileName) continue;
+    if (lower.startsWith(prefix) &&
+        companions.contains(lower.substring(prefix.length))) {
+      name = '${newStem}_${name.substring(prefix.length)}';
+    }
+    try {
+      _moveEntity(entity, path.join(to, name));
+    } catch (_) {
+      // Left behind; the room still opens without it.
+    }
+  }
+}
+
+/// Deletes [dir] when nothing is left in it.
+void _deleteIfEmpty(Directory dir) {
+  try {
+    if (dir.existsSync() && dir.listSync().isEmpty) dir.deleteSync();
+  } catch (_) {}
+}
+
+/// Letters and digits only, for matching `ARTS111` to `ARTS_111`.
+String _looseKey(String name) =>
+    name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+/// Moves a room saved as `<dir>\ARTS_111_config.json` into the folder layout:
+/// the config becomes `<dir>\ARTS_111\config.json`, and its old folder, loose
+/// companions, pictures and conversion backup go into `ARTS_111\room_files`,
+/// the parts renamed for the new stem.
+///
+/// Returns the new config path, or '' when nothing moved: the room is already
+/// in the layout, or a `config.json` is already where it would go.
+String migrateRoomToFolderLayout(String configPath) {
+  if (configPath.isEmpty || isFolderLayoutConfig(configPath)) return '';
+  final config = File(configPath);
+  if (!config.existsSync()) return '';
+  final dir = path.dirname(configPath);
+  final oldStem = path.basenameWithoutExtension(configPath);
+  final newStem = folderNameForLegacyRoom(configPath);
+  final target = roomConfigPathIn(dir, newStem);
+  if (File(target).existsSync()) return '';
+
+  // Loose companions join the old folder first, so they move with the rest.
+  moveRoomFilesIntoFolder(configPath);
+  final oldFolder = Directory(roomFolderPath(configPath));
+  final newFolder = roomFolderPath(target);
+  Directory(newFolder).createSync(recursive: true);
+  _moveRoomFolderContents(oldFolder, newFolder, oldStem, newStem);
+
+  // Pictures and the conversion backup an older build left beside the config.
+  final prefix = '${oldStem.toLowerCase()}_';
+  final roomKey = _looseKey(newStem);
+  for (final entity in Directory(dir).listSync(followLinks: false)) {
+    if (entity is! File) continue;
+    final lower = path.basename(entity.path).toLowerCase();
+    final picture = lower.startsWith(prefix) &&
+        _kRoomPictureExtensions.contains(path.extension(lower));
+    final backup = lower.endsWith('_old_config.json') &&
+        _looseKey(lower.substring(
+                0, lower.length - '_old_config.json'.length)) ==
+            roomKey;
+    if (!picture && !backup) continue;
+    try {
+      _moveEntity(entity, path.join(newFolder, path.basename(entity.path)));
+    } catch (_) {}
+  }
+
+  if (!_moveEntity(config, target)) return '';
+  if (!path.equals(oldFolder.path, path.dirname(target))) {
+    _deleteIfEmpty(oldFolder);
+  }
+  return target;
+}
+
+/// Moves the `config\` folder an older build made beside a `config.json` into
+/// `room_files`, its `config_` parts renamed for the room. Returns true when
+/// anything was there to move.
+bool moveOldConfigFolderIntoRoomFiles(String configPath) {
+  if (!isFolderLayoutConfig(configPath)) return false;
+  final old = Directory(path.join(
+    path.dirname(configPath),
+    path.basenameWithoutExtension(configPath),
+  ));
+  if (!old.existsSync()) return false;
+  final to = roomFolderPath(configPath);
+  Directory(to).createSync(recursive: true);
+  _moveRoomFolderContents(
+    old,
+    to,
+    path.basenameWithoutExtension(configPath),
+    roomStem(configPath),
+  );
+  _deleteIfEmpty(old);
+  return true;
+}
+
+/// `<room folder>/<config base>_<suffix>.json` for [part], or '' with no
+/// config file.
+String roomSidecarPath(String configPath, RoomSidecarPart part) =>
+    roomFilePath(configPath, '${kRoomSidecarSuffix[part]}.json');
+
+/// Where [part] was written before rooms had folders.
+String legacyRoomSidecarPath(String configPath, RoomSidecarPart part) =>
+    legacyRoomFilePath(configPath, '${kRoomSidecarSuffix[part]}.json');
+
+/// The file to READ [part] from: in the folder, else beside the config, else ''.
+String readableRoomSidecarPath(String configPath, RoomSidecarPart part) =>
+    readableRoomFilePath(configPath, '${kRoomSidecarSuffix[part]}.json');
 
 /// Every part's path, for a caller that has to write or scan all of them.
 Map<RoomSidecarPart, String> roomSidecarPaths(String configPath) => {

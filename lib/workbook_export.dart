@@ -2,10 +2,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 import 'package:url_launcher/url_launcher.dart';
 
+import 'file_dialogs.dart';
 import 'app_logger.dart';
 
 import 'app_snack.dart';
@@ -54,7 +55,7 @@ Future<void> exportRoomWorkbook(
   // make sure it has been.
   provider.ensureAvFlowForCurrentConfig();
 
-  String? outputFile = await FilePicker.saveFile(
+  String? outputFile = await saveFileCompat(
     dialogTitle: 'Save Room Workbook',
     fileName: '${roomFileStem(provider, 'room_workbook')}.xlsx',
     type: FileType.custom,
@@ -234,7 +235,7 @@ Future<void> exportProjectWorkbook(
     return;
   }
 
-  final picked = await FilePicker.saveFile(
+  final picked = await saveFileCompat(
     dialogTitle: 'Save the project workbook',
     fileName: '${projectFileStem(provider.project)}_project.xlsx',
     type: FileType.custom,

@@ -863,7 +863,6 @@
     "ipAddress": "10.248.128.43",
     "webLink": "https://10.248.128.43/api/login?NortxeSession=r.mC2zqdvqsaTuPJgSVWGgAAKA.c&redirect=https://10.248.128.43/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 503,
     "macAddress": "00-05-A6-0E-9F-65",
     "touchPanelIp": "10.248.128.19",
@@ -871,6 +870,14 @@
       "SC-AYRS201"
     ],
     "deviceLinks": {
+      "1521": {
+        "deviceName": "AYRS201-IPCP-Pro-350M",
+        "link": "10.248.128.43"
+      },
+      "4255": {
+        "deviceName": "AYRS201-TLP",
+        "link": "10.248.128.19"
+      },
       "4257": {
         "deviceName": "AYRS201-Via",
         "matchedDnsName": "ayrs201-via",
@@ -882,8 +889,13 @@
         "matchedDnsName": "AYRS201-Power",
         "ip": "10.248.132.146",
         "link": "http://10.248.132.146"
+      },
+      "4259": {
+        "deviceName": "AYRS201-Switcher",
+        "link": "10.248.128.44"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "AYRS 214",
@@ -1500,7 +1512,6 @@
     "ipAddress": "10.248.133.14",
     "webLink": "https://10.248.133.14/api/login?NortxeSession=r.lqGJV4YtwJIBvttm5Zz9epSh.c&redirect=https://10.248.133.14/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 464,
     "macAddress": "00-05-A6-25-6A-03",
     "touchPanelIp": "",
@@ -1517,12 +1528,6 @@
         "ip": "10.248.133.14",
         "link": "http://10.248.133.14"
       },
-      "3839": {
-        "deviceName": "BSS112-DSP",
-        "matchedDnsName": "BSS112-DSP",
-        "ip": "10.248.133.7",
-        "link": "http://10.248.133.7"
-      },
       "3833": {
         "deviceName": "BSS112-Projector1",
         "matchedDnsName": "BSS112-Projector-1",
@@ -1534,6 +1539,18 @@
         "matchedDnsName": "BSS112-Projector-2",
         "ip": "10.248.133.12",
         "link": "http://10.248.133.12"
+      },
+      "3839": {
+        "deviceName": "BSS112-DSP",
+        "matchedDnsName": "BSS112-DSP",
+        "ip": "10.248.133.7",
+        "link": "http://10.248.133.7"
+      },
+      "3841": {
+        "deviceName": "BSS112-AVBridge",
+        "matchedDnsName": "BSS112-AVBridge",
+        "ip": "10.248.133.8",
+        "link": "http://10.248.133.8"
       },
       "3842": {
         "deviceName": "BSS112-Instructor-Cam",
@@ -1547,19 +1564,14 @@
         "ip": "10.248.133.9",
         "link": "http://10.248.133.9"
       },
-      "3841": {
-        "deviceName": "BSS112-AVBridge",
-        "matchedDnsName": "BSS112-AVBridge",
-        "ip": "10.248.133.8",
-        "link": "http://10.248.133.8"
-      },
       "3844": {
         "deviceName": "BSS112-Power",
         "matchedDnsName": "BSS112-Power",
         "ip": "10.248.133.13",
         "link": "http://10.248.133.13"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 121B",
@@ -1718,7 +1730,6 @@
     "ipAddress": "10.248.133.52",
     "webLink": "https://10.248.133.52/api/login?NortxeSession=r.I2jUbqCH4KPZZYKad4VPLodu.b&redirect=https://10.248.133.52/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 478,
     "macAddress": "00-05-A6-28-F9-93",
     "touchPanelIp": "",
@@ -1729,24 +1740,6 @@
       "rtsp://10.248.133.54/vaddio-av-bridge-2x1-stream"
     ],
     "deviceLinks": {
-      "4088": {
-        "deviceName": "BSS237-DSP",
-        "matchedDnsName": "BSS237-DSP",
-        "ip": "10.248.133.51",
-        "link": "http://10.248.133.51"
-      },
-      "4079": {
-        "deviceName": "BSS237-Projector-1",
-        "matchedDnsName": "BSS237-Projector-1",
-        "ip": "10.248.133.58",
-        "link": "http://10.248.133.58"
-      },
-      "4080": {
-        "deviceName": "BSS237-Projector-2",
-        "matchedDnsName": "BSS237-Projector-2",
-        "ip": "10.248.133.59",
-        "link": "http://10.248.133.59"
-      },
       "4002": {
         "deviceName": "BSS237-Instructor-Cam",
         "matchedDnsName": "BSS237-Instructor-Cam",
@@ -1765,6 +1758,18 @@
         "ip": "132.241.128.137",
         "link": "http://132.241.128.137"
       },
+      "4079": {
+        "deviceName": "BSS237-Projector-1",
+        "matchedDnsName": "BSS237-Projector-1",
+        "ip": "10.248.133.58",
+        "link": "http://10.248.133.58"
+      },
+      "4080": {
+        "deviceName": "BSS237-Projector-2",
+        "matchedDnsName": "BSS237-Projector-2",
+        "ip": "10.248.133.59",
+        "link": "http://10.248.133.59"
+      },
       "4081": {
         "deviceName": "BSS237-TV-1",
         "matchedDnsName": "BSS237-TV-1",
@@ -1782,15 +1787,21 @@
         "matchedDnsName": "BSS237-Power",
         "ip": "10.248.133.62",
         "link": "http://10.248.133.62"
+      },
+      "4088": {
+        "deviceName": "BSS237-DSP",
+        "matchedDnsName": "BSS237-DSP",
+        "ip": "10.248.133.51",
+        "link": "http://10.248.133.51"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 238",
     "ipAddress": "10.248.133.66",
     "webLink": "https://10.248.133.66/api/login?NortxeSession=r.awh67nqcYg9K1LL5aTz2YA4v.a&redirect=https://10.248.133.66/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 480,
     "macAddress": "00-05-A6-27-EA-9E",
     "touchPanelIp": "",
@@ -1813,18 +1824,6 @@
         "ip": "10.248.133.65",
         "link": "http://10.248.133.65"
       },
-      "3974": {
-        "deviceName": "BSS238-Projector-1",
-        "matchedDnsName": "BSS238-Projector-1",
-        "ip": "10.248.133.72",
-        "link": "http://10.248.133.72"
-      },
-      "3975": {
-        "deviceName": "BSS238-Projector-2",
-        "matchedDnsName": "BSS238-Projector-2",
-        "ip": "10.248.133.73",
-        "link": "http://10.248.133.73"
-      },
       "3972": {
         "deviceName": "BSS238-Instructor-Cam",
         "matchedDnsName": "BSS238-Instructor-Cam",
@@ -1836,6 +1835,18 @@
         "matchedDnsName": "BSS238-Audience-Cam",
         "ip": "10.248.133.69",
         "link": "http://10.248.133.69"
+      },
+      "3974": {
+        "deviceName": "BSS238-Projector-1",
+        "matchedDnsName": "BSS238-Projector-1",
+        "ip": "10.248.133.72",
+        "link": "http://10.248.133.72"
+      },
+      "3975": {
+        "deviceName": "BSS238-Projector-2",
+        "matchedDnsName": "BSS238-Projector-2",
+        "ip": "10.248.133.73",
+        "link": "http://10.248.133.73"
       },
       "3976": {
         "deviceName": "BSS238-TV-1",
@@ -1861,7 +1872,8 @@
         "ip": "10.248.133.76",
         "link": "http://10.248.133.76"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 239",
@@ -1928,7 +1940,6 @@
     "ipAddress": "10.248.133.91",
     "webLink": "https://10.248.133.91/api/login?NortxeSession=r.mILkjvsY0XZGnboWPSBCmi32.f&redirect=https://10.248.133.91/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 481,
     "macAddress": "00-05-A6-28-87-52",
     "touchPanelIp": "",
@@ -1944,24 +1955,6 @@
         "matchedDnsName": "BSS240-IPCP",
         "ip": "10.248.133.91",
         "link": "http://10.248.133.91"
-      },
-      "4040": {
-        "deviceName": "BSS240-DSP",
-        "matchedDnsName": "BSS240-DSP",
-        "ip": "10.248.133.90",
-        "link": "http://10.248.133.90"
-      },
-      "4042": {
-        "deviceName": "BSS240-Projector1",
-        "matchedDnsName": "BSS240-Projector-1",
-        "ip": "10.248.133.96",
-        "link": "http://10.248.133.96"
-      },
-      "4043": {
-        "deviceName": "BSS240-Projector2",
-        "matchedDnsName": "BSS240-Projector-2",
-        "ip": "10.248.133.97",
-        "link": "http://10.248.133.97"
       },
       "4037": {
         "deviceName": "BSS240-Instructor-Cam",
@@ -1981,6 +1974,24 @@
         "ip": "132.241.128.140",
         "link": "http://132.241.128.140"
       },
+      "4040": {
+        "deviceName": "BSS240-DSP",
+        "matchedDnsName": "BSS240-DSP",
+        "ip": "10.248.133.90",
+        "link": "http://10.248.133.90"
+      },
+      "4042": {
+        "deviceName": "BSS240-Projector1",
+        "matchedDnsName": "BSS240-Projector-1",
+        "ip": "10.248.133.96",
+        "link": "http://10.248.133.96"
+      },
+      "4043": {
+        "deviceName": "BSS240-Projector2",
+        "matchedDnsName": "BSS240-Projector-2",
+        "ip": "10.248.133.97",
+        "link": "http://10.248.133.97"
+      },
       "4044": {
         "deviceName": "BSS240-Power",
         "matchedDnsName": "BSS240-Power",
@@ -1993,14 +2004,14 @@
         "ip": "10.248.133.93",
         "link": "http://10.248.133.93"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 241",
     "ipAddress": "10.248.133.101",
     "webLink": "https://10.248.133.101/api/login?NortxeSession=r.aKiVgyhNmgco64anFldoJk7O.a&redirect=https://10.248.133.101/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 477,
     "macAddress": "00-05-A6-27-EA-DE",
     "touchPanelIp": "",
@@ -2017,11 +2028,17 @@
         "ip": "10.248.133.101",
         "link": "http://10.248.133.101"
       },
-      "3964": {
-        "deviceName": "BSS241-DSP",
-        "matchedDnsName": "BSS241-DSP",
-        "ip": "10.248.133.100",
-        "link": "http://10.248.133.100"
+      "3955": {
+        "deviceName": "BSS241-Audience-Cam",
+        "matchedDnsName": "BSS241-Audience-Cam",
+        "ip": "10.248.133.104",
+        "link": "http://10.248.133.104"
+      },
+      "3956": {
+        "deviceName": "BSS241-Instructor-Cam",
+        "matchedDnsName": "BSS241-Instructor-Cam",
+        "ip": "10.248.133.105",
+        "link": "http://10.248.133.105"
       },
       "3958": {
         "deviceName": "BSS241-Projector1",
@@ -2034,18 +2051,6 @@
         "matchedDnsName": "BSS241-Projector-2",
         "ip": "10.248.133.108",
         "link": "http://10.248.133.108"
-      },
-      "3955": {
-        "deviceName": "BSS241-Audience-Cam",
-        "matchedDnsName": "BSS241-Audience-Cam",
-        "ip": "10.248.133.104",
-        "link": "http://10.248.133.104"
-      },
-      "3956": {
-        "deviceName": "BSS241-Instructor-Cam",
-        "matchedDnsName": "BSS241-Instructor-Cam",
-        "ip": "10.248.133.105",
-        "link": "http://10.248.133.105"
       },
       "3960": {
         "deviceName": "BSS241-TV-1",
@@ -2065,13 +2070,20 @@
         "ip": "10.248.133.111",
         "link": "http://10.248.133.111"
       },
+      "3964": {
+        "deviceName": "BSS241-DSP",
+        "matchedDnsName": "BSS241-DSP",
+        "ip": "10.248.133.100",
+        "link": "http://10.248.133.100"
+      },
       "3966": {
         "deviceName": "BSS241-AVBridge",
         "matchedDnsName": "BSS241-AVBridge",
         "ip": "10.248.133.103",
         "link": "http://10.248.133.103"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 242",
@@ -2138,7 +2150,6 @@
     "ipAddress": "10.248.133.124",
     "webLink": "https://10.248.133.124/api/login?NortxeSession=r.3InmQS3qc35GmkamI1xqWBOc.a&redirect=https://10.248.133.124/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 491,
     "macAddress": "00-05-A6-28-CC-3E",
     "touchPanelIp": "",
@@ -2155,23 +2166,11 @@
         "ip": "10.248.133.124",
         "link": "http://10.248.133.124"
       },
-      "4113": {
-        "deviceName": "BSS243-DSP",
-        "matchedDnsName": "BSS243-DSP",
-        "ip": "10.248.133.123",
-        "link": "http://10.248.133.123"
-      },
       "4106": {
         "deviceName": "BSS243-Projector",
         "matchedDnsName": "BSS243-Projector",
         "ip": "10.248.133.128",
         "link": "http://10.248.133.128"
-      },
-      "4111": {
-        "deviceName": "BSS243-Audience-Cam",
-        "matchedDnsName": "BSS243-Audience-Cam",
-        "ip": "10.248.133.126",
-        "link": "http://10.248.133.126"
       },
       "4107": {
         "deviceName": "BSS243-AVBridge",
@@ -2184,15 +2183,27 @@
         "matchedDnsName": "BSS243-Power",
         "ip": "10.248.133.130",
         "link": "http://10.248.133.130"
+      },
+      "4111": {
+        "deviceName": "BSS243-Audience-Cam",
+        "matchedDnsName": "BSS243-Audience-Cam",
+        "ip": "10.248.133.126",
+        "link": "http://10.248.133.126"
+      },
+      "4113": {
+        "deviceName": "BSS243-DSP",
+        "matchedDnsName": "BSS243-DSP",
+        "ip": "10.248.133.123",
+        "link": "http://10.248.133.123"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 244",
     "ipAddress": "10.248.133.132",
     "webLink": "https://10.248.133.132/api/login?NortxeSession=r.kodxdDkWx3nGE7Vr4si2qSPQ.a&redirect=https://10.248.133.132/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 485,
     "macAddress": "00-05-A6-28-CC-12",
     "touchPanelIp": "",
@@ -2209,18 +2220,6 @@
         "ip": "10.248.133.132",
         "link": "http://10.248.133.132"
       },
-      "4018": {
-        "deviceName": "BSS244-DSP",
-        "matchedDnsName": "BSS244-DSP",
-        "ip": "10.248.133.131",
-        "link": "http://10.248.133.131"
-      },
-      "4020": {
-        "deviceName": "BSS244-Projector",
-        "matchedDnsName": "BSS244-Projector",
-        "ip": "10.248.133.136",
-        "link": "http://10.248.133.136"
-      },
       "4016": {
         "deviceName": "BSS244-Instructor-Cam",
         "matchedDnsName": "BSS244-Instructor-Cam",
@@ -2233,11 +2232,23 @@
         "ip": "10.248.133.134",
         "link": "http://10.248.133.134"
       },
+      "4018": {
+        "deviceName": "BSS244-DSP",
+        "matchedDnsName": "BSS244-DSP",
+        "ip": "10.248.133.131",
+        "link": "http://10.248.133.131"
+      },
       "4019": {
         "deviceName": "BSS244-Power",
         "matchedDnsName": "BSS244-Power",
         "ip": "10.248.133.138",
         "link": "http://10.248.133.138"
+      },
+      "4020": {
+        "deviceName": "BSS244-Projector",
+        "matchedDnsName": "BSS244-Projector",
+        "ip": "10.248.133.136",
+        "link": "http://10.248.133.136"
       },
       "4021": {
         "deviceName": "BSS244-AVBridge",
@@ -2245,14 +2256,14 @@
         "ip": "10.248.133.133",
         "link": "http://10.248.133.133"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 245",
     "ipAddress": "10.248.133.140",
     "webLink": "https://10.248.133.140/api/login?NortxeSession=r.Q8Derr73ezUIxzywg2B5yxOi.b&redirect=https://10.248.133.140/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 483,
     "macAddress": "00-05-A6-28-87-7C",
     "touchPanelIp": "",
@@ -2269,17 +2280,23 @@
         "ip": "10.248.133.140",
         "link": "http://10.248.133.140"
       },
+      "4129": {
+        "deviceName": "BSS245-Projector",
+        "matchedDnsName": "BSS245-Projector",
+        "ip": "10.248.133.144",
+        "link": "http://10.248.133.144"
+      },
       "4131": {
         "deviceName": "BSS245-DSP",
         "matchedDnsName": "BSS245-DSP",
         "ip": "10.248.133.139",
         "link": "http://10.248.133.139"
       },
-      "4129": {
-        "deviceName": "BSS245-Projector",
-        "matchedDnsName": "BSS245-Projector",
-        "ip": "10.248.133.144",
-        "link": "http://10.248.133.144"
+      "4133": {
+        "deviceName": "BSS245-AVBridge",
+        "matchedDnsName": "BSS245-AVBridge",
+        "ip": "10.248.133.141",
+        "link": "http://10.248.133.141"
       },
       "4134": {
         "deviceName": "BSS245-Instructor-Cam",
@@ -2293,19 +2310,14 @@
         "ip": "10.248.133.142",
         "link": "http://10.248.133.142"
       },
-      "4133": {
-        "deviceName": "BSS245-AVBridge",
-        "matchedDnsName": "BSS245-AVBridge",
-        "ip": "10.248.133.141",
-        "link": "http://10.248.133.141"
-      },
       "4136": {
         "deviceName": "BSS245-Power",
         "matchedDnsName": "BSS245-Power",
         "ip": "10.248.133.145",
         "link": "http://10.248.133.145"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 246",
@@ -2472,7 +2484,7 @@
         "link": "http://10.248.133.166"
       }
     },
-    "supportsLogging": false
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 249",
@@ -2545,7 +2557,6 @@
     "ipAddress": "10.248.133.187",
     "webLink": "https://10.248.133.187/api/login?NortxeSession=r.cZzgxQNbXf4J1vEydDNgYxPM.b&redirect=https://10.248.133.187/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 488,
     "macAddress": "00-05-A6-28-87-D0",
     "touchPanelIp": "",
@@ -2562,11 +2573,17 @@
         "ip": "10.248.133.187",
         "link": "http://10.248.133.187"
       },
-      "4176": {
-        "deviceName": "BSS251-DSP",
-        "matchedDnsName": "BSS251-DSP",
-        "ip": "10.248.133.186",
-        "link": "http://10.248.133.186"
+      "4048": {
+        "deviceName": "BSS251-Instructor-Cam",
+        "matchedDnsName": "BSS251-Instructor-Cam",
+        "ip": "10.248.133.190",
+        "link": "http://10.248.133.190"
+      },
+      "4049": {
+        "deviceName": "BSS251-Audience-Cam",
+        "matchedDnsName": "BSS251-Audience-Cam",
+        "ip": "10.248.133.193",
+        "link": "http://10.248.133.193"
       },
       "4170": {
         "deviceName": "BSS251-Projector-1",
@@ -2580,23 +2597,17 @@
         "ip": "10.248.133.192",
         "link": "http://10.248.133.192"
       },
-      "4048": {
-        "deviceName": "BSS251-Instructor-Cam",
-        "matchedDnsName": "BSS251-Instructor-Cam",
-        "ip": "10.248.133.190",
-        "link": "http://10.248.133.190"
-      },
-      "4049": {
-        "deviceName": "BSS251-Audience-Cam",
-        "matchedDnsName": "BSS251-Audience-Cam",
-        "ip": "10.248.133.193",
-        "link": "http://10.248.133.193"
-      },
       "4174": {
         "deviceName": "BSS251-AVBridge",
         "matchedDnsName": "BSS251-AVBridge",
         "ip": "10.248.133.189",
         "link": "http://10.248.133.189"
+      },
+      "4176": {
+        "deviceName": "BSS251-DSP",
+        "matchedDnsName": "BSS251-DSP",
+        "ip": "10.248.133.186",
+        "link": "http://10.248.133.186"
       },
       "4177": {
         "deviceName": "BSS251-Power",
@@ -2604,51 +2615,58 @@
         "ip": "10.248.133.194",
         "link": "http://10.248.133.194"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 258",
     "ipAddress": "10.248.133.196",
-    "webLink": "https://10.248.133.196/api/login?NortxeSession=r.GMWx3UZOwQPFBAtoCfsJkbbI.b&redirect=https://10.248.133.196/web/vtlp/ui/index.html#/main",
+    "webLink": "https://10.248.133.196/api/login?NortxeSession=r.kLw20AkpPrm0riV6c4NfuLgN.b&redirect=https://10.248.133.196/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "roomId": 498,
+    "roomId": 536,
     "macAddress": "00-05-A6-27-E5-42",
     "touchPanelIp": "10.248.133.199",
     "pcNames": [
       "CONF-BSS258"
     ],
     "deviceLinks": {
-      "1516": {
+      "1567": {
         "deviceName": "BSS258-IPCP",
         "matchedDnsName": "BSS258-IPCP",
         "ip": "10.248.133.196",
         "link": "http://10.248.133.196"
       },
-      "4233": {
+      "4664": {
         "deviceName": "BSS258-TLP",
         "matchedDnsName": "BSS258-TLP",
         "ip": "10.248.133.199",
         "link": "http://10.248.133.199"
       },
-      "4234": {
+      "4665": {
         "deviceName": "BSS258-TV",
         "matchedDnsName": "BSS258-TV",
         "ip": "10.248.133.198",
         "link": "http://10.248.133.198"
       },
-      "4377": {
+      "4666": {
+        "matchedDnsName": "BSS258-wireless",
+        "ip": "132.241.128.151",
+        "deviceName": "BSS258-Wireless",
+        "link": "http://132.241.128.151"
+      },
+      "4667": {
         "deviceName": "BSS258-Power",
         "matchedDnsName": "BSS258-Power",
         "ip": "10.248.133.197",
         "link": "http://10.248.133.197"
       }
     },
-    "supportsLogging": false
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 259",
     "ipAddress": "10.248.133.200",
-    "webLink": "https://10.248.133.200/api/login?NortxeSession=r.kLw20AkpPrm0riV6c4NfuLgN.b&redirect=https://10.248.133.200/web/vtlp/ui/index.html",
+    "webLink": "https://10.248.133.200/api/login?NortxeSession=r.GMWx3UZOwQPFBAtoCfsJkbbI.b&redirect=https://10.248.133.200/web/vtlp/ui/index.html",
     "password": "ATEC2007",
     "roomId": 497,
     "macAddress": "00-05-A6-27-E4-CF",
@@ -2657,32 +2675,36 @@
       "CONF-BSS259"
     ],
     "deviceLinks": {
-      "1514": {
-        "deviceName": "BSS259-IPCP",
-        "matchedDnsName": "BSS259-IPCP",
-        "ip": "10.248.133.200",
-        "link": "http://10.248.133.200"
+      "1568": {
+        "deviceName": "BSS259-Controller",
+        "link": "10.248.133.200"
       },
-      "4207": {
+      "4668": {
         "deviceName": "BSS259-TLP",
         "matchedDnsName": "BSS259-TLP",
         "ip": "10.248.133.203",
         "link": "http://10.248.133.203"
       },
-      "4208": {
+      "4669": {
         "deviceName": "BSS259-TV",
         "matchedDnsName": "BSS259-TV",
         "ip": "10.248.133.202",
         "link": "http://10.248.133.202"
       },
-      "4378": {
+      "4670": {
+        "matchedDnsName": "BSS259-wireless",
+        "ip": "132.241.128.152",
+        "deviceName": "BSS259-Wireless",
+        "link": "http://132.241.128.152"
+      },
+      "4671": {
         "deviceName": "BSS259-Power",
         "matchedDnsName": "BSS259-Power",
         "ip": "10.248.133.201",
         "link": "http://10.248.133.201"
       }
     },
-    "supportsLogging": false
+    "supportsLogging": true
   },
   {
     "roomName": "BSS 261",
@@ -3259,556 +3281,6 @@
     }
   },
   {
-    "roomName": "BUTE 101",
-    "ipAddress": "10.248.131.3",
-    "webLink": "https://10.248.131.3/api/login?NortxeSession=r.GfGRS3GGdHnfjRsTHXXNjfJD.k&redirect=https://10.248.131.3/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 383,
-    "macAddress": "00-05-A6-1D-73-70",
-    "touchPanelIp": "10.248.131.70",
-    "pcNames": [],
-    "deviceLinks": {
-      "402": {
-        "deviceName": "BUTE101-IPL-Pro-S6",
-        "matchedDnsName": "BUTE101-IPL-PRO-S6",
-        "ip": "10.248.131.3",
-        "link": "http://10.248.131.3"
-      },
-      "2434": {
-        "deviceName": "BUTE101-TLP",
-        "matchedDnsName": "BUTE101-TLP-525M",
-        "ip": "10.248.131.70",
-        "link": "http://10.248.131.70"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 102",
-    "ipAddress": "10.248.131.195",
-    "webLink": "https://10.248.131.195/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 30,
-    "macAddress": "00-05-A6-18-71-11",
-    "touchPanelIp": "",
-    "pcNames": [],
-    "deviceLinks": {
-      "30": {
-        "deviceName": "MLC Plus 200 : Butte 102",
-        "matchedDnsName": "mlcplus-bute102",
-        "ip": "10.248.131.195",
-        "link": "http://10.248.131.195"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 103",
-    "ipAddress": "10.248.131.4",
-    "webLink": "https://10.248.131.4/api/login?NortxeSession=r.0PcJgonzMRye59RG0qEhAX7c.e&redirect=https://10.248.131.4/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 384,
-    "macAddress": "00-05-A6-1D-AF-B9",
-    "touchPanelIp": "10.248.131.71",
-    "pcNames": [],
-    "deviceLinks": {
-      "1402": {
-        "deviceName": "BUTE103-IPL-Pro-S6",
-        "matchedDnsName": "BUTE103-IPL-PRO-S6",
-        "ip": "10.248.131.4",
-        "link": "http://10.248.131.4"
-      },
-      "3433": {
-        "deviceName": "BUTE103-TLP",
-        "matchedDnsName": "BUTE103-TLP-525M",
-        "ip": "10.248.131.71",
-        "link": "http://10.248.131.71"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 104",
-    "ipAddress": "10.248.131.196",
-    "webLink": "https://10.248.131.196/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 335,
-    "macAddress": "00-05-A6-19-BE-05",
-    "touchPanelIp": "",
-    "pcNames": [],
-    "deviceLinks": {
-      "319": {
-        "deviceName": "MLC Plus 200 : Butte 104",
-        "matchedDnsName": "mlcplus-bute104",
-        "ip": "10.248.131.196",
-        "link": "http://10.248.131.196"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 109",
-    "ipAddress": "10.248.131.5",
-    "webLink": "https://10.248.131.5/api/login?NortxeSession=r.zt75U4KceQUdvov4Kz6qYwFQ.g&redirect=https://10.248.131.5/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 385,
-    "macAddress": "00-05-A6-1D-73-EE",
-    "touchPanelIp": "10.248.131.72",
-    "pcNames": [],
-    "deviceLinks": {
-      "1403": {
-        "deviceName": "BUTE109-IPL-Pro-S6",
-        "matchedDnsName": "BUTE109-IPL-PRO-S6",
-        "ip": "10.248.131.5",
-        "link": "http://10.248.131.5"
-      },
-      "3436": {
-        "deviceName": "BUTE109-TLP",
-        "matchedDnsName": "BUTE109-TLP-525M",
-        "ip": "10.248.131.72",
-        "link": "http://10.248.131.72"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 113",
-    "ipAddress": "10.248.129.158",
-    "webLink": "https://10.248.129.158/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 471,
-    "macAddress": "00-05-A6-11-AA-75",
-    "touchPanelIp": "",
-    "pcNames": [],
-    "deviceLinks": {
-      "1489": {
-        "deviceName": "mlc-plus-bute113",
-        "matchedDnsName": "mlc-plus-bute113",
-        "ip": "10.248.129.158",
-        "link": "http://10.248.129.158"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 201",
-    "ipAddress": "10.248.131.6",
-    "webLink": "https://10.248.131.6/api/login?NortxeSession=r.rbmwhxibYDLFi7h88ELwBcJd.d&redirect=https://10.248.131.6/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 386,
-    "macAddress": "00-05-A6-1D-AF-97",
-    "touchPanelIp": "10.248.131.73",
-    "pcNames": [
-      "SC-BUTE201"
-    ],
-    "deviceLinks": {
-      "1404": {
-        "deviceName": "BUTE201-IPL-PRO-S6",
-        "matchedDnsName": "BUTE201-IPL-PRO-S6",
-        "ip": "10.248.131.6",
-        "link": "http://10.248.131.6"
-      },
-      "3440": {
-        "deviceName": "BUTE201-TLP",
-        "matchedDnsName": "BUTE201-TLP-525M",
-        "ip": "10.248.131.73",
-        "link": "http://10.248.131.73"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 203",
-    "ipAddress": "10.248.128.20",
-    "webLink": "http://10.248.128.20/gc2/gv-index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 42,
-    "macAddress": "00-05-A6-03-EB-AB",
-    "touchPanelIp": "",
-    "pcNames": [
-      "SC-BUTE203"
-    ]
-  },
-  {
-    "roomName": "BUTE 205",
-    "ipAddress": "10.248.128.21",
-    "webLink": "https://10.248.128.21/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 40,
-    "macAddress": "00-05-A6-01-87-5A",
-    "touchPanelIp": "",
-    "pcNames": []
-  },
-  {
-    "roomName": "BUTE 209",
-    "ipAddress": "10.248.128.140",
-    "webLink": "https://10.248.128.140/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 37,
-    "macAddress": "00-05-A6-14-EC-F2",
-    "touchPanelIp": "",
-    "pcNames": [
-      "SC-BUTE209"
-    ],
-    "deviceLinks": {
-      "37": {
-        "deviceName": "MLC Plus 200 : Butte 209",
-        "matchedDnsName": "mlc-plus-bute209",
-        "ip": "10.248.128.140",
-        "link": "http://10.248.128.140"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 211",
-    "ipAddress": "10.248.129.61",
-    "webLink": "https://10.248.129.61/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 38,
-    "macAddress": "00-05-A6-11-AA-50",
-    "touchPanelIp": "",
-    "pcNames": [],
-    "deviceLinks": {
-      "38": {
-        "deviceName": "mlc-plus-butte211 ",
-        "matchedDnsName": "mlc-plus-butte211",
-        "ip": "10.248.129.61",
-        "link": "http://10.248.129.61"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 219",
-    "ipAddress": "10.248.131.199",
-    "webLink": "https://10.248.131.199/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 34,
-    "macAddress": "00-05-A6-14-EC-BB",
-    "touchPanelIp": "",
-    "pcNames": [
-      "SC-BUTE219"
-    ],
-    "deviceLinks": {
-      "34": {
-        "deviceName": "MLC Plus 200 : Butte 219",
-        "matchedDnsName": "mlc-bute219",
-        "ip": "10.248.128.195",
-        "link": "http://10.248.128.195"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 221",
-    "ipAddress": "10.248.131.7",
-    "webLink": "https://10.248.131.7/api/login?NortxeSession=r.Qkm7uUeh1E3iAopexschsJO3.a&redirect=https://10.248.131.7/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 389,
-    "macAddress": "00-05-A6-1D-73-E7",
-    "touchPanelIp": "10.248.131.74",
-    "pcNames": [
-      "SC-BUTE221"
-    ],
-    "deviceLinks": {
-      "3459": {
-        "deviceName": "BUTE221-TLP",
-        "matchedDnsName": "BUTE221-TLP-525M",
-        "ip": "10.248.131.74",
-        "link": "http://10.248.131.74"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 223",
-    "ipAddress": "10.248.128.199",
-    "webLink": "https://10.248.128.199/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 43,
-    "macAddress": "00-05-A6-07-8F-36",
-    "touchPanelIp": "",
-    "pcNames": [
-      "SC-BUTE223"
-    ]
-  },
-  {
-    "roomName": "BUTE 225",
-    "ipAddress": "10.248.128.201",
-    "webLink": "https://10.248.128.201/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 44,
-    "macAddress": "00-05-A6-07-91-AF",
-    "touchPanelIp": "",
-    "pcNames": []
-  },
-  {
-    "roomName": "BUTE 227",
-    "ipAddress": "10.248.128.146",
-    "webLink": "https://10.248.128.146/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 48,
-    "macAddress": "00-05-A6-14-EC-EA",
-    "touchPanelIp": "",
-    "pcNames": [],
-    "deviceLinks": {
-      "48": {
-        "deviceName": "MLC Plus 200 : Butte227",
-        "matchedDnsName": "mlc-plus-bute227",
-        "ip": "10.248.128.146",
-        "link": "http://10.248.128.146"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 229",
-    "ipAddress": "10.248.129.62",
-    "webLink": "https://10.248.129.62/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 387,
-    "macAddress": "00-05-A6-1D-73-73",
-    "touchPanelIp": "10.248.131.75",
-    "pcNames": [
-      "SC-BUTE229"
-    ],
-    "deviceLinks": {
-      "3444": {
-        "deviceName": "BUTE229-TLP",
-        "matchedDnsName": "BUTE229-TLP-525M",
-        "ip": "10.248.131.75",
-        "link": "http://10.248.131.75"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 301",
-    "ipAddress": "10.248.129.63",
-    "webLink": "https://10.248.129.63/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 50,
-    "macAddress": "00-05-A6-11-A8-AD",
-    "touchPanelIp": "",
-    "pcNames": [
-      "SC-BUTE301"
-    ],
-    "deviceLinks": {
-      "50": {
-        "deviceName": "mlc-plus-butte301",
-        "matchedDnsName": "mlc-plus-butte301",
-        "ip": "10.248.129.63",
-        "link": "http://10.248.129.63"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 307",
-    "ipAddress": "10.248.131.9",
-    "webLink": "https://10.248.131.9/api/login?NortxeSession=r.szxwO3wbVlbsQBzgn8xfrH9c.c&redirect=https://10.248.131.9/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 388,
-    "macAddress": "00-05-A6-1D-73-EB",
-    "touchPanelIp": "10.248.131.76",
-    "pcNames": [
-      "SC-BUTE307"
-    ],
-    "deviceLinks": {
-      "1406": {
-        "deviceName": "BUTE307-IPL-Pro-S6",
-        "matchedDnsName": "BUTE307-IPL-PRO-S6",
-        "ip": "10.248.131.9",
-        "link": "http://10.248.131.9"
-      },
-      "3448": {
-        "deviceName": "BUTE307-TLP",
-        "matchedDnsName": "BUTE307-TLP-525M",
-        "ip": "10.248.131.76",
-        "link": "http://10.248.131.76"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 309",
-    "ipAddress": "10.248.128.203",
-    "webLink": "https://10.248.128.203/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 45,
-    "macAddress": "00-05-A6-07-91-C3",
-    "touchPanelIp": "",
-    "pcNames": [
-      "SC-BUTE309"
-    ]
-  },
-  {
-    "roomName": "BUTE 319",
-    "ipAddress": "10.248.131.203",
-    "webLink": "https://10.248.131.203/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 52,
-    "macAddress": "00-05-A6-19-BE-07",
-    "touchPanelIp": "",
-    "pcNames": [
-      "SC-BUTE319"
-    ],
-    "deviceLinks": {
-      "52": {
-        "deviceName": "MLC Plus 200 : Butte 319",
-        "matchedDnsName": "mlcplus-bute319",
-        "ip": "10.248.131.203",
-        "link": "http://10.248.131.203"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 321",
-    "ipAddress": "10.248.128.147",
-    "webLink": "https://10.248.128.147/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 53,
-    "macAddress": "00-05-A6-14-EC-FD",
-    "touchPanelIp": "",
-    "pcNames": [
-      "SC-BUTE321"
-    ],
-    "deviceLinks": {
-      "53": {
-        "deviceName": "MLC Plus 200 : Butte 321",
-        "matchedDnsName": "mlc-plus-bute321",
-        "ip": "10.248.128.147",
-        "link": "http://10.248.128.147"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 323",
-    "ipAddress": "10.248.131.10",
-    "webLink": "https://10.248.131.10/api/login?NortxeSession=r.VRfOnNXT2ydPdzD4veXQxKvh.a&redirect=https://10.248.131.10/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 390,
-    "macAddress": "00-05-A6-1D-AF-E9",
-    "touchPanelIp": "10.248.131.77",
-    "pcNames": [
-      "SC-BUTE323"
-    ],
-    "deviceLinks": {
-      "1409": {
-        "deviceName": "BUTE323-IPL-Pro-S6",
-        "matchedDnsName": "BUTE327-IPL-PRO-S6",
-        "ip": "10.248.131.10",
-        "link": "http://10.248.131.10"
-      },
-      "3463": {
-        "deviceName": "BUTE323-TLP",
-        "matchedDnsName": "BUTE323-TLP-525M",
-        "ip": "10.248.131.77",
-        "link": "http://10.248.131.77"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 325",
-    "ipAddress": "10.248.128.205",
-    "webLink": "https://10.248.128.205/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 46,
-    "macAddress": "00-05-A6-07-95-FE",
-    "touchPanelIp": "",
-    "pcNames": []
-  },
-  {
-    "roomName": "BUTE 327",
-    "ipAddress": "10.248.128.151",
-    "webLink": "https://10.248.128.151/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 55,
-    "macAddress": "00-05-A6-14-ED-04",
-    "touchPanelIp": "",
-    "pcNames": [
-      "SC-BUTE327"
-    ],
-    "deviceLinks": {
-      "55": {
-        "deviceName": "MLC Plus 200 : Butte 327",
-        "matchedDnsName": "mlc-plus-bute327",
-        "ip": "10.248.128.151",
-        "link": "http://10.248.128.151"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 329",
-    "ipAddress": "10.248.128.153",
-    "webLink": "https://10.248.128.153/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 56,
-    "macAddress": "00-05-A6-14-ED-03",
-    "touchPanelIp": "",
-    "pcNames": [
-      "SC-BUTE329"
-    ],
-    "deviceLinks": {
-      "56": {
-        "deviceName": "MLC Plus 200 : Butte 329",
-        "matchedDnsName": "mlc-plus-bute329",
-        "ip": "10.248.128.153",
-        "link": "http://10.248.128.153"
-      }
-    }
-  },
-  {
-    "roomName": "BUTE 503",
-    "ipAddress": "10.248.128.32",
-    "webLink": "https://10.248.128.32/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 41,
-    "macAddress": "00-05-A6-06-87-7E",
-    "touchPanelIp": "",
-    "pcNames": []
-  },
-  {
-    "roomName": "BUTE 505",
-    "ipAddress": "10.248.131.11",
-    "webLink": "https://10.248.131.11/api/login?NortxeSession=r.HL8wBQwhsZ7PCrzppztqrQuh.c&redirect=https://10.248.131.11/web/vtlp/ui/index.html",
-    "password": "ATEC2007",
-    "supportsLogging": false,
-    "roomId": 391,
-    "macAddress": "00-05-A6-1D-AF-94",
-    "touchPanelIp": "10.248.131.78",
-    "pcNames": [
-      "SC-BUTE505"
-    ],
-    "deviceLinks": {
-      "1410": {
-        "deviceName": "BUTE505-IPL-Pro-S6",
-        "matchedDnsName": "BUTE505-IPL-PRO-S6",
-        "ip": "10.248.131.11",
-        "link": "http://10.248.131.11"
-      },
-      "3467": {
-        "deviceName": "BUTE505-TLP",
-        "matchedDnsName": "BUTE505-TLP-525M",
-        "ip": "10.248.131.78",
-        "link": "http://10.248.131.78"
-      }
-    }
-  },
-  {
     "roomName": "BUTE 601",
     "ipAddress": "10.248.128.173",
     "webLink": "https://10.248.128.173/web/vtlp/ui/index.html",
@@ -3826,14 +3298,17 @@
     "ipAddress": "10.248.129.128",
     "webLink": "https://10.248.129.128/web/vtlp/34c0bbb7-4008-43b1-81d1-246c61fa86a3/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 58,
     "subRoomId": 12,
+    "combinedRoom": "CLSA 100",
+    "gveSide": "A",
     "macAddress": "00-05-A6-1A-AA-FF",
     "touchPanelIp": "",
     "pcNames": [
-      "SC-CLSA100A"
-    ]
+      "SC-CLSA100A",
+      "sc-g02229"
+    ],
+    "supportsLogging": false
   },
   {
     "roomName": "CLSA 100B",
@@ -3842,6 +3317,8 @@
     "password": "ATEC2007",
     "roomId": 58,
     "subRoomId": 13,
+    "combinedRoom": "CLSA 100",
+    "gveSide": "B",
     "macAddress": "00-05-A6-1A-AA-FF",
     "touchPanelIp": "",
     "pcNames": [
@@ -3856,6 +3333,7 @@
     "password": "ATEC2007",
     "roomId": 515,
     "subRoomId": 1,
+    "combinedRoom": "FAEC 111 117",
     "macAddress": "00-05-A6-2D-A8-B3",
     "touchPanelIp": "",
     "pcNames": [
@@ -4119,6 +3597,7 @@
     "password": "ATEC2007",
     "roomId": 515,
     "subRoomId": 2,
+    "combinedRoom": "FAEC 111 117",
     "macAddress": "00-05-A6-2D-A8-B3",
     "touchPanelIp": "",
     "pcNames": [
@@ -4382,6 +3861,7 @@
     "password": "ATEC2007",
     "roomId": 515,
     "subRoomId": 3,
+    "combinedRoom": "FAEC 111 117",
     "macAddress": "00-05-A6-2D-A8-B3",
     "touchPanelIp": "",
     "pcNames": [
@@ -4645,6 +4125,7 @@
     "password": "ATEC2007",
     "roomId": 515,
     "subRoomId": 4,
+    "combinedRoom": "FAEC 111 117",
     "macAddress": "00-05-A6-2D-A8-B3",
     "touchPanelIp": "",
     "pcNames": [
@@ -5161,6 +4642,7 @@
       }
     },
     "subRoomId": 6,
+    "combinedRoom": "FAEC 111 117",
     "supportsLogging": false
   },
   {
@@ -5170,6 +4652,7 @@
     "password": "ATEC2007",
     "roomId": 515,
     "subRoomId": 5,
+    "combinedRoom": "FAEC 111 117",
     "macAddress": "00-05-A6-2D-A8-B3",
     "touchPanelIp": "",
     "pcNames": [
@@ -5758,7 +5241,6 @@
     "ipAddress": "10.248.128.92",
     "webLink": "https://10.248.128.92/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 77,
     "macAddress": "00-05-A6-14-EC-F4",
     "touchPanelIp": "",
@@ -5771,8 +5253,17 @@
         "matchedDnsName": "mlc-plus-glnn223",
         "ip": "10.248.128.92",
         "link": "http://10.248.128.92"
+      },
+      "342": {
+        "deviceName": "Extron - IN1608 xi SA v1.4 serial",
+        "link": "10.248.128.94"
+      },
+      "344": {
+        "deviceName": "Extron - IN1608 xi SA Static IP Reservation",
+        "link": "10.248.128.94"
       }
-    }
+    },
+    "supportsLogging": false
   },
   {
     "roomName": "GLNN 225",
@@ -5857,10 +5348,9 @@
   },
   {
     "roomName": "GLNN 306",
-    "ipAddress": "10.248.128.76",
-    "webLink": "https://10.248.128.76/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "ipAddress": "10.248.129.176",
+    "webLink": "https://10.248.129.176/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 352,
     "macAddress": "00-05-A6-1D-73-64",
     "touchPanelIp": "10.248.128.76",
@@ -5874,17 +5364,17 @@
         "ip": "10.248.129.176",
         "link": "http://10.248.129.176"
       },
-      "2145": {
-        "deviceName": "GLNN306-TLP525M",
-        "matchedDnsName": "glnn306-tlp525m",
-        "ip": "10.248.128.76",
-        "link": "http://10.248.128.76"
-      },
       "2142": {
         "deviceName": "GLNN306-AVER-TR311",
         "matchedDnsName": "GLNN306-AVER-TR311",
         "ip": "10.248.129.186",
         "link": "http://10.248.129.186"
+      },
+      "2145": {
+        "deviceName": "GLNN306-TLP525M",
+        "matchedDnsName": "glnn306-tlp525m",
+        "ip": "10.248.128.76",
+        "link": "http://10.248.128.76"
       },
       "3803": {
         "deviceName": "GLNN306-MediaPort",
@@ -5892,7 +5382,8 @@
         "ip": "10.248.131.139",
         "link": "http://10.248.131.139"
       }
-    }
+    },
+    "supportsLogging": false
   },
   {
     "roomName": "GLNN 308",
@@ -6053,7 +5544,6 @@
     "ipAddress": "10.248.128.27",
     "webLink": "https://10.248.128.27/api/login?NortxeSession=r.d84TrjFunSHOFavS0lFbYTpV.a&redirect=https://10.248.128.27/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 396,
     "macAddress": "00-05-A6-1E-3E-99",
     "touchPanelIp": "10.248.128.16",
@@ -6073,13 +5563,14 @@
         "ip": "10.248.128.16",
         "link": "http://10.248.128.16"
       },
-      "3489": {
+      "4678": {
         "deviceName": "HOLT111-Projector",
         "matchedDnsName": "HOLT111-IPL-PRO-S6-R",
         "ip": "10.248.128.27",
         "link": "http://10.248.128.27"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "HOLT 113",
@@ -6159,9 +5650,8 @@
   {
     "roomName": "HOLT 171",
     "ipAddress": "10.248.129.56",
-    "webLink": "https://10.248.129.56/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "webLink": "https://10.248.129.56/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 522,
     "macAddress": "00-05-A6-22-F0-2F",
     "touchPanelIp": "10.248.129.55",
@@ -6181,7 +5671,8 @@
         "ip": "10.248.129.55",
         "link": "http://10.248.129.55"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "HOLT 173",
@@ -6207,9 +5698,8 @@
   {
     "roomName": "HOLT 175",
     "ipAddress": "10.248.129.54",
-    "webLink": "https://10.248.129.54/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "webLink": "https://10.248.129.54/web/vtlp/ui/index.html",
     "password": "ATEC2007",
-    "supportsLogging": false,
     "roomId": 95,
     "macAddress": "00-05-A6-0C-E0-DD",
     "touchPanelIp": "10.248.129.53",
@@ -6228,8 +5718,13 @@
         "matchedDnsName": "TLP-holt175",
         "ip": "10.248.129.53",
         "link": "http://10.248.129.53"
+      },
+      "3458": {
+        "deviceName": "Extron - DTP CrossPoint 84 IPCP SA v5.7",
+        "link": "10.248.128.15"
       }
-    }
+    },
+    "supportsLogging": true
   },
   {
     "roomName": "HOLT 185",
@@ -6518,25 +6013,25 @@
       "SC-HOLT337"
     ],
     "deviceLinks": {
-      "1534": {
+      "1569": {
         "deviceName": "IPL Pro S6",
         "matchedDnsName": "HOLT337-IPL-PRO-S6",
         "ip": "10.248.132.29",
         "link": "http://10.248.132.29"
       },
-      "4358": {
+      "4672": {
         "deviceName": "TLP Pro 725T",
         "matchedDnsName": "HOLT337-TLP725T",
         "ip": "10.248.132.54",
         "link": "http://10.248.132.54"
       },
-      "4359": {
+      "4673": {
         "deviceName": "1 - Sony VPL-PHZ60",
         "matchedDnsName": "HOLT337-PHZ60",
         "ip": "10.248.132.65",
         "link": "http://10.248.132.65"
       },
-      "4361": {
+      "4675": {
         "deviceName": "APC - AP7900B",
         "matchedDnsName": "HOLT337-APC",
         "ip": "10.248.132.31",
@@ -8048,8 +7543,7 @@
     "macAddress": "00-05-A6-13-C9-F1",
     "touchPanelIp": "10.248.128.38",
     "pcNames": [
-      "SC-PAC144",
-      "SC-PAC144-BOOTH"
+      "SC-PAC144"
     ],
     "deviceLinks": {
       "712": {
@@ -8114,7 +7608,7 @@
     "touchPanelIp": "",
     "macAddress": "00-05-A6-08-25-43",
     "roomId": 157,
-    "supportsLogging": true
+    "supportsLogging": false
   },
   {
     "roomName": "PARK 119A",
@@ -8458,6 +7952,8 @@
     "supportsLogging": false,
     "roomId": 525,
     "subRoomId": 6,
+    "combinedRoom": "SCI 126AB",
+    "gveSide": "A",
     "macAddress": "00-05-A6-1A-AA-C9",
     "touchPanelIp": "",
     "pcNames": [
@@ -8472,6 +7968,8 @@
     "supportsLogging": false,
     "roomId": 525,
     "subRoomId": 7,
+    "combinedRoom": "SCI 126AB",
+    "gveSide": "B",
     "macAddress": "00-05-A6-1A-AA-D3",
     "touchPanelIp": "",
     "pcNames": [
@@ -9149,6 +8647,8 @@
     "supportsLogging": false,
     "roomId": 323,
     "subRoomId": 8,
+    "combinedRoom": "SCI 453_455",
+    "gveSide": "A",
     "macAddress": "00-05-A6-1A-AB-11",
     "touchPanelIp": "10.248.130.45",
     "pcNames": [
@@ -9177,6 +8677,8 @@
     "supportsLogging": false,
     "roomId": 323,
     "subRoomId": 9,
+    "combinedRoom": "SCI 453_455",
+    "gveSide": "B",
     "macAddress": "00-05-A6-1A-AB-23",
     "touchPanelIp": "10.248.130.57",
     "pcNames": [
@@ -9212,6 +8714,8 @@
     "supportsLogging": false,
     "roomId": 322,
     "subRoomId": 10,
+    "combinedRoom": "SCI 458_460",
+    "gveSide": "A",
     "macAddress": "00-05-A6-1A-AB-29",
     "touchPanelIp": "10.248.130.158",
     "pcNames": [
@@ -9226,6 +8730,8 @@
     "supportsLogging": false,
     "roomId": 322,
     "subRoomId": 11,
+    "combinedRoom": "SCI 458_460",
+    "gveSide": "B",
     "macAddress": "00-05-A6-1A-AA-A5",
     "touchPanelIp": "10.248.130.169",
     "pcNames": [
@@ -10768,5 +10274,24 @@
     "pcNames": [
       "CONF-YOLO259"
     ]
+  },
+  {
+    "roomName": "GLNN 104",
+    "ipAddress": "10.248.131.192",
+    "webLink": "https://10.248.131.192/web/vtlp/7d7df812-8b54-4c4c-b19f-526e125d9a5d/index.html#!/main",
+    "password": "ATEC2007",
+    "touchPanelIp": "",
+    "macAddress": "00-05-A6-18-70-B3",
+    "roomId": 535,
+    "pcNames": [
+      "SC-GLNN104"
+    ],
+    "supportsLogging": false,
+    "deviceLinks": {
+      "1565": {
+        "deviceName": "MLC Plus 200 : GLNN 104",
+        "link": "https://10.248.131.192/"
+      }
+    }
   }
 ]

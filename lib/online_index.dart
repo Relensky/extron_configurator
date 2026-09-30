@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+import 'room_sidecar.dart' show roomStem;
 
 import 'building_project.dart' show formatIsoDate, parseIsoDate;
 import 'report_tools.dart';
@@ -290,7 +291,7 @@ XlsxSheet buildOnlineIndexSheet(
       if (bySource.containsKey(normalizeSourcePath(child))) continue;
       missing.add([
         e.kind == 'campus' ? 'job' : 'room',
-        path.basenameWithoutExtension(child),
+        roomStem(child),
         e.name,
         child,
       ]);

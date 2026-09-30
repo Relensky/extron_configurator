@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Lays [child] out at least [minWidth] wide, scrolling sideways with a
 /// visible scrollbar when the window is narrower than that.

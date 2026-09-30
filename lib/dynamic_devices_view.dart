@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'file_dialogs.dart';
 import 'app_state.dart';
 import 'av_flow_swap_dialogs.dart' show syncDrawnDeviceToModel;
 import 'config_dictionary.dart';
@@ -878,7 +879,7 @@ class DeviceConfigurationForm extends StatelessWidget {
               icon: const Icon(Icons.file_open),
               label: const Text('Pick .py File'),
               onPressed: () async {
-                FilePickerResult? result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['py']);
+                FilePickerResult? result = await pickFilesCompat(type: FileType.custom, allowedExtensions: ['py']);
                 if (result != null) {
                   String fullPath = result.files.single.path!;
                   String modPath = fullPath;

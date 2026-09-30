@@ -2,11 +2,12 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart' show compareRoomNames;
@@ -235,7 +236,7 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
   }
 
   Future<void> _chooseFile(AppStateProvider provider) async {
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: 'Choose the class schedule export',
       type: FileType.custom,
       allowedExtensions: const ['csv'],
@@ -754,7 +755,7 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
       return;
     }
     final ext = what == 'xlsx' ? 'xlsx' : 'txt';
-    String? file = await FilePicker.saveFile(
+    String? file = await saveFileCompat(
       dialogTitle: 'Save install windows',
       fileName: '${_fileStem(provider)}.$ext',
       type: FileType.custom,

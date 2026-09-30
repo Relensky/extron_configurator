@@ -1,10 +1,11 @@
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'color_wheel_picker.dart';
@@ -772,7 +773,7 @@ class _SchematicViewState extends State<SchematicView> {
     final sections = reportSections(provider, model);
 
     final ext = asXlsx ? 'xlsx' : 'txt';
-    String? outputFile = await FilePicker.saveFile(
+    String? outputFile = await saveFileCompat(
       dialogTitle: 'Save Device Report',
       fileName: '${_fileStem(provider, 'device_report')}.$ext',
       type: FileType.custom,

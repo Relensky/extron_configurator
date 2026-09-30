@@ -136,6 +136,7 @@ void main() {
       dir = Directory.systemTemp.createTempSync('room_sidecar_split_');
       configPath = path.join(dir.path, 'BSS103_config.json');
       File(configPath).writeAsStringSync('{}');
+      Directory(path.join(dir.path, 'BSS103_config')).createSync();
     });
 
     tearDown(() {
@@ -168,7 +169,51 @@ void main() {
     }
 
     String named(String suffix) =>
+        path.join(dir.path, 'BSS103_config', 'BSS103_config_$suffix.json');
+
+    String loose(String suffix) =>
         path.join(dir.path, 'BSS103_config_$suffix.json');
+
+    test('a room from before room folders opens, and its files move in',
+        () async {
+      await furnished().saveAvFlow();
+      for (final suffix in const ['av_flow', 'racks', 'cost']) {
+        File(named(suffix)).renameSync(loose(suffix));
+      }
+      File(loose('previous')).writeAsStringSync('{}');
+
+      // Read where it is, before anything moves.
+      final before = opened()..loadAvFlowForCurrentConfig();
+      expect(before.avNodes.single.label, 'Switcher');
+      expect(before.avCost.taxPercent, 8.25);
+
+      final moved = moveRoomFilesIntoFolder(configPath);
+      expect(moved, containsAll([
+        'BSS103_config_av_flow.json',
+        'BSS103_config_racks.json',
+        'BSS103_config_cost.json',
+        'BSS103_config_previous.json',
+      ]));
+      for (final suffix in const ['av_flow', 'racks', 'cost', 'previous']) {
+        expect(File(loose(suffix)).existsSync(), isFalse, reason: suffix);
+        expect(File(named(suffix)).existsSync(), isTrue, reason: suffix);
+      }
+
+      final back = opened()..loadAvFlowForCurrentConfig();
+      expect(back.avNodes.single.label, 'Switcher');
+      expect(back.avRacks.single.name, 'Rack 1');
+      expect(back.avCost.taxPercent, 8.25);
+    });
+
+    test('a file already in the room folder is never overwritten by a move',
+        () {
+      File(named('cost')).writeAsStringSync('{"kept": true}');
+      File(loose('cost')).writeAsStringSync('{"kept": false}');
+
+      expect(moveRoomFilesIntoFolder(configPath), isEmpty);
+      expect(File(named('cost')).readAsStringSync(), '{"kept": true}');
+      expect(File(loose('cost')).existsSync(), isTrue);
+    });
 
     test('saving writes a file per part', () async {
       final p = furnished();

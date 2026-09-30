@@ -2,14 +2,15 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:auris/auris.dart';
+import 'third_party/auris/auris.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as path;
 
+import 'file_dialogs.dart';
 import 'app_logger.dart';
 import 'app_snack.dart';
 import 'app_updates.dart';
@@ -77,6 +78,9 @@ void main() {
   // double-clicked .exe does not have, and the log this app asks people to send
   // in never hears about it.
   installGlobalErrorHandlers();
+  // One log file per session, with a header, a heartbeat and an audit of the
+  // last session. See app_logger.dart.
+  AppLogger.startSession();
   // Marks where each session starts in the log. Crashes the Dart handlers
   // cannot see are logged by windows/runner/crash_log.cpp.
   // The OS as people know it: Platform.operatingSystemVersion says "Windows
@@ -245,7 +249,11 @@ class RoomConfigApp extends StatelessWidget {
         // anything; see app_updates.dart.
         child: UpdateNoticeHost(
           updater: appUpdater,
-          child: _helpShortcuts(child!),
+          // fl_chart still reads the theme from package:flutter/material;
+          // this hands it the app's colors and text. Drop it once fl_chart
+          // moves to material_ui.
+          // ignore: deprecated_member_use
+          child: _helpShortcuts(MaterialUiCompatibilityBridge(child: child!)),
         ),
       ),
       home: const MainDashboard(),
@@ -379,6 +387,14 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   Future<ui.AppExitResponse> _onExitRequested() async {
+    final response = await _exitResponse();
+    // Closing on purpose: the clean-exit marker keeps the next run from
+    // reporting this session as a crash.
+    if (response == ui.AppExitResponse.exit) AppLogger.endSession();
+    return response;
+  }
+
+  Future<ui.AppExitResponse> _exitResponse() async {
     if (!mounted) return ui.AppExitResponse.exit;
     final provider = context.read<AppStateProvider>();
     if (!provider.hasUnsavedWork) return ui.AppExitResponse.exit;
@@ -1313,7 +1329,7 @@ class _MainDashboardState extends State<MainDashboard> {
     // the same folder, and somebody who picks the job out of that folder means
     // to open the job — being told it is not a room config would be the app
     // refusing to do the obvious thing.
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: title,
       type: FileType.custom,
       allowedExtensions: const ['json'],
@@ -3046,9 +3062,35 @@ class AppSettingsView extends StatelessWidget {
           '${autosaveStatusLine(provider)}\n'
           'Recovery copies live in ${provider.autosaveFolder}, one folder '
           'per file, and each is deleted as soon as its document is saved.\n'
-          'The error, info and migration logs, and any crash dumps, live in '
+          'A log is written for each session and kept 30 days, in '
           '${AppLogger.logFolder}.',
           style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        // Where the session logs go. Blank is the per-user default, which is
+        // also where native crashes are always logged.
+        TextFormField(
+          key: ValueKey('logFolderPath_${provider.logFolderPath}'),
+          initialValue: provider.logFolderPath,
+          decoration: InputDecoration(
+            labelText: 'Log Folder',
+            hintText: AppLogger.defaultLogFolder,
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder_open),
+              tooltip: 'Choose the log folder',
+              onPressed: () async {
+                final picked = await FilePicker.getDirectoryPath(
+                  dialogTitle: 'Choose where the logs are written',
+                  initialDirectory: AppLogger.logFolder,
+                );
+                if (picked != null) {
+                  provider.updateSetting('logFolderPath', picked);
+                }
+              },
+            ),
+          ),
+          onFieldSubmitted: (v) => provider.updateSetting('logFolderPath', v),
         ),
         const SizedBox(height: 20),
 
@@ -3197,7 +3239,7 @@ class AppSettingsView extends StatelessWidget {
               icon: const Icon(Icons.upload_file),
               tooltip: 'Select File',
               onPressed: () async {
-                final picked = await FilePicker.pickFiles(
+                final picked = await pickFilesCompat(
                   type: FileType.custom,
                   allowedExtensions: const ['csv'],
                 );
@@ -3278,7 +3320,7 @@ class AppSettingsView extends StatelessWidget {
               icon: const Icon(Icons.file_open),
               tooltip: 'Select JSON File',
               onPressed: () async {
-                FilePickerResult? result = await FilePicker.pickFiles(
+                FilePickerResult? result = await pickFilesCompat(
                   type: FileType.custom, 
                   allowedExtensions: ['json']
                 );
@@ -3312,7 +3354,7 @@ class AppSettingsView extends StatelessWidget {
                     icon: const Icon(Icons.file_open),
                     tooltip: 'Select JSON File',
                     onPressed: () async {
-                      FilePickerResult? result = await FilePicker.pickFiles(
+                      FilePickerResult? result = await pickFilesCompat(
                         type: FileType.custom, 
                         allowedExtensions: ['json']
                       );
@@ -3374,7 +3416,7 @@ class AppSettingsView extends StatelessWidget {
                     icon: const Icon(Icons.file_open),
                     tooltip: 'Select JSON File',
                     onPressed: () async {
-                      FilePickerResult? result = await FilePicker.pickFiles(
+                      FilePickerResult? result = await pickFilesCompat(
                         type: FileType.custom,
                         allowedExtensions: ['json'],
                       );
@@ -3436,7 +3478,7 @@ class AppSettingsView extends StatelessWidget {
                     icon: const Icon(Icons.file_open),
                     tooltip: 'Select JSON File',
                     onPressed: () async {
-                      FilePickerResult? result = await FilePicker.pickFiles(
+                      FilePickerResult? result = await pickFilesCompat(
                         type: FileType.custom,
                         allowedExtensions: ['json'],
                       );
@@ -3506,7 +3548,7 @@ class AppSettingsView extends StatelessWidget {
                     icon: const Icon(Icons.file_open),
                     tooltip: 'Select JSON File',
                     onPressed: () async {
-                      FilePickerResult? result = await FilePicker.pickFiles(
+                      FilePickerResult? result = await pickFilesCompat(
                         type: FileType.custom,
                         allowedExtensions: ['json'],
                       );
@@ -3610,7 +3652,7 @@ class AppSettingsView extends StatelessWidget {
                         tooltip: 'Select JSON File',
                         onPressed: () async {
                           FilePickerResult? result =
-                              await FilePicker.pickFiles(
+                              await pickFilesCompat(
                             type: FileType.custom,
                             allowedExtensions: ['json'],
                           );
@@ -3700,7 +3742,7 @@ class AppSettingsView extends StatelessWidget {
                         tooltip: 'Select JSON File',
                         onPressed: () async {
                           FilePickerResult? result =
-                              await FilePicker.pickFiles(
+                              await pickFilesCompat(
                             type: FileType.custom,
                             allowedExtensions: ['json'],
                           );
@@ -3751,7 +3793,7 @@ class AppSettingsView extends StatelessWidget {
                     icon: const Icon(Icons.file_open),
                     tooltip: 'Select JSON File',
                     onPressed: () async {
-                      FilePickerResult? result = await FilePicker.pickFiles(
+                      FilePickerResult? result = await pickFilesCompat(
                         type: FileType.custom,
                         allowedExtensions: ['json'],
                       );
@@ -3800,7 +3842,7 @@ class AppSettingsView extends StatelessWidget {
               icon: const Icon(Icons.file_open),
               tooltip: 'Select JSON File',
               onPressed: () async {
-                FilePickerResult? result = await FilePicker.pickFiles(
+                FilePickerResult? result = await pickFilesCompat(
                   type: FileType.custom, 
                   allowedExtensions: ['json']
                 );
@@ -4235,7 +4277,7 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
                               : () async {
                                   // Any file type: Whereused.csv is typical,
                                   // but module .py files etc. work too.
-                                  final result = await FilePicker.pickFiles();
+                                  final result = await pickFilesCompat();
                                   if (result != null && mounted) {
                                     setState(() => _extraFilePath =
                                         result.files.single.path ?? '');
@@ -4519,7 +4561,7 @@ class FirstRunSetupDialog extends StatelessWidget {
                   provider.updateSetting(settingKey, dir);
                 }
               } else {
-                FilePickerResult? result = await FilePicker.pickFiles(
+                FilePickerResult? result = await pickFilesCompat(
                   type: FileType.custom,
                   allowedExtensions: ['json'],
                 );
@@ -4536,7 +4578,8 @@ class FirstRunSetupDialog extends StatelessWidget {
   }
 }
 
-/// What App Config's log viewer shows: the error, info and migration logs.
+/// What App Config's log viewer shows: the session logs, and the native
+/// crash log, which stays in the default folder whatever Settings names.
 LogViewerConfig configuratorLogViewerConfig() => LogViewerConfig(
   appName: 'Extron Configurator',
   version: kAppVersion,
@@ -4546,8 +4589,15 @@ LogViewerConfig configuratorLogViewerConfig() => LogViewerConfig(
       label: 'Log',
       include: (name) => name.toLowerCase().endsWith('.txt'),
     ),
+    if (!path.equals(AppLogger.logFolder, AppLogger.defaultLogFolder))
+      LogSource.folder(
+        AppLogger.defaultLogFolder,
+        label: 'Crash',
+        include: (name) =>
+            name.toLowerCase() == 'deployment_app_error_log.txt',
+      ),
   ],
-  chooseSavePath: (name) => FilePicker.saveFile(
+  chooseSavePath: (name) => saveFileCompat(
     dialogTitle: 'Export logs',
     fileName: name,
     type: FileType.custom,
@@ -4685,9 +4735,59 @@ class _FileMenu extends StatelessWidget {
         item('file_download', Icons.cloud_download, 'Download Config',
             onDownload),
         item('file_upload', Icons.cloud_upload, 'Upload Config', onUpload),
+        const Divider(height: 8),
+        item('file_use_shared_folder', Icons.folder_shared,
+            'Use Shared Folder for All Settings',
+            () => _useSharedFolder(context, provider)),
       ],
     );
   }
+}
+
+/// Asks, then points every file and folder setting at the shared folder.
+Future<void> _useSharedFolder(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Use the shared folder for all settings?'),
+      content: const Text(
+        'The Root Folder is set to\n\n'
+        '${AppStateProvider.kSharedRootFolder}\n\n'
+        'and every file and folder chosen elsewhere in Settings (modules, '
+        'catalog, processors, buildings, template, rules, vendors, delivery '
+        'locations, manuals, spec sheets, class schedule) is cleared so it is '
+        'read from there. Labor rates and base costs are reloaded from it too. '
+        'The log folder is not changed.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('use_shared_folder_confirm'),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Use shared folder'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final reachable = Directory(AppStateProvider.kSharedRootFolder).existsSync();
+  await provider.useSharedFolderForAll();
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      content: Text(reachable
+          ? 'All settings now use the shared folder.'
+          : 'All settings now use the shared folder, but it cannot be '
+              'reached right now - check the network connection.'),
+    ),
+  );
 }
 
 /// One line of the File menu, shown in full.

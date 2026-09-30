@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'contrast.dart';
@@ -334,7 +335,7 @@ class _LaborRatesDialogState extends State<_LaborRatesDialog> {
   }
 
   Future<void> _load(AppStateProvider provider) async {
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: 'Open a rate card',
       type: FileType.custom,
       allowedExtensions: ['json'],
@@ -348,7 +349,7 @@ class _LaborRatesDialogState extends State<_LaborRatesDialog> {
   }
 
   Future<void> _saveAs(AppStateProvider provider) async {
-    String? output = await FilePicker.saveFile(
+    String? output = await saveFileCompat(
       dialogTitle: 'Save the rate card as',
       fileName: 'labor_rates.json',
       type: FileType.custom,

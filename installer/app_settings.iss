@@ -45,6 +45,11 @@ Source: "..\documentation\*"; DestDir: "{app}\documentation"; Flags: ignoreversi
 Source: "..\room_presets\*"; DestDir: "{app}\room_presets"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "..\RYG campus\*"; DestDir: "{app}\RYG campus"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
+[Dirs]
+; The install folder is the Root Folder: the catalog, costs and other data
+; files beside the exe are saved in place, so users need to write to it.
+Name: "{app}"; Permissions: users-modify
+
 [InstallDelete]
 ; Older setups installed the modules to {app}\device, which the app
 ; never looked in.

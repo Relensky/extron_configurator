@@ -2,9 +2,10 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
@@ -1342,7 +1343,7 @@ Future<void> exportOrderReminders(
     return;
   }
 
-  final picked = await FilePicker.saveFile(
+  final picked = await saveFileCompat(
     dialogTitle: 'Save the order reminders',
     fileName:
         '${reminderFileStem(provider.project, trackName: trackName)}.ics',

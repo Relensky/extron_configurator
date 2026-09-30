@@ -231,7 +231,7 @@ void main() {
   });
 
   group('how far back they go', () {
-    test('sixty, the same as everywhere else', () {
+    test('the catalog keeps fewer steps, each being the whole catalog', () {
       final p = app();
       p.avDeviceLibrary = AvDeviceLibrary.empty();
       p.appDataReplaced(AppDataDocument.catalog);
@@ -242,7 +242,7 @@ void main() {
         step(p);
       }
 
-      expect(p.appDataUndoDepth(AppDataDocument.catalog), kUndoDepth);
+      expect(p.appDataUndoDepth(AppDataDocument.catalog), kCatalogUndoDepth);
     });
   });
 

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -80,7 +81,7 @@ void main() {
     });
   });
 
-  group('the three log files', () {
+  group('the session log', () {
     late Directory dir;
 
     setUp(() {
@@ -94,22 +95,59 @@ void main() {
       } catch (_) {}
     });
 
-    test('all sit in the log folder', () {
+    test('all go to the session log, in the log folder', () {
       for (final p in [
         AppLogger.errorLogPath,
         AppLogger.infoLogPath,
         AppLogger.migrationLogPath,
       ]) {
+        expect(p, AppLogger.sessionLogPath);
         expect(path.dirname(p), path.dirname(path.join(dir.path, 'x')));
       }
-      // Named the same as they always were, so an old support instruction and
-      // an old habit both still find the right file.
-      expect(path.basename(AppLogger.errorLogPath),
-          'deployment_app_error_log.txt');
-      expect(path.basename(AppLogger.infoLogPath),
-          'deployment_app_info_log.txt');
-      expect(path.basename(AppLogger.migrationLogPath),
-          'deployment_app_migration_log.txt');
+      expect(path.basename(AppLogger.sessionLogPath),
+          matches(RegExp(r'^session_log_[\d_-]+_\d+\.txt$')));
+    });
+
+    test('opens with a header, and every line carries its UTC offset', () {
+      final text = File(AppLogger.sessionLogPath).readAsStringSync();
+      expect(text, contains('App version: '));
+      expect(text, contains('Timestamps: local time with its UTC offset'));
+      for (final line in const LineSplitter().convert(text.trim())) {
+        expect(line, matches(RegExp(r'^\[\S+[+-]\d\d:\d\d\] \[[A-Z]+\] ')));
+      }
+    });
+
+    test('a session that did not close says so in the next one', () async {
+      // A run that ended without its clean-exit marker...
+      File(path.join(dir.path, 'session_log_2026-01-01_00-00-00_1.txt'))
+          .writeAsStringSync('[x] [INFO] the last thing before the crash\r\n');
+      // ...and the next one starting.
+      AppLogger.logFolderForTest = dir.path;
+      final next = File(AppLogger.sessionLogPath).readAsStringSync();
+      expect(next, contains('PREVIOUS SESSION DID NOT EXIT CLEANLY'));
+      expect(next, contains('the last thing before the crash'));
+    });
+
+    test('a session that closed on purpose is not reported', () async {
+      await AppLogger.logInfo('work');
+      AppLogger.endSession();
+      final next = File(AppLogger.sessionLogPath).readAsStringSync();
+      expect(next, isNot(contains('DID NOT EXIT CLEANLY')));
+    });
+
+    test('logs older than 30 days are removed, newer ones kept', () {
+      final old = File(path.join(dir.path, 'session_log_old_1.txt'))
+        ..writeAsStringSync('x')
+        ..setLastModifiedSync(DateTime.now().subtract(const Duration(days: 31)));
+      final recent = File(path.join(dir.path, 'session_log_recent_2.txt'))
+        ..writeAsStringSync('x');
+      final crash = File(path.join(dir.path, 'deployment_app_error_log.txt'))
+        ..writeAsStringSync('x')
+        ..setLastModifiedSync(DateTime.now().subtract(const Duration(days: 90)));
+      expect(AppLogger.purgeOldLogs(dir), 1);
+      expect(old.existsSync(), isFalse);
+      expect(recent.existsSync(), isTrue);
+      expect(crash.existsSync(), isTrue, reason: 'the native log is not ours');
     });
 
     test('a folder that does not exist yet is created to write into',
@@ -124,17 +162,23 @@ void main() {
           contains('a first error on a fresh install'));
     });
 
-    test('each kind lands in its own file', () async {
+    test('each kind is tagged with its category', () async {
       await AppLogger.logError('an error line');
       await AppLogger.logInfo('an info line');
       await AppLogger.logMigration('a_room.json', ['a migration line']);
 
-      expect(File(AppLogger.errorLogPath).readAsStringSync(),
-          allOf(contains('an error line'), isNot(contains('an info line'))));
-      expect(File(AppLogger.infoLogPath).readAsStringSync(),
-          contains('an info line'));
-      expect(File(AppLogger.migrationLogPath).readAsStringSync(),
-          contains('a migration line'));
+      final text = File(AppLogger.sessionLogPath).readAsStringSync();
+      expect(text, contains('[ERROR] an error line'));
+      expect(text, contains('[INFO] an info line'));
+      expect(text, contains('[DATA] CONFIG LOADED: a_room.json'));
+      expect(text, contains('a migration line'));
+    });
+
+    test('an over-long line keeps both ends', () async {
+      await AppLogger.logInfo('start ${'x' * 5000} end');
+      final text = File(AppLogger.sessionLogPath).readAsStringSync();
+      expect(text, contains('chars omitted'));
+      expect(text, contains(' end'));
     });
 
     test('the change log written beside a room is left where the caller put it',

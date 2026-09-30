@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
-import 'package:auris/auris.dart';
-import 'package:flutter/material.dart';
+import 'third_party/auris/auris.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_state.dart';
 import 'contrast.dart';

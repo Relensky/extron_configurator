@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -105,6 +105,68 @@ void main() {
       expect(tester.takeException(), isNull);
       // Nothing has been written to disk, so the unsaved marker is up.
       expect(find.text('Unsaved changes'), findsOneWidget);
+    });
+
+    testWidgets('keeps its place when the page is left and come back to', (
+      tester,
+    ) async {
+      final provider = withCatalog();
+      await pump(tester, provider, const DeviceEditorView());
+      await tester.tap(find.text('Switcher Y'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextField, 'Power'), '120');
+      await tester.pumpAndSettle();
+
+      // Off to another page, as a visit to Settings would be...
+      await pump(tester, provider, const Text('Settings'));
+      // ...and back.
+      await pump(tester, provider, const DeviceEditorView());
+
+      expect(find.text('Connectors - 1 in / 0 out'), findsOneWidget,
+          reason: 'the entry is still open');
+      expect(find.text('Unsaved changes'), findsOneWidget,
+          reason: 'the unsaved edit is still flagged');
+    });
+
+    testWidgets('typing tells the rest of the app once it pauses', (
+      tester,
+    ) async {
+      final provider = withCatalog();
+      await pump(tester, provider, const DeviceEditorView());
+      await tester.tap(find.text('Switcher Y'));
+      await tester.pumpAndSettle();
+      var notified = 0;
+      provider.addListener(() => notified++);
+
+      for (final text in ['1', '12', '120']) {
+        await tester.enterText(find.widgetWithText(TextField, 'Power'), text);
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(notified, 0);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(notified, 1);
+      expect(
+        provider.avDeviceLibrary.templateForModel('Switcher Y')!.powerWatts,
+        120,
+      );
+    });
+
+    testWidgets('Save stays top right when the window narrows', (
+      tester,
+    ) async {
+      final provider = withCatalog();
+      await pump(tester, provider, const DeviceEditorView());
+      tester.view.physicalSize = const Size(900, 1000);
+      await tester.pumpAndSettle();
+
+      final save = tester.getRect(find.byKey(const ValueKey('catalog_save')));
+      final title = tester.getRect(find.text('Device Editor'));
+      final reload = tester.getRect(find.text('Reload'));
+      expect(save.right, greaterThan(900 - 40));
+      expect(save.top, lessThan(title.bottom));
+      expect(reload.top, greaterThan(save.bottom),
+          reason: 'the other buttons wrap below the top row');
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('adds an output connector', (tester) async {

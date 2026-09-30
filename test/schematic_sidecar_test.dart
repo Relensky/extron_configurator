@@ -45,10 +45,10 @@ void main() {
   AppStateProvider openedOn(String configFile) =>
       AppStateProvider(autoLoadSettings: false)..currentConfigPath = configFile;
 
-  test('the sidecar path sits next to the working config', () {
+  test('the sidecar path sits in the room folder beside the config', () {
     final p = openedOn(configPath);
     expect(p.schematicSidecarPath,
-        path.join(dir.path, 'BSS103_config_control_schematic.json'));
+        path.join(dir.path, 'BSS103_config', 'BSS103_config_control_schematic.json'));
   });
 
   test('opening a config loads the layout saved in its folder', () {
@@ -146,12 +146,15 @@ void main() {
   });
 
   group('the rename from <config>_schematic.json', () {
-    String legacyPath() => path.join(dir.path, 'BSS103_config_schematic.json');
-    String currentPath() =>
-        path.join(dir.path, 'BSS103_config_control_schematic.json');
+    String legacyPath() =>
+        path.join(dir.path, 'BSS103_config', 'BSS103_config_schematic.json');
+    String currentPath() => path.join(
+        dir.path, 'BSS103_config', 'BSS103_config_control_schematic.json');
 
     void writeLegacy() {
-      File(legacyPath()).writeAsStringSync(jsonEncode({
+      File(legacyPath())
+        ..createSync(recursive: true)
+        ..writeAsStringSync(jsonEncode({
         'positions': {
           'DSPDEVICE_1': [11.0, 22.0]
         },

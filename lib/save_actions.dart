@@ -1,3 +1,4 @@
+import 'file_dialogs.dart';
 import 'collab/collab_controller.dart';
 import 'collab/collab_widgets.dart';
 import 'dart:convert';
@@ -5,7 +6,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_logger.dart';
@@ -25,6 +26,7 @@ import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'project_briefing_dialog.dart';
 import 'project_setup_dialog.dart';
+import 'room_sidecar.dart' show roomConfigDisplayName, roomConfigPathIn;
 
 /// ============================================================================
 ///  ONE SAVE BUTTON THAT KNOWS WHAT YOU ARE LOOKING AT
@@ -228,6 +230,11 @@ Future<bool> _runSave(
             'Room',
             provider.currentConfigPath,
           );
+        } else if (provider.lastRoomSaveError.isNotEmpty) {
+          showTimedSnackBar(
+            messenger,
+            SnackBar(content: Text(provider.lastRoomSaveError)),
+          );
         }
         return ok;
       }
@@ -251,7 +258,7 @@ Future<bool> _runSave(
     case SaveScope.project:
       var target = provider.currentProjectPath;
       if (saveAs || target.isEmpty) {
-        final picked = await FilePicker.saveFile(
+        final picked = await saveFileCompat(
           dialogTitle: 'Save the project',
           fileName: '${_projectFileStem(provider.project)}$kProjectFileSuffix',
           type: FileType.custom,
@@ -941,7 +948,7 @@ Future<bool> closeRoomFile(
 
   final was = provider.currentConfigPath.isEmpty
       ? 'the room'
-      : path.basename(provider.currentConfigPath);
+      : roomConfigDisplayName(provider.currentConfigPath);
   final hasProject = provider.hasOpenProject;
   provider.closeRoom();
 
@@ -967,7 +974,7 @@ Future<bool> openProjectFromFile(
   AppStateProvider provider,
 ) async {
   if (!await confirmLeavingProject(context, provider)) return false;
-  final picked = await FilePicker.pickFiles(
+  final picked = await pickFilesCompat(
     dialogTitle: 'Open a project',
     type: FileType.custom,
     allowedExtensions: const ['json'],
@@ -1871,7 +1878,7 @@ Future<int> attachDrawnRooms(
                       Padding(
                         padding: const EdgeInsets.only(bottom: 2),
                         child: Text(
-                          '${m.line.name}  ->  ${path.basename(m.configPath)}',
+                          '${m.line.name}  ->  ${roomConfigDisplayName(m.configPath)}',
                           style: Theme.of(ctx).textTheme.bodySmall,
                         ),
                       ),
@@ -1989,7 +1996,7 @@ Future<BuiltRooms> buildLineItemRooms(
     provider.applyRoomPreset(preset, jackPrefix: roomJackPrefix(provider));
     buildControlSideForPreset(provider, preset);
 
-    final file = path.join(folder, provider.defaultRoomConfigFileName);
+    final file = roomConfigPathIn(folder, provider.defaultRoomFolderName);
     if (File(file).existsSync()) {
       fileExists.add(line.name);
       continue;

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 
@@ -98,7 +98,7 @@ void main() {
       expect(back.avFlowBackground.scale, 0.75);
     });
 
-    test('an imported picture is copied in beside the config', () async {
+    test('an imported picture is copied into the room folder', () async {
       // A room folder is the unit that gets zipped and mailed; a backdrop
       // referenced off somebody's desktop is a broken picture the moment it
       // leaves this machine.
@@ -110,8 +110,18 @@ void main() {
       final stored = await p.importRoomImage(source.path, 'flow_background');
       expect(path.isAbsolute(stored), isFalse, reason: 'stored by NAME');
       expect(stored, contains('flow_background'));
-      expect(File(path.join(dir.path, stored)).existsSync(), isTrue);
-      expect(p.resolveFloorPlanImage(stored), path.join(dir.path, stored));
+      final inFolder = path.join(dir.path, 'BSS103_config', stored);
+      expect(File(inFolder).existsSync(), isTrue);
+      expect(p.resolveFloorPlanImage(stored), inFolder);
+    });
+
+    test('a picture left beside the config by an older build still resolves',
+        () {
+      File(path.join(dir.path, 'shared.png')).writeAsBytesSync(const [1]);
+      final p = AppStateProvider(autoLoadSettings: false)
+        ..currentConfigPath = configPath;
+      expect(p.resolveFloorPlanImage('shared.png'),
+          path.join(dir.path, 'shared.png'));
     });
 
     test('a second import does not overwrite the first', () async {

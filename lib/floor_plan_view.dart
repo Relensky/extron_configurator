@@ -3,11 +3,12 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart';
@@ -289,7 +290,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   // --- importing ------------------------------------------------------------
 
   Future<void> _importPlan(AppStateProvider provider) async {
-    final result = await FilePicker.pickFiles(
+    final result = await pickFilesCompat(
       dialogTitle: 'Choose a floor plan image',
       type: FileType.custom,
       allowedExtensions: const ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'],
@@ -579,7 +580,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     }
     final title = model.roomTitle.isEmpty ? 'Floor plan' : model.roomTitle;
     final ext = asXlsx ? 'xlsx' : 'txt';
-    String? outputFile = await FilePicker.saveFile(
+    String? outputFile = await saveFileCompat(
       dialogTitle: 'Save the location report',
       fileName: '${roomFileStem(provider, 'locations')}.$ext',
       type: FileType.custom,

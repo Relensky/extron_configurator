@@ -1,7 +1,8 @@
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_port_editor.dart' show avRowIcon;
@@ -350,7 +351,7 @@ class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
   }
 
   Future<void> _load(AppStateProvider provider) async {
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: 'Open a delivery location list',
       type: FileType.custom,
       allowedExtensions: ['json'],
@@ -364,7 +365,7 @@ class _DeliveryLocationsDialogState extends State<DeliveryLocationsDialog> {
   }
 
   Future<void> _saveAs(AppStateProvider provider) async {
-    String? output = await FilePicker.saveFile(
+    String? output = await saveFileCompat(
       dialogTitle: 'Save the delivery locations as',
       fileName: 'delivery_locations.json',
       type: FileType.custom,

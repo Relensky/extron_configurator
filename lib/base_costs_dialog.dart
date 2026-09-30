@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'contrast.dart';
@@ -325,7 +326,7 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
   }
 
   Future<void> _load(AppStateProvider provider) async {
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: 'Open a base cost card',
       type: FileType.custom,
       allowedExtensions: ['json'],
@@ -339,7 +340,7 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
   }
 
   Future<void> _saveAs(AppStateProvider provider) async {
-    String? output = await FilePicker.saveFile(
+    String? output = await saveFileCompat(
       dialogTitle: 'Save the base costs as',
       fileName: 'base_costs.json',
       type: FileType.custom,

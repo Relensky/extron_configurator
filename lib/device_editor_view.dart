@@ -1,13 +1,15 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'contrast.dart';
@@ -72,25 +74,100 @@ class DeviceEditorView extends StatefulWidget {
   State<DeviceEditorView> createState() => _DeviceEditorViewState();
 }
 
-class _DeviceEditorViewState extends State<DeviceEditorView> {
+/// Where the catalog was left, kept for the session so a trip to Settings and
+/// back lands on the same entry, search and scroll position.
+class _CatalogMemory {
   /// Normalized model key of the entry being edited.
-  String _selectedKey = '';
+  String selectedKey = '';
 
-  String _search = '';
-  String _categoryFilter = '';
-  bool _customOnly = false;
+  String search = '';
+  String categoryFilter = '';
+  bool customOnly = false;
 
   /// What the list is ordered by — see [_CatalogSort].
-  _CatalogSort _sort = _CatalogSort.bestMatch;
+  _CatalogSort sort = _CatalogSort.bestMatch;
 
   /// Retired models are hidden by default. They are still IN the catalog —
   /// rooms that already use one keep resolving its ports and price — but a
   /// list of a thousand parts is hard enough to search without the
   /// discontinued half of it in the way.
-  bool _showRetired = false;
+  bool showRetired = false;
 
   /// True when the catalog has been edited since the last write to disk.
-  bool _dirty = false;
+  bool dirty = false;
+
+  double listOffset = 0;
+  double detailOffset = 0;
+}
+
+/// One memory per app state, so tests that build their own never share one.
+final Expando<_CatalogMemory> _catalogMemory = Expando('catalog view');
+
+class _DeviceEditorViewState extends State<DeviceEditorView> {
+  late final _CatalogMemory _m;
+  late final AppStateProvider _provider;
+  late final ScrollController _listScroll;
+  late final ScrollController _detailScroll;
+
+  /// Coalesces the app-wide notify while typing in an entry. Every tab
+  /// rebuilds on it, which is what made typing lag.
+  Timer? _notifyTimer;
+
+  String get _selectedKey => _m.selectedKey;
+  set _selectedKey(String v) => _m.selectedKey = v;
+  String get _search => _m.search;
+  set _search(String v) => _m.search = v;
+  String get _categoryFilter => _m.categoryFilter;
+  set _categoryFilter(String v) => _m.categoryFilter = v;
+  bool get _customOnly => _m.customOnly;
+  set _customOnly(bool v) => _m.customOnly = v;
+  _CatalogSort get _sort => _m.sort;
+  set _sort(_CatalogSort v) => _m.sort = v;
+  bool get _showRetired => _m.showRetired;
+  set _showRetired(bool v) => _m.showRetired = v;
+  bool get _dirty => _m.dirty;
+  set _dirty(bool v) => _m.dirty = v;
+
+  @override
+  void initState() {
+    super.initState();
+    _provider = context.read<AppStateProvider>();
+    _m = _catalogMemory[_provider] ??= _CatalogMemory();
+    _listScroll = ScrollController(initialScrollOffset: _m.listOffset)
+      ..addListener(() => _m.listOffset = _listScroll.offset);
+    _detailScroll = ScrollController(initialScrollOffset: _m.detailOffset)
+      ..addListener(() => _m.detailOffset = _detailScroll.offset);
+  }
+
+  @override
+  void dispose() {
+    if (_notifyTimer?.isActive ?? false) {
+      _notifyTimer!.cancel();
+      // After the frame that is taking this page down, not during it.
+      final provider = _provider;
+      scheduleMicrotask(provider.avDeviceLibraryChanged);
+    }
+    _listScroll.dispose();
+    _detailScroll.dispose();
+    super.dispose();
+  }
+
+  /// Tells the rest of the app the catalog changed, once typing pauses.
+  void _notifySoon() {
+    _notifyTimer?.cancel();
+    _notifyTimer = Timer(const Duration(milliseconds: 400), () {
+      _notifyTimer = null;
+      _provider.avDeviceLibraryChanged();
+    });
+  }
+
+  /// Sends a pending notify now, before anything reads the catalog.
+  void _flushNotify() {
+    if (!(_notifyTimer?.isActive ?? false)) return;
+    _notifyTimer!.cancel();
+    _notifyTimer = null;
+    _provider.avDeviceLibraryChanged();
+  }
 
   /// Bumped to put the model box back to what the entry is actually called.
   ///
@@ -211,7 +288,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   }
 
   Future<void> _attachSpecSheet(AvDeviceTemplate entry, String folder) async {
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: 'Attach the spec sheet for ${entry.model}',
       type: FileType.custom,
       allowedExtensions: kSpecSheetExtensions,
@@ -373,18 +450,24 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   }
 
   void _apply(AvDeviceTemplate updated, {String previousModel = ''}) {
-    final provider = context.read<AppStateProvider>();
-    provider.avDeviceLibrary.upsert(updated, previousModel: previousModel);
+    _provider.avDeviceLibrary.upsert(updated, previousModel: previousModel);
     _selectedKey = AvDeviceLibrary.normalizeModel(updated.model);
     _dirty = true;
-    provider.avDeviceLibraryChanged();
+    // This page redraws from its own setState; the rest of the app hears
+    // about it once typing pauses.
+    _notifySoon();
   }
 
   Future<void> _save() async {
+    _flushNotify();
     final provider = context.read<AppStateProvider>();
     final saved = await provider.saveAvDeviceLibrary();
     if (saved.isEmpty) {
-      _snack('Could not save the device catalog.', error: true);
+      final why = provider.avDeviceLibrary.lastSaveError;
+      _snack(
+        why.isEmpty ? 'Could not save the device catalog.' : why,
+        error: true,
+      );
       return;
     }
     setState(() => _dirty = false);
@@ -399,10 +482,18 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     final library = provider.avDeviceLibrary;
     final entries = _filtered(library);
 
-    return Column(
+    return LayoutBuilder(
+      builder: (context, box) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildToolbar(provider, library),
+        // Capped and scrollable: on a short screen at high scaling the wrapped
+        // buttons would otherwise push the list off the page.
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: box.maxHeight * 0.45),
+          child: SingleChildScrollView(
+            child: _buildToolbar(provider, library),
+          ),
+        ),
         const Divider(height: 1),
         Expanded(
           child: Row(
@@ -431,6 +522,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -521,138 +613,166 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
       library: library,
       asOf: standardsAsOf,
     ).where((r) => standardNeedsLooking(r, standardsAsOf)).length;
+    final Widget unsaved = Chip(
+      // The avatar as well as the label: an icon on a fill nobody
+      // measured is the same fault drawn smaller.
+      avatar: Icon(
+        Icons.edit,
+        size: 16,
+        color: errorTextOn(
+          theme.colorScheme,
+          theme.colorScheme.errorContainer,
+        ),
+      ),
+      label: Text(
+        'Unsaved changes',
+        style: TextStyle(
+          color: errorTextOn(
+            theme.colorScheme,
+            theme.colorScheme.errorContainer,
+          ),
+        ),
+      ),
+      backgroundColor: theme.colorScheme.errorContainer,
+    );
+    final Widget buttons = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        OutlinedButton.icon(
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('New device'),
+          onPressed: () => _showNewDeviceDialog(library),
+        ),
+        // A billable line that is not a box: it needs a name, a price
+        // and nothing else, so it skips the connector and rack-height
+        // half of the editor rather than being filled in with zeroes.
+        OutlinedButton.icon(
+          icon: const Icon(Icons.receipt_long, size: 18),
+          label: const Text('New cost item'),
+          onPressed: () => _showNewDeviceDialog(library, costItem: true),
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.percent, size: 18),
+          label: const Text('Education prices...'),
+          onPressed: () => _showEducationPricingDialog(provider, library),
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.merge, size: 18),
+          label: const Text('Merge from file...'),
+          onPressed: () => _startMerge(provider),
+        ),
+        // ONE VOCABULARY, OR THE APP UNDERSTANDS NONE OF IT. A price
+        // list imported under the manufacturer's own aisle names -
+        // 'Fox Systems', 'XTP Systems', 'Scalers Switchers' - reads
+        // perfectly well in the column and prices at nothing, because
+        // nothing in the app maps those words onto a room's config
+        // section. See [kTrackedCategories]. Labeled with the count so
+        // it says how much of the catalog is in that state, and shown
+        // in the ordinary style rather than in red: an untracked
+        // category is untidy, not broken.
+        OutlinedButton.icon(
+          key: const ValueKey('catalog_tidy_categories'),
+          icon: const Icon(Icons.label_outline, size: 18),
+          label: Text(
+            untracked == 0
+                ? 'Tidy categories...'
+                : 'Tidy categories ($untracked)...',
+          ),
+          onPressed: () => _tidyCategories(provider),
+        ),
+        // WHAT THE ESTATE IS PRICED ON. Every figure the project and
+        // campus reports fall back to comes off one line of the
+        // base-cost card, and each of those lines names the model it was
+        // benchmarked on. The question "is anything on that card still
+        // benchmarked on a product we cannot buy" is a question about
+        // the CATALOG, so it is asked here rather than one category at a
+        // time off a report. Labeled with the count that makes it worth
+        // pressing. See [showCatalogStandards].
+        OutlinedButton.icon(
+          key: const ValueKey('catalog_standards'),
+          icon: const Icon(Icons.price_change_outlined, size: 18),
+          label: Text(
+            wantsStandards == 0
+                ? 'Priced on...'
+                : 'Priced on ($wantsStandards)...',
+          ),
+          onPressed: () => showCatalogStandards(context),
+        ),
+        // ONE PART NUMBER, ONE ENTRY. Two imports of the same box under
+        // two model names are two half-filled entries that drift apart,
+        // and the part number is the only thing that says they are the
+        // same product. Shown only when there is something to fix, in
+        // the error color, because a catalog that is clean should not
+        // carry a permanent warning about it.
+        if (duplicates.isNotEmpty)
+          OutlinedButton.icon(
+            key: const ValueKey('catalog_duplicates'),
+            icon: const Icon(Icons.copy_all, size: 18),
+            label: Text(
+              duplicates.length == 1
+                  ? '1 duplicate part number'
+                  : '${duplicates.length} duplicate part numbers',
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: theme.colorScheme.error,
+              side: BorderSide(color: theme.colorScheme.error),
+            ),
+            onPressed: () => _showDuplicates(provider),
+          ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.ios_share, size: 18),
+          label: const Text('Export a copy...'),
+          onPressed: () => _exportCopy(provider),
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Reload'),
+          onPressed: () => _reload(provider),
+        ),
+      ],
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text('Device Editor', style: theme.textTheme.titleLarge),
-              const SizedBox(width: 4),
-              if (_dirty)
-                Chip(
-                  // The avatar as well as the label: an icon on a fill nobody
-                  // measured is the same fault drawn smaller.
-                  avatar: Icon(
-                    Icons.edit,
-                    size: 16,
-                    color: errorTextOn(
-                      theme.colorScheme,
-                      theme.colorScheme.errorContainer,
+          // Save stays at the top right. The title and the unsaved notice
+          // hold the left; the other buttons wrap between them, and drop to
+          // their own row when that gap gets too narrow to hold them.
+          LayoutBuilder(
+            builder: (context, box) {
+              final scale = MediaQuery.textScalerOf(context).scale(1);
+              final inline = box.maxWidth >= 1100 * scale;
+              final top = Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Device Editor',
+                      style: theme.textTheme.titleLarge,
                     ),
                   ),
-                  label: Text(
-                    'Unsaved changes',
-                    style: TextStyle(
-                      color: errorTextOn(
-                        theme.colorScheme,
-                        theme.colorScheme.errorContainer,
-                      ),
-                    ),
+                  const SizedBox(width: 12),
+                  if (_dirty) ...[unsaved, const SizedBox(width: 8)],
+                  if (inline) Expanded(child: buttons) else const Spacer(),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    key: const ValueKey('catalog_save'),
+                    icon: const Icon(Icons.save, size: 18),
+                    label: const Text('Save catalog'),
+                    onPressed: _save,
                   ),
-                  backgroundColor: theme.colorScheme.errorContainer,
-                ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('New device'),
-                onPressed: () => _showNewDeviceDialog(library),
-              ),
-              // A billable line that is not a box: it needs a name, a price
-              // and nothing else, so it skips the connector and rack-height
-              // half of the editor rather than being filled in with zeroes.
-              OutlinedButton.icon(
-                icon: const Icon(Icons.receipt_long, size: 18),
-                label: const Text('New cost item'),
-                onPressed: () => _showNewDeviceDialog(library, costItem: true),
-              ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.percent, size: 18),
-                label: const Text('Education prices...'),
-                onPressed: () => _showEducationPricingDialog(provider, library),
-              ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.merge, size: 18),
-                label: const Text('Merge from file...'),
-                onPressed: () => _startMerge(provider),
-              ),
-              // ONE VOCABULARY, OR THE APP UNDERSTANDS NONE OF IT. A price
-              // list imported under the manufacturer's own aisle names -
-              // 'Fox Systems', 'XTP Systems', 'Scalers Switchers' - reads
-              // perfectly well in the column and prices at nothing, because
-              // nothing in the app maps those words onto a room's config
-              // section. See [kTrackedCategories]. Labeled with the count so
-              // it says how much of the catalog is in that state, and shown
-              // in the ordinary style rather than in red: an untracked
-              // category is untidy, not broken.
-              OutlinedButton.icon(
-                key: const ValueKey('catalog_tidy_categories'),
-                icon: const Icon(Icons.label_outline, size: 18),
-                label: Text(
-                  untracked == 0
-                      ? 'Tidy categories...'
-                      : 'Tidy categories ($untracked)...',
-                ),
-                onPressed: () => _tidyCategories(provider),
-              ),
-              // WHAT THE ESTATE IS PRICED ON. Every figure the project and
-              // campus reports fall back to comes off one line of the
-              // base-cost card, and each of those lines names the model it was
-              // benchmarked on. The question "is anything on that card still
-              // benchmarked on a product we cannot buy" is a question about
-              // the CATALOG, so it is asked here rather than one category at a
-              // time off a report. Labeled with the count that makes it worth
-              // pressing. See [showCatalogStandards].
-              OutlinedButton.icon(
-                key: const ValueKey('catalog_standards'),
-                icon: const Icon(Icons.price_change_outlined, size: 18),
-                label: Text(
-                  wantsStandards == 0
-                      ? 'Priced on...'
-                      : 'Priced on ($wantsStandards)...',
-                ),
-                onPressed: () => showCatalogStandards(context),
-              ),
-              // ONE PART NUMBER, ONE ENTRY. Two imports of the same box under
-              // two model names are two half-filled entries that drift apart,
-              // and the part number is the only thing that says they are the
-              // same product. Shown only when there is something to fix, in
-              // the error color, because a catalog that is clean should not
-              // carry a permanent warning about it.
-              if (duplicates.isNotEmpty)
-                OutlinedButton.icon(
-                  key: const ValueKey('catalog_duplicates'),
-                  icon: const Icon(Icons.copy_all, size: 18),
-                  label: Text(
-                    duplicates.length == 1
-                        ? '1 duplicate part number'
-                        : '${duplicates.length} duplicate part numbers',
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.colorScheme.error,
-                    side: BorderSide(color: theme.colorScheme.error),
-                  ),
-                  onPressed: () => _showDuplicates(provider),
-                ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.ios_share, size: 18),
-                label: const Text('Export a copy...'),
-                onPressed: () => _exportCopy(provider),
-              ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Reload'),
-                onPressed: () => _reload(provider),
-              ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.save, size: 18),
-                label: const Text('Save catalog'),
-                onPressed: _save,
-              ),
-            ],
+                ],
+              );
+              if (inline) return top;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [top, const SizedBox(height: 8), buttons],
+              );
+            },
           ),
           const SizedBox(height: 8),
           // A WRAP, for the same reason the toolbar above it is one: search,
@@ -827,6 +947,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     }
 
     return ListView.builder(
+      controller: _listScroll,
       itemCount: entries.length,
       itemBuilder: (ctx, i) {
         final t = entries[i];
@@ -900,6 +1021,19 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 
   // --- the editor -----------------------------------------------------------
 
+  /// 'Added by jsmith on 2026-09-29 · changed by dstanley on 2026-09-30'.
+  static String _stampLine(AvDeviceTemplate t) {
+    String day(String iso) => iso.length >= 10 ? iso.substring(0, 10) : iso;
+    return [
+      if (t.addedBy.isNotEmpty) 'Added by ${t.addedBy} on ${day(t.addedAt)}',
+      if (t.changedBy.isNotEmpty)
+        'changed by ${t.changedBy} on ${day(t.changedAt)}',
+    ].join(' · ').replaceFirstMapped(
+      RegExp('^c'),
+      (_) => 'C',
+    );
+  }
+
   Widget _buildDetail(AppStateProvider provider, AvDeviceLibrary library) {
     final theme = Theme.of(context);
     final entry = _selected(library);
@@ -935,8 +1069,20 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     final key = AvDeviceLibrary.normalizeModel(entry.model);
 
     return ListView(
+      controller: _detailScroll,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, kFloatingButtonClearance),
       children: [
+        if (entry.addedBy.isNotEmpty || entry.changedBy.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              _stampLine(entry),
+              key: const ValueKey('catalog_entry_stamps'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
         Row(
           children: [
             Expanded(
@@ -2132,7 +2278,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   }
 
   Future<void> _startMerge(AppStateProvider provider) async {
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: 'Pick the device catalog to merge in',
       type: FileType.custom,
       allowedExtensions: ['json'],
@@ -2177,7 +2323,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   }
 
   Future<void> _exportCopy(AppStateProvider provider) async {
-    String? outputFile = await FilePicker.saveFile(
+    String? outputFile = await saveFileCompat(
       dialogTitle: 'Export a copy of the device catalog',
       fileName: 'av_devices.json',
       type: FileType.custom,

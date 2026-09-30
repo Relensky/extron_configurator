@@ -23,7 +23,7 @@
 // ============================================================================
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import 'log_viewer_platform.dart' as platform;
@@ -53,12 +53,21 @@ class LogViewerConfig {
   /// See [ChooseSavePath].
   final ChooseSavePath? chooseSavePath;
 
+  /// The time zone the viewer opens in, as a [LogTimeZone.id]. Null means
+  /// whatever was picked earlier in this process, or this computer's zone.
+  final String? timeZoneId;
+
+  /// Told when the time zone is changed, so the app can save the choice.
+  final void Function(String id)? onTimeZoneChanged;
+
   const LogViewerConfig({
     required this.appName,
     required this.version,
     required this.sources,
     this.currentLogPath,
     this.chooseSavePath,
+    this.timeZoneId,
+    this.onTimeZoneChanged,
   });
 }
 
@@ -101,6 +110,128 @@ List<int> filterLogLines(
   ];
 }
 
+// ============================================================================
+// [TIME ZONES]: a log line starts with the time it was written, and every
+// app's logger now ends that stamp with its UTC offset, so the viewer can
+// show it in the time zone of the computer doing the reading - a log sent in
+// from another machine, or written before a daylight-saving change, then
+// lines up with the reader's clock. Stamps without an offset (logs from
+// before the change) are shown exactly as written, because there is no way
+// to know which zone they were in.
+//
+// The five apps stamp lines three ways, all accepted here:
+//   [2026-09-29T11:05:30.316050-07:00] [ACTION] ...   the Dashboard
+//   2026-09-29 11:05:30-07:00 [area] ...               Instructor, GeoGuesser
+//   2026-09-29T11:05:30.316050-07:00 INFO  ...          Quizzer
+//
+// Display only: copying and exporting always take the file as written.
+// ============================================================================
+final RegExp _lineStamp = RegExp(r'^(\[?)(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}'
+    r'(\.\d+)?(?:[+-]\d{2}:\d{2}|Z))(\]?)');
+
+/// Short name for a zone: Windows reports "Pacific Daylight Time", which is
+/// shortened to its initials (PDT). Names that are already short stay.
+String shortTimeZoneName(String name) {
+  final List<String> words =
+      name.split(' ').where((w) => w.isNotEmpty).toList();
+  if (words.length < 2) return name;
+  return words.map((w) => w[0].toUpperCase()).join();
+}
+
+/// The time zone the viewer shows times in: this computer's own (with its
+/// daylight-saving changes), UTC, or a fixed offset from UTC.
+class LogTimeZone {
+  /// Offset from UTC for a fixed zone; null for this computer's zone.
+  final Duration? offset;
+
+  const LogTimeZone._(this.offset);
+
+  static const LogTimeZone local = LogTimeZone._(null);
+  static const LogTimeZone utc = LogTimeZone._(Duration.zero);
+
+  /// UTC plus [minutes] (negative for the Americas).
+  factory LogTimeZone.fixed(int minutes) =>
+      minutes == 0 ? utc : LogTimeZone._(Duration(minutes: minutes));
+
+  /// `local`, `utc`, or `utc-480` style (minutes). Saved by the app.
+  String get id => offset == null
+      ? 'local'
+      : offset == Duration.zero
+          ? 'utc'
+          : 'utc${offset!.inMinutes}';
+
+  static LogTimeZone fromId(String? id) {
+    if (id == null || id == 'local') return local;
+    if (id == 'utc') return utc;
+    final int? m = int.tryParse(id.replaceFirst('utc', ''));
+    return m == null ? local : LogTimeZone.fixed(m);
+  }
+
+  /// Every zone the picker offers: this computer's, UTC, then whole-hour
+  /// offsets from UTC-12 to UTC+14.
+  static List<LogTimeZone> get choices => [
+        local,
+        utc,
+        for (int h = -12; h <= 14; h++)
+          if (h != 0) LogTimeZone.fixed(h * 60),
+      ];
+
+  /// A time in this zone.
+  DateTime convert(DateTime t) =>
+      offset == null ? t.toLocal() : t.toUtc().add(offset!);
+
+  /// Short tag written after a time: `PDT`, `UTC`, `UTC-08:00`.
+  String tagFor(DateTime t) {
+    if (offset == null) return shortTimeZoneName(t.toLocal().timeZoneName);
+    if (offset == Duration.zero) return 'UTC';
+    return 'UTC${_offsetText(offset!)}';
+  }
+
+  /// For the picker and the export header.
+  String get label {
+    if (offset == null) {
+      final DateTime now = DateTime.now();
+      return "this computer's time zone (${shortTimeZoneName(now.timeZoneName)}, "
+          'UTC${_offsetText(now.timeZoneOffset)})';
+    }
+    return offset == Duration.zero ? 'UTC' : 'UTC${_offsetText(offset!)}';
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is LogTimeZone && other.offset == offset;
+
+  @override
+  int get hashCode => offset.hashCode;
+}
+
+String _offsetText(Duration d) {
+  final int m = d.inMinutes.abs();
+  return '${d.isNegative ? '-' : '+'}${(m ~/ 60).toString().padLeft(2, '0')}:'
+      '${(m % 60).toString().padLeft(2, '0')}';
+}
+
+/// [line] with its leading timestamp converted to [zone] (this computer's by
+/// default) and written `[YYYY-MM-DD HH:MM:SS.mmm PDT]`. Unchanged when the
+/// line has no timestamp, or one without a UTC offset.
+String logLineForDisplay(String line, [LogTimeZone zone = LogTimeZone.local]) {
+  final RegExpMatch? m = _lineStamp.firstMatch(line);
+  if (m == null) return line;
+  final String open = m.group(1)!;
+  final String close = m.group(4)!;
+  // "[..." with no closing bracket, or the reverse, is not a stamp.
+  if (open.isEmpty != close.isEmpty) return line;
+  final DateTime? parsed = DateTime.tryParse(m.group(2)!);
+  if (parsed == null) return line;
+  final DateTime t = zone.convert(parsed);
+  // Milliseconds only where the logger wrote a fraction of a second.
+  final String ms = m.group(3) == null
+      ? ''
+      : '.${t.millisecond.toString().padLeft(3, '0')}';
+  return '$open${_when(t)}$ms ${zone.tagFor(parsed)}$close'
+      '${line.substring(m.end)}';
+}
+
 /// A file name for an export: `<app>_logs_<date>_<time>.txt`, or with the
 /// exported file's own name in place of `logs`.
 String suggestedLogExportName(
@@ -138,18 +269,24 @@ String logExportHeader(
   List<LogFileInfo> files, {
   String? note,
   DateTime? now,
+  LogTimeZone zone = LogTimeZone.local,
 }) {
+  final DateTime at = now ?? DateTime.now();
+  String when(DateTime t) => '${_when(zone.convert(t))} ${zone.tagFor(t)}';
   final StringBuffer b = StringBuffer()
     ..writeln('=' * 72)
     ..writeln('${config.appName} ${config.version} logs')
     ..writeln(platform.machineSummary())
-    ..writeln('Exported: ${_when(now ?? DateTime.now())}');
+    ..writeln('Time zone: ${zone.label}. The times in this header are in it; '
+        'each log line keeps the stamp it was written with, which in '
+        'current versions ends in its own UTC offset.')
+    ..writeln('Exported: ${when(at)}');
   if (note != null) b.writeln(note);
   if (files.isNotEmpty) {
     b.writeln('Files:');
     for (final f in files) {
       b.writeln('  ${f.path}  (${_size(f.bytes)}, last written '
-          '${_when(f.modified)}${f.isCurrent ? ', this session' : ''})');
+          '${when(f.modified)}${f.isCurrent ? ', this session' : ''})');
     }
   }
   b.writeln('=' * 72);
@@ -175,9 +312,11 @@ String logFileSection(LogFileInfo file, LogText text) {
 }
 
 /// Everything in the newest [kLogBundleFiles] files, for All recent logs.
-String buildLogBundle(LogViewerConfig config, List<LogFileInfo> files) {
+String buildLogBundle(LogViewerConfig config, List<LogFileInfo> files,
+    {LogTimeZone zone = LogTimeZone.local}) {
   final List<LogFileInfo> chosen = files.take(kLogBundleFiles).toList();
   final StringBuffer b = StringBuffer(logExportHeader(config, chosen,
+      zone: zone,
       note: files.length > chosen.length
           ? 'The newest ${chosen.length} of ${files.length} log files.'
           : null));
@@ -227,6 +366,9 @@ class LogViewerDialog extends StatefulWidget {
   /// like the help dialog's.
   static bool expanded = false;
 
+  /// The time zone last picked, for apps that do not save it themselves.
+  static LogTimeZone? lastTimeZone;
+
   @override
   State<LogViewerDialog> createState() => _LogViewerDialogState();
 }
@@ -242,6 +384,15 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
   List<String> _lines = const [];
   List<int> _shown = const [];
   bool _problemsOnly = false;
+  late LogTimeZone _zone = widget.config.timeZoneId != null
+      ? LogTimeZone.fromId(widget.config.timeZoneId)
+      : (LogViewerDialog.lastTimeZone ?? LogTimeZone.local);
+
+  void _setZone(LogTimeZone zone) {
+    setState(() => _zone = zone);
+    LogViewerDialog.lastTimeZone = zone;
+    widget.config.onTimeZoneChanged?.call(zone.id);
+  }
 
   /// What the last Copy or Export did, shown in the bottom bar.
   String? _status;
@@ -338,7 +489,7 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
     final LogFileInfo file = _files[_selected];
     switch (take) {
       case _Take.thisFile:
-        return logExportHeader(_config, [file]) +
+        return logExportHeader(_config, [file], zone: _zone) +
             logFileSection(
                 file, platform.readLogText(file.path, maxBytes: kLogCopyBytes));
       case _Take.shown:
@@ -347,11 +498,12 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
           if (_problemsOnly) 'problems only',
         ].join(', ');
         final String header = logExportHeader(_config, [file],
+            zone: _zone,
             note: 'Lines shown: ${_shown.length} of ${_lines.length}'
                 '${filter.isEmpty ? '' : ' ($filter)'}');
         return '$header\n${[for (final i in _shown) _lines[i]].join('\n')}\n';
       case _Take.allRecent:
-        return buildLogBundle(_config, _files);
+        return buildLogBundle(_config, _files, zone: _zone);
     }
   }
 
@@ -630,6 +782,27 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
                   _refilter();
                 },
               ),
+              PopupMenuButton<LogTimeZone>(
+                tooltip: 'Time zone the times are shown in; exports name it '
+                    'at the top',
+                initialValue: _zone,
+                onSelected: _setZone,
+                itemBuilder: (context) => [
+                  for (final z in LogTimeZone.choices)
+                    PopupMenuItem(
+                        value: z,
+                        child: Text(z.label)),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.schedule, size: 18),
+                    const SizedBox(width: 4),
+                    Text(_zone.tagFor(DateTime.now())),
+                    const Icon(Icons.arrow_drop_down, size: 18),
+                  ]),
+                ),
+              ),
               Text(
                   '${_shown.length == _lines.length ? '' : '${_shown.length} of '}'
                   '${_lines.length} lines',
@@ -653,7 +826,13 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
         if (text?.error != null)
           _notice(theme, 'This file could not be read: ${text!.error}',
               error: true)
-        else if (text?.truncated ?? false)
+        else if (text != null &&
+            _lines.isNotEmpty &&
+            _lineStamp.hasMatch(_lines.last))
+          _notice(
+              theme,
+              'Times are shown in ${_zone.label}.'),
+        if (text?.error == null && (text?.truncated ?? false))
           _notice(
               theme,
               'Showing the last ${_size(kLogViewBytes)} of '
@@ -688,7 +867,7 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
                         itemCount: _shown.length,
                         itemBuilder: (context, i) {
                           final String line = _lines[_shown[i]];
-                          return Text(line,
+                          return Text(logLineForDisplay(line, _zone),
                               style: logLineIsProblem(line) ? problem : mono);
                         },
                       ),

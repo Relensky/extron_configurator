@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
@@ -121,7 +121,7 @@ void main() {
 
       // They live in the floor plan file, not the flow one.
       expect(
-        File(path.join(dir.path, 'BSS103_config_floor_plans.json'))
+        File(path.join(dir.path, 'BSS103_config', 'BSS103_config_floor_plans.json'))
             .readAsStringSync(),
         contains('RCP'),
       );

@@ -214,6 +214,34 @@ const String kDefaultEstimateNotes =
     'This estimate does not include electrical, construction, or finish '
     'work, such as adding or relocating power outlets, installing conduit or '
     'surface raceway (Wiremold), patching, or painting. Where that work is '
+    'needed it must be arranged through FMS and will be billed separately.\n'
+    '\n'
+    'This estimate assumes that existing network jacks and building cabling '
+    'are active, correctly labeled, and in good working order. Jacks that '
+    'need to be added, repaired, relocated, or activated will require a '
+    'separate TSRV request at additional cost.\n'
+    'Any additional work or materials beyond the scope described above, or '
+    'site conditions discovered during installation, may result in '
+    'additional costs.\n'
+    '\n'
+    'This estimate is good for 60 days from the date shown. A signed '
+    'estimate or email approval is required to execute this proposal. By '
+    'approving this proposal, you authorize purchase of the equipment '
+    'outlined herein on your behalf and agree to any and all terms outlined '
+    'in the body of the proposal.';
+
+/// The standard notes as earlier builds wrote them. A room still carrying
+/// this is given the current wording.
+const String _kPreviousEstimateNotes =
+    'Equipment costs are preliminary estimates and may vary depending on '
+    'final product selection, availability, shipping costs, and applicable '
+    'taxes. The miscellaneous materials allowance is intended to cover '
+    'cables, surge protection, and other minor installation materials that '
+    'may be required.\n'
+    '\n'
+    'This estimate does not include electrical, construction, or finish '
+    'work, such as adding or relocating power outlets, installing conduit or '
+    'surface raceway (Wiremold), patching, or painting. Where that work is '
     'needed it must be arranged through Facilities Management Services '
     '(FMS) and will be billed separately.\n'
     '\n'
@@ -226,6 +254,20 @@ const String kDefaultEstimateNotes =
     'Any additional work or materials beyond the scope described above, or '
     'site conditions discovered during installation, may result in '
     'additional costs.';
+
+/// [notes] with the standard terms on it, which every estimate goes out with.
+///
+/// Blank notes become the terms; the earlier wording is replaced with the
+/// current one; notes somebody wrote are kept and the terms follow them.
+String withStandardEstimateNotes(String notes) {
+  final norm = notes.replaceAll('\r\n', '\n');
+  if (norm.trim().isEmpty) return kDefaultEstimateNotes;
+  if (norm.contains(kDefaultEstimateNotes)) return notes;
+  if (norm.contains(_kPreviousEstimateNotes)) {
+    return norm.replaceFirst(_kPreviousEstimateNotes, kDefaultEstimateNotes);
+  }
+  return '${norm.trimRight()}\n\n$kDefaultEstimateNotes';
+}
 
 /// Where a custom section prints on the estimate PDF.
 enum EstimateSectionPlace {
@@ -2060,7 +2102,7 @@ List<ReportSection> withEstimateSections(
       EstimateSectionPlace.beforePricing,
     ),
     ...priced,
-    ...text('Notes', settings.notes),
+    ...text('Notes', withStandardEstimateNotes(settings.notes)),
     ...estimateSectionReports(
       settings.sections,
       EstimateSectionPlace.afterTotals,

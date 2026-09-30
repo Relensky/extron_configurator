@@ -264,7 +264,7 @@ ARTS 111
       expect(provider.project.manualRooms.map((r) => r.name),
           ['PAC 999', 'SCI 1']);
       expect(provider.project.rooms, hasLength(2));
-      expect(File(path.join(dir.path, 'HOLT_170_config.json')).existsSync(),
+      expect(File(path.join(dir.path, 'HOLT_170', 'config.json')).existsSync(),
           isTrue);
       expect(provider.avNodes, isNotEmpty);
     });

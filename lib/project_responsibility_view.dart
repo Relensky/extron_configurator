@@ -4,9 +4,10 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
@@ -2390,7 +2391,7 @@ class _ResponsibilityEditorDialogState
   /// Picks a cutsheet off disk into the product field.
   Future<void> _pickCutsheet() async {
     final provider = context.read<AppStateProvider>();
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: 'Choose the cutsheet for this line',
     );
     final chosen = picked?.files.firstOrNull?.path;
@@ -2750,7 +2751,7 @@ Future<void> _exportSpreadsheet(
   final stem = project.name.trim().isEmpty
       ? 'project'
       : project.name.trim().replaceAll(RegExp(r'[^\w\-]+'), '_');
-  final picked = await FilePicker.saveFile(
+  final picked = await saveFileCompat(
     dialogTitle: 'Save the responsibility matrix',
     fileName: '${stem}_responsibility.xlsx',
     type: FileType.custom,
@@ -2894,7 +2895,7 @@ class _ResponsibilityImageDialogState
     final stem = widget.project.name.trim().isEmpty
         ? 'project'
         : widget.project.name.trim().replaceAll(RegExp(r'[^\w\-]+'), '_');
-    final picked = await FilePicker.saveFile(
+    final picked = await saveFileCompat(
       dialogTitle: 'Save the responsibility matrix',
       fileName: '${stem}_responsibility.png',
       type: FileType.custom,

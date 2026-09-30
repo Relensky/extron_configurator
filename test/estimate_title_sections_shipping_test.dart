@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:archive/archive.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -307,8 +307,12 @@ void main() {
       ['', 'Painting'],
     ]);
     expect(all.length, priced.length + 4);
-    // Nothing typed in scope or notes, nothing exported for them.
-    expect(withEstimateSections(priced, RoomCostSettings()), priced);
+    // Nothing typed: no scope, and the notes are the standard terms, which
+    // every estimate carries.
+    final bare = withEstimateSections(priced, RoomCostSettings());
+    expect(bare.take(priced.length), priced);
+    expect(bare.length, priced.length + 1);
+    expect(bare.last.title, 'Notes');
 
     final text = renderTextReport('Room 101', all);
     expect(text.indexOf('Deliverables'), lessThan(text.indexOf('Totals')));

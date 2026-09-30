@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'assumed_cycle_bar.dart';
@@ -18,6 +19,7 @@ import 'manual_rooms_dialog.dart';
 import 'model_standards_view.dart';
 import 'online_copy_dialog.dart' show publishCampusCopy;
 import 'recent_files.dart';
+import 'room_sidecar.dart' show roomStem;
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
 import 'lifecycle_export.dart';
@@ -355,7 +357,7 @@ class _CampusViewState extends State<_CampusView> {
   }
 
   Future<void> _addFiles() async {
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: 'Which rooms and projects belong to this campus?',
       allowMultiple: true,
       type: FileType.custom,
@@ -399,7 +401,7 @@ class _CampusViewState extends State<_CampusView> {
     final before = _paths.length;
     _step(
       files.length == 1
-          ? 'Add ${path.basenameWithoutExtension(files.single)}'
+          ? 'Add ${roomStem(files.single)}'
           : 'Add ${files.length} jobs',
       () {
         for (final f in files) {
@@ -442,7 +444,7 @@ class _CampusViewState extends State<_CampusView> {
       name = asked;
     }
     final campus = CampusFile(name: name, projects: _paths);
-    final picked = await FilePicker.saveFile(
+    final picked = await saveFileCompat(
       dialogTitle: 'Save this campus',
       fileName: _file.isNotEmpty
           ? path.basename(_file)
@@ -529,7 +531,7 @@ class _CampusViewState extends State<_CampusView> {
   /// Opens a saved campus over this one.
   Future<void> _openCampus() async {
     final messenger = ScaffoldMessenger.of(context);
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: 'Open a campus',
       type: FileType.custom,
       allowedExtensions: const ['json'],
@@ -664,7 +666,7 @@ class _CampusViewState extends State<_CampusView> {
 
   void _remove(String file) {
     _step(
-      'Remove ${path.basenameWithoutExtension(file)}',
+      'Remove ${roomStem(file)}',
       () => _paths.removeWhere((p) => path.equals(p, file)),
     );
     if (_paths.isEmpty) {

@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.16+26';
+const String kAppVersion = '0.5.21+31';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,110 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.21',
+    date: 'September 29, 2026',
+    title: 'New rooms come drawn',
+    changes: [
+      'A room saved for the first time - a new room, or one built from a '
+          'project line item - gets its AV Flow file in room_files straight '
+          'away, with its devices placed and the routing drawn from the '
+          'config, as the AV Flow tab would on first opening.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.20',
+    date: 'September 29, 2026',
+    title: 'Everything from the shared folder',
+    changes: [
+      'File > Use Shared Folder for All Settings points the Root Folder at '
+          'the shared Configurator_Files folder and clears every file and '
+          'folder chosen elsewhere, so the catalog, rates, vendors and the '
+          'rest are all read from there.',
+      'Changing the Root Folder now reloads labor rates, base costs, '
+          'delivery locations and vendors from the new folder instead of the '
+          'files read before.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.19',
+    date: 'September 29, 2026',
+    title: 'A folder per room',
+    changes: [
+      'System Settings has Startup/Shutdown Audio Input and Output: a '
+          'switcher input tied to the room audio at startup and shutdown. '
+          'Both are blank in the default config.',
+      'Each room is saved in a folder named for it, as config.json - the '
+          'name the processor reads - with its signal flow, racks, floor '
+          'plans, cabling, cost, history and backups in a room_files folder '
+          'beside it. A room saved the old way is moved into this layout the '
+          'next time it is opened, and the project follows it; save the '
+          'project afterwards to keep the new link.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.18',
+    date: 'September 29, 2026',
+    title: 'One shared folder, edited together',
+    changes: [
+      'The Root Folder defaults to the shared Configurator_Files folder on '
+          'doit-files. Anything that folder does not carry - the modules, '
+          'manuals, template and buildings list - still comes from the '
+          'app\'s own folder.',
+      'Several people can have the catalog and the other shared files open '
+          'and save at the same time. Each save waits its turn and keeps what '
+          'others saved since you opened the file, instead of writing over '
+          'it. A save held up for a moment by another person or a virus scan '
+          'is retried rather than failing.',
+      'Catalog entries, and items in the other shared lists, record who '
+          'added them and who last changed them, and when. The Device Editor '
+          'shows it above each entry.',
+      'Every estimate carries the standard terms in its notes, now including '
+          'the 60-day validity and approval wording, on the Cost tab, the PDF '
+          'and the Excel exports. Notes you wrote are kept, with the terms '
+          'after them, and older wording is brought up to date.',
+      'Logging works as it does in the Extron debugger: one log per session, '
+          'kept 30 days, every line stamped with its time zone, a header '
+          'naming the version and machine, a note when the last session did '
+          'not close properly, and a memory reading every minute. Settings '
+          'has a Log Folder.',
+      'Long sessions: the catalog\'s undo no longer copies the whole catalog '
+          'on every change anywhere in the app, and keeps 20 steps rather '
+          'than 60. A network drop is logged once rather than every few '
+          'seconds.',
+      'Updated to the latest components, including the standalone Material '
+          'library. Some light-theme text on colored panels is slightly '
+          'softer.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.17',
+    date: 'September 29, 2026',
+    title: 'A folder per room, and a steadier catalog',
+    changes: [
+      'Each room\'s files now live in a folder named after the room, beside '
+          'its config: the AV flow, racks, floor plans, cabling, cost, '
+          'history, control schematic, backups, change log and imported '
+          'pictures. The folder holding your rooms shows just the room, '
+          'project and campus files. Rooms saved the old way are moved into '
+          'their folder when you open them.',
+      'Core Components lists only the products on the job. Devices with no '
+          'control module are on the Control Gaps sheet.',
+      'Pulling the online copy back finds a part even after the catalog has '
+          'given it a part number or model since the copy was published. A '
+          'row it still cannot match is listed, not passed over as '
+          'unchanged.',
+      'Device Editor: typing in an entry no longer lags. The page remembers '
+          'the open entry, search, filters, scroll position and unsaved '
+          'changes when you go to another page and come back. Save catalog '
+          'stays at the top right, and the other buttons wrap below it when '
+          'the window is narrow.',
+      'The Root Folder setting shows the app\'s own folder when nothing else '
+          'is chosen, and the installer lets users save the files in it, so '
+          'the catalog can be saved after a fresh install. A save that '
+          'fails says where and why.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.16',
     date: 'September 28, 2026',

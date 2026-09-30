@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import 'app_logger.dart';
+import 'building_project.dart' show currentUserName;
+import 'safe_write.dart';
+import 'shared_json.dart';
 import 'av_flow_model.dart';
 import 'search_match.dart';
 
@@ -507,6 +510,15 @@ class AvDeviceTemplate {
   /// every entry in av_devices.json, shipped ones included.
   final bool addedByUser;
 
+  /// Who put this entry in the shared catalog, and when (ISO 8601). Blank
+  /// for entries older than the stamps. Set on save; see [AvDeviceLibrary.save].
+  final String addedBy;
+  final String addedAt;
+
+  /// Who last changed it, and when. Blank when nobody has since it was added.
+  final String changedBy;
+  final String changedAt;
+
   const AvDeviceTemplate({
     required this.model,
     this.manufacturer = '',
@@ -533,6 +545,10 @@ class AvDeviceTemplate {
     required this.ports,
     this.custom = false,
     this.addedByUser = false,
+    this.addedBy = '',
+    this.addedAt = '',
+    this.changedBy = '',
+    this.changedAt = '',
   });
 
   /// True when this entry is a length of cable rather than a box.
@@ -610,6 +626,10 @@ class AvDeviceTemplate {
     List<AvPort>? ports,
     bool? custom,
     bool? addedByUser,
+    String? addedBy,
+    String? addedAt,
+    String? changedBy,
+    String? changedAt,
   }) => AvDeviceTemplate(
     model: model ?? this.model,
     manufacturer: manufacturer ?? this.manufacturer,
@@ -636,6 +656,10 @@ class AvDeviceTemplate {
     ports: ports ?? this.ports,
     custom: custom ?? this.custom,
     addedByUser: addedByUser ?? this.addedByUser,
+    addedBy: addedBy ?? this.addedBy,
+    addedAt: addedAt ?? this.addedAt,
+    changedBy: changedBy ?? this.changedBy,
+    changedAt: changedAt ?? this.changedAt,
   );
 
   Map<String, dynamic> toJson() => {
@@ -663,6 +687,10 @@ class AvDeviceTemplate {
     if (lifeYears > 0) 'lifeYears': lifeYears,
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
+    if (addedBy.isNotEmpty) 'addedBy': addedBy,
+    if (addedAt.isNotEmpty) 'addedAt': addedAt,
+    if (changedBy.isNotEmpty) 'changedBy': changedBy,
+    if (changedAt.isNotEmpty) 'changedAt': changedAt,
   };
 
   /// A lead time off a catalog file, or null when there is not a usable one.
@@ -751,6 +779,10 @@ class AvDeviceTemplate {
     ],
     custom: custom,
     addedByUser: json['addedByUser'] == true,
+    addedBy: json['addedBy']?.toString() ?? '',
+    addedAt: json['addedAt']?.toString() ?? '',
+    changedBy: json['changedBy']?.toString() ?? '',
+    changedAt: json['changedAt']?.toString() ?? '',
   );
 }
 
@@ -970,7 +1002,13 @@ class AvDeviceLibrary {
   /// rebuilt: the wrapper is a copy, and the map behind it is already ours.
   Map<String, AvDeviceTemplate>? _familyDefaultsView;
 
+  /// Bumped on every change, so a caller can tell "changed since I last
+  /// looked" without encoding 1,700 entries to find out.
+  int get revision => _revision;
+  int _revision = 0;
+
   void _invalidate() {
+    _revision++;
     _sorted = null;
     _duplicates = null;
     _customCount = null;
@@ -1474,9 +1512,52 @@ class AvDeviceLibrary {
   ///
   /// [rebind] false writes a COPY without adopting it: handing your catalog
   /// to a colleague shouldn't quietly repoint your own saves at their folder.
+  /// Why the last [save] failed, for the screen. '' after a good save.
+  String lastSaveError = '';
+
   Future<String> save({String toPath = '', bool rebind = true}) async {
     final target = toPath.isNotEmpty ? toPath : filePath;
+    lastSaveError = target.isEmpty ? 'No catalog file is set.' : '';
     if (target.isEmpty) return '';
+    // Held for the whole read-merge-write, so two people saving at once
+    // take turns instead of each writing over the other's merge.
+    return withFileLock(target, () => _save(target, rebind));
+  }
+
+  /// Stamps entries this copy added or changed since it last read the file,
+  /// with [user] and [at]. Untouched entries keep the stamps they had.
+  void _stampEdits(String user, String at) {
+    Map<String, dynamic> content(AvDeviceTemplate t) =>
+        t.toJson()..removeWhere((k, _) => kStampKeys.contains(k));
+    var changed = false;
+    for (final e in _byModel.entries.toList()) {
+      final t = e.value;
+      if (!t.custom) continue;
+      final base = _baseline[e.key];
+      AvDeviceTemplate? next;
+      if (base == null) {
+        // New since the file was read. With no read to compare against,
+        // only an entry somebody added here counts as theirs.
+        if (t.addedBy.isEmpty && (_baseline.isNotEmpty || t.addedByUser)) {
+          next = t.copyWith(addedBy: user, addedAt: at);
+        }
+      } else if (jsonEncode(content(t)) != jsonEncode(content(base))) {
+        next = t.copyWith(
+          addedBy: t.addedBy.isEmpty ? base.addedBy : t.addedBy,
+          addedAt: t.addedAt.isEmpty ? base.addedAt : t.addedAt,
+          changedBy: user,
+          changedAt: at,
+        );
+      }
+      if (next != null) {
+        _byModel[e.key] = next;
+        changed = true;
+      }
+    }
+    if (changed) _invalidate();
+  }
+
+  Future<String> _save(String target, bool rebind) async {
     try {
       // Whoever else has been in the file since this copy read it keeps their
       // work — a catalog on a share is edited by more than one person and a
@@ -1487,6 +1568,9 @@ class AvDeviceLibrary {
       // that from something the person at this keyboard drew. Run the other
       // way round it counted every entry as locally edited and threw away the
       // other editor's connectors.
+      if (rebind) {
+        _stampEdits(currentUserName(), DateTime.now().toIso8601String());
+      }
       final adopted = rebind ? await _reconcileWithDisk(target) : 0;
       // Nothing inconsistent reaches the file: the catalog in memory is
       // brought into line first, so what is on disk and what the editor shows
@@ -1530,6 +1614,16 @@ class AvDeviceLibrary {
         e,
         stack,
       );
+      final denied = e is FileSystemException &&
+          (e.osError?.errorCode == 5 ||
+              (e.osError?.message.toLowerCase().contains('denied') ?? false));
+      lastSaveError = denied
+          ? 'Windows will not let this account write to $target. Set the '
+              'Root Folder (or the catalog file) in Settings to a folder you '
+              'can write to, or reinstall this version, which opens up the '
+              'install folder.'
+          : 'Could not write $target: '
+              '${e is FileSystemException ? e.osError?.message ?? e.message : e}';
       return '';
     }
   }
@@ -1700,20 +1794,8 @@ class AvDeviceLibrary {
 
   /// Writes [contents] to [target] through a temporary file, so a reader on
   /// the share never opens a half-written catalog.
-  static Future<void> _writeAtomically(String target, String contents) async {
-    final temp = File('$target.tmp');
-    await temp.writeAsString(contents, flush: true);
-    try {
-      await temp.rename(target);
-    } catch (_) {
-      // Some network shares refuse a rename over an existing file. Falling
-      // back to a plain write is the behavior this has always had.
-      await File(target).writeAsString(contents, flush: true);
-      try {
-        await temp.delete();
-      } catch (_) {}
-    }
-  }
+  static Future<void> _writeAtomically(String target, String contents) =>
+      writeFileSafely(target, contents);
 
   /// Reads a catalog file on its own, with no built-ins underneath — what a
   /// merge needs, since a built-in in the other engineer's copy would

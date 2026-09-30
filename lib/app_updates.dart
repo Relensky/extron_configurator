@@ -36,6 +36,9 @@ final FolderUpdater appUpdater = FolderUpdater(
   },
   // exit(0) skips the runner's normal close; without this the next start
   // would log the update as a crash.
-  beforeExit: () async => endCrashSession(),
+  beforeExit: () async {
+    endCrashSession();
+    AppLogger.endSession();
+  },
   log: (message) => AppLogger.logInfo(message),
 );

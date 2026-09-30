@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -43,7 +44,11 @@ Map<String, List<List<String>>> readXlsxSheets(Uint8List bytes) {
 
   String? fileText(String name) {
     for (final f in archive.files) {
-      if (f.name == name) return String.fromCharCodes(f.content as List<int>);
+      // UTF-8, as every program writes these parts; read as Latin-1 a
+      // name with a × or an en dash in it never matched the job.
+      if (f.name == name) {
+        return utf8.decode(f.content as List<int>, allowMalformed: true);
+      }
     }
     return null;
   }

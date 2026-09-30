@@ -2,10 +2,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'screenshot_tools.dart';
@@ -178,7 +179,7 @@ Future<bool> saveSheetPicture(
     return false;
   }
 
-  final picked = await FilePicker.saveFile(
+  final picked = await saveFileCompat(
     dialogTitle: 'Save ${what.toLowerCase()}',
     fileName: '$fileStem.png',
     type: FileType.custom,
@@ -541,7 +542,7 @@ Future<void> saveLifecycleWorkbook(
   final messenger = ScaffoldMessenger.of(context);
   final provider = context.read<AppStateProvider>();
 
-  String? picked = await FilePicker.saveFile(
+  String? picked = await saveFileCompat(
     dialogTitle: 'Save ${what.toLowerCase()}',
     fileName: '$fileStem.xlsx',
     type: FileType.custom,

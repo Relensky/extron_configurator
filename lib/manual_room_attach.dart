@@ -5,6 +5,7 @@ import 'package:path/path.dart' as path;
 
 import 'building_project.dart' show ManualRoom;
 import 'project_estimate.dart' show roomCodeFromConfig;
+import 'room_sidecar.dart' show isRoomFolder;
 
 /// ============================================================================
 ///  THE ESTIMATES THAT HAVE BECOME ROOMS
@@ -72,6 +73,13 @@ List<DrawnRoom> findDrawnRooms(Directory folder) {
   for (final entry in folder.listSync(recursive: true, followLinks: false)) {
     if (entry is! File) continue;
     if (path.extension(entry.path).toLowerCase() != '.json') continue;
+    // A room's own backups are copies of it, not more rooms.
+    if (isRoomFolder(path.dirname(entry.path))) continue;
+    final lower = path.basename(entry.path).toLowerCase();
+    if (lower.endsWith('_old_config.json') ||
+        lower.endsWith('_previous.json')) {
+      continue;
+    }
     Map<String, dynamic> config;
     try {
       final read = jsonDecode(entry.readAsStringSync());

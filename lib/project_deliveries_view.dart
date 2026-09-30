@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
@@ -3413,7 +3413,7 @@ Future<void> attachPoFile(
   ProjectPo po,
 ) async {
   final messenger = ScaffoldMessenger.of(context);
-  final picked = await FilePicker.pickFiles(
+  final picked = await pickFilesCompat(
     dialogTitle: 'Pick the order for '
         '${po.number.trim().isEmpty ? 'this PO' : po.number.trim()}',
   );

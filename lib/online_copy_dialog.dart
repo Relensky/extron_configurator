@@ -2,9 +2,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'contrast.dart';
@@ -220,7 +221,7 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
         ? ''
         : path.join(_folder.trim(), onlineWorkbookName(widget.provider.project));
     if (file.isEmpty || !File(file).existsSync()) {
-      final picked = await FilePicker.pickFiles(
+      final picked = await pickFilesCompat(
         dialogTitle: 'Which workbook has the updates in it?',
         type: FileType.custom,
         allowedExtensions: const ['xlsx'],

@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
@@ -123,7 +123,7 @@ List<Widget> plansSlivers(BuildContext context, ProjectEstimate estimate) {
 /// reason somebody goes back to the email thread instead.
 Future<void> _pickPlans(
     BuildContext context, AppStateProvider provider) async {
-  final picked = await FilePicker.pickFiles(
+  final picked = await pickFilesCompat(
     dialogTitle: 'Add building plans to the project',
     // ANY file, not just the ones the app can draw. A DWG is a plan; it is
     // worth listing beside the PDFs and handing to the machine's own opener,

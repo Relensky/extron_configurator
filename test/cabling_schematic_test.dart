@@ -639,11 +639,11 @@ void main() {
 
       // In the cabling file, with the screen switches.
       final cablingFile =
-          File(path.join(dir.path, 'BSS103_config_cabling.json'));
+          File(path.join(dir.path, 'BSS103_config', 'BSS103_config_cabling.json'));
       expect(cablingFile.readAsStringSync(), contains('TSRV Scope'));
       // And NOT in the flow file, which carries the room, not the drawing.
       expect(
-        File(path.join(dir.path, 'BSS103_config_av_flow.json'))
+        File(path.join(dir.path, 'BSS103_config', 'BSS103_config_av_flow.json'))
             .readAsStringSync(),
         isNot(contains('TSRV Scope')),
       );

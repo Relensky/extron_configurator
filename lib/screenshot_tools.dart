@@ -2,13 +2,14 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'contrast.dart';
 import 'app_logger.dart';
 import 'app_snack.dart';
@@ -677,7 +678,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
       final bytes = await _flatten();
       if (bytes == null) throw Exception('PNG encode failed');
 
-      String? outputFile = await FilePicker.saveFile(
+      String? outputFile = await saveFileCompat(
         dialogTitle: 'Save Screenshot',
         fileName: widget.defaultFileName,
         type: FileType.custom,
@@ -1892,7 +1893,7 @@ class _CapturedPictureDialogState extends State<_CapturedPictureDialog> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
-      String? picked = await FilePicker.saveFile(
+      String? picked = await saveFileCompat(
         dialogTitle: 'Save ${widget.what.toLowerCase()}',
         fileName: widget.fileName,
         type: FileType.custom,

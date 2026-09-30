@@ -1,9 +1,10 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart';
@@ -289,7 +290,7 @@ Future<void> exportTabReport(
   }
 
   final ext = what == 'xlsx' ? 'xlsx' : 'txt';
-  String? outputFile = await FilePicker.saveFile(
+  String? outputFile = await saveFileCompat(
     dialogTitle: 'Save $label',
     fileName: '${roomFileStem(provider, _stem(tab))}.$ext',
     type: FileType.custom,

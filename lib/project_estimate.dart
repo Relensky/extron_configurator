@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show Size;
 
-import 'package:path/path.dart' as path;
 
 import 'app_logger.dart';
 import 'av_device_library.dart';
@@ -181,17 +180,28 @@ Future<LoadedRoom> readRoomFromDiskAsync(String configPath) async {
   }
 
   await fetch(configPath);
-  if (configPath.isNotEmpty) {
-    final paths = roomSidecarPaths(configPath);
-    for (final part in RoomSidecarPart.values) {
-      await fetch(paths[part] ?? '');
-    }
-    await fetch(path.join(
-      path.dirname(configPath),
-      '${path.basenameWithoutExtension(configPath)}_avflow.json',
-    ));
+  for (final file in _roomPartCandidates(configPath).values.expand((f) => f)) {
+    await fetch(file);
   }
   return readRoomFromDisk(configPath, read: (file) => texts[file]);
+}
+
+/// Where each part may be, first choice first: the room's folder, then loose
+/// beside the config where an older build wrote it. The flow part also takes
+/// its pre-rename name in both places.
+Map<RoomSidecarPart, List<String>> _roomPartCandidates(String configPath) {
+  if (configPath.isEmpty) return const {};
+  return {
+    for (final part in RoomSidecarPart.values)
+      part: [
+        roomSidecarPath(configPath, part),
+        legacyRoomSidecarPath(configPath, part),
+        if (part == RoomSidecarPart.flow) ...[
+          roomFilePath(configPath, 'avflow.json'),
+          legacyRoomFilePath(configPath, 'avflow.json'),
+        ],
+      ],
+  };
 }
 
 /// [read] supplies a file's text, or null when it is absent - see
@@ -266,26 +276,20 @@ LoadedRoom readRoomFromDisk(
     }
   }
 
-  final paths = roomSidecarPaths(configPath);
-  final parts = <RoomSidecarPart, Map<String, dynamic>?>{
-    for (final part in RoomSidecarPart.values) part: readPart(paths[part] ?? ''),
-  };
-
-  var flowPath = parts[RoomSidecarPart.flow] == null
-      ? ''
-      : (paths[RoomSidecarPart.flow] ?? '');
-
-  // The pre-rename flow file, read only when the current name is absent —
-  // the same fallback the app makes, so a room documented before the rename
-  // prices instead of reading as empty.
-  if (parts[RoomSidecarPart.flow] == null) {
-    final legacy = path.join(
-      path.dirname(configPath),
-      '${path.basenameWithoutExtension(configPath)}_avflow.json',
-    );
-    parts[RoomSidecarPart.flow] = readPart(legacy);
-    if (parts[RoomSidecarPart.flow] != null) flowPath = legacy;
-  }
+  // Each part from the first place it is found - the same fallback the app
+  // makes, so a room not opened since rooms had folders, or documented before
+  // the flow file's rename, prices instead of reading as empty.
+  var flowPath = '';
+  final parts = <RoomSidecarPart, Map<String, dynamic>?>{};
+  _roomPartCandidates(configPath).forEach((part, files) {
+    for (final file in files) {
+      final doc = readPart(file);
+      if (doc == null) continue;
+      parts[part] = doc;
+      if (part == RoomSidecarPart.flow) flowPath = file;
+      break;
+    }
+  });
 
   if (parts.values.every((p) => p == null)) {
     // Not an error: an AV-only room that nobody has drawn yet, or a control

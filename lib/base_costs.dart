@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'shared_json.dart';
 import 'app_logger.dart';
 import 'av_device_library.dart' show PricingTier;
 import 'building_project.dart' show formatIsoDate, parseIsoDate;
-import 'safe_write.dart';
 
 /// ============================================================================
 ///  BASE COSTS
@@ -357,6 +357,7 @@ class BaseCostBook {
           ..source = 'Built-in defaults (no file at $path yet)';
       }
       final doc = jsonDecode(await file.readAsString());
+      rememberSharedJson(path, doc);
       if (doc is! Map) throw const FormatException('Root must be an object.');
       final book = BaseCostBook(filePath: path, source: path);
       for (final c in (doc['costs'] as List? ?? [])) {
@@ -391,14 +392,18 @@ class BaseCostBook {
     }
   }
 
+  /// True when the last save merged in somebody else's changes, so this copy
+  /// should be read again. See shared_json.dart.
+  bool lastSaveTookTheirs = false;
+
   /// Writes the card. Returns the file written, or '' on failure.
   Future<String> save({String toPath = ''}) async {
     final target = toPath.isNotEmpty ? toPath : filePath;
     if (target.isEmpty) return '';
     try {
-      const encoder = JsonEncoder.withIndent('  ');
-      await File(target).parent.create(recursive: true);
-      await writeFileSafely(target, encoder.convert(toJson()));
+      // Merged with whatever somebody else saved since this copy read it.
+      lastSaveTookTheirs =
+          (await saveSharedJson(target, toJson())).tookTheirs;
       filePath = target;
       source = target;
       AppLogger.logInfo('Base costs saved to $target.');

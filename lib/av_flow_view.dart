@@ -3,12 +3,13 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 
+import 'file_dialogs.dart';
 import 'contrast.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
@@ -134,6 +135,70 @@ AvFlowModel buildAvFlowModel(AppStateProvider provider) {
 /// Signal-flow reading order, left to right: sources feed the switcher, the
 /// switcher feeds processing, processing feeds the displays. Power and
 /// anything unrecognized go in the source column so they don't split a row.
+/// Places every active config device not yet on the canvas, each in its
+/// column. [skipDismissed] leaves off boxes somebody removed by hand. Returns
+/// how many were added. The AV Flow tab's first visit, and a new room's save.
+int seedAvFlowFromConfig(
+  AppStateProvider provider, {
+  bool skipDismissed = true,
+  bool recordUndo = true,
+}) {
+  final config = provider.roomConfig;
+  if (config.isEmpty) return 0;
+  final keys = getActiveDeviceKeys(config, provider.uiSchema.deviceCountMap);
+  final existing = {for (final n in provider.avNodes) n.id};
+
+  // Running y per column, starting below whatever is already placed there.
+  final columnY = <int, double>{};
+  for (final n in provider.avNodes) {
+    final col = (n.pos.dx / kAvAutoColumnPitch).round();
+    columnY[col] = math.max(
+      columnY[col] ?? kAvAutoOriginY,
+      n.pos.dy + n.height + kAvAutoRowGap,
+    );
+  }
+
+  int added = 0;
+  for (final key in keys) {
+    if (existing.contains(key)) continue;
+    if (skipDismissed && provider.avDismissedDevices.contains(key)) continue;
+    final dev = config[key];
+    if (dev is! Map) continue;
+
+    final model = dev['model']?.toString() ?? '';
+    final template = provider.avDeviceLibrary.resolve(
+      configKey: key,
+      model: model,
+    );
+    final col = _columnForDevice(key);
+    final y = columnY[col] ?? kAvAutoOriginY;
+
+    final node = AvNode(
+      id: key,
+      label: dev['name']?.toString() ?? key,
+      model: model,
+      pos: Offset(kAvAutoOriginX + col * kAvAutoColumnPitch, y),
+      // A power controller's outlets come out of the catalog as OUTLET 1..8
+      // and come onto the page as OUTLET 3 · Via: the room's config is the
+      // only thing that knows which outlet is which.
+      ports: withOutletNames(
+        withPowerInlet(template.ports, template.powerInput),
+        key,
+        config,
+      ),
+      fromConfig: true,
+      rackUnits: template.rackUnits,
+      powerWatts: template.powerWatts,
+      btuPerHour: template.btuPerHour,
+      powerSource: powerSourceForInput(template.powerInput),
+    );
+    provider.addAvNode(node, recordUndo: recordUndo);
+    columnY[col] = y + node.height + kAvAutoRowGap;
+    added++;
+  }
+  return added;
+}
+
 int _columnForDevice(String key) {
   // Boxes the routing put in, named after the config field that placed them:
   // a source or its transmitter reads on the left, a display's receiver on the
@@ -373,7 +438,7 @@ class _AvFlowViewState extends State<AvFlowView>
   /// lays the image out against before the bytes have been decoded, and a
   /// guess would jump the backdrop the first time it painted.
   Future<void> _importBackground(AppStateProvider provider) async {
-    final result = await FilePicker.pickFiles(
+    final result = await pickFilesCompat(
       dialogTitle: 'Choose a background image',
       type: FileType.custom,
       allowedExtensions: const ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'],
@@ -548,60 +613,13 @@ class _AvFlowViewState extends State<AvFlowView>
     bool silent = false,
     bool batch = false,
   }) {
-    final config = provider.roomConfig;
-    if (config.isEmpty) return 0;
+    if (provider.roomConfig.isEmpty) return 0;
     if (!silent) provider.clearAvDismissedDevices();
-    final keys = getActiveDeviceKeys(config, provider.uiSchema.deviceCountMap);
-    final existing = {for (final n in provider.avNodes) n.id};
-
-    // Running y per column, starting below whatever is already placed there.
-    final columnY = <int, double>{};
-    for (final n in provider.avNodes) {
-      final col = (n.pos.dx / kAvAutoColumnPitch).round();
-      columnY[col] = math.max(
-        columnY[col] ?? kAvAutoOriginY,
-        n.pos.dy + n.height + kAvAutoRowGap,
-      );
-    }
-
-    int added = 0;
-    for (final key in keys) {
-      if (existing.contains(key)) continue;
-      if (silent && provider.avDismissedDevices.contains(key)) continue;
-      final dev = config[key];
-      if (dev is! Map) continue;
-
-      final model = dev['model']?.toString() ?? '';
-      final template = provider.avDeviceLibrary.resolve(
-        configKey: key,
-        model: model,
-      );
-      final col = _columnForDevice(key);
-      final y = columnY[col] ?? kAvAutoOriginY;
-
-      final node = AvNode(
-        id: key,
-        label: dev['name']?.toString() ?? key,
-        model: model,
-        pos: Offset(kAvAutoOriginX + col * kAvAutoColumnPitch, y),
-        // A power controller's outlets come out of the catalog as OUTLET 1..8
-        // and come onto the page as OUTLET 3 · Via: the room's config is the
-        // only thing that knows which outlet is which.
-        ports: withOutletNames(
-          withPowerInlet(template.ports, template.powerInput),
-          key,
-          config,
-        ),
-        fromConfig: true,
-        rackUnits: template.rackUnits,
-        powerWatts: template.powerWatts,
-        btuPerHour: template.btuPerHour,
-        powerSource: powerSourceForInput(template.powerInput),
-      );
-      provider.addAvNode(node, recordUndo: !batch);
-      columnY[col] = y + node.height + kAvAutoRowGap;
-      added++;
-    }
+    final added = seedAvFlowFromConfig(
+      provider,
+      skipDismissed: silent,
+      recordUndo: !batch,
+    );
 
     if (!silent && !batch) {
       _snack(
@@ -889,7 +907,7 @@ class _AvFlowViewState extends State<AvFlowView>
     final sections = avReportSections(provider, model);
 
     final ext = asXlsx ? 'xlsx' : 'txt';
-    String? outputFile = await FilePicker.saveFile(
+    String? outputFile = await saveFileCompat(
       dialogTitle: 'Save AV Report',
       fileName: '${_fileStem(provider, 'av_report')}.$ext',
       type: FileType.custom,

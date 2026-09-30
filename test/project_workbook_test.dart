@@ -451,7 +451,7 @@ void main() {
       expect(sheet, contains('What needs doing'));
     });
 
-    test('the summary warns about it and the master list says which rooms',
+    test('the summary warns about it; Core Components lists products only',
         () {
       final archive = ZipDecoder()
           .decodeBytes(buildProjectWorkbookBytes(estimate: withGaps()));
@@ -460,10 +460,9 @@ void main() {
         sheetNamed(archive, 'Summary'),
         contains('have no control module'),
       );
-      expect(
-        sheetNamed(archive, 'Core Components'),
-        contains('no module: '),
-      );
+      final master = sheetNamed(archive, 'Core Components');
+      expect(master, isNot(contains('no module')));
+      expect(master, isNot(contains('>Control<')));
     });
 
     test('the quote requests carry none of it', () {

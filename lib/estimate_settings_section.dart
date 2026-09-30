@@ -2,9 +2,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_state.dart';
 import 'image_color_picker.dart';
 import 'main.dart' show AccentColorPicker;
@@ -135,7 +136,7 @@ class EstimateSettingsSection extends StatelessWidget {
                         icon: const Icon(Icons.image_outlined),
                         tooltip: 'Choose an image',
                         onPressed: () async {
-                          final result = await FilePicker.pickFiles(
+                          final result = await pickFilesCompat(
                             type: FileType.custom,
                             allowedExtensions: const ['png', 'jpg', 'jpeg'],
                           );

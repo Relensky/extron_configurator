@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:path/path.dart' as path;
+import 'room_sidecar.dart' show roomStem;
 
 import 'app_logger.dart';
 import 'app_state.dart';
@@ -251,7 +251,7 @@ Future<CampusLifecycle> readCampus({
 
   final jobs = <CampusJob>[];
   for (final file in projectPaths) {
-    final fallback = path.basenameWithoutExtension(file);
+    final fallback = roomStem(file);
     try {
       // A room on its own is priced and aged as a job of one room.
       final project = isRoomConfigFile(file)

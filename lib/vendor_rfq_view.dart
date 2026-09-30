@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
@@ -71,7 +71,7 @@ bool quoteDrawableHere(String filePath) {
 /// the reason given on [attachPoFile]. Returns the absolute path, or blank
 /// when nothing was chosen.
 Future<String> pickVendorQuoteFile(String vendorName) async {
-  final picked = await FilePicker.pickFiles(
+  final picked = await pickFilesCompat(
     dialogTitle: 'Pick the quote from $vendorName',
   );
   final chosen = picked?.files.single.path;

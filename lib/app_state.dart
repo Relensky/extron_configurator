@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 
+import 'file_dialogs.dart';
 import 'app_logger.dart';
 import 'app_paths.dart';
 import 'av_device_library.dart';
@@ -22,7 +23,7 @@ import 'cabling_schematic.dart';
 import 'building_project.dart';
 import 'av_flow_routing.dart' show autoDrawRoutingFromConfig;
 import 'processor_prompt.dart' show isControlProcessorCategory;
-import 'av_flow_view.dart' show buildAvFlowModel;
+import 'av_flow_view.dart' show buildAvFlowModel, seedAvFlowFromConfig;
 import 'export_tools.dart' show roomFileStem;
 import 'online_copy.dart';
 import 'online_index.dart';
@@ -53,6 +54,7 @@ import 'ui_schema.dart';
 import 'vendor_book.dart';
 import 'undo_history.dart';
 import 'safe_write.dart';
+import 'shared_json.dart';
 import 'package:file_picker/file_picker.dart';
 
 /// The navigation rail's tabs, in rail order.
@@ -311,6 +313,10 @@ typedef SchematicLayout = ({
 /// Grouped because they behave the same way in every respect that matters
 /// here — each is one file in the Root Folder, each is edited on its own tab,
 /// each is written only by its own Save, and each now keeps its own history.
+/// Undo steps kept for the catalog. Fewer than [kUndoDepth]: each step is the
+/// whole catalog.
+const int kCatalogUndoDepth = 20;
+
 enum AppDataDocument { catalog, schema, flowRules }
 
 /// What each is called where a person reads it.
@@ -625,6 +631,10 @@ class AppStateProvider extends ChangeNotifier {
   /// Folder. See class_schedule.dart.
   String classSchedulePath = '';
 
+  /// Where the session logs go; blank is the per-user default. See
+  /// app_logger.dart.
+  String logFolderPath = '';
+
   /// Whether this copy tells others it has a file open, and watches for their
   /// saves. On unless turned off; see collab/collab_controller.dart.
   bool collabEnabled = true;
@@ -790,14 +800,47 @@ class AppStateProvider extends ChangeNotifier {
         candidates.length > 1 ? candidates[1] : candidates[0];
   }
 
-  /// Root Folder setting, falling back to the app's base directory.
-  String get effectiveRootFolder =>
-      rootFolderPath.isNotEmpty ? rootFolderPath : _appBaseDir();
+  /// The department's shared folder: the catalog, costs, labor rates and the
+  /// other data files everybody edits together. The Root Folder when Settings
+  /// names none and the share can be reached.
+  static const String kSharedRootFolder =
+      r'\\doit-files\ATEC\CTS\StaffFiles\Classroom Technology\Projects'
+      r'\Configurator_Files';
+
+  /// Looked up once a run: a share that is down can take many seconds to say
+  /// so, and it is asked on every path lookup. Never under `flutter test`.
+  static bool? _sharedRootReachable;
+  static bool get _sharedRootAvailable => _sharedRootReachable ??= () {
+        if (runningUnderTest) return false;
+        try {
+          return Directory(kSharedRootFolder).existsSync();
+        } catch (_) {
+          return false;
+        }
+      }();
+
+  /// Root Folder setting, else the shared folder, else the app's own folder.
+  String get effectiveRootFolder => rootFolderPath.isNotEmpty
+      ? rootFolderPath
+      : _sharedRootAvailable
+          ? kSharedRootFolder
+          : _appBaseDir();
+
+  /// `<root>/name` when it is there, else the copy installed beside the app
+  /// when that is there, else `<root>/name`. For what the shared folder may
+  /// not carry: the modules, manuals, template and buildings list.
+  String _inRootOrApp(String name) {
+    final inRoot = path.join(effectiveRootFolder, name);
+    bool there(String p) =>
+        File(p).existsSync() || Directory(p).existsSync();
+    if (there(inRoot)) return inRoot;
+    final inApp = path.join(_appBaseDir(), name);
+    return there(inApp) ? inApp : inRoot;
+  }
 
   /// Python modules folder: explicit choice, else `<root>/devices`.
-  String get effectiveModulesPath => modulesPath.isNotEmpty
-      ? modulesPath
-      : path.join(effectiveRootFolder, 'devices');
+  String get effectiveModulesPath =>
+      modulesPath.isNotEmpty ? modulesPath : _inRootOrApp('devices');
 
   /// PDF manuals folder: explicit choice, else `<root>/documentation`.
   /// Each module's manual is `<module file name>.pdf` in this folder.
@@ -809,30 +852,30 @@ class AppStateProvider extends ChangeNotifier {
 
   String get effectiveDocumentationPath => documentationPath.isNotEmpty
       ? documentationPath
-      : path.join(effectiveRootFolder, 'documentation');
+      : _inRootOrApp('documentation');
 
   /// processors.json: explicit choice, else `<root>/processors.json`.
   String get effectiveProcessorsFilePath => processorsFilePath.isNotEmpty
       ? processorsFilePath
-      : path.join(effectiveRootFolder, 'processors.json');
+      : _inRootOrApp('processors.json');
 
   /// buildings.json: explicit choice, else `<root>/buildings.json`.
   String get effectiveBuildingsFilePath => buildingsFilePath.isNotEmpty
       ? buildingsFilePath
-      : path.join(effectiveRootFolder, 'buildings.json');
+      : _inRootOrApp('buildings.json');
 
   /// Template config: explicit choice, else `<root>/config.json`.
   String get effectiveTemplateFilePath => templateFilePath.isNotEmpty
       ? templateFilePath
-      : path.join(effectiveRootFolder, 'config.json');
+      : _inRootOrApp('config.json');
 
   /// ui_schema.json / key_map.json: use the root-folder copy only when it
   /// actually exists there, so the loaders' own working-dir / executable
   /// search still applies otherwise (returns '' to trigger that search).
   String _resolveOptionalFile(String explicit, String filename) {
     if (explicit.isNotEmpty) return explicit;
-    if (rootFolderPath.isNotEmpty) {
-      final candidate = path.join(rootFolderPath, filename);
+    if (rootFolderPath.isNotEmpty || _sharedRootAvailable) {
+      final candidate = path.join(effectiveRootFolder, filename);
       if (File(candidate).existsSync()) return candidate;
     }
     return '';
@@ -842,10 +885,10 @@ class AppStateProvider extends ChangeNotifier {
   /// hints (explicit choice, else the root-folder default location).
   String get effectiveUiSchemaPath => uiSchemaPath.isNotEmpty
       ? uiSchemaPath
-      : path.join(effectiveRootFolder, 'ui_schema.json');
+      : _inRootOrApp('ui_schema.json');
   String get effectiveKeyMapPath => keyMapPath.isNotEmpty
       ? keyMapPath
-      : path.join(effectiveRootFolder, 'key_map.json');
+      : _inRootOrApp('key_map.json');
 
   // ---------------------------------------------------------------------
   //  SETTINGS PERSISTENCE (app_config.json)
@@ -947,6 +990,7 @@ class AppStateProvider extends ChangeNotifier {
       'documentationPath': documentationPath,
       'specSheetFolder': specSheetFolder,
       'classSchedulePath': classSchedulePath,
+      'logFolderPath': logFolderPath,
       'collabEnabled': collabEnabled,
       'googleClientId': googleClientId,
       'googleClientSecret': googleClientSecret,
@@ -1594,8 +1638,9 @@ class AppStateProvider extends ChangeNotifier {
   bool get hasOriginalFileConfig =>
       _originalLoadedConfig.isNotEmpty || originalConfigBackupPath.isNotEmpty;
 
-  /// The `*_old_config.json` this room's conversion left in the config's own
-  /// folder, or '' when there is none.
+  /// The `*_old_config.json` this room's conversion left in the room's folder
+  /// (or, for a room converted before rooms had folders, loose beside the
+  /// config), or '' when there is none.
   ///
   /// The backup is written by [_processLoadedConfig] on every load of a file
   /// that needed converting, and it is the ONLY record of what the room said
@@ -1605,11 +1650,19 @@ class AppStateProvider extends ChangeNotifier {
   String get originalConfigBackupPath {
     if (currentConfigPath.isEmpty) return '';
     try {
+      // Anything in the room's own folder is this room's.
+      final own = Directory(roomFolderPath(currentConfigPath));
+      if (own.existsSync()) {
+        for (final entity in own.listSync()) {
+          if (entity is File &&
+              entity.path.toLowerCase().endsWith('_old_config.json')) {
+            return entity.path;
+          }
+        }
+      }
       final dir = Directory(path.dirname(currentConfigPath));
       if (!dir.existsSync()) return '';
-      final stem = path
-          .basenameWithoutExtension(currentConfigPath)
-          .toLowerCase();
+      final stem = roomStem(currentConfigPath).toLowerCase();
       String fallback = '';
       for (final entity in dir.listSync()) {
         if (entity is! File) continue;
@@ -2180,33 +2233,25 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Sidecar file the layout persists to ('' when the session has no working
   /// file yet — Create New that was never saved).
-  String get schematicSidecarPath {
-    if (currentConfigPath.isEmpty) return '';
-    final dir = path.dirname(currentConfigPath);
-    final base = path.basenameWithoutExtension(currentConfigPath);
-    return path.join(dir, '${base}_control_schematic.json');
-  }
+  String get schematicSidecarPath =>
+      roomFilePath(currentConfigPath, 'control_schematic.json');
 
   /// The name this sidecar used before the tab was renamed to Control
   /// Schematic. Rooms documented with an older build still have one of these
   /// sitting next to the config, so it is read when the new name is absent
   /// and removed once the layout has been written under the new name — see
   /// [loadSchematicLayoutForCurrentConfig] and [saveSchematicLayout].
-  String get legacySchematicSidecarPath {
-    if (currentConfigPath.isEmpty) return '';
-    final dir = path.dirname(currentConfigPath);
-    final base = path.basenameWithoutExtension(currentConfigPath);
-    return path.join(dir, '${base}_schematic.json');
-  }
+  String get legacySchematicSidecarPath =>
+      roomFilePath(currentConfigPath, 'schematic.json');
 
   /// Where the layout should actually be READ from: the current name when it
-  /// exists, otherwise the old one. Empty when neither is there.
+  /// exists, otherwise the old one, in the room folder or loose beside the
+  /// config. Empty when neither is there.
   String get _readableSchematicSidecar {
-    final current = schematicSidecarPath;
-    if (current.isNotEmpty && File(current).existsSync()) return current;
-    final legacy = legacySchematicSidecarPath;
-    if (legacy.isNotEmpty && File(legacy).existsSync()) return legacy;
-    return '';
+    final current = readableRoomFilePath(
+        currentConfigPath, 'control_schematic.json');
+    if (current.isNotEmpty) return current;
+    return readableRoomFilePath(currentConfigPath, 'schematic.json');
   }
 
   /// True when the in-memory diagram holds anything the user arranged by hand
@@ -2279,8 +2324,8 @@ class AppStateProvider extends ChangeNotifier {
     // (post-frame), so without it a loaded sidecar wouldn't show until the
     // next unrelated rebuild.
     // Reads whichever name is actually on disk, so a room documented before
-    // the rename opens untouched. Nothing is moved here — a read should not
-    // rewrite the user's folder; the file moves on the next save.
+    // the rename opens untouched. The open already moved loose files into the
+    // room folder; the old name is retired on the next save.
     final sidecar = _readableSchematicSidecar;
     if (sidecar.isEmpty) {
       notifyListeners();
@@ -2402,6 +2447,7 @@ class AppStateProvider extends ChangeNotifier {
     final sidecar = schematicSidecarPath;
     if (sidecar.isEmpty) return '';
     try {
+      ensureRoomFolder(currentConfigPath);
       const encoder = JsonEncoder.withIndent('  ');
       await writeFileSafely(
         sidecar,
@@ -4388,8 +4434,9 @@ class AppStateProvider extends ChangeNotifier {
   Future<String> importRoomImage(String sourcePath, String kind) async {
     if (currentConfigPath.isEmpty) return sourcePath;
     try {
-      final dir = path.dirname(currentConfigPath);
-      final stem = path.basenameWithoutExtension(currentConfigPath);
+      ensureRoomFolder(currentConfigPath);
+      final dir = roomFolderPath(currentConfigPath);
+      final stem = roomStem(currentConfigPath);
       final ext = path.extension(sourcePath);
       // Numbered so importing a second one doesn't overwrite the first.
       String name = '${stem}_$kind$ext';
@@ -4408,14 +4455,70 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Where a floor plan image is resolved from: an absolute path as given,
-  /// otherwise beside the working config, which is where the importer puts it.
-  String resolveFloorPlanImage(String imageFile) {
+  /// otherwise the room's folder, which is where the importer puts it, then
+  /// beside the working config, where an older build put it.
+  String resolveFloorPlanImage(String imageFile) =>
+      _resolveRoomImage(imageFile, currentConfigPath);
+
+  String _resolveRoomImage(String imageFile, String configPath) {
     if (imageFile.trim().isEmpty) return '';
     if (path.isAbsolute(imageFile)) return imageFile;
-    final dir = currentConfigPath.isEmpty
-        ? effectiveRootFolder
-        : path.dirname(currentConfigPath);
-    return path.join(dir, imageFile);
+    if (configPath.isEmpty) return path.join(effectiveRootFolder, imageFile);
+    final inFolder = path.join(roomFolderPath(configPath), imageFile);
+    final beside = path.join(path.dirname(configPath), imageFile);
+    if (!File(inFolder).existsSync() && File(beside).existsSync()) {
+      return beside;
+    }
+    return inFolder;
+  }
+
+  /// The pictures the room names by a relative path: plan sheets and the
+  /// signal flow backdrop.
+  List<String> get _roomImageNames => [
+        for (final plan in avFloorPlans)
+          if (plan.hasImage && !path.isAbsolute(plan.imageFile)) plan.imageFile,
+        if (avFlowBackground.hasImage &&
+            !path.isAbsolute(avFlowBackground.imageFile))
+          avFlowBackground.imageFile,
+      ];
+
+  /// Moves the pictures an older build imported for this room from beside the
+  /// config into the room's folder. Only ones named for this room: a picture
+  /// under any other name may be shared with other rooms.
+  void _moveLooseRoomImages() {
+    if (currentConfigPath.isEmpty) return;
+    final dir = path.dirname(currentConfigPath);
+    final prefix =
+        '${roomStem(currentConfigPath).toLowerCase()}_';
+    final folder = roomFolderPath(currentConfigPath);
+    for (final name in _roomImageNames.toSet()) {
+      if (path.basename(name) != name) continue;
+      if (!name.toLowerCase().startsWith(prefix)) continue;
+      try {
+        if (moveIntoRoomFolder(path.join(dir, name), folder)) {
+          AppLogger.logInfo('Moved $name into ${path.basename(folder)}.');
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// Copies the room's relative pictures from [fromConfig]'s folder into the
+  /// current config's, for a room saved under a new name.
+  void _carryRoomImages(String fromConfig) {
+    if (fromConfig.isEmpty || currentConfigPath.isEmpty) return;
+    final folder = roomFolderPath(currentConfigPath);
+    for (final name in _roomImageNames.toSet()) {
+      final target = path.join(folder, name);
+      if (File(target).existsSync()) continue;
+      final source = _resolveRoomImage(name, fromConfig);
+      try {
+        if (!File(source).existsSync()) continue;
+        Directory(path.dirname(target)).createSync(recursive: true);
+        File(source).copySync(target);
+      } catch (e) {
+        AppLogger.logError('Could not copy $name to the new room folder', e);
+      }
+    }
   }
 
   // --- room type presets ----------------------------------------------------
@@ -4874,8 +4977,9 @@ class AppStateProvider extends ChangeNotifier {
   /// estimate. Does nothing when the box already says something, so
   /// converting or reopening a room never writes over what was typed there.
   void applyDefaultEstimateNotes() {
-    if (avCost.notes.trim().isNotEmpty) return;
-    avCost.notes = kDefaultEstimateNotes;
+    final next = withStandardEstimateNotes(avCost.notes);
+    if (next == avCost.notes) return;
+    avCost.notes = next;
     notifyListeners();
   }
 
@@ -6255,21 +6359,17 @@ class AppStateProvider extends ChangeNotifier {
   /// The name this sidecar used before it was brought in line with
   /// `<config>_control_schematic.json`. Read when the current name is absent,
   /// and retired once the diagram has been written under the new one.
-  String get legacyAvFlowSidecarPath {
-    if (currentConfigPath.isEmpty) return '';
-    final dir = path.dirname(currentConfigPath);
-    final base = path.basenameWithoutExtension(currentConfigPath);
-    return path.join(dir, '${base}_avflow.json');
-  }
+  String get legacyAvFlowSidecarPath =>
+      roomFilePath(currentConfigPath, 'avflow.json');
 
   /// Where the AV diagram should actually be READ from: the current name when
-  /// it exists, otherwise the old one. Empty when neither is there.
+  /// it exists, otherwise the old one, in the room folder or loose beside the
+  /// config. Empty when neither is there.
   String get _readableAvFlowSidecar {
-    final current = avFlowSidecarPath;
-    if (current.isNotEmpty && File(current).existsSync()) return current;
-    final legacy = legacyAvFlowSidecarPath;
-    if (legacy.isNotEmpty && File(legacy).existsSync()) return legacy;
-    return '';
+    final current =
+        readableRoomSidecarPath(currentConfigPath, RoomSidecarPart.flow);
+    if (current.isNotEmpty) return current;
+    return readableRoomFilePath(currentConfigPath, 'avflow.json');
   }
 
   /// True when the session holds an AV diagram worth protecting. A cost
@@ -6296,9 +6396,11 @@ class AppStateProvider extends ChangeNotifier {
   /// artifact is its cost estimate still has something worth not overwriting.
   bool get hasSavedAvFlow {
     if (_readableAvFlowSidecar.isNotEmpty) return true;
-    for (final entry in avSidecarPaths.entries) {
-      if (entry.key == RoomSidecarPart.flow) continue;
-      if (entry.value.isNotEmpty && File(entry.value).existsSync()) return true;
+    for (final part in RoomSidecarPart.values) {
+      if (part == RoomSidecarPart.flow) continue;
+      if (readableRoomSidecarPath(currentConfigPath, part).isNotEmpty) {
+        return true;
+      }
     }
     return false;
   }
@@ -6394,16 +6496,18 @@ class AppStateProvider extends ChangeNotifier {
     }
 
     // The flow file under whichever name is on disk, so a room documented
-    // before the rename opens untouched. Nothing is moved here — a read should
-    // not rewrite the user's folder; the file moves on the next save.
+    // before the rename opens untouched. The open already moved loose files
+    // into the room folder; the old name is retired on the next save.
     final flowFile = _readableAvFlowSidecar;
     final parts = <RoomSidecarPart, Map<String, dynamic>?>{
       RoomSidecarPart.flow: readPart(flowFile, 'signal flow'),
     };
-    final paths = avSidecarPaths;
     for (final part in RoomSidecarPart.values) {
       if (part == RoomSidecarPart.flow) continue;
-      parts[part] = readPart(paths[part] ?? '', kRoomSidecarSuffix[part]!);
+      parts[part] = readPart(
+        readableRoomSidecarPath(currentConfigPath, part),
+        kRoomSidecarSuffix[part]!,
+      );
     }
 
     if (parts.values.every((p) => p == null)) {
@@ -6419,6 +6523,15 @@ class AppStateProvider extends ChangeNotifier {
     // An older room's flow file holds every key and has no companions to
     // overlay it, so this hands back exactly that document.
     _readAvFlowJson(mergeRoomSidecar(parts));
+    _moveLooseRoomImages();
+    // The standard terms, in their current wording, on a room that has an
+    // estimate. Before the room is marked saved, so it does not show as an
+    // unsaved change; the next save writes it. Not in the shared reader: an
+    // undo must put back exactly what was there.
+    if (parts[RoomSidecarPart.cost] != null ||
+        mergeRoomSidecar(parts)['cost'] != null) {
+      avCost.notes = withStandardEstimateNotes(avCost.notes);
+    }
 
     final found = [
       for (final part in RoomSidecarPart.values)
@@ -6669,6 +6782,15 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  /// What the AV Flow tab draws on its first visit: every config device
+  /// placed, then the routing the config states. Only on an empty canvas, and
+  /// not in an estimate-only room, where every item is picked by hand.
+  void drawAvFlowDefaults() {
+    if (roomConfig.isEmpty || isEstimateRoom || avNodes.isNotEmpty) return;
+    seedAvFlowFromConfig(this, recordUndo: false);
+    autoDrawRoutingFromConfig(this);
+  }
+
   /// Writes everything that belongs to the room but not to config.json: the
   /// AV diagram with its cost estimate, and the control schematic layout.
   /// Returns the files written.
@@ -6731,6 +6853,7 @@ class AppStateProvider extends ChangeNotifier {
     final sidecar = avFlowSidecarPath;
     if (sidecar.isEmpty) return '';
     try {
+      ensureRoomFolder(currentConfigPath);
       const encoder = JsonEncoder.withIndent('  ');
 
       // One file per part. The flow file is written LAST: it is the one the
@@ -7610,10 +7733,9 @@ class AppStateProvider extends ChangeNotifier {
       final parts = <RoomSidecarPart, Map<String, dynamic>?>{
         RoomSidecarPart.flow: part(_readableAvFlowSidecar),
       };
-      final paths = avSidecarPaths;
       for (final p in RoomSidecarPart.values) {
         if (p == RoomSidecarPart.flow) continue;
-        parts[p] = part(paths[p] ?? '');
+        parts[p] = part(readableRoomSidecarPath(currentConfigPath, p));
       }
       final av = parts.values.every((p) => p == null)
           ? <String, dynamic>{}
@@ -7708,7 +7830,13 @@ class AppStateProvider extends ChangeNotifier {
 
       modulesPath = str('modulesPath', '');
       processorsFilePath = str('processorsFilePath', '');
+      // Blank means the shared folder (Settings shows it as the hint). 0.5.17
+      // saved the app's own folder here; that is read as blank too.
       rootFolderPath = str('rootFolderPath', '');
+      if (rootFolderPath.isNotEmpty &&
+          path.equals(rootFolderPath, _appBaseDir())) {
+        rootFolderPath = '';
+      }
       buildingsFilePath = str('buildingsFilePath', '');
       templateFilePath = str('templateFilePath', '');
       uiSchemaPath = str('uiSchemaPath', '');
@@ -7720,6 +7848,8 @@ class AppStateProvider extends ChangeNotifier {
       documentationPath = str('documentationPath', '');
       specSheetFolder = str('specSheetFolder', '');
       classSchedulePath = str('classSchedulePath', '');
+      logFolderPath = str('logFolderPath', '');
+      AppLogger.setLogFolder(logFolderPath);
       collabEnabled = saved['collabEnabled'] is bool
           ? saved['collabEnabled'] as bool
           : true;
@@ -7850,7 +7980,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Prompts the user to pick an existing config file and loads it.
   /// Automatically creates a backup of the original file if migration is needed.
   Future<bool> loadExistingConfig() async {
-    FilePickerResult? result = await FilePicker.pickFiles(
+    FilePickerResult? result = await pickFilesCompat(
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
@@ -7875,13 +8005,20 @@ class AppStateProvider extends ChangeNotifier {
   Future<bool> openConfigAtPath(String file, {bool remember = true}) async {
     lastOpenError = '';
     try {
-      final f = File(file);
+      // A link saved before the room moved into its own folder.
+      if (!File(file).existsSync()) {
+        final moved = folderLayoutPathFor(file);
+        if (moved != file && File(moved).existsSync()) file = moved;
+      }
+      var f = File(file);
       final originalContents = await f.readAsString();
       final Map<String, dynamic> parsedConfig = jsonDecode(originalContents);
+      f = File(await _moveRoomIntoFolderLayout(f.path));
 
       // Remember the working file so 'Apply Changes' in the raw editor can
       // save back to it directly.
       currentConfigPath = f.path;
+      _moveLooseRoomFiles();
 
       // The room on screen is not the room the last target named.
       clearDeploymentTarget();
@@ -7889,10 +8026,10 @@ class AppStateProvider extends ChangeNotifier {
       await _processLoadedConfig(
         originalContents: originalContents,
         parsedConfig: parsedConfig,
-        backupDirectory: f.parent.path,
+        backupDirectory: roomFolderPath(f.path),
         sourceLabel: f.path,
         // Change log named after the opened file: <name>_backup_log.txt
-        changeLogBaseName: path.basenameWithoutExtension(f.path),
+        changeLogBaseName: roomStem(f.path),
       );
       // The room now matches the file it came from, so the unsaved-work
       // check has a baseline to compare against.
@@ -7919,6 +8056,78 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  /// Off in tests, which open rooms laid out the older way on purpose - see
+  /// test/flutter_test_config.dart.
+  static bool moveRoomsIntoFolders = true;
+
+  /// Moves a room saved as `ARTS_111_config.json` into `ARTS_111\config.json`
+  /// with its files in `room_files` (see [migrateRoomToFolderLayout]), and
+  /// repoints the open project and the recent list. Returns the path to open.
+  ///
+  /// Left alone while a crash copy is waiting for it: that copy is keyed on
+  /// the old path and is offered first.
+  Future<String> _moveRoomIntoFolderLayout(String file) async {
+    if (!moveRoomsIntoFolders || isFolderLayoutConfig(file)) return file;
+    final slot =
+        path.join(autosaveFolder, 'rooms', recoverySlotName(file));
+    if (Directory(slot).existsSync()) return file;
+    final String moved;
+    try {
+      moved = migrateRoomToFolderLayout(file);
+    } catch (e, stack) {
+      AppLogger.logError('Could not move $file into its room folder', e, stack);
+      return file;
+    }
+    if (moved.isEmpty) return file;
+    AppLogger.logInfo('Moved ${path.basename(file)} to '
+        '${path.relative(moved, from: path.dirname(file))}.');
+
+    _forgetCachedRoom(file);
+    for (int i = 0; i < project.rooms.length; i++) {
+      final ref = project.rooms[i];
+      final absolute =
+          BuildingProject.resolvePath(ref.configPath, currentProjectPath);
+      if (!_samePath(absolute, file)) continue;
+      project.rooms[i] = ref.copyWith(
+        configPath: BuildingProject.storePath(moved, currentProjectPath),
+      );
+      _projectChanged(repricing: false);
+    }
+    await forgetRecentFile(RecentKind.room, file);
+    return moved;
+  }
+
+  /// Repoints [loaded]'s rooms that moved into their own folder since the job
+  /// was saved. Returns how many.
+  static int _followMovedRooms(BuildingProject loaded, String projectPath) {
+    int moved = 0;
+    for (int i = 0; i < loaded.rooms.length; i++) {
+      final ref = loaded.rooms[i];
+      final absolute = BuildingProject.resolvePath(ref.configPath, projectPath);
+      if (absolute.isEmpty || File(absolute).existsSync()) continue;
+      final now = folderLayoutPathFor(absolute);
+      if (now == absolute || !File(now).existsSync()) continue;
+      loaded.rooms[i] = ref.copyWith(
+        configPath: BuildingProject.storePath(now, projectPath),
+      );
+      moved++;
+    }
+    return moved;
+  }
+
+  /// Moves an older room's loose companion files into its folder. See
+  /// [moveRoomFilesIntoFolder]; pictures follow once the plans are read.
+  void _moveLooseRoomFiles() {
+    if (moveOldConfigFolderIntoRoomFiles(currentConfigPath)) {
+      AppLogger.logInfo('Moved the config folder beside '
+          '$currentConfigPath into $kRoomFilesFolder.');
+    }
+    final moved = moveRoomFilesIntoFolder(currentConfigPath);
+    if (moved.isEmpty) return;
+    AppLogger.logInfo('Moved ${moved.join(', ')} into the '
+        '${path.basename(roomFolderPath(currentConfigPath))} folder.');
+  }
+
   /// Why the last [openConfigAtPath] failed, for the screen. '' after a
   /// successful open.
   String lastOpenError = '';
@@ -7926,7 +8135,7 @@ class AppStateProvider extends ChangeNotifier {
   /// A failed open, in words: an empty file names the backup beside it, since
   /// that is where the room still is.
   static String describeOpenFailure(String file, Object error) {
-    final name = path.basename(file);
+    final name = roomConfigDisplayName(file);
     final f = File(file);
     if (!f.existsSync()) return '$name is not there any more.';
     bool empty = false;
@@ -7934,14 +8143,14 @@ class AppStateProvider extends ChangeNotifier {
       empty = f.readAsStringSync().trim().isEmpty;
     } catch (_) {}
     if (empty) {
-      final dir = path.dirname(file);
-      final stem = path.basenameWithoutExtension(file);
-      final previous = '${stem}_previous.json';
-      final hint = File(path.join(dir, previous)).existsSync()
-          ? '$previous beside it holds the copy from before the last save; '
-              'copy it over $name to get the room back.'
-          : 'Look beside it for a backup ending in _previous.json or '
-              '_old_config.json.';
+      final previous = readableRoomFilePath(file, 'previous.json');
+      final folder = path.basename(roomFolderPath(file));
+      final hint = previous.isNotEmpty
+          ? '${path.relative(previous, from: path.dirname(file))} holds the '
+              'copy from before the last save; copy it over $name to get the '
+              'room back.'
+          : 'Look in the $folder folder beside it for a backup ending in '
+              '_previous.json or _old_config.json.';
       return '$name is empty - a save was probably cut off. $hint';
     }
     if (error is FormatException) {
@@ -7991,7 +8200,7 @@ class AppStateProvider extends ChangeNotifier {
       // Prompt for where the NEW (editable) working copy should live.
       // Per convention, the working file is always plain config.json.
       onStatusUpdate('System: Choose where to save the new working copy...');
-      String? savePath = await FilePicker.saveFile(
+      String? savePath = await saveFileCompat(
         dialogTitle: 'Save Downloaded Config As (new working file)',
         fileName: 'config.json',
         type: FileType.custom,
@@ -8011,12 +8220,13 @@ class AppStateProvider extends ChangeNotifier {
       // Remember the working file so 'Apply Changes' in the raw editor can
       // save back to it directly.
       currentConfigPath = savePath;
+      _moveLooseRoomFiles();
 
-      // Backup the pristine download next to the working copy, then load it
+      // Backup the pristine download in the room's folder, then load it
       await _processLoadedConfig(
         originalContents: originalContents,
         parsedConfig: parsedConfig,
-        backupDirectory: File(savePath).parent.path,
+        backupDirectory: roomFolderPath(savePath),
         sourceLabel: 'SFTP download from $ipAddress -> $savePath',
         backupBaseName: backupBase.isNotEmpty ? backupBase : null,
         // Change log matches the backup name: e.g. BSS103_backup_log.txt
@@ -8032,6 +8242,19 @@ class AppStateProvider extends ChangeNotifier {
     } finally {
       try { if (tempDir != null && await tempDir.exists()) await tempDir.delete(recursive: true); } catch (_) {}
     }
+  }
+
+  /// A backup named for the room's identity rather than its file, left loose
+  /// beside the config by an older build, moved into [folder].
+  void _moveLooseBackup(String name, String folder) {
+    if (currentConfigPath.isEmpty) return;
+    final loose = path.join(path.dirname(currentConfigPath), name);
+    if (path.equals(path.dirname(loose), folder)) return;
+    try {
+      if (moveIntoRoomFolder(loose, folder)) {
+        AppLogger.logInfo('Moved $name into ${path.basename(folder)}.');
+      }
+    } catch (_) {}
   }
 
   /// Shared pipeline for any incoming config (local file or SFTP download):
@@ -8113,8 +8336,10 @@ class AppStateProvider extends ChangeNotifier {
         backupFileName = '${base}_old_config.json';
       }
       final backupFilePath = path.join(backupDirectory, backupFileName);
+      _moveLooseBackup(backupFileName, backupDirectory);
 
       // Write the exact original string to disk so no formatting is lost
+      await Directory(backupDirectory).create(recursive: true);
       await File(backupFilePath).writeAsString(originalContents);
 
       AppLogger.logInfo("Created backup of original config at $backupFilePath");
@@ -8267,6 +8492,8 @@ class AppStateProvider extends ChangeNotifier {
         logBase = '${bldgAbbreviation(bldg)}_$room';
       }
       final changeLogPath = path.join(backupDirectory, '${logBase}_backup_log.txt');
+      _moveLooseBackup('${logBase}_backup_log.txt', backupDirectory);
+      await Directory(backupDirectory).create(recursive: true);
       await AppLogger.writeChangeLog(
           changeLogPath, sourceLabel, List<String>.from(systemLogs));
       systemLogs.add("CHANGE LOG: Details saved to '${logBase}_backup_log.txt'");
@@ -8663,6 +8890,29 @@ class AppStateProvider extends ChangeNotifier {
     return added;
   }
 
+  /// Points every shared setting at [kSharedRootFolder]: the Root Folder is
+  /// set to it and each file or folder chosen elsewhere is cleared, so it is
+  /// read from there. The log folder and the online folder are left alone.
+  Future<void> useSharedFolderForAll() async {
+    modulesPath = '';
+    processorsFilePath = '';
+    buildingsFilePath = '';
+    templateFilePath = '';
+    uiSchemaPath = '';
+    keyMapPath = '';
+    avDevicesFilePath = '';
+    flowRulesFilePath = '';
+    deliveryLocationsFilePath = '';
+    vendorListFilePath = '';
+    documentationPath = '';
+    specSheetFolder = '';
+    classSchedulePath = '';
+    classSchedule = ClassScheduleIndex.empty;
+    // Reloads everything that runs on a default, modules included, and saves.
+    await updateSetting('rootFolderPath', kSharedRootFolder);
+    AppLogger.logInfo('All settings pointed at $kSharedRootFolder.');
+  }
+
   /// Updates a setting in memory and saves app_config.json simultaneously
   Future<void> updateSetting(String key, String value) async {
     switch (key) {
@@ -8693,14 +8943,25 @@ class AppStateProvider extends ChangeNotifier {
         loadAvDeviceLibrary();
         // ignore: unawaited_futures
         loadFlowRules();
+        // These four remember the file they were read from, so they are
+        // pointed at the new root rather than re-read from the old one.
         // ignore: unawaited_futures
-        loadLaborRates();
+        loadLaborRates(
+            explicitPath: path.join(effectiveRootFolder, 'labor_rates.json'));
         // ignore: unawaited_futures
-        loadBaseCosts();
-        // ignore: unawaited_futures
-        loadDeliveryLocations();
-        // ignore: unawaited_futures
-        loadVendorBook();
+        loadBaseCosts(
+            explicitPath: path.join(effectiveRootFolder, 'base_costs.json'));
+        if (deliveryLocationsFilePath.isEmpty) {
+          // ignore: unawaited_futures
+          loadDeliveryLocations(
+              explicitPath:
+                  path.join(effectiveRootFolder, 'delivery_locations.json'));
+        }
+        if (vendorListFilePath.isEmpty) {
+          // ignore: unawaited_futures
+          loadVendorBook(
+              explicitPath: path.join(effectiveRootFolder, 'vendor_list.json'));
+        }
         // ignore: unawaited_futures
         loadBuildingsList();
         // ignore: unawaited_futures
@@ -8758,6 +9019,10 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'specSheetFolder':
         specSheetFolder = value; // resolved on demand, like the manuals
+        break;
+      case 'logFolderPath':
+        logFolderPath = value.trim();
+        AppLogger.setLogFolder(logFolderPath);
         break;
       case 'classSchedulePath':
         classSchedulePath = value;
@@ -8884,12 +9149,11 @@ class AppStateProvider extends ChangeNotifier {
             ? effectiveUiSchemaPath
             : uiSchema.source);
     try {
-      final file = File(target);
-      await file.parent.create(recursive: true);
-      await file.writeAsString(
-          const JsonEncoder.withIndent('  ').convert(uiSchema.rawDoc));
+      final saved = await saveSharedJson(target, uiSchema.rawDoc);
       uiSchema.source = target;
       AppLogger.logInfo('UI schema saved to $target.');
+      // Somebody else's fields came in with the merge: read them.
+      if (saved.tookTheirs) await loadUiSchema();
       notifyListeners();
       return target;
     } catch (e, stack) {
@@ -9056,6 +9320,10 @@ class AppStateProvider extends ChangeNotifier {
   /// Writes the rule book. Returns the file written, or '' on failure.
   Future<String> saveFlowRules() async {
     final saved = await flowRules.save(effectiveFlowRulesPath);
+    // Somebody else's rules came in with the merge: read them.
+    if (saved.isNotEmpty && flowRules.lastSaveTookTheirs) {
+      await loadFlowRules();
+    }
     notifyListeners();
     return saved;
   }
@@ -9091,6 +9359,9 @@ class AppStateProvider extends ChangeNotifier {
   /// Writes the rate card. Returns the file written, or '' on failure.
   Future<String> saveLaborRates() async {
     final saved = await laborRates.save(toPath: effectiveLaborRatesPath);
+    if (saved.isNotEmpty && laborRates.lastSaveTookTheirs) {
+      await loadLaborRates(explicitPath: saved);
+    }
     notifyListeners();
     return saved;
   }
@@ -9116,6 +9387,9 @@ class AppStateProvider extends ChangeNotifier {
   /// Writes the base cost card. Returns the file written, or '' on failure.
   Future<String> saveBaseCosts() async {
     final saved = await baseCosts.save(toPath: effectiveBaseCostsPath);
+    if (saved.isNotEmpty && baseCosts.lastSaveTookTheirs) {
+      await loadBaseCosts(explicitPath: saved);
+    }
     notifyListeners();
     return saved;
   }
@@ -9148,6 +9422,9 @@ class AppStateProvider extends ChangeNotifier {
     final saved = await deliveryLocations.save(
       toPath: effectiveDeliveryLocationsPath,
     );
+    if (saved.isNotEmpty && deliveryLocations.lastSaveTookTheirs) {
+      await loadDeliveryLocations(explicitPath: saved);
+    }
     notifyListeners();
     return saved;
   }
@@ -9188,6 +9465,9 @@ class AppStateProvider extends ChangeNotifier {
   /// Writes the directory. Returns the file written, or '' on failure.
   Future<String> saveVendorBook() async {
     final saved = await vendorBook.save(toPath: effectiveVendorListPath);
+    if (saved.isNotEmpty && vendorBook.lastSaveTookTheirs) {
+      await loadVendorBook(explicitPath: saved);
+    }
     notifyListeners();
     return saved;
   }
@@ -9542,8 +9822,7 @@ class AppStateProvider extends ChangeNotifier {
       }
     }
     if (currentConfigPath.isNotEmpty) {
-      final stem = path
-          .basenameWithoutExtension(currentConfigPath)
+      final stem = roomStem(currentConfigPath)
           .replaceAll(RegExp(r'[_\- ]?config$', caseSensitive: false), '');
       final hit = unique(_processorKey(stem));
       if (hit != null) return hit;
@@ -10587,7 +10866,7 @@ class AppStateProvider extends ChangeNotifier {
             mode: ProcessStartMode.detached);
       } else {
         // No portable "select the file" on Linux desktops — open the folder.
-        return openInDesktop(folder);
+        return await openInDesktop(folder);
       }
       AppLogger.logInfo('Revealed $filePath');
       return null;
@@ -10778,15 +11057,10 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Where the pre-save backup of the working file lives: `<name>_previous.json`
-  /// beside it, the same sidecar convention
-  /// `<name>_control_schematic.json` follows.
+  /// in the room's folder, beside `<name>_control_schematic.json`.
   /// '' when the session has no working file yet.
-  String get saveBackupPath {
-    if (currentConfigPath.isEmpty) return '';
-    final dir = path.dirname(currentConfigPath);
-    final base = path.basenameWithoutExtension(currentConfigPath);
-    return path.join(dir, '${base}_previous.json');
-  }
+  String get saveBackupPath =>
+      roomFilePath(currentConfigPath, 'previous.json');
 
   /// The backup this session's last save actually wrote, so Undo can never
   /// offer a stale file: a backup left beside a DIFFERENT config (the path
@@ -10813,6 +11087,7 @@ class AppStateProvider extends ChangeNotifier {
       final source = File(currentConfigPath);
       // First save of a brand new file: nothing on disk to preserve yet.
       if (!await source.exists()) return;
+      ensureRoomFolder(currentConfigPath);
       await source.copy(target);
       _lastSaveBackupPath = target;
       AppLogger.logInfo('Backed up $currentConfigPath to $target');
@@ -11052,8 +11327,8 @@ class AppStateProvider extends ChangeNotifier {
       final defaultFileName = '${bldgAbbreviation(gveBldg.toString())}_${gveRoom}_config.json';
 
       // Prompt the user for a save location
-      String? outputFile = await FilePicker.saveFile(
-        dialogTitle: 'Save Room Configuration',
+      String? outputFile = await saveFileCompat(
+        dialogTitle: 'Save Room Configuration (saved as <room>\\config.json)',
         fileName: defaultFileName,
         type: FileType.custom,
         allowedExtensions: ['json'],
@@ -11064,6 +11339,17 @@ class AppStateProvider extends ChangeNotifier {
       // The dialog hands back exactly what was typed, so a name entered without
       // an extension would land as a file Windows can't associate with JSON.
       if (!outputFile.toLowerCase().endsWith('.json')) outputFile += '.json';
+      // Saved as <room>\config.json, the name the processor reads.
+      outputFile = folderLayoutPathFor(outputFile);
+      lastRoomSaveError = '';
+      if (File(outputFile).existsSync() &&
+          !path.equals(outputFile, currentConfigPath)) {
+        lastRoomSaveError =
+            '${path.basename(path.dirname(outputFile))} already holds a room. '
+            'Open that room, or save this one under another name.';
+        AppLogger.logError('Not saved: $outputFile already exists.');
+        return false;
+      }
       return await saveRoomConfigTo(outputFile);
     } catch (e, stack) {
       AppLogger.logError("Failed to export room configuration", e, stack);
@@ -11071,12 +11357,19 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  /// Why the last [exportRoomConfig] refused to save, for the screen.
+  String lastRoomSaveError = '';
+
   /// The file name a room is offered under - `ARTS_111_config.json`.
-  String get defaultRoomConfigFileName {
+  String get defaultRoomConfigFileName =>
+      '${defaultRoomFolderName}_config.json';
+
+  /// The folder a room is saved in - `ARTS_111`.
+  String get defaultRoomFolderName {
     final systemSetup = roomConfig['SYSTEM_SETUP'] ?? {};
     final gveBldg = systemSetup['gve_bldg'] ?? 'UNKNOWN_BLDG';
     final gveRoom = systemSetup['gve_room'] ?? 'UNKNOWN_ROOM';
-    return '${bldgAbbreviation(gveBldg.toString())}_${gveRoom}_config.json';
+    return '${bldgAbbreviation(gveBldg.toString())}_$gveRoom';
   }
 
   /// Saves the open room to [outputFile] with no dialog, and makes it the
@@ -11094,6 +11387,7 @@ class AppStateProvider extends ChangeNotifier {
       // Clean out unused devices and sort keys before saving
       Map<String, dynamic> exportData = _pruneConfig(roomConfig);
 
+      await targetFile.parent.create(recursive: true);
       await writeFileSafely(
           targetFile.path, encoder.convert(_sortJson(exportData)));
       AppLogger.logInfo("Config successfully saved to ${targetFile.path}");
@@ -11108,11 +11402,18 @@ class AppStateProvider extends ChangeNotifier {
       // and the Save Layout / Save AV Setup sidecars — have somewhere to live.
       // The synced-path markers move with it so the in-memory diagrams
       // survive instead of being reset as a "different config".
+      final previousPath = currentConfigPath;
       currentConfigPath = outputFile;
       _schematicSyncedPath = outputFile;
       _avFlowSyncedPath = outputFile;
+      if (previousPath != outputFile) _carryRoomImages(previousPath);
+      // A room saved for the first time gets its AV Flow file, drawn from the
+      // config with the defaults, whether or not the tab has been opened.
+      final newRoom = !File(avFlowSidecarPath).existsSync();
+      if (newRoom) drawAvFlowDefaults();
       // The diagrams and the cost estimate follow the config to its new home.
       await saveProjectSidecars();
+      if (newRoom && !hasAvFlow) await saveAvFlow();
       markRoomSaved();
       // The file this room is worked from from now on, so it is the one the
       // list should point at - not the one it was saved away from.
@@ -12833,13 +13134,34 @@ class AppStateProvider extends ChangeNotifier {
   //  than blocked. What is on disk stays where the last Save put it until
   //  somebody presses Save again.
 
-  final DocumentHistory _catalogHistory = DocumentHistory();
+  // Fewer steps than the other documents: each is the whole catalog, about
+  // 2 MB, and sixty of them each way was hundreds of MB in a long session.
+  final DocumentHistory _catalogHistory =
+      DocumentHistory(depth: kCatalogUndoDepth);
+
+  /// The catalog as last encoded for its history, and which catalog and
+  /// revision that was. Every notification in the app asks for a snapshot;
+  /// re-encoding 1,700 entries each time was what made typing anywhere lag.
+  ({AvDeviceLibrary library, int revision, String encoded})? _catalogSnap;
+
+  String _catalogSnapshot() {
+    final lib = avDeviceLibrary;
+    final cached = _catalogSnap;
+    if (cached != null &&
+        identical(cached.library, lib) &&
+        cached.revision == lib.revision) {
+      return cached.encoded;
+    }
+    final encoded = _encodeDoc(lib.toDoc(), _catalogHistory);
+    _catalogSnap = (library: lib, revision: lib.revision, encoded: encoded);
+    return encoded;
+  }
   final DocumentHistory _schemaHistory = DocumentHistory();
   final DocumentHistory _flowRulesHistory = DocumentHistory();
 
   late final UndoRecorder _catalogUndo = UndoRecorder(
     history: _catalogHistory,
-    snapshot: () => _encodeDoc(avDeviceLibrary.toDoc(), _catalogHistory),
+    snapshot: _catalogSnapshot,
     label: (before, after) => _docEditLabel(before, after, 'entries'),
   );
 
@@ -13107,6 +13429,7 @@ class AppStateProvider extends ChangeNotifier {
   Future<String> openProject(String file) async {
     try {
       final loaded = await BuildingProject.load(file);
+      final followed = _followMovedRooms(loaded, file);
       // EVERY ROOM READ FIRST, in the background. Pricing the job reads them
       // otherwise, one after another on the window's own thread, and on a
       // share that is a freeze of several seconds with nothing on screen.
@@ -13120,7 +13443,12 @@ class AppStateProvider extends ChangeNotifier {
       }
       project = loaded;
       currentProjectPath = file;
-      projectDirty = false;
+      // Saving writes the rooms' new folders into the job.
+      projectDirty = followed > 0;
+      if (followed > 0) {
+        AppLogger.logInfo('$followed room(s) on this job moved into their own '
+            'folders; save the project to keep the new links.');
+      }
       _projectStarted = true;
       _projectRooms
         ..clear()
@@ -14047,7 +14375,7 @@ class AppStateProvider extends ChangeNotifier {
       itemKey: 'manual:$manualId',
       itemName: line.name,
       field: 'Line item',
-      summary: 'replaced by ${path.basename(configPath)}',
+      summary: 'replaced by ${roomConfigDisplayName(configPath)}',
     );
     AppLogger.logInfo(
       'Line item "${line.name}" swapped for the room config $configPath.',
@@ -14516,6 +14844,7 @@ class AppStateProvider extends ChangeNotifier {
       final text = await f.exists() ? await f.readAsString() : '{}';
       final doc = Map<String, dynamic>.from(jsonDecode(text) as Map);
       edit(doc);
+      await f.parent.create(recursive: true);
       final indent = RegExp(r'\n( +)"').firstMatch(text)?.group(1) ?? '  ';
       await writeFileSafely(
         file,
@@ -14576,6 +14905,8 @@ class AppStateProvider extends ChangeNotifier {
         continue;
       }
 
+      // Written, so filed where the room is written now.
+      moveRoomFilesIntoFolder(absolute);
       final paths = roomSidecarPaths(absolute);
       var changed = false;
       if (price != null || (name != null && hit.kind == MasterPartKind.other)) {
@@ -17507,7 +17838,7 @@ class AppStateProvider extends ChangeNotifier {
     if (roomNeverSaved) {
       out.add('This room has never been saved - it has no file yet.');
     } else if (roomHasUnsavedChanges) {
-      out.add('${path.basename(currentConfigPath)} has edits that are not in '
+      out.add('${roomConfigDisplayName(currentConfigPath)} has edits that are not in '
           'the file - a field, a box on a drawing, a price, or all three.');
     }
     if (projectDirty) {

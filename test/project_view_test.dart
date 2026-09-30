@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/gestures.dart'
     show kDoubleTapMinTime, kDoubleTapTimeout;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;

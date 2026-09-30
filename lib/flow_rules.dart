@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as path;
 
+import 'shared_json.dart';
 import 'app_logger.dart';
 import 'av_flow_model.dart';
 import 'room_locations.dart';
@@ -1043,6 +1044,7 @@ class FlowRules {
           throw const FormatException(
               'Root of av_flow_rules.json must be an object.');
         }
+        rememberSharedJson(candidate, doc);
         final rules = FlowRules.fromJson(doc)..source = candidate;
         AppLogger.logInfo('AV flow rules loaded from $candidate.');
         return rules;
@@ -1058,13 +1060,15 @@ class FlowRules {
     return FlowRules.builtIn();
   }
 
+  /// True when the last save merged in somebody else's changes, so this copy
+  /// should be read again. See shared_json.dart.
+  bool lastSaveTookTheirs = false;
+
   /// Writes the rule book. Returns the path written, or '' on failure.
   Future<String> save(String targetPath) async {
     try {
-      final file = File(targetPath);
-      await file.parent.create(recursive: true);
-      await file.writeAsString(
-          const JsonEncoder.withIndent('  ').convert(toJson()));
+      lastSaveTookTheirs =
+          (await saveSharedJson(targetPath, toJson())).tookTheirs;
       source = targetPath;
       AppLogger.logInfo('AV flow rules saved to $targetPath.');
       return targetPath;

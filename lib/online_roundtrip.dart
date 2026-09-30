@@ -71,11 +71,41 @@ typedef MasterEdit = ({
   double? unitPrice,
 });
 
+/// Every row id [line] could have been published under. The key moves when the
+/// catalog gives a part a part number or a model, so a workbook published
+/// before that still names the part by an older key.
+List<String> _rowIdsFor(MasterPartLine line) {
+  final kind = line.key.split('|').first;
+  return [
+    masterRowId(line.key),
+    masterRowId(masterPartKey(
+      kind: kind,
+      partNumber: line.partNumber,
+      model: line.model,
+      manufacturer: line.manufacturer,
+      description: line.description,
+    )),
+    masterRowId(masterPartKey(
+      kind: kind,
+      model: line.model,
+      manufacturer: line.manufacturer,
+      description: line.description,
+    )),
+    masterRowId(masterPartKey(
+      kind: kind,
+      manufacturer: line.manufacturer,
+      description: line.description,
+    )),
+  ];
+}
+
 /// What changed on the Core Components sheet against [master], by row id.
 ///
-/// A row whose id the job does not know is skipped: it is a part that has
-/// left the job, or a line somebody typed, and neither is a price for
-/// anything. A price that is not a number is left alone and reported.
+/// A row is found by its id, under any key the part could have had, then by
+/// its model or part number when those name exactly one part. A row found by
+/// none of them is left alone and reported, so an out-of-date workbook never
+/// reads as "nothing changed". A price that is not a number is left alone and
+/// reported.
 List<MasterEdit> readMasterEdits(
   Map<String, List<List<String>>> sheets,
   List<MasterPartLine> master,
@@ -83,8 +113,23 @@ List<MasterEdit> readMasterEdits(
 ) {
   final grid = sheets[kMasterSheet];
   if (grid == null) return const [];
-  final byId = {for (final l in master) masterRowId(l.key): l};
+  final byId = <String, MasterPartLine>{};
+  // Current keys first, so an older key never takes a row from its owner.
+  for (final l in master) {
+    byId[masterRowId(l.key)] = l;
+  }
+  for (final l in master) {
+    for (final id in _rowIdsFor(l)) {
+      byId.putIfAbsent(id, () => l);
+    }
+  }
+  MasterPartLine? only(bool Function(MasterPartLine) test) {
+    final hits = master.where(test).toList();
+    return hits.length == 1 ? hits.single : null;
+  }
+
   final out = <MasterEdit>[];
+  final unmatched = <String>[];
   Map<String, int>? cols;
   String cell(List<String> row, String name) {
     final c = cols![name];
@@ -99,8 +144,22 @@ List<MasterEdit> readMasterEdits(
       continue;
     }
     if (cols == null) continue;
-    final line = byId[cell(row, 'Row id')];
-    if (line == null) continue;
+    final rowId = cell(row, 'Row id');
+    if (rowId.isEmpty) continue;
+    final byModel = cell(row, 'Model').toLowerCase();
+    final byNumber = cell(row, 'Part number').toLowerCase();
+    final line = byId[rowId] ??
+        (byModel.isEmpty
+            ? null
+            : only((l) => l.model.trim().toLowerCase() == byModel)) ??
+        (byNumber.isEmpty
+            ? null
+            : only((l) => l.partNumber.trim().toLowerCase() == byNumber));
+    if (line == null) {
+      final label = cell(row, 'Part');
+      unmatched.add(label.isEmpty ? rowId : label);
+      continue;
+    }
 
     final name = cell(row, 'Part');
     final model = cell(row, 'Model');
@@ -139,6 +198,16 @@ List<MasterEdit> readMasterEdits(
         edit.unitPrice != null) {
       out.add(edit);
     }
+  }
+  if (unmatched.isNotEmpty) {
+    problems.add(
+      '${unmatched.length} row${unmatched.length == 1 ? '' : 's'} on '
+      '$kMasterSheet could not be matched to a part on this job, so '
+      '${unmatched.length == 1 ? 'it was' : 'they were'} left alone: '
+      '${unmatched.take(6).join(', ')}'
+      '${unmatched.length > 6 ? ', and ${unmatched.length - 6} more' : ''}. '
+      'Publish again to get a copy that lines up with the job.',
+    );
   }
   return out;
 }

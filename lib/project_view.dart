@@ -3,11 +3,12 @@ import 'dart:math' as math;
 import 'dart:ui' as ui show lerpDouble;
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_device_library.dart'
@@ -1491,7 +1492,7 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
               children: [
                 FilledButton.tonalIcon(
                   onPressed: () async {
-                    final picked = await FilePicker.pickFiles(
+                    final picked = await pickFilesCompat(
                       dialogTitle: 'Add room configs to the project',
                       type: FileType.custom,
                       allowedExtensions: const ['json'],
@@ -5956,7 +5957,7 @@ class _AwardDialogState extends State<_AwardDialog> {
     final name =
         context.read<AppStateProvider>().project.vendorById(_vendorId)?.name ??
         'the vendor';
-    final picked = await FilePicker.pickFiles(
+    final picked = await pickFilesCompat(
       dialogTitle: 'Pick the order for $name',
     );
     final chosen = picked?.files.single.path;

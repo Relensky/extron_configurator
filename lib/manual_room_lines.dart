@@ -1,8 +1,8 @@
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
-import 'package:path/path.dart' as path;
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_device_library.dart' show PricingTier;
@@ -14,6 +14,7 @@ import 'manual_room_equipment.dart' show manualRoomEquipmentSummary;
 import 'manual_room_equipment_dialog.dart' show showManualRoomEquipment;
 import 'manual_rooms_dialog.dart' show showManualRoomForm;
 import 'project_schedule.dart' show formatScheduleDate;
+import 'room_sidecar.dart' show roomConfigDisplayName;
 import 'save_actions.dart'
     show attachDrawnRooms, buildAllLineItemRooms, buildRoomFromLineItem;
 
@@ -128,7 +129,7 @@ Future<void> buildRoomFromLine(BuildContext context, ManualRoom room) async {
 /// goes — in one step, so the two of them can never both be on the plan.
 Future<void> swapManualRoomLine(BuildContext context, ManualRoom room) async {
   final provider = context.read<AppStateProvider>();
-  final picked = await FilePicker.pickFiles(
+  final picked = await pickFilesCompat(
     dialogTitle: 'Which room config replaces ${room.name}?',
     type: FileType.custom,
     allowedExtensions: const ['json'],
@@ -146,7 +147,7 @@ Future<void> swapManualRoomLine(BuildContext context, ManualRoom room) async {
       duration: const Duration(seconds: 5),
       content: Text(
         error.isEmpty
-            ? '${room.name} is now ${path.basename(file)}. Its estimate is off '
+            ? '${room.name} is now ${roomConfigDisplayName(file)}. Its estimate is off '
                   'the plan and the room is priced from its own parts.'
             : error,
       ),

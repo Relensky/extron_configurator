@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
+import 'package:material_ui/material_ui.dart';
 
 import 'app_state.dart';
 import 'contrast.dart';
+import 'room_sidecar.dart' show roomConfigDisplayName;
 
 /// ============================================================================
 ///  SNACK BARS THAT ACTUALLY GO AWAY
@@ -185,7 +185,7 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showSavedFileSnack(
   messenger: ScaffoldMessenger.of(context),
   theme: Theme.of(context),
   provider: provider,
-  message: '$what saved as ${p.basename(savedPath)}',
+  message: '$what saved as ${roomConfigDisplayName(savedPath)}',
   savedPath: savedPath,
 );
 

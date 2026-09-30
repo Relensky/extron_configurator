@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:path/path.dart' as path;
 
 import 'app_logger.dart';
 import 'app_state.dart';
@@ -122,6 +121,9 @@ void _writeOverrides(String configPath, Set<String> keys, double price) {
     throw StateError('the config is not at $configPath');
   }
 
+  // Written, so filed where the room is written now.
+  moveRoomFilesIntoFolder(configPath);
+
   // What the room says now, through the same reader the estimate uses, so an
   // old-format room is understood exactly as it is elsewhere.
   final loaded = readRoomFromDisk(configPath);
@@ -198,5 +200,5 @@ List<String> roomsCarrying(AppStateProvider provider, MasterPartLine line) => [
         if ((line.lineKeysByRoom[ref.id] ?? const <String>{}).isNotEmpty)
           ref.label.trim().isNotEmpty
               ? ref.label.trim()
-              : path.basenameWithoutExtension(ref.configPath),
+              : roomStem(ref.configPath),
     ];

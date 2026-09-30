@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
@@ -50,8 +50,9 @@ void main() {
     File(configPath).writeAsStringSync(jsonEncode({
       'SYSTEM_SETUP': {'gui_full_room_name': name},
     }));
-    File(path.join(dir.path, '${stem}_config_av_flow.json'))
-        .writeAsStringSync(jsonEncode({
+    File(path.join(dir.path, '${stem}_config', '${stem}_config_av_flow.json'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync(jsonEncode({
       'nodes': [for (final n in nodes) n.toJson()],
     }));
     return configPath;
@@ -89,7 +90,7 @@ void main() {
       .firstWhere((l) => l.model.toLowerCase() == 'display x');
 
   double onDisk(String stem, String key) {
-    final f = File(path.join(dir.path, '${stem}_config_cost.json'));
+    final f = File(path.join(dir.path, '${stem}_config', '${stem}_config_cost.json'));
     if (!f.existsSync()) return -1;
     final doc = jsonDecode(f.readAsStringSync()) as Map;
     final cost = doc['cost'] as Map?;
@@ -122,7 +123,7 @@ void main() {
   group('save to catalog', () {
     test('prices every room from one figure, touching no room file', () async {
       final p = withProject();
-      final before = File(path.join(dir.path, 'a_config_cost.json'));
+      final before = File(path.join(dir.path, 'a_config', 'a_config_cost.json'));
       expect(before.existsSync(), isFalse);
 
       final saved = await priceInCatalog(
@@ -209,7 +210,7 @@ void main() {
       final key = line.lineKeysByRoom.values.first.first;
       expect(onDisk('a', key), 950);
       expect(onDisk('b', key), 950);
-      expect(File(path.join(dir.path, 'c_config_cost.json')).existsSync(),
+      expect(File(path.join(dir.path, 'c_config', 'c_config_cost.json')).existsSync(),
           isFalse,
           reason: 'Room C does not carry this part');
     });
@@ -244,7 +245,7 @@ void main() {
       expect(p.avCost.priceOverrides.values, contains(950.0));
       expect(p.roomHasUnsavedChanges, isTrue);
       // Its file still says nothing.
-      expect(File(path.join(dir.path, 'a_config_cost.json')).existsSync(),
+      expect(File(path.join(dir.path, 'a_config', 'a_config_cost.json')).existsSync(),
           isFalse);
     });
 

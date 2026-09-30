@@ -2,12 +2,13 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show compute;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_state.dart';
 import 'project_schedule.dart' show formatScheduleDate;
 import 'project_timeline_view.dart' show showProjectDatePicker;
+import 'room_sidecar.dart' show isRoomFolder, roomConfigDisplayName;
 
 /// ============================================================================
 ///  SETTING A JOB UP ON THE DAY IT STARTS
@@ -63,7 +64,7 @@ typedef NewProjectSetup = ({
 /// The room configs under [folder], deepest folder last, in a stable order.
 ///
 /// A ROOM CONFIG IS A FILE ENDING IN `config.json`. That catches both spellings
-/// this app writes — `BSS_101_config.json` beside the room's other files, and a
+/// this app writes — `BSS_101_config.json` with its own folder of files, and a
 /// bare `config.json` in a folder of its own — and it excludes everything that
 /// lives beside one: the sidecars are `_config_av_flow.json` and
 /// `_config_cost.json`, the job itself is `_project.json`, and none of them end
@@ -105,8 +106,12 @@ List<String> findRoomConfigs(
         final name = path.basename(entry.path).toLowerCase();
         if (!name.endsWith('config.json')) continue;
         if (name == 'app_config.json') continue;
+        // The conversion backup; a loose one is from before room folders.
+        if (name.endsWith('_old_config.json')) continue;
         out.add(entry.path);
-      } else if (entry is Directory && depth < maxDepth) {
+      } else if (entry is Directory &&
+          depth < maxDepth &&
+          !isRoomFolder(entry.path)) {
         walk(entry, depth + 1);
       }
     }
@@ -482,11 +487,11 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                     children: [
                       for (final room in _rooms.keys)
                         CheckboxListTile(
-                          key: ValueKey('setup_room_${path.basename(room)}'),
+                          key: ValueKey('setup_room_${roomConfigDisplayName(room)}'),
                           dense: true,
                           value: _rooms[room] ?? false,
                           title: Text(
-                            path.basename(room),
+                            roomConfigDisplayName(room),
                             style: theme.textTheme.bodySmall,
                             overflow: TextOverflow.ellipsis,
                           ),
