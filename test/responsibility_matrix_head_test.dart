@@ -60,6 +60,32 @@ void main() {
     matching: find.text(scope),
   );
 
+  testWidgets('a scope column is widened by dragging its edge', (tester) async {
+    final p = withMatrix();
+    await pumpPane(tester, p);
+    final first = p.project.responsibility.first;
+    final second = p.project.responsibility[1];
+    final head = find.byKey(ValueKey('matrix_head_${first.id}'));
+    final before = tester.getSize(head).width;
+    final neighbor = tester.getSize(
+      find.byKey(ValueKey('matrix_head_${second.id}')),
+    ).width;
+
+    await tester.drag(
+      find.byKey(ValueKey('matrix_resize_${first.id}')),
+      const Offset(80, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(p.project.responsibilityColumnWidths[first.id], isNotNull);
+    expect(tester.getSize(head).width, greaterThan(before));
+    // Only that column: its neighbor's share of the sheet did not grow.
+    expect(
+      tester.getSize(find.byKey(ValueKey('matrix_head_${second.id}'))).width,
+      lessThanOrEqualTo(neighbor),
+    );
+  });
+
   group('the grip and the name are stacked, not side by side', () {
     testWidgets('the grip is above the name and both start at the same edge', (
       tester,

@@ -238,9 +238,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Add from catalog').first);
+    await tester.tap(find.byKey(const ValueKey('cost_add_equipment')));
     await tester.pumpAndSettle();
-    expect(find.text('Add equipment'), findsOneWidget);
+    expect(find.byKey(const ValueKey('add_part_note')), findsOneWidget);
 
     await tester.enterText(
       find.widgetWithText(TextField, 'Search the device catalog'),
@@ -287,7 +287,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Add from catalog').first);
+      await tester.tap(find.byKey(const ValueKey('cost_add_equipment')));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.widgetWithText(TextField, 'Search the device catalog'),

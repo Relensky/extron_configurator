@@ -562,8 +562,8 @@ ProjectBriefing buildProjectBriefing({
     lines.add(BriefingLine(
       urgency: BriefingUrgency.open,
       message: estimate.unpricedParts == 1
-          ? '1 part has no price anywhere on the job'
-          : '${estimate.unpricedParts} parts have no price anywhere on the job',
+          ? '1 part is missing pricing'
+          : '${estimate.unpricedParts} parts are missing pricing',
       pane: BriefingPane.parts,
       detail: _some([
         for (final l in estimate.master)
@@ -576,9 +576,9 @@ ProjectBriefing buildProjectBriefing({
     lines.add(BriefingLine(
       urgency: BriefingUrgency.open,
       message: estimate.untaggedParts == 1
-          ? '1 part is in no buying package, so it is on no quote request'
-          : '${estimate.untaggedParts} parts are in no buying package, so '
-              'they are on no quote request',
+          ? '1 item is missing a vendor and will not be tracked'
+          : '${estimate.untaggedParts} items are missing a vendor and will '
+              'not be tracked',
       pane: BriefingPane.vendors,
       detail: _some([
         for (final l in estimate.master)

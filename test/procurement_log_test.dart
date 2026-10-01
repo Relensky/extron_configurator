@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:extron_configurator/building_project.dart';
@@ -67,5 +70,71 @@ void main() {
     }
     expect(parseTypedDate('2/30/2027'), isNull);
     expect(parseTypedDate('soon'), isNull);
+  });
+
+  test('column colors are kept with the project and reach the spreadsheet', () {
+    final project = BuildingProject(
+      procurement: [entry],
+      procurementColors: {'status': 0xFF123456},
+    );
+    final back = BuildingProject.fromJson(project.toJson());
+    expect(back.procurementColors, {'status': 0xFF123456});
+
+    final status = kProcurementColumnSpecs.firstWhere((c) => c.id == 'status');
+    expect(procurementColumnColor(status, back.procurementColors), 0xFF123456);
+    final company =
+        kProcurementColumnSpecs.firstWhere((c) => c.id == 'company');
+    expect(
+      procurementColumnColor(company, back.procurementColors),
+      ProcurementGroup.item.color,
+    );
+    // White on a dark color, dark on a light one.
+    expect(procurementInkFor(0xFF123456), 0xFFFFFFFF);
+    expect(procurementInkFor(0xFFFFE0B2), 0xFF1F2933);
+
+    final archive = ZipDecoder().decodeBytes(
+      buildXlsx([
+        procurementLogSheet('HIL', [entry], colors: back.procurementColors),
+      ]),
+    );
+    final styles = utf8.decode(
+      archive.files.firstWhere((f) => f.name == 'xl/styles.xml').content
+          as List<int>,
+    );
+    expect(styles, contains('FF123456'));
+  });
+
+  test('the columns go in the order the job keeps them', () {
+    final ids = [
+      for (final c in orderedProcurementColumns(['status', 'device'])) c.id,
+    ];
+    expect(ids.take(3), ['status', 'device', 'company']);
+    expect(ids, hasLength(kProcurementColumnSpecs.length));
+
+    final sections = procurementLogSections([entry], order: ['status']);
+    expect(sections.single.header.first, 'Status');
+    expect(sections.single.rows.single.first, 'Submitted to DPR');
+
+    final project = BuildingProject(procurementColumnOrder: ['notes']);
+    expect(
+      BuildingProject.fromJson(project.toJson()).procurementColumnOrder,
+      ['notes'],
+    );
+  });
+
+  test('a renamed column keeps its name in the project and the export', () {
+    final project = BuildingProject(
+      procurementColumnLabels: {'status': 'Submittal status'},
+    );
+    final back = BuildingProject.fromJson(project.toJson());
+    expect(back.procurementColumnLabels, {'status': 'Submittal status'});
+
+    final sections = procurementLogSections(
+      [entry],
+      labels: back.procurementColumnLabels,
+    );
+    expect(sections.single.header, contains('Submittal status'));
+    expect(sections.single.header, isNot(contains('Status')));
+    expect(sections.single.header, contains('Company'));
   });
 }

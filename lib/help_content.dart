@@ -1457,14 +1457,14 @@ const List<HelpTopic> kHelpTopics = [
         'the rooms estimate as planned" drops that figure in as a line.',
   ),
   HelpTopic(
-    title: 'Install windows',
+    title: 'Maintenance windows',
     section: 'The job',
-    where: 'Project tab → Timeline → Install windows → Find install windows...',
+    where: 'Project tab → Timeline → Maintenance windows → Find maintenance windows...',
     plain:
         'When each room on the job is free to work in, read off the class '
         'schedule, drawn as a timeline of classes and free time. Click a '
         'free window to put it on the timeline.',
-    keywords: ['install window', 'class schedule', 'free time', 'gap',
+    keywords: ['maintenance window', 'class schedule', 'free time', 'gap',
       'calendar', 'when is the room free', 'facilities', 'cts dashboard'],
     body:
         'Reads the Facilities class schedule export '
@@ -1482,7 +1482,7 @@ const List<HelpTopic> kHelpTopics = [
         'annotate and save. Export saves the classes, free windows and '
         'planned windows as Excel or text, or copies them.\n\n'
         'Click a window to add it to the job; it shows on the Timeline pane, '
-        'as "Install - <room number>" on the dates line, and in the Order '
+        'as "Maintenance - <room number>" on the dates line, and in the Order '
         'Timeline sheet of the project workbook, and is saved with the '
         'project. Click it again, or the X on the '
         'timeline, to take it off. A room the schedule does not know is marked '

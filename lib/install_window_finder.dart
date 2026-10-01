@@ -317,7 +317,7 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Find install windows'),
+        title: const Text('Find maintenance windows'),
         leading: IconButton(
           key: const ValueKey('install_finder_close'),
           icon: const Icon(Icons.close),
@@ -640,7 +640,7 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
 
   String _reportTitle(AppStateProvider provider) {
     final job = provider.project.name.trim();
-    return 'Install windows${job.isEmpty ? '' : ' - $job'} - $_rangeLabel';
+    return 'Maintenance windows${job.isEmpty ? '' : ' - $job'} - $_rangeLabel';
   }
 
   String _fileStem(AppStateProvider provider) {
@@ -694,7 +694,7 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
                 day(d.day),
                 picked.contains(
                         _slotKey(r.id, g.day, g.startMinutes, g.endMinutes))
-                    ? 'Planned install window'
+                    ? 'Planned maintenance window'
                     : g.wholeDay
                         ? 'Free all day'
                         : 'Free',
@@ -715,7 +715,7 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
     return [
       if (planned.isNotEmpty)
         (
-          title: 'Planned install windows',
+          title: 'Planned maintenance windows',
           header: const ['Room', 'Date', 'Day', 'Start', 'End', 'Length'],
           rows: [
             for (final w in planned)
@@ -751,12 +751,12 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
       await Clipboard.setData(
           ClipboardData(text: renderTextReport(title, sections)));
       messenger.showSnackBar(const SnackBar(
-          content: Text('Install windows copied to the clipboard.')));
+          content: Text('Maintenance windows copied to the clipboard.')));
       return;
     }
     final ext = what == 'xlsx' ? 'xlsx' : 'txt';
     String? file = await saveFileCompat(
-      dialogTitle: 'Save install windows',
+      dialogTitle: 'Save maintenance windows',
       fileName: '${_fileStem(provider)}.$ext',
       type: FileType.custom,
       allowedExtensions: [ext],
@@ -767,7 +767,7 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
       if (ext == 'xlsx') {
         await File(file).writeAsBytes(buildXlsx([
           buildStackedReportSheet(
-            sheetName: 'Install windows',
+            sheetName: 'Maintenance windows',
             title: title,
             sections: sections,
           ),
@@ -779,12 +779,12 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
         messenger: messenger,
         theme: theme,
         provider: provider,
-        message: 'Install windows saved as ${path.basename(file)}',
+        message: 'Maintenance windows saved as ${path.basename(file)}',
         savedPath: file,
       );
     } catch (e) {
       messenger.showSnackBar(SnackBar(
-        content: Text('Failed to save the install windows: $e'),
+        content: Text('Failed to save the maintenance windows: $e'),
         backgroundColor: snackErrorFillOn(messenger),
       ));
     }
@@ -1378,7 +1378,7 @@ class _Legend extends StatelessWidget {
         swatch(_freeFill(isDark), _freeInk(isDark).withValues(alpha: 0.45),
             picture ? 'Free' : 'Free - click to add'),
         swatch(scheme.primary, scheme.primary,
-            picture ? 'Planned install window' : 'On the timeline'),
+            picture ? 'Planned maintenance window' : 'On the timeline'),
       ],
     );
   }
@@ -1416,14 +1416,14 @@ class InstallWindowsCard extends StatelessWidget {
                     children: [
                       const Icon(Icons.event_available),
                       const SizedBox(width: 8),
-                      Text('Install windows',
+                      Text('Maintenance windows',
                           style: theme.textTheme.titleMedium),
                     ],
                   ),
                   FilledButton.tonalIcon(
                     key: const ValueKey('find_install_windows'),
                     icon: const Icon(Icons.search, size: 18),
-                    label: const Text('Find install windows...'),
+                    label: const Text('Find maintenance windows...'),
                     onPressed: () => showInstallWindowFinder(context),
                   ),
                 ],
@@ -1431,7 +1431,7 @@ class InstallWindowsCard extends StatelessWidget {
               const SizedBox(height: 6),
               if (windows.isEmpty)
                 Text(
-                  'None yet. Find install windows reads the class schedule '
+                  'None yet. Find maintenance windows reads the class schedule '
                   'and shows when each room on this job is free; click a '
                   'window to put it here.',
                   style: theme.textTheme.bodySmall,

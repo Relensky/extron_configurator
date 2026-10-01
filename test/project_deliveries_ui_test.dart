@@ -51,6 +51,84 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('the search finds deliveries by item and by PO number', (
+    tester,
+  ) async {
+    final p = withProject();
+    p.addProjectPo(number: 'PO-1001');
+    p.addProjectPo(number: 'PO-2002');
+    final plate = p.addProjectDelivery(
+      itemName: 'Wall plate',
+      qty: 6,
+      poNumber: 'PO-1001',
+    );
+    final mic = p.addProjectDelivery(
+      itemName: 'Ceiling mic',
+      qty: 2,
+      poNumber: 'PO-2002',
+    );
+    await pumpPane(tester, p);
+    Finder card(String id) => find.byKey(ValueKey('delivery_card_$id'));
+    expect(card(plate.id), findsOneWidget);
+    expect(card(mic.id), findsOneWidget);
+
+    // By what it is.
+    await tester.enterText(find.byKey(const ValueKey('delivery_search')), 'mic');
+    await tester.pumpAndSettle();
+    expect(card(mic.id), findsOneWidget);
+    expect(card(plate.id), findsNothing);
+
+    // By the PO it came on - which also narrows the PO list.
+    await tester.enterText(
+      find.byKey(const ValueKey('delivery_search')),
+      '1001',
+    );
+    await tester.pumpAndSettle();
+    expect(card(plate.id), findsOneWidget);
+    expect(card(mic.id), findsNothing);
+    expect(find.text('PURCHASE ORDERS (1 of 2)'), findsOneWidget);
+  });
+
+  testWidgets('a delivery folds to its heading, and they all fold at once', (
+    tester,
+  ) async {
+    final p = withProject();
+    final plate = p.addProjectDelivery(itemName: 'Wall plate', qty: 6);
+    final mic = p.addProjectDelivery(itemName: 'Ceiling mic', qty: 2);
+    await pumpPane(tester, p);
+
+    // Open: the where-it-is buttons are on the card.
+    Finder where(String id) => find.descendant(
+      of: find.byKey(ValueKey('delivery_card_$id')),
+      matching: find.byType(SegmentedButton<DeliveryState>),
+    );
+    final openCards = where(plate.id).evaluate().length;
+
+    await tester.tap(find.byKey(ValueKey('delivery_fold_${plate.id}')));
+    await tester.pumpAndSettle();
+    expect(where(plate.id).evaluate().length, lessThan(openCards + 1));
+    // Still named, on its heading line.
+    expect(find.text('6 x Wall plate'), findsOneWidget);
+    final foldedHeight =
+        tester.getSize(find.byKey(ValueKey('delivery_card_${plate.id}'))).height;
+    final openHeight =
+        tester.getSize(find.byKey(ValueKey('delivery_card_${mic.id}'))).height;
+    expect(foldedHeight, lessThan(openHeight));
+
+    await tester.tap(find.byKey(const ValueKey('delivery_collapse_all')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(ValueKey('delivery_card_${mic.id}'))).height,
+      closeTo(foldedHeight, 1),
+    );
+    expect(find.text('Expand all'), findsOneWidget);
+
+    // And the whole section folds away.
+    await tester.tap(find.byKey(const ValueKey('delivery_delivered_toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('delivery_card_${mic.id}')), findsNothing);
+  });
+
   testWidgets('a PO typed at the top is a PO the job keeps', (tester) async {
     final p = withProject();
     await pumpPane(tester, p);

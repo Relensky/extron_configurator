@@ -309,6 +309,23 @@ void main() {
       expect(find.text('Room B'), findsOneWidget);
     });
 
+    testWidgets('closes the open room from the menu, keeping the job',
+        (tester) async {
+      final p = withProject();
+      await tester.runAsync(
+        () => p.openProjectRoomRef(p.project.rooms.first),
+      );
+      await pump(tester, p);
+
+      await tester.tap(find.byKey(const ValueKey('room_picker_menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('room_picker_close')));
+      await tester.pumpAndSettle();
+      expect(p.currentConfigPath, isEmpty);
+      expect(p.project.rooms, isNotEmpty);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
     testWidgets('offers to save a room that is behind its file',
         (tester) async {
       final p = withProject();

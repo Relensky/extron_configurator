@@ -65,6 +65,12 @@ Color collabColorFor(String user) {
 String _clock(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
+/// True when [presence] has changed the document since opening it: work
+/// not saved yet, or a save made after they opened it.
+bool collabHasChanged(EditorPresence presence) =>
+    presence.unsaved ||
+    (presence.savedAt != null && presence.savedAt!.isAfter(presence.since));
+
 /// The people and pending saves for the page on screen, on the banner.
 class CollabPresenceStrip extends StatelessWidget {
   final AppTab tab;
@@ -86,6 +92,10 @@ class CollabPresenceStrip extends StatelessWidget {
             chips.add(_IncomingChip(kind: kind, incoming: incoming));
           }
           for (final other in collab.othersOn(kind)) {
+            // Only somebody who has CHANGED it. A colleague who merely has
+            // the file open is not editing it, and a chip for every reader
+            // made every open file look like it was being worked on.
+            if (!collabHasChanged(other)) continue;
             chips.add(CollabEditorAvatar(presence: other, kind: kind));
           }
         }

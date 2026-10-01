@@ -5,7 +5,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'pinned_grid.dart' show gridMetric;
-import 'save_actions.dart' show createProjectRoom;
+import 'save_actions.dart' show closeRoomFile, createProjectRoom;
 
 /// ============================================================================
 ///  THE ROOM PICKER IN THE TITLE BAR
@@ -217,6 +217,7 @@ class _RoomMenu extends StatelessWidget {
   /// Not a room id — those are always `room<n>` — so the last entry on the
   /// menu can never be mistaken for one of the rooms above it.
   static const String _newRoom = '<new-room>';
+  static const String _closeRoom = '<close-room>';
 
   final ProjectRoomRef? open;
   final List<ProjectRoomRef> rooms;
@@ -256,6 +257,11 @@ class _RoomMenu extends StatelessWidget {
         // the rooms are the answer nearly every time this is opened.
         if (id == _newRoom) {
           await createProjectRoom(context, provider);
+          return;
+        }
+        // Back to the job with no room open, asking about unsaved work first.
+        if (id == _closeRoom) {
+          await closeRoomFile(context, provider);
           return;
         }
         final ref = provider.project.roomById(id);
@@ -304,6 +310,18 @@ class _RoomMenu extends StatelessWidget {
             ),
           ),
         const PopupMenuDivider(),
+        PopupMenuItem(
+          key: const ValueKey('room_picker_close'),
+          value: _closeRoom,
+          enabled: open != null,
+          child: const ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.close, size: 18),
+            title: Text('Close this room'),
+            subtitle: Text('The project stays open'),
+          ),
+        ),
         const PopupMenuItem(
           value: _newRoom,
           child: ListTile(

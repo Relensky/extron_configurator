@@ -268,7 +268,7 @@ void main() {
     });
   });
 
-  group('install windows', () {
+  group('maintenance windows', () {
     InstallWindow window(DateTime day) => InstallWindow.create(
       roomId: 'r1',
       roomLabel: 'BSS 103 - Lecture Hall',
@@ -277,17 +277,44 @@ void main() {
       endMinutes: 12 * 60,
     );
 
-    testWidgets('an install window is on the rail with its room number', (
+    testWidgets('a maintenance window is on the rail with its room number', (
       tester,
     ) async {
       final it = job();
       it.project.installWindows.add(window(DateTime(2026, 3, 2)));
       await pump(tester, it);
       expect(find.byKey(const ValueKey('timeline_date_graph')), findsOneWidget);
-      expect(mark('Install - BSS 103'), findsOneWidget);
+      expect(mark('Maintenance - BSS 103'), findsOneWidget);
     });
 
-    test('the workbook timeline lists the install windows', () {
+    testWidgets('a to-do with a due date is on the rail, until it is done', (
+      tester,
+    ) async {
+      final it = job();
+      it.project.todos.addAll([
+        ProjectTodo(
+          id: 'todo1',
+          text: 'Confirm lead times',
+          created: DateTime(2026, 1, 5),
+          due: DateTime(2026, 3, 9),
+        ),
+        ProjectTodo(
+          id: 'todo2',
+          text: 'Already sorted',
+          created: DateTime(2026, 1, 5),
+          due: DateTime(2026, 3, 10),
+          state: ProjectTodoState.done,
+        ),
+        // No date: not a point on a calendar.
+        ProjectTodo(id: 'todo3', text: 'Sometime', created: DateTime(2026, 1, 5)),
+      ]);
+      await pump(tester, it);
+      expect(mark('To do - Confirm lead times'), findsOneWidget);
+      expect(mark('To do - Already sorted'), findsNothing);
+      expect(mark('To do - Sometime'), findsNothing);
+    });
+
+    test('the workbook timeline lists the maintenance windows', () {
       final it = job();
       it.project.installWindows.add(window(DateTime(2026, 3, 2)));
       final sections = projectTimelineSections(
@@ -295,7 +322,7 @@ void main() {
         asOf: asOf,
       );
       final windows = sections.singleWhere(
-        (s) => s.title.startsWith('Install windows'),
+        (s) => s.title.startsWith('Maintenance windows'),
       );
       expect(windows.rows.single, [
         formatScheduleDate(DateTime(2026, 3, 2)),

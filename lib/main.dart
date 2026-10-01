@@ -216,6 +216,7 @@ class RoomConfigApp extends StatelessWidget {
           auris: p.aurisColor,
           secondary: p.classicSecondary,
           textScale: p.textScale,
+          uiScale: p.uiScale,
         ));
 
     return MaterialApp(
@@ -242,7 +243,9 @@ class RoomConfigApp extends StatelessWidget {
       // App-wide text size (App Config > Text Size): scale every text style
       // by wrapping the whole app in a MediaQuery text scaler.
       navigatorKey: navigatorKey,
-      builder: (context, child) => MediaQuery(
+      builder: (context, child) => AppScale(
+        scale: theme.uiScale,
+        child: MediaQuery(
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.linear(theme.textScale),
         ),
@@ -256,6 +259,7 @@ class RoomConfigApp extends StatelessWidget {
           // ignore: deprecated_member_use
           child: _helpShortcuts(MaterialUiCompatibilityBridge(child: child!)),
         ),
+      ),
       ),
       home: const MainDashboard(),
     );
@@ -2837,16 +2841,61 @@ class AppSettingsView extends StatelessWidget {
         ],
         const SizedBox(height: 20),
 
+        // --- INTERFACE SIZE ---
+        // The whole window's scale, set here rather than by Windows' display
+        // scaling. See [AppScale].
+        Builder(builder: (context) {
+          const Map<String, String> sizes = {
+            '0': 'Follow Windows',
+            '0.5': '50%',
+            '0.6': '60%',
+            '0.7': '70%',
+            '0.75': '75%',
+            '0.8': '80%',
+            '0.9': '90%',
+            '1.0': '100%',
+            '1.1': '110%',
+            '1.25': '125%',
+            '1.5': '150%',
+            '1.75': '175%',
+            '2.0': '200%',
+          };
+          final String current = sizes.keys.firstWhere(
+              (k) => double.parse(k) == provider.uiScale,
+              orElse: () => '');
+          return DropdownButtonFormField<String>(
+            key: const ValueKey('ui_scale'),
+            decoration: const InputDecoration(
+              labelText: 'Interface Size',
+              helperText: 'Scales the whole window, whatever the Windows '
+                  'display scaling is. 100% is the size at Windows 100%.',
+              border: OutlineInputBorder(),
+            ),
+            initialValue: (current.isNotEmpty) ? current : null,
+            items: sizes.entries
+                .map((e) =>
+                    DropdownMenuItem(value: e.key, child: Text(e.value)))
+                .toList(),
+            onChanged: (val) {
+              if (val != null) provider.updateSetting('uiScale', val);
+            },
+          );
+        }),
+        const SizedBox(height: 20),
+
         // --- TEXT SIZE ---
         // App-wide text scale, applied via the MediaQuery text scaler that
         // wraps the MaterialApp. Persisted like every other setting.
         Builder(builder: (context) {
           const Map<String, String> sizes = {
+            '0.7': 'Tiny (70%)',
             '0.85': 'Small (85%)',
             '1.0': 'Normal (100%)',
             '1.15': 'Large (115%)',
             '1.3': 'Extra Large (130%)',
             '1.5': 'Huge (150%)',
+            '1.75': '175%',
+            '2.0': '200%',
           };
           // Match the stored double back to an option key; null (no
           // selection shown) if it was hand-set to something unlisted.
@@ -3252,7 +3301,7 @@ class AppSettingsView extends StatelessWidget {
             hintText: provider.effectiveClassSchedulePath,
             helperText: 'FacilitiesLinkClassScheduleDaily.csv - the same file '
                 'the CTS-Dashboard reads. Used by Project > Timeline > Find '
-                'install windows. Blank = that name in the Root Folder.',
+                'maintenance windows. Blank = that name in the Root Folder.',
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.upload_file),
@@ -5162,4 +5211,48 @@ class _ExportFab extends StatelessWidget {
       provider.googleClientId.trim().isEmpty
           ? 'Saves the .xlsx and opens Google Sheets to import it'
           : 'Straight into your Google Drive, as a Sheet';
+}
+
+
+/// Draws the app at [scale] physical pixels per logical pixel, whatever
+/// Windows' display scaling is, so the size is the one chosen in App Config.
+/// A [scale] of 0 or less leaves Windows' scaling in charge.
+class AppScale extends StatelessWidget {
+  final double scale;
+  final Widget child;
+
+  const AppScale({super.key, required this.scale, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    if (scale <= 0 || mq.devicePixelRatio <= 0) return child;
+    // How much bigger, in today's logical pixels, one of ours is.
+    final factor = scale / mq.devicePixelRatio;
+    if ((factor - 1).abs() < 0.001) return child;
+    final size = mq.size / factor;
+    return MediaQuery(
+      data: mq.copyWith(
+        size: size,
+        devicePixelRatio: scale,
+        padding: mq.padding / factor,
+        viewPadding: mq.viewPadding / factor,
+        viewInsets: mq.viewInsets / factor,
+      ),
+      child: ClipRect(
+        child: OverflowBox(
+          alignment: Alignment.topLeft,
+          minWidth: size.width,
+          maxWidth: size.width,
+          minHeight: size.height,
+          maxHeight: size.height,
+          child: Transform.scale(
+            scale: factor,
+            alignment: Alignment.topLeft,
+            child: SizedBox.fromSize(size: size, child: child),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -167,6 +167,26 @@ class _OnlineCopyDialog extends StatefulWidget {
 class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
   late String _folder = widget.provider.project.onlineFolder;
 
+  /// The folder, typed or picked. Editable, so a long path can be read and
+  /// fixed in place.
+  late final TextEditingController _folderText =
+      TextEditingController(text: _folder);
+
+  @override
+  void dispose() {
+    _folderText.dispose();
+    super.dispose();
+  }
+
+  /// Where the folder picker opens: the job's folder when it exists, else the
+  /// folder the project file is in.
+  String? get _startFolder {
+    final typed = _folder.trim();
+    if (typed.isNotEmpty && Directory(typed).existsSync()) return typed;
+    final projectPath = widget.provider.currentProjectPath;
+    return projectPath.isEmpty ? null : path.dirname(projectPath);
+  }
+
   /// Write the project file beside the workbook.
   ///
   /// On by default: it is what makes the folder enough to OPEN the job on
@@ -181,8 +201,10 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
   Future<void> _pickFolder() async {
     final picked = await FilePicker.getDirectoryPath(
       dialogTitle: 'Which folder does OneDrive or Google Drive sync?',
+      initialDirectory: _startFolder,
     );
     if (picked == null || !mounted) return;
+    _folderText.text = picked;
     setState(() => _folder = picked);
   }
 
@@ -324,25 +346,17 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
               Row(
                 children: [
                   Expanded(
-                    child: InputDecorator(
+                    child: TextField(
+                      key: const ValueKey('online_copy_folder'),
+                      controller: _folderText,
+                      enabled: !_busy,
                       decoration: const InputDecoration(
                         labelText: 'Folder',
+                        hintText: 'None picked yet - type a path or choose one',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
-                      child: Text(
-                        _folder.trim().isEmpty
-                            ? 'None picked yet'
-                            : _folder.trim(),
-                        key: const ValueKey('online_copy_folder'),
-                        overflow: TextOverflow.ellipsis,
-                        style: _folder.trim().isEmpty
-                            ? theme.textTheme.bodyMedium?.copyWith(
-                                fontStyle: FontStyle.italic,
-                                color: muted,
-                              )
-                            : theme.textTheme.bodyMedium,
-                      ),
+                      onChanged: (v) => setState(() => _folder = v),
                     ),
                   ),
                   const SizedBox(width: 8),

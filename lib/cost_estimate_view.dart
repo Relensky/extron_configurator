@@ -134,13 +134,17 @@ bool quotedModelIsControllable(AppStateProvider provider, String model) {
 /// The blank a row puts in a shared button slot it has nothing to put in.
 const Widget _rowSlotGap = SizedBox(width: kRowIconWidth, height: 34);
 
+/// How far the Model cell's text is held off the name beside it. The cell
+/// and the caption over it both use it, so the two stay in line.
+const double kModelCellInset = 8;
+
 const List<_Col> _kEquipmentCols = [
   // MIXED COLUMNS. A device off the diagram prints its name and its count as
   // plain text; a line added here has a box for both. Both cells carry the
   // box's inset (see [_CellText]), so the caption sits over either kind and
   // the two kinds of row line up with each other.
   _Col.field('Device', flex: 3),
-  _Col('Model', flex: 2),
+  _Col('Model', flex: 2, inset: kModelCellInset),
   // DRAWN, SPARES, TOTAL — the same three the cabling table has, for the same
   // reason. The drawing says how many the room has; a job often buys one more
   // than that, and the spare is real money no drawing will ever account for.
@@ -194,6 +198,9 @@ double _costPageMinWidth(bool shipping) => shipping ? 1000 : 880;
 /// The rack-hardware table's columns — see [_kEquipmentCols].
 const List<_Col> _kHardwareCols = [
   _Col('Item', flex: 3),
+  // Maker, model and part number, so a plate or a mount can be ordered off
+  // the row.
+  _Col('Model', flex: 2, inset: kModelCellInset),
   _Col('Kind', flex: 2),
   // Mixed, like the equipment table's: placed hardware prints
   // its count, a line added here has a box for it.
@@ -212,6 +219,7 @@ const List<_Col> _kHardwareCols = [
 /// quoted by hand.
 const List<_Col> _kCablingCols = [
   _Col('Cable type', flex: 3),
+  _Col('Model', flex: 2, inset: kModelCellInset),
   _Col('Drawn', width: 66, align: TextAlign.right),
   _Col.field('Spares', gap: 12, width: 80, numeric: true),
   _Col('Total', gap: 12, width: 54, align: TextAlign.right),
@@ -242,6 +250,7 @@ const List<_Col> _kLaborCols = [
 /// The other-items table's columns — see [_kEquipmentCols].
 const List<_Col> _kItemsCols = [
   _Col.field('Description', flex: 3),
+  _Col.field('Model', gap: 8, flex: 2, extraInset: kModelCellInset),
   _Col.field('Category', gap: 8, flex: 2),
   _Col.field('Qty', gap: 8, width: 70, numeric: true),
   _Col.field('Unit price', gap: 8, width: 130, numeric: true),
@@ -599,9 +608,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       // a scrollbar rather than rows cut off at the edge.
       child: MinWidthScroll(
         minWidth: _costPageMinWidth(settings.showShipping),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, kFloatingButtonClearance),
-          children: cardsIn(context),
+        // Every word on the page can be selected and copied, not only the
+        // ones in boxes.
+        child: SelectionArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              16,
+              12,
+              16,
+              kFloatingButtonClearance,
+            ),
+            children: cardsIn(context),
+          ),
         ),
       ),
     );
@@ -743,25 +761,46 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 SizedBox(
                   width: 130,
                   // Blank follows the project's rate, shown behind the box.
-                  child: LiveTextField(
-                    fieldId: 'taxPercent',
-                    initial: settings.ownTaxRate
-                        ? trimNumber(settings.taxPercent)
-                        : '',
-                    label: 'Tax rate',
-                    hint: trimNumber(provider.baseTaxPercent),
-                    hintIsValue: true,
-                    helper: settings.ownTaxRate
-                        ? 'This room only'
-                        : provider.openProjectRoom != null
-                            ? 'Project rate'
-                            : 'Default rate',
-                    suffix: '%',
-                    numeric: true,
-                    onChanged: (v) => v.trim().isEmpty
-                        ? provider.clearAvCostOwnTax()
-                        : provider.setAvCostTax(
-                            percent: double.tryParse(v) ?? 0),
+                  // Where the rate comes from is said ABOVE the box.
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 3),
+                        child: Text(
+                          // The rate itself, when it is not this room's own:
+                          // an empty box says nothing about what is charged.
+                          settings.ownTaxRate
+                              ? 'This room only'
+                              : provider.openProjectRoom != null
+                              ? 'Project rate: '
+                                    '${trimNumber(provider.baseTaxPercent)}%'
+                              : 'Default rate: '
+                                    '${trimNumber(provider.baseTaxPercent)}%',
+                          key: const ValueKey('cost_tax_source'),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: mutedInk(context, theme),
+                          ),
+                        ),
+                      ),
+                      LiveTextField(
+                        fieldId: 'taxPercent',
+                        initial: settings.ownTaxRate
+                            ? trimNumber(settings.taxPercent)
+                            : '',
+                        label: 'Tax rate',
+                        hint: trimNumber(provider.baseTaxPercent),
+                        hintIsValue: true,
+                        suffix: '%',
+                        numeric: true,
+                        onChanged: (v) => v.trim().isEmpty
+                            ? provider.clearAvCostOwnTax()
+                            : provider.setAvCostTax(
+                                percent: double.tryParse(v) ?? 0,
+                              ),
+                      ),
+                    ],
                   ),
                 ),
                 // WHAT THE PDF IS HEADED. 'CTS Estimate', 'Audio Visual
@@ -965,20 +1004,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       onSelected: provider.setAvCostShippingTaxable,
                     ),
                   ),
-                // Two ways on, the same pair the "Other items" card offers:
-                // off the catalog, so the price follows a revision; or a plain
-                // line for the box that has no catalog entry and a figure
-                // somebody was quoted over the phone.
+                // One way on: the dialog takes a catalog part, or just a name
+                // for a line whose details come later.
                 PrintHide(child: TextButton.icon(
-                  icon: const Icon(Icons.playlist_add, size: 16),
-                  label: const Text('Add from catalog'),
+                  key: const ValueKey('cost_add_equipment'),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add equipment'),
                   onPressed: () => _addExtraPart(context, provider,
                       kind: _ExtraPart.equipment),
-                )),
-                PrintHide(child: TextButton.icon(
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add line'),
-                  onPressed: () => provider.addAvCostExtraEquipment(),
                 )),
               ],
             ),
@@ -1029,12 +1062,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       // "Projector 1" says nothing without "PowerLite L630U"
                       // beside it - so either cell, cut off, hovers to both.
                       extra == null
-                          ? _CellText(
-                              line.description,
-                              hover: _rowIdentity(line),
-                            )
+                          ? _lineNameField(provider, line)
                           : LiveTextField(
                               fieldId: 'eqpdesc_${extra.id}',
+          lazy: true,
                               initial: extra.description,
                               hint: 'e.g. Owner-furnished display',
                               onChanged: (v) =>
@@ -1042,21 +1073,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 extra.copyWith(description: v),
                               ),
                             ),
-                      // Model
-                      _ModelCell(
-                        text: extra == null
-                            ? (line.model.isEmpty ? '-' : line.model)
-                            : [
-                                if (line.model.isNotEmpty) line.model,
-                                if (extra.spare)
-                                  'spare'
-                                else if (extra.noControl)
-                                  'not in the config'
-                                else
-                                  'not on the diagram',
-                              ].join(' · '),
-                        hover: _rowIdentity(line),
-                        color: mutedInk(context, theme),
+                      // Model: maker, model and part number
+                      _partCell(
+                        context,
+                        line: line,
+                        typed: extra,
+                        onEdit: provider.updateAvCostExtraEquipment,
+                        note: extra == null
+                            ? ''
+                            : extra.spare
+                            ? 'spare'
+                            : extra.noControl
+                            ? 'not in the config'
+                            : 'not on the diagram',
                       ),
                       // Qty: always editable. On a drawn line it is how many
                       // the quote buys; the drawing keeps its own count, shown
@@ -1121,17 +1150,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 ),
                               ),
                             ),
-                      // Spares. Only against a line the DIAGRAM counts: a
-                      // quoted line already has an editable quantity of its
-                      // own, and two boxes meaning the same thing on one row
-                      // is how a number gets typed into the wrong one.
+                      // Spares, on a drawn line and a quoted one alike: the Qty
+                      // beside it is what the room has, this is what the job
+                      // buys on top. A line that is itself marked a spare has
+                      // none of its own.
                       //
                       // The + and − beside it are how the quantity on a DRAWN
                       // line moves: the drawing says the room has three, and
                       // buying a fourth is a decision about the order rather
                       // than an edit to the room, so it lands here and the
                       // Total beside it follows.
-                      extra == null
+                      extra == null || !extra.spare
                           ? _qtyStepper(
                               value: line.spareQty,
                               what: line.description.trim().isEmpty
@@ -1470,13 +1499,27 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           ),
                           const SizedBox(width: 6),
                           Expanded(
-                            child: Text(
-                              line.description,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 13),
-                            ),
+                            child: extra == null
+                                ? _lineNameField(provider, line)
+                                : LiveTextField(
+                                    fieldId: 'hwdesc_${extra.id}',
+          lazy: true,
+                                    initial: extra.description,
+                                    hint: 'e.g. Spare 2U shelf',
+                                    onChanged: (v) =>
+                                        provider.updateAvCostExtraHardware(
+                                      extra.copyWith(description: v),
+                                    ),
+                                  ),
                           ),
                         ],
+                      ),
+                      // Model: maker, model and part number
+                      _partCell(
+                        context,
+                        line: line,
+                        typed: extra,
+                        onEdit: provider.updateAvCostExtraHardware,
                       ),
                       // Kind
                       Text(
@@ -1808,14 +1851,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(
-                                  line.description,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 13),
-                                ),
+                                child: _lineNameField(provider, line),
                               ),
                             ],
                           ),
+                          // Model
+                          _partCell(context, line: line),
                           // Drawn
                           Text(
                             trimNumber(runs),
@@ -1996,6 +2037,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               Expanded(
                                 child: LiveTextField(
                                   fieldId: 'cbldesc_${item.id}',
+          lazy: true,
                                   initial: item.description,
                                   hint: 'e.g. Cat6A spool, 1000 ft',
                                   onChanged: (v) =>
@@ -2005,6 +2047,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 ),
                               ),
                             ],
+                          ),
+                          // Model
+                          _partCell(
+                            context,
+                            line: line,
+                            typed: item,
+                            onEdit: provider.updateAvCostExtraCable,
                           ),
                           // Drawn — none of it is, which is the point.
                           Text(
@@ -2181,6 +2230,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final searchController = TextEditingController();
     final qtyController = TextEditingController(text: '1');
     final nameController = TextEditingController();
+    // For a part the catalog does not have: who makes it, what it is ordered
+    // as.
+    final makerController = TextEditingController();
+    final partController = TextEditingController();
     String? selectedModel;
     var placement = EquipmentPlacement.estimateOnly;
 
@@ -2195,7 +2248,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               _ExtraPart.equipment => 'Add equipment',
               _ExtraPart.cable => 'Add cable',
               _ExtraPart.hardware => 'Add rack hardware',
-              _ExtraPart.misc => 'Add a cost item',
+              _ExtraPart.misc => 'Add other items',
             }),
             content: SizedBox(
               width: 560,
@@ -2229,6 +2282,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             'Editor with "New cost item".',
                     },
                     style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Pick it from the catalog, or type a name below and fill '
+                    'in the maker, part number and price on the line later.',
+                    key: const ValueKey('add_part_note'),
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   TextField(
@@ -2346,11 +2408,40 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       ),
                     ],
                   ),
+                  if (selectedModel == null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            key: const ValueKey('add_part_maker'),
+                            controller: makerController,
+                            decoration: const InputDecoration(
+                              labelText: 'Manufacturer',
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            key: const ValueKey('add_part_number'),
+                            controller: partController,
+                            decoration: const InputDecoration(
+                              labelText: 'Part number',
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   Text(
                     selectedModel == null
-                        ? 'Nothing picked - it goes on by name, and you type '
-                              'its price on the line.'
+                        ? 'Nothing picked - it goes on by name. Its maker, '
+                              'part number and price can be filled in on the '
+                              'line.'
                         : 'Priced from the catalog: $selectedModel',
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
@@ -2390,11 +2481,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         ? (selectedModel ?? '')
         : nameController.text.trim();
     final template = library.templateForModel(selectedModel ?? '');
+    // Only a part the catalog does not have keeps what was typed for these.
+    final maker = selectedModel == null ? makerController.text.trim() : '';
+    final partNo = selectedModel == null ? partController.text.trim() : '';
 
     switch (kind) {
       case _ExtraPart.equipment:
         final line = provider.addAvCostExtraEquipment(
           catalogModel: selectedModel ?? '',
+          manufacturer: maker,
+          partNumber: partNo,
           description: name,
           category: template?.category ?? '',
           qty: qty,
@@ -2427,12 +2523,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       case _ExtraPart.cable:
         provider.addAvCostExtraCable(
           catalogModel: selectedModel ?? '',
+          manufacturer: maker,
+          partNumber: partNo,
           description: name,
           qty: qty,
         );
       case _ExtraPart.hardware:
         provider.addAvCostExtraHardware(
           catalogModel: selectedModel ?? '',
+          manufacturer: maker,
+          partNumber: partNo,
           description: name,
           category: template?.category ?? '',
           qty: qty,
@@ -2440,6 +2540,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       case _ExtraPart.misc:
         provider.addAvCostItem(
           catalogModel: selectedModel ?? '',
+          manufacturer: maker,
+          partNumber: partNo,
           description: name,
           category: template?.category ?? '',
           qty: qty,
@@ -5014,6 +5116,112 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   }
 
   /// A free-text card - the scope of work or the notes. Prints as plain text.
+  /// The title of a line the diagram, a rack or a cable run counts: a box
+  /// holding the title typed for it, with the names it would otherwise go by
+  /// behind it. Cleared, it goes back to those.
+  ///
+  /// A name too long for the column hovers to the whole of it and its model -
+  /// only then, so the page is not a tooltip under every cell.
+  Widget _lineNameField(AppStateProvider provider, CostLine line) =>
+      hoverWhenClipped(
+        // The box holds the text a field's inset in from each edge.
+        text: '${line.description}    ',
+        message: _rowIdentity(line),
+        style: const TextStyle(fontSize: 13),
+        child: LiveTextField(
+          key: ValueKey('linename_${line.key}'),
+          fieldId: 'linename_${line.key}',
+          lazy: true,
+          initial: provider.avCost.lineNames[line.key] ?? '',
+          hint: line.defaultName,
+          hintIsValue: true,
+          onChanged: (v) => provider.setAvCostLineName(line.key, v),
+        ),
+      );
+
+  /// The Model column: maker, model and part number. A line typed by hand
+  /// with no catalog part behind it has a box for its maker and one for its
+  /// part number instead.
+  Widget _partCell(
+    BuildContext context, {
+    CostLine? line,
+    CostLineItem? typed,
+    ValueChanged<CostLineItem>? onEdit,
+    String note = '',
+  }) => Padding(
+    // Clear of the name box beside it, out of the column's own width. The
+    // caption over it is inset by the same amount - see [kModelCellInset].
+    padding: const EdgeInsets.only(left: kModelCellInset),
+    child: _partCellBody(
+      context,
+      line: line,
+      typed: typed,
+      onEdit: onEdit,
+      note: note,
+    ),
+  );
+
+  Widget _partCellBody(
+    BuildContext context, {
+    CostLine? line,
+    CostLineItem? typed,
+    ValueChanged<CostLineItem>? onEdit,
+    String note = '',
+  }) {
+    final theme = Theme.of(context);
+    final muted = mutedInk(context, theme);
+    if (typed != null && typed.catalogModel.trim().isEmpty && onEdit != null) {
+      final maker = LiveTextField(
+        key: ValueKey('maker_${typed.id}'),
+        fieldId: 'maker_${typed.id}',
+          lazy: true,
+        initial: typed.manufacturer,
+        hint: 'Maker',
+        onChanged: (v) => onEdit(typed.copyWith(manufacturer: v)),
+      );
+      final part = LiveTextField(
+        key: ValueKey('partno_${typed.id}'),
+        fieldId: 'partno_${typed.id}',
+          lazy: true,
+        initial: typed.partNumber,
+        hint: 'Part #',
+        onChanged: (v) => onEdit(typed.copyWith(partNumber: v)),
+      );
+      // Side by side when there is room; one over the other in a narrow
+      // window, where two boxes in a row would each be a sliver.
+      final boxes = LayoutBuilder(
+        builder: (context, box) => box.maxWidth < 120
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [maker, const SizedBox(height: 4), part],
+              )
+            : Row(
+                children: [
+                  Expanded(child: maker),
+                  const SizedBox(width: 4),
+                  Expanded(child: part),
+                ],
+              ),
+      );
+      return note.isEmpty ? boxes : Tooltip(message: note, child: boxes);
+    }
+    final text = line == null
+        ? ''
+        : partIdentity(
+            manufacturer: line.manufacturer,
+            model: line.model,
+            partNumber: line.partNumber,
+            description: line.description,
+          );
+    final shown = [if (text.isNotEmpty) text, if (note.isNotEmpty) note]
+        .join(' · ');
+    return _ModelCell(
+      text: shown.isEmpty ? '-' : shown,
+      hover: line == null ? null : _partHover(line),
+      color: muted,
+    );
+  }
+
   /// The notice from Settings, shown as it prints, with the way to edit it.
   Widget _noticeCard(BuildContext context, AppStateProvider provider) {
     final theme = Theme.of(context);
@@ -5073,6 +5281,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               LiveTextField(
                 key: ValueKey(fieldId),
                 fieldId: fieldId,
+                lazy: true,
                 initial: value,
                 hint: hint,
                 minLines: 3,
@@ -5465,22 +5674,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               subtitle:
                   'labor, cable, mounts - anything not a device on the canvas',
               actions: [
-                // Two ways on: off the catalog, so a price agreed once is not
-                // retyped per room and follows a revision; or a blank line for
-                // the one-off nobody will ever quote again.
+                // One way on, the same dialog as the other cards.
                 PrintHide(child: TextButton.icon(
-                  icon: const Icon(Icons.playlist_add, size: 16),
-                  label: const Text('Add from catalog'),
+                  key: const ValueKey('cost_add_items'),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add other items'),
                   onPressed: () => _addExtraPart(
                     context,
                     provider,
                     kind: _ExtraPart.misc,
                   ),
-                )),
-                PrintHide(child: TextButton.icon(
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add item'),
-                  onPressed: () => provider.addAvCostItem(),
                 )),
               ],
             ),
@@ -5503,15 +5706,26 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     // Description
                     LiveTextField(
                       fieldId: 'desc_${item.id}',
+          lazy: true,
                       initial: item.description,
                       hint: 'e.g. Installation labor',
                       onChanged: (v) => provider.updateAvCostItem(
                         item.copyWith(description: v),
                       ),
                     ),
+                    // Model
+                    _partCell(
+                      context,
+                      line: estimate.extras
+                          .where((l) => l.key == item.id)
+                          .firstOrNull,
+                      typed: item,
+                      onEdit: provider.updateAvCostItem,
+                    ),
                     // Category
                     LiveTextField(
                       fieldId: 'cat_${item.id}',
+          lazy: true,
                       initial: item.category,
                       hint: 'Labor',
                       onChanged: (v) => provider.updateAvCostItem(
@@ -6060,8 +6274,8 @@ class _Col {
     this.width = 0,
     this.flex = 0,
     this.align = TextAlign.left,
-  }) : inset = 0,
-       keepsBox = false,
+    this.inset = 0,
+  }) : keepsBox = false,
        stepper = false;
 
   /// A caption over an input box. [numeric] right-aligns it, because that is
@@ -6074,8 +6288,9 @@ class _Col {
     bool numeric = false,
     this.keepsBox = false,
     this.stepper = false,
+    double extraInset = 0,
   }) : align = numeric ? TextAlign.right : TextAlign.left,
-       inset = kFieldTextInset;
+       inset = kFieldTextInset + extraInset;
 
   /// The inset as padding on whichever side the caption is drawn against.
   EdgeInsets padding(bool printing) {
@@ -6144,10 +6359,6 @@ Widget hoverWhenClipped({
 class _CellText extends StatelessWidget {
   final String text;
 
-  /// What to say on hover when the text does not fit - the whole row's
-  /// identity, not just this cell's. Null asks for no tooltip at all.
-  final String? hover;
-
   /// Right-aligned and inset from the right, the way a numeric field puts its
   /// figure.
   final bool numeric;
@@ -6161,7 +6372,6 @@ class _CellText extends StatelessWidget {
     this.text, {
     this.numeric = false,
     this.stepper = false,
-    this.hover,
   });
 
   @override
@@ -6174,16 +6384,11 @@ class _CellText extends StatelessWidget {
       padding: numeric
           ? EdgeInsets.only(right: inset)
           : EdgeInsets.only(left: inset),
-      child: hoverWhenClipped(
-        text: text,
-        message: hover,
+      child: Text(
+        text,
+        textAlign: numeric ? TextAlign.right : TextAlign.left,
+        overflow: TextOverflow.ellipsis,
         style: style,
-        child: Text(
-          text,
-          textAlign: numeric ? TextAlign.right : TextAlign.left,
-          overflow: TextOverflow.ellipsis,
-          style: style,
-        ),
       ),
     );
   }
@@ -6695,6 +6900,37 @@ Future<String?> _pickJobType(
 String _rowIdentity(CostLine line) => [
   if (line.description.trim().isNotEmpty) line.description.trim(),
   if (line.model.trim().isNotEmpty) line.model.trim(),
+].join('\n');
+
+/// A row's maker, model and part number on one line - 'Chief XTM1U' or
+/// 'Extron SF 228T Plus · 60-1862-03'. A model that only repeats the row's
+/// name, or a part number the model already says, is left off.
+String partIdentity({
+  String manufacturer = '',
+  String model = '',
+  String partNumber = '',
+  String description = '',
+}) {
+  final maker = manufacturer.trim();
+  final m = model.trim();
+  final part = partNumber.trim();
+  final named =
+      m.isNotEmpty && m.toLowerCase() != description.trim().toLowerCase();
+  final head = [if (maker.isNotEmpty) maker, if (named) m].join(' ');
+  final showPart = part.isNotEmpty &&
+      part.toLowerCase() != m.toLowerCase() &&
+      !head.toLowerCase().contains(part.toLowerCase());
+  return [if (head.isNotEmpty) head, if (showPart) part].join(' · ');
+}
+
+/// Everything a row is, one per line, for the hover.
+String _partHover(CostLine line) => [
+  if (line.description.trim().isNotEmpty) line.description.trim(),
+  if (line.manufacturer.trim().isNotEmpty)
+    'Manufacturer: ${line.manufacturer.trim()}',
+  if (line.model.trim().isNotEmpty) 'Model: ${line.model.trim()}',
+  if (line.partNumber.trim().isNotEmpty)
+    'Part number: ${line.partNumber.trim()}',
 ].join('\n');
 
 /// The Model column's cell - the quiet half of a row's identity.

@@ -176,7 +176,9 @@ void main() {
         findsNothing,
       );
       await tester.enterText(
-        find.widgetWithText(TextField, 'Vent plate'),
+        // The dialog's box: the row behind it has a title box showing the
+        // same name.
+        find.widgetWithText(TextField, 'Vent plate').last,
         '1RU fan panel',
       );
       await tester.pumpAndSettle();
@@ -212,7 +214,9 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.widgetWithText(TextField, 'Vent plate'),
+        // The dialog's box: the row behind it has a title box showing the
+        // same name.
+        find.widgetWithText(TextField, 'Vent plate').last,
         '1RU fan panel',
       );
       await tester.pumpAndSettle();

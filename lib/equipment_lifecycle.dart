@@ -1079,6 +1079,9 @@ RoomLifecycle buildRoomLifecycle({
   PricingTier tier = PricingTier.msrp,
   DateTime? asOf,
   int defaultLifeYears = kDefaultEquipmentLifeYears,
+
+  /// The project's build date, for equipment with no install date of its own.
+  DateTime? buildDate,
 }) {
   final now = asOf ?? DateTime.now();
   final day = DateTime(now.year, now.month, now.day);
@@ -1132,7 +1135,7 @@ RoomLifecycle buildRoomLifecycle({
       category: category,
       locationName: model.locationNameOf(node.id),
       zone: model.zoneOf(node.id),
-      installedOn: node.installedOn,
+      installedOn: node.installedOn ?? buildDate,
       lifeYears: life,
       lifeSource: source,
       asOf: day,
@@ -1361,6 +1364,7 @@ BuildingLifecycle buildProjectLifecycle({
             tier: tier,
             asOf: day,
             defaultLifeYears: defaultLifeYears,
+            buildDate: estimate.project.buildDate,
           ),
       // THE ROOMS NOBODY HAS DRAWN. Most of an estate has never been through
       // this app, and a refresh plan that covered only the rooms that have is
@@ -1368,7 +1372,10 @@ BuildingLifecycle buildProjectLifecycle({
       // nobody checks. See [ManualRoom].
       for (final room in estimate.project.manualRooms)
         buildManualRoomLifecycle(
-          room: room,
+          room: room.installedOn != null ||
+                  estimate.project.buildDate == null
+              ? room
+              : room.copyWith(installedOn: estimate.project.buildDate),
           baseCosts: baseCosts,
           tier: tier,
           asOf: day,

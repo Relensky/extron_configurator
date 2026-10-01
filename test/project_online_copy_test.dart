@@ -211,6 +211,34 @@ void main() {
       );
     });
 
+    testWidgets('a folder can be typed in, and the job remembers it', (
+      tester,
+    ) async {
+      final p = job();
+      final folder = syncFolder();
+      await openTab(tester, p);
+
+      await tester.tap(find.byKey(const ValueKey('project_online_copy')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('online_copy_folder')),
+        folder,
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const ValueKey('online_copy_publish')));
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      });
+      await tester.pump();
+
+      expect(p.project.onlineFolder, folder);
+      expect(
+        File(path.join(folder, 'Bessey_Hall_project.xlsx')).existsSync(),
+        isTrue,
+      );
+    });
+
     testWidgets('publishes into the folder the job already knows', (
       tester,
     ) async {
@@ -223,8 +251,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<Text>(find.byKey(const ValueKey('online_copy_folder')))
-            .data,
+            .widget<TextField>(find.byKey(const ValueKey('online_copy_folder')))
+            .controller!
+            .text,
         folder,
       );
 

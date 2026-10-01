@@ -12,6 +12,7 @@ import 'project_estimate.dart';
 import 'project_schedule.dart';
 import 'report_tools.dart';
 import 'procurement_log.dart';
+import 'procurement_sync.dart';
 import 'responsibility_matrix.dart';
 import 'schedule_workbook.dart';
 import 'xlsx_writer.dart';
@@ -1250,16 +1251,13 @@ List<String> _projectWarnings(ProjectEstimate estimate) {
         'before relying on any figure here.',
   if (estimate.unpricedParts > 0)
     '${estimate.unpricedParts} part${estimate.unpricedParts == 1 ? '' : 's'} '
-        'on the master list '
-        '${estimate.unpricedParts == 1 ? 'has' : 'have'} no price anywhere. '
+        '${estimate.unpricedParts == 1 ? 'is' : 'are'} missing pricing. '
         'The total is short by whatever '
         '${estimate.unpricedParts == 1 ? 'it costs' : 'they cost'}.',
   if (estimate.untaggedParts > 0)
-    '${estimate.untaggedParts} part'
-        '${estimate.untaggedParts == 1 ? ' is' : 's are'} in no buying '
-        'package, so '
-        '${estimate.untaggedParts == 1 ? 'it is' : 'they are'} on no quote '
-        'request. See the Untagged rows on Core Components.',
+    '${estimate.untaggedParts} item'
+        '${estimate.untaggedParts == 1 ? ' is' : 's are'} missing a vendor and '
+        'will not be tracked. See the Untagged rows on Core Components.',
   // Not a pricing problem, and on the pricing sheet anyway. A building quoted
   // without anybody noticing that six of its boxes have no driver is a
   // building that arrives on site and cannot be commissioned, and the quote is
@@ -1279,7 +1277,7 @@ List<String> _projectWarnings(ProjectEstimate estimate) {
   // The job's rule, broken: one spare of everything a room installs. Said as
   // a count of PARTS rather than as a percentage of the job, because it is the
   // parts somebody has to go and decide about.
-  if (estimate.unsparedParts.isNotEmpty)
+  if (estimate.unsparedParts.isNotEmpty && estimate.spareUnits > 0)
     '${estimate.unsparedParts.length} '
         'product${estimate.unsparedParts.length == 1 ? '' : 's'} '
         '${estimate.unsparedParts.length == 1 ? 'is' : 'are'} installed with '
@@ -1451,7 +1449,7 @@ List<ReportSection> installWindowSections(BuildingProject project) {
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   return [
     (
-      title: 'Install windows (${windows.length})',
+      title: 'Maintenance windows (${windows.length})',
       header: const ['Date', 'Day', 'Room', 'Time', 'Notes'],
       rows: [
         for (final w in windows)
@@ -2796,7 +2794,7 @@ Uint8List buildProjectWorkbookBytes({
     // No parts to order, but install windows still go out on the sheet.
     sheets.add(buildStackedReportSheet(
       sheetName: tab(kProjectTimelineSheet),
-      title: '$title - install windows',
+      title: '$title - maintenance windows',
       sections: installWindowSections(estimate.project),
       generated: stamp,
     ));
@@ -2810,7 +2808,7 @@ Uint8List buildProjectWorkbookBytes({
   if (classes.isNotEmpty) {
     sheets.add(buildStackedReportSheet(
       sheetName: tab(kClassScheduleSheet),
-      title: '$title - class schedule and install windows',
+      title: '$title - class schedule and maintenance windows',
       sections: classes,
       generated: stamp,
     ));
@@ -2873,13 +2871,18 @@ Uint8List buildProjectWorkbookBytes({
   if (matrix != null) sheets.add(matrix);
 
   // The contractor's procurement log, as its own export writes it.
-  final procurement = estimate.project.procurement.isEmpty
+  // Only on a job that keeps one. The lines are the live ones - named off the
+  // rooms, with every room line on them - see procurement_sync.dart.
+  final procurement = !estimate.project.procurement.any((e) => !e.excluded)
       ? null
       : procurementLogSheet(
           estimate.project.name,
-          estimate.project.procurement,
+          liveProcurement(estimate.project, estimate),
           sheetName: tab(kProcurementLogSheet),
           generated: stamp,
+          colors: estimate.project.procurementColors,
+          order: estimate.project.procurementColumnOrder,
+          labels: estimate.project.procurementColumnLabels,
         );
   if (procurement != null) sheets.add(procurement);
 

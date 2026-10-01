@@ -35,7 +35,8 @@ import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
 import 'project_plans_view.dart';
 import 'project_pricing.dart';
-import 'project_procurement_view.dart';
+import 'project_procurement_view.dart'
+    show ProcurementDateField, procurementSlivers;
 import 'project_responsibility_view.dart';
 import 'project_room_picker.dart';
 import 'project_schedule.dart';
@@ -392,6 +393,12 @@ class _ProjectViewState extends State<ProjectView> {
     _partSortAscending = next.ascending;
   });
 
+  /// Sorts by exactly what the Sort by menu asked for.
+  void _setPartSort(PartSortKey key, bool ascending) => setState(() {
+    _partSort = key;
+    _partSortAscending = ascending;
+  });
+
   /// Ticks or unticks one part.
   void _toggleSelectedPart(String key) => setState(() {
     if (!_selectedParts.remove(key)) _selectedParts.add(key);
@@ -417,6 +424,9 @@ class _ProjectViewState extends State<ProjectView> {
   /// here for the same reason the parts are, and written to the file for the
   /// same reason they are not: a selection is a way of looking at the log.
   final Set<String> _selectedDeliveries = <String>{};
+
+  /// What the Deliveries pane is searching for and has folded away.
+  final DeliveriesView _deliveriesView = DeliveriesView();
 
   void _toggleSelectedDelivery(String id) => setState(() {
     if (!_selectedDeliveries.remove(id)) _selectedDeliveries.add(id);
@@ -652,6 +662,7 @@ class _ProjectViewState extends State<ProjectView> {
               sort: _partSort,
               sortAscending: _partSortAscending,
               onSort: _sortParts,
+              onSortExact: _setPartSort,
               selected: _selectedParts,
               onToggleSelected: _toggleSelectedPart,
               onSelectShown: _selectShownParts,
@@ -666,6 +677,8 @@ class _ProjectViewState extends State<ProjectView> {
               onToggleSelected: _toggleSelectedDelivery,
               onSelectShown: _selectShownDeliveries,
               onClearSelected: _clearSelectedDeliveries,
+              view: _deliveriesView,
+              onViewChanged: () => setState(() {}),
             ),
             _ProjectPane.lifecycle => lifecycleSlivers(
               context,
@@ -1146,6 +1159,14 @@ class _ProjectViewState extends State<ProjectView> {
         v.trim().isEmpty ? null : double.tryParse(v) ?? 0,
       ),
     );
+    // When the job is built: the replacement plan ages equipment with no
+    // install date of its own from it. A year alone is the first of January.
+    final buildDate = ProcurementDateField(
+      key: ValueKey('project_build_date_${provider.currentProjectPath}'),
+      label: 'Build date',
+      value: provider.project.buildDate,
+      onChanged: provider.setProjectBuildDate,
+    );
     // WHO THE JOB IS FOR, beside what it is called. It goes out on the
     // workbook's first sheet and on every quote request, and until it was here
     // the only way to set it was through the API - a field on a document
@@ -1176,6 +1197,8 @@ class _ProjectViewState extends State<ProjectView> {
           SizedBox(width: 140, child: job),
           const SizedBox(width: 8),
           SizedBox(width: 100, child: tax),
+          const SizedBox(width: 8),
+          SizedBox(width: 180, child: buildDate),
         ],
       );
     }
@@ -1194,6 +1217,8 @@ class _ProjectViewState extends State<ProjectView> {
             Expanded(child: job),
             const SizedBox(width: 8),
             SizedBox(width: 100, child: tax),
+            const SizedBox(width: 8),
+            SizedBox(width: 180, child: buildDate),
           ],
         ),
       ],
@@ -1208,14 +1233,13 @@ class _ProjectViewState extends State<ProjectView> {
                 'short.',
     if (estimate.unpricedParts > 0)
       estimate.unpricedParts == 1
-          ? '1 part has no price anywhere.'
-          : '${estimate.unpricedParts} parts have no price anywhere.',
+          ? '1 part is missing pricing.'
+          : '${estimate.unpricedParts} parts are missing pricing.',
     if (estimate.untaggedParts > 0)
       estimate.untaggedParts == 1
-          ? '1 part is tagged to no vendor - it is on no order as things '
-                'stand.'
-          : '${estimate.untaggedParts} parts are tagged to no vendor - they '
-                'are on no order as things stand.',
+          ? '1 item is missing a vendor and will not be tracked.'
+          : '${estimate.untaggedParts} items are missing a vendor and will '
+                'not be tracked.',
     if (estimate.undrivenDevices > 0)
       estimate.undrivenDevices == 1
           ? '1 device has no control module - quoted, but it will not '
@@ -1977,7 +2001,7 @@ class _RoomRowState extends State<_RoomRow> {
     // THE THREE FIGURES, AS A BLOCK. They belong together — equipment plus
     // labor IS the room total — so they move together when the row runs out of
     // width rather than being squeezed one by one until the last two touch.
-    final figures = e == null
+    List<Widget>? figuresFor({required bool stretch}) => e == null
         ? null
         : <Widget>[
             _cell(
@@ -1986,6 +2010,7 @@ class _RoomRowState extends State<_RoomRow> {
               formatMoney(e.equipmentTotal, currency),
               ink: ink,
               quiet: quiet,
+              stretch: stretch,
             ),
             _cell(
               context,
@@ -1993,6 +2018,7 @@ class _RoomRowState extends State<_RoomRow> {
               formatMoney(e.laborTotal, currency),
               ink: ink,
               quiet: quiet,
+              stretch: stretch,
             ),
             _cell(
               context,
@@ -2001,8 +2027,10 @@ class _RoomRowState extends State<_RoomRow> {
               ink: ink,
               quiet: quiet,
               bold: true,
+              stretch: stretch,
             ),
           ];
+    final figures = figuresFor(stretch: false);
 
     // WHAT IS TRUE ABOUT THIS ROOM that no other column asks — the asbestos
     // above the grid, the wall it shares with the studio.
@@ -2087,7 +2115,11 @@ class _RoomRowState extends State<_RoomRow> {
               child: Icon(Icons.info_outline, size: 24, color: quiet),
             ),
           ),
-        ),
+        )
+      else
+        // The flag's place, kept: a row with nothing flagged is as wide as
+        // one with, so the columns beside it line up down the page.
+        const SizedBox(width: 40, height: 40),
       IconButton(
         tooltip: 'Move up',
         icon: const Icon(Icons.arrow_upward, size: 18),
@@ -2123,16 +2155,31 @@ class _RoomRowState extends State<_RoomRow> {
         child: LayoutBuilder(
           builder: (context, box) {
             if (box.maxWidth >= gridMetric(context, 900)) {
+              final stretched = figuresFor(stretch: true);
               return Row(
                 children: [
                   include,
                   Expanded(flex: 3, child: name),
-                  if (figures != null)
-                    ...figures
-                  else
-                    const Expanded(flex: 3, child: SizedBox()),
-                  const SizedBox(width: 8),
-                  Expanded(flex: 3, child: notes),
+                  // ONE BLOCK, ONE HEIGHT. The notes box is taller than a
+                  // figure, and centered side by side their labels sat on
+                  // different lines. Stretched to the same height, the labels
+                  // run along the top and each figure sits level with the box.
+                  Expanded(
+                    flex: 6,
+                    child: IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (stretched != null)
+                            ...stretched
+                          else
+                            const Expanded(flex: 3, child: SizedBox()),
+                          const SizedBox(width: 8),
+                          Expanded(flex: 3, child: notes),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 4),
                   ...actions,
                 ],
@@ -2232,8 +2279,22 @@ class _RoomRowState extends State<_RoomRow> {
     required Color ink,
     required Color quiet,
     bool bold = false,
+
+    /// True beside the notes box on the wide row: the figure fills the height
+    /// it is given and sits level with the box, under a label at the top.
+    bool stretch = false,
   }) {
     final theme = Theme.of(context);
+    final figure = Text(
+      value,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        fontWeight: bold ? FontWeight.bold : null,
+        color: ink,
+      ),
+    );
     return Expanded(
       // A GAP THAT CANNOT BE SQUEEZED OUT. Three right-aligned figures in
       // three Expandeds have nothing between them but whatever slack is left,
@@ -2250,16 +2311,12 @@ class _RoomRowState extends State<_RoomRow> {
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(color: quiet),
             ),
-            Text(
-              value,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: bold ? FontWeight.bold : null,
-                color: ink,
-              ),
-            ),
+            if (stretch)
+              Expanded(
+                child: Align(alignment: Alignment.centerRight, child: figure),
+              )
+            else
+              figure,
           ],
         ),
       ),
@@ -2888,6 +2945,9 @@ List<Widget> partsSlivers(
   bool sortAscending = true,
   ValueChanged<PartSortKey>? onSort,
 
+  /// The Sort by menu's pick: a key and a direction, set outright.
+  void Function(PartSortKey key, bool ascending)? onSortExact,
+
   /// The parts ticked for a bulk edit, by [MasterPartLine.key], and the three
   /// ways that set changes. Null callbacks turn the tick boxes off entirely,
   /// which is what a caller that has nowhere to keep a selection wants.
@@ -3067,6 +3127,15 @@ List<Widget> partsSlivers(
                         .read<AppStateProvider>()
                         .setProjectPartsByRoom(v.first),
                   ),
+                  // THE SORT, SAID OUT LOUD. The column headings sort when
+                  // pressed, which nobody finds; this is the same sort with
+                  // its name on it.
+                  if (onSortExact != null)
+                    _PartSortMenu(
+                      sort: sort,
+                      ascending: sortAscending,
+                      onChanged: onSortExact,
+                    ),
                   filterChip('All (${estimate.master.length})', ''),
                   for (final p in estimate.packages)
                     if (!p.isUntagged)
@@ -6894,9 +6963,8 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
                           'company, then invite it onto a package above. The '
                           'shared list on App Config is what a new job starts '
                           'with.'
-                    : 'The companies this job asks to quote. A vendor claims '
-                          'no parts of its own - what it is asked for is a '
-                          'property of the package that invited it.',
+                    : 'The companies that will be sent a quote for equipment '
+                          'related to the current project.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -7912,6 +7980,85 @@ class _RuleEditorState extends State<_RuleEditor> {
           ],
         ),
       ],
+    );
+  }
+}
+
+
+/// The Sort by menu on the Equipment page, and the arrow that reverses it.
+class _PartSortMenu extends StatelessWidget {
+  final PartSortKey sort;
+  final bool ascending;
+  final void Function(PartSortKey key, bool ascending) onChanged;
+
+  const _PartSortMenu({
+    required this.sort,
+    required this.ascending,
+    required this.onChanged,
+  });
+
+  /// What the menu calls each order, in the order it lists them.
+  static const Map<PartSortKey, String> _labels = {
+    PartSortKey.natural: 'Grouped',
+    PartSortKey.orderBy: 'Order-by date',
+    PartSortKey.part: 'Part',
+    PartSortKey.unit: 'Unit price',
+    PartSortKey.extended: 'Extended price',
+    PartSortKey.leadTime: 'Lead time',
+    PartSortKey.vendor: 'Package',
+    PartSortKey.qty: 'Qty',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final sorted = sort != PartSortKey.natural;
+    return Container(
+      padding: const EdgeInsets.only(left: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Sort by', style: theme.textTheme.labelMedium),
+          const SizedBox(width: 6),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<PartSortKey>(
+              key: const ValueKey('project_parts_sort'),
+              value: sort,
+              isDense: true,
+              style: theme.textTheme.bodyMedium,
+              items: [
+                for (final e in _labels.entries)
+                  DropdownMenuItem(value: e.key, child: Text(e.value)),
+              ],
+              // A new order starts the way it is usually wanted: dates and
+              // names from the top, money and lead times biggest first.
+              onChanged: (key) {
+                if (key == null) return;
+                final biggestFirst = key == PartSortKey.unit ||
+                    key == PartSortKey.extended ||
+                    key == PartSortKey.leadTime;
+                onChanged(key, !biggestFirst);
+              },
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('project_parts_sort_direction'),
+            visualDensity: VisualDensity.compact,
+            iconSize: 18,
+            tooltip: !sorted
+                ? 'Pick an order to sort by first'
+                : ascending
+                ? 'Smallest or earliest first. Press to reverse.'
+                : 'Largest or latest first. Press to reverse.',
+            icon: Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward),
+            onPressed: sorted ? () => onChanged(sort, !ascending) : null,
+          ),
+        ],
+      ),
     );
   }
 }

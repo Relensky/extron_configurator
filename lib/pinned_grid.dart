@@ -477,6 +477,7 @@ class _PinnedGridState extends State<PinnedGrid> {
                 child: Scrollbar(
                   controller: _cells,
                   thumbVisibility: scrollsX,
+                  trackVisibility: scrollsX,
                   notificationPredicate: (n) => n.depth == 0,
                   child: SingleChildScrollView(
                     controller: _cells,
@@ -502,6 +503,7 @@ class _PinnedGridState extends State<PinnedGrid> {
                 child: Scrollbar(
                   controller: _cells,
                   thumbVisibility: scrollsX,
+                  trackVisibility: scrollsX,
                   notificationPredicate: (n) => n.depth == 1,
                   child: SingleChildScrollView(
                     controller: _rows,

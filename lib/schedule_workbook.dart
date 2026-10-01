@@ -107,8 +107,8 @@ List<ReportSection> classScheduleSections(
 
   sections.add((
     title: everyDay
-        ? 'Install windows by date'
-        : 'Install windows by date (days with a window only)',
+        ? 'Maintenance windows by date'
+        : 'Maintenance windows by date (days with a window only)',
     header: [
       'Room',
       for (final d in days) '${_weekdays[d.weekday - 1]} ${d.month}/${d.day}',
@@ -139,7 +139,7 @@ List<ReportSection> classScheduleSections(
     title: 'Key',
     header: const ['', ''],
     rows: [
-      [_install('8a-12p'), 'Install window, with its hours'],
+      [_install('8a-12p'), 'Maintenance window, with its hours'],
       [_class('ART 101'), 'Class meeting'],
       [_busy(''), 'Classes that day, no window'],
     ],
@@ -210,7 +210,7 @@ List<ReportSection> classScheduleSections(
                   if (m + 30 <= w.startMinutes || m >= w.endMinutes) continue;
                   final starts = m <= w.startMinutes;
                   return _install(
-                    starts ? 'Install ${w.day.month}/${w.day.day}' : '',
+                    starts ? 'Maint. ${w.day.month}/${w.day.day}' : '',
                   );
                 }
                 return '';

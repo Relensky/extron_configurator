@@ -6,8 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/base_costs.dart';
+import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/equipment_lifecycle.dart';
 import 'package:extron_configurator/model_swap.dart';
+import 'package:extron_configurator/procurement_log.dart' show parseTypedDate;
 import 'package:extron_configurator/room_locations.dart';
 
 /// How old the gear is, when it falls due, and what that costs.
@@ -1012,6 +1014,35 @@ void main() {
       );
       expect(room.costDueIn(2026), 3000);
       expect(room.costDueBy(2026), 3000);
+    });
+  });
+
+  group('a new building', () {
+    test('equipment with no date of its own is aged from the build date', () {
+      final room = buildRoomLifecycle(
+        model: roomOf([
+          box('new'),
+          box('kept', installedOn: DateTime(2019, 3, 1)),
+        ]),
+        asOf: asOf,
+        buildDate: DateTime(2027, 1, 1),
+      );
+      final byId = {for (final i in room.items) i.node.id: i};
+      expect(byId['new']!.installedOn, DateTime(2027, 1, 1));
+      expect(byId['kept']!.installedOn, DateTime(2019, 3, 1));
+    });
+
+    test('the build date is kept with the project', () {
+      final project = BuildingProject(buildDate: DateTime(2027, 1, 1));
+      expect(
+        BuildingProject.fromJson(project.toJson()).buildDate,
+        DateTime(2027, 1, 1),
+      );
+      expect(BuildingProject().toJson().containsKey('buildDate'), isFalse);
+    });
+
+    test('a year typed alone is the first of January', () {
+      expect(parseTypedDate('2027'), DateTime(2027, 1, 1));
     });
   });
 }

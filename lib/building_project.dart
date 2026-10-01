@@ -2595,6 +2595,11 @@ class BuildingProject {
   /// default. A room can still set its own.
   double? taxPercent;
 
+  /// When the job is built. Equipment with no install date of its own is
+  /// aged from this on the replacement plan, so a new building has its
+  /// lifecycle from the day it opens.
+  DateTime? buildDate;
+
   final List<ProjectRoomRef> rooms;
 
   // -------------------------------------------------------------------------
@@ -2803,6 +2808,22 @@ class BuildingProject {
   /// [ProcurementEntry].
   final List<ProcurementEntry> procurement;
 
+  /// Procurement column id -> the heading color chosen for it, ARGB.
+  final Map<String, int> procurementColors;
+
+  /// The procurement columns in the order they were dragged into, by id.
+  /// Empty is the contractor's own order.
+  final List<String> procurementColumnOrder;
+
+  /// Procurement column id -> the heading typed for it on this job.
+  final Map<String, String> procurementColumnLabels;
+
+  /// Procurement column id -> the width it was dragged to on the page.
+  final Map<String, double> procurementColumnWidths;
+
+  /// Responsibility item id -> the width its column was dragged to.
+  final Map<String, double> responsibilityColumnWidths;
+
   /// Everything that has ARRIVED, one row per lot - see [ProjectDelivery].
   /// Empty on a job nobody is tracking deliveries on, which behaves exactly as
   /// it did before this existed.
@@ -2893,6 +2914,7 @@ class BuildingProject {
     this.notes = '',
     this.currency = r'$',
     this.taxPercent,
+    this.buildDate,
     List<ProjectRoomRef>? rooms,
     this.campusFile = '',
     this.onlineFolder = '',
@@ -2917,6 +2939,11 @@ class BuildingProject {
     List<ProjectPlan>? plans,
     List<ProjectPo>? purchaseOrders,
     List<ProcurementEntry>? procurement,
+    Map<String, int>? procurementColors,
+    List<String>? procurementColumnOrder,
+    Map<String, String>? procurementColumnLabels,
+    Map<String, double>? procurementColumnWidths,
+    Map<String, double>? responsibilityColumnWidths,
     List<ProjectDelivery>? deliveries,
     List<ProjectEdit>? history,
     int roomCounter = 0,
@@ -2958,6 +2985,11 @@ class BuildingProject {
        plans = plans ?? [],
        purchaseOrders = purchaseOrders ?? [],
        procurement = procurement ?? [],
+       procurementColors = procurementColors ?? {},
+       procurementColumnOrder = procurementColumnOrder ?? [],
+       procurementColumnLabels = procurementColumnLabels ?? {},
+       procurementColumnWidths = procurementColumnWidths ?? {},
+       responsibilityColumnWidths = responsibilityColumnWidths ?? {},
        deliveries = deliveries ?? [],
        history = history ?? [],
        _roomCounter = roomCounter,
@@ -4424,6 +4456,7 @@ class BuildingProject {
     if (notes.isNotEmpty) 'notes': notes,
     'currency': currency,
     if (taxPercent != null) 'taxPercent': taxPercent,
+    if (buildDate != null) 'buildDate': formatIsoDate(buildDate!),
     'rooms': [for (final r in rooms) r.toJson()],
     // Which sheet this job is on - see [campusFile]. Written only when there
     // is one, so a job that has never been on a campus does not grow a key
@@ -4473,6 +4506,22 @@ class BuildingProject {
       'purchaseOrders': [for (final p in purchaseOrders) p.toJson()],
     if (procurement.isNotEmpty)
       'procurement': [for (final e in procurement) e.toJson()],
+    if (procurementColors.isNotEmpty)
+      'procurementColors': Map<String, int>.of(procurementColors),
+    if (procurementColumnOrder.isNotEmpty)
+      'procurementColumnOrder': List<String>.of(procurementColumnOrder),
+    if (procurementColumnLabels.isNotEmpty)
+      'procurementColumnLabels': Map<String, String>.of(
+        procurementColumnLabels,
+      ),
+    if (procurementColumnWidths.isNotEmpty)
+      'procurementColumnWidths': Map<String, double>.of(
+        procurementColumnWidths,
+      ),
+    if (responsibilityColumnWidths.isNotEmpty)
+      'responsibilityColumnWidths': Map<String, double>.of(
+        responsibilityColumnWidths,
+      ),
     if (deliveries.isNotEmpty)
       'deliveries': [for (final d in deliveries) d.toJson()],
     if (history.isNotEmpty)
@@ -4512,6 +4561,14 @@ class BuildingProject {
     if (_deliveryCounter > 0) 'deliveryCounter': _deliveryCounter,
     if (_responsibilityCounter > 0)
       'responsibilityCounter': _responsibilityCounter,
+  };
+
+  /// Column widths off a project file: id -> a positive number.
+  static Map<String, double> _widthsFrom(Object? raw) => {
+    if (raw is Map)
+      for (final e in raw.entries)
+        if (e.value is num && (e.value as num) > 0)
+          e.key.toString(): (e.value as num).toDouble(),
   };
 
   factory BuildingProject.fromJson(Map<String, dynamic> json) {
@@ -4833,6 +4890,7 @@ class BuildingProject {
           ? json['currency'].toString()
           : r'$',
       taxPercent: (json['taxPercent'] as num?)?.toDouble(),
+      buildDate: parseIsoDate(json['buildDate']),
       rooms: rooms,
       campusFile: json['campusFile']?.toString().trim() ?? '',
       onlineFolder: json['onlineFolder']?.toString().trim() ?? '',
@@ -4881,6 +4939,25 @@ class BuildingProject {
           if (entry is Map)
             ProcurementEntry.fromJson(Map<String, dynamic>.from(entry)),
       ],
+      procurementColumnOrder: [
+        for (final id in (json['procurementColumnOrder'] as List? ?? []))
+          id.toString(),
+      ],
+      procurementColumnWidths: _widthsFrom(json['procurementColumnWidths']),
+      responsibilityColumnWidths: _widthsFrom(
+        json['responsibilityColumnWidths'],
+      ),
+      procurementColumnLabels: {
+        if (json['procurementColumnLabels'] is Map)
+          for (final e in (json['procurementColumnLabels'] as Map).entries)
+            if (e.value.toString().trim().isNotEmpty)
+              e.key.toString(): e.value.toString(),
+      },
+      procurementColors: {
+        if (json['procurementColors'] is Map)
+          for (final e in (json['procurementColors'] as Map).entries)
+            if (e.value is num) e.key.toString(): (e.value as num).toInt(),
+      },
       deliveries: deliveries,
       history: history,
       spareCounter: [
@@ -4978,6 +5055,7 @@ class BuildingProject {
     notes: notes,
     currency: currency,
     taxPercent: taxPercent,
+    buildDate: buildDate,
     rooms: List<ProjectRoomRef>.from(rooms),
     campusFile: campusFile,
     onlineFolder: onlineFolder,
@@ -5005,6 +5083,13 @@ class BuildingProject {
     // hand back rows that share their note lists with the ones it replaced.
     purchaseOrders: [for (final p in purchaseOrders) p.copyWith()],
     procurement: List<ProcurementEntry>.from(procurement),
+    procurementColors: Map<String, int>.of(procurementColors),
+    procurementColumnOrder: List<String>.of(procurementColumnOrder),
+    procurementColumnLabels: Map<String, String>.of(procurementColumnLabels),
+    procurementColumnWidths: Map<String, double>.of(procurementColumnWidths),
+    responsibilityColumnWidths: Map<String, double>.of(
+      responsibilityColumnWidths,
+    ),
     deliveries: [for (final d in deliveries) d.copyWith()],
     history: List<ProjectEdit>.from(history),
     roomCounter: _roomCounter,

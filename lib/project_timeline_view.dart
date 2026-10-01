@@ -2670,11 +2670,27 @@ class _ProjectDateGraphState extends State<ProjectDateGraph>
     for (final w in project.installWindows) {
       out.add((
         date: w.day,
-        label: 'Install - ${w.roomCode}',
+        label: 'Maintenance - ${w.roomCode}',
         // The finder's free-time green.
         color: theme.brightness == Brightness.dark
             ? Colors.greenAccent
             : Colors.green[800]!,
+      ));
+    }
+
+    // To-dos that have a due date and are not done: a date somebody has
+    // committed to belongs on the same line as the rest of them.
+    for (final todo in project.todos) {
+      final due = todo.due;
+      if (due == null || !todo.isOpen) continue;
+      final text = todo.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+      out.add((
+        date: due,
+        label: 'To do - '
+            '${text.length > 48 ? '${text.substring(0, 47)}...' : text}',
+        color: theme.brightness == Brightness.dark
+            ? Colors.orangeAccent
+            : Colors.orange[900]!,
       ));
     }
 

@@ -1011,6 +1011,7 @@ class AppStateProvider extends ChangeNotifier {
       'aurisColor': aurisColor,
       'classicSecondary': classicSecondary,
       'textScale': textScale,
+      'uiScale': uiScale,
       'currencySymbol': currencySymbol,
       'defaultTaxPercent': defaultTaxPercent,
       'pricingTier': pricingTier.name,
@@ -1320,6 +1321,10 @@ class AppStateProvider extends ChangeNotifier {
   /// dropdown in App Config and applied to every view via a MediaQuery
   /// text scaler around the whole MaterialApp.
   double textScale = 1.0;
+
+  /// How big the whole interface is drawn, whatever Windows' display scaling
+  /// is: 1.0 is the size the app is at Windows 100%. 0 follows Windows.
+  double uiScale = 1.0;
 
   /// What goes in front of every figure the app prints. One app-wide answer
   /// rather than one per room: a shop bills in one currency, and re-typing the
@@ -5145,6 +5150,20 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Sets this room's price for one estimate line, or clears it back to the
   /// catalog price when [price] is null.
+  /// Titles a line on the estimate; blank goes back to the names the diagram
+  /// gives it. See [RoomCostSettings.lineNames].
+  void setAvCostLineName(String lineKey, String name) {
+    final next = name.trim();
+    if ((avCost.lineNames[lineKey] ?? '') == next) return;
+    _pushAvUndo('Line title', _costScope, coalesce: 'cost:name:$lineKey');
+    if (next.isEmpty) {
+      avCost.lineNames.remove(lineKey);
+    } else {
+      avCost.lineNames[lineKey] = next;
+    }
+    notifyListeners();
+  }
+
   void setAvCostPrice(String lineKey, double? price) {
     // Per line: two prices typed one after another are two steps.
     _pushAvUndo(
@@ -5167,6 +5186,8 @@ class AppStateProvider extends ChangeNotifier {
     double unitPrice = 0,
     bool taxable = true,
     String catalogModel = '',
+    String manufacturer = '',
+    String partNumber = '',
   }) {
     final item = CostLineItem(
       id: _nextCostId('ITEM_'),
@@ -5176,6 +5197,8 @@ class AppStateProvider extends ChangeNotifier {
       unitPrice: unitPrice,
       taxable: taxable,
       catalogModel: catalogModel,
+      manufacturer: manufacturer,
+      partNumber: partNumber,
     );
     _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.items.add(item);
@@ -5221,6 +5244,8 @@ class AppStateProvider extends ChangeNotifier {
   /// typed on it.
   CostLineItem addAvCostExtraEquipment({
     String catalogModel = '',
+    String manufacturer = '',
+    String partNumber = '',
     String description = '',
     String category = '',
     double qty = 1,
@@ -5233,6 +5258,8 @@ class AppStateProvider extends ChangeNotifier {
       qty: qty,
       unitPrice: unitPrice,
       catalogModel: catalogModel,
+      manufacturer: manufacturer,
+      partNumber: partNumber,
     );
     _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.extraEquipment.add(item);
@@ -5259,6 +5286,7 @@ class AppStateProvider extends ChangeNotifier {
     if (recordUndo) _pushAvUndo('Remove ${_costLineName(was)}', _costScope);
     avCost.extraEquipment.removeWhere((i) => i.id == itemId);
     avCost.priceOverrides.remove(itemId);
+    avCost.equipmentSpares.remove(itemId);
     notifyListeners();
   }
 
@@ -5381,6 +5409,8 @@ class AppStateProvider extends ChangeNotifier {
 
   CostLineItem addAvCostExtraHardware({
     String catalogModel = '',
+    String manufacturer = '',
+    String partNumber = '',
     String description = '',
     String category = '',
     double qty = 1,
@@ -5393,6 +5423,8 @@ class AppStateProvider extends ChangeNotifier {
       qty: qty,
       unitPrice: unitPrice,
       catalogModel: catalogModel,
+      manufacturer: manufacturer,
+      partNumber: partNumber,
     );
     _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.extraHardware.add(item);
@@ -5426,6 +5458,8 @@ class AppStateProvider extends ChangeNotifier {
 
   CostLineItem addAvCostExtraCable({
     String catalogModel = '',
+    String manufacturer = '',
+    String partNumber = '',
     String description = '',
     double qty = 1,
     double unitPrice = 0,
@@ -5437,6 +5471,8 @@ class AppStateProvider extends ChangeNotifier {
       qty: qty,
       unitPrice: unitPrice,
       catalogModel: catalogModel,
+      manufacturer: manufacturer,
+      partNumber: partNumber,
     );
     _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.extraCables.add(item);
@@ -7894,6 +7930,7 @@ class AppStateProvider extends ChangeNotifier {
       aurisColor = str('aurisColor', 'F0A500');
       classicSecondary = str('classicSecondary', '');
       textScale = double.tryParse(str('textScale', '')) ?? 1.0;
+      uiScale = double.tryParse(str('uiScale', '')) ?? 1.0;
       currencySymbol = str('currencySymbol', r'$');
       defaultTaxPercent = math.max(
         0,
@@ -9083,6 +9120,9 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'classicSecondary':
         classicSecondary = value; // RRGGBB hex, or '' = Auto
+        break;
+      case 'uiScale':
+        uiScale = double.tryParse(value) ?? 1.0;
         break;
       case 'textScale':
         textScale = double.tryParse(value) ?? 1.0;
@@ -13694,6 +13734,25 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: currency != null && currency.isNotEmpty);
   }
 
+  /// When the job is built; null clears it.
+  void setProjectBuildDate(DateTime? date) {
+    final next = date == null ? null : dateOnly(date);
+    if (next == project.buildDate) return;
+    project.buildDate = next;
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Build date',
+      summary: next == null ? 'cleared' : formatIsoDate(next),
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// The build date the open room's equipment is aged from when it has no
+  /// date of its own: its project's, when the room is on the open job.
+  DateTime? get roomBuildDate =>
+      openProjectRoom != null ? project.buildDate : null;
+
   /// The job's tax rate; null goes back to the app's default.
   void setProjectTaxPercent(double? percent) {
     final next = percent == null ? null : math.max(0.0, percent);
@@ -13749,7 +13808,7 @@ class AppStateProvider extends ChangeNotifier {
     _logProjectEdit(
       itemKey: window.id,
       itemName: window.roomLabel,
-      field: 'Install window',
+      field: 'Maintenance window',
       summary: 'added ${formatScheduleDate(window.day)} ${window.timeLabel}',
     );
     _projectChanged(repricing: false);
@@ -13762,7 +13821,7 @@ class AppStateProvider extends ChangeNotifier {
     _logProjectEdit(
       itemKey: id,
       itemName: gone.roomLabel,
-      field: 'Install window',
+      field: 'Maintenance window',
       summary: 'removed ${formatScheduleDate(gone.day)} ${gone.timeLabel}',
     );
     _projectChanged(repricing: false);
@@ -16037,7 +16096,12 @@ class AppStateProvider extends ChangeNotifier {
 
   void updateProcurementEntry(ProcurementEntry entry) {
     final i = project.procurement.indexWhere((e) => e.id == entry.id);
-    if (i < 0) return;
+    if (i < 0) {
+      // A room line shown on the log with no entry behind it yet: the first
+      // edit is what stores it. See procurement_sync.dart.
+      if (entry.id.startsWith('auto:')) addProcurementEntry(entry);
+      return;
+    }
     final before = project.procurement[i];
     project.procurement[i] = entry;
     _logProjectEdit(
@@ -16052,64 +16116,171 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
-  void removeProcurementEntry(String id) {
-    final i = project.procurement.indexWhere((e) => e.id == id);
-    if (i < 0) return;
-    final was = project.procurement.removeAt(i);
+  /// Gives a procurement column its own heading color, or null for its band's.
+  void setProcurementColumnColor(String columnId, int? argb) {
+    final before = project.procurementColors[columnId];
+    if (before == argb) return;
+    if (argb == null) {
+      project.procurementColors.remove(columnId);
+    } else {
+      project.procurementColors[columnId] = argb;
+    }
     _logProjectEdit(
-      itemKey: 'procurement:$id',
-      itemName: was.device.isEmpty ? 'Procurement line' : was.device,
+      itemKey: 'procurement:colors',
+      itemName: 'Procurement log',
+      field: 'Procurement log',
+      summary: 'column colors changed',
+      coalesce: true,
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Keeps the width a procurement column was dragged to; null goes back to
+  /// its usual one.
+  void setProcurementColumnWidth(String columnId, double? width) {
+    if (width == null) {
+      if (project.procurementColumnWidths.remove(columnId) == null) return;
+    } else {
+      if (project.procurementColumnWidths[columnId] == width) return;
+      project.procurementColumnWidths[columnId] = width;
+    }
+    _projectChanged(repricing: false);
+  }
+
+  /// Keeps the width a responsibility column was dragged to; null goes back
+  /// to the usual one.
+  void setResponsibilityColumnWidth(String itemId, double? width) {
+    if (width == null) {
+      if (project.responsibilityColumnWidths.remove(itemId) == null) return;
+    } else {
+      if (project.responsibilityColumnWidths[itemId] == width) return;
+      project.responsibilityColumnWidths[itemId] = width;
+    }
+    _projectChanged(repricing: false);
+  }
+
+  /// Takes a whole section - every line for one room - off the log.
+  void removeProcurementEntries(List<ProcurementEntry> entries) {
+    if (entries.isEmpty) return;
+    for (final entry in entries) {
+      final i = project.procurement.indexWhere((e) => e.id == entry.id);
+      if (entry.linked) {
+        final hidden = entry.copyWith(excluded: true);
+        if (i >= 0) {
+          project.procurement[i] = hidden;
+        } else {
+          project.procurement.add(
+            hidden.copyWith(id: project.nextProcurementId()),
+          );
+        }
+      } else if (i >= 0) {
+        project.procurement.removeAt(i);
+      }
+    }
+    _logProjectEdit(
+      itemKey: 'procurement',
+      itemName: 'Procurement log',
+      field: 'Procurement log',
+      summary: '${entries.first.room.isEmpty ? 'a section' : entries.first.room}'
+          ' removed (${entries.length} line${entries.length == 1 ? '' : 's'})',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Renames a procurement column on this job; blank goes back to its usual
+  /// heading.
+  void setProcurementColumnLabel(String columnId, String label) {
+    final next = label.trim();
+    final before = project.procurementColumnLabels[columnId] ?? '';
+    if (next == before) return;
+    if (next.isEmpty) {
+      project.procurementColumnLabels.remove(columnId);
+    } else {
+      project.procurementColumnLabels[columnId] = next;
+    }
+    _logProjectEdit(
+      itemKey: 'procurement:labels',
+      itemName: 'Procurement log',
+      field: 'Procurement log',
+      summary: 'column headings changed',
+      coalesce: true,
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Moves a procurement column into [targetId]'s place: dropped to the
+  /// right it lands after it, dropped to the left, before it.
+  void moveProcurementColumn(String id, String targetId) {
+    final order = [
+      for (final c in orderedProcurementColumns(project.procurementColumnOrder))
+        c.id,
+    ];
+    final to = order.indexOf(targetId);
+    if (to < 0 || id == targetId || !order.remove(id)) return;
+    order.insert(to, id);
+    project.procurementColumnOrder
+      ..clear()
+      ..addAll(order);
+    _logProjectEdit(
+      itemKey: 'procurement:order',
+      itemName: 'Procurement log',
+      field: 'Procurement log',
+      summary: 'columns reordered',
+      coalesce: true,
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Takes a line off the log.
+  ///
+  /// A line typed here is deleted. One that follows a room line is kept and
+  /// marked as taken off, or the room line would put it straight back - see
+  /// [restoreHiddenProcurement].
+  void removeProcurementEntry(ProcurementEntry entry) {
+    final name = entry.device.isEmpty ? 'Procurement line' : entry.device;
+    final i = project.procurement.indexWhere((e) => e.id == entry.id);
+    if (entry.linked) {
+      final hidden = entry.copyWith(excluded: true);
+      if (i >= 0) {
+        project.procurement[i] = hidden;
+      } else {
+        project.procurement.add(
+          hidden.copyWith(id: project.nextProcurementId()),
+        );
+      }
+    } else {
+      if (i < 0) return;
+      project.procurement.removeAt(i);
+    }
+    _logProjectEdit(
+      itemKey: 'procurement:${entry.id}',
+      itemName: name,
       field: 'Procurement log',
       summary: 'removed',
     );
     _projectChanged(repricing: false);
   }
 
-  /// Adds a line for every piece of equipment and hardware on the job's rooms
-  /// that the log does not already carry. Returns how many were added.
-  int fillProcurementFromRooms(ProjectEstimate estimate) {
-    String key(String room, String device) =>
-        '${room.trim().toLowerCase()}|${device.trim().toLowerCase()}';
-    final have = {
-      for (final e in project.procurement) key(e.room, e.device),
-    };
-    var added = 0;
-    for (final room in estimate.rooms) {
-      final costs = room.estimate;
-      if (costs == null || !room.ref.included) continue;
-      for (final line in [...costs.equipment, ...costs.hardware]) {
-        final device = [
-          line.manufacturer.trim(),
-          line.model.trim().isNotEmpty ? line.model.trim() : line.description,
-        ].where((s) => s.isNotEmpty).join(' ');
-        if (device.isEmpty || !have.add(key(room.codeName, device))) continue;
-        final leadDays = project.partLeadTimes[line.key];
-        project.procurement.add(
-          ProcurementEntry(
-            id: project.nextProcurementId(),
-            company: kProcurementCompanies.first,
-            room: room.codeName,
-            device: device,
-            description: line.description.trim().isNotEmpty
-                ? line.description.trim()
-                : line.category,
-            leadTime: leadDays == null ? '' : trimNumber(leadDays / 7),
-            notes: line.qty == 1 ? '' : 'Qty ${trimNumber(line.qty)}',
-          ),
-        );
-        added++;
-      }
+  /// How many room lines have been taken off the log on purpose.
+  int get hiddenProcurementCount =>
+      project.procurement.where((e) => e.excluded).length;
+
+  /// Puts back every room line that was taken off the log. Returns how many.
+  int restoreHiddenProcurement() {
+    final hidden = hiddenProcurementCount;
+    if (hidden == 0) return 0;
+    for (var i = 0; i < project.procurement.length; i++) {
+      final e = project.procurement[i];
+      if (e.excluded) project.procurement[i] = e.copyWith(excluded: false);
     }
-    if (added > 0) {
-      _logProjectEdit(
-        itemKey: 'procurement',
-        itemName: 'Procurement log',
-        field: 'Procurement log',
-        summary: '$added line${added == 1 ? '' : 's'} added from the rooms',
-      );
-      _projectChanged(repricing: false);
-    }
-    return added;
+    _logProjectEdit(
+      itemKey: 'procurement',
+      itemName: 'Procurement log',
+      field: 'Procurement log',
+      summary: '$hidden hidden line${hidden == 1 ? '' : 's'} put back',
+    );
+    _projectChanged(repricing: false);
+    return hidden;
   }
 
   void removeResponsibilityItem(String id) {

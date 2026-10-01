@@ -216,10 +216,14 @@ class XlsxTint {
   /// The ink on top of it, 'RRGGBB', already chosen to be legible on [fillHex].
   final String inkHex;
 
+  /// Set in bold, for a colored column heading.
+  final bool bold;
+
   const XlsxTint({
     required this.text,
     required this.fillHex,
     required this.inkHex,
+    this.bold = false,
   });
 
   /// What sorts the column widths, and what a text report prints.
@@ -603,7 +607,8 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
   // One font and one fill per distinct pair in the book, so a name that
   // appears on nine rows and two sheets costs one style rather than eleven.
   final tints = <String>[];
-  String tintKey(XlsxTint t) => '${t.fillHex}|${t.inkHex}';
+  String tintKey(XlsxTint t) =>
+      '${t.fillHex}|${t.inkHex}${t.bold ? '|b' : ''}';
   for (final sheet in sheets) {
     for (final row in sheet.rows) {
       for (final value in row) {
@@ -627,7 +632,8 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
     tintFills.write('<fill><patternFill patternType="solid">'
         '<fgColor rgb="FF${parts[0]}"/><bgColor indexed="64"/>'
         '</patternFill></fill>');
-    tintFonts.write('<font><sz val="11"/><color rgb="FF${parts[1]}"/>'
+    tintFonts.write('<font>${parts.length > 2 ? '<b/>' : ''}'
+        '<sz val="11"/><color rgb="FF${parts[1]}"/>'
         '<name val="Calibri"/></font>');
     tintXfs.write(
         '<xf fontId="${3 + tints.indexOf(key)}" fillId="${5 + tints.indexOf(key)}" '

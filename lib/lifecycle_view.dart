@@ -95,6 +95,7 @@ class _LifecycleViewState extends State<LifecycleView> {
       library: provider.avDeviceLibrary,
       baseCosts: provider.baseCosts,
       tier: provider.pricingTier,
+      buildDate: provider.roomBuildDate,
     );
     final room = recorded.onCycle(provider.assumedLifeCycle);
 

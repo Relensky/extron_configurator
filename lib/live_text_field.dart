@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -60,6 +62,19 @@ class LiveTextField extends StatefulWidget {
   /// Shows an X that empties the box - for search and filter fields.
   final bool clearable;
 
+  /// Waits until typing pauses before calling [onChanged], instead of calling
+  /// it on every key.
+  ///
+  /// For a box whose value reprices or redraws a whole page: a name typed at
+  /// speed was a rebuild per letter, and the letters lagged behind the
+  /// fingers. What was typed is still committed at once on Enter, on clicking
+  /// away, and when the box goes off screen - only the keystrokes in between
+  /// are held.
+  final bool lazy;
+
+  /// How long a [lazy] box waits after the last key.
+  static const Duration lazyPause = Duration(milliseconds: 400);
+
   const LiveTextField({
     super.key,
     required this.fieldId,
@@ -77,6 +92,7 @@ class LiveTextField extends StatefulWidget {
     this.maxLines = 1,
     this.minLines,
     this.clearable = false,
+    this.lazy = false,
   });
 
   @override
@@ -91,6 +107,39 @@ class _LiveTextFieldState extends State<LiveTextField> {
   /// Owned here so the box can tell "somebody is typing in me" from "somebody
   /// changed this value from outside" — see [didUpdateWidget].
   final FocusNode _focus = FocusNode();
+
+  /// What a [LiveTextField.lazy] box is holding, and the clock on it.
+  Timer? _pause;
+  String? _held;
+
+  @override
+  void initState() {
+    super.initState();
+    // Clicking or tabbing away commits what was typed.
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _flush();
+    });
+  }
+
+  void _changed(String text) {
+    if (!widget.lazy) {
+      widget.onChanged(text);
+      return;
+    }
+    _held = text;
+    _pause?.cancel();
+    _pause = Timer(LiveTextField.lazyPause, _flush);
+  }
+
+  /// Hands over whatever a lazy box is still holding.
+  void _flush() {
+    _pause?.cancel();
+    _pause = null;
+    final held = _held;
+    if (held == null) return;
+    _held = null;
+    widget.onChanged(held);
+  }
 
   @override
   void didUpdateWidget(covariant LiveTextField old) {
@@ -115,6 +164,14 @@ class _LiveTextFieldState extends State<LiveTextField> {
 
   @override
   void dispose() {
+    // Typed and then scrolled or tabbed away inside the pause: still an edit.
+    // Handed over after this frame, because the tree is being torn down now.
+    _pause?.cancel();
+    final held = _held;
+    if (held != null) {
+      final commit = widget.onChanged;
+      scheduleMicrotask(() => commit(held));
+    }
     _focus.dispose();
     _controller.dispose();
     super.dispose();
@@ -165,6 +222,11 @@ class _LiveTextFieldState extends State<LiveTextField> {
       isDense: true,
       border: const OutlineInputBorder(),
       labelText: widget.label,
+      // A box whose hint is the value it resolves to keeps its label up, so
+      // that value shows without the box having to be clicked into.
+      floatingLabelBehavior: widget.hintIsValue && widget.label != null
+          ? FloatingLabelBehavior.always
+          : null,
       hintText: widget.hint,
       helperText: widget.helper,
       prefixText: widget.prefix,
@@ -172,13 +234,21 @@ class _LiveTextFieldState extends State<LiveTextField> {
       suffixIcon: widget.clearable
           ? ClearFieldButton(
               controller: _controller,
-              onCleared: () => widget.onChanged(''),
+              onCleared: () {
+                _held = null;
+                _pause?.cancel();
+                widget.onChanged('');
+              },
             )
           : null,
     ),
-    onChanged: widget.onChanged,
-    onSubmitted: widget.onSubmitted,
+    onChanged: _changed,
+    onSubmitted: (text) {
+      _flush();
+      widget.onSubmitted?.call(text);
+    },
     onTapOutside: (_) {
+      _flush();
       // Committing on focus loss as well as on Enter: a rename typed and then
       // clicked away from is still a rename the user made.
       if (widget.onSubmitted != null) widget.onSubmitted!(_controller.text);

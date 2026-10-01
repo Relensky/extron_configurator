@@ -39,6 +39,18 @@ void main() {
       expect(s.taxPercent, 0);
     });
 
+    test('taking the base rate does not change what the room saves', () {
+      // Or opening a room on a job with a rate would mark it changed.
+      final room = RoomCostSettings();
+      final before = jsonEncode(room.toJson());
+      room.followBaseTax(9.25);
+      expect(room.taxPercent, 9.25);
+      expect(jsonEncode(room.toJson()), before);
+      // A room's own rate is still saved.
+      final own = RoomCostSettings(taxPercent: 5);
+      expect(own.toJson()['taxPercent'], 5);
+    });
+
     test('a following room saved at the base still follows it', () {
       final saved = RoomCostSettings()..followBaseTax(7.25);
       final s = read(saved.toJson());

@@ -440,9 +440,8 @@ void main() {
       );
       await pump(tester, p);
 
-      // Two boxes meaning the same thing on one row is how a number gets
-      // typed into the wrong one.
-      expect(spareBox(item.id), findsNothing);
+      // Its own quantity, and spares on top of it like a drawn line has.
+      expect(spareBox(item.id), findsOneWidget);
       expect(
         find.byWidgetPredicate(
           (w) => w is LiveTextField && w.fieldId == 'eqpqty_${item.id}',

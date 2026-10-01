@@ -114,6 +114,12 @@ class CostLineItem {
   /// it forever.
   final bool noControl;
 
+  /// Who makes it and what it is ordered as, for a line typed by hand. A
+  /// catalog line takes both from the catalog; these fill in where it has
+  /// none.
+  final String manufacturer;
+  final String partNumber;
+
   const CostLineItem({
     required this.id,
     required this.description,
@@ -124,6 +130,8 @@ class CostLineItem {
     this.catalogModel = '',
     this.spare = false,
     this.noControl = false,
+    this.manufacturer = '',
+    this.partNumber = '',
   });
 
   double get total => qty * unitPrice;
@@ -137,6 +145,8 @@ class CostLineItem {
     String? catalogModel,
     bool? spare,
     bool? noControl,
+    String? manufacturer,
+    String? partNumber,
   }) => CostLineItem(
     id: id,
     description: description ?? this.description,
@@ -147,6 +157,8 @@ class CostLineItem {
     catalogModel: catalogModel ?? this.catalogModel,
     spare: spare ?? this.spare,
     noControl: noControl ?? this.noControl,
+    manufacturer: manufacturer ?? this.manufacturer,
+    partNumber: partNumber ?? this.partNumber,
   );
 
   Map<String, dynamic> toJson() => {
@@ -159,6 +171,8 @@ class CostLineItem {
     if (catalogModel.isNotEmpty) 'catalogModel': catalogModel,
     if (spare) 'spare': true,
     if (noControl) 'noControl': true,
+    if (manufacturer.trim().isNotEmpty) 'manufacturer': manufacturer.trim(),
+    if (partNumber.trim().isNotEmpty) 'partNumber': partNumber.trim(),
   };
 
   factory CostLineItem.fromJson(Map<String, dynamic> json) => CostLineItem(
@@ -171,6 +185,8 @@ class CostLineItem {
     catalogModel: json['catalogModel']?.toString() ?? '',
     spare: json['spare'] == true,
     noControl: json['noControl'] == true,
+    manufacturer: json['manufacturer']?.toString() ?? '',
+    partNumber: json['partNumber']?.toString() ?? '',
   );
 }
 
@@ -470,6 +486,11 @@ class RoomCostSettings {
   /// decision is made at: the cat6 is somebody else's and the HDMI is not.
   final Map<String, String> furnishedLines;
 
+  /// Line key -> the title typed for that line on the estimate, in place of
+  /// the names the diagram gives it. A row of twelve boxes is listed by all
+  /// twelve names until somebody says what the line is called.
+  final Map<String, String> lineNames;
+
   /// Line keys left off this estimate as existing equipment that stays where
   /// it is - not bought, not installed. Counted with [CostEstimate.excludedLines]
   /// like a device marked existing on the drawing.
@@ -559,6 +580,7 @@ class RoomCostSettings {
     Map<String, double>? qtyOverrides,
     Map<String, double>? equipmentSpares,
     Map<String, String>? furnishedLines,
+    Map<String, String>? lineNames,
     List<CostLineItem>? extraEquipment,
     List<CostLineItem>? extraHardware,
     List<CostLineItem>? extraCables,
@@ -575,6 +597,7 @@ class RoomCostSettings {
        equipmentSpares = equipmentSpares ?? {},
        qtyOverrides = qtyOverrides ?? {},
        furnishedLines = furnishedLines ?? {},
+       lineNames = lineNames ?? {},
        extraEquipment = extraEquipment ?? [],
        extraHardware = extraHardware ?? [],
        extraCables = extraCables ?? [];
@@ -599,6 +622,7 @@ class RoomCostSettings {
       qtyOverrides.isEmpty &&
       equipmentSpares.isEmpty &&
       furnishedLines.isEmpty &&
+      lineNames.isEmpty &&
       extraEquipment.isEmpty &&
       extraHardware.isEmpty &&
       extraCables.isEmpty;
@@ -628,6 +652,7 @@ class RoomCostSettings {
     equipmentSpares.clear();
     qtyOverrides.clear();
     furnishedLines.clear();
+    lineNames.clear();
     extraEquipment.clear();
     extraHardware.clear();
     extraCables.clear();
@@ -641,7 +666,10 @@ class RoomCostSettings {
   Map<String, dynamic> toJson() => {
     'currency': currency,
     'taxLabel': taxLabel,
-    'taxPercent': taxPercent,
+    // A room on the base rate stores none of its own: the rate it shows is
+    // the project's, and writing that in would make the room read as changed
+    // every time the project's rate differed from the file's.
+    'taxPercent': ownTaxRate ? taxPercent : 0,
     'taxOwn': ownTaxRate,
     'includeCabling': includeCabling,
     if (equipmentSort != CostEquipmentSort.standard)
@@ -675,6 +703,7 @@ class RoomCostSettings {
       'qtyOverrides': Map<String, double>.of(qtyOverrides),
     if (furnishedLines.isNotEmpty)
       'furnishedLines': Map<String, String>.of(furnishedLines),
+    if (lineNames.isNotEmpty) 'lineNames': Map<String, String>.of(lineNames),
     if (extraEquipment.isNotEmpty)
       'extraEquipment': [for (final i in extraEquipment) i.toJson()],
     if (extraHardware.isNotEmpty)
@@ -791,6 +820,13 @@ class RoomCostSettings {
         // missing entry means the line is priced on this quote.
         if (value == null) return;
         furnishedLines[key.toString()] = value.toString().trim();
+      });
+    }
+    final names = json['lineNames'];
+    if (names is Map) {
+      names.forEach((key, value) {
+        final text = value?.toString().trim() ?? '';
+        if (text.isNotEmpty) lineNames[key.toString()] = text;
       });
     }
     final entries = json['cableEntries'];
@@ -1117,6 +1153,13 @@ class CostLine {
   /// [RoomCostSettings.shippingEach].
   final double shippingEach;
 
+  /// What the line was called before a title was typed for it - the names
+  /// off the diagram. '' when [description] is still that.
+  final String sourceName;
+
+  /// The name the diagram, the rack or the catalog gives the line.
+  String get defaultName => sourceName.isEmpty ? description : sourceName;
+
   const CostLine({
     required this.key,
     required this.description,
@@ -1133,12 +1176,34 @@ class CostLine {
     this.onDiagram,
     this.furnishedBy,
     this.shippingEach = 0,
+    this.sourceName = '',
   });
+
+  /// This line under the title typed for it - see [RoomCostSettings.lineNames].
+  CostLine named(String title) => CostLine(
+    key: key,
+    description: title,
+    sourceName: defaultName,
+    model: model,
+    partNumber: partNumber,
+    manufacturer: manufacturer,
+    category: category,
+    qty: qty,
+    unitPrice: unitPrice,
+    taxable: taxable,
+    source: source,
+    spare: spare,
+    spareQty: spareQty,
+    onDiagram: onDiagram,
+    furnishedBy: furnishedBy,
+    shippingEach: shippingEach,
+  );
 
   /// This line with [each] as its per-unit shipping.
   CostLine withShipping(double each) => CostLine(
     key: key,
     description: description,
+    sourceName: sourceName,
     model: model,
     partNumber: partNumber,
     manufacturer: manufacturer,
@@ -1558,9 +1623,13 @@ CostEstimate computeRoomCost({
       source = PriceSource.none;
     }
     final furnishedBy = settings.furnishedLines[item.id];
+    // Spares on a quoted line, the same as on a drawn one: more of the same
+    // product at the same price, counted on the line rather than beside it.
+    final spares = settings.equipmentSpares[item.id] ?? 0;
+    final qty = item.qty + (spares > 0 ? spares : 0.0);
     if (source == PriceSource.none && furnishedBy == null) {
       unpricedLines++;
-      unpricedDevices += item.qty.round();
+      unpricedDevices += qty.round();
     }
     if (source == PriceSource.catalogOtherTier && furnishedBy == null) {
       otherTierLines++;
@@ -1575,12 +1644,17 @@ CostEstimate computeRoomCost({
                 : item.catalogModel)
           : item.description,
       model: item.catalogModel,
-      partNumber: catalog?.partNumber ?? '',
-      manufacturer: catalog?.manufacturer ?? '',
+      partNumber: catalog?.partNumber.trim().isNotEmpty == true
+          ? catalog!.partNumber
+          : item.partNumber.trim(),
+      manufacturer: catalog?.manufacturer.trim().isNotEmpty == true
+          ? catalog!.manufacturer
+          : item.manufacturer.trim(),
       category: item.category.trim().isEmpty
           ? fallbackCategory
           : item.category,
-      qty: item.qty,
+      qty: qty,
+      spareQty: spares > 0 ? spares : 0,
       unitPrice: price,
       taxable: item.taxable,
       source: source,
@@ -1907,6 +1981,22 @@ CostEstimate computeRoomCost({
     }
   }
 
+  // --- titles typed on the estimate ----------------------------------------
+  //  In one place, after every table is built, so a line is retitled the same
+  //  way whether it came off the diagram, a rack or a cable run.
+  if (settings.lineNames.isNotEmpty) {
+    void retitle(List<CostLine> lines) {
+      for (var i = 0; i < lines.length; i++) {
+        final title = settings.lineNames[lines[i].key]?.trim() ?? '';
+        if (title.isNotEmpty) lines[i] = lines[i].named(title);
+      }
+    }
+
+    retitle(equipment);
+    retitle(hardware);
+    retitle(cabling);
+  }
+
   // --- shipping, per unit, on the lines it was typed against --------------
   //  Only while the column is on: switching it off takes shipping off the
   //  quote and keeps the figures for when it comes back.
@@ -2173,6 +2263,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       title: 'Equipment',
       header: [
         'Device',
+        'Manufacturer',
         'Model',
         // What actually goes on the purchase order — a model name is what the
         // room is designed around, a part number is what gets ordered.
@@ -2194,6 +2285,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
                       '(${trimNumber(line.drawnQty)} drawn + '
                       '${trimNumber(line.spareQty)} spare)'
                 : line.description,
+            line.manufacturer,
             line.model,
             line.partNumber,
             line.qty,
@@ -2212,6 +2304,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       header: const [
         'Item',
         'Kind',
+        'Manufacturer',
         'Model',
         'Part number',
         'Qty',
@@ -2224,6 +2317,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
           [
             line.description,
             line.category,
+            line.manufacturer,
             line.model,
             line.partNumber,
             line.qty,
@@ -2237,6 +2331,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       title: 'Cabling',
       header: const [
         'Cable',
+        'Manufacturer',
         'Part number',
         'Runs',
         'Unit price',
@@ -2247,6 +2342,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
         for (final line in estimate.cabling)
           [
             line.description,
+            line.manufacturer,
             line.partNumber,
             line.qty,
             cash(line.unitPrice),
@@ -2286,6 +2382,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       header: const [
         'Description',
         'Category',
+        'Manufacturer',
         'Part number',
         'Qty',
         'Unit price',
@@ -2297,6 +2394,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
           [
             line.description,
             line.category,
+            line.manufacturer,
             line.partNumber,
             line.qty,
             cash(line.unitPrice),

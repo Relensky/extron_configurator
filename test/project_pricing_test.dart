@@ -367,7 +367,7 @@ void main() {
           )
           .first,
     );
-    expect(tip.message, contains('tagged to no vendor'));
+    expect(tip.message, contains('missing a vendor'));
   });
 
   testWidgets('the warning opens the list of parts with no price',

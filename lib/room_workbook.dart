@@ -199,6 +199,7 @@ Uint8List buildRoomWorkbookBytes({
             baseCosts: provider.baseCosts,
             tier: provider.pricingTier,
             asOf: stamp,
+            buildDate: provider.roomBuildDate,
           ),
           currency: provider.currencySymbol,
         ),

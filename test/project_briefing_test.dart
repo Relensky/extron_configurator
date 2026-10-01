@@ -168,8 +168,8 @@ void main() {
     );
 
     final all = briefing.openLines.map((l) => l.message).join(' | ');
-    expect(all, contains('no price'));
-    expect(all, contains('in no buying package'));
+    expect(all, contains('missing pricing'));
+    expect(all, contains('missing a vendor'));
     expect(all, contains('No delivery deadline'));
     // Nothing on this job is spared, and nothing else would ever raise it.
     expect(all, contains('spare'));

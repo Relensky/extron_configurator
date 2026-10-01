@@ -144,6 +144,7 @@ List<ReportSection> tabReportSections(
           library: provider.avDeviceLibrary,
           baseCosts: provider.baseCosts,
           tier: provider.pricingTier,
+          buildDate: provider.roomBuildDate,
         ),
         currency: provider.currencySymbol,
       );

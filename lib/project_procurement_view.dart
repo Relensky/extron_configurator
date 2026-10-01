@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
@@ -6,11 +8,16 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'color_wheel_picker.dart';
 import 'file_dialogs.dart';
+import 'name_colors.dart' show kNameTintWheel;
 import 'pinned_grid.dart';
 import 'procurement_log.dart';
+import 'procurement_sync.dart';
 import 'project_estimate.dart';
 import 'project_schedule.dart' show formatScheduleDate;
+import 'responsive.dart' show kFloatingButtonClearance;
+import 'screenshot_tools.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -26,27 +33,35 @@ import 'xlsx_writer.dart';
 /// Which band a header box is colored in.
 enum _Group { item, status, schedule, dates, notes }
 
-/// One column after the frozen device column.
-typedef _Col = ({String label, double width, _Group group});
+/// One column after the frozen device column: the id its color is kept
+/// under (see [kProcurementColumnSpecs]), the heading shown, and its width.
+typedef _Col = ({String id, String label, double width});
 
 const List<_Col> _kCols = [
-  (label: 'Company', width: 110, group: _Group.item),
-  (label: 'Room #', width: 90, group: _Group.item),
-  (label: 'Equipment Description', width: 210, group: _Group.item),
-  (label: 'Status', width: 170, group: _Group.status),
-  (label: 'Install Before Drywall or After Paint?', width: 150, group: _Group.status),
-  (label: 'P6 Activity ID', width: 110, group: _Group.schedule),
-  (label: 'P6 Activity Description', width: 190, group: _Group.schedule),
-  (label: 'Review Time', width: 90, group: _Group.schedule),
-  (label: 'Lead Times (Weeks)', width: 100, group: _Group.schedule),
-  (label: 'P6 Start Date', width: 120, group: _Group.dates),
-  (label: 'Required On Site ($kProcurementOnSiteLeadDays days before P6)', width: 130, group: _Group.dates),
-  (label: 'Date to be Submitted', width: 120, group: _Group.dates),
-  (label: 'Released', width: 80, group: _Group.dates),
-  (label: 'Actual Release Date', width: 120, group: _Group.dates),
-  (label: 'Estimated Delivery Date', width: 120, group: _Group.dates),
-  (label: 'Notes/Comments', width: 240, group: _Group.notes),
+  (id: 'company', label: 'Company', width: 110),
+  (id: 'room', label: 'Room #', width: 90),
+  (id: 'description', label: 'Equipment Description', width: 210),
+  (id: 'status', label: 'Status', width: 170),
+  (id: 'phase', label: 'Install Before Drywall or After Paint?', width: 150),
+  (id: 'p6Id', label: 'P6 Activity ID', width: 110),
+  (id: 'p6Description', label: 'P6 Activity Description', width: 190),
+  (id: 'review', label: 'Review Time', width: 90),
+  (id: 'lead', label: 'Lead Times (Weeks)', width: 100),
+  (id: 'p6Start', label: 'P6 Start Date', width: 120),
+  (
+    id: 'onSite',
+    label: 'Required On Site ($kProcurementOnSiteLeadDays days before P6)',
+    width: 130,
+  ),
+  (id: 'submitBy', label: 'Date to be Submitted', width: 120),
+  (id: 'released', label: 'Released', width: 80),
+  (id: 'releasedOn', label: 'Actual Release Date', width: 120),
+  (id: 'delivery', label: 'Estimated Delivery Date', width: 120),
+  (id: 'notes', label: 'Notes/Comments', width: 240),
 ];
+
+ProcurementColumnSpec _spec(String id) =>
+    kProcurementColumnSpecs.firstWhere((c) => c.id == id);
 
 const double _kFrozen = 260;
 const double _kRow = 44;
@@ -59,7 +74,17 @@ List<Widget> procurementSlivers(
   ProjectEstimate estimate,
 ) {
   final provider = context.watch<AppStateProvider>();
-  final entries = provider.project.procurement;
+  // The stored lines with their names read off the rooms, and every room line
+  // nobody has an entry for yet - see procurement_sync.dart.
+  final entries = liveProcurement(provider.project, estimate);
+  final onRooms = {
+    for (final l in procurementLinesOf(estimate)) '${l.roomId}|${l.key}',
+  };
+  // Linked to a room line that is no longer on the job.
+  final orphans = {
+    for (final e in entries)
+      if (e.linked && !onRooms.contains('${e.roomId}|${e.lineKey}')) e.id,
+  };
 
   return [
     SliverToBoxAdapter(
@@ -73,17 +98,27 @@ List<Widget> procurementSlivers(
           child: Center(
             child: Text(
               'Nothing on the log yet.\n\n'
-              'Fill it from the rooms, or add lines by hand. Each line says '
-              'who buys it, when it has to be on site, and where its '
-              'submittal has got to.',
+              'Every piece of equipment and hardware on the rooms is listed '
+              'here once the rooms have some. Lines can be added by hand too. '
+              'Each line says who buys it, when it has to be on site, and '
+              'where its submittal has got to.',
               textAlign: TextAlign.center,
             ),
           ),
         ),
       )
     else
-      SliverToBoxAdapter(child: _LogGrid(entries: entries)),
-    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      // A whole window tall, not whatever is left under the headings: scrolled
+      // to, the grid fills the screen with its sideways bar at the foot.
+      SliverLayoutBuilder(
+        builder: (context, constraints) => SliverToBoxAdapter(
+          child: SizedBox(
+            height: math.max(360.0, constraints.viewportMainAxisExtent),
+            child: _LogGrid(entries: entries, orphans: orphans),
+          ),
+        ),
+      ),
+    if (entries.isEmpty) const SliverToBoxAdapter(child: SizedBox(height: 24)),
   ];
 }
 
@@ -205,32 +240,30 @@ class _Toolbar extends StatelessWidget {
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Add a line'),
           ),
-          OutlinedButton.icon(
-            key: const ValueKey('procurement_fill'),
-            onPressed: () {
-              final added = provider.fillProcurementFromRooms(estimate);
-              showTimedSnackBar(
-                ScaffoldMessenger.of(context),
-                SnackBar(
-                  content: Text(
-                    added == 0
-                        ? 'Every piece of equipment on the rooms is already '
-                              'on the log.'
-                        : '$added line${added == 1 ? '' : 's'} added from the '
-                              'rooms.',
-                  ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.playlist_add, size: 18),
-            label: const Text('Fill from the rooms'),
-          ),
+          if (provider.hiddenProcurementCount > 0)
+            OutlinedButton.icon(
+              key: const ValueKey('procurement_restore'),
+              onPressed: provider.restoreHiddenProcurement,
+              icon: const Icon(Icons.visibility_outlined, size: 18),
+              label: Text(
+                'Put back ${provider.hiddenProcurementCount} removed',
+              ),
+            ),
           if (entries.isNotEmpty) ...[
             OutlinedButton.icon(
               key: const ValueKey('procurement_export_xlsx'),
               onPressed: () => _exportSpreadsheet(context),
               icon: const Icon(Icons.table_view, size: 18),
               label: const Text('Spreadsheet'),
+            ),
+            OutlinedButton.icon(
+              key: const ValueKey('procurement_export_image'),
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const _ProcurementImageDialog(),
+              ),
+              icon: const Icon(Icons.image_outlined, size: 18),
+              label: const Text('Image'),
             ),
             Text(
               '${entries.length} line${entries.length == 1 ? '' : 's'}',
@@ -257,7 +290,10 @@ typedef _Row = ({String room, int count, ProcurementEntry? entry, int index});
 class _LogGrid extends StatefulWidget {
   final List<ProcurementEntry> entries;
 
-  const _LogGrid({required this.entries});
+  /// The ids of entries whose room line has gone from the job.
+  final Set<String> orphans;
+
+  const _LogGrid({required this.entries, this.orphans = const {}});
 
   @override
   State<_LogGrid> createState() => _LogGridState();
@@ -267,6 +303,23 @@ class _LogGridState extends State<_LogGrid> {
   double _zoom = kGridZoomNormal;
   bool _fit = false;
 
+  /// The columns after the frozen device column, in the job's order and at
+  /// the widths they have been dragged to.
+  List<_Col> _cols = _kCols;
+
+  /// Widths while an edge is being dragged, by column id. Kept here until
+  /// the drag ends, so the whole app is not rebuilt on every pixel.
+  final Map<String, double> _dragWidths = {};
+
+  static const double _kMinWidth = 60;
+  static const double _kMaxWidth = 700;
+
+  /// A column's width before zoom: dragged, kept with the job, or its usual.
+  double _baseWidth(String id, double usual) =>
+      _dragWidths[id] ??
+      context.read<AppStateProvider>().project.procurementColumnWidths[id] ??
+      usual;
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) => _sheet(context, box.maxWidth),
@@ -274,9 +327,19 @@ class _LogGridState extends State<_LogGrid> {
 
   Widget _sheet(BuildContext context, double available) {
     final theme = Theme.of(context);
+    final order = context.watch<AppStateProvider>().project.procurementColumnOrder;
+    _cols = [
+      for (final spec in orderedProcurementColumns(order))
+        if (spec.id != 'device')
+          () {
+            final c = _kCols.firstWhere((c) => c.id == spec.id);
+            return (id: c.id, label: c.label, width: _baseWidth(c.id, c.width));
+          }(),
+    ];
+    final frozenBase = _baseWidth('device', _kFrozen);
     final natural =
-        gridMetric(context, _kFrozen) +
-        _kCols.fold<double>(0, (s, c) => s + gridMetric(context, c.width));
+        gridMetric(context, frozenBase) +
+        _cols.fold<double>(0, (s, c) => s + gridMetric(context, c.width));
     final zoom = _fit
         ? gridFitZoom(natural: natural, available: available - 32)
         : _zoom;
@@ -291,10 +354,16 @@ class _LogGridState extends State<_LogGrid> {
       ],
     ];
     final rowH = w(_kRow);
-    final bodyWidth = _kCols.fold<double>(0, (s, c) => s + w(c.width));
+    final bodyWidth = _cols.fold<double>(0, (s, c) => s + w(c.width));
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      // Clear of the floating Screenshot and Export buttons.
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        4,
+        16,
+        kFloatingButtonClearance,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -303,7 +372,9 @@ class _LogGridState extends State<_LogGrid> {
               Expanded(
                 child: Text(
                   'Press a line to edit it. Press a status or a date to '
-                  'change just that.',
+                  'change just that. Drag a heading by its grip to move the '
+                  'column, or press it to change its color. Shift and the '
+                  'mouse wheel scroll sideways.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -325,17 +396,35 @@ class _LogGridState extends State<_LogGrid> {
             ],
           ),
           const SizedBox(height: 4),
-          PinnedGrid(
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, frame) => PinnedGrid(
             key: const ValueKey('procurement_grid'),
-            frozenWidth: w(_kFrozen),
+            maxHeight: frame.maxHeight,
+            frozenWidth: w(frozenBase),
             headerHeight: w(_kHead),
             bodyWidth: bodyWidth,
             bodyHeight: rowH * rows.length,
-            corner: _headBox(zoomed, 'Device', _Group.item, w(_kFrozen), w),
+            corner: _headBox(
+              zoomed,
+              'device',
+              'Device',
+              w(frozenBase),
+              w,
+              base: frozenBase,
+            ),
             header: Row(
               children: [
-                for (final c in _kCols)
-                  _headBox(zoomed, c.label, c.group, w(c.width), w),
+                for (final c in _cols)
+                  _headBox(
+                    zoomed,
+                    c.id,
+                    c.label,
+                    w(c.width),
+                    w,
+                    movable: true,
+                    base: c.width,
+                  ),
               ],
             ),
             rowCount: rows.length,
@@ -344,6 +433,8 @@ class _LogGridState extends State<_LogGrid> {
                 _frozenRow(context, zoomed, rows[i], w),
             bodyRowBuilder: (context, i) =>
                 _bodyRow(context, zoomed, rows[i], w),
+              ),
+            ),
           ),
         ],
       ),
@@ -353,37 +444,181 @@ class _LogGridState extends State<_LogGrid> {
   /// A header: a colored box, every one the same height.
   Widget _headBox(
     TextTheme zoomed,
+    String id,
     String label,
-    _Group group,
     double width,
-    double Function(double) w,
-  ) {
-    final c = _groupColors(Theme.of(context), group);
+    double Function(double) w, {
+    bool movable = false,
+    required double base,
+  }) => SizedBox(
+    width: width,
+    child: Stack(
+      children: [
+        _headTarget(zoomed, id, label, width, w, movable: movable),
+        // THE EDGE THAT RESIZES. Dragged, the column follows; let go, the
+        // width is kept with the job. Double-pressed, it goes back.
+        Positioned(
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 8,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.resizeColumn,
+            child: GestureDetector(
+              key: ValueKey('procurement_resize_$id'),
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: (d) => setState(
+                () => _dragWidths[id] =
+                    ((_dragWidths[id] ?? base) + d.delta.dx / w(1)).clamp(
+                      _kMinWidth,
+                      _kMaxWidth,
+                    ),
+              ),
+              onHorizontalDragEnd: (_) {
+                final dragged = _dragWidths[id];
+                if (dragged == null) return;
+                context.read<AppStateProvider>().setProcurementColumnWidth(
+                  id,
+                  dragged.roundToDouble(),
+                );
+                setState(() => _dragWidths.remove(id));
+              },
+              onDoubleTap: () => context
+                  .read<AppStateProvider>()
+                  .setProcurementColumnWidth(id, null),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _headTarget(
+    TextTheme zoomed,
+    String id,
+    String label,
+    double width,
+    double Function(double) w, {
+    bool movable = false,
+  }) {
+    final box = _colorBox(zoomed, id, label, width, w, movable: movable);
+    if (!movable) return box;
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (d) => d.data != id,
+      onAcceptWithDetails: (d) =>
+          context.read<AppStateProvider>().moveProcurementColumn(d.data, id),
+      // Drawn over the heading, not around it, so the row does not widen.
+      builder: (context, candidate, _) => Container(
+        foregroundDecoration: candidate.isEmpty
+            ? null
+            : BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 3,
+                  ),
+                ),
+              ),
+        child: box,
+      ),
+    );
+  }
+
+  Widget _colorBox(
+    TextTheme zoomed,
+    String id,
+    String label,
+    double width,
+    double Function(double) w, {
+    bool movable = false,
+  }) {
+    final provider = context.watch<AppStateProvider>();
+    final fill = procurementColumnColor(
+      _spec(id),
+      provider.project.procurementColors,
+    );
+    final c = (fill: Color(fill), ink: Color(procurementInkFor(fill)));
+    // The heading typed on this job, when there is one.
+    final typed = provider.project.procurementColumnLabels[id]?.trim() ?? '';
+    if (typed.isNotEmpty) label = typed;
     return SizedBox(
       width: width,
       height: w(_kHead),
       child: Padding(
         padding: EdgeInsets.all(_kGap),
-        child: DecoratedBox(
+        child: Tooltip(
+          message: 'Press to rename this column or change its color',
+          waitDuration: const Duration(milliseconds: 600),
+          child: InkWell(
+          key: ValueKey('procurement_head_$id'),
+          borderRadius: BorderRadius.circular(6),
+          onTap: () => showProcurementColumnDialog(context, _spec(id)),
+          child: DecoratedBox(
           decoration: BoxDecoration(
             color: c.fill,
             borderRadius: BorderRadius.circular(6),
           ),
-          child: Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: w(6)),
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: zoomed.labelSmall?.copyWith(
-                  color: c.ink,
-                  fontWeight: FontWeight.bold,
+          child: Stack(
+            children: [
+              Center(
+                child: Padding(
+                  // Room for the grip on the left only.
+                  padding: EdgeInsets.only(
+                    left: movable ? w(16) : w(6),
+                    right: w(4),
+                  ),
+                  child: WholeWordText(
+                    label,
+                    maxLines: 3,
+                    style: zoomed.labelSmall?.copyWith(
+                      color: c.ink,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              if (movable)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Draggable<String>(
+                    key: ValueKey('procurement_grip_$id'),
+                    data: id,
+                    dragAnchorStrategy: pointerDragAnchorStrategy,
+                    feedback: Material(
+                      elevation: 4,
+                      color: c.fill,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            color: c.ink,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.grab,
+                      child: Tooltip(
+                        message: 'Drag to move this column',
+                        child: Icon(
+                          Icons.drag_indicator,
+                          size: w(16),
+                          color: c.ink.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
+        ),
+        ),
         ),
       ),
     );
@@ -399,6 +634,41 @@ class _LogGridState extends State<_LogGrid> {
   Border _rule(ThemeData theme) => Border(
     bottom: BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5),
   );
+
+  /// Takes every line for [room] off the log, after asking.
+  Future<void> _removeSection(String room) async {
+    final lines = [
+      for (final e in widget.entries)
+        if (e.room.trim() == room) e,
+    ];
+    if (lines.isEmpty) return;
+    final name = room.isEmpty ? 'this section' : room;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove $name from the log?'),
+        content: Text(
+          '${lines.length} line${lines.length == 1 ? '' : 's'} come off the '
+          'procurement log, with their statuses and dates. The rooms and '
+          'their estimates are not changed. Lines that follow a room can be '
+          'put back afterwards from the toolbar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            key: const ValueKey('procurement_remove_section_go'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    context.read<AppStateProvider>().removeProcurementEntries(lines);
+  }
 
   Future<void> _edit(ProcurementEntry entry) async {
     final provider = context.read<AppStateProvider>();
@@ -425,17 +695,32 @@ class _LogGridState extends State<_LogGrid> {
           color: _rowFill(theme, row),
           border: _rule(theme),
         ),
-        padding: EdgeInsets.symmetric(horizontal: w(10)),
+        padding: EdgeInsets.only(left: w(10)),
         alignment: Alignment.centerLeft,
-        child: Text(
-          '${row.room.isEmpty ? 'No room' : row.room}  ·  ${row.count} '
-          'line${row.count == 1 ? '' : 's'}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: zoomed.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${row.room.isEmpty ? 'No room' : row.room}  ·  ${row.count} '
+                'line${row.count == 1 ? '' : 's'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: zoomed.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+            IconButton(
+              key: ValueKey('procurement_remove_section_${row.room}'),
+              tooltip: 'Remove this whole section',
+              visualDensity: VisualDensity.compact,
+              iconSize: w(18),
+              color: theme.colorScheme.onPrimaryContainer,
+              icon: const Icon(Icons.delete_sweep_outlined),
+              onPressed: () => _removeSection(row.room),
+            ),
+          ],
         ),
       );
     }
@@ -453,8 +738,21 @@ class _LogGridState extends State<_LogGrid> {
                 visualDensity: VisualDensity.compact,
                 iconSize: w(18),
                 icon: const Icon(Icons.delete_outline),
-                onPressed: () => provider.removeProcurementEntry(entry.id),
+                onPressed: () => provider.removeProcurementEntry(entry),
               ),
+              if (widget.orphans.contains(entry.id))
+                Padding(
+                  padding: EdgeInsets.only(right: w(4)),
+                  child: Tooltip(
+                    message: 'No longer on the room\'s estimate. The name is '
+                        'the last one it had.',
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      size: w(16),
+                      color: Colors.orange.shade700,
+                    ),
+                  ),
+                ),
               Expanded(
                 child: Tooltip(
                   message: entry.device,
@@ -575,6 +873,9 @@ class _LogGridState extends State<_LogGrid> {
       text(entry.notes),
     ];
 
+    final byId = {
+      for (final (i, col) in _kCols.indexed) col.id: cells[i],
+    };
     return Material(
       color: _rowFill(theme, row) ?? Colors.transparent,
       child: InkWell(
@@ -583,9 +884,9 @@ class _LogGridState extends State<_LogGrid> {
           decoration: BoxDecoration(border: _rule(theme)),
           child: Row(
             children: [
-              for (var c = 0; c < _kCols.length; c++)
+              for (final col in _cols)
                 Container(
-                  width: w(_kCols[c].width),
+                  width: w(col.width),
                   padding: EdgeInsets.symmetric(horizontal: w(8)),
                   alignment: Alignment.centerLeft,
                   decoration: BoxDecoration(
@@ -597,7 +898,7 @@ class _LogGridState extends State<_LogGrid> {
                       ),
                     ),
                   ),
-                  child: cells[c],
+                  child: byId[col.id],
                 ),
             ],
           ),
@@ -923,8 +1224,24 @@ Future<ProcurementEntry?> showProcurementEditor(
                 runSpacing: 12,
                 children: [
                   field(company, 'Company', presets: kProcurementCompanies),
-                  field(room, 'Room #'),
-                  field(device, 'Device', width: 536),
+                  if (entry.linked)
+                    SizedBox(
+                      width: 536,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Room and device',
+                          helperText: 'From the room. Rename or swap it on '
+                              'the room or the Equipment page and it changes '
+                              'here.',
+                          isDense: true,
+                        ),
+                        child: Text('${entry.room}  -  ${entry.device}'),
+                      ),
+                    )
+                  else ...[
+                    field(room, 'Room #'),
+                    field(device, 'Device', width: 536),
+                  ],
                   field(description, 'Equipment description', width: 536),
                   SizedBox(
                     width: 260,
@@ -1010,6 +1327,9 @@ Future<ProcurementEntry?> showProcurementEditor(
                   releasedOn: releasedOn,
                   estimatedDelivery: delivery,
                   notes: notes.text.trim(),
+                  roomId: entry.roomId,
+                  lineKey: entry.lineKey,
+                  excluded: entry.excluded,
                 ),
               ),
               child: const Text('Save'),
@@ -1038,7 +1358,15 @@ Future<void> _exportSpreadsheet(BuildContext context) async {
       picked.toLowerCase().endsWith('.xlsx') ? picked : '$picked.xlsx';
   try {
     await File(target).writeAsBytes(
-      buildXlsx([procurementLogSheet(project.name, project.procurement)]),
+      buildXlsx([
+        procurementLogSheet(
+          project.name,
+          liveProcurement(project, provider.priceProject()),
+          colors: project.procurementColors,
+          order: project.procurementColumnOrder,
+          labels: project.procurementColumnLabels,
+        ),
+      ]),
     );
     if (context.mounted) {
       showSavedFileSnack(context, provider, 'The procurement log', target);
@@ -1051,4 +1379,465 @@ Future<void> _exportSpreadsheet(BuildContext context) async {
       );
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+//  COLUMN COLORS
+// ---------------------------------------------------------------------------
+
+/// Renames one column and picks its heading color, for this job. Both are
+/// used on the page, in the picture and in the spreadsheet.
+Future<void> showProcurementColumnDialog(
+  BuildContext context,
+  ProcurementColumnSpec column,
+) {
+  final provider = context.read<AppStateProvider>();
+  final title = TextEditingController(
+    text: procurementColumnLabel(
+      column,
+      provider.project.procurementColumnLabels,
+    ),
+  );
+  return showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) {
+        final chosen = provider.project.procurementColors[column.id];
+        final shown = Color(
+          procurementColumnColor(column, provider.project.procurementColors),
+        );
+        void set(int? argb) =>
+            setLocal(() => provider.setProcurementColumnColor(column.id, argb));
+        final swatches = <Color>[
+          for (final g in ProcurementGroup.values) Color(g.color),
+          ...kNameTintWheel,
+        ];
+        return AlertDialog(
+          key: const ValueKey('procurement_color_dialog'),
+          title: const Text('Column heading'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  key: const ValueKey('procurement_column_title'),
+                  controller: title,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Title',
+                    helperText: 'Blank goes back to "${column.label}"',
+                    isDense: true,
+                    suffixIcon: IconButton(
+                      tooltip: 'Back to the usual title',
+                      icon: const Icon(Icons.restart_alt, size: 18),
+                      onPressed: () => setLocal(() {
+                        title.text = column.label;
+                        provider.setProcurementColumnLabel(column.id, '');
+                      }),
+                    ),
+                  ),
+                  // The usual title typed back is the usual title.
+                  onChanged: (v) => provider.setProcurementColumnLabel(
+                    column.id,
+                    v.trim() == column.label ? '' : v,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'The title and its color are used on the page, in the '
+                  'picture and in the spreadsheet.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final c in swatches)
+                      ColorSwatchButton(
+                        key: ValueKey(
+                          'procurement_color_'
+                          '${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}',
+                        ),
+                        color: c,
+                        selected: shown.toARGB32() == c.toARGB32(),
+                        onTap: () => set(c.toARGB32()),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.colorize, size: 16),
+                      label: const Text('Any other color'),
+                      onPressed: () async {
+                        final picked = await showColorWheelDialog(
+                          ctx,
+                          initial: shown,
+                          title: 'Color for this column',
+                        );
+                        if (picked != null) set(picked.toARGB32());
+                      },
+                    ),
+                    TextButton.icon(
+                      key: const ValueKey('procurement_color_default'),
+                      icon: const Icon(Icons.restart_alt, size: 16),
+                      label: const Text('Default'),
+                      onPressed: chosen == null ? null : () => set(null),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+//  THE PICTURE
+// ---------------------------------------------------------------------------
+
+/// The log as a picture: previewed, then saved, copied or annotated.
+class _ProcurementImageDialog extends StatefulWidget {
+  const _ProcurementImageDialog();
+
+  @override
+  State<_ProcurementImageDialog> createState() =>
+      _ProcurementImageDialogState();
+}
+
+class _ProcurementImageDialogState extends State<_ProcurementImageDialog> {
+  final GlobalKey _boundary = GlobalKey();
+  bool _saving = false;
+
+  String get _stem {
+    final name = context.read<AppStateProvider>().project.name.trim();
+    return name.isEmpty ? 'project' : name.replaceAll(RegExp(r'[^\w\-]+'), '_');
+  }
+
+  /// Two device pixels per logical one, so the picture reads on paper.
+  Future<Uint8List?> _capture() async {
+    setState(() => _saving = true);
+    try {
+      return await captureBoundary(_boundary, pixelRatio: 2.0);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _failed() => showTimedSnackBar(
+    ScaffoldMessenger.of(context),
+    const SnackBar(content: Text('The log could not be captured.')),
+  );
+
+  Future<void> _copy() async {
+    final bytes = await _capture();
+    if (!mounted) return;
+    await copyPictureToClipboard(context, bytes, what: 'The log');
+  }
+
+  Future<void> _annotate() async {
+    final bytes = await _capture();
+    if (!mounted) return;
+    if (bytes == null) return _failed();
+    await showAnnotationEditor(
+      context,
+      bytes,
+      defaultFileName: '${_stem}_AV_Procurement_Log.png',
+    );
+  }
+
+  Future<void> _save() async {
+    final provider = context.read<AppStateProvider>();
+    final bytes = await _capture();
+    if (!mounted) return;
+    if (bytes == null) return _failed();
+    final picked = await saveFileCompat(
+      dialogTitle: 'Save the AV procurement log',
+      fileName: '${_stem}_AV_Procurement_Log.png',
+      type: FileType.custom,
+      allowedExtensions: const ['png'],
+    );
+    if (picked == null) return;
+    final target =
+        picked.toLowerCase().endsWith('.png') ? picked : '$picked.png';
+    try {
+      await File(target).writeAsBytes(bytes);
+      if (mounted) {
+        showSavedFileSnack(context, provider, 'The procurement log', target);
+      }
+    } catch (e) {
+      if (mounted) {
+        showTimedSnackBar(
+          ScaffoldMessenger.of(context),
+          SnackBar(content: Text('The picture could not be written: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final project = context.watch<AppStateProvider>().project;
+    return AlertDialog(
+      key: const ValueKey('procurement_image_dialog'),
+      title: const Text('The procurement log as a picture'),
+      content: SizedBox(
+        width: MediaQuery.of(context).size.width * 0.9,
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: ZoomablePicturePreview(
+          keyPrefix: 'procurement_image',
+          backdrop: Theme.of(context).brightness == Brightness.dark
+              ? Colors.black45
+              : Colors.grey[350],
+          child: RepaintBoundary(
+            key: _boundary,
+            child: ProcurementLogPicture(
+              title: project.name.trim().isEmpty
+                  ? kProcurementLogSheet
+                  : '${project.name.trim()} - $kProcurementLogSheet',
+              entries: liveProcurement(
+                project,
+                context.read<AppStateProvider>().priceProject(),
+              ),
+              colors: project.procurementColors,
+              order: project.procurementColumnOrder,
+              labels: project.procurementColumnLabels,
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _saving ? null : _annotate,
+          icon: const Icon(Icons.draw_outlined, size: 18),
+          label: const Text('Annotate'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _saving ? null : _copy,
+          icon: const Icon(Icons.copy_all_outlined, size: 18),
+          label: const Text('Copy to clipboard'),
+        ),
+        FilledButton.icon(
+          key: const ValueKey('procurement_save_png'),
+          onPressed: _saving ? null : _save,
+          icon: const Icon(Icons.download, size: 18),
+          label: Text(_saving ? 'Capturing...' : 'Save as PNG'),
+        ),
+      ],
+    );
+  }
+}
+
+/// The log drawn as the document: every column, every room, on white, with
+/// the column headings in the job's colors.
+class ProcurementLogPicture extends StatelessWidget {
+  final String title;
+  final List<ProcurementEntry> entries;
+  final Map<String, int> colors;
+  final List<String> order;
+  final Map<String, String> labels;
+
+  const ProcurementLogPicture({
+    super.key,
+    required this.title,
+    required this.entries,
+    required this.colors,
+    this.order = const [],
+    this.labels = const {},
+  });
+
+  static const double _wide = 180;
+  static const double _narrow = 96;
+
+  /// The wider columns: the ones that hold a name or a sentence.
+  static const Set<String> _wideIds = {
+    'device',
+    'description',
+    'p6Description',
+    'notes',
+    'status',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    const ink = Color(0xFF1F2933);
+    const cellStyle = TextStyle(fontSize: 11, color: ink);
+    const line = BorderSide(color: Color(0xFFBDBDBD), width: 0.5);
+
+    double widthOf(ProcurementColumnSpec c) =>
+        _wideIds.contains(c.id) ? _wide : _narrow;
+
+    Widget cell(String text, double width, {Color? fill, TextStyle? style}) =>
+        Container(
+          width: width,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          decoration: BoxDecoration(
+            color: fill,
+            border: const Border(right: line, bottom: line),
+          ),
+          child: Text(text, style: style ?? cellStyle),
+        );
+
+    Widget heading(ProcurementColumnSpec c) {
+      final fill = procurementColumnColor(c, colors);
+      return Container(
+        width: widthOf(c),
+        height: 58,
+        margin: const EdgeInsets.all(1.5),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Color(fill),
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: WholeWordText(
+          procurementColumnLabel(c, labels),
+          maxLines: 3,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.bold,
+            color: Color(procurementInkFor(fill)),
+          ),
+        ),
+      );
+    }
+
+    final columns = orderedProcurementColumns(order);
+
+    Widget entryRow(ProcurementEntry e, int i) {
+      final values = procurementValues(e);
+      return Container(
+        color: i.isOdd ? const Color(0xFFF5F5F5) : Colors.white,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final spec in columns)
+              cell(values[spec.id] ?? '', widthOf(spec) + 3),
+          ],
+        ),
+      );
+    }
+
+    final total = columns.fold<double>(
+      0,
+      (sum, c) => sum + widthOf(c) + 3,
+    );
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: ink,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [for (final c in columns) heading(c)],
+          ),
+          for (final group in procurementByRoom(entries)) ...[
+            Container(
+              width: total,
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              color: const Color(0xFFE8EAF6),
+              child: Text(
+                group.room.isEmpty ? 'No room' : group.room,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: ink,
+                ),
+              ),
+            ),
+            for (final (i, e) in group.entries.indexed) entryRow(e, i),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Centered text that wraps between words and never inside one: when a
+/// single word is wider than the space, the type shrinks to fit it.
+class WholeWordText extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+  final int maxLines;
+
+  const WholeWordText(
+    this.text, {
+    super.key,
+    this.style,
+    this.maxLines = 3,
+  });
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      final base = DefaultTextStyle.of(context).style.merge(style);
+      final scaler = MediaQuery.textScalerOf(context);
+      var widest = 0.0;
+      for (final word in text.split(RegExp(r'\s+'))) {
+        if (word.isEmpty) continue;
+        final painter = TextPainter(
+          text: TextSpan(text: word, style: base),
+          textDirection: TextDirection.ltr,
+          textScaler: scaler,
+          maxLines: 1,
+        )..layout();
+        if (painter.width > widest) widest = painter.width;
+        painter.dispose();
+      }
+      final room = box.maxWidth;
+      // A hair of slack, so rounding never tips a word over the edge.
+      final shrink = widest > 0 && room.isFinite && widest + 1 > room
+          ? (room / (widest + 1)).clamp(0.5, 1.0)
+          : 1.0;
+      final size = base.fontSize;
+      return Text(
+        text,
+        textAlign: TextAlign.center,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: shrink == 1.0 || size == null
+            ? base
+            // The spacing between letters shrinks with them, or the word
+            // would still be too wide.
+            : base.copyWith(
+                fontSize: size * shrink,
+                letterSpacing: base.letterSpacing == null
+                    ? null
+                    : base.letterSpacing! * shrink,
+              ),
+      );
+    },
+  );
 }

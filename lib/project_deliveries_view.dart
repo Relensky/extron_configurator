@@ -54,6 +54,49 @@ import 'project_timeline_view.dart'
 /// tab rather than here for the reason the parts list's are: a selection is a
 /// way of LOOKING at the log, not a fact about the job, and it has to survive
 /// this function being rebuilt on every keystroke.
+/// What the Deliveries pane is showing: what is being searched for, and what
+/// has been folded away. Held by the Project tab, so it survives a rebuild
+/// and a trip to another pane.
+class DeliveriesView {
+  /// Matched against item names, PO numbers, vendors, locations and rooms.
+  String search = '';
+
+  /// The delivery cards folded down to their heading, by id.
+  final Set<String> collapsed = <String>{};
+
+  bool ordersOpen = true;
+  bool deliveredOpen = true;
+}
+
+/// A part's manufacturer, model and part number on one line, each said once:
+/// 'Extron · SF 228T Plus · 60-1862-03'. '' when the job knows none of them.
+String partIdentityLine(MasterPartLine m) {
+  final seen = <String>{};
+  return [
+    for (final bit in [m.manufacturer, m.model, m.partNumber])
+      if (bit.trim().isNotEmpty &&
+          bit.trim().toLowerCase() != m.description.trim().toLowerCase() &&
+          seen.add(bit.trim().toLowerCase()))
+        bit.trim(),
+  ].join('  ·  ');
+}
+
+/// True when [needle] (lower case) is in a part's name, manufacturer, model
+/// or part number.
+bool partMatchesSearch(MasterPartLine m, String needle) =>
+    needle.isEmpty ||
+    m.description.toLowerCase().contains(needle) ||
+    m.manufacturer.toLowerCase().contains(needle) ||
+    m.model.toLowerCase().contains(needle) ||
+    m.partNumber.toLowerCase().contains(needle);
+
+/// True when [query] is blank or found in any of [fields], ignoring case.
+bool deliveryMatches(String query, Iterable<String> fields) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return true;
+  return fields.any((f) => f.toLowerCase().contains(q));
+}
+
 List<Widget> deliveriesSlivers(
   BuildContext context,
   ProjectEstimate estimate, {
@@ -61,9 +104,16 @@ List<Widget> deliveriesSlivers(
   ValueChanged<String>? onToggleSelected,
   ValueChanged<List<String>>? onSelectShown,
   VoidCallback? onClearSelected,
+  DeliveriesView? view,
+  VoidCallback? onViewChanged,
 }) {
   final provider = context.watch<AppStateProvider>();
   final project = provider.project;
+  final show = view ?? DeliveriesView();
+  void changed(VoidCallback change) {
+    change();
+    onViewChanged?.call();
+  }
 
   // The building code and room number - 'BSS 103' - the same way every other
   // pane names a room. See [ProjectRoomCost.codeName].
@@ -75,7 +125,7 @@ List<Widget> deliveriesSlivers(
 
   // Newest arrival first: a delivery log is read from the top, and what landed
   // this week is what somebody is looking for.
-  final deliveries = [...project.deliveries]
+  final everyDelivery = [...project.deliveries]
     ..sort((a, b) {
       final ad = a.deliveredOn;
       final bd = b.deliveredOn;
@@ -86,8 +136,47 @@ List<Widget> deliveriesSlivers(
       return byDate != 0 ? byDate : b.id.compareTo(a.id);
     });
 
+  // WHAT THE SEARCH LEAVES. An item, a PO number, a vendor, where it is or
+  // the room it went into - whichever of them somebody remembers.
+  final deliveries = [
+    for (final d in everyDelivery)
+      if (deliveryMatches(show.search, [
+        d.itemName,
+        d.poNumber,
+        d.location,
+        roomNames[d.roomId] ?? '',
+        for (final n in d.notes) n.text,
+      ]))
+        d,
+  ];
+  final orders = [
+    for (final po in project.purchaseOrders)
+      if (deliveryMatches(show.search, [
+        po.number,
+        po.vendor,
+        for (final n in po.notes) n.text,
+      ]))
+        po,
+  ];
+  final searching = show.search.trim().isNotEmpty;
+
   return [
     SliverToBoxAdapter(child: _AddPoBar(provider: provider)),
+    if (project.purchaseOrders.isNotEmpty || project.deliveries.isNotEmpty)
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          child: _DeliverySearch(
+            text: show.search,
+            onChanged: (v) => changed(() => show.search = v),
+            found: searching
+                ? '${orders.length} PO${orders.length == 1 ? '' : 's'}, '
+                      '${deliveries.length} '
+                      'deliver${deliveries.length == 1 ? 'y' : 'ies'}'
+                : '',
+          ),
+        ),
+      ),
     if (project.purchaseOrders.isEmpty)
       const SliverToBoxAdapter(
         child: Padding(
@@ -104,15 +193,22 @@ List<Widget> deliveriesSlivers(
     else ...[
       SliverToBoxAdapter(
         child: _SectionLabel(
-          text: 'PURCHASE ORDERS (${project.purchaseOrders.length})',
+          text: searching
+              ? 'PURCHASE ORDERS (${orders.length} of '
+                    '${project.purchaseOrders.length})'
+              : 'PURCHASE ORDERS (${project.purchaseOrders.length})',
+          open: show.ordersOpen,
+          onToggle: () => changed(() => show.ordersOpen = !show.ordersOpen),
+          toggleKey: 'delivery_orders_toggle',
         ),
       ),
+      if (show.ordersOpen)
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
         sliver: SliverList.builder(
-          itemCount: project.purchaseOrders.length,
+          itemCount: orders.length,
           itemBuilder: (context, i) => _PoCard(
-            po: project.purchaseOrders[i],
+            po: orders[i],
             provider: provider,
             estimate: estimate,
           ),
@@ -124,8 +220,15 @@ List<Widget> deliveriesSlivers(
         children: [
           Expanded(
             child: _SectionLabel(
-              text: deliveries.isEmpty
+              open: show.deliveredOpen,
+              onToggle: () =>
+                  changed(() => show.deliveredOpen = !show.deliveredOpen),
+              toggleKey: 'delivery_delivered_toggle',
+              text: everyDelivery.isEmpty
                   ? 'DELIVERED'
+                  : searching
+                  ? 'DELIVERED (${deliveries.length} of '
+                        '${everyDelivery.length})'
                   : 'DELIVERED (${_onHandSummary(project)})',
               // TICK EVERYTHING, or untick it. Only once there is something to
               // tick: a box above an empty log is a control with nothing to
@@ -159,6 +262,30 @@ List<Widget> deliveriesSlivers(
                     ),
             ),
           ),
+          if (deliveries.isNotEmpty && show.deliveredOpen)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: () {
+                final allFolded =
+                    deliveries.every((d) => show.collapsed.contains(d.id));
+                return TextButton.icon(
+                  key: const ValueKey('delivery_collapse_all'),
+                  icon: Icon(
+                    allFolded ? Icons.unfold_more : Icons.unfold_less,
+                    size: 18,
+                  ),
+                  label: Text(allFolded ? 'Expand all' : 'Collapse all'),
+                  onPressed: () => changed(() {
+                    final ids = [for (final d in deliveries) d.id];
+                    if (allFolded) {
+                      show.collapsed.removeAll(ids);
+                    } else {
+                      show.collapsed.addAll(ids);
+                    }
+                  }),
+                );
+              }(),
+            ),
           // TWO WAYS IN, because a delivery is either one thing or a load.
           // The second only appears when there is an equipment list to tick
           // against - it has nothing to offer a job whose parts are not
@@ -195,7 +322,14 @@ List<Widget> deliveriesSlivers(
         ],
       ),
     ),
-    if (deliveries.isEmpty)
+    if (everyDelivery.isNotEmpty && deliveries.isEmpty)
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 12, 16, 24),
+          child: Text('No delivery matches "${show.search.trim()}".'),
+        ),
+      )
+    else if (deliveries.isEmpty)
       const SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -214,7 +348,7 @@ List<Widget> deliveriesSlivers(
           ),
         ),
       )
-    else ...[
+    else if (show.deliveredOpen) ...[
       SliverToBoxAdapter(child: _PaperworkLine(project: project)),
       // ABOVE THE LIST rather than floating over it, for the reason the parts
       // list's bar is: a bar that pushed the rows up and down under the
@@ -245,6 +379,11 @@ List<Widget> deliveriesSlivers(
             estimate: estimate,
             rooms: roomChoices,
             roomNames: roomNames,
+            collapsed: show.collapsed.contains(deliveries[i].id),
+            onToggleCollapsed: () => changed(() {
+              final id = deliveries[i].id;
+              if (!show.collapsed.remove(id)) show.collapsed.add(id);
+            }),
             selected: selected.contains(deliveries[i].id),
             onSelect: onToggleSelected == null
                 ? null
@@ -255,6 +394,73 @@ List<Widget> deliveriesSlivers(
     ],
     const SliverToBoxAdapter(child: SizedBox(height: 24)),
   ];
+}
+
+/// The search box over the purchase orders and the deliveries.
+class _DeliverySearch extends StatefulWidget {
+  final String text;
+  final ValueChanged<String> onChanged;
+
+  /// What the search found, said beside the box. '' while nothing is typed.
+  final String found;
+
+  const _DeliverySearch({
+    required this.text,
+    required this.onChanged,
+    required this.found,
+  });
+
+  @override
+  State<_DeliverySearch> createState() => _DeliverySearchState();
+}
+
+class _DeliverySearchState extends State<_DeliverySearch> {
+  late final TextEditingController _text =
+      TextEditingController(text: widget.text);
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      SizedBox(
+        width: 360,
+        child: TextField(
+          key: const ValueKey('delivery_search'),
+          controller: _text,
+          decoration: InputDecoration(
+            isDense: true,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.search, size: 20),
+            hintText: 'Search items and PO numbers',
+            suffixIcon: _text.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear the search',
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () {
+                      _text.clear();
+                      widget.onChanged('');
+                      setState(() {});
+                    },
+                  ),
+          ),
+          onChanged: (v) {
+            widget.onChanged(v);
+            setState(() {});
+          },
+        ),
+      ),
+      if (widget.found.isNotEmpty) ...[
+        const SizedBox(width: 12),
+        Text(widget.found, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    ],
+  );
 }
 
 /// What the log is carrying that is not on a purchase order: the card
@@ -341,7 +547,19 @@ class _SectionLabel extends StatelessWidget {
   /// headings above it.
   final Widget? leading;
 
-  const _SectionLabel({required this.text, this.leading});
+  /// Whether the section under this heading is showing, and the press that
+  /// folds it. Null [onToggle] is a heading with nothing to fold.
+  final bool open;
+  final VoidCallback? onToggle;
+  final String toggleKey;
+
+  const _SectionLabel({
+    required this.text,
+    this.leading,
+    this.open = true,
+    this.onToggle,
+    this.toggleKey = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -353,13 +571,37 @@ class _SectionLabel extends StatelessWidget {
         color: theme.colorScheme.onSurfaceVariant,
       ),
     );
+    final fold = onToggle == null
+        ? null
+        : InkWell(
+            key: toggleKey.isEmpty ? null : ValueKey(toggleKey),
+            customBorder: const CircleBorder(),
+            onTap: onToggle,
+            child: Tooltip(
+              message: open ? 'Collapse this section' : 'Expand this section',
+              child: Icon(
+                open ? Icons.expand_more : Icons.chevron_right,
+                size: 20,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          );
     return Padding(
-      padding: EdgeInsets.fromLTRB(leading == null ? 28 : 8, 12, 16, 4),
-      child: leading == null
+      padding: EdgeInsets.fromLTRB(
+        fold != null || leading != null ? 8 : 28,
+        12,
+        16,
+        4,
+      ),
+      child: fold == null && leading == null
           ? label
           : Row(
               children: [
-                leading!,
+                ?fold,
+                if (leading != null) ...[
+                  if (fold != null) const SizedBox(width: 4),
+                  leading!,
+                ],
                 const SizedBox(width: 4),
                 Flexible(child: label),
               ],
@@ -994,10 +1236,7 @@ class _PoPartsDialogState extends State<_PoPartsDialog> {
     if (needle.isEmpty) return base;
     return [
       for (final m in base)
-        if (m.description.toLowerCase().contains(needle) ||
-            m.model.toLowerCase().contains(needle) ||
-            m.partNumber.toLowerCase().contains(needle))
-          m,
+        if (partMatchesSearch(m, needle)) m,
     ];
   }
 
@@ -1136,6 +1375,8 @@ class _PoPartsDialogState extends State<_PoPartsDialog> {
                           ),
                           subtitle: Text(
                             [
+                              if (partIdentityLine(m).isNotEmpty)
+                                partIdentityLine(m),
                               '${formatUnits(m.qty)} on the job',
                               if (m.vendor != null) m.vendor!.name,
                               // Said out loud rather than silently moved: a
@@ -1213,6 +1454,10 @@ class _DeliveryCard extends StatelessWidget {
   final bool selected;
   final VoidCallback? onSelect;
 
+  /// Folded down to its heading: what it is, how many, and where.
+  final bool collapsed;
+  final VoidCallback? onToggleCollapsed;
+
   const _DeliveryCard({
     required this.row,
     required this.provider,
@@ -1221,6 +1466,8 @@ class _DeliveryCard extends StatelessWidget {
     required this.roomNames,
     this.selected = false,
     this.onSelect,
+    this.collapsed = false,
+    this.onToggleCollapsed,
   });
 
   @override
@@ -1252,6 +1499,23 @@ class _DeliveryCard extends StatelessWidget {
                       value: selected,
                       visualDensity: VisualDensity.compact,
                       onChanged: (_) => onSelect!(),
+                    ),
+                  ),
+                if (onToggleCollapsed != null)
+                  InkWell(
+                    key: ValueKey('delivery_fold_${row.id}'),
+                    customBorder: const CircleBorder(),
+                    onTap: onToggleCollapsed,
+                    child: Tooltip(
+                      message: collapsed ? 'Expand' : 'Collapse',
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Icon(
+                          collapsed ? Icons.chevron_right : Icons.expand_more,
+                          size: 20,
+                          color: muted,
+                        ),
+                      ),
                     ),
                   ),
                 Icon(deliveryStateIcon(row.state), size: 18, color: muted),
@@ -1323,7 +1587,7 @@ class _DeliveryCard extends StatelessWidget {
             // to is found by scrolling this list - and a delivery that names
             // neither a PO nor a card is the one that cannot be reconciled
             // against an order, an invoice or a statement later.
-            if (row.needsPaperwork)
+            if (row.needsPaperwork && !collapsed)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Row(
@@ -1348,17 +1612,20 @@ class _DeliveryCard extends StatelessWidget {
                   ],
                 ),
               ),
-            const SizedBox(height: 8),
-            // WHERE IT IS, as one gesture. Moving a pallet from the dock to a
-            // shelf to a room is the thing this pane is opened for, so it is a
-            // row of buttons on the card rather than a dialog to open first.
-            _WhereRow(row: row, provider: provider, rooms: rooms),
-            _NoteThread(
-              notes: row.notes,
-              fieldKey: 'delivery_note_${row.id}',
-              onAdd: (text) => provider.addProjectDeliveryNote(row.id, text),
-              onRemove: (i) => provider.removeProjectDeliveryNote(row.id, i),
-            ),
+            if (!collapsed) ...[
+              const SizedBox(height: 8),
+              // WHERE IT IS, as one gesture. Moving a pallet from the dock to
+              // a shelf to a room is the thing this pane is opened for, so it
+              // is a row of buttons on the card rather than a dialog to open
+              // first.
+              _WhereRow(row: row, provider: provider, rooms: rooms),
+              _NoteThread(
+                notes: row.notes,
+                fieldKey: 'delivery_note_${row.id}',
+                onAdd: (text) => provider.addProjectDeliveryNote(row.id, text),
+                onRemove: (i) => provider.removeProjectDeliveryNote(row.id, i),
+              ),
+            ],
           ],
         ),
       ),
@@ -2234,6 +2501,10 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
     text: widget.existing?.location ?? '',
   );
   late final TextEditingController _note = TextEditingController();
+
+  /// Narrows the What arrived list by name, manufacturer, model or part
+  /// number.
+  final TextEditingController _partSearch = TextEditingController();
   late DateTime? _delivered = widget.existing?.deliveredOn ?? today();
   late DateTime? _installed = widget.existing?.installedOn;
   late DeliveryState _state =
@@ -2262,6 +2533,7 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
     _po.dispose();
     _location.dispose();
     _note.dispose();
+    _partSearch.dispose();
     super.dispose();
   }
 
@@ -2391,8 +2663,28 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (master.length > 8) ...[
+                TextField(
+                  key: const ValueKey('delivery_part_search'),
+                  controller: _partSearch,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.search, size: 20),
+                    hintText: 'Search by name, manufacturer or part number',
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               DropdownButtonFormField<String>(
-                key: const ValueKey('delivery_part'),
+                // Rebuilt as the search narrows it, so the list it opens is
+                // the narrowed one.
+                key: ValueKey(
+                  _partSearch.text.isEmpty
+                      ? 'delivery_part'
+                      : 'delivery_part_${_partSearch.text}',
+                ),
                 initialValue: known ? _partKey : _kOffList,
                 isExpanded: true,
                 decoration: const InputDecoration(
@@ -2401,13 +2693,22 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
                 ),
                 items: [
                   for (final m in master)
-                    DropdownMenuItem(
-                      value: m.key,
-                      child: Text(
-                        m.description,
-                        overflow: TextOverflow.ellipsis,
+                    // The one already picked stays on the list whatever is
+                    // typed, or the box would have nothing to show.
+                    if (m.key == _partKey ||
+                        partMatchesSearch(
+                          m,
+                          _partSearch.text.trim().toLowerCase(),
+                        ))
+                      DropdownMenuItem(
+                        value: m.key,
+                        child: Text(
+                          partIdentityLine(m).isEmpty
+                              ? m.description
+                              : '${m.description}  -  ${partIdentityLine(m)}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
                   const DropdownMenuItem(
                     value: _kOffList,
                     child: Text('Something not on the equipment list'),
@@ -2816,10 +3117,7 @@ class _BulkDeliveryDialogState extends State<_BulkDeliveryDialog> {
     if (needle.isEmpty) return widget.estimate.master;
     return [
       for (final m in widget.estimate.master)
-        if (m.description.toLowerCase().contains(needle) ||
-            m.model.toLowerCase().contains(needle) ||
-            m.partNumber.toLowerCase().contains(needle))
-          m,
+        if (partMatchesSearch(m, needle)) m,
     ];
   }
 
@@ -3134,6 +3432,7 @@ class _BulkDeliveryDialogState extends State<_BulkDeliveryDialog> {
             ),
             subtitle: Text(
               [
+                if (partIdentityLine(line).isNotEmpty) partIdentityLine(line),
                 if (line.qty > 0) 'the job buys ${formatUnits(line.qty)}',
                 if (here > 0) '${formatUnits(here)} already logged',
                 if (po.isNotEmpty) 'bought on $po' else 'on no PO the job knows',

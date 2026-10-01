@@ -136,6 +136,32 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  test('a part is found by its maker and part number, not only its name', () {
+    final mic = MasterPartLine(
+      key: 'k1',
+      kind: MasterPartKind.equipment,
+      description: 'Ceiling microphone',
+      model: 'MXA925',
+      partNumber: 'MXA925B-S',
+      manufacturer: 'Shure',
+      category: '',
+      qty: 5,
+      total: 100,
+      unitPrice: 20,
+      maxUnitPrice: 20,
+      qtyByRoom: const {},
+      rfq: null,
+      vendor: null,
+      tagSource: RfqTagSource.none,
+      unpriced: false,
+    );
+    expect(partMatchesSearch(mic, 'shure'), isTrue);
+    expect(partMatchesSearch(mic, 'mxa925b'), isTrue);
+    expect(partMatchesSearch(mic, 'ceiling'), isTrue);
+    expect(partMatchesSearch(mic, 'extron'), isFalse);
+    expect(partIdentityLine(mic), 'Shure  ·  MXA925  ·  MXA925B-S');
+  });
+
   testWidgets('picking a part brings the PO that bought it', (tester) async {
     final j = job();
     await open(tester, j.provider, j.estimate);

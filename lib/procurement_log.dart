@@ -1,7 +1,9 @@
+import 'dart:math' as math;
+
 import 'building_project.dart' show addDays, formatIsoDate, parseIsoDate;
 import 'project_schedule.dart' show formatScheduleDate;
 import 'report_tools.dart';
-import 'xlsx_writer.dart' show XlsxSheet;
+import 'xlsx_writer.dart' show XlsxRowStyle, XlsxSheet, XlsxTint;
 
 /// ============================================================================
 ///  THE AV PROCUREMENT LOG
@@ -59,6 +61,8 @@ DateTime? parseTypedDate(String text) {
     return date.month == m ? date : null;
   }
 
+  // A year on its own: the first of January.
+  if (RegExp(r'^\d{4}$').hasMatch(t)) return make(int.parse(t), 1, 1);
   var match = RegExp(r'^(\d{4})-(\d{1,2})-(\d{1,2})$').firstMatch(t);
   if (match != null) {
     return make(int.parse(match[1]!), int.parse(match[2]!),
@@ -117,6 +121,16 @@ class ProcurementEntry {
   final DateTime? estimatedDelivery;
   final String notes;
 
+  /// The room line this entry is about: the project room's id and the line's
+  /// key on that room's estimate. Both set, the room and device shown are the
+  /// room's own, live - see procurement_sync.dart. Blank is a line typed here.
+  final String roomId;
+  final String lineKey;
+
+  /// Taken off the log on purpose. Kept, so the room line it names does not
+  /// come straight back.
+  final bool excluded;
+
   const ProcurementEntry({
     required this.id,
     this.company = '',
@@ -135,7 +149,13 @@ class ProcurementEntry {
     this.releasedOn,
     this.estimatedDelivery,
     this.notes = '',
+    this.roomId = '',
+    this.lineKey = '',
+    this.excluded = false,
   });
+
+  /// True when this entry follows a line on a room's estimate.
+  bool get linked => roomId.isNotEmpty && lineKey.isNotEmpty;
 
   /// The status as the contractor reads it: 'Submitted to DPR'.
   String get statusText {
@@ -178,8 +198,15 @@ class ProcurementEntry {
     DateTime? estimatedDelivery,
     bool clearEstimatedDelivery = false,
     String? notes,
+    String? id,
+    String? roomId,
+    String? lineKey,
+    bool? excluded,
   }) => ProcurementEntry(
-    id: id,
+    id: id ?? this.id,
+    roomId: roomId ?? this.roomId,
+    lineKey: lineKey ?? this.lineKey,
+    excluded: excluded ?? this.excluded,
     company: company ?? this.company,
     room: room ?? this.room,
     device: device ?? this.device,
@@ -222,6 +249,9 @@ class ProcurementEntry {
       if (estimatedDelivery != null)
         'estimatedDelivery': date(estimatedDelivery),
       if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+      if (roomId.isNotEmpty) 'roomId': roomId,
+      if (lineKey.isNotEmpty) 'lineKey': lineKey,
+      if (excluded) 'excluded': true,
     };
   }
 
@@ -245,30 +275,122 @@ class ProcurementEntry {
       releasedOn: parseIsoDate(json['releasedOn']),
       estimatedDelivery: parseIsoDate(json['estimatedDelivery']),
       notes: text('notes'),
+      roomId: text('roomId'),
+      lineKey: text('lineKey'),
+      excluded: json['excluded'] == true,
     );
   }
 }
 
 /// The log's columns, in the order the contractor's sheet has them.
-const List<String> kProcurementColumns = [
-  'Company',
-  'Room #',
-  'Device',
-  'Equipment Description',
-  'Status',
-  'Install Before Drywall or After Paint?',
-  'P6 Activity ID',
-  'P6 Activity Description',
-  'Review Time',
-  'Lead Times (In Weeks)',
-  'P6 Start Date',
-  'Date Required On Site ($kProcurementOnSiteLeadDays Days before P6)',
-  'Date to be Submitted',
-  'Released',
-  'Actual Release Date',
-  'Estimated Delivery Date',
-  'Notes/Comments',
+/// The bands the columns are colored in until somebody picks their own.
+enum ProcurementGroup {
+  item(0xFFC5CAE9),
+  status(0xFFFFE0B2),
+  schedule(0xFFB2DFDB),
+  dates(0xFFE1BEE7),
+  notes(0xFFCFD8DC);
+
+  /// The default heading color, ARGB.
+  final int color;
+  const ProcurementGroup(this.color);
+}
+
+/// One column of the log: a stable id (what a chosen color is saved under),
+/// its heading, and the band it starts in.
+typedef ProcurementColumnSpec = ({
+  String id,
+  String label,
+  ProcurementGroup group,
+});
+
+/// The log's columns, in the order the contractor's sheet has them.
+const List<ProcurementColumnSpec> kProcurementColumnSpecs = [
+  (id: 'company', label: 'Company', group: ProcurementGroup.item),
+  (id: 'room', label: 'Room #', group: ProcurementGroup.item),
+  (id: 'device', label: 'Device', group: ProcurementGroup.item),
+  (
+    id: 'description',
+    label: 'Equipment Description',
+    group: ProcurementGroup.item,
+  ),
+  (id: 'status', label: 'Status', group: ProcurementGroup.status),
+  (
+    id: 'phase',
+    label: 'Install Before Drywall or After Paint?',
+    group: ProcurementGroup.status,
+  ),
+  (id: 'p6Id', label: 'P6 Activity ID', group: ProcurementGroup.schedule),
+  (
+    id: 'p6Description',
+    label: 'P6 Activity Description',
+    group: ProcurementGroup.schedule,
+  ),
+  (id: 'review', label: 'Review Time', group: ProcurementGroup.schedule),
+  (
+    id: 'lead',
+    label: 'Lead Times (In Weeks)',
+    group: ProcurementGroup.schedule,
+  ),
+  (id: 'p6Start', label: 'P6 Start Date', group: ProcurementGroup.dates),
+  (
+    id: 'onSite',
+    label: 'Date Required On Site ($kProcurementOnSiteLeadDays Days before P6)',
+    group: ProcurementGroup.dates,
+  ),
+  (
+    id: 'submitBy',
+    label: 'Date to be Submitted',
+    group: ProcurementGroup.dates,
+  ),
+  (id: 'released', label: 'Released', group: ProcurementGroup.dates),
+  (
+    id: 'releasedOn',
+    label: 'Actual Release Date',
+    group: ProcurementGroup.dates,
+  ),
+  (
+    id: 'delivery',
+    label: 'Estimated Delivery Date',
+    group: ProcurementGroup.dates,
+  ),
+  (id: 'notes', label: 'Notes/Comments', group: ProcurementGroup.notes),
 ];
+
+/// The headings alone, in order.
+final List<String> kProcurementColumns = [
+  for (final c in kProcurementColumnSpecs) c.label,
+];
+
+/// A column's heading color, ARGB: the one chosen on this job, or its band's.
+int procurementColumnColor(
+  ProcurementColumnSpec column,
+  Map<String, int> chosen,
+) => chosen[column.id] ?? column.group.color;
+
+/// A column's heading: the one typed on this job, or its usual one.
+String procurementColumnLabel(
+  ProcurementColumnSpec column,
+  Map<String, String> typed,
+) {
+  final own = typed[column.id]?.trim() ?? '';
+  return own.isEmpty ? column.label : own;
+}
+
+/// Dark or white text, whichever reads on [argb].
+int procurementInkFor(int argb) {
+  double channel(int shift) {
+    final c = ((argb >> shift) & 0xFF) / 255.0;
+    return c <= 0.03928 ? c / 12.92 : math.pow((c + 0.055) / 1.055, 2.4) * 1.0;
+  }
+
+  final luminance =
+      0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0);
+  return luminance > 0.4 ? 0xFF1F2933 : 0xFFFFFFFF;
+}
+
+String _hex(int argb) =>
+    (argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
 
 /// The entries grouped by room, rooms in the order they first appear.
 List<({String room, List<ProcurementEntry> entries})> procurementByRoom(
@@ -284,53 +406,118 @@ List<({String room, List<ProcurementEntry> entries})> procurementByRoom(
 }
 
 /// One row of the issued sheet.
-List<dynamic> procurementRow(ProcurementEntry e) {
+/// The columns in the order the job keeps them: [order] first, by id, then
+/// any it does not name in their usual places.
+List<ProcurementColumnSpec> orderedProcurementColumns(List<String> order) {
+  final byId = {for (final c in kProcurementColumnSpecs) c.id: c};
+  final out = <ProcurementColumnSpec>[
+    for (final id in order)
+      if (byId.containsKey(id)) byId.remove(id)!,
+  ];
+  for (final c in kProcurementColumnSpecs) {
+    if (byId.containsKey(c.id)) out.add(c);
+  }
+  return out;
+}
+
+/// What one line says in each column, by column id.
+Map<String, String> procurementValues(ProcurementEntry e) {
   String date(DateTime? d) => d == null ? '' : formatScheduleDate(d);
+  return {
+    'company': e.company,
+    'room': e.room,
+    'device': e.device,
+    'description': e.description,
+    'status': e.statusText,
+    'phase': e.installPhase,
+    'p6Id': e.p6ActivityId,
+    'p6Description': e.p6ActivityDescription,
+    'review': e.reviewTime,
+    'lead': e.leadTime,
+    'p6Start': date(e.p6Start),
+    'onSite': date(e.requiredOnSite),
+    'submitBy': date(e.submitBy),
+    'released': e.released ? 'Yes' : '',
+    'releasedOn': date(e.releasedOn),
+    'delivery': date(e.estimatedDelivery),
+    'notes': e.notes,
+  };
+}
+
+/// One row of the issued sheet, in [order] (see [orderedProcurementColumns]).
+List<dynamic> procurementRow(
+  ProcurementEntry e, {
+  List<String> order = const [],
+}) {
+  final values = procurementValues(e);
   return [
-    e.company,
-    e.room,
-    e.device,
-    e.description,
-    e.statusText,
-    e.installPhase,
-    e.p6ActivityId,
-    e.p6ActivityDescription,
-    e.reviewTime,
-    e.leadTime,
-    date(e.p6Start),
-    date(e.requiredOnSite),
-    date(e.submitBy),
-    e.released ? 'Yes' : '',
-    date(e.releasedOn),
-    date(e.estimatedDelivery),
-    e.notes,
+    for (final c in orderedProcurementColumns(order)) values[c.id] ?? '',
   ];
 }
 
-/// The log as report sections, one per room.
-List<ReportSection> procurementLogSections(List<ProcurementEntry> entries) => [
-  for (final group in procurementByRoom(entries))
-    (
-      title: group.room.isEmpty ? 'No room' : group.room,
-      header: kProcurementColumns,
-      rows: [for (final e in group.entries) procurementRow(e)],
-    ),
-];
+/// The log as report sections, one per room, its columns in [order] and
+/// headed as [labels] renames them.
+List<ReportSection> procurementLogSections(
+  List<ProcurementEntry> entries, {
+  List<String> order = const [],
+  Map<String, String> labels = const {},
+}) {
+  final header = [
+    for (final c in orderedProcurementColumns(order))
+      procurementColumnLabel(c, labels),
+  ];
+  return [
+    for (final group in procurementByRoom(entries))
+      (
+        title: group.room.isEmpty ? 'No room' : group.room,
+        header: header,
+        rows: [
+          for (final e in group.entries) procurementRow(e, order: order),
+        ],
+      ),
+  ];
+}
 
 /// The tab the log is written on, in its own file and in the workbook.
 const String kProcurementLogSheet = 'AV Procurement Log';
 
-/// The log as a spreadsheet for the contractor.
+/// The log as a spreadsheet for the contractor, its column headings in the
+/// colors chosen on the Procurement page.
 XlsxSheet procurementLogSheet(
   String projectName,
   List<ProcurementEntry> entries, {
   String sheetName = kProcurementLogSheet,
   DateTime? generated,
-}) => buildStackedReportSheet(
-  sheetName: sheetName,
-  title: projectName.trim().isEmpty
-      ? kProcurementLogSheet
-      : '${projectName.trim()} - $kProcurementLogSheet',
-  sections: procurementLogSections(entries),
-  generated: generated,
-);
+  Map<String, int> colors = const {},
+  List<String> order = const [],
+  Map<String, String> labels = const {},
+}) {
+  final sheet = buildStackedReportSheet(
+    sheetName: sheetName,
+    title: projectName.trim().isEmpty
+        ? kProcurementLogSheet
+        : '${projectName.trim()} - $kProcurementLogSheet',
+    sections: procurementLogSections(entries, order: order, labels: labels),
+    generated: generated,
+  );
+  final byLabel = {
+    for (final c in kProcurementColumnSpecs)
+      procurementColumnLabel(c, labels): c,
+  };
+  for (var r = 0; r < sheet.rows.length; r++) {
+    if (sheet.rowStyles[r] != XlsxRowStyle.header) continue;
+    final row = sheet.rows[r];
+    for (var c = 0; c < row.length; c++) {
+      final spec = byLabel[row[c]];
+      if (spec == null) continue;
+      final fill = procurementColumnColor(spec, colors);
+      row[c] = XlsxTint(
+        text: procurementColumnLabel(spec, labels),
+        fillHex: _hex(fill),
+        inkHex: _hex(procurementInkFor(fill)),
+        bold: true,
+      );
+    }
+  }
+  return sheet;
+}

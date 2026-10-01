@@ -621,6 +621,34 @@ class _MatrixGridState extends State<_MatrixGrid> {
   /// the window is resized or the side pane is folded away.
   bool _fit = true;
 
+  // --- column widths --------------------------------------------------------
+  //  A scope column can be dragged wider or narrower by its right-hand edge.
+  //  The width is kept with the job; while the edge is moving it lives here,
+  //  so the whole app is not rebuilt on every pixel.
+
+  /// What a scope column is before anybody drags it.
+  static const double _kItemBase = 116;
+  static const double _kMinItem = 60;
+  static const double _kMaxItem = 480;
+
+  final Map<String, double> _dragWidths = {};
+
+  /// Each scope column's width as drawn, by item id. Filled in [_sheet].
+  Map<String, double> _widths = const {};
+
+  /// One base pixel as drawn - what a drag distance is divided by.
+  double _unit = 1;
+
+  /// A scope column's width before type scaling and zoom.
+  double _itemBase(String id) =>
+      _dragWidths[id] ??
+      widget.project.responsibilityColumnWidths[id] ??
+      _kItemBase;
+
+  /// The width [item]'s column is drawn at.
+  double _itemWidth(ResponsibilityItem item, _Metrics m) =>
+      _widths[item.id] ?? m.itemColumn;
+
   @override
   void dispose() {
     _hover.dispose();
@@ -744,10 +772,16 @@ class _MatrixGridState extends State<_MatrixGrid> {
     // at once.
     final zoom = _fit
         ? gridFitZoom(
-            natural: naturalRoom + naturalItemColumn(context) * items.length,
+            natural: naturalRoom +
+                items.fold<double>(
+                  0,
+                  (sum, i) => sum + gridMetric(context, _itemBase(i.id)),
+                ),
             available: available - 32,
           )
         : _zoom;
+    _unit = gridMetric(context, 1) * zoom;
+    _widths = {for (final i in items) i.id: _itemBase(i.id) * _unit};
 
     // The type goes with the boxes. A cell at half size with the same figure
     // in it is a cell with an ellipsis where the quantity was.
@@ -764,7 +798,11 @@ class _MatrixGridState extends State<_MatrixGrid> {
         context,
         items: items,
         style: zoomed.labelMedium?.copyWith(fontWeight: FontWeight.bold),
-        columnWidth: naturalItemColumn(context) * zoom,
+        // The narrowest column, so every name has the height it needs.
+        columnWidth: _widths.values.fold<double>(
+          naturalItemColumn(context) * zoom,
+          (least, w) => w < least ? w : least,
+        ),
         zoom: zoom,
       ),
     );
@@ -834,7 +872,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
                 (anyCutsheet ? m.cutsheetRow : 0) +
                 m.partyRow * 2 +
                 m.roomLabelRow,
-            bodyWidth: m.itemColumn * items.length,
+            bodyWidth: _widths.values.fold<double>(0, (sum, w) => sum + w),
             bodyHeight: m.bodyRow * bodyRows,
             corner: _frozenHead(theme, zoomed, m, anyCutsheet),
             header: Row(
@@ -1035,7 +1073,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
           children: [
             for (final item in items)
               SizedBox(
-                width: m.itemColumn,
+                width: _itemWidth(item, m),
                 // ANSWERED FROM A MENU ON THE CELL - see [_CellPicker]. The
                 // same gesture the party rows above take, rather than a modal
                 // for every one of three hundred boxes.
@@ -1108,7 +1146,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
       children: [
         for (final item in widget.project.responsibility)
           SizedBox(
-            width: m.itemColumn,
+            width: _itemWidth(item, m),
             child: _cell(
               height: m.bodyRow,
               align: Alignment.center,
@@ -1217,7 +1255,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _ColumnGrip(item: item, width: m.itemColumn),
+                _ColumnGrip(item: item, width: _itemWidth(item, m)),
                 Expanded(
                   // ON THE RULE IT BELONGS TO. The name sits at the bottom of
                   // the head, against the parties it is answered by, however
@@ -1316,7 +1354,58 @@ class _MatrixGridState extends State<_MatrixGrid> {
     );
 
     return SizedBox(
-      width: m.itemColumn,
+      width: _itemWidth(item, m),
+      child: Stack(
+        children: [
+          _headDropTarget(context, item, index, described),
+          // THE EDGE THAT RESIZES. Dragged, the column follows; let go, the
+          // width is kept with the job. Double-pressed, it goes back.
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 8,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeColumn,
+              child: GestureDetector(
+                key: ValueKey('matrix_resize_${item.id}'),
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragUpdate: (d) => setState(
+                  () => _dragWidths[item.id] =
+                      (_itemBase(item.id) + d.delta.dx / _unit).clamp(
+                        _kMinItem,
+                        _kMaxItem,
+                      ),
+                ),
+                onHorizontalDragEnd: (_) {
+                  final dragged = _dragWidths[item.id];
+                  if (dragged == null) return;
+                  context
+                      .read<AppStateProvider>()
+                      .setResponsibilityColumnWidth(
+                        item.id,
+                        dragged.roundToDouble(),
+                      );
+                  setState(() => _dragWidths.remove(item.id));
+                },
+                onDoubleTap: () => context
+                    .read<AppStateProvider>()
+                    .setResponsibilityColumnWidth(item.id, null),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headDropTarget(
+    BuildContext context,
+    ResponsibilityItem item,
+    int index,
+    Widget described,
+  ) {
+    return SizedBox(
       // DROPPED ON A HEAD, dragged by the grip inside it. A column is its
       // heading as far as anybody reading the sheet is concerned, so the head
       // is the target - but it is NOT the handle: dragging the head is how the

@@ -183,13 +183,13 @@ void main() {
       // here — the fees card is below the fold and the on-screen list is
       // lazy, which is the very reason the capture cannot use it.)
       expect(find.byType(TextField), findsWidgets);
-      expect(find.widgetWithText(TextButton, 'Add line'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Add equipment'), findsOneWidget);
 
       await pump(tester, p, capturing: Brightness.light);
 
       // In the capture frame: no inputs, no buttons, no icons.
       expect(find.byType(TextField), findsNothing);
-      expect(find.widgetWithText(TextButton, 'Add line'), findsNothing);
+      expect(find.widgetWithText(TextButton, 'Add equipment'), findsNothing);
       expect(find.widgetWithText(TextButton, 'Add crew'), findsNothing);
       // Built, because the capture frame is not lazy — and still hidden.
       expect(find.widgetWithText(TextButton, 'Add fee'), findsNothing);

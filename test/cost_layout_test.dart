@@ -215,7 +215,7 @@ void main() {
     // The Equipment card's own right edge, measured off the row of column
     // captions under the heading rather than hard-coded.
     final cardRight = tester.getBottomRight(find.byType(Card).at(1)).dx;
-    final addLine = find.text('Add line');
+    final addLine = find.byKey(const ValueKey('cost_add_equipment'));
     expect(addLine, findsOneWidget);
     final buttonRight = tester.getBottomRight(addLine).dx;
 

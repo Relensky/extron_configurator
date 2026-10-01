@@ -14,6 +14,9 @@ import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/project_estimate.dart';
+import 'package:extron_configurator/procurement_log.dart';
+import 'package:extron_configurator/procurement_sync.dart';
+import 'package:extron_configurator/project_procurement_view.dart';
 import 'package:extron_configurator/project_view.dart';
 
 /// The Project tab: the building total at the top, the rooms behind it, the
@@ -469,10 +472,73 @@ void main() {
     });
   });
 
+  testWidgets('the equipment list has a Sort by menu', (tester) async {
+    await pump(tester, withProject());
+    await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
+
+    IconButton direction() => tester.widget<IconButton>(
+      find.byKey(const ValueKey('project_parts_sort_direction')),
+    );
+    // Grouped: nothing to reverse yet.
+    expect(direction().onPressed, isNull);
+
+    await tester.tap(find.byKey(const ValueKey('project_parts_sort')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Extended price').last);
+    await tester.pumpAndSettle();
+
+    // Money starts biggest first, and the arrow reverses it.
+    expect(direction().onPressed, isNotNull);
+    expect((direction().icon as Icon).icon, Icons.arrow_downward);
+    await tester.tap(find.byKey(const ValueKey('project_parts_sort_direction')));
+    await tester.pumpAndSettle();
+    expect((direction().icon as Icon).icon, Icons.arrow_upward);
+
+    // The other orders asked for are all on the menu.
+    await tester.tap(find.byKey(const ValueKey('project_parts_sort')));
+    await tester.pumpAndSettle();
+    for (final label in ['Order-by date', 'Part', 'Unit price', 'Lead time']) {
+      expect(find.text(label), findsWidgets);
+    }
+  });
+
+  testWidgets('the room rows line up: figures, notes and buttons',
+      (tester) async {
+    await pump(tester, withProject());
+
+    List<Rect> rects(String label) => [
+      for (final e in find.text(label).evaluate())
+        tester.getRect(find.byWidget(e.widget)),
+    ];
+    // One per room row. 'Equipment' and 'Labor' are also on the pane switcher
+    // and the totals card, so each row's are the ones level with its Notes.
+    final notes = rects('Notes').where((r) => r.top > 200).toList();
+    Rect beside(String label, Rect note) => rects(label).reduce(
+      (a, b) =>
+          (a.top - note.top).abs() <= (b.top - note.top).abs() ? a : b,
+    );
+    final equipment = [for (final n in notes) beside('Equipment', n)];
+    final labor = [for (final n in notes) beside('Labor', n)];
+    expect(notes.length, greaterThanOrEqualTo(2));
+
+    // Down the page: every row's columns start and end in the same place.
+    for (final column in [equipment, labor, notes]) {
+      for (final r in column) {
+        expect(r.right, closeTo(column.first.right, 0.5));
+      }
+    }
+    // Across a row: the labels sit on one line.
+    for (var i = 0; i < equipment.length; i++) {
+      expect(equipment[i].top, closeTo(notes[i].top, 0.5));
+      expect(labor[i].top, closeTo(notes[i].top, 0.5));
+    }
+  });
+
   group('the procurement log', () {
     Future<AppStateProvider> opened(WidgetTester tester) async {
+      // Nothing is filled in: the rooms' own lines are on the log already.
       final p = withProject();
-      expect(p.fillProcurementFromRooms(p.priceProject()), greaterThan(0));
       await pump(tester, p, width: 3000);
       await tester.tap(find.byKey(const ValueKey('project_pane_procurement')));
       await tester.pumpAndSettle();
@@ -488,17 +554,169 @@ void main() {
       expect(find.text('125%'), findsOneWidget);
     });
 
+    testWidgets('a column heading takes a color of its own', (tester) async {
+      final p = await opened(tester);
+      await tester.tap(find.byKey(const ValueKey('procurement_head_status')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('procurement_color_dialog')),
+        findsOneWidget,
+      );
+      // The dates band's color, picked for the status column.
+      await tester.tap(find.byKey(const ValueKey('procurement_color_e1bee7')));
+      await tester.pumpAndSettle();
+      expect(p.project.procurementColors['status'], 0xFFE1BEE7);
+      await tester.tap(find.byKey(const ValueKey('procurement_color_default')));
+      await tester.pumpAndSettle();
+      expect(p.project.procurementColors, isEmpty);
+    });
+
+    testWidgets('a column heading can be renamed', (tester) async {
+      final p = await opened(tester);
+      await tester.tap(find.byKey(const ValueKey('procurement_head_status')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('procurement_column_title')),
+        'Submittal status',
+      );
+      await tester.pumpAndSettle();
+      expect(p.project.procurementColumnLabels['status'], 'Submittal status');
+      expect(find.text('Submittal status'), findsWidgets);
+      // The usual title typed back is no rename at all.
+      await tester.enterText(
+        find.byKey(const ValueKey('procurement_column_title')),
+        'Status',
+      );
+      await tester.pumpAndSettle();
+      expect(p.project.procurementColumnLabels, isEmpty);
+    });
+
+    testWidgets('a heading too narrow for a word shrinks it, never splits it',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 70,
+                child: WholeWordText(
+                  'Released',
+                  style: TextStyle(fontSize: 14),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final text = tester.widget<Text>(find.text('Released'));
+      expect(text.style!.fontSize, lessThan(14));
+      // One line tall: the word was not broken across two.
+      final painter = TextPainter(
+        text: TextSpan(text: 'Released', style: text.style),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: 70);
+      expect(painter.computeLineMetrics(), hasLength(1));
+    });
+
+    testWidgets('a column is moved by dragging its heading', (tester) async {
+      final p = await opened(tester);
+      final grip = find.byKey(const ValueKey('procurement_grip_status'));
+      final target = find.byKey(const ValueKey('procurement_head_company'));
+      final gesture = await tester.startGesture(tester.getCenter(grip));
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.moveTo(tester.getCenter(target));
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        orderedProcurementColumns(p.project.procurementColumnOrder)
+            .map((c) => c.id)
+            .take(2),
+        ['status', 'company'],
+      );
+    });
+
+    testWidgets('a column is widened by dragging its edge', (tester) async {
+      final p = await opened(tester);
+      final head = find.byKey(const ValueKey('procurement_head_status'));
+      final before = tester.getSize(head).width;
+      await tester.drag(
+        find.byKey(const ValueKey('procurement_resize_status')),
+        const Offset(60, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(head).width, greaterThan(before + 30));
+      expect(p.project.procurementColumnWidths['status'], greaterThan(170));
+      // Kept with the project.
+      expect(
+        BuildingProject.fromJson(p.project.toJson())
+            .procurementColumnWidths['status'],
+        p.project.procurementColumnWidths['status'],
+      );
+    });
+
+    testWidgets('a whole room section can be removed', (tester) async {
+      final p = await opened(tester);
+      final before = liveProcurement(p.project, p.priceProject());
+      expect(before.where((e) => e.room == 'Bessey 101'), hasLength(2));
+      await tester.tap(
+        find.byKey(const ValueKey('procurement_remove_section_Bessey 101')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('procurement_remove_section_go')),
+      );
+      await tester.pumpAndSettle();
+      final after = liveProcurement(p.project, p.priceProject());
+      expect(after.where((e) => e.room == 'Bessey 101'), isEmpty);
+      expect(after, hasLength(before.length - 2));
+    });
+
+    testWidgets('the page can be taken as a picture', (tester) async {
+      await opened(tester);
+      await tester.tap(find.byKey(const ValueKey('procurement_export_image')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('procurement_image_dialog')),
+        findsOneWidget,
+      );
+      expect(find.byType(ProcurementLogPicture), findsOneWidget);
+    });
+
     testWidgets('a date can be typed into its cell', (tester) async {
       final p = await opened(tester);
-      final id = p.project.procurement.first.id;
-      await tester.tap(find.byKey(ValueKey('procurement_p6_$id')));
+      // A room line nobody has an entry for yet; looking stores nothing.
+      expect(p.project.procurement, isEmpty);
+      final shown = liveProcurement(p.project, p.priceProject()).first;
+      await tester.tap(find.byKey(ValueKey('procurement_p6_${shown.id}')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).last, '3/10/2027');
       await tester.tap(find.byKey(const ValueKey('procurement_date_save')));
       await tester.pumpAndSettle();
-      final entry = p.project.procurement.first;
+      // The first edit is what stores it, still linked to its room line.
+      final entry = p.project.procurement.single;
       expect(entry.p6Start, DateTime(2027, 3, 10));
       expect(entry.requiredOnSite, DateTime(2027, 3, 6));
+      expect(entry.linked, isTrue);
+      expect(entry.lineKey, shown.lineKey);
+    });
+
+    testWidgets('a removed room line stays off until it is put back',
+        (tester) async {
+      final p = await opened(tester);
+      final before = liveProcurement(p.project, p.priceProject());
+      p.removeProcurementEntry(before.first);
+      await tester.pumpAndSettle();
+      expect(
+        liveProcurement(p.project, p.priceProject()),
+        hasLength(before.length - 1),
+      );
+      await tester.tap(find.byKey(const ValueKey('procurement_restore')));
+      await tester.pumpAndSettle();
+      expect(
+        liveProcurement(p.project, p.priceProject()),
+        hasLength(before.length),
+      );
     });
   });
 

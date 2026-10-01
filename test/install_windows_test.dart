@@ -143,7 +143,7 @@ void main() {
     expect(before.every((d) => d.free), isTrue);
   });
 
-  test('install windows survive the project file', () {
+  test('maintenance windows survive the project file', () {
     final p = BuildingProject(name: 'Job');
     p.installWindows.add(InstallWindow.create(
       roomId: 'manual1',
@@ -320,11 +320,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('install_export_copy')));
     await tester.pumpAndSettle();
     expect(copied, isNotNull);
-    expect(copied, contains('Install windows - Job'));
-    expect(copied, contains('Planned install windows'));
+    expect(copied, contains('Maintenance windows - Job'));
+    expect(copied, contains('Planned maintenance windows'));
     expect(copied, contains('SOCI 101'));
     expect(copied, contains('Intro Sociology'));
-    expect(copied, contains('Planned install window'));
+    expect(copied, contains('Planned maintenance window'));
     expect(copied, contains('Free all day'), reason: 'Tue 2 Feb is free');
 
     // The view is remembered for the session; the picture is of the timeline.

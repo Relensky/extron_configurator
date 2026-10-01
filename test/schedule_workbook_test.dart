@@ -32,7 +32,7 @@ void main() {
         wholeDay: wholeDay,
       );
 
-  test('no install windows, no tab', () {
+  test('no maintenance windows, no tab', () {
     expect(classScheduleSections(withWindows([]), schedule), isEmpty);
   });
 
@@ -72,7 +72,7 @@ void main() {
     expect((monday[col(9 * 60)] as XlsxTint).text, 'ART 101');
     expect(monday[col(10 * 60)], isA<XlsxTint>(), reason: 'still in class');
     expect(monday[col(10 * 60 + 30)], '');
-    expect((monday[col(11 * 60)] as XlsxTint).text, 'Install 10/5');
+    expect((monday[col(11 * 60)] as XlsxTint).text, 'Maint. 10/5');
     // Tuesday has neither.
     expect(week.rows[1].skip(1).every((c) => c == ''), isTrue);
   });

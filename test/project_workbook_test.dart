@@ -179,6 +179,15 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('the project workbook', () {
+    test('a job with no spares says so once, not twice', () {
+      final archive = ZipDecoder().decodeBytes(
+        buildProjectWorkbookBytes(estimate: job()),
+      );
+      final summary = sheetNamed(archive, 'Summary');
+      expect(summary, contains('Nothing on this job has a spare'));
+      expect(summary, isNot(contains('installed with nothing held spare')));
+    });
+
     test('carries the procurement log, as its own export writes it', () {
       final estimate = job();
       estimate.project.procurement.add(
@@ -427,7 +436,7 @@ void main() {
       expect(tabNames(archive), contains('Untagged'));
       expect(
         sheetNamed(archive, 'Summary'),
-        contains('in no buying package'),
+        contains('missing a vendor'),
       );
     });
   });

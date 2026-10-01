@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.25+35';
+const String kAppVersion = '0.5.34+44';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,164 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.34',
+    date: 'October 1, 2026',
+    title: 'Faster typing on the Cost tab; search and sorting for parts and deliveries',
+    changes: [
+      'Typing a name, description, manufacturer, part number or note on the '
+          'Cost tab no longer lags. The change is taken when the typing '
+          'pauses, on Enter, or on clicking away, rather than on every key.',
+      'On the Cost tab, a room on its project\'s tax rate shows the rate: '
+          '"Project rate: 9.25%" above the box, and the rate in the box.',
+      'The Deliveries page has a search box that finds deliveries and '
+          'purchase orders by item, PO number, vendor, location or room.',
+      'On the Deliveries page each delivery folds down to its heading line, '
+          'Collapse all and Expand all do the lot, and the Purchase Orders '
+          'and Delivered sections fold too.',
+      'The Equipment page has a Sort by menu: order-by date, part, unit '
+          'price, extended price, lead time, package or quantity, with an '
+          'arrow that reverses the order.',
+      'Adding a delivery or a purchase order shows each part with its '
+          'manufacturer, model and part number, and the search finds parts '
+          'by any of those as well as by name.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.33',
+    date: 'October 1, 2026',
+    title: 'The procurement log follows the rooms',
+    changes: [
+      'The procurement log follows the rooms. Every piece of equipment and '
+          'hardware on a room is on the log, and a line shows the name the '
+          'room has for it now - rename or swap a part and the log, its '
+          'spreadsheet and its picture change with it. A line whose item has '
+          'left the room is flagged rather than dropped.',
+      'A whole room section can be removed from the procurement log, and '
+          'removed lines can be put back from the toolbar.',
+      'Column widths on the Procurement and Responsibility pages can be '
+          'dragged by the right-hand edge of a heading. The width is kept '
+          'with the project; double-click the edge to put it back.',
+      'On the Cost tab, a line that is quoted but not drawn can have spares, '
+          'the same as a drawn one.',
+      'On the Cost tab, the name of every equipment, rack hardware and cable '
+          'line can be edited, including lines counted off the diagram - a '
+          'row of twelve boxes can be given one title instead of twelve '
+          'names. Cleared, it goes back. Any text on the page can be '
+          'selected and copied.',
+      'On the Cost tab, where the tax rate comes from - the project, the '
+          'default, or this room - is said above the Tax rate box.',
+      'On the Project Rooms page the Equipment, Labor, Room total, Notes and '
+          'buttons line up from row to row.',
+      'Install windows are now called maintenance windows.',
+      'A to-do with a due date is on the Timeline until it is done.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.32',
+    date: 'September 30, 2026',
+    title: 'Opening a file no longer marks it edited',
+    changes: [
+      'Opening a room no longer marks it as changed. A room on its '
+          "project's tax rate was reading as edited the moment it opened.",
+      'The name of somebody else with a file open is shown only once they '
+          'have changed it - unsaved work, or a save since they opened it - '
+          'rather than whenever they have it open.',
+      'On the Cost tab the Model heading sits directly over the model text.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.31',
+    date: 'September 30, 2026',
+    title: 'Procurement headings: rename them, whole words',
+    changes: [
+      'Pressing a Procurement column heading now lets you retitle the '
+          'column as well as color it. The title is kept with the project '
+          'and used by the spreadsheet and the picture; blank goes back to '
+          'the usual one.',
+      'A column heading never splits a word across two lines. It wraps '
+          'between words, and a word too wide for its column is set a '
+          'little smaller instead.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.30',
+    date: 'September 30, 2026',
+    title: 'Interface size; a full-height procurement grid',
+    changes: [
+      'App Config has an Interface Size: the whole window is drawn at the '
+          'size picked there, whatever the Windows display scaling is. 100% '
+          'is the size the app is at Windows 100%; Follow Windows keeps the '
+          'old behavior. It runs from 50% to 200%. Text Size still applies on '
+          'top, and now runs from 70% to 200%.',
+      'The Procurement grid is a full window tall instead of the space left '
+          'under the headings. Scrolled to, it fills the screen with its '
+          'sideways bar at the foot.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.29',
+    date: 'September 30, 2026',
+    title: 'Build date; movable procurement columns',
+    changes: [
+      'Procurement columns can be dragged into a new order by the grip on '
+          'each heading. The order is kept with the project and used by the '
+          'spreadsheet and the picture.',
+      'The Procurement grid fills the window, so its sideways scroll bar is '
+          'at the foot of the screen. Click the bar or drag it, or hold Shift '
+          'and turn the mouse wheel.',
+      'A project has a build date, beside the tax rate. Equipment with no '
+          'install date of its own is aged from it on the replacement plan, '
+          'so a new building has its lifecycle from the day it opens. A year '
+          'on its own can be typed.',
+      'The room picker in the title bar has "Close this room", which leaves '
+          'the project open.',
+      'On the Cost tab, equipment and other items have one Add button each, '
+          'like rack hardware and cabling. The dialog takes a catalog part, '
+          'or just a name whose details can be filled in on the line later. '
+          'The Model column sits a little clear of the name beside it.',
+      'Warnings say a part is "missing pricing" and an item is "missing a '
+          'vendor and will not be tracked". A job with no spares says so once '
+          'on the workbook rather than twice.',
+      'The Packages page describes vendors as the companies that will be '
+          'sent a quote for equipment related to the current project.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.28',
+    date: 'September 30, 2026',
+    title: 'Procurement column colors and picture',
+    changes: [
+      'On the Procurement page, press a column heading to give it a color of '
+          'its own, or put it back to its default. The colors are kept with '
+          'the project, and the spreadsheet - on its own or in the project '
+          'workbook - colors its headings to match.',
+      'The Procurement page has an Image button: the whole log as a '
+          'picture, in the column colors, to save as a PNG, copy, or '
+          'annotate.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.27',
+    date: 'September 30, 2026',
+    title: 'Manufacturer and part number on every cost line',
+    changes: [
+      'Every table on the Cost tab - equipment, rack hardware, cabling and '
+          'other items - shows each line\'s manufacturer, model and part '
+          'number. A line added by hand, with no catalog part behind it, has '
+          'its own manufacturer and part number to type, in the Add dialog '
+          'and on the line. The room exports carry a Manufacturer column.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.26',
+    date: 'September 30, 2026',
+    title: 'Online Copy folder',
+    changes: [
+      'In Online Copy the folder can be typed or edited in place, and Choose '
+          "opens in the job's own folder.",
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.25',
     date: 'September 30, 2026',
