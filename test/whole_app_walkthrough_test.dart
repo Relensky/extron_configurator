@@ -140,7 +140,7 @@ void main() {
     await settle(tester, 'settings');
 
     const titles = [
-      'Pricing and estimates', 'Appearance', 'Editing behavior',
+      'Pricing and estimates', 'Editing behavior',
       'App updates', 'Autosave and recovery', 'Logging', 'Files and folders',
       'Working together', 'Data files', 'Shared lists', 'Processor connection',
     ];

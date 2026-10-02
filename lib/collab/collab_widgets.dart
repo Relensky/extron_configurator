@@ -102,7 +102,13 @@ class _MoreEditors extends StatelessWidget {
                 user: e.presence.user,
                 picture: provider.avatarFileFor(e.presence.user),
               ),
-              title: Text(e.presence.user),
+              // The row is not pressable, but the name is not disabled.
+              title: Text(
+                e.presence.user,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
               subtitle: Text(
                 [
                   e.presence.whereText.isEmpty
@@ -183,6 +189,22 @@ class CollabPresenceStrip extends StatelessWidget {
   }
 }
 
+/// The theme's tooltip box with no see-through, so the page does not show
+/// behind a tall hover box.
+Decoration _solidTooltipBox(BuildContext context) {
+  final themed = TooltipTheme.of(context).decoration;
+  if (themed is BoxDecoration && themed.color != null) {
+    return themed.copyWith(color: themed.color!.withValues(alpha: 1));
+  }
+  if (themed != null) return themed;
+  // The stock tooltip colors, at full strength.
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  return BoxDecoration(
+    color: dark ? Colors.white : Colors.grey[700],
+    borderRadius: const BorderRadius.all(Radius.circular(4)),
+  );
+}
+
 /// One other editor: their initials in a colored circle, and their Windows
 /// user name beside it.
 class CollabEditorAvatar extends StatelessWidget {
@@ -210,6 +232,7 @@ class CollabEditorAvatar extends StatelessWidget {
             '- when they save, you will be offered their changes to combine.' : ''}'
         '${presence.savedAt != null ? '\nLast saved at ${_clock(presence.savedAt!)}.' : ''}';
     return Tooltip(
+      decoration: _solidTooltipBox(context),
       // Their picture, large, above the words - so who it is can be seen,
       // not only read.
       richMessage: picture == null

@@ -56,6 +56,14 @@ void main() {
     await tester.pump();
   }
 
+  /// Settings, by the one way in: the profile menu.
+  Future<void> openSettings(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('profile_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('profile_menu_settings')));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('a cold start lands on the start screen, not the job list',
       (tester) async {
     final p = fresh();
@@ -97,7 +105,7 @@ void main() {
         reason: 'Save is in the corner of the second row');
 
     // THE TITLE BAR: the File menu, Undo, Redo and History at the left;
-    // light/dark, Help and Settings at the right.
+    // light/dark, Help and the profile at the right.
     const leftKeys = [
       'file_menu',
       'toolbar_undo',
@@ -108,7 +116,7 @@ void main() {
     const rightKeys = [
       'toggle_theme',
       'open_help',
-      'banner_app_config',
+      'profile_button',
     ];
     for (final key in [...leftKeys, ...rightKeys]) {
       expect(
@@ -139,16 +147,14 @@ void main() {
     expect(rectOf('toolbar_redo').left, greaterThan(rectOf('toolbar_undo').left));
     expect(rectOf('show_history').left, greaterThan(rectOf('toolbar_redo').left));
 
-    // Your profile in the corner, Settings just left of it - the same way
-    // round as the debugger app.
+    // Your profile in the corner, Help just left of it, and no gear.
     expect(barRight - rectOf('profile_button').right, lessThan(16),
         reason: 'the profile is the far-right button');
-    expect(rectOf('banner_app_config').right,
-        lessThan(rectOf('profile_button').left + 1),
-        reason: 'Settings sits just left of the profile');
+    expect(find.byKey(const ValueKey('banner_app_config')), findsNothing,
+        reason: 'Settings is on the profile menu');
     expect(rectOf('open_help').right,
-        lessThan(rectOf('banner_app_config').left + 1),
-        reason: 'Help is just left of Settings');
+        lessThan(rectOf('profile_button').left + 1),
+        reason: 'Help is just left of the profile');
     expect(rectOf('toggle_theme').right, lessThan(rectOf('open_help').left + 1));
     expect(
       find.descendant(
@@ -163,23 +169,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(p.selectedTabIndex, AppTab.project.index);
 
-    await tester.tap(find.byKey(const ValueKey('banner_app_config')));
-    await tester.pumpAndSettle();
+    await openSettings(tester);
     expect(p.selectedTabIndex, AppTab.appConfig.index);
     expect(find.byKey(const ValueKey('settings_window')), findsOneWidget);
 
-    // THE GEAR AGAIN CLOSES IT, back to the page it was opened from.
-    await tester.tap(find.byKey(const ValueKey('banner_app_config')));
-    await tester.pumpAndSettle();
-    expect(p.selectedTabIndex, AppTab.project.index);
-    expect(find.byKey(const ValueKey('settings_window')), findsNothing);
-
-    // ...and so does the window's own close button.
-    await tester.tap(find.byKey(const ValueKey('banner_app_config')));
-    await tester.pumpAndSettle();
+    // THE WINDOW'S CLOSE BUTTON goes back to the page it was opened from.
     await tester.tap(find.byKey(const ValueKey('settings_close')));
     await tester.pumpAndSettle();
     expect(p.selectedTabIndex, AppTab.project.index);
+    expect(find.byKey(const ValueKey('settings_window')), findsNothing);
+  });
+
+  testWidgets('the deployment target is set from the File menu',
+      (tester) async {
+    final p = fresh();
+    p.newProject(name: 'Bessey Hall');
+    await pump(tester, p);
+
+    await tester.tap(find.byKey(const ValueKey('file_menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('file_deployment_target')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('deployment_target_dialog')),
+        findsOneWidget);
+    expect(find.text('Select Room Deployment'), findsOneWidget);
   });
 
   testWidgets('settings fills the window and scrolls from anywhere',
@@ -187,8 +200,7 @@ void main() {
     final p = fresh();
     p.newProject(name: 'Bessey Hall');
     await pump(tester, p);
-    await tester.tap(find.byKey(const ValueKey('banner_app_config')));
-    await tester.pumpAndSettle();
+    await openSettings(tester);
 
     final screen = tester.getRect(find.byType(Scaffold).first);
     final window = tester.getRect(find.byKey(const ValueKey('settings_window')));
@@ -296,7 +308,7 @@ void main() {
     expect(find.byType(NavRailRow), findsNothing);
     expect(find.byKey(const ValueKey('banner_project')), findsOneWidget,
         reason: 'the way back to the job must not fold away with the rail');
-    expect(find.byKey(const ValueKey('banner_app_config')), findsOneWidget);
+    expect(find.byKey(const ValueKey('profile_button')), findsOneWidget);
   });
 
   // ---------------------------------------------------------------------------

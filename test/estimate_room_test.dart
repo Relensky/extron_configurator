@@ -135,7 +135,7 @@ void main() {
       expect(p.estimateLogoSide, 'right');
     });
 
-    testWidgets('App Config edits the preparer', (tester) async {
+    testWidgets('the profile edits the preparer', (tester) async {
       final p = AppStateProvider(autoLoadSettings: false);
       await tester.pumpWidget(
         ChangeNotifierProvider<AppStateProvider>.value(

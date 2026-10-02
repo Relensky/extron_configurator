@@ -5220,10 +5220,138 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           );
     final shown = [if (text.isNotEmpty) text, if (note.isNotEmpty) note]
         .join(' · ');
-    return _ModelCell(
+    final cell = _ModelCell(
       text: shown.isEmpty ? '-' : shown,
       hover: line == null ? null : _partHover(line),
       color: muted,
+    );
+    // Nothing to click or flag on a photographed quote.
+    if (line == null || _capturing) return cell;
+    return InkWell(
+      key: ValueKey('partedit_${line.key}'),
+      onTap: () => _editLinePart(context, line),
+      child: Row(
+        children: [
+          Expanded(child: cell),
+          if (line.offCatalog)
+            Tooltip(
+              message: 'Maker and part number typed here - '
+                  'the price no longer follows the catalog',
+              child: Icon(
+                Icons.link_off,
+                key: ValueKey('partoff_${line.key}'),
+                size: 14,
+                color: theme.colorScheme.tertiary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Edits a line's maker and part number, warning that it leaves the
+  /// catalog; a line already off it can be put back.
+  Future<void> _editLinePart(BuildContext context, CostLine line) async {
+    final provider = context.read<AppStateProvider>();
+    final maker = TextEditingController(text: line.manufacturer.trim());
+    final part = TextEditingController(text: line.partNumber.trim());
+    // A catalog price is kept as the room price, so the total does not move.
+    final keep = isCatalogSource(line.source) ? line.unitPrice : null;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return AlertDialog(
+          title: const Text('Manufacturer and part number'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  key: const ValueKey('partedit_maker'),
+                  controller: maker,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Manufacturer'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  key: const ValueKey('partedit_part'),
+                  controller: part,
+                  decoration: const InputDecoration(labelText: 'Part number'),
+                  onSubmitted: (_) => Navigator.of(ctx).pop(true),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      line.offCatalog
+                          ? Icons.link_off
+                          : Icons.warning_amber_rounded,
+                      size: 18,
+                      color: theme.colorScheme.tertiary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        line.offCatalog
+                            ? 'This line is off the catalog: its price does '
+                                  'not follow catalog price changes.'
+                            : keep != null
+                            ? 'Changing these takes the line off the catalog. '
+                                  'Its price stays at '
+                                  '${formatMoney(keep, provider.avCost.currency)} '
+                                  'as a room price and stops following '
+                                  'catalog price changes.'
+                            : 'Changing these takes the line off the catalog. '
+                                  'Its price will not follow catalog price '
+                                  'changes.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (line.offCatalog)
+              TextButton(
+                key: const ValueKey('partedit_restore'),
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Restore catalog'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              key: const ValueKey('partedit_save'),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    if (saved == null) return;
+    if (!saved) {
+      provider.clearAvCostLinePart(line.key);
+      return;
+    }
+    final nextMaker = maker.text.trim();
+    final nextPart = part.text.trim();
+    if (nextMaker == line.manufacturer.trim() &&
+        nextPart == line.partNumber.trim()) {
+      return;
+    }
+    provider.setAvCostLinePart(
+      line.key,
+      manufacturer: nextMaker,
+      partNumber: nextPart,
+      keepPrice: keep,
     );
   }
 

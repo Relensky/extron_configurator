@@ -190,6 +190,35 @@ class CostLineItem {
   );
 }
 
+/// A maker and part number typed on an estimate line in place of the
+/// catalog's. The line stops taking its price from the catalog.
+class LinePart {
+  final String manufacturer;
+  final String partNumber;
+
+  /// The catalog price kept as the room price when the line left the
+  /// catalog, so restoring the line can take it back off.
+  final double? heldPrice;
+
+  const LinePart({
+    this.manufacturer = '',
+    this.partNumber = '',
+    this.heldPrice,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'manufacturer': manufacturer,
+    'partNumber': partNumber,
+    if (heldPrice != null) 'heldPrice': heldPrice,
+  };
+
+  factory LinePart.fromJson(Map<String, dynamic> json) => LinePart(
+    manufacturer: json['manufacturer']?.toString().trim() ?? '',
+    partNumber: json['partNumber']?.toString().trim() ?? '',
+    heldPrice: (json['heldPrice'] as num?)?.toDouble(),
+  );
+}
+
 /// What order the equipment table lists its lines in.
 ///
 /// A choice about the QUOTE rather than about the screen, so it is kept with
@@ -491,6 +520,10 @@ class RoomCostSettings {
   /// twelve names until somebody says what the line is called.
   final Map<String, String> lineNames;
 
+  /// Line key -> the maker and part number typed for that line. A line here
+  /// is off the catalog: see [LinePart].
+  final Map<String, LinePart> lineParts;
+
   /// Line keys left off this estimate as existing equipment that stays where
   /// it is - not bought, not installed. Counted with [CostEstimate.excludedLines]
   /// like a device marked existing on the drawing.
@@ -581,6 +614,7 @@ class RoomCostSettings {
     Map<String, double>? equipmentSpares,
     Map<String, String>? furnishedLines,
     Map<String, String>? lineNames,
+    Map<String, LinePart>? lineParts,
     List<CostLineItem>? extraEquipment,
     List<CostLineItem>? extraHardware,
     List<CostLineItem>? extraCables,
@@ -598,6 +632,7 @@ class RoomCostSettings {
        qtyOverrides = qtyOverrides ?? {},
        furnishedLines = furnishedLines ?? {},
        lineNames = lineNames ?? {},
+       lineParts = lineParts ?? {},
        extraEquipment = extraEquipment ?? [],
        extraHardware = extraHardware ?? [],
        extraCables = extraCables ?? [];
@@ -623,6 +658,7 @@ class RoomCostSettings {
       equipmentSpares.isEmpty &&
       furnishedLines.isEmpty &&
       lineNames.isEmpty &&
+      lineParts.isEmpty &&
       extraEquipment.isEmpty &&
       extraHardware.isEmpty &&
       extraCables.isEmpty;
@@ -653,6 +689,7 @@ class RoomCostSettings {
     qtyOverrides.clear();
     furnishedLines.clear();
     lineNames.clear();
+    lineParts.clear();
     extraEquipment.clear();
     extraHardware.clear();
     extraCables.clear();
@@ -704,6 +741,10 @@ class RoomCostSettings {
     if (furnishedLines.isNotEmpty)
       'furnishedLines': Map<String, String>.of(furnishedLines),
     if (lineNames.isNotEmpty) 'lineNames': Map<String, String>.of(lineNames),
+    if (lineParts.isNotEmpty)
+      'lineParts': {
+        for (final e in lineParts.entries) e.key: e.value.toJson(),
+      },
     if (extraEquipment.isNotEmpty)
       'extraEquipment': [for (final i in extraEquipment) i.toJson()],
     if (extraHardware.isNotEmpty)
@@ -827,6 +868,16 @@ class RoomCostSettings {
       names.forEach((key, value) {
         final text = value?.toString().trim() ?? '';
         if (text.isNotEmpty) lineNames[key.toString()] = text;
+      });
+    }
+    final parts = json['lineParts'];
+    if (parts is Map) {
+      parts.forEach((key, value) {
+        if (value is Map) {
+          lineParts[key.toString()] = LinePart.fromJson(
+            Map<String, dynamic>.from(value),
+          );
+        }
       });
     }
     final entries = json['cableEntries'];
@@ -1160,6 +1211,10 @@ class CostLine {
   /// The name the diagram, the rack or the catalog gives the line.
   String get defaultName => sourceName.isEmpty ? description : sourceName;
 
+  /// True when the maker and part number were typed on the estimate, so the
+  /// price no longer follows the catalog. See [RoomCostSettings.lineParts].
+  final bool offCatalog;
+
   const CostLine({
     required this.key,
     required this.description,
@@ -1177,7 +1232,29 @@ class CostLine {
     this.furnishedBy,
     this.shippingEach = 0,
     this.sourceName = '',
+    this.offCatalog = false,
   });
+
+  /// This line with the maker and part number typed for it.
+  CostLine withPart(LinePart part) => CostLine(
+    key: key,
+    description: description,
+    sourceName: sourceName,
+    model: model,
+    partNumber: part.partNumber,
+    manufacturer: part.manufacturer,
+    category: category,
+    qty: qty,
+    unitPrice: unitPrice,
+    taxable: taxable,
+    source: source,
+    spare: spare,
+    spareQty: spareQty,
+    onDiagram: onDiagram,
+    furnishedBy: furnishedBy,
+    shippingEach: shippingEach,
+    offCatalog: true,
+  );
 
   /// This line under the title typed for it - see [RoomCostSettings.lineNames].
   CostLine named(String title) => CostLine(
@@ -1197,6 +1274,7 @@ class CostLine {
     onDiagram: onDiagram,
     furnishedBy: furnishedBy,
     shippingEach: shippingEach,
+    offCatalog: offCatalog,
   );
 
   /// This line with [each] as its per-unit shipping.
@@ -1217,6 +1295,7 @@ class CostLine {
     onDiagram: onDiagram,
     furnishedBy: furnishedBy,
     shippingEach: each,
+    offCatalog: offCatalog,
   );
 
   /// Shipping for the whole line; nothing when somebody else is buying it.
@@ -1434,6 +1513,14 @@ CostEstimate computeRoomCost({
   int excludedLines = 0;
   int excludedDevices = 0;
 
+  // A line with its own maker and part number is off the catalog: it carries
+  // what was typed, and the catalog's price is not read for it.
+  bool offCatalog(String key) => settings.lineParts.containsKey(key);
+  CostLine parted(CostLine line) {
+    final part = settings.lineParts[line.key];
+    return part == null ? line : line.withPart(part);
+  }
+
   final groups = groupDevices(model)
     ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
 
@@ -1473,7 +1560,9 @@ CostEstimate computeRoomCost({
       }
     }
 
-    final catalogPrice = catalog?.priceForTier(tier);
+    final catalogPrice = offCatalog(group.key)
+        ? null
+        : catalog?.priceForTier(tier);
 
     final double price;
     final PriceSource source;
@@ -1518,19 +1607,21 @@ CostEstimate computeRoomCost({
     if (otherTier && furnishedBy == null) otherTierLines++;
 
     equipment.add(
-      CostLine(
-        key: group.key,
-        description: group.label,
-        model: group.model,
-        partNumber: catalog?.partNumber ?? '',
-        manufacturer: catalog?.manufacturer ?? '',
-        category: category,
-        qty: qty,
-        spareQty: spares > 0 ? spares : 0,
-        onDiagram: quoted == null ? null : group.qty.toDouble(),
-        unitPrice: price,
-        source: source,
-        furnishedBy: furnishedBy,
+      parted(
+        CostLine(
+          key: group.key,
+          description: group.label,
+          model: group.model,
+          partNumber: catalog?.partNumber ?? '',
+          manufacturer: catalog?.manufacturer ?? '',
+          category: category,
+          qty: qty,
+          spareQty: spares > 0 ? spares : 0,
+          onDiagram: quoted == null ? null : group.qty.toDouble(),
+          unitPrice: price,
+          source: source,
+          furnishedBy: furnishedBy,
+        ),
       ),
     );
   }
@@ -1545,7 +1636,9 @@ CostEstimate computeRoomCost({
     final catalog = library.templateForModel(line.catalogModel);
     final override = settings.priceOverrides[line.key];
 
-    final catalogPrice = catalog?.priceForTier(tier);
+    final catalogPrice = offCatalog(line.key)
+        ? null
+        : catalog?.priceForTier(tier);
 
     final double price;
     final PriceSource source;
@@ -1574,21 +1667,23 @@ CostEstimate computeRoomCost({
     if (source == PriceSource.catalogOtherTier && furnishedBy == null) {
       otherTierLines++;
     }
-    final costLine = CostLine(
-      key: line.key,
-      furnishedBy: furnishedBy,
-      description: line.description,
-      model: line.catalogModel,
-      // The catalog's number, or — when the entry it came from is gone —
-      // the one recorded on the placed item, same as its price.
-      partNumber: catalog?.partNumber.isNotEmpty == true
-          ? catalog!.partNumber
-          : line.partNumber,
-      manufacturer: catalog?.manufacturer ?? '',
-      category: line.category,
-      qty: line.qty,
-      unitPrice: price,
-      source: source,
+    final costLine = parted(
+      CostLine(
+        key: line.key,
+        furnishedBy: furnishedBy,
+        description: line.description,
+        model: line.catalogModel,
+        // The catalog's number, or — when the entry it came from is gone —
+        // the one recorded on the placed item, same as its price.
+        partNumber: catalog?.partNumber.isNotEmpty == true
+            ? catalog!.partNumber
+            : line.partNumber,
+        manufacturer: catalog?.manufacturer ?? '',
+        category: line.category,
+        qty: line.qty,
+        unitPrice: price,
+        source: source,
+      ),
     );
     if (isRackHardwareCategory(line.category)) {
       hardware.add(costLine);
@@ -1602,7 +1697,9 @@ CostEstimate computeRoomCost({
   //  cost the same and both follow a catalog revision.
   CostLine extraLine(CostLineItem item, String fallbackCategory) {
     final catalog = library.templateForModel(item.catalogModel);
-    final catalogPrice = catalog?.priceForTier(tier);
+    final catalogPrice = offCatalog(item.id)
+        ? null
+        : catalog?.priceForTier(tier);
     final override = settings.priceOverrides[item.id];
 
     final double price;
@@ -1635,7 +1732,7 @@ CostEstimate computeRoomCost({
       otherTierLines++;
     }
 
-    return CostLine(
+    return parted(CostLine(
       key: item.id,
       furnishedBy: furnishedBy,
       description: item.description.trim().isEmpty
@@ -1659,7 +1756,7 @@ CostEstimate computeRoomCost({
       taxable: item.taxable,
       source: source,
       spare: item.spare,
-    );
+    ));
   }
 
   // Equipment quoted but not drawn, listed under the devices that are. It
@@ -1858,7 +1955,9 @@ CostEstimate computeRoomCost({
         // length, or both.
         final key = keyFor(grouped.key, catalog, runLengthFt);
         final override = settings.priceOverrides[key];
-        final catalogPrice = catalog?.priceForTier(tier);
+        final catalogPrice = offCatalog(key)
+            ? null
+            : catalog?.priceForTier(tier);
 
         // THE LENGTH THIS LINE IS ABOUT: what the made-up lead is bought in,
         // or the run length the group was split on.
@@ -1915,7 +2014,7 @@ CostEstimate computeRoomCost({
         final lineSpares = sparesByGroup[grouped.key] ?? 0;
 
         cabling.add(
-          CostLine(
+          parted(CostLine(
             key: key,
             description: [
               catalog?.model.trim().isNotEmpty == true
@@ -1951,7 +2050,7 @@ CostEstimate computeRoomCost({
             unitPrice: price,
             source: source,
             furnishedBy: furnishedBy,
-          ),
+          )),
         );
       }
     }

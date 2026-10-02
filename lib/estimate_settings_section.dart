@@ -24,7 +24,7 @@ const List<Color> kEstimateAccentSwatches = [
   Color(0xFFBF360C), // rust
 ];
 
-/// App Config: what goes on every estimate PDF - the logo, which corner it
+/// The profile: what goes on every estimate PDF - the logo, which corner it
 /// prints in, the accent color and who prepared it.
 class EstimateSettingsSection extends StatelessWidget {
   const EstimateSettingsSection({super.key});
@@ -74,8 +74,6 @@ class EstimateSettingsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Estimate PDF', style: theme.textTheme.titleLarge),
-        const SizedBox(height: 12),
         Wrap(
           spacing: 16,
           runSpacing: 16,

@@ -641,7 +641,7 @@ const List<HelpTopic> kHelpTopics = [
         'stands now, which is what to reach for after a big edit.\n\n'
         'The schematic is drawn around the processor, so it waits until the '
         'room has one: a control processor drawn on the AV flow, one quoted on '
-        'the Cost tab, or a deployment processor chosen in App Config. Until '
+        'the Cost tab, or a deployment processor chosen on the File menu. Until '
         'then the tab offers to add a processor from the catalog.',
   ),
   HelpTopic(
@@ -763,7 +763,7 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'The estimate PDF',
     section: 'The money',
-    where: 'Cost tab - Export - PDF estimate; App Config - Estimate PDF',
+    where: 'Cost tab - Export - PDF estimate; Your profile - Estimate PDF',
     plain:
         'A finished estimate to send out: your logo, who prepared it, the '
         'scope of work, every priced line, the totals and your notes.',
@@ -772,7 +772,7 @@ const List<HelpTopic> kHelpTopics = [
       'color',
     ],
     body:
-        'The logo and the name under "Prepared by" are set once in App Config '
+        'The logo and the name under "Prepared by" are set once in your profile '
         'under Estimate PDF, with an optional contact line such as an email '
         'address. The logo can be a PNG or a JPEG and prints in the top right '
         'corner of the first page, or the top left if you pick Left under Logo '
@@ -2210,7 +2210,7 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'Theme, contrast and print mode',
     section: 'The machinery',
-    where: 'App Config tab → Appearance',
+    where: 'Your profile → Appearance',
     plain:
         'Light or dark, higher contrast for a bright room, and a plain mode '
         'that survives being printed or put through a projector.',

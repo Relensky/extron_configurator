@@ -2090,8 +2090,8 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// SETTINGS IS A WINDOW YOU OPEN AND CLOSE, not a place you move to. The
-  /// gear opens it over whatever you were doing, and the gear again (or its
-  /// close button, or Esc) puts you back on that page.
+  /// profile menu opens it over whatever you were doing, and its close button
+  /// or Esc puts you back on that page.
   bool get settingsOpen => selectedTabIndex == AppTab.appConfig.index;
 
   void toggleSettings() =>
@@ -5393,6 +5393,54 @@ class AppStateProvider extends ChangeNotifier {
       avCost.lineNames.remove(lineKey);
     } else {
       avCost.lineNames[lineKey] = next;
+    }
+    notifyListeners();
+  }
+
+  /// Types a maker and part number on an estimate line, taking it off the
+  /// catalog. [keepPrice] becomes the room price when none is typed, so the
+  /// line keeps its figure. See [RoomCostSettings.lineParts].
+  void setAvCostLinePart(
+    String lineKey, {
+    required String manufacturer,
+    required String partNumber,
+    double? keepPrice,
+  }) {
+    final before = avCost.lineParts[lineKey];
+    final maker = manufacturer.trim();
+    final part = partNumber.trim();
+    if (before != null &&
+        before.manufacturer == maker &&
+        before.partNumber == part) {
+      return;
+    }
+    _pushAvUndo('Edit part', _costScope);
+    var held = before?.heldPrice;
+    if (before == null &&
+        keepPrice != null &&
+        keepPrice > 0 &&
+        !avCost.priceOverrides.containsKey(lineKey)) {
+      avCost.priceOverrides[lineKey] = keepPrice;
+      held = keepPrice;
+    }
+    avCost.lineParts[lineKey] = LinePart(
+      manufacturer: maker,
+      partNumber: part,
+      heldPrice: held,
+    );
+    notifyListeners();
+  }
+
+  /// Puts an estimate line back on the catalog's maker, part number and
+  /// price. A room price typed since it left is kept.
+  void clearAvCostLinePart(String lineKey) {
+    final part = avCost.lineParts[lineKey];
+    if (part == null) return;
+    _pushAvUndo('Restore catalog part', _costScope);
+    avCost.lineParts.remove(lineKey);
+    if (part.heldPrice != null &&
+        avCost.priceOverrides[lineKey] == part.heldPrice) {
+      avCost.priceOverrides.remove(lineKey);
     }
     notifyListeners();
   }

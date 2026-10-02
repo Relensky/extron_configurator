@@ -721,7 +721,6 @@ class _MainDashboardState extends State<MainDashboard> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
-    final theme = Theme.of(context);
     final hasConfig = provider.roomConfig.isNotEmpty;
     // Selected tab lives in the provider so it survives the remount that a
     // theme-family change (Auris <-> Classic) forces via the MaterialApp key.
@@ -813,11 +812,6 @@ class _MainDashboardState extends State<MainDashboard> {
       // save_actions.dart.
       const SaveToolbar(),
     ];
-
-    // The bar the gear's SELECTED accent is painted on, so it can be measured
-    // against that fill rather than assumed to read on it.
-    final appBarFill =
-        theme.appBarTheme.backgroundColor ?? theme.colorScheme.primary;
 
     final page = Scaffold(
       // THE LOWER RIGHT CORNER: the screenshot, and under it every way a
@@ -931,29 +925,10 @@ class _MainDashboardState extends State<MainDashboard> {
                 : 'Switch to dark mode',
             onPressed: () => provider.toggleTheme(),
           ),
-          // HELP, just left of Settings.
+          // HELP, just left of the profile.
           const HelpButton(),
-          // SETTINGS, IN THE CORNER - and it toggles: the gear opens the
-          // settings window over the page you were on, and the gear again
-          // closes it and puts you back there.
-          IconButton(
-            key: const ValueKey('banner_app_config'),
-            icon: const Icon(Icons.settings),
-            isSelected: provider.settingsOpen,
-            selectedIcon: Icon(
-              Icons.settings,
-              color: legibleTone(
-                theme.colorScheme.secondary,
-                appBarFill,
-                minRatio: kContrastLarge,
-              ),
-            ),
-            tooltip: provider.settingsOpen
-                ? 'Close Settings'
-                : 'Settings - file locations, pricing, autosave, logging',
-            onPressed: provider.toggleSettings,
-          ),
-          // YOU, beside the gear - see [ProfileButton].
+          // YOU, in the corner - and the way into Settings. See
+          // [ProfileButton].
           const ProfileButton(),
           const SizedBox(width: 4),
         ],
@@ -961,7 +936,7 @@ class _MainDashboardState extends State<MainDashboard> {
       // SETTINGS FILLS THE WINDOW under the title bar - the rail and the
       // page step aside while it is open, and its one scroll view spans the
       // full width, so the wheel and the scrollbar work wherever the pointer
-      // is. The gear, its X or Esc put the page back. See [_SettingsWindow].
+      // is. Its X or Esc put the page back. See [_SettingsWindow].
       body: provider.settingsOpen
           ? const _SettingsWindow(child: AppSettingsView())
           : Column(
@@ -2433,7 +2408,7 @@ DropdownMenuItem<String> _themeStyleItem(
 ///  One searchable dropdown over the rooms in processors.json, with the full
 ///  building name resolved from buildings.json — so 'AGYM 129' is found by
 ///  typing 'acker', 'AGYM', '129', or its IP address. Used everywhere a room
-///  is selected: App Config (Active Deployment Target) and both the SFTP
+///  is selected: the File menu's Deployment Target and both the SFTP
 ///  Upload and Download dialogs.
 /// ============================================================================
 class ProcessorSearchField extends StatelessWidget {
@@ -2658,9 +2633,9 @@ class _SettingsSectionState extends State<SettingsSection> {
   }
 }
 
-/// YOU, IN THE CORNER: your avatar beside the gear. Pressed, it shows your
-/// name and email, opens your profile, and is a way into Application
-/// Configuration - the same menu the debugger app has.
+/// YOU, IN THE CORNER: your avatar. Pressed, it shows your name and email,
+/// opens your profile, and is the way into Application Configuration - the
+/// same menu the debugger app has.
 class ProfileButton extends StatelessWidget {
   const ProfileButton({super.key});
 
@@ -2722,7 +2697,8 @@ class ProfileButton extends StatelessWidget {
   }
 }
 
-/// Your profile: name, email and avatar.
+/// Your profile: name, email and avatar, how the app looks to you, and what
+/// goes on your estimate PDFs.
 Future<void> showProfileDialog(BuildContext context) => showDialog<void>(
   context: context,
   builder: (_) => const _ProfileDialog(),
@@ -2777,7 +2753,22 @@ class _ProfileDialog extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               const AvatarSettingsSection(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              SettingsSection(
+                id: 'appearance',
+                title: 'Appearance',
+                summary: 'Theme, accent color, and interface and text size',
+                icon: Icons.palette_outlined,
+                children: const [AppearanceSettings()],
+              ),
+              SettingsSection(
+                id: 'estimate_pdf',
+                title: 'Estimate PDF',
+                summary: 'Who prepared it, the notice, logo and accent color',
+                icon: Icons.picture_as_pdf_outlined,
+                children: const [EstimateSettingsSection()],
+              ),
+              const SizedBox(height: 4),
             ],
           ),
         ),
@@ -2800,7 +2791,7 @@ class _ProfileDialog extends StatelessWidget {
   }
 }
 
-/// Theme, colors, and interface and text size - App Config's Appearance.
+/// Theme, colors, and interface and text size - the profile's Appearance.
 class AppearanceSettings extends StatelessWidget {
   const AppearanceSettings({super.key});
 
@@ -2997,46 +2988,8 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 22),
 
-        // --- ACTIVE DEPLOYMENT TARGET ---
-        // First on the tab because it is the one setting that changes between
-        // sessions: every path below is set once and forgotten, while this
-        // picks which room the next upload or download talks to. At the
-        // bottom its dropdown opened off the end of a long scrolling page,
-        // which meant scrolling to find the field and scrolling again to see
-        // what it offered.
-        SettingsSection(
-          id: 'deployment',
-          title: 'Deployment target',
-          summary: 'Which room the next upload or download talks to',
-          icon: Icons.router_outlined,
-          initiallyOpen: true,
-          children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ProcessorSearchField(
-                label: 'Select Room Deployment',
-                helperText:
-                    'Search by building name, code, room number, or IP - '
-                    'rooms from processors.json, names from buildings.json.',
-                initialProcessor: provider.selectedProcessor,
-                onSelected: (proc) => provider.selectProcessor(proc),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: IconButton(
-                icon: const Icon(Icons.clear),
-                tooltip: 'Clear Active Room',
-                onPressed: () => provider.selectProcessor(null),
-              ),
-            ),
-          ],
-        ),
-          ],
-        ),
+        // The deployment target is on the File menu - see
+        // [showDeploymentTargetDialog].
 
         // --- PRICING ---
         // Currency and which of a catalog entry's two prices the estimates
@@ -3046,7 +2999,7 @@ class AppSettingsView extends StatelessWidget {
         SettingsSection(
           id: 'pricing',
           title: 'Pricing and estimates',
-          summary: 'Currency, price tier, and how the estimate PDF reads',
+          summary: 'Currency, default tax rate, and price tier',
           icon: Icons.request_quote_outlined,
           children: [
         // Wrap, not Row: three controls plus their explanation is more than a
@@ -3148,20 +3101,11 @@ class AppSettingsView extends StatelessWidget {
           'other tier is flagged on the estimate rather than quietly costed.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
-        const Divider(height: 40),
-
-        // --- ESTIMATE PDF ---
-        const EstimateSettingsSection(),
           ],
         ),
 
-        SettingsSection(
-          id: 'appearance',
-          title: 'Appearance',
-          summary: 'Theme, accent color, and interface and text size',
-          icon: Icons.palette_outlined,
-          children: const [AppearanceSettings()],
-        ),
+        // Appearance and the estimate PDF are in the profile - see
+        // [_ProfileDialog].
         SettingsSection(
           id: 'behavior',
           title: 'Editing behavior',
@@ -5181,6 +5125,8 @@ class _FileMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
     final recents = provider.recentFiles;
+    final target =
+        provider.selectedProcessor?['roomName']?.toString().trim() ?? '';
 
     Widget item(String key, IconData icon, String label, VoidCallback onTap) =>
         MenuItemButton(
@@ -5283,10 +5229,71 @@ class _FileMenu extends StatelessWidget {
         item('file_download', Icons.cloud_download, 'Download Config',
             onDownload),
         item('file_upload', Icons.cloud_upload, 'Upload Config', onUpload),
+        // Which room those two talk to, named on the line when one is set.
+        item(
+          'file_deployment_target',
+          Icons.router_outlined,
+          target.isEmpty ? 'Deployment Target...' : 'Deployment Target: $target',
+          () => showDeploymentTargetDialog(context),
+        ),
         const Divider(height: 8),
         item('file_use_shared_folder', Icons.folder_shared,
             'Use Shared Folder for All Settings',
             () => _useSharedFolder(context, provider)),
+      ],
+    );
+  }
+}
+
+/// The Active Deployment Target: which room the next upload or download
+/// talks to. Opened from the File menu.
+Future<void> showDeploymentTargetDialog(BuildContext context) =>
+    showDialog<void>(
+      context: context,
+      builder: (_) => const _DeploymentTargetDialog(),
+    );
+
+class _DeploymentTargetDialog extends StatelessWidget {
+  const _DeploymentTargetDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    return AlertDialog(
+      key: const ValueKey('deployment_target_dialog'),
+      title: const Text('Deployment target'),
+      content: SizedBox(
+        width: 640,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ProcessorSearchField(
+                label: 'Select Room Deployment',
+                helperText:
+                    'Search by building name, code, room number, or IP - '
+                    'rooms from processors.json, names from buildings.json.',
+                initialProcessor: provider.selectedProcessor,
+                onSelected: (proc) => provider.selectProcessor(proc),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: IconButton(
+                icon: const Icon(Icons.clear),
+                tooltip: 'Clear Active Room',
+                onPressed: () => provider.selectProcessor(null),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
       ],
     );
   }
@@ -5365,8 +5372,8 @@ class _MenuLabel extends StatelessWidget {
 }
 
 /// SETTINGS AS A WINDOW OVER THE WHOLE APP. It fills everything under the
-/// title bar, with its own title strip and close button; Esc, the X and the
-/// gear all close it and put you back on the page you came from.
+/// title bar, with its own title strip and close button; Esc and the X close
+/// it and put you back on the page you came from.
 class _SettingsWindow extends StatelessWidget {
   final Widget child;
 

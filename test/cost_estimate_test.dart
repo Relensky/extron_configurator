@@ -113,6 +113,62 @@ void main() {
       expect(back.equipment.single.source, PriceSource.catalog);
     });
 
+    test('a typed maker and part number take the line off the catalog', () {
+      final p = room();
+      p.addAvNode(device('S1', 'Switcher', 'Switcher Y'));
+      const key = 'model:switcher y';
+      CostLine line(AvDeviceLibrary library) => computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: library,
+        settings: p.avCost,
+      ).equipment.single;
+
+      p.setAvCostLinePart(
+        key,
+        manufacturer: 'Acme',
+        partNumber: 'AC-1',
+        keepPrice: line(catalog()).unitPrice,
+      );
+
+      // A catalog revision no longer reaches the line.
+      final revised = catalog()
+        ..upsert(
+          const AvDeviceTemplate(model: 'Switcher Y', price: 3000, ports: []),
+        );
+      final off = line(revised);
+      expect(off.offCatalog, isTrue);
+      expect(off.manufacturer, 'Acme');
+      expect(off.partNumber, 'AC-1');
+      expect(off.unitPrice, 2500);
+      expect(off.source, PriceSource.override);
+
+      // It survives a save and a load.
+      final reread = RoomCostSettings()..readJson(p.avCost.toJson());
+      expect(reread.lineParts[key]?.partNumber, 'AC-1');
+
+      // Restored, the held price goes and the catalog's comes back.
+      p.clearAvCostLinePart(key);
+      final back = line(revised);
+      expect(back.offCatalog, isFalse);
+      expect(back.unitPrice, 3000);
+      expect(back.source, PriceSource.catalog);
+    });
+
+    test('restoring a line keeps a price typed since it left the catalog', () {
+      final p = room();
+      p.addAvNode(device('S1', 'Switcher', 'Switcher Y'));
+      const key = 'model:switcher y';
+      p.setAvCostLinePart(
+        key,
+        manufacturer: 'Acme',
+        partNumber: 'AC-1',
+        keepPrice: 2500,
+      );
+      p.setAvCostPrice(key, 1900);
+      p.clearAvCostLinePart(key);
+      expect(p.avCost.priceOverrides[key], 1900);
+    });
+
     test('devices nobody priced are counted, not silently treated as free', () {
       final p = room();
       p.addAvNode(device('D1', 'Display', 'Display X'));

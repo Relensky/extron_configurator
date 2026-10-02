@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/main.dart';
 
-/// Settings in folding sections, and your profile beside the gear.
+/// Settings in folding sections, and your profile in the corner.
 void main() {
   setUp(SettingsSection.forgetOpenForTest);
 
@@ -27,9 +27,10 @@ void main() {
     final p = AppStateProvider(autoLoadSettings: false);
     await pump(tester, p, const Scaffold(body: AppSettingsView()));
 
-    // The deployment target is open; the rest are folded.
-    expect(find.byKey(const ValueKey('settings_section_deployment')),
-        findsOneWidget);
+    // Folded, and without what moved to the File menu and the profile.
+    for (final id in ['deployment', 'appearance', 'estimate_pdf']) {
+      expect(find.byKey(ValueKey('settings_section_$id')), findsNothing);
+    }
     expect(find.text('Logging'), findsOneWidget);
     expect(find.byKey(const ValueKey('open_log_folder')), findsNothing);
 
@@ -117,10 +118,24 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('profile_menu_profile')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('profile_dialog')), findsOneWidget);
-    // Who you are and your avatar - and no app settings.
+    // Who you are and your avatar, then how the app and your PDFs look.
     expect(find.byKey(const ValueKey('profile_email')), findsOneWidget);
     expect(find.byKey(const ValueKey('avatar_settings')), findsOneWidget);
-    expect(find.text('Theme Style'), findsNothing);
+    expect(find.byKey(const ValueKey('settings_section_appearance')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('settings_section_estimate_pdf')),
+        findsOneWidget);
+
+    await tester.ensureVisible(find.text('Appearance'));
+    await tester.tap(find.text('Appearance'));
+    await tester.pumpAndSettle();
+    expect(find.text('Theme Style'), findsOneWidget);
+    expect(find.text('Text Size'), findsOneWidget);
+    await tester.ensureVisible(find.text('Estimate PDF'));
+    await tester.tap(find.text('Estimate PDF'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('estimate_prepared_by')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('profile_email')));
 
     await tester.enterText(
       find.byKey(const ValueKey('profile_email')),

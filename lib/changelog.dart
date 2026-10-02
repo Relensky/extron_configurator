@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.43+53';
+const String kAppVersion = '0.5.45+55';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,34 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.45',
+    date: 'October 2, 2026',
+    title: 'Manufacturer and part number editable on the Cost page',
+    changes: [
+      'The manufacturer and part number of a line on the Cost page can be '
+          'edited by clicking its Model cell. An edited line leaves the '
+          'catalog - a warning says so, its price is kept as a room price, '
+          'and a broken-link icon marks it. It can be restored from the same '
+          'box.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.44',
+    date: 'October 1, 2026',
+    title: 'Settings moved to the profile and the File menu',
+    changes: [
+      'The gear button is gone from the title bar - Application '
+          'Configuration opens from the profile menu.',
+      'The deployment target is on the File menu, which names the room '
+          'that is set.',
+      'Theme, colors, interface and text size, and the Estimate PDF settings '
+          'are in your profile instead of Application Configuration.',
+      'The box shown when hovering over someone editing has a solid '
+          'background.',
+      'Names in the +N list of editors are in normal text instead of grey.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.43',
     date: 'October 1, 2026',
