@@ -12,6 +12,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'color_wheel_picker.dart';
+import 'column_drag.dart';
 import 'contrast.dart';
 import 'name_colors.dart';
 import 'pdf_viewer_dialog.dart';
@@ -649,9 +650,13 @@ class _MatrixGridState extends State<_MatrixGrid> {
   double _itemWidth(ResponsibilityItem item, _Metrics m) =>
       _widths[item.id] ?? m.itemColumn;
 
+  /// The scope column being dragged by its grip, or null.
+  final ValueNotifier<String?> _columnDrag = ValueNotifier(null);
+
   @override
   void dispose() {
     _hover.dispose();
+    _columnDrag.dispose();
     super.dispose();
   }
 
@@ -866,6 +871,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
           // says a cell's meaning: the room down the side, the scope and the
           // two parties across the top.
           PinnedGrid(
+            dragging: _columnDrag,
             frozenWidth: m.roomColumn,
             headerHeight:
                 m.headRow +
@@ -1255,7 +1261,11 @@ class _MatrixGridState extends State<_MatrixGrid> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _ColumnGrip(item: item, width: _itemWidth(item, m)),
+                _ColumnGrip(
+                  item: item,
+                  width: _itemWidth(item, m),
+                  dragging: _columnDrag,
+                ),
                 Expanded(
                   // ON THE RULE IT BELONGS TO. The name sits at the bottom of
                   // the head, against the parties it is answered by, however
@@ -1365,7 +1375,13 @@ class _MatrixGridState extends State<_MatrixGrid> {
             top: 0,
             bottom: 0,
             width: 8,
-            child: MouseRegion(
+            // Out of the way while a column is being moved, so a drop on the
+            // edge still lands.
+            child: ValueListenableBuilder<String?>(
+              valueListenable: _columnDrag,
+              builder: (context, moving, child) =>
+                  IgnorePointer(ignoring: moving != null, child: child),
+              child: MouseRegion(
               cursor: SystemMouseCursors.resizeColumn,
               child: GestureDetector(
                 key: ValueKey('matrix_resize_${item.id}'),
@@ -1393,6 +1409,7 @@ class _MatrixGridState extends State<_MatrixGrid> {
                     .setResponsibilityColumnWidth(item.id, null),
               ),
             ),
+            ),
           ),
         ],
       ),
@@ -1410,25 +1427,23 @@ class _MatrixGridState extends State<_MatrixGrid> {
       // heading as far as anybody reading the sheet is concerned, so the head
       // is the target - but it is NOT the handle: dragging the head is how the
       // sheet is panned sideways, and a grid that reordered itself every time
-      // somebody scrolled it would be unusable.
-      child: DragTarget<String>(
-        onWillAcceptWithDetails: (d) => d.data != item.id,
-        onAcceptWithDetails: (d) => context
-            .read<AppStateProvider>()
-            .reorderResponsibilityItem(d.data, index),
-        builder: (context, candidate, _) => Container(
-          decoration: candidate.isEmpty
-              ? null
-              : BoxDecoration(
-                  border: Border(
-                    left: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 3,
-                    ),
-                  ),
-                ),
-          child: described,
-        ),
+      // somebody scrolled it would be unusable. The half it is dropped on says
+      // which side it lands - see column_drag.dart.
+      child: ColumnDropTarget(
+        id: item.id,
+        dragging: _columnDrag,
+        onDrop: (dragged, after) {
+          final provider = context.read<AppStateProvider>();
+          final from = provider.project.responsibility.indexWhere(
+            (r) => r.id == dragged,
+          );
+          if (from < 0) return;
+          provider.reorderResponsibilityItem(
+            dragged,
+            columnDropIndex(from, index, after: after),
+          );
+        },
+        child: described,
       ),
     );
   }
@@ -1574,46 +1589,31 @@ const double _kGripIcon = 14;
 class _ColumnGrip extends StatelessWidget {
   final ResponsibilityItem item;
   final double width;
+  final ValueNotifier<String?> dragging;
 
-  const _ColumnGrip({required this.item, required this.width});
+  const _ColumnGrip({
+    required this.item,
+    required this.width,
+    required this.dragging,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final grip = Tooltip(
-      message: 'Drag to move this column',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.grab,
+    return ColumnDragGrip(
+      key: ValueKey('matrix_grip_${item.id}'),
+      id: item.id,
+      label: item.scope,
+      width: width,
+      dragging: dragging,
+      child: Tooltip(
+        message: 'Drag to move this column',
         child: Icon(
           Icons.drag_indicator,
           size: gridMetric(context, _kGripIcon),
           color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
-    );
-
-    return Draggable<String>(
-      key: ValueKey('matrix_grip_${item.id}'),
-      data: item.id,
-      dragAnchorStrategy: pointerDragAnchorStrategy,
-      feedback: Material(
-        elevation: 4,
-        child: Container(
-          width: width,
-          padding: const EdgeInsets.all(8),
-          color: theme.colorScheme.surfaceContainerHigh,
-          child: Text(
-            item.scope,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ),
-      childWhenDragging: Opacity(opacity: 0.35, child: grip),
-      child: grip,
     );
   }
 }

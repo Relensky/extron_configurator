@@ -717,12 +717,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 ],
               ),
             ],
-            const SizedBox(height: 12),
+            // Room above the row for the note over the tax rate - see below.
+            const SizedBox(height: 26),
             // A WRAP, so a narrow window moves the boxes to a second line
-            // rather than pushing the last one off the card.
+            // rather than pushing the last one off the card. The run spacing
+            // leaves the note room when the tax rate lands on a second line.
             Wrap(
               spacing: 12,
-              runSpacing: 8,
+              runSpacing: 22,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 // The tier and the tax rate used to print here as a line of
@@ -761,13 +763,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 SizedBox(
                   width: 130,
                   // Blank follows the project's rate, shown behind the box.
-                  // Where the rate comes from is said ABOVE the box.
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // Where the rate comes from is said ABOVE the box - drawn
+                  // there without taking up height, so the box stays in line
+                  // with tax name and the PDF boxes.
+                  child: Stack(
+                    clipBehavior: Clip.none,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4, bottom: 3),
+                      Positioned(
+                        left: 4,
+                        right: -40,
+                        top: -19,
                         child: Text(
                           // The rate itself, when it is not this room's own:
                           // an empty box says nothing about what is charged.

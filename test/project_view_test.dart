@@ -18,6 +18,7 @@ import 'package:extron_configurator/procurement_log.dart';
 import 'package:extron_configurator/procurement_sync.dart';
 import 'package:extron_configurator/project_procurement_view.dart';
 import 'package:extron_configurator/project_view.dart';
+import 'package:extron_configurator/timeline_export_view.dart';
 
 /// The Project tab: the building total at the top, the rooms behind it, the
 /// merged parts list, and the vendor tagging that splits it.
@@ -672,6 +673,39 @@ void main() {
       expect(after, hasLength(before.length - 2));
     });
 
+    testWidgets('a room section folds to its band, and they all fold at once',
+        (tester) async {
+      final p = await opened(tester);
+      final lines = liveProcurement(p.project, p.priceProject())
+          .where((e) => e.room == 'Bessey 101')
+          .toList();
+      expect(lines, hasLength(2));
+      Finder row(String id) => find.byKey(ValueKey('procurement_row_$id'));
+      expect(row(lines.first.id), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('procurement_fold_Bessey 101')),
+      );
+      await tester.pumpAndSettle();
+      expect(row(lines.first.id), findsNothing);
+      expect(find.textContaining('Bessey 101'), findsWidgets,
+          reason: 'the band is still there');
+
+      await tester.tap(find.byKey(const ValueKey('procurement_fold_all')));
+      await tester.pumpAndSettle();
+      expect(find.byType(InkWell).evaluate().isNotEmpty, isTrue);
+      expect(
+        liveProcurement(p.project, p.priceProject())
+            .any((e) => row(e.id).evaluate().isNotEmpty),
+        isFalse,
+        reason: 'every room folded',
+      );
+
+      await tester.tap(find.byKey(const ValueKey('procurement_fold_all')));
+      await tester.pumpAndSettle();
+      expect(row(lines.first.id), findsOneWidget);
+    });
+
     testWidgets('the page can be taken as a picture', (tester) async {
       await opened(tester);
       await tester.tap(find.byKey(const ValueKey('procurement_export_image')));
@@ -713,10 +747,209 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('procurement_restore')));
       await tester.pumpAndSettle();
+      final room = p.hiddenProcurementRooms.single;
+      await tester.tap(find.byKey(ValueKey('procurement_restore_${room.key}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('procurement_restore_go')));
+      await tester.pumpAndSettle();
       expect(
         liveProcurement(p.project, p.priceProject()),
         hasLength(before.length),
       );
+    });
+
+    testWidgets('removed rooms are put back only when ticked', (tester) async {
+      final p = await opened(tester);
+      final live = liveProcurement(p.project, p.priceProject());
+      final rooms = {for (final e in live) e.room};
+      expect(rooms.length, greaterThan(1));
+      for (final room in rooms) {
+        p.removeProcurementEntries([
+          for (final e in liveProcurement(p.project, p.priceProject()))
+            if (e.room == room) e,
+        ]);
+      }
+      await tester.pumpAndSettle();
+      expect(liveProcurement(p.project, p.priceProject()), isEmpty);
+      expect(p.hiddenProcurementRooms, hasLength(rooms.length));
+
+      await tester.tap(find.byKey(const ValueKey('procurement_restore')));
+      await tester.pumpAndSettle();
+      final first = p.hiddenProcurementRooms.first;
+      await tester.tap(find.byKey(ValueKey('procurement_restore_${first.key}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('procurement_restore_go')));
+      await tester.pumpAndSettle();
+
+      final back = liveProcurement(p.project, p.priceProject());
+      expect({for (final e in back) e.room}, {first.room});
+      expect(p.hiddenProcurementRooms, hasLength(rooms.length - 1));
+    });
+
+    testWidgets('columns are added, deleted and deleted all', (tester) async {
+      final p = await opened(tester);
+      await tester.tap(find.byKey(const ValueKey('procurement_columns')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('procurement_column_new')),
+        'Quote #',
+      );
+      await tester.tap(find.byKey(const ValueKey('procurement_column_add')));
+      await tester.pumpAndSettle();
+      expect(p.project.procurementCustomColumns.single.label, 'Quote #');
+      expect(p.project.procurementColumns.last.id, 'custom1');
+
+      await tester.tap(
+        find.byKey(const ValueKey('procurement_column_shown_status')),
+      );
+      await tester.pumpAndSettle();
+      expect(p.project.procurementHiddenColumns, ['status']);
+
+      await tester.tap(
+        find.byKey(const ValueKey('procurement_columns_delete_all')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('procurement_columns_delete_all_go')),
+      );
+      await tester.pumpAndSettle();
+      expect(p.project.procurementCustomColumns, isEmpty);
+      expect([for (final c in p.project.procurementColumns) c.id], ['device']);
+
+      // And ticked back on.
+      await tester.tap(
+        find.byKey(const ValueKey('procurement_column_shown_notes')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        [for (final c in p.project.procurementColumns) c.id],
+        ['device', 'notes'],
+      );
+    });
+
+    testWidgets('an added column is filled in on the grid', (tester) async {
+      final p = await opened(tester);
+      final id = p.addProcurementColumn('Quote #');
+      await tester.pumpAndSettle();
+      final shown = liveProcurement(p.project, p.priceProject()).first;
+      final cell = find.byKey(ValueKey('procurement_custom_${id}_${shown.id}'));
+      await tester.ensureVisible(cell);
+      await tester.tap(cell);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('procurement_text_field')),
+        'Q-1042',
+      );
+      await tester.tap(find.byKey(const ValueKey('procurement_text_save')));
+      await tester.pumpAndSettle();
+      expect(p.project.procurement.single.custom[id], 'Q-1042');
+
+      p.deleteProcurementColumn(id);
+      expect(p.project.procurement.single.custom, isEmpty);
+    });
+
+    testWidgets('a column dropped on the right half lands after it',
+        (tester) async {
+      final p = await opened(tester);
+      final grip = find.byKey(const ValueKey('procurement_grip_status'));
+      final target = find.byKey(const ValueKey('procurement_head_company'));
+      final box = tester.getRect(target);
+      final gesture = await tester.startGesture(tester.getCenter(grip));
+      await tester.pump(const Duration(milliseconds: 50));
+      // Off the grip first, as a hand does, so the drag has begun.
+      await gesture.moveBy(const Offset(30, 0));
+      await tester.pump(const Duration(milliseconds: 50));
+      // On the resize edge, which stands aside while a column moves.
+      await gesture.moveTo(Offset(box.right - 3, box.center.dy));
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      final ids = [for (final c in p.project.procurementColumns) c.id];
+      expect(ids.indexOf('status'), ids.indexOf('company') + 1);
+      expect(ids.indexOf('room'), ids.indexOf('status') + 1);
+    });
+  });
+
+  group('the job list', () {
+    testWidgets('Add lights up with the first letter typed', (tester) async {
+      final p = withProject();
+      await pump(tester, p);
+      await tester.tap(find.byKey(const ValueKey('project_pane_todo')));
+      await tester.pumpAndSettle();
+
+      FilledButton add() => tester.widget<FilledButton>(
+        find.ancestor(
+          of: find.text('Add'),
+          matching: find.byWidgetPredicate((w) => w is FilledButton),
+        ),
+      );
+      expect(add().onPressed, isNull);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('todo_new_text')),
+        'c',
+      );
+      await tester.pump();
+      expect(add().onPressed, isNotNull, reason: 'no other change needed');
+
+      await tester.tap(find.text('Add'));
+      await tester.pumpAndSettle();
+      expect(p.project.todos.single.text, 'c');
+    });
+
+    testWidgets('every note is on the timeline, which exports as a picture',
+        (tester) async {
+      final p = withProject();
+      p.addProjectTodo('ring the dean');
+      p.addProjectTodo('order mounts');
+      await pump(tester, p);
+      await tester.tap(find.byKey(const ValueKey('project_pane_timeline')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('timeline_job_list')), findsOneWidget);
+      expect(find.text('ring the dean'), findsOneWidget);
+      expect(find.text('order mounts'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('timeline_export_image')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('timeline_image_dialog')),
+        findsOneWidget,
+      );
+      expect(find.byType(TimelinePicture), findsOneWidget);
+    });
+
+    testWidgets('every open note offers a calendar invite, in words',
+        (tester) async {
+      final p = withProject();
+      p.addProjectTodo('ring the dean');
+      p.addProjectTodo('order mounts');
+      p.addProjectTodo('already done');
+      final done = p.project.todos.last.id;
+      p.setProjectTodoState(done, ProjectTodoState.done);
+      await pump(tester, p);
+
+      // The To do pane.
+      await tester.tap(find.byKey(const ValueKey('project_pane_todo')));
+      await tester.pumpAndSettle();
+      expect(find.text('Calendar invite'), findsNWidgets(2));
+      expect(find.byKey(ValueKey('todo_remind_$done')), findsNothing);
+
+      final first = p.project.todos.first.id;
+      await tester.tap(find.byKey(ValueKey('todo_remind_$first')));
+      await tester.pumpAndSettle();
+      expect(find.text('Add to my calendar'), findsOneWidget);
+      expect(find.text('Email as invite'), findsOneWidget);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+
+      // The timeline's job list.
+      await tester.tap(find.byKey(const ValueKey('project_pane_timeline')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey('timeline_remind_$first')), findsOneWidget);
+      expect(find.byKey(ValueKey('timeline_remind_$done')), findsNothing);
+      expect(tester.takeException(), isNull);
     });
   });
 

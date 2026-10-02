@@ -123,6 +123,69 @@ void main() {
     return (epson: found('Epson'), sharp: found('Sharp'));
   }
 
+  group('a delivery shows on the part\'s order', () {
+    test('its PO goes on the order, and the whole quantity marks it arrived',
+        () {
+      final (:p, rfqId: _, vendorId: _) = job();
+      final keys = keysOf(p);
+      expect(p.project.orderForPart(keys.epson), isNull);
+
+      // One room, so one projector: a lot of it is all of it.
+      p.addProjectDelivery(
+        partKey: keys.epson,
+        itemName: 'Epson projector',
+        poNumber: 'PO-1188',
+        qty: 1,
+        deliveredOn: DateTime(2026, 4, 2),
+      );
+      final order = p.project.orderForPart(keys.epson)!;
+      expect(order.poNumber, 'PO-1188');
+      expect(order.isOrdered, isTrue);
+      expect(order.receivedOn, DateTime(2026, 4, 2));
+      expect(p.project.partsOnPo('PO-1188'), contains(keys.epson));
+    });
+
+    test('part of the quantity is on order, not yet arrived', () {
+      final (:p, rfqId: _, vendorId: _) = job();
+      p.addRoomToProject(writeRoom('r1', 'Bessey 103'));
+      final keys = keysOf(p);
+      p.addProjectDelivery(
+        partKey: keys.epson,
+        poNumber: 'PO-1188',
+        qty: 1,
+        deliveredOn: DateTime(2026, 4, 2),
+      );
+      expect(p.project.orderForPart(keys.epson)!.isReceived, isFalse);
+      p.addProjectDelivery(
+        partKey: keys.epson,
+        poNumber: 'PO-1188',
+        qty: 1,
+        deliveredOn: DateTime(2026, 4, 9),
+      );
+      expect(p.project.orderForPart(keys.epson)!.receivedOn, DateTime(2026, 4, 9));
+    });
+
+    test('a PO already on the order is kept; a returned lot counts for nothing',
+        () {
+      final (:p, rfqId: _, vendorId: _) = job();
+      final keys = keysOf(p);
+      p.addProjectDelivery(
+        partKey: keys.sharp,
+        poNumber: 'PO-9',
+        qty: 1,
+        state: DeliveryState.returned,
+      );
+      expect(p.project.orderForPart(keys.sharp), isNull);
+      p.markProjectPartOrdered(keys.sharp, on: DateTime(2026, 3, 1));
+      p.project.setPartOrder(
+        keys.sharp,
+        p.project.orderForPart(keys.sharp)!.copyWith(poNumber: 'PO-1'),
+      );
+      p.addProjectDelivery(partKey: keys.sharp, poNumber: 'PO-2', qty: 1);
+      expect(p.project.orderForPart(keys.sharp)!.poNumber, 'PO-1');
+    });
+  });
+
   testWidgets("the box opens on the PO's own package, and can be widened", (
     tester,
   ) async {

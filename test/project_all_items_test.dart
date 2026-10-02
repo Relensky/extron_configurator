@@ -163,6 +163,23 @@ void main() {
       expect(back.buysOnlyFor(1), isEmpty);
     });
 
+    test('a scoped room is still taxed at the job\'s rate', () {
+      provider.setProjectTaxPercent(10);
+      ProjectEstimate taxed() => computeProjectEstimate(
+        project: provider.project,
+        projectPath: projectFile,
+        library: provider.avDeviceLibrary,
+      );
+      provider.setPriorityBuysOnly(2, ['Projector']);
+      provider.setPriorityAddOns(2, [
+        (model: 'Speakers', description: 'Ceiling speakers', qty: 2),
+      ]);
+      final holt = room(taxed(), 'HOLT 171').estimate!;
+      expect(holt.tax, greaterThan(0));
+      expect(holt.taxPercent, 10);
+      expect(holt.tax, closeTo(holt.taxableBase * 0.10, 0.01));
+    });
+
     test('clearing it buys everything again', () {
       final full = room(price(), 'HOLT 171').total;
       provider.setPriorityBuysOnly(2, ['Projector']);

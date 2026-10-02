@@ -429,6 +429,9 @@ class SchemaFieldBuilder {
 
     return DropdownButtonFormField<String>(
       initialValue: current.isNotEmpty ? current : null,
+      // Expanded, so an option longer than the field is cut short with an
+      // ellipsis rather than pushed past its edge.
+      isExpanded: true,
       decoration: _decoration(label, spec.helperText,
           mismatch: valueMismatch || conflict != null,
           mismatchText: valueMismatch
@@ -436,7 +439,10 @@ class SchemaFieldBuilder {
               : conflict,
           labelColor: _originColor(context, provider, sectionKey, fieldKey)),
       items: options
-          .map((o) => DropdownMenuItem(value: o.value, child: Text(o.label)))
+          .map((o) => DropdownMenuItem(
+                value: o.value,
+                child: Text(o.label, overflow: TextOverflow.ellipsis),
+              ))
           .toList(),
       onChanged: (val) {
         if (val == null) return;
@@ -636,6 +642,7 @@ class SchemaFieldBuilder {
 
     return DropdownButtonFormField<String>(
       initialValue: hasValue ? currentComboKey : null,
+      isExpanded: true,
       decoration: _decoration(label, spec.helperText,
           mismatch: valueMismatch || conflict != null,
           mismatchText: valueMismatch
@@ -643,7 +650,10 @@ class SchemaFieldBuilder {
               : conflict,
           labelColor: _originColor(context, provider, sectionKey, fieldKey)),
       items: options
-          .map((o) => DropdownMenuItem(value: o.comboKey, child: Text(o.label)))
+          .map((o) => DropdownMenuItem(
+                value: o.comboKey,
+                child: Text(o.label, overflow: TextOverflow.ellipsis),
+              ))
           .toList(),
       onChanged: (val) {
         if (val == null) return;

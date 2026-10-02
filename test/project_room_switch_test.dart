@@ -192,6 +192,21 @@ void main() {
       expect(readRoomFromDisk(roomA()).settings.priceOverrides, isEmpty);
     });
 
+    test('the total holds still while a room is half way open', () async {
+      final p = withProject();
+      await p.openProjectRoomRef(p.project.rooms.first);
+      expect(p.priceProject().grandTotal, 3000);
+
+      // The config is in and the path has moved; the drawing still in memory
+      // is the room being left. Priced now, that room counted twice.
+      await p.openConfigAtPath(roomB());
+      expect(p.avNodes.single.model, 'Display X', reason: 'the gap itself');
+      expect(p.priceProject().grandTotal, 3000);
+
+      p.loadAvFlowForCurrentConfig();
+      expect(p.priceProject().grandTotal, 3000);
+    });
+
     test('a box added to the diagram lands on the master list', () async {
       final p = withProject();
       await p.openProjectRoomRef(p.project.rooms.first);

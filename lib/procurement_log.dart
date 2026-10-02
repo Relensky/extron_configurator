@@ -131,6 +131,10 @@ class ProcurementEntry {
   /// come straight back.
   final bool excluded;
 
+  /// Column id -> what this line says in a column added on the job - see
+  /// [BuildingProject.procurementCustomColumns].
+  final Map<String, String> custom;
+
   const ProcurementEntry({
     required this.id,
     this.company = '',
@@ -152,6 +156,7 @@ class ProcurementEntry {
     this.roomId = '',
     this.lineKey = '',
     this.excluded = false,
+    this.custom = const {},
   });
 
   /// True when this entry follows a line on a room's estimate.
@@ -202,11 +207,13 @@ class ProcurementEntry {
     String? roomId,
     String? lineKey,
     bool? excluded,
+    Map<String, String>? custom,
   }) => ProcurementEntry(
     id: id ?? this.id,
     roomId: roomId ?? this.roomId,
     lineKey: lineKey ?? this.lineKey,
     excluded: excluded ?? this.excluded,
+    custom: custom ?? this.custom,
     company: company ?? this.company,
     room: room ?? this.room,
     device: device ?? this.device,
@@ -252,6 +259,11 @@ class ProcurementEntry {
       if (roomId.isNotEmpty) 'roomId': roomId,
       if (lineKey.isNotEmpty) 'lineKey': lineKey,
       if (excluded) 'excluded': true,
+      if (custom.values.any((v) => v.trim().isNotEmpty))
+        'custom': {
+          for (final e in custom.entries)
+            if (e.value.trim().isNotEmpty) e.key: e.value.trim(),
+        },
     };
   }
 
@@ -278,9 +290,28 @@ class ProcurementEntry {
       roomId: text('roomId'),
       lineKey: text('lineKey'),
       excluded: json['excluded'] == true,
+      custom: {
+        if (json['custom'] is Map)
+          for (final e in (json['custom'] as Map).entries)
+            e.key.toString(): e.value?.toString() ?? '',
+      },
     );
   }
 }
+
+/// A column added on one job, after the contractor's own.
+typedef ProcurementCustomColumn = ({String id, String label});
+
+/// What the id of every added column starts with.
+const String kProcurementCustomPrefix = 'custom';
+
+/// True for a column added on the job rather than built in.
+bool procurementColumnIsCustom(String id) =>
+    id.startsWith(kProcurementCustomPrefix);
+
+/// The one column that cannot be deleted: it names the line, and it is the
+/// frozen one the line is pressed by.
+const String kProcurementFixedColumn = 'device';
 
 /// The log's columns, in the order the contractor's sheet has them.
 /// The bands the columns are colored in until somebody picks their own.
@@ -405,16 +436,26 @@ List<({String room, List<ProcurementEntry> entries})> procurementByRoom(
   ];
 }
 
-/// One row of the issued sheet.
 /// The columns in the order the job keeps them: [order] first, by id, then
-/// any it does not name in their usual places.
-List<ProcurementColumnSpec> orderedProcurementColumns(List<String> order) {
-  final byId = {for (final c in kProcurementColumnSpecs) c.id: c};
+/// any it does not name in their usual places, then the job's [custom] ones.
+/// Built-in columns in [hidden] are left out; the device column never is.
+List<ProcurementColumnSpec> orderedProcurementColumns(
+  List<String> order, {
+  Set<String> hidden = const {},
+  List<ProcurementCustomColumn> custom = const [],
+}) {
+  final all = <ProcurementColumnSpec>[
+    for (final c in kProcurementColumnSpecs)
+      if (c.id == kProcurementFixedColumn || !hidden.contains(c.id)) c,
+    for (final c in custom)
+      (id: c.id, label: c.label, group: ProcurementGroup.notes),
+  ];
+  final byId = {for (final c in all) c.id: c};
   final out = <ProcurementColumnSpec>[
     for (final id in order)
       if (byId.containsKey(id)) byId.remove(id)!,
   ];
-  for (final c in kProcurementColumnSpecs) {
+  for (final c in all) {
     if (byId.containsKey(c.id)) out.add(c);
   }
   return out;
@@ -441,38 +482,41 @@ Map<String, String> procurementValues(ProcurementEntry e) {
     'releasedOn': date(e.releasedOn),
     'delivery': date(e.estimatedDelivery),
     'notes': e.notes,
+    ...e.custom,
   };
 }
 
-/// One row of the issued sheet, in [order] (see [orderedProcurementColumns]).
+/// One row of the issued sheet, in [order] (see [orderedProcurementColumns]),
+/// or in [columns] when given - see [BuildingProject.procurementColumns].
 List<dynamic> procurementRow(
   ProcurementEntry e, {
   List<String> order = const [],
+  List<ProcurementColumnSpec>? columns,
 }) {
   final values = procurementValues(e);
   return [
-    for (final c in orderedProcurementColumns(order)) values[c.id] ?? '',
+    for (final c in columns ?? orderedProcurementColumns(order))
+      values[c.id] ?? '',
   ];
 }
 
-/// The log as report sections, one per room, its columns in [order] and
-/// headed as [labels] renames them.
+/// The log as report sections, one per room, its columns in [order] (or
+/// [columns]) and headed as [labels] renames them.
 List<ReportSection> procurementLogSections(
   List<ProcurementEntry> entries, {
   List<String> order = const [],
   Map<String, String> labels = const {},
+  List<ProcurementColumnSpec>? columns,
 }) {
-  final header = [
-    for (final c in orderedProcurementColumns(order))
-      procurementColumnLabel(c, labels),
-  ];
+  final shown = columns ?? orderedProcurementColumns(order);
+  final header = [for (final c in shown) procurementColumnLabel(c, labels)];
   return [
     for (final group in procurementByRoom(entries))
       (
         title: group.room.isEmpty ? 'No room' : group.room,
         header: header,
         rows: [
-          for (final e in group.entries) procurementRow(e, order: order),
+          for (final e in group.entries) procurementRow(e, columns: shown),
         ],
       ),
   ];
@@ -491,18 +535,23 @@ XlsxSheet procurementLogSheet(
   Map<String, int> colors = const {},
   List<String> order = const [],
   Map<String, String> labels = const {},
+  List<ProcurementColumnSpec>? columns,
 }) {
+  final shown = columns ?? orderedProcurementColumns(order);
   final sheet = buildStackedReportSheet(
     sheetName: sheetName,
     title: projectName.trim().isEmpty
         ? kProcurementLogSheet
         : '${projectName.trim()} - $kProcurementLogSheet',
-    sections: procurementLogSections(entries, order: order, labels: labels),
+    sections: procurementLogSections(
+      entries,
+      labels: labels,
+      columns: shown,
+    ),
     generated: generated,
   );
   final byLabel = {
-    for (final c in kProcurementColumnSpecs)
-      procurementColumnLabel(c, labels): c,
+    for (final c in shown) procurementColumnLabel(c, labels): c,
   };
   for (var r = 0; r < sheet.rows.length; r++) {
     if (sheet.rowStyles[r] != XlsxRowStyle.header) continue;

@@ -86,6 +86,34 @@ void main() {
       );
     });
 
+    testWidgets('dropped on the right half of a heading, it lands after',
+        (tester) async {
+      final p = withProject();
+      for (final scope in ['Screens', 'Speakers', 'Cameras']) {
+        p.addResponsibilityItem(scope);
+      }
+      await pumpPane(tester, p);
+
+      final grip = find.byKey(const ValueKey('matrix_grip_resp1'));
+      final last = tester.getRect(
+        find.byKey(const ValueKey('matrix_head_resp3')),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(grip));
+      await tester.pump(const Duration(milliseconds: 50));
+      // Off the grip first, as a hand does, so the drag has begun.
+      await gesture.moveBy(const Offset(30, 0));
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.moveTo(Offset(last.right - 3, last.center.dy));
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        p.project.responsibility.map((r) => r.scope),
+        ['Speakers', 'Cameras', 'Screens'],
+      );
+    });
+
     testWidgets('the heading itself still pans the sheet', (tester) async {
       // The grip is the handle, not the whole head: a grid that reordered
       // itself every time somebody scrolled across it would be unusable.

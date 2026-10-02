@@ -19,6 +19,8 @@ import 'package:extron_configurator/main.dart';
 /// were blank. That is a latent hazard worth avoiding, though testing showed
 /// it was NOT the cause of the sliver_multi_box_adaptor child-order assertion.)
 void main() {
+  // Every settings section open, so its fields can be found.
+  SettingsSection.startOpen = true;
   testWidgets('App Config renders with every path blank (no duplicate keys)',
       (WidgetTester tester) async {
     // Desktop-sized surface: the default 800x600 test window is narrower than

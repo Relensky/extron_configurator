@@ -89,6 +89,11 @@ class CollabNotice {
 class CollabDocState {
   String path = '';
   Object? baseline;
+
+  /// This copy as it was right after it was opened or saved - what opening
+  /// filled in is told apart from what the person typed. See [mergeJson3].
+  Object? loaded;
+  bool hasLoaded = false;
   String stamp = '';
   DateTime since = DateTime.now();
   DateTime? savedAt;
@@ -96,6 +101,7 @@ class CollabDocState {
   IncomingChange? incoming;
   DateTime? lastAnnounced;
   bool lastAnnouncedDirty = false;
+  String lastAnnouncedWhere = '';
 }
 
 /// The outcome of bringing another person's saved changes into memory.
@@ -105,10 +111,14 @@ class CollabMergeOutcome {
   final int takenFromTheirs;
   final List<MergeConflict> conflicts;
 
+  /// Their new rows given a new number so both people's were kept.
+  final int renumbered;
+
   const CollabMergeOutcome({
     required this.merged,
     this.takenFromTheirs = 0,
     this.conflicts = const [],
+    this.renumbered = 0,
   });
 
   static const none = CollabMergeOutcome(merged: false);
@@ -215,13 +225,16 @@ class CollabController extends ChangeNotifier {
 
     final board = PresenceBoard(file);
     final dirty = doc.isDirty;
+    final where = _whereKey();
     if (s.lastAnnounced == null ||
         dirty != s.lastAnnouncedDirty ||
+        where != s.lastAnnouncedWhere ||
         now.difference(s.lastAnnounced!) >= kPresenceHeartbeat) {
       await board.announce(_presence(s, now, dirty));
       s
         ..lastAnnounced = now
-        ..lastAnnouncedDirty = dirty;
+        ..lastAnnouncedDirty = dirty
+        ..lastAnnouncedWhere = where;
     }
 
     final others = await board.others(me, now: now);
@@ -265,15 +278,28 @@ class CollabController extends ChangeNotifier {
     return changed;
   }
 
-  EditorPresence _presence(CollabDocState s, DateTime now, bool dirty) =>
-      EditorPresence(
-        user: me.user,
-        machine: me.machine,
-        since: s.since,
-        heartbeat: now,
-        unsaved: dirty,
-        savedAt: s.savedAt,
-      );
+  /// Which room file this copy has open and which tab it is on, for the
+  /// presence note - set by the app. Null says nothing about either.
+  ({String room, String tab}) Function()? whereAmI;
+
+  String _whereKey() {
+    final w = whereAmI?.call();
+    return w == null ? '' : '${w.room}|${w.tab}';
+  }
+
+  EditorPresence _presence(CollabDocState s, DateTime now, bool dirty) {
+    final w = whereAmI?.call();
+    return EditorPresence(
+      user: me.user,
+      machine: me.machine,
+      since: s.since,
+      heartbeat: now,
+      unsaved: dirty,
+      savedAt: s.savedAt,
+      room: w?.room ?? '',
+      tab: w?.tab ?? '',
+    );
+  }
 
   /// Runs [body] - a save - with the watcher paused, so this copy's own
   /// write is never mistaken for somebody else's.
@@ -285,6 +311,42 @@ class CollabController extends ChangeNotifier {
       _held--;
     }
   }
+
+  // --- the merge queue -----------------------------------------------------
+  //
+  //  ONE AT A TIME. A Merge pressed on the room and the project, and a save
+  //  merging before it writes, used to run together - each reading the file,
+  //  merging and rebuilding the screen at once, with the watcher still ticking
+  //  under them. Queued, each finishes before the next starts, with the
+  //  watcher paused for the lot.
+
+  Future<void> _queueTail = Future.value();
+  int _queued = 0;
+
+  /// What a job in the queue sees as the current zone value, so a job that
+  /// queues more work runs it straight away instead of waiting on itself.
+  static final Object _inQueue = Object();
+
+  /// Merges and saves waiting or running. The screen shows a busy chip while
+  /// this is above nothing.
+  int get queued => _queued;
+
+  /// Runs [job] after everything queued before it, with the watcher paused.
+  Future<T> enqueue<T>(Future<T> Function() job) {
+    if (identical(Zone.current[_inQueue], this)) return job();
+    _queued++;
+    notifyListeners();
+    final run = _queueTail.then(
+      (_) => runZoned(() => hold(job), zoneValues: {_inQueue: this}),
+    );
+    _queueTail = run.then<void>((_) {}, onError: (_) {});
+    return run.whenComplete(() {
+      _queued--;
+      if (!_disposed) notifyListeners();
+    });
+  }
+
+  bool _disposed = false;
 
   /// Records the file as it is now as the base of the next merge. Called
   /// after every load and every save of [kind].
@@ -314,7 +376,22 @@ class CollabController extends ChangeNotifier {
     final s = _state[doc.kind]!;
     s.stamp = _stampOf(doc.watchedFiles);
     s.baseline = doc.filePath.isEmpty ? null : cloneJson(doc.readDisk());
+    s.loaded = cloneJson(doc.current());
+    s.hasLoaded = true;
   }
+
+  JsonMergeResult _merge3(
+    CollabDocState s,
+    CollabDocument doc,
+    Object? disk, {
+    MergeSide Function(MergeConflict)? resolve,
+  }) => s.hasLoaded
+      ? mergeJson3(s.baseline, doc.current(), disk,
+          resolve: resolve, loaded: s.loaded)
+      : mergeJson3(s.baseline, doc.current(), disk, resolve: resolve);
+
+  /// The document as this copy holds it, for naming things in a conflict.
+  Object? currentOf(CollabDocKind kind) => _docs[kind]?.current();
 
   /// What merging the file on disk into memory would do, without doing it.
   /// Null when the file is exactly the base (nobody else saved).
@@ -327,7 +404,7 @@ class CollabController extends ChangeNotifier {
     if (disk == null || s.baseline == null || jsonEquals(disk, s.baseline)) {
       return null;
     }
-    return mergeJson3(s.baseline, doc.current(), disk);
+    return _merge3(s, doc, disk);
   }
 
   /// Brings the saved file's changes into memory.
@@ -359,22 +436,29 @@ class CollabController extends ChangeNotifier {
       s
         ..baseline = cloneJson(disk)
         ..stamp = _stampOf(doc.watchedFiles)
-        ..incoming = null;
+        ..incoming = null
+        ..loaded = cloneJson(doc.current())
+        ..hasLoaded = true;
       notifyListeners();
       return const CollabMergeOutcome(merged: true);
     }
 
-    final result = mergeJson3(s.baseline, doc.current(), disk, resolve: resolve);
+    final result = _merge3(s, doc, disk, resolve: resolve);
     doc.apply(cloneJson(result.merged), clean: jsonEquals(result.merged, disk));
     s
       ..baseline = cloneJson(disk)
       ..stamp = _stampOf(doc.watchedFiles)
-      ..incoming = null;
+      ..incoming = null
+      // What is in memory now is part this person's and part the file's, so
+      // "untouched since opening" can no longer be read off it.
+      ..hasLoaded = false
+      ..loaded = null;
     notifyListeners();
     return CollabMergeOutcome(
       merged: true,
       takenFromTheirs: result.takenFromTheirs,
       conflicts: result.conflicts,
+      renumbered: result.renumbered,
     );
   }
 
@@ -394,6 +478,7 @@ class CollabController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     stop();
     _notices.close();
     super.dispose();
@@ -431,7 +516,9 @@ class CollabController extends ChangeNotifier {
     for (var i = 0; i < a.length; i++) {
       if (a[i].identity != b[i].identity ||
           a[i].unsaved != b[i].unsaved ||
-          a[i].savedAt != b[i].savedAt) {
+          a[i].savedAt != b[i].savedAt ||
+          a[i].room != b[i].room ||
+          a[i].tab != b[i].tab) {
         return false;
       }
     }

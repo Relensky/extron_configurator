@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import 'collab_controller.dart';
 import 'json_merge.dart';
+import 'merge_labels.dart';
 import 'presence.dart';
 
 /// ============================================================================
@@ -71,6 +73,56 @@ bool collabHasChanged(EditorPresence presence) =>
     presence.unsaved ||
     (presence.savedAt != null && presence.savedAt!.isAfter(presence.since));
 
+/// How many editors get a chip of their own before the rest go in a list.
+const int kCollabChipsShown = 3;
+
+/// The editors past [kCollabChipsShown]: '+2', opening a list of who they
+/// are and where.
+class _MoreEditors extends StatelessWidget {
+  final List<({EditorPresence presence, CollabDocKind kind})> editors;
+
+  const _MoreEditors({required this.editors});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.read<AppStateProvider>();
+    return PopupMenuButton<void>(
+      key: const ValueKey('collab_more_editors'),
+      tooltip: '${editors.length} more editing',
+      position: PopupMenuPosition.under,
+      itemBuilder: (_) => [
+        for (final e in editors)
+          PopupMenuItem<void>(
+            enabled: false,
+            child: ListTile(
+              key: ValueKey('collab_more_${e.presence.user}'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: CollabAvatarCircle(
+                user: e.presence.user,
+                picture: provider.avatarFileFor(e.presence.user),
+              ),
+              title: Text(e.presence.user),
+              subtitle: Text(
+                [
+                  e.presence.whereText.isEmpty
+                      ? 'the ${collabDocNoun(e.kind)}'
+                      : e.presence.whereText,
+                  if (e.presence.unsaved) 'unsaved changes',
+                ].join(' - '),
+              ),
+            ),
+          ),
+      ],
+      child: Chip(
+        visualDensity: VisualDensity.compact,
+        avatar: const Icon(Icons.group_outlined, size: 16),
+        label: Text('+${editors.length}'),
+      ),
+    );
+  }
+}
+
 /// The people and pending saves for the page on screen, on the banner.
 class CollabPresenceStrip extends StatelessWidget {
   final AppTab tab;
@@ -85,7 +137,13 @@ class CollabPresenceStrip extends StatelessWidget {
       listenable: collab,
       builder: (context, _) {
         if (!collab.enabled) return const SizedBox.shrink();
-        final chips = <Widget>[];
+        final chips = <Widget>[
+          // The queue at work: merges and saves, one at a time.
+          if (collab.queued > 0) _BusyChip(waiting: collab.queued - 1),
+        ];
+        // Each person once, on the first document they are editing.
+        final editors = <({EditorPresence presence, CollabDocKind kind})>[];
+        final seen = <CollabIdentity>{};
         for (final kind in collabKindsForTab(tab)) {
           final incoming = collab.incomingOn(kind);
           if (incoming != null) {
@@ -96,8 +154,17 @@ class CollabPresenceStrip extends StatelessWidget {
             // the file open is not editing it, and a chip for every reader
             // made every open file look like it was being worked on.
             if (!collabHasChanged(other)) continue;
-            chips.add(CollabEditorAvatar(presence: other, kind: kind));
+            if (!seen.add(other.identity)) continue;
+            editors.add((presence: other, kind: kind));
           }
+        }
+        // A FEW ON THE BAR, THE REST IN A LIST. Five people editing at once
+        // is five chips the bar has no room for.
+        for (final e in editors.take(kCollabChipsShown)) {
+          chips.add(CollabEditorAvatar(presence: e.presence, kind: e.kind));
+        }
+        if (editors.length > kCollabChipsShown) {
+          chips.add(_MoreEditors(editors: editors.skip(kCollabChipsShown).toList()));
         }
         if (chips.isEmpty) return const SizedBox.shrink();
         return Padding(
@@ -133,12 +200,36 @@ class CollabEditorAvatar extends StatelessWidget {
     final theme = Theme.of(context);
     final color = collabColorFor(presence.user);
     final noun = collabDocNoun(kind);
+    final picture = context.read<AppStateProvider>().avatarFileFor(
+      presence.user,
+    );
+    final about = '${presence.user} on ${presence.machine} has this $noun '
+        'open (since ${_clock(presence.since)}).'
+        '${presence.whereText.isEmpty ? '' : '\nNow in ${presence.whereText}.'}'
+        '${presence.unsaved ? '\nThey have changes they have not saved yet '
+            '- when they save, you will be offered their changes to combine.' : ''}'
+        '${presence.savedAt != null ? '\nLast saved at ${_clock(presence.savedAt!)}.' : ''}';
     return Tooltip(
-      message: '${presence.user} on ${presence.machine} has this $noun open '
-          '(since ${_clock(presence.since)}).'
-          '${presence.unsaved ? '\nThey have changes they have not saved yet '
-              '- when they save, you will be offered their changes to merge.' : ''}'
-          '${presence.savedAt != null ? '\nLast saved at ${_clock(presence.savedAt!)}.' : ''}',
+      // Their picture, large, above the words - so who it is can be seen,
+      // not only read.
+      richMessage: picture == null
+          ? TextSpan(text: about)
+          : TextSpan(
+              children: [
+                WidgetSpan(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: CollabAvatarCircle(
+                      key: ValueKey('collab_avatar_hover_${presence.user}'),
+                      user: presence.user,
+                      picture: picture,
+                      radius: 48,
+                    ),
+                  ),
+                ),
+                TextSpan(text: '\n$about'),
+              ],
+            ),
       child: Chip(
         key: ValueKey('collab_editor_${presence.user}'),
         visualDensity: VisualDensity.compact,
@@ -146,17 +237,7 @@ class CollabEditorAvatar extends StatelessWidget {
         avatar: Stack(
           clipBehavior: Clip.none,
           children: [
-            CircleAvatar(
-              backgroundColor: color,
-              child: Text(
-                collabInitials(presence.user),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            CollabAvatarCircle(user: presence.user, picture: picture),
             if (presence.unsaved)
               Positioned(
                 right: -2,
@@ -169,11 +250,77 @@ class CollabEditorAvatar extends StatelessWidget {
               ),
           ],
         ),
+        // The room they are in beside the name, when they are in one.
         label: Text(
-          presence.user,
+          presence.room.trim().isEmpty
+              ? presence.user
+              : '${presence.user} · ${presence.room.trim()}',
           style: theme.textTheme.labelMedium,
         ),
         side: BorderSide(color: color, width: 1.5),
+      ),
+    );
+  }
+}
+
+/// Shown while the queue of merges and saves is working, with how many are
+/// waiting.
+class _BusyChip extends StatelessWidget {
+  final int waiting;
+
+  const _BusyChip({required this.waiting});
+
+  @override
+  Widget build(BuildContext context) => Chip(
+    key: const ValueKey('collab_busy'),
+    visualDensity: VisualDensity.compact,
+    avatar: const SizedBox(
+      width: 14,
+      height: 14,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    ),
+    label: Text(waiting > 0 ? 'Syncing ($waiting waiting)' : 'Syncing…'),
+  );
+}
+
+/// Somebody's avatar: their picture when they have set one, else their
+/// initials in their color.
+class CollabAvatarCircle extends StatelessWidget {
+  final String user;
+  final String? picture;
+  final double radius;
+
+  const CollabAvatarCircle({
+    super.key,
+    required this.user,
+    this.picture,
+    this.radius = 12,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = collabColorFor(user);
+    final file = picture;
+    if (file != null) {
+      return CircleAvatar(
+        key: ValueKey('collab_avatar_picture_$user'),
+        radius: radius,
+        backgroundColor: color,
+        backgroundImage: FileImage(File(file)),
+        // A picture that cannot be read shows the initials instead.
+        onBackgroundImageError: (_, _) {},
+      );
+    }
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: color,
+      child: Text(
+        collabInitials(user),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: radius * 0.85,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -190,15 +337,16 @@ class _IncomingChip extends StatelessWidget {
     final theme = Theme.of(context);
     return Tooltip(
       message: '${incoming.who} saved this ${collabDocNoun(kind)} at '
-          '${_clock(incoming.at)}. Merge brings their changes in now; anything '
-          'you both changed is shown for you to choose. Saving merges too.',
+          '${_clock(incoming.at)}. Press to combine their changes with '
+          'yours now - nothing of either of yours is lost, and anything you '
+          'both changed is shown for you to choose. Saving combines them too.',
       child: ActionChip(
         key: ValueKey('collab_incoming_${kind.name}'),
         visualDensity: VisualDensity.compact,
         avatar: Icon(Icons.merge_type, color: theme.colorScheme.onTertiary),
         backgroundColor: theme.colorScheme.tertiary,
         label: Text(
-          '${incoming.who} saved - Merge',
+          '${incoming.who} saved - Combine',
           style: theme.textTheme.labelMedium
               ?.copyWith(color: theme.colorScheme.onTertiary),
         ),
@@ -214,7 +362,23 @@ class _IncomingChip extends StatelessWidget {
 
 /// Brings somebody else's saved changes into this copy, asking about anything
 /// both of you changed. Returns false when the person backed out.
+///
+/// Queued behind any other merge or save - see [CollabController.enqueue].
 Future<bool> mergeIncomingNow(
+  BuildContext context,
+  AppStateProvider provider,
+  CollabDocKind kind,
+) => provider.collab.enqueue(() async {
+      // Merged already while it waited - a second press, or a save that
+      // folded it in. Nothing left to bring in.
+      if (provider.collab.incomingOn(kind) == null) return true;
+      // A frame for the busy chip before the work starts.
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      if (!context.mounted) return false;
+      return _mergeNow(context, provider, kind);
+    });
+
+Future<bool> _mergeNow(
   BuildContext context,
   AppStateProvider provider,
   CollabDocKind kind, {
@@ -232,24 +396,37 @@ Future<bool> mergeIncomingNow(
       conflicts: preview.conflicts,
       who: collab.incomingOn(kind)?.who ?? 'Someone else',
       beforeSave: beforeSave,
+      doc: collab.currentOf(kind),
     );
     if (choices == null) return false;
   }
   final outcome = await collab.mergeIncoming(
     kind,
-    resolve: choices == null
-        ? null
-        : (c) => choices![c.path] ?? MergeSide.mine,
+    // Anything not asked about - the file moved again since the question was
+    // put - keeps both where it can, so nobody's work goes unseen.
+    resolve: (c) =>
+        choices?[c.path] ??
+        (c.canKeepBoth ? MergeSide.both : MergeSide.mine),
   );
   if (outcome.merged && messenger != null) {
+    final who = collab.incomingOn(kind)?.who ?? 'the other editor';
     final n = outcome.takenFromTheirs;
+    final parts = [
+      if (n > 0) '$n change${n == 1 ? '' : 's'} from $who added',
+      if (outcome.renumbered > 0)
+        '${outcome.renumbered} item${outcome.renumbered == 1 ? '' : 's'} you '
+            'both added kept as separate items',
+      if (outcome.conflicts.isNotEmpty)
+        '${outcome.conflicts.length} place'
+            '${outcome.conflicts.length == 1 ? '' : 's'} you both changed '
+            'settled as you chose',
+    ];
     messenger.showSnackBar(SnackBar(
       content: Text(
-        'Merged the saved ${collabDocNoun(kind)}'
-        '${n > 0 ? ': $n change${n == 1 ? '' : 's'} taken from the file' : ''}'
-        '${outcome.conflicts.isNotEmpty ? ', ${outcome.conflicts.length} '
-            'conflict${outcome.conflicts.length == 1 ? '' : 's'} settled as you '
-            'chose' : ''}.',
+        parts.isEmpty
+            ? 'Combined with the saved ${collabDocNoun(kind)}.'
+            : 'Combined with the saved ${collabDocNoun(kind)}: '
+                  '${parts.join('; ')}.',
       ),
     ));
   }
@@ -258,7 +435,8 @@ Future<bool> mergeIncomingNow(
 
 /// Before a save: if somebody else saved the file since this copy read it,
 /// fold their changes in first so the save does not write over them. Returns
-/// false when the person canceled.
+/// false when the person canceled. Called from inside the save's own place in
+/// the queue - see [CollabController.enqueue].
 Future<bool> reconcileBeforeSave(
   BuildContext context,
   AppStateProvider provider,
@@ -268,100 +446,119 @@ Future<bool> reconcileBeforeSave(
   if (!collab.enabled) return true;
   final preview = collab.previewMerge(kind);
   if (preview == null) return true;
-  return mergeIncomingNow(context, provider, kind, beforeSave: true);
+  return _mergeNow(context, provider, kind, beforeSave: true);
 }
 
-/// Lists every place both people changed, each with a Mine / Theirs choice.
+/// Lists every place both people changed, in words, each with a choice.
 /// Returns the choices by conflict path, or null when canceled.
+///
+/// NOBODY'S WORK GOES BY DEFAULT. Where both can be kept - two pieces of
+/// text, or a thing one of you deleted and the other changed - Keep both is
+/// already chosen. Where they cannot, nothing is chosen, and Combine waits
+/// until each one has been decided by a person looking at both.
 Future<Map<String, MergeSide>?> showMergeConflictDialog(
   BuildContext context, {
   required CollabDocKind kind,
   required List<MergeConflict> conflicts,
   required String who,
   bool beforeSave = false,
+  Object? doc,
 }) {
-  final choices = {for (final c in conflicts) c.path: MergeSide.mine};
+  final choices = <String, MergeSide?>{
+    for (final c in conflicts) c.path: c.canKeepBoth ? MergeSide.both : null,
+  };
+  final noun = collabDocNoun(kind);
   return showDialog<Map<String, MergeSide>>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setState) {
         final theme = Theme.of(ctx);
+        final muted = theme.colorScheme.onSurfaceVariant;
+        final undecided = choices.values.where((v) => v == null).length;
+
+        String side(Object? value, String person) => value == null
+            ? '$person deleted it'
+            : '$person: ${describeMergeValue(value)}';
+
         return AlertDialog(
           key: const ValueKey('collab_conflict_dialog'),
-          title: Text('You and $who both changed this ${collabDocNoun(kind)}'),
+          title: Text('$who saved this $noun while you were working on it'),
           content: SizedBox(
-            width: 640,
+            width: 680,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Everything only one of you changed is merged already. '
-                  'These ${conflicts.length} place'
-                  '${conflicts.length == 1 ? ' was' : 's were'} changed by '
-                  'both - pick which to keep.'
-                  '${beforeSave ? ' The save continues once you apply.' : ''}',
+                  'Everything else from both of you is already combined - '
+                  'new items either of you added are all kept. '
+                  '${conflicts.length == 1 ? 'One thing was' : '${conflicts.length} '
+                      'things were'} changed by both of you, differently. '
+                  'Choose what to keep for '
+                  '${conflicts.length == 1 ? 'it' : 'each'}.'
+                  '${beforeSave ? ' Your save goes ahead once you combine.' : ''}',
                   style: theme.textTheme.bodyMedium,
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => setState(() {
-                        for (final k in choices.keys) {
-                          choices[k] = MergeSide.mine;
-                        }
-                      }),
-                      child: const Text('Keep all mine'),
-                    ),
-                    TextButton(
-                      onPressed: () => setState(() {
-                        for (final k in choices.keys) {
-                          choices[k] = MergeSide.theirs;
-                        }
-                      }),
-                      child: Text('Take all of $who\'s'),
-                    ),
-                  ],
-                ),
+                const SizedBox(height: 10),
                 Flexible(
                   child: ListView(
                     shrinkWrap: true,
                     children: [
                       for (final c in conflicts)
                         Card(
+                          key: ValueKey('collab_conflict_${c.path}'),
                           child: Padding(
-                            padding: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                SelectableText(
-                                  c.path,
+                                Text(
+                                  describeMergePlace(c.path, doc),
                                   style: theme.textTheme.titleSmall,
                                 ),
-                                Text(
-                                  'Was: ${describeJsonValue(c.base)}',
-                                  style: theme.textTheme.bodySmall,
-                                ),
+                                if (c.base != null)
+                                  Text(
+                                    'Before either of you changed it: '
+                                    '${describeMergeValue(c.base)}',
+                                    style: theme.textTheme.bodySmall
+                                        ?.copyWith(color: muted),
+                                  ),
                                 RadioGroup<MergeSide>(
                                   groupValue: choices[c.path],
-                                  onChanged: (v) => setState(
-                                    () => choices[c.path] = v ?? MergeSide.mine,
-                                  ),
+                                  onChanged: (v) =>
+                                      setState(() => choices[c.path] = v),
                                   child: Column(
                                     children: [
+                                      if (c.canKeepBoth)
+                                        RadioListTile<MergeSide>(
+                                          key: ValueKey(
+                                            'collab_both_${c.path}',
+                                          ),
+                                          dense: true,
+                                          value: MergeSide.both,
+                                          title: const Text('Keep both'),
+                                          subtitle: Text(
+                                            c.mine == null || c.theirs == null
+                                                ? 'Keeps it, with the change '
+                                                      'that was made to it'
+                                                : 'Keeps both versions, one '
+                                                      'after the other',
+                                          ),
+                                        ),
                                       RadioListTile<MergeSide>(
+                                        key: ValueKey('collab_mine_${c.path}'),
                                         dense: true,
                                         value: MergeSide.mine,
-                                        title: Text(
-                                          'Mine: ${describeJsonValue(c.mine)}',
-                                        ),
+                                        title: Text(side(c.mine, 'Yours')),
                                       ),
                                       RadioListTile<MergeSide>(
+                                        key: ValueKey(
+                                          'collab_theirs_${c.path}',
+                                        ),
                                         dense: true,
                                         value: MergeSide.theirs,
                                         title: Text(
-                                          '$who: ${describeJsonValue(c.theirs)}',
+                                          side(c.theirs, '$who\'s'),
                                         ),
                                       ),
                                     ],
@@ -374,18 +571,30 @@ Future<Map<String, MergeSide>?> showMergeConflictDialog(
                     ],
                   ),
                 ),
+                if (undecided > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '$undecided still to choose.',
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                  ),
               ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+              child: Text(beforeSave ? 'Cancel the save' : 'Not now'),
             ),
             FilledButton(
               key: const ValueKey('collab_conflict_apply'),
-              onPressed: () => Navigator.pop(ctx, choices),
-              child: Text(beforeSave ? 'Merge and save' : 'Merge'),
+              onPressed: undecided > 0
+                  ? null
+                  : () => Navigator.pop(ctx, {
+                      for (final e in choices.entries) e.key: e.value!,
+                    }),
+              child: Text(beforeSave ? 'Combine and save' : 'Combine'),
             ),
           ],
         );

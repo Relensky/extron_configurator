@@ -24,6 +24,7 @@ import 'campus_lifecycle_view.dart'
     show showCampusLifecycle, showCampusLifecycleFile, showNewCampus;
 import 'responsive.dart';
 import 'app_state.dart';
+import 'avatar_settings.dart';
 import 'cost_estimate.dart' show trimNumber;
 import 'changelog.dart';
 import 'av_device_library.dart';
@@ -949,9 +950,11 @@ class _MainDashboardState extends State<MainDashboard> {
             ),
             tooltip: provider.settingsOpen
                 ? 'Close Settings'
-                : 'Settings - file locations, theme, pricing, autosave',
+                : 'Settings - file locations, pricing, autosave, logging',
             onPressed: provider.toggleSettings,
           ),
+          // YOU, beside the gear - see [ProfileButton].
+          const ProfileButton(),
           const SizedBox(width: 4),
         ],
       ),
@@ -1336,6 +1339,8 @@ class _MainDashboardState extends State<MainDashboard> {
     // refusing to do the obvious thing.
     final picked = await pickFilesCompat(
       dialogTitle: title,
+      // The projects folder on the file server until a first file is opened.
+      initialDirectory: provider.openDialogStartFolder,
       type: FileType.custom,
       allowedExtensions: const ['json'],
     );
@@ -2588,197 +2593,224 @@ Widget _settingsAction(BuildContext context, Widget button) => SizedBox(
       child: button,
     );
 
-class AppSettingsView extends StatelessWidget {
-  const AppSettingsView({super.key});
+/// One collapsible area of the settings page: a heading that opens and closes
+/// it, with a line saying what is inside. Whether each is open is remembered
+/// for the session.
+class SettingsSection extends StatefulWidget {
+  final String id;
+  final String title;
+  final String summary;
+  final IconData icon;
+  final bool initiallyOpen;
+  final List<Widget> children;
+
+  /// Opens every section from the start - for tests that look for a field.
+  @visibleForTesting
+  static bool startOpen = false;
+
+  static final Map<String, bool> _open = {};
+
+  /// Forgets which sections were opened - for tests, which share a run.
+  @visibleForTesting
+  static void forgetOpenForTest() => _open.clear();
+
+  const SettingsSection({
+    super.key,
+    required this.id,
+    required this.title,
+    required this.summary,
+    required this.icon,
+    required this.children,
+    this.initiallyOpen = false,
+  });
+
+  @override
+  State<SettingsSection> createState() => _SettingsSectionState();
+}
+
+class _SettingsSectionState extends State<SettingsSection> {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final open = SettingsSection.startOpen ||
+        (SettingsSection._open[widget.id] ?? widget.initiallyOpen);
+    return Card(
+      key: ValueKey('settings_section_${widget.id}'),
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        // NOT a PageStorageKey. The tile keeps open-or-shut in page storage
+        // under its key, and every text box inside it keeps its scroll
+        // position under the same key - so a box read "true" where it wanted
+        // a number and failed to build. Open-or-shut is kept in [_open].
+        key: ValueKey('settings_section_tile_${widget.id}'),
+        initiallyExpanded: open,
+        maintainState: true,
+        leading: Icon(widget.icon),
+        title: Text(widget.title, style: theme.textTheme.titleMedium),
+        subtitle: Text(widget.summary, style: theme.textTheme.bodySmall),
+        childrenPadding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+        onExpansionChanged: (v) => SettingsSection._open[widget.id] = v,
+        children: widget.children,
+      ),
+    );
+  }
+}
+
+/// YOU, IN THE CORNER: your avatar beside the gear. Pressed, it shows your
+/// name and email, opens your profile, and is a way into Application
+/// Configuration - the same menu the debugger app has.
+class ProfileButton extends StatelessWidget {
+  const ProfileButton({super.key});
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
+    final user = provider.collab.me.user;
+    final picture = provider.myAvatarFile;
+    final email = provider.userEmail.trim();
+    return PopupMenuButton<String>(
+      key: const ValueKey('profile_button'),
+      tooltip: 'Your profile - ${provider.profileName}',
+      offset: const Offset(0, 44),
+      onSelected: (v) {
+        if (v == 'profile') showProfileDialog(context);
+        if (v == 'settings' && !provider.settingsOpen) {
+          provider.toggleSettings();
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem<String>(
+          enabled: false,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: CollabAvatarCircle(
+              user: user,
+              picture: picture,
+              radius: 22,
+            ),
+            title: Text(provider.profileName),
+            subtitle: Text(email.isEmpty ? 'No email set' : email),
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(
+          value: 'profile',
+          child: ListTile(
+            key: ValueKey('profile_menu_profile'),
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.manage_accounts_outlined),
+            title: Text('Your profile'),
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'settings',
+          child: ListTile(
+            key: ValueKey('profile_menu_settings'),
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.settings),
+            title: Text('Application Configuration'),
+          ),
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: CollabAvatarCircle(user: user, picture: picture, radius: 15),
+      ),
+    );
+  }
+}
 
-    return ListView(
-      padding: const EdgeInsets.all(32.0),
+/// Your profile: name, email and avatar.
+Future<void> showProfileDialog(BuildContext context) => showDialog<void>(
+  context: context,
+  builder: (_) => const _ProfileDialog(),
+);
+
+class _ProfileDialog extends StatelessWidget {
+  const _ProfileDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final theme = Theme.of(context);
+    return AlertDialog(
+      key: const ValueKey('profile_dialog'),
+      title: const Text('Your profile'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 8, 0),
+      content: SizedBox(
+        width: 640,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(right: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Signed in to Windows as ${provider.collab.me.user} on '
+                '${provider.collab.me.machine}.',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const ValueKey('profile_name'),
+                initialValue: provider.userDisplayName,
+                decoration: InputDecoration(
+                  labelText: 'Name',
+                  hintText: provider.collab.me.user,
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (v) => provider.updateSetting('userDisplayName', v),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const ValueKey('profile_email'),
+                initialValue: provider.userEmail,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  hintText: 'name@csuchico.edu',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (v) => provider.updateSetting('userEmail', v),
+              ),
+              const SizedBox(height: 20),
+              const AvatarSettingsSection(),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          icon: const Icon(Icons.settings, size: 18),
+          label: const Text('Application Configuration'),
+          onPressed: () {
+            Navigator.of(context).pop();
+            if (!provider.settingsOpen) provider.toggleSettings();
+          },
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Theme, colors, and interface and text size - App Config's Appearance.
+class AppearanceSettings extends StatelessWidget {
+  const AppearanceSettings({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // A Wrap rather than a Row: the heading and the button together are
-        // wider than a half-width window at 130% text, and a Row would run the
-        // button off the edge behind the overflow stripes. Here it drops onto
-        // its own line instead.
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 16,
-          runSpacing: 8,
-          children: [
-            Text('Application Configuration', style: Theme.of(context).textTheme.headlineMedium),
-            // Re-opens the same dialog shown on the very first launch, for
-            // fixing paths guided-style instead of field by field.
-            OutlinedButton.icon(
-              icon: const Icon(Icons.tune),
-              label: const Text('Run First-Time Setup'),
-              onPressed: () => showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (_) => const FirstRunSetupDialog(),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        // All settings on this tab persist to a plain JSON file that travels
-        // with the app, replacing the old hidden OS preference store.
-        Text(
-          'Settings are saved automatically to ${provider.settingsFilePath}',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 22),
-
-        // --- ACTIVE DEPLOYMENT TARGET ---
-        // First on the tab because it is the one setting that changes between
-        // sessions: every path below is set once and forgotten, while this
-        // picks which room the next upload or download talks to. At the
-        // bottom its dropdown opened off the end of a long scrolling page,
-        // which meant scrolling to find the field and scrolling again to see
-        // what it offered.
-        Text('Active Deployment Target',
-            style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ProcessorSearchField(
-                label: 'Select Room Deployment',
-                helperText:
-                    'Search by building name, code, room number, or IP - '
-                    'rooms from processors.json, names from buildings.json.',
-                initialProcessor: provider.selectedProcessor,
-                onSelected: (proc) => provider.selectProcessor(proc),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: IconButton(
-                icon: const Icon(Icons.clear),
-                tooltip: 'Clear Active Room',
-                onPressed: () => provider.selectProcessor(null),
-              ),
-            ),
-          ],
-        ),
-        const Divider(height: 40),
-
-        // --- PRICING ---
-        // Currency and which of a catalog entry's two prices the estimates
-        // cost from. Both are app-wide: a shop bills in one currency, and
-        // whether a job is quoted at list or at education pricing is a
-        // decision about the job, not about each device.
-        Text('Pricing', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        // Wrap, not Row: three controls plus their explanation is more than a
-        // narrow window has room for on one line, and this tab is read at
-        // whatever width the app happens to be open at.
-        Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          crossAxisAlignment: WrapCrossAlignment.start,
-          children: [
-            SizedBox(
-              width: 240,
-              child: DropdownButtonFormField<String>(
-                initialValue: kCurrencySymbols.contains(provider.currencySymbol)
-                    ? provider.currencySymbol
-                    : null,
-                // A dropdown sizes itself to its WIDEST item, not the selected
-                // one, so without this the box wants the width of "New Zealand
-                // dollar" and overflows whatever it is put in.
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Currency symbol',
-                  helperText: 'Shown in front of every figure',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final c in kCurrencySymbols)
-                    DropdownMenuItem(
-                      value: c,
-                      child: Text('$c   ${kCurrencyNames[c] ?? ''}'),
-                    ),
-                ],
-                onChanged: (val) {
-                  if (val != null) provider.updateSetting('currencySymbol', val);
-                },
-              ),
-            ),
-            // Anything not on the list — a currency code, a local symbol.
-            SizedBox(
-              width: 200,
-              child: TextFormField(
-                key: ValueKey('currencySymbol_${provider.currencySymbol}'),
-                decoration: const InputDecoration(
-                  labelText: 'Or type one',
-                  helperText: 'Blank resets to \$',
-                  border: OutlineInputBorder(),
-                ),
-                initialValue: provider.currencySymbol,
-                onChanged: (val) =>
-                    provider.updateSetting('currencySymbol', val),
-              ),
-            ),
-            SizedBox(
-              width: 200,
-              child: TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Default tax rate',
-                  helperText: 'New projects start with it',
-                  suffixText: '%',
-                  border: OutlineInputBorder(),
-                ),
-                initialValue: provider.defaultTaxPercent == 0
-                    ? ''
-                    : trimNumber(provider.defaultTaxPercent),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (val) =>
-                    provider.updateSetting('defaultTaxPercent', val),
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Estimate prices',
-                    style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 6),
-                // Short labels: two full names side by side is wider than a
-                // narrow window, and a SegmentedButton does not wrap.
-                SegmentedButton<PricingTier>(
-                  segments: [
-                    for (final t in PricingTier.values)
-                      ButtonSegment(
-                        value: t,
-                        label: Text(kPricingTierShort[t] ?? t.name),
-                        tooltip: kPricingTierLabels[t],
-                      ),
-                  ],
-                  selected: {provider.pricingTier},
-                  onSelectionChanged: (s) => provider.setPricingTier(s.first),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Every catalog entry carries both prices. A price typed on a room '
-          'still wins over either; a line the catalog can only price at the '
-          'other tier is flagged on the estimate rather than quietly costed.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const Divider(height: 40),
-
-        // --- ESTIMATE PDF ---
-        const EstimateSettingsSection(),
-        const Divider(height: 40),
-
         // --- THEME STYLE ---
         // Two styles, each with its own accent swatch picker below:
         // Classic (flex_color_scheme, the default) and Auris (sci-fi HUD).
@@ -2918,8 +2950,225 @@ class AppSettingsView extends StatelessWidget {
             },
           );
         }),
-        const SizedBox(height: 20),
+      ],
+    );
+  }
+}
+class AppSettingsView extends StatelessWidget {
+  const AppSettingsView({super.key});
 
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+
+    return ListView(
+      padding: const EdgeInsets.all(32.0),
+      children: [
+        // A Wrap rather than a Row: the heading and the button together are
+        // wider than a half-width window at 130% text, and a Row would run the
+        // button off the edge behind the overflow stripes. Here it drops onto
+        // its own line instead.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
+          children: [
+            Text('Application Configuration', style: Theme.of(context).textTheme.headlineMedium),
+            // Re-opens the same dialog shown on the very first launch, for
+            // fixing paths guided-style instead of field by field.
+            OutlinedButton.icon(
+              icon: const Icon(Icons.tune),
+              label: const Text('Run First-Time Setup'),
+              onPressed: () => showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const FirstRunSetupDialog(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // All settings on this tab persist to a plain JSON file that travels
+        // with the app, replacing the old hidden OS preference store.
+        Text(
+          'Settings are saved automatically to ${provider.settingsFilePath}',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 22),
+
+        // --- ACTIVE DEPLOYMENT TARGET ---
+        // First on the tab because it is the one setting that changes between
+        // sessions: every path below is set once and forgotten, while this
+        // picks which room the next upload or download talks to. At the
+        // bottom its dropdown opened off the end of a long scrolling page,
+        // which meant scrolling to find the field and scrolling again to see
+        // what it offered.
+        SettingsSection(
+          id: 'deployment',
+          title: 'Deployment target',
+          summary: 'Which room the next upload or download talks to',
+          icon: Icons.router_outlined,
+          initiallyOpen: true,
+          children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ProcessorSearchField(
+                label: 'Select Room Deployment',
+                helperText:
+                    'Search by building name, code, room number, or IP - '
+                    'rooms from processors.json, names from buildings.json.',
+                initialProcessor: provider.selectedProcessor,
+                onSelected: (proc) => provider.selectProcessor(proc),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: IconButton(
+                icon: const Icon(Icons.clear),
+                tooltip: 'Clear Active Room',
+                onPressed: () => provider.selectProcessor(null),
+              ),
+            ),
+          ],
+        ),
+          ],
+        ),
+
+        // --- PRICING ---
+        // Currency and which of a catalog entry's two prices the estimates
+        // cost from. Both are app-wide: a shop bills in one currency, and
+        // whether a job is quoted at list or at education pricing is a
+        // decision about the job, not about each device.
+        SettingsSection(
+          id: 'pricing',
+          title: 'Pricing and estimates',
+          summary: 'Currency, price tier, and how the estimate PDF reads',
+          icon: Icons.request_quote_outlined,
+          children: [
+        // Wrap, not Row: three controls plus their explanation is more than a
+        // narrow window has room for on one line, and this tab is read at
+        // whatever width the app happens to be open at.
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          crossAxisAlignment: WrapCrossAlignment.start,
+          children: [
+            SizedBox(
+              width: 240,
+              child: DropdownButtonFormField<String>(
+                initialValue: kCurrencySymbols.contains(provider.currencySymbol)
+                    ? provider.currencySymbol
+                    : null,
+                // A dropdown sizes itself to its WIDEST item, not the selected
+                // one, so without this the box wants the width of "New Zealand
+                // dollar" and overflows whatever it is put in.
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Currency symbol',
+                  helperText: 'Shown in front of every figure',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final c in kCurrencySymbols)
+                    DropdownMenuItem(
+                      value: c,
+                      child: Text('$c   ${kCurrencyNames[c] ?? ''}'),
+                    ),
+                ],
+                onChanged: (val) {
+                  if (val != null) provider.updateSetting('currencySymbol', val);
+                },
+              ),
+            ),
+            // Anything not on the list — a currency code, a local symbol.
+            SizedBox(
+              width: 200,
+              child: TextFormField(
+                key: ValueKey('currencySymbol_${provider.currencySymbol}'),
+                decoration: const InputDecoration(
+                  labelText: 'Or type one',
+                  helperText: 'Blank resets to \$',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.currencySymbol,
+                onChanged: (val) =>
+                    provider.updateSetting('currencySymbol', val),
+              ),
+            ),
+            SizedBox(
+              width: 200,
+              child: TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Default tax rate',
+                  helperText: 'New projects start with it',
+                  suffixText: '%',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.defaultTaxPercent == 0
+                    ? ''
+                    : trimNumber(provider.defaultTaxPercent),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (val) =>
+                    provider.updateSetting('defaultTaxPercent', val),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Estimate prices',
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 6),
+                // Short labels: two full names side by side is wider than a
+                // narrow window, and a SegmentedButton does not wrap.
+                SegmentedButton<PricingTier>(
+                  segments: [
+                    for (final t in PricingTier.values)
+                      ButtonSegment(
+                        value: t,
+                        label: Text(kPricingTierShort[t] ?? t.name),
+                        tooltip: kPricingTierLabels[t],
+                      ),
+                  ],
+                  selected: {provider.pricingTier},
+                  onSelectionChanged: (s) => provider.setPricingTier(s.first),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Every catalog entry carries both prices. A price typed on a room '
+          'still wins over either; a line the catalog can only price at the '
+          'other tier is flagged on the estimate rather than quietly costed.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const Divider(height: 40),
+
+        // --- ESTIMATE PDF ---
+        const EstimateSettingsSection(),
+          ],
+        ),
+
+        SettingsSection(
+          id: 'appearance',
+          title: 'Appearance',
+          summary: 'Theme, accent color, and interface and text size',
+          icon: Icons.palette_outlined,
+          children: const [AppearanceSettings()],
+        ),
+        SettingsSection(
+          id: 'behavior',
+          title: 'Editing behavior',
+          summary: 'Device defaults on load, delete confirmation, and finding '
+              'rooms in a folder',
+          icon: Icons.tune,
+          children: [
         // --- DEVICE DEFAULTS ON LOAD ---
         // Load-time counterpart of ui_schema.json "device_defaults": also
         // fill missing baseline properties when opening an existing config.
@@ -2957,7 +3206,7 @@ class AppSettingsView extends StatelessWidget {
         // depth that is right for both — too shallow finds nothing, too deep
         // starts returning archived copies as if they were rooms.
         Text('Finding rooms in a folder',
-            style: Theme.of(context).textTheme.titleLarge),
+            style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 12),
         SizedBox(
           width: 320,
@@ -2992,20 +3241,26 @@ class AppSettingsView extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 20),
+          ],
+        ),
 
         // --- APP UPDATES ---
         // New versions come from the release folder on the file share. See
         // app_updates.dart; nothing installs until the user presses Update.
-        Text('App Updates', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 4),
+        SettingsSection(
+          id: 'updates',
+          title: 'App updates',
+          summary: 'Where new versions come from, and installing them',
+          icon: Icons.system_update_alt,
+          children: [
         UpdateSettingsSection(
           updater: appUpdater,
           pickFolder: () => FilePicker.getDirectoryPath(
             dialogTitle: 'Select the release folder',
           ),
         ),
-        const SizedBox(height: 20),
+          ],
+        ),
 
         // --- AUTOSAVE ---
         // Recovery copies on a timer. Read the header comment on
@@ -3013,8 +3268,12 @@ class AppSettingsView extends StatelessWidget {
         // over the user's own files: an autosave that saved would make "close
         // without saving" impossible to honor, and would make the warning on
         // exit a lie.
-        Text('Autosave', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
+        SettingsSection(
+          id: 'autosave',
+          title: 'Autosave and recovery',
+          summary: 'Recovery copies of unsaved work, and where they are kept',
+          icon: Icons.backup_outlined,
+          children: [
         SwitchListTile(
           key: const ValueKey('autosave_enabled'),
           title: const Text('Keep a recovery copy of unsaved work'),
@@ -3102,11 +3361,36 @@ class AppSettingsView extends StatelessWidget {
                 }
               },
             ),
-            // Beside the recovery folder because they are the same question:
-            // where does this app put the things it writes for itself. A log
-            // somebody is asked to send in and cannot find is not a log.
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '${autosaveStatusLine(provider)}\n'
+          'Recovery copies live in ${provider.autosaveFolder}, one folder '
+          'per file, and each is deleted as soon as its document is saved.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+          ],
+        ),
+
+        // --- LOGGING ---
+        // Its own area: a log somebody is asked to send in and cannot find is
+        // not a log.
+        SettingsSection(
+          id: 'logging',
+          title: 'Logging',
+          summary: 'Session logs: where they are written, and reading or '
+              'sending them',
+          icon: Icons.article_outlined,
+          children: [
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
             OutlinedButton.icon(
-              icon: const Icon(Icons.article_outlined),
+              key: const ValueKey('open_log_folder'),
+              icon: const Icon(Icons.folder_open),
               label: const Text('Open log folder'),
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
@@ -3127,9 +3411,6 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          '${autosaveStatusLine(provider)}\n'
-          'Recovery copies live in ${provider.autosaveFolder}, one folder '
-          'per file, and each is deleted as soon as its document is saved.\n'
           'A log is written for each session and kept 30 days, in '
           '${AppLogger.logFolder}.',
           style: Theme.of(context).textTheme.bodySmall,
@@ -3160,6 +3441,20 @@ class AppSettingsView extends StatelessWidget {
           ),
           onFieldSubmitted: (v) => provider.updateSetting('logFolderPath', v),
         ),
+          ],
+        ),
+
+        // --- FILES AND FOLDERS ---
+        // Where everything is read from. The Root Folder first: every blank
+        // path below falls back to it.
+        SettingsSection(
+          id: 'files',
+          title: 'Files and folders',
+          summary: 'The Root Folder, modules, manuals, and the data files the '
+              'app reads',
+          icon: Icons.folder_outlined,
+          children: [
+        _rootFolderField(context, provider),
         const SizedBox(height: 20),
 
         // Python Modules Path
@@ -3248,8 +3543,11 @@ class AppSettingsView extends StatelessWidget {
             labelText: 'Documentation Path (PDF manuals)',
             // Blank = the "documentation" sub-folder of the Root Folder
             hintText: provider.effectiveDocumentationPath,
-            helperText: 'Blank = "documentation" sub-folder of the Root Folder. '
-                'Each manual is named after its python module, e.g. extr_dsp_DMP_64_Plus_Series.pdf',
+            helperText: 'Blank = "documentation" sub-folder of the '
+                'Root Folder. Each manual is '
+                'named after its python module, e.g. '
+                'extr_dsp_DMP_64_Plus_Series.pdf',
+            helperMaxLines: 3,
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.folder),
@@ -3321,9 +3619,16 @@ class AppSettingsView extends StatelessWidget {
           initialValue: provider.classSchedulePath,
           onChanged: (val) => provider.updateSetting('classSchedulePath', val),
         ),
-        const SizedBox(height: 20),
+          ],
+        ),
 
         // EDITING TOGETHER - see collab/collab_controller.dart.
+        SettingsSection(
+          id: 'together',
+          title: 'Working together',
+          summary: 'Seeing who else has a file open, and Google Sheets',
+          icon: Icons.groups_outlined,
+          children: [
         SwitchListTile(
           key: const ValueKey('collab_enabled_switch'),
           contentPadding: EdgeInsets.zero,
@@ -3373,8 +3678,16 @@ class AppSettingsView extends StatelessWidget {
           initialValue: provider.googleClientSecret,
           onChanged: (val) => provider.updateSetting('googleClientSecret', val),
         ),
-        const SizedBox(height: 20),
+          ],
+        ),
 
+        SettingsSection(
+          id: 'data',
+          title: 'Data files',
+          summary: 'Buildings, template, schema, catalog, flow rules, key map '
+              'and processors',
+          icon: Icons.description_outlined,
+          children: [
         // Buildings JSON Path
         TextFormField(
           key: ValueKey('buildingsFilePath_${provider.buildingsFilePath}'),
@@ -3653,6 +3966,108 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        // Legacy Key Map (key_map.json) Path
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                key: ValueKey('keyMapPath_${provider.keyMapPath}'),
+                decoration: InputDecoration(
+                  labelText: 'Legacy Key Map File Path (key_map.json)',
+                  hintText: 'Blank = key_map.json in the Root Folder / next to the app',
+                  helperText: 'Active map: ${provider.keyMap.source} - ${provider.keyMap.ruleCount} rules. '
+                      'Applied automatically when a config is loaded.',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.file_open),
+                    tooltip: 'Select JSON File',
+                    onPressed: () async {
+                      FilePickerResult? result = await pickFilesCompat(
+                        type: FileType.custom,
+                        allowedExtensions: ['json'],
+                      );
+                      if (result != null) {
+                        provider.updateSetting('keyMapPath', result.files.single.path!);
+                      }
+                    },
+                  ),
+                ),
+                initialValue: provider.keyMapPath,
+                onChanged: (val) => provider.updateSetting('keyMapPath', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            _settingsAction(
+              context,
+              ElevatedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reload Key Map'),
+                onPressed: () async {
+                  // Pull in edits made to key_map.json without restarting
+                  await provider.loadKeyMap();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Key map reloaded: ${provider.keyMap.source} '
+                          '(${provider.keyMap.ruleCount} rules)'),
+                    ));
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Processors JSON Path
+        TextFormField(
+          key: ValueKey('processorsFilePath_${provider.processorsFilePath}'),
+          decoration: InputDecoration(
+            labelText: 'Processors JSON File Path',
+            // Blank = processors.json in the Root Folder; read automatically on boot
+            hintText: provider.effectiveProcessorsFilePath,
+            helperText: 'Blank = processors.json in the Root Folder. Read automatically on startup.',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.file_open),
+              tooltip: 'Select JSON File',
+              onPressed: () async {
+                FilePickerResult? result = await pickFilesCompat(
+                  type: FileType.custom, 
+                  allowedExtensions: ['json']
+                );
+                if (result != null) {
+                  // updateSetting reloads the processors list itself
+                  provider.updateSetting('processorsFilePath', result.files.single.path!);
+                }
+              },
+            ),
+          ),
+          initialValue: provider.processorsFilePath,
+          // updateSetting reloads the processors list itself
+          onChanged: (val) => provider.updateSetting('processorsFilePath', val),
+        ),
+        const SizedBox(height: 20),
+        
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.sync),
+            label: const Text('Load Processors Data'),
+            onPressed: () => provider.loadProcessorsList(),
+          ),
+        ),
+        const SizedBox(height: 20),
+
+          ],
+        ),
+
+        SettingsSection(
+          id: 'lists',
+          title: 'Shared lists',
+          summary: 'Delivery locations and default vendors',
+          icon: Icons.list_alt,
+          children: [
         // Delivery Locations (delivery_locations.json) Path
         //
         // The docks kit is dropped at and the rooms gear is held in.
@@ -3661,7 +4076,7 @@ class AppSettingsView extends StatelessWidget {
         // names is what makes "everything at Central Stores" a question a job
         // can answer.
         Text('Delivery locations',
-            style: Theme.of(context).textTheme.titleLarge),
+            style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         Text(
           'Set the places up once and every delivery on every job can be '
@@ -3756,7 +4171,8 @@ class AppSettingsView extends StatelessWidget {
         // locations: the spelling of a company name and the rep behind it are
         // facts about the department, and one directory is what keeps three
         // jobs from comparing quotes from three different 'Extron's.
-        Text('Default vendors', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 20),
+        Text('Default vendors', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         Text(
           'Set the companies up once and every new job starts with them on '
@@ -3840,131 +4256,15 @@ class AppSettingsView extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 20),
-
-        const SizedBox(height: 20),
-
-        // Legacy Key Map (key_map.json) Path
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: TextFormField(
-                key: ValueKey('keyMapPath_${provider.keyMapPath}'),
-                decoration: InputDecoration(
-                  labelText: 'Legacy Key Map File Path (key_map.json)',
-                  hintText: 'Blank = key_map.json in the Root Folder / next to the app',
-                  helperText: 'Active map: ${provider.keyMap.source} - ${provider.keyMap.ruleCount} rules. '
-                      'Applied automatically when a config is loaded.',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.file_open),
-                    tooltip: 'Select JSON File',
-                    onPressed: () async {
-                      FilePickerResult? result = await pickFilesCompat(
-                        type: FileType.custom,
-                        allowedExtensions: ['json'],
-                      );
-                      if (result != null) {
-                        provider.updateSetting('keyMapPath', result.files.single.path!);
-                      }
-                    },
-                  ),
-                ),
-                initialValue: provider.keyMapPath,
-                onChanged: (val) => provider.updateSetting('keyMapPath', val),
-              ),
-            ),
-            const SizedBox(width: 16),
-            _settingsAction(
-              context,
-              ElevatedButton.icon(
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reload Key Map'),
-                onPressed: () async {
-                  // Pull in edits made to key_map.json without restarting
-                  await provider.loadKeyMap();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text('Key map reloaded: ${provider.keyMap.source} '
-                          '(${provider.keyMap.ruleCount} rules)'),
-                    ));
-                  }
-                },
-              ),
-            ),
           ],
         ),
-        const SizedBox(height: 20),
 
-        // Processors JSON Path
-        TextFormField(
-          key: ValueKey('processorsFilePath_${provider.processorsFilePath}'),
-          decoration: InputDecoration(
-            labelText: 'Processors JSON File Path',
-            // Blank = processors.json in the Root Folder; read automatically on boot
-            hintText: provider.effectiveProcessorsFilePath,
-            helperText: 'Blank = processors.json in the Root Folder. Read automatically on startup.',
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.file_open),
-              tooltip: 'Select JSON File',
-              onPressed: () async {
-                FilePickerResult? result = await pickFilesCompat(
-                  type: FileType.custom, 
-                  allowedExtensions: ['json']
-                );
-                if (result != null) {
-                  // updateSetting reloads the processors list itself
-                  provider.updateSetting('processorsFilePath', result.files.single.path!);
-                }
-              },
-            ),
-          ),
-          initialValue: provider.processorsFilePath,
-          // updateSetting reloads the processors list itself
-          onChanged: (val) => provider.updateSetting('processorsFilePath', val),
-        ),
-        const SizedBox(height: 20),
-        
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.sync),
-            label: const Text('Load Processors Data'),
-            onPressed: () => provider.loadProcessorsList(),
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Template Root Path
-        TextFormField(
-          key: ValueKey('rootFolderPath_${provider.rootFolderPath}'),
-          decoration: InputDecoration(
-            labelText: 'Root Folder Path (default base for all blank paths above)',
-            hintText: provider.effectiveRootFolder,
-            helperText: 'Blank = the app\'s working directory. Blank paths above default to files in this folder '
-                '(config.json, processors.json, buildings.json, ui_schema.json, key_map.json, and the "devices" modules sub-folder).',
-            helperMaxLines: 3,
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.folder),
-              tooltip: 'Select Directory',
-              onPressed: () async {
-                String? selectedDirectory = await FilePicker.getDirectoryPath();
-                if (selectedDirectory != null) {
-                  provider.updateSetting('rootFolderPath', selectedDirectory);
-                }
-              },
-            ),
-          ),
-          initialValue: provider.rootFolderPath,
-          onChanged: (val) => provider.updateSetting('rootFolderPath', val),
-        ),
-        const SizedBox(height: 20),
-
-        Text('Processor Connection', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
+        SettingsSection(
+          id: 'processor',
+          title: 'Processor connection',
+          summary: 'SFTP settings and the saved processor password',
+          icon: Icons.lan_outlined,
+          children: [
         const Text(
             'SFTP settings used for every processor transfer. The defaults are '
             'the Extron standards - only change them for nonstandard hardware.'),
@@ -4032,11 +4332,43 @@ class AppSettingsView extends StatelessWidget {
           const SizedBox(height: 8),
           _DefaultPasswordField(provider: provider),
         ],
+          ],
+        ),
         const SizedBox(height: 30),
 
       ],
     );
   }
+
+  /// The Root Folder: the base every blank path on this page falls back to.
+  static Widget _rootFolderField(
+    BuildContext context,
+    AppStateProvider provider,
+  ) => TextFormField(
+    key: ValueKey('rootFolderPath_${provider.rootFolderPath}'),
+    decoration: InputDecoration(
+      labelText: 'Root Folder Path (default base for every blank path below)',
+      hintText: provider.effectiveRootFolder,
+      helperText: 'Blank = the app\'s own folder. Blank paths below default '
+          'to files in this folder (config.json, processors.json, '
+          'buildings.json, ui_schema.json, key_map.json, av_flow_rules.json, '
+          'and the "devices" and "documentation" sub-folders).',
+      helperMaxLines: 3,
+      border: const OutlineInputBorder(),
+      suffixIcon: IconButton(
+        icon: const Icon(Icons.folder),
+        tooltip: 'Select Directory',
+        onPressed: () async {
+          final selectedDirectory = await FilePicker.getDirectoryPath();
+          if (selectedDirectory != null) {
+            provider.updateSetting('rootFolderPath', selectedDirectory);
+          }
+        },
+      ),
+    ),
+    initialValue: provider.rootFolderPath,
+    onChanged: (val) => provider.updateSetting('rootFolderPath', val),
+  );
 }
 
 /// The saved processor password field on App Config.
@@ -4431,6 +4763,10 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
 class FirstRunSetupDialog extends StatelessWidget {
   const FirstRunSetupDialog({super.key});
 
+  /// Stands in for asking the network whether the file server is there.
+  @visibleForTesting
+  static bool? fileServerReachableForTest;
+
   Future<void> _finish(BuildContext context, AppStateProvider provider) async {
     await provider.completeFirstRunSetup();
     if (context.mounted) Navigator.of(context).pop();
@@ -4463,19 +4799,25 @@ class FirstRunSetupDialog extends StatelessWidget {
         ],
       ),
       content: SizedBox(
-        width: 680,
+        width: 696,
         child: SingleChildScrollView(
+          // A lane of its own for the scroll bar, clear of the Browse buttons.
+          padding: const EdgeInsets.only(right: 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Pick the Root Folder first - every file found inside it is detected '
-                'automatically. Use Browse on any row where a file lives somewhere else. '
+                'The Root Folder starts as the app\'s own folder. Press Set to file '
+                'server to use the shared files everybody edits, or pick another Root '
+                'Folder - every file found inside it is detected automatically. Use '
+                'Browse on any row where a file lives somewhere else. '
                 'Green = found at the shown location, red = not found (you can still '
                 'finish and set it later in App Config). Choices are saved immediately, '
                 'and this dialog will not appear again after you finish.',
               ),
+              const SizedBox(height: 14),
+              const _FileServerBox(),
               const SizedBox(height: 18),
               // --- PREFERRED ACCENT COLOR ---
               // Follows the ACTIVE theme style, so re-running setup while
@@ -4640,6 +4982,144 @@ class FirstRunSetupDialog extends StatelessWidget {
               }
             },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The file server, offered at the top of First-Time Setup: its path, and a
+/// button that points every setting at it.
+class _FileServerBox extends StatefulWidget {
+  const _FileServerBox();
+
+  @override
+  State<_FileServerBox> createState() => _FileServerBoxState();
+}
+
+class _FileServerBoxState extends State<_FileServerBox> {
+  bool _busy = false;
+
+  /// Whether the server answered: null while asking, which on a computer off
+  /// the network can take a few seconds - so it is asked in the background.
+  bool? _reachable;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    var there = false;
+    final forTest = FirstRunSetupDialog.fileServerReachableForTest;
+    if (forTest != null) {
+      setState(() => _reachable = forTest);
+      return;
+    }
+    try {
+      there = await Directory(AppStateProvider.kSharedRootFolder)
+          .exists()
+          .timeout(const Duration(seconds: 8), onTimeout: () => false);
+    } catch (_) {}
+    if (mounted) setState(() => _reachable = there);
+  }
+
+  Future<void> _use(AppStateProvider provider) async {
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final reachable =
+        Directory(AppStateProvider.kSharedRootFolder).existsSync();
+    await provider.useSharedFolderForAll();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (!reachable) {
+      showTimedSnackBar(
+        messenger,
+        const SnackBar(
+          content: Text(
+            'Set to the file server, but it cannot be reached right now - '
+            'check the network connection.',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final scheme = Theme.of(context).colorScheme;
+    final onServer = path.equals(
+      provider.effectiveRootFolder,
+      AppStateProvider.kSharedRootFolder,
+    );
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.dns_outlined, color: scheme.onSecondaryContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'File server',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: scheme.onSecondaryContainer,
+                  ),
+                ),
+                SelectableText(
+                  AppStateProvider.kSharedRootFolder,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSecondaryContainer,
+                  ),
+                ),
+                Text(
+                  key: const ValueKey('first_run_file_server_status'),
+                  onServer
+                      ? 'The app is reading everything from here.'
+                      : _reachable == null
+                      ? 'Checking whether this computer can reach it...'
+                      : _reachable!
+                      ? 'Reachable. The app works from its own folder until '
+                            'you set this.'
+                      : 'Not reachable from this computer. The app works '
+                            'from its own folder; set this once you are on '
+                            'the network.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSecondaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          onServer
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green.shade600),
+                    const SizedBox(width: 6),
+                    const Text('In use'),
+                  ],
+                )
+              : FilledButton.icon(
+                  key: const ValueKey('first_run_use_file_server'),
+                  // Only once the server has answered: a root on a share
+                  // nobody can reach is an app with nothing to read.
+                  onPressed: _busy || _reachable != true
+                      ? null
+                      : () => _use(provider),
+                  icon: const Icon(Icons.folder_shared, size: 18),
+                  label: const Text('Set to file server'),
+                ),
         ],
       ),
     );

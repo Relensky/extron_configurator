@@ -48,8 +48,10 @@ import 'room_locations.dart';
 import 'recent_files.dart';
 import 'room_presets.dart';
 import 'room_sidecar.dart';
+import 'nav_rail.dart' show navTabLabel;
 import 'collab/collab_controller.dart';
 import 'collab/json_merge.dart' show cloneJson;
+import 'collab/presence.dart' show CollabIdentity;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'secret_store.dart';
 import 'sftp_client.dart';
@@ -648,6 +650,16 @@ class AppStateProvider extends ChangeNotifier {
   String googleClientId = '';
   String googleClientSecret = '';
 
+  /// Your name and email, as the profile menu shows them. The name defaults
+  /// to the Windows login - see [profileName].
+  String userDisplayName = '';
+  String userEmail = '';
+
+  /// The name the profile shows: what was typed, else the Windows login.
+  String get profileName => userDisplayName.trim().isNotEmpty
+      ? userDisplayName.trim()
+      : collab.me.user;
+
   // --- Processor connection settings (App Config > Processor Connection) ---
   // Defaults are the Extron standards; editable for nonstandard processors.
   /// The folder OneDrive or Google Drive syncs, remembered for the whole app.
@@ -755,6 +767,10 @@ class AppStateProvider extends ChangeNotifier {
   /// a run, and resolving it touches the disk, so it is computed once.
   static String? _cachedAppBaseDir;
 
+  /// Points the app's own folder somewhere else, for a test; null restores it.
+  @visibleForTesting
+  static set appBaseDirForTest(String? dir) => _cachedAppBaseDir = dir;
+
   /// The default base folder for every blank path AND for app_config.json.
   ///
   /// It must be a STABLE, WRITABLE location: the process working directory
@@ -803,15 +819,20 @@ class AppStateProvider extends ChangeNotifier {
         candidates.length > 1 ? candidates[1] : candidates[0];
   }
 
+  /// Where the department's projects live on the file server. The Open
+  /// dialog starts here until a first file has been opened.
+  static const String kSharedProjectsFolder =
+      r'\\doit-files\ATEC\CTS\StaffFiles\Classroom Technology\Projects';
+
   /// The department's shared folder: the catalog, costs, labor rates and the
-  /// other data files everybody edits together. The Root Folder when Settings
-  /// names none and the share can be reached.
+  /// other data files everybody edits together. Offered on First-Time Setup
+  /// as the file server; see [useSharedFolderForAll].
   static const String kSharedRootFolder =
       r'\\doit-files\ATEC\CTS\StaffFiles\Classroom Technology\Projects'
       r'\Configurator_Files';
 
   /// Looked up once a run: a share that is down can take many seconds to say
-  /// so, and it is asked on every path lookup. Never under `flutter test`.
+  /// so. Never under `flutter test`.
   static bool? _sharedRootReachable;
   static bool get _sharedRootAvailable => _sharedRootReachable ??= () {
         if (runningUnderTest) return false;
@@ -822,12 +843,220 @@ class AppStateProvider extends ChangeNotifier {
         }
       }();
 
-  /// Root Folder setting, else the shared folder, else the app's own folder.
-  String get effectiveRootFolder => rootFolderPath.isNotEmpty
-      ? rootFolderPath
-      : _sharedRootAvailable
-          ? kSharedRootFolder
-          : _appBaseDir();
+  /// Root Folder setting, else the app's own folder. A new install starts on
+  /// its own folder; the file server is one press away on First-Time Setup.
+  String get effectiveRootFolder =>
+      rootFolderPath.isNotEmpty ? rootFolderPath : _appBaseDir();
+
+  // --- avatars ---------------------------------------------------------------
+  //
+  //  A picture in place of the initials on the presence chips. Kept in the
+  //  Root Folder's assets\avatars - on the file share when that is the root,
+  //  so everybody on the job sees everybody's - named for the Windows login.
+
+  static const List<String> _kAvatarTypes = ['.png', '.jpg', '.jpeg'];
+
+  /// Where avatars are kept: `<root>\assets\avatars`.
+  String get avatarFolder =>
+      path.join(effectiveRootFolder, 'assets', 'avatars');
+
+  /// The file name an avatar is kept under: the login, safe for a file name.
+  static String _avatarStem(String user) =>
+      user.trim().toLowerCase().replaceAll(RegExp(r'[^\w\-.]+'), '_');
+
+  /// Looked up at most once a minute per person - the presence strip is
+  /// redrawn every few seconds and the folder is on a share - so a picture a
+  /// colleague sets turns up within the minute.
+  final Map<String, ({String? file, DateTime at})> _avatarCache = {};
+
+  /// [user]'s avatar on disk, or null when they have none.
+  String? avatarFileFor(String user) {
+    if (user.trim().isEmpty) return null;
+    final stem = _avatarStem(user);
+    final cached = _avatarCache[stem];
+    final now = DateTime.now();
+    if (cached != null && now.difference(cached.at).inSeconds < 60) {
+      return cached.file;
+    }
+    String? found;
+    for (final ext in _kAvatarTypes) {
+      final f = path.join(avatarFolder, '$stem$ext');
+      try {
+        if (File(f).existsSync()) {
+          found = f;
+          break;
+        }
+      } catch (_) {}
+    }
+    _avatarCache[stem] = (file: found, at: now);
+    return found;
+  }
+
+  /// This copy's own avatar, or null.
+  String? get myAvatarFile => avatarFileFor(collab.me.user);
+
+  /// Copies [picture] in as this login's avatar. Returns '' when it worked,
+  /// else what went wrong.
+  Future<String> setMyAvatar(String picture) async {
+    final ext = path.extension(picture).toLowerCase();
+    if (!_kAvatarTypes.contains(ext)) {
+      return 'Pick a PNG or JPEG picture.';
+    }
+    final stem = _avatarStem(collab.me.user);
+    if (stem.isEmpty) return 'This computer has no login name to file it under.';
+    try {
+      await Directory(avatarFolder).create(recursive: true);
+      await _deleteMyAvatarFiles(stem);
+      final target = path.join(avatarFolder, '$stem$ext');
+      await File(picture).copy(target);
+      imageCache.clear();
+      imageCache.clearLiveImages();
+      _avatarCache.remove(stem);
+      AppLogger.logInfo('Avatar set from $picture to $target.');
+      notifyListeners();
+      return '';
+    } catch (e, stack) {
+      AppLogger.logError('Could not set the avatar', e, stack);
+      return 'The picture could not be copied: $e';
+    }
+  }
+
+  /// Takes this login's avatar away; the initials come back.
+  Future<void> removeMyAvatar() async {
+    final stem = _avatarStem(collab.me.user);
+    await _deleteMyAvatarFiles(stem);
+    imageCache.clear();
+    imageCache.clearLiveImages();
+    _avatarCache.remove(stem);
+    notifyListeners();
+  }
+
+  Future<void> _deleteMyAvatarFiles(String stem) async {
+    for (final ext in _kAvatarTypes) {
+      final f = File(path.join(avatarFolder, '$stem$ext'));
+      try {
+        if (await f.exists()) await f.delete();
+      } catch (e) {
+        AppLogger.logError('Could not delete the old avatar ${f.path}', e);
+      }
+    }
+  }
+
+  /// Puts what the Root Folder is meant to hold there when it is missing, so
+  /// each starts assigned to the root: a blank av_flow_rules.json (a family
+  /// left out keeps the built-in rules), and the devices and documentation
+  /// folders - filled from the copies installed beside the app, so the
+  /// modules and manuals are not lost by moving. Settings that name their own
+  /// file or folder are left alone. Returns what was made.
+  ///
+  /// [force] runs it under `flutter test`, where it otherwise does nothing -
+  /// a test that set the root to the file server must not write to it.
+  Future<List<String>> ensureRootDefaults({bool force = false}) async {
+    if (runningUnderTest && !force) return const [];
+    final root = effectiveRootFolder;
+    final made = <String>[];
+    try {
+      if (!Directory(root).existsSync()) return const [];
+      final app = _appBaseDir();
+      final rules = File(path.join(root, 'av_flow_rules.json'));
+      if (flowRulesFilePath.isEmpty && !rules.existsSync()) {
+        // The rules installed beside the app when there are some - a blank
+        // file would hide them - else a blank one.
+        final installed = File(path.join(app, 'av_flow_rules.json'));
+        if (!path.equals(installed.path, rules.path) &&
+            installed.existsSync()) {
+          await installed.copy(rules.path);
+        } else {
+          await rules.writeAsString(
+            const JsonEncoder.withIndent('    ').convert({
+              '__readme':
+                  'AV flow rules for the Room Config Builder. Blank: every '
+                  "family uses the app's built-in rules until it is edited "
+                  'on the Flow Rules tab.',
+              '__rulesVersion': kFlowRulesVersion,
+            }),
+          );
+        }
+        made.add(rules.path);
+      }
+      for (final (name, chosen) in [
+        ('devices', modulesPath),
+        ('documentation', documentationPath),
+      ]) {
+        if (chosen.isNotEmpty) continue;
+        final folder = Directory(path.join(root, name));
+        if (folder.existsSync()) continue;
+        final installed = Directory(path.join(app, name));
+        if (path.equals(installed.path, folder.path) ||
+            !installed.existsSync()) {
+          await folder.create(recursive: true);
+        } else {
+          // FILLED IN THE BACKGROUND, into a side folder renamed into place
+          // when it is whole: the manuals are tens of megabytes over the
+          // share, and a half-copied folder would read as one missing its
+          // modules. Until then the installed copy is the one read.
+          final seeding = _seedFolder(installed, folder);
+          if (force) await seeding;
+        }
+        made.add(folder.path);
+      }
+    } catch (e, stack) {
+      AppLogger.logError('Could not set up the Root Folder at $root', e, stack);
+    }
+    for (final m in made) {
+      AppLogger.logInfo('Made $m in the Root Folder.');
+    }
+    return made;
+  }
+
+  /// Copies [from] to a side folder beside [to], then renames it into place.
+  /// Another copy of the app doing the same at once is not a problem: the
+  /// second rename finds the folder there and its copy is thrown away.
+  static Future<void> _seedFolder(Directory from, Directory to) async {
+    final side = Directory('${to.path}.partial_$pid');
+    try {
+      if (side.existsSync()) await side.delete(recursive: true);
+      await _copyFolder(from, side);
+      if (to.existsSync()) {
+        await side.delete(recursive: true);
+        return;
+      }
+      await side.rename(to.path);
+      AppLogger.logInfo('Filled ${to.path} from ${from.path}.');
+    } catch (e, stack) {
+      AppLogger.logError('Could not fill ${to.path}', e, stack);
+      try {
+        if (side.existsSync()) await side.delete(recursive: true);
+      } catch (_) {}
+    }
+  }
+
+  static Future<void> _copyFolder(Directory from, Directory to) async {
+    await for (final entity in from.list(recursive: true)) {
+      final rel = path.relative(entity.path, from: from.path);
+      final target = path.join(to.path, rel);
+      if (entity is Directory) {
+        await Directory(target).create(recursive: true);
+      } else if (entity is File) {
+        await Directory(path.dirname(target)).create(recursive: true);
+        await entity.copy(target);
+      }
+    }
+  }
+
+  /// Where the Open dialog starts: the projects folder on the file server
+  /// until anything has been opened, then wherever Windows last left it.
+  String? get openDialogStartFolder {
+    if (recentFiles.isNotEmpty) return null;
+    if (runningUnderTest) return null;
+    try {
+      return Directory(kSharedProjectsFolder).existsSync()
+          ? kSharedProjectsFolder
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// `<root>/name` when it is there, else the copy installed beside the app
   /// when that is there, else `<root>/name`. For what the shared folder may
@@ -842,6 +1071,8 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Python modules folder: explicit choice, else `<root>/devices`.
+  /// Out of the box this is the Root Folder's (the app's own) - the file
+  /// server's once the Root Folder is set to it on First-Time Setup.
   String get effectiveModulesPath =>
       modulesPath.isNotEmpty ? modulesPath : _inRootOrApp('devices');
 
@@ -877,7 +1108,7 @@ class AppStateProvider extends ChangeNotifier {
   /// search still applies otherwise (returns '' to trigger that search).
   String _resolveOptionalFile(String explicit, String filename) {
     if (explicit.isNotEmpty) return explicit;
-    if (rootFolderPath.isNotEmpty || _sharedRootAvailable) {
+    if (rootFolderPath.isNotEmpty) {
       final candidate = path.join(effectiveRootFolder, filename);
       if (File(candidate).existsSync()) return candidate;
     }
@@ -997,6 +1228,8 @@ class AppStateProvider extends ChangeNotifier {
       'collabEnabled': collabEnabled,
       'googleClientId': googleClientId,
       'googleClientSecret': googleClientSecret,
+      'userDisplayName': userDisplayName,
+      'userEmail': userEmail,
       'onlineFolder': onlineFolder,
       'sftpUsername': sftpUsername,
       'sftpPort': sftpPort,
@@ -7704,7 +7937,13 @@ class AppStateProvider extends ChangeNotifier {
   /// own (the Google Sheets sign-in).
   SecretStore get secretStore => _secrets;
 
-  AppStateProvider({bool autoLoadSettings = true, SecretStore? secretStore}) {
+  /// [collabIdentity] stands in for the Windows sign-in - for a test that
+  /// plays two people on one machine.
+  AppStateProvider({
+    bool autoLoadSettings = true,
+    SecretStore? secretStore,
+    @visibleForTesting CollabIdentity? collabIdentity,
+  }) {
     _persistenceEnabled = autoLoadSettings;
     // A test provider gets a memory store unless it asks for a real one, so no
     // test ever depends on a keystore being present.
@@ -7718,10 +7957,23 @@ class AppStateProvider extends ChangeNotifier {
     for (final doc in AppDataDocument.values) {
       appDataReplaced(doc);
     }
-    collab = CollabController(enabled: false)
+    collab = CollabController(enabled: false, identity: collabIdentity)
       ..register(_RoomCollabDoc(this))
       ..register(_ProjectCollabDoc(this))
-      ..register(_CatalogCollabDoc(this));
+      ..register(_CatalogCollabDoc(this))
+      // What the presence chips say about where this person is.
+      ..whereAmI = () {
+        var room = '';
+        if (currentConfigPath.isNotEmpty) {
+          room = roomCodeFromConfig(roomConfig);
+          if (room.trim().isEmpty) room = roomStem(currentConfigPath);
+        }
+        final tab = selectedTabIndex >= 0 &&
+                selectedTabIndex < AppTab.values.length
+            ? navTabLabel(AppTab.values[selectedTabIndex])
+            : '';
+        return (room: room, tab: tab);
+      };
     if (autoLoadSettings) _loadSavedSettings();
   }
 
@@ -7832,10 +8084,17 @@ class AppStateProvider extends ChangeNotifier {
   /// Puts a merged job in place of the one in memory.
   void replaceProjectDocument(Object? doc, {required bool clean}) {
     if (doc is! Map) return;
+    final before = {for (final r in project.rooms) r.id: r.configPath};
     project = BuildingProject.fromJson(
       Map<String, dynamic>.from(cloneJson(doc) as Map),
     );
-    _projectRooms.clear();
+    // The rooms' own files did not change with the job's, so their reads are
+    // kept - dropping them all made the next redraw read every room off the
+    // share at once. Only a room now pointing at a different file is read
+    // again; one that left the job is dropped when the job is next priced.
+    final now = {for (final r in project.rooms) r.id: r.configPath};
+    _projectRooms.removeWhere((id, _) => before[id] != now[id]);
+    _projectEstimate = null;
     projectDirty = !clean;
     AppLogger.logInfo(clean
         ? 'Project reloaded from $currentProjectPath with another editor\'s '
@@ -7912,6 +8171,8 @@ class AppStateProvider extends ChangeNotifier {
           : true;
       googleClientId = str('googleClientId', '');
       googleClientSecret = str('googleClientSecret', '');
+      userDisplayName = str('userDisplayName', '');
+      userEmail = str('userEmail', '');
       _applyCollabEnabled();
       onlineFolder = str('onlineFolder', '');
       sftpUsername = str('sftpUsername', 'admin');
@@ -7991,6 +8252,17 @@ class AppStateProvider extends ChangeNotifier {
         firstRunSetupNeeded = false;
         // Grandfather existing installs in so they're never asked.
         _initialSetupComplete = true;
+        // AN INSTALL THAT WAS ON THE FILE SERVER STAYS ON IT. The Root Folder
+        // used to fall back to the share by itself; it now falls back to the
+        // app's own folder, so an install that named none and could reach the
+        // share has the share written in, once.
+        if (rootFolderPath.isEmpty && _sharedRootAvailable) {
+          rootFolderPath = kSharedRootFolder;
+          AppLogger.logInfo(
+            'Root Folder set to $kSharedRootFolder, where this install was '
+            'already reading from.',
+          );
+        }
       } else {
         firstRunSetupNeeded = true;
       }
@@ -7998,6 +8270,10 @@ class AppStateProvider extends ChangeNotifier {
       // Write the file back immediately so app_config.json exists in the
       // root folder (with defaults or the imported values) from now on.
       await _persistSettings();
+
+      // The rules file and the devices and documentation folders, in the root
+      // when they are not there yet - before anything reads them.
+      await ensureRootDefaults();
 
       // Load the GUI field schema (falls back to built-in defaults on any error)
       await loadUiSchema();
@@ -8996,8 +9272,12 @@ class AppStateProvider extends ChangeNotifier {
         // ignore: unawaited_futures
         loadProcessorsList(); // Re-read from the new (or newly-defaulted) location
         break;
-      case 'rootFolderPath': 
-        rootFolderPath = value; 
+      case 'rootFolderPath':
+        rootFolderPath = value;
+        // Avatars live under the root, so they are looked up there afresh.
+        _avatarCache.clear();
+        // A new root gets what it should hold before anything reads it.
+        await ensureRootDefaults();
         // The root folder is the default base for every other path, so
         // re-resolve everything that may be running on a default:
         // ignore: unawaited_futures
@@ -9098,6 +9378,12 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'googleClientSecret':
         googleClientSecret = value.trim();
+        break;
+      case 'userDisplayName':
+        userDisplayName = value.trim();
+        break;
+      case 'userEmail':
+        userEmail = value.trim();
         break;
       case 'sftpUsername':
         sftpUsername = value.trim().isEmpty ? 'admin' : value.trim();
@@ -12491,6 +12777,24 @@ class AppStateProvider extends ChangeNotifier {
   /// the answer could have changed on disk.
   final Map<String, LoadedRoom> _projectRooms = {};
 
+  /// Room id -> the newest file time a cached room was read at - see
+  /// [roomFilesModified]. A room whose files say otherwise, or that has no
+  /// time here, is read again by [_rereadChangedRooms].
+  final Map<String, DateTime?> _projectRoomStamps = {};
+
+  /// The rooms whose files had changed since the job last checked them, as
+  /// found when it was opened: name, then the total before and after. Empty
+  /// when nothing had. Shown once on the Project tab.
+  List<({String room, double before, double after})> roomsChangedOnOpen =
+      const [];
+
+  void dismissRoomsChangedOnOpen() {
+    if (roomsChangedOnOpen.isEmpty) return;
+    roomsChangedOnOpen = const [];
+    _keepEstimate = true;
+    notifyListeners();
+  }
+
   /// The last answer [priceProject] gave, or null when it has to work it out.
   ///
   /// WHY MEMOIZE AT ALL. Pricing a job is a pure function of the project, the
@@ -13545,11 +13849,14 @@ class AppStateProvider extends ChangeNotifier {
       // otherwise, one after another on the window's own thread, and on a
       // share that is a freeze of several seconds with nothing on screen.
       final read = <String, LoadedRoom>{};
+      final stamps = <String, DateTime?>{};
       projectOpenProgress.value = (0, loaded.rooms.length);
       for (final ref in loaded.rooms) {
-        read[ref.id] = await readRoomFromDiskAsync(
-          BuildingProject.resolvePath(ref.configPath, file),
-        );
+        final absolute = BuildingProject.resolvePath(ref.configPath, file);
+        // Taken before the read, so a save landing during it reads as a
+        // change next time rather than being missed.
+        stamps[ref.id] = await roomFilesModified(absolute);
+        read[ref.id] = await readRoomFromDiskAsync(absolute);
         projectOpenProgress.value = (read.length, loaded.rooms.length);
       }
       project = loaded;
@@ -13564,16 +13871,37 @@ class AppStateProvider extends ChangeNotifier {
       _projectRooms
         ..clear()
         ..addAll(read);
+      _projectRoomStamps
+        ..clear()
+        ..addAll(stamps);
       AppLogger.logInfo(
         'Project "${project.name}" opened from $file '
         '(${project.rooms.length} rooms, ${project.vendors.length} vendors).',
       );
+      final check = _updateRoomSnapshots(read, stamps);
+      roomsChangedOnOpen = check.changed;
+      // WRITTEN TO ITSELF, so the file says what the rooms say now. Only on a
+      // job with nothing else unsaved: a save here must not take somebody's
+      // other edits with it unasked. Those go with their next save.
+      var saved = false;
+      if (check.recorded && !projectDirty) {
+        try {
+          await project.save(file);
+          saved = true;
+          AppLogger.logInfo('Room check recorded in $file.');
+        } catch (e) {
+          AppLogger.logError('Could not record the room check in $file', e);
+          projectDirty = true;
+        }
+      } else if (check.recorded) {
+        projectDirty = true;
+      }
       // Anything a crash left behind for THIS project, offered back the same
       // way a room's is.
       checkForProjectRecovery();
       await rememberRecentFile(RecentKind.project, file, name: project.name);
       _projectDocumentReplaced();
-      collab.noteInSync(CollabDocKind.project);
+      collab.noteInSync(CollabDocKind.project, saved: saved);
       return '';
     } catch (e, stack) {
       AppLogger.logError('Failed to open the project $file', e, stack);
@@ -13604,6 +13932,8 @@ class AppStateProvider extends ChangeNotifier {
     projectDirty = false;
     _projectStarted = false;
     _projectRooms.clear();
+    _projectRoomStamps.clear();
+    roomsChangedOnOpen = const [];
     AppLogger.logInfo('Project "$was" closed.');
     _projectDocumentReplaced();
   }
@@ -13643,6 +13973,19 @@ class AppStateProvider extends ChangeNotifier {
         project.rooms[i] = room.copyWith(
           configPath: BuildingProject.storePath(absolute, to),
         );
+      }
+      // The notes' attachments, the same way: still found from the new file.
+      String rehome(String a) => BuildingProject.storePath(
+        BuildingProject.resolvePath(a, currentProjectPath),
+        to,
+      );
+      for (final todo in List.of(project.todos)) {
+        project.setTodoAttachments(todo.id, [
+          for (final a in todo.attachments) rehome(a),
+        ]);
+        project.setTodoAttachments(todo.id, [
+          for (final a in todo.waitingAttachments) rehome(a),
+        ], waiting: true);
       }
     }
 
@@ -15819,6 +16162,8 @@ class AppStateProvider extends ChangeNotifier {
       field: field,
       summary: summary,
       coalesce: coalesce,
+      // The same who as the presence chips - see [CollabController.me].
+      user: collab.me.user,
     );
   }
 
@@ -16208,16 +16553,18 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
-  /// Moves a procurement column into [targetId]'s place: dropped to the
-  /// right it lands after it, dropped to the left, before it.
-  void moveProcurementColumn(String id, String targetId) {
-    final order = [
-      for (final c in orderedProcurementColumns(project.procurementColumnOrder))
-        c.id,
-    ];
+  /// Moves a procurement column beside [targetId]: after it when [after],
+  /// else before it.
+  void moveProcurementColumn(
+    String id,
+    String targetId, {
+    bool after = false,
+  }) {
+    final order = [for (final c in project.procurementColumns) c.id];
+    if (id == targetId || !order.remove(id)) return;
     final to = order.indexOf(targetId);
-    if (to < 0 || id == targetId || !order.remove(id)) return;
-    order.insert(to, id);
+    if (to < 0) return;
+    order.insert(to + (after ? 1 : 0), id);
     project.procurementColumnOrder
       ..clear()
       ..addAll(order);
@@ -16265,22 +16612,143 @@ class AppStateProvider extends ChangeNotifier {
   int get hiddenProcurementCount =>
       project.procurement.where((e) => e.excluded).length;
 
-  /// Puts back every room line that was taken off the log. Returns how many.
-  int restoreHiddenProcurement() {
-    final hidden = hiddenProcurementCount;
-    if (hidden == 0) return 0;
+  /// The rooms with lines taken off the log, in log order: a key for
+  /// [restoreHiddenProcurement], the room's name, and how many lines.
+  List<({String key, String room, int lines})> get hiddenProcurementRooms {
+    final names = <String, String>{};
+    final counts = <String, int>{};
+    for (final e in project.procurement) {
+      if (!e.excluded) continue;
+      final key = _procurementRoomKey(e);
+      names.putIfAbsent(key, () => e.room.trim());
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return [
+      for (final key in names.keys)
+        (key: key, room: names[key]!, lines: counts[key]!),
+    ];
+  }
+
+  static String _procurementRoomKey(ProcurementEntry e) =>
+      e.roomId.isNotEmpty ? e.roomId : 'name:${e.room.trim()}';
+
+  /// Puts back the room lines taken off the log - only those of the rooms in
+  /// [rooms] (keys from [hiddenProcurementRooms]) when given. Returns how many.
+  int restoreHiddenProcurement({Set<String>? rooms}) {
+    var restored = 0;
     for (var i = 0; i < project.procurement.length; i++) {
       final e = project.procurement[i];
-      if (e.excluded) project.procurement[i] = e.copyWith(excluded: false);
+      if (!e.excluded) continue;
+      if (rooms != null && !rooms.contains(_procurementRoomKey(e))) continue;
+      project.procurement[i] = e.copyWith(excluded: false);
+      restored++;
     }
+    if (restored == 0) return 0;
     _logProjectEdit(
       itemKey: 'procurement',
       itemName: 'Procurement log',
       field: 'Procurement log',
-      summary: '$hidden hidden line${hidden == 1 ? '' : 's'} put back',
+      summary: '$restored hidden line${restored == 1 ? '' : 's'} put back',
     );
     _projectChanged(repricing: false);
-    return hidden;
+    return restored;
+  }
+
+  /// Adds a column after the others. Returns its id.
+  String addProcurementColumn(String label) {
+    final id = project.nextProcurementColumnId();
+    final name = label.trim().isEmpty ? 'New column' : label.trim();
+    project.procurementCustomColumns.add((id: id, label: name));
+    _logProjectEdit(
+      itemKey: 'procurement:columns',
+      itemName: 'Procurement log',
+      field: 'Procurement log',
+      summary: 'column "$name" added',
+    );
+    _projectChanged(repricing: false);
+    return id;
+  }
+
+  /// Shows or deletes a built-in procurement column. The device column
+  /// always stays.
+  void setProcurementColumnShown(String id, bool shown) {
+    if (id == kProcurementFixedColumn || procurementColumnIsCustom(id)) return;
+    final hidden = project.procurementHiddenColumns;
+    if (shown == !hidden.contains(id)) return;
+    if (shown) {
+      hidden.remove(id);
+    } else {
+      hidden.add(id);
+    }
+    _logProjectEdit(
+      itemKey: 'procurement:columns',
+      itemName: 'Procurement log',
+      field: 'Procurement log',
+      summary: shown ? 'column put back' : 'column deleted',
+      coalesce: true,
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Deletes a procurement column: an added one with what the lines said in
+  /// it, a built-in one until it is put back.
+  void deleteProcurementColumn(String id) {
+    if (!procurementColumnIsCustom(id)) {
+      setProcurementColumnShown(id, false);
+      return;
+    }
+    final before = project.procurementCustomColumns.length;
+    project.procurementCustomColumns.removeWhere((c) => c.id == id);
+    if (project.procurementCustomColumns.length == before) return;
+    _forgetProcurementColumns({id});
+    _logProjectEdit(
+      itemKey: 'procurement:columns',
+      itemName: 'Procurement log',
+      field: 'Procurement log',
+      summary: 'column deleted',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Deletes every column but the device one, to start the log's columns
+  /// from scratch. The lines stay.
+  void deleteAllProcurementColumns() {
+    final added = {for (final c in project.procurementCustomColumns) c.id};
+    project.procurementCustomColumns.clear();
+    _forgetProcurementColumns(added);
+    project.procurementHiddenColumns
+      ..clear()
+      ..addAll([
+        for (final c in kProcurementColumnSpecs)
+          if (c.id != kProcurementFixedColumn) c.id,
+      ]);
+    _logProjectEdit(
+      itemKey: 'procurement:columns',
+      itemName: 'Procurement log',
+      field: 'Procurement log',
+      summary: 'all columns deleted',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Drops everything kept about added columns [ids]: the lines' values and
+  /// the column's color, title, width and place.
+  void _forgetProcurementColumns(Set<String> ids) {
+    if (ids.isEmpty) return;
+    for (var i = 0; i < project.procurement.length; i++) {
+      final e = project.procurement[i];
+      if (!e.custom.keys.any(ids.contains)) continue;
+      project.procurement[i] = e.copyWith(
+        custom: {
+          for (final c in e.custom.entries)
+            if (!ids.contains(c.key)) c.key: c.value,
+        },
+      );
+    }
+    project.procurementColors.removeWhere((k, _) => ids.contains(k));
+    project.procurementColumnLabels.removeWhere((k, _) => ids.contains(k));
+    project.procurementColumnWidths.removeWhere((k, _) => ids.contains(k));
+    project.procurementColumnOrder.removeWhere(ids.contains);
   }
 
   void removeResponsibilityItem(String id) {
@@ -17371,8 +17839,63 @@ class AppStateProvider extends ChangeNotifier {
         '- ${row.state.phrase}',
       ].join(' '),
     );
+    _followDeliveryOnOrder(row);
     _projectChanged(repricing: false);
     return row;
+  }
+
+  /// A delivery of a part shows on that part's order on the Equipment list:
+  /// the PO it came on (when the order names none), an order date (an
+  /// arrival means it was bought), and arrived once what has been logged is
+  /// the whole quantity on the job. A returned lot counts for nothing.
+  void _followDeliveryOnOrder(ProjectDelivery row) {
+    final key = row.partKey;
+    if (key.isEmpty || row.oneOff || row.state == DeliveryState.returned) {
+      return;
+    }
+    final before = project.orderForPart(key) ?? const PartOrder();
+    final day = row.deliveredOn ?? today();
+    var next = before;
+    final po = row.poNumber.trim();
+    if (po.isNotEmpty && before.poNumber.trim().isEmpty) {
+      next = next.copyWith(poNumber: po);
+    }
+    if (next.orderedOn == null) next = next.copyWith(orderedOn: day);
+
+    // Arrived when the deliveries add up to the job's quantity. A delivery
+    // with no quantity on it is taken as the lot.
+    if (next.receivedOn == null) {
+      final line =
+          priceProject().master.where((l) => l.key == key).firstOrNull;
+      final wanted = next.qty > 0 ? next.qty : (line?.qty ?? 0);
+      var landed = 0.0;
+      var whole = false;
+      for (final d in project.deliveries) {
+        if (d.partKey != key || d.state == DeliveryState.returned) continue;
+        if (d.qty <= 0) whole = true;
+        landed += d.qty;
+      }
+      if (whole || (wanted > 0 && landed >= wanted)) {
+        next = next.copyWith(receivedOn: day);
+      }
+    }
+    if (next.poNumber == before.poNumber &&
+        next.orderedOn == before.orderedOn &&
+        next.receivedOn == before.receivedOn) {
+      return;
+    }
+    project.setPartOrder(key, next);
+    _logProjectEdit(
+      itemKey: projectPartItemKey(key),
+      itemName: row.itemName.trim().isEmpty ? key : row.itemName.trim(),
+      field: 'Order',
+      summary: next.receivedOn != null && before.receivedOn == null
+          ? 'arrived ${formatIsoDate(next.receivedOn!)}'
+              '${next.poNumber.trim().isEmpty ? '' : ' on ${next.poNumber.trim()}'}'
+              ' - from the delivery log'
+          : 'on ${next.poNumber.trim().isEmpty ? 'order' : next.poNumber.trim()}'
+              ' - from the delivery log',
+    );
   }
 
   /// Replaces a delivery row. [summary] says what changed; nothing is logged
@@ -17596,7 +18119,7 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   void setProjectTodoState(String id, ProjectTodoState state) {
-    project.setTodoState(id, state);
+    project.setTodoState(id, state, by: collab.me.user);
     _logProjectEdit(
       itemKey: 'todo:$id',
       itemName: _todoTextOf(id),
@@ -17652,7 +18175,7 @@ class AppStateProvider extends ChangeNotifier {
     // Named BEFORE it goes, or the entry that records the removal cannot say
     // what was removed.
     final was = _todoTextOf(id);
-    project.removeTodo(id);
+    project.removeTodo(id, by: collab.me.user);
     _logProjectEdit(
       itemKey: 'todo:$id',
       itemName: was,
@@ -17662,9 +18185,120 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  /// Says what note [id] is waiting on.
+  void setProjectTodoWaitingNote(String id, String note) {
+    final todo = project.todos.where((t) => t.id == id).firstOrNull;
+    if (todo == null || todo.waitingNote == note.trim()) return;
+    project.setTodoWaitingNote(id, note);
+    _logProjectEdit(
+      itemKey: 'todo:$id',
+      itemName: _todoTextOf(id),
+      field: 'Waiting on',
+      summary: note.trim().isEmpty ? 'cleared' : note.trim(),
+      coalesce: true,
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Where the files kept with note [todoId] are copied: a folder beside the
+  /// project file, so they travel with the job. '' for a job never saved.
+  String todoAttachmentFolder(String todoId) {
+    if (currentProjectPath.isEmpty) return '';
+    final stem = path.basenameWithoutExtension(currentProjectPath);
+    return path.join(
+      path.dirname(currentProjectPath),
+      '${stem}_attachments',
+      todoId,
+    );
+  }
+
+  /// Where a stored attachment is on disk.
+  String resolveTodoAttachment(String stored) =>
+      BuildingProject.resolvePath(stored, currentProjectPath);
+
+  /// Copies [files] in beside the project and keeps them with note [id] -
+  /// or, when [waiting], with what it is waiting on. Returns '' when it
+  /// worked, else what went wrong.
+  Future<String> attachToProjectTodo(
+    String id,
+    List<String> files, {
+    bool waiting = false,
+  }) async {
+    final todo = project.todos.where((t) => t.id == id).firstOrNull;
+    if (todo == null || files.isEmpty) return '';
+    final folder = todoAttachmentFolder(id);
+    if (folder.isEmpty) {
+      return 'Save the project first - attachments are kept in a folder '
+          'beside the project file.';
+    }
+    final added = <String>[];
+    try {
+      await Directory(folder).create(recursive: true);
+      for (final source in files) {
+        // A second file of the same name gets a number, never overwrites.
+        final base = path.basenameWithoutExtension(source);
+        final ext = path.extension(source);
+        var target = path.join(folder, '$base$ext');
+        for (var n = 2; File(target).existsSync(); n++) {
+          target = path.join(folder, '$base ($n)$ext');
+        }
+        await File(source).copy(target);
+        added.add(BuildingProject.storePath(target, currentProjectPath));
+      }
+    } catch (e, stack) {
+      AppLogger.logError('Could not attach files to a job note', e, stack);
+      if (added.isEmpty) return 'The files could not be copied: $e';
+    }
+    project.setTodoAttachments(
+      id,
+      [...(waiting ? todo.waitingAttachments : todo.attachments), ...added],
+      waiting: waiting,
+    );
+    _logProjectEdit(
+      itemKey: 'todo:$id',
+      itemName: _todoTextOf(id),
+      field: 'Job list',
+      summary: '${added.length} file${added.length == 1 ? '' : 's'} attached'
+          '${waiting ? ' to what it is waiting on' : ''}',
+    );
+    _projectChanged(repricing: false);
+    return added.length == files.length
+        ? ''
+        : 'Only ${added.length} of ${files.length} files could be copied.';
+  }
+
+  /// Takes one file off note [id], deleting the project's copy of it.
+  Future<void> removeProjectTodoAttachment(String id, String stored) async {
+    final todo = project.todos.where((t) => t.id == id).firstOrNull;
+    if (todo == null) return;
+    final waiting = todo.waitingAttachments.contains(stored);
+    if (!waiting && !todo.attachments.contains(stored)) return;
+    project.setTodoAttachments(
+      id,
+      [
+        for (final a in waiting ? todo.waitingAttachments : todo.attachments)
+          if (a != stored) a,
+      ],
+      waiting: waiting,
+    );
+    try {
+      final file = File(resolveTodoAttachment(stored));
+      if (await file.exists()) await file.delete();
+    } catch (e) {
+      AppLogger.logError('Could not delete the attachment $stored', e);
+    }
+    _logProjectEdit(
+      itemKey: 'todo:$id',
+      itemName: _todoTextOf(id),
+      field: 'Job list',
+      summary: '${path.basename(stored)} removed',
+    );
+    _projectChanged(repricing: false);
+  }
+
   /// Drops every finished note, and says how many went.
   int clearDoneProjectTodos() {
-    final gone = project.clearDoneTodos();
+    final gone = project.clearDoneTodos(by: collab.me.user);
     if (gone > 0) _projectChanged();
     return gone;
   }
@@ -17854,11 +18488,14 @@ class AppStateProvider extends ChangeNotifier {
 
     loadAvFlowForCurrentConfig();
 
-    // Both the room being left and the room being opened are now better read
-    // live than from the cache: the one being left may have unsaved edits the
-    // cache never saw, and the one being opened is about to be priced from
-    // memory instead.
-    _projectRooms.clear();
+    // Only the rooms whose files changed are read again. Throwing every room
+    // away here made the total jump on opening a room whenever another window
+    // or computer had saved one since - the figure was right, but it moved at
+    // a moment that had nothing to do with it. The room being left was priced
+    // from memory and is not cached, so it is read fresh either way; the one
+    // being opened is priced from memory now.
+    _rereadChangedRooms();
+    _projectEstimate = null;
 
     AppLogger.logInfo(
       'Project room "${ref.fallbackName}" opened into the editor from '
@@ -18033,7 +18670,15 @@ class AppStateProvider extends ChangeNotifier {
       // The room in the editor is read from MEMORY and never cached: it is
       // being edited, so a copy of it is out of date the moment it is taken,
       // and the file underneath it is out of date until somebody saves.
-      if (currentConfigPath.isNotEmpty && _samePath(absolute, currentConfigPath)) {
+      //
+      // BUT NOT WHILE IT IS STILL OPENING. The path changes first and the
+      // drawing and costs arrive after, and in between memory still holds the
+      // room being left - priced as this one, that room was counted twice and
+      // the total jumped up and back. Until its own drawing is in, the room is
+      // its file, which is exactly what it is about to load.
+      if (currentConfigPath.isNotEmpty &&
+          _samePath(absolute, currentConfigPath) &&
+          _samePath(_avFlowSyncedPath, currentConfigPath)) {
         rooms[ref.id] = _liveRoom(absolute);
         _projectRooms.remove(ref.id);
         continue;
@@ -18063,6 +18708,93 @@ class AppStateProvider extends ChangeNotifier {
     );
   }
 
+  /// Brings [BuildingProject.roomSnapshots] up to what the rooms' files say,
+  /// priced off the [read] files rather than any room open in the editor.
+  /// [recorded] when the snapshot changed and wants writing; [changed] the
+  /// rooms whose total moved since the job last checked them. A room checked
+  /// for the first time, or saved with no price moving, is recorded without
+  /// being counted.
+  ({
+    bool recorded,
+    List<({String room, double before, double after})> changed,
+  }) _updateRoomSnapshots(
+    Map<String, LoadedRoom> read,
+    Map<String, DateTime?> stamps,
+  ) {
+    final estimate = computeProjectEstimate(
+      project: project,
+      projectPath: currentProjectPath,
+      library: avDeviceLibrary,
+      rates: laborRates,
+      baseCosts: baseCosts,
+      tier: pricingTier,
+      rooms: read,
+      defaultTaxPercent: defaultTaxPercent,
+    );
+    final changed = <({String room, double before, double after})>[];
+    final next = <String, RoomSnapshot>{};
+    var different = false;
+    for (final room in estimate.rooms) {
+      final now = RoomSnapshot(
+        filesModified: stamps[room.ref.id],
+        total: room.estimate?.grandTotal ?? 0,
+      );
+      next[room.ref.id] = now;
+      final was = project.roomSnapshots[room.ref.id];
+      if (was == null) {
+        different = true;
+        continue;
+      }
+      final moved = (was.total - now.total).abs() > 0.005;
+      if (moved || was.filesModified != now.filesModified) different = true;
+      if (moved) {
+        changed.add((room: room.name, before: was.total, after: now.total));
+      }
+    }
+    if (next.length != project.roomSnapshots.length) different = true;
+    if (!different) return (recorded: false, changed: const []);
+    project.roomSnapshots
+      ..clear()
+      ..addAll(next);
+    project.roomsCheckedAt = DateTime.now();
+    for (final c in changed) {
+      AppLogger.logInfo(
+        'Room "${c.room}" changed since the job was last checked: '
+        '${c.before.toStringAsFixed(2)} -> ${c.after.toStringAsFixed(2)}.',
+      );
+    }
+    return (recorded: true, changed: changed);
+  }
+
+  /// Re-reads the rooms on the job whose files have changed since they were
+  /// cached, and leaves the rest. Returns how many were read again.
+  ///
+  /// What opening a room does, instead of throwing every room away: a room
+  /// saved from another window or computer is picked up, and one nobody
+  /// touched keeps the figure it had. On this thread, like the full re-read
+  /// it replaces - a stat per file is far less than reading every room.
+  int _rereadChangedRooms() {
+    final open = currentConfigPath;
+    var reread = 0;
+    for (final ref in project.rooms) {
+      final absolute = BuildingProject.resolvePath(
+        ref.configPath,
+        currentProjectPath,
+      );
+      // The room in the editor is priced from memory anyway.
+      if (open.isNotEmpty && _samePath(absolute, open)) continue;
+      final stamp = roomFilesModifiedSync(absolute);
+      final cached = _projectRooms.containsKey(ref.id) &&
+          _projectRoomStamps.containsKey(ref.id) &&
+          _projectRoomStamps[ref.id] == stamp;
+      if (cached) continue;
+      _projectRooms[ref.id] = readRoomFromDisk(absolute);
+      _projectRoomStamps[ref.id] = stamp;
+      reread++;
+    }
+    return reread;
+  }
+
   /// Reads every room on the open job into the cache in the background, so
   /// the first price of a big job does not freeze the window. [onProgress]
   /// hears rooms read against the total.
@@ -18078,10 +18810,12 @@ class AppStateProvider extends ChangeNotifier {
     for (final ref in refs) {
       final absolute =
           BuildingProject.resolvePath(ref.configPath, currentProjectPath);
+      final stamp = await roomFilesModified(absolute);
       final room = await readRoomFromDiskAsync(absolute);
       // Skipped if the job changed while it was reading.
       if (project.rooms.any((r) => r.id == ref.id)) {
         _projectRooms[ref.id] = room;
+        _projectRoomStamps[ref.id] = stamp;
       }
       onProgress?.call(++done, refs.length);
     }

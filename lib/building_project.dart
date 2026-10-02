@@ -1169,6 +1169,22 @@ class ProjectTodo {
   /// actually knows about and a typed label is not.
   final String scopeLabel;
 
+  /// Pictures and documents kept with this note: copies in the project's
+  /// attachments folder, stored relative to the project file like the rooms.
+  final List<String> attachments;
+
+  /// The Windows login that marked it done; '' while open, or for a note
+  /// finished before this was kept.
+  final String completedBy;
+
+  /// What a note set to Waiting on is waiting for - "Extron to confirm the
+  /// lead time". '' when nobody said.
+  final String waitingNote;
+
+  /// Files kept with [waitingNote] - the email being waited on, the quote
+  /// that has to come back. Stored like [attachments].
+  final List<String> waitingAttachments;
+
   const ProjectTodo({
     required this.id,
     required this.text,
@@ -1178,6 +1194,10 @@ class ProjectTodo {
     this.due,
     this.roomId = '',
     this.scopeLabel = '',
+    this.attachments = const [],
+    this.completedBy = '',
+    this.waitingNote = '',
+    this.waitingAttachments = const [],
   });
 
   /// True when this note is about the job as a whole — neither a room nor a
@@ -1215,6 +1235,10 @@ class ProjectTodo {
     bool clearDue = false,
     String? roomId,
     String? scopeLabel,
+    List<String>? attachments,
+    String? completedBy,
+    String? waitingNote,
+    List<String>? waitingAttachments,
   }) => ProjectTodo(
     id: id,
     text: text ?? this.text,
@@ -1224,6 +1248,10 @@ class ProjectTodo {
     due: clearDue ? null : (due ?? this.due),
     roomId: roomId ?? this.roomId,
     scopeLabel: scopeLabel ?? this.scopeLabel,
+    attachments: attachments ?? this.attachments,
+    completedBy: completedBy ?? this.completedBy,
+    waitingNote: waitingNote ?? this.waitingNote,
+    waitingAttachments: waitingAttachments ?? this.waitingAttachments,
   );
 
   Map<String, dynamic> toJson() => {
@@ -1235,6 +1263,11 @@ class ProjectTodo {
     if (due != null) 'due': formatIsoDate(due!),
     if (roomId.isNotEmpty) 'roomId': roomId,
     if (scopeLabel.trim().isNotEmpty) 'scopeLabel': scopeLabel.trim(),
+    if (attachments.isNotEmpty) 'attachments': List<String>.of(attachments),
+    if (completedBy.isNotEmpty) 'completedBy': completedBy,
+    if (waitingNote.trim().isNotEmpty) 'waitingNote': waitingNote.trim(),
+    if (waitingAttachments.isNotEmpty)
+      'waitingAttachments': List<String>.of(waitingAttachments),
   };
 
   factory ProjectTodo.fromJson(Map<String, dynamic> json) => ProjectTodo(
@@ -1248,7 +1281,64 @@ class ProjectTodo {
     due: parseIsoDate(json['due']),
     roomId: json['roomId']?.toString() ?? '',
     scopeLabel: json['scopeLabel']?.toString().trim() ?? '',
+    attachments: [
+      for (final a in (json['attachments'] as List? ?? []))
+        if (a.toString().trim().isNotEmpty) a.toString(),
+    ],
+    completedBy: json['completedBy']?.toString() ?? '',
+    waitingNote: json['waitingNote']?.toString() ?? '',
+    waitingAttachments: [
+      for (final a in (json['waitingAttachments'] as List? ?? []))
+        if (a.toString().trim().isNotEmpty) a.toString(),
+    ],
   );
+}
+
+/// A note taken off the job list - deleted, or cleared once done - kept so
+/// the history can still say what it was and who finished or removed it.
+class ArchivedTodo {
+  final ProjectTodo todo;
+
+  /// The Windows login that took it off the list.
+  final String removedBy;
+  final DateTime removedAt;
+
+  const ArchivedTodo({
+    required this.todo,
+    required this.removedBy,
+    required this.removedAt,
+  });
+
+  /// True when it was finished before it came off; false for one deleted
+  /// while still open.
+  bool get wasCompleted => todo.isDone;
+
+  /// Who it counts for: whoever completed it, else whoever deleted it.
+  String get by => wasCompleted && todo.completedBy.isNotEmpty
+      ? todo.completedBy
+      : removedBy;
+
+  Map<String, dynamic> toJson() => {
+    // The note's own id, so two people's archives of different notes merge.
+    'id': todo.id,
+    'todo': todo.toJson(),
+    'removedBy': removedBy,
+    'removedAt': removedAt.toIso8601String(),
+  };
+
+  static ArchivedTodo? fromJson(Map<String, dynamic> json) {
+    final t = json['todo'];
+    if (t is! Map) return null;
+    final todo = ProjectTodo.fromJson(Map<String, dynamic>.from(t));
+    if (todo.id.isEmpty) return null;
+    return ArchivedTodo(
+      todo: todo,
+      removedBy: json['removedBy']?.toString() ?? '',
+      removedAt:
+          DateTime.tryParse(json['removedAt']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2179,6 +2269,26 @@ class ManualRoom {
 }
 
 /// One room on the job: where its config lives, and whether it counts.
+/// What a room's files said when the job last checked them: when they were
+/// last written, and what the room priced at then.
+class RoomSnapshot {
+  final DateTime? filesModified;
+  final double total;
+
+  const RoomSnapshot({this.filesModified, this.total = 0});
+
+  Map<String, dynamic> toJson() => {
+    if (filesModified != null)
+      'filesModified': filesModified!.toIso8601String(),
+    'total': total,
+  };
+
+  factory RoomSnapshot.fromJson(Map<String, dynamic> json) => RoomSnapshot(
+    filesModified: DateTime.tryParse(json['filesModified']?.toString() ?? ''),
+    total: (json['total'] as num?)?.toDouble() ?? 0,
+  );
+}
+
 class ProjectRoomRef {
   final String id;
 
@@ -2781,6 +2891,10 @@ class BuildingProject {
   /// on screen never rewrites the file.
   final List<ProjectTodo> todos;
 
+  /// Notes taken off the job list, newest last - see [ArchivedTodo]. What
+  /// the history's finished-tasks tab reads.
+  final List<ArchivedTodo> todoArchive;
+
   /// The phases this job delivers in, in timeline order — see [ProjectTrack].
   /// Empty on a job that has never used them, which behaves exactly as it did
   /// before tracks existed.
@@ -2820,6 +2934,21 @@ class BuildingProject {
 
   /// Procurement column id -> the width it was dragged to on the page.
   final Map<String, double> procurementColumnWidths;
+
+  /// Built-in procurement columns deleted on this job, by id.
+  final List<String> procurementHiddenColumns;
+
+  /// Columns added on this job, after the built-in ones. Each entry's value
+  /// for one is in [ProcurementEntry.custom].
+  final List<ProcurementCustomColumn> procurementCustomColumns;
+
+  /// Room id -> what its files said when the job last checked them. Brought
+  /// up to date, and written, when the project is opened - see
+  /// [AppStateProvider.openProject].
+  final Map<String, RoomSnapshot> roomSnapshots;
+
+  /// When [roomSnapshots] last changed.
+  DateTime? roomsCheckedAt;
 
   /// Responsibility item id -> the width its column was dragged to.
   final Map<String, double> responsibilityColumnWidths;
@@ -2931,6 +3060,7 @@ class BuildingProject {
     Map<String, int>? partLeadTimes,
     Map<String, DateTime>? partNeedBy,
     List<ProjectTodo>? todos,
+    List<ArchivedTodo>? todoArchive,
     List<ProjectTrack>? tracks,
     Map<String, String>? partTracks,
     Map<String, PartOrder>? partOrders,
@@ -2943,6 +3073,10 @@ class BuildingProject {
     List<String>? procurementColumnOrder,
     Map<String, String>? procurementColumnLabels,
     Map<String, double>? procurementColumnWidths,
+    List<String>? procurementHiddenColumns,
+    List<ProcurementCustomColumn>? procurementCustomColumns,
+    Map<String, RoomSnapshot>? roomSnapshots,
+    this.roomsCheckedAt,
     Map<String, double>? responsibilityColumnWidths,
     List<ProjectDelivery>? deliveries,
     List<ProjectEdit>? history,
@@ -2978,6 +3112,7 @@ class BuildingProject {
        partLeadTimes = partLeadTimes ?? {},
        partNeedBy = partNeedBy ?? {},
        todos = todos ?? [],
+       todoArchive = todoArchive ?? [],
        tracks = tracks ?? [],
        partTracks = partTracks ?? {},
        partOrders = partOrders ?? {},
@@ -2989,6 +3124,9 @@ class BuildingProject {
        procurementColumnOrder = procurementColumnOrder ?? [],
        procurementColumnLabels = procurementColumnLabels ?? {},
        procurementColumnWidths = procurementColumnWidths ?? {},
+       procurementHiddenColumns = procurementHiddenColumns ?? [],
+       procurementCustomColumns = procurementCustomColumns ?? [],
+       roomSnapshots = roomSnapshots ?? {},
        responsibilityColumnWidths = responsibilityColumnWidths ?? {},
        deliveries = deliveries ?? [],
        history = history ?? [],
@@ -3259,15 +3397,21 @@ class BuildingProject {
   /// Re-opening something clears the date rather than leaving the old one on
   /// it: a note that says it was finished in March and is sitting in the open
   /// column is a note that will be read wrong.
-  void setTodoState(String id, ProjectTodoState state, {DateTime? when}) {
+  void setTodoState(
+    String id,
+    ProjectTodoState state, {
+    DateTime? when,
+    String? by,
+  }) {
     final i = todos.indexWhere((t) => t.id == id);
     if (i < 0) return;
+    final done = state == ProjectTodoState.done;
     todos[i] = todos[i].copyWith(
       state: state,
-      completed: state == ProjectTodoState.done
-          ? dateOnly(when ?? DateTime.now())
-          : null,
-      clearCompleted: state != ProjectTodoState.done,
+      completed: done ? dateOnly(when ?? DateTime.now()) : null,
+      clearCompleted: !done,
+      // Who finished it, for the history; cleared if it is reopened.
+      completedBy: done ? (by ?? currentUserName()) : '',
     );
   }
 
@@ -3305,15 +3449,47 @@ class BuildingProject {
     );
   }
 
-  void removeTodo(String id) => todos.removeWhere((t) => t.id == id);
+  /// Takes one note off the list, keeping it in [todoArchive] with who took
+  /// it off.
+  void removeTodo(String id, {String? by, DateTime? when}) {
+    final i = todos.indexWhere((t) => t.id == id);
+    if (i < 0) return;
+    todoArchive.add(ArchivedTodo(
+      todo: todos.removeAt(i),
+      removedBy: by ?? currentUserName(),
+      removedAt: when ?? DateTime.now(),
+    ));
+  }
+
+  /// Says what one note is waiting on.
+  void setTodoWaitingNote(String id, String note) {
+    final i = todos.indexWhere((t) => t.id == id);
+    if (i >= 0) todos[i] = todos[i].copyWith(waitingNote: note.trim());
+  }
+
+  /// Replaces the files kept with one note - or, when [waiting], with what
+  /// it is waiting on.
+  void setTodoAttachments(
+    String id,
+    List<String> attachments, {
+    bool waiting = false,
+  }) {
+    final i = todos.indexWhere((t) => t.id == id);
+    if (i < 0) return;
+    todos[i] = waiting
+        ? todos[i].copyWith(waitingAttachments: List.of(attachments))
+        : todos[i].copyWith(attachments: List.of(attachments));
+  }
 
   /// Drops every finished note. The one bulk action the list offers, because
   /// tidying a long done-list one row at a time is the reason people stop
   /// marking things done.
-  int clearDoneTodos() {
-    final before = todos.length;
-    todos.removeWhere((t) => t.isDone);
-    return before - todos.length;
+  int clearDoneTodos({String? by, DateTime? when}) {
+    final done = [for (final t in todos) if (t.isDone) t];
+    for (final t in done) {
+      removeTodo(t.id, by: by, when: when);
+    }
+    return done.length;
   }
 
   ProjectVendor? vendorById(String id) {
@@ -3549,6 +3725,25 @@ class BuildingProject {
       if (n != null && n > best) best = n;
     }
     return 'proc${best + 1}';
+  }
+
+  /// The procurement log's columns as this job shows them: in its order,
+  /// without the deleted ones, with its own added after the built-in ones.
+  List<ProcurementColumnSpec> get procurementColumns =>
+      orderedProcurementColumns(
+        procurementColumnOrder,
+        hidden: procurementHiddenColumns.toSet(),
+        custom: procurementCustomColumns,
+      );
+
+  /// A fresh id for a procurement column added on this job.
+  String nextProcurementColumnId() {
+    var best = 0;
+    for (final c in procurementCustomColumns) {
+      final n = int.tryParse(c.id.replaceFirst(kProcurementCustomPrefix, ''));
+      if (n != null && n > best) best = n;
+    }
+    return '$kProcurementCustomPrefix${best + 1}';
   }
 
   ResponsibilityItem? responsibilityById(String id) {
@@ -4487,6 +4682,8 @@ class BuildingProject {
         for (final e in partNeedBy.entries) e.key: formatIsoDate(e.value),
       },
     if (todos.isNotEmpty) 'todos': [for (final t in todos) t.toJson()],
+    if (todoArchive.isNotEmpty)
+      'todoArchive': [for (final a in todoArchive) a.toJson()],
     if (tracks.isNotEmpty) 'tracks': [for (final t in tracks) t.toJson()],
     if (partTracks.isNotEmpty) 'partTracks': partTracks,
     if (partOrders.isNotEmpty)
@@ -4518,10 +4715,23 @@ class BuildingProject {
       'procurementColumnWidths': Map<String, double>.of(
         procurementColumnWidths,
       ),
+    if (procurementHiddenColumns.isNotEmpty)
+      'procurementHiddenColumns': List<String>.of(procurementHiddenColumns),
+    if (procurementCustomColumns.isNotEmpty)
+      'procurementCustomColumns': [
+        for (final c in procurementCustomColumns)
+          {'id': c.id, 'label': c.label},
+      ],
     if (responsibilityColumnWidths.isNotEmpty)
       'responsibilityColumnWidths': Map<String, double>.of(
         responsibilityColumnWidths,
       ),
+    if (roomSnapshots.isNotEmpty)
+      'roomSnapshots': {
+        for (final e in roomSnapshots.entries) e.key: e.value.toJson(),
+      },
+    if (roomsCheckedAt != null)
+      'roomsCheckedAt': roomsCheckedAt!.toIso8601String(),
     if (deliveries.isNotEmpty)
       'deliveries': [for (final d in deliveries) d.toJson()],
     if (history.isNotEmpty)
@@ -4911,6 +5121,10 @@ class BuildingProject {
       partLeadTimes: leadTimes,
       partNeedBy: needBy,
       todos: todos,
+      todoArchive: [
+        for (final a in (json['todoArchive'] as List? ?? []))
+          if (a is Map) ?ArchivedTodo.fromJson(Map<String, dynamic>.from(a)),
+      ],
       tracks: tracks,
       partTracks: trackPins,
       partOrders: orders,
@@ -4944,6 +5158,26 @@ class BuildingProject {
           id.toString(),
       ],
       procurementColumnWidths: _widthsFrom(json['procurementColumnWidths']),
+      procurementHiddenColumns: [
+        for (final id in (json['procurementHiddenColumns'] as List? ?? []))
+          id.toString(),
+      ],
+      procurementCustomColumns: [
+        for (final c in (json['procurementCustomColumns'] as List? ?? []))
+          if (c is Map && (c['id']?.toString() ?? '').isNotEmpty)
+            (id: c['id'].toString(), label: c['label']?.toString() ?? ''),
+      ],
+      roomSnapshots: {
+        if (json['roomSnapshots'] is Map)
+          for (final e in (json['roomSnapshots'] as Map).entries)
+            if (e.value is Map)
+              e.key.toString(): RoomSnapshot.fromJson(
+                Map<String, dynamic>.from(e.value as Map),
+              ),
+      },
+      roomsCheckedAt: DateTime.tryParse(
+        json['roomsCheckedAt']?.toString() ?? '',
+      ),
       responsibilityColumnWidths: _widthsFrom(
         json['responsibilityColumnWidths'],
       ),
@@ -5072,6 +5306,7 @@ class BuildingProject {
     partLeadTimes: Map<String, int>.from(partLeadTimes),
     partNeedBy: Map<String, DateTime>.from(partNeedBy),
     todos: List<ProjectTodo>.from(todos),
+    todoArchive: List<ArchivedTodo>.from(todoArchive),
     tracks: List<ProjectTrack>.from(tracks),
     partTracks: Map<String, String>.from(partTracks),
     partOrders: Map<String, PartOrder>.from(partOrders),
@@ -5087,6 +5322,10 @@ class BuildingProject {
     procurementColumnOrder: List<String>.of(procurementColumnOrder),
     procurementColumnLabels: Map<String, String>.of(procurementColumnLabels),
     procurementColumnWidths: Map<String, double>.of(procurementColumnWidths),
+    procurementHiddenColumns: List<String>.of(procurementHiddenColumns),
+    procurementCustomColumns: List.of(procurementCustomColumns),
+    roomSnapshots: Map<String, RoomSnapshot>.of(roomSnapshots),
+    roomsCheckedAt: roomsCheckedAt,
     responsibilityColumnWidths: Map<String, double>.of(
       responsibilityColumnWidths,
     ),

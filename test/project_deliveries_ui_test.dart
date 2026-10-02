@@ -129,6 +129,35 @@ void main() {
     expect(find.byKey(ValueKey('delivery_card_${mic.id}')), findsNothing);
   });
 
+  testWidgets('a PO folds to its heading, and they all fold at once', (
+    tester,
+  ) async {
+    final p = withProject();
+    final first = p.addProjectPo(number: 'PO-1001');
+    final second = p.addProjectPo(number: 'PO-2002');
+    await pumpPane(tester, p);
+
+    double height(String id) =>
+        tester.getSize(find.byKey(ValueKey('po_card_$id'))).height;
+    final open = height(second.id);
+    expect(find.byKey(ValueKey('po_parts_${first.id}')), findsOneWidget);
+
+    await tester.tap(find.byKey(ValueKey('po_fold_${first.id}')));
+    await tester.pumpAndSettle();
+    expect(height(first.id), lessThan(open));
+    expect(find.byKey(ValueKey('po_parts_${first.id}')), findsNothing);
+    expect(find.text('PO-1001'), findsOneWidget, reason: 'still named');
+
+    await tester.tap(find.byKey(const ValueKey('po_collapse_all')));
+    await tester.pumpAndSettle();
+    expect(height(second.id), closeTo(height(first.id), 1));
+    expect(find.text('Expand all'), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey('po_collapse_all')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('po_parts_${first.id}')), findsOneWidget);
+  });
+
   testWidgets('a PO typed at the top is a PO the job keeps', (tester) async {
     final p = withProject();
     await pumpPane(tester, p);

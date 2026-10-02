@@ -2881,8 +2881,8 @@ Uint8List buildProjectWorkbookBytes({
           sheetName: tab(kProcurementLogSheet),
           generated: stamp,
           colors: estimate.project.procurementColors,
-          order: estimate.project.procurementColumnOrder,
           labels: estimate.project.procurementColumnLabels,
+          columns: estimate.project.procurementColumns,
         );
   if (procurement != null) sheets.add(procurement);
 

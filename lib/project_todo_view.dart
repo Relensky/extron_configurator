@@ -1,14 +1,23 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart' show PlatformFile;
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
+import 'app_logger.dart';
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'contrast.dart';
+import 'file_dialogs.dart';
 import 'live_text_field.dart';
+import 'pdf_viewer_dialog.dart';
 import 'project_estimate.dart';
 import 'project_schedule.dart';
 import 'project_timeline_view.dart'
     show ClearDateButton, showProjectDatePicker;
+import 'todo_calendar.dart';
 
 /// ============================================================================
 ///  THE JOB'S TO-DO LIST
@@ -280,6 +289,8 @@ class _AddTodoBarState extends State<_AddTodoBar> {
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
+              // Add lights up with the first letter, not on the next redraw.
+              onChanged: (_) => setState(() {}),
               onSubmitted: (_) => _add(),
             ),
           ),
@@ -732,6 +743,12 @@ class _TodoRow extends StatelessWidget {
                         if (!todo.isDone) ...[
                           const SizedBox(width: 10),
                           _DueButton(todo: todo, provider: provider),
+                          const SizedBox(width: 10),
+                          TodoReminderButton(
+                            todo: todo,
+                            provider: provider,
+                            scope: scopeText,
+                          ),
                         ] else if (todo.due != null) ...[
                           const SizedBox(width: 10),
                           Text(
@@ -743,25 +760,74 @@ class _TodoRow extends StatelessWidget {
                         ],
                         if (blocked) ...[
                           const SizedBox(width: 10),
-                          Icon(
-                            Icons.pause_circle_outline,
-                            size: 12,
-                            color: theme.colorScheme.tertiary,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            kProjectTodoStateLabels[ProjectTodoState.blocked]!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.tertiary,
+                          // What it is waiting on, pressed to change it.
+                          Flexible(
+                            child: InkWell(
+                              key: ValueKey('todo_waiting_${todo.id}'),
+                              borderRadius: BorderRadius.circular(4),
+                              onTap: () =>
+                                  showWaitingDialog(context, provider, todo.id),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.pause_circle_outline,
+                                    size: 12,
+                                    color: theme.colorScheme.tertiary,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Flexible(
+                                    child: Text(
+                                      todo.waitingNote.isEmpty
+                                          ? '${kProjectTodoStateLabels[ProjectTodoState.blocked]!} - add why'
+                                          : '${kProjectTodoStateLabels[ProjectTodoState.blocked]!}: '
+                                                '${todo.waitingNote}',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: theme.colorScheme.tertiary,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ],
                     ),
                   ),
+                  if (todo.attachments.isNotEmpty ||
+                      (blocked && todo.waitingAttachments.isNotEmpty))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12, bottom: 6),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          for (final a in todo.attachments)
+                            _AttachmentChip(
+                              todo: todo,
+                              stored: a,
+                              provider: provider,
+                            ),
+                          // What it is waiting on, marked as such.
+                          if (blocked)
+                            for (final a in todo.waitingAttachments)
+                              _AttachmentChip(
+                                todo: todo,
+                                stored: a,
+                                provider: provider,
+                                waiting: true,
+                              ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
+            _AttachButton(todo: todo, provider: provider),
             if (!todo.isDone)
               IconButton(
                 key: ValueKey('todo_block_${todo.id}'),
@@ -773,10 +839,14 @@ class _TodoRow extends StatelessWidget {
                   size: 18,
                   color: blocked ? theme.colorScheme.tertiary : null,
                 ),
-                onPressed: () => provider.setProjectTodoState(
-                  todo.id,
-                  blocked ? ProjectTodoState.open : ProjectTodoState.blocked,
-                ),
+                // Waiting asks what on - see [_WaitingDialog]. Back on the
+                // list is one press.
+                onPressed: blocked
+                    ? () => provider.setProjectTodoState(
+                        todo.id,
+                        ProjectTodoState.open,
+                      )
+                    : () => showWaitingDialog(context, provider, todo.id),
               ),
             IconButton(
               key: ValueKey('todo_remove_${todo.id}'),
@@ -791,6 +861,478 @@ class _TodoRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  REMINDERS
+// ---------------------------------------------------------------------------
+
+/// Sends a note out as a calendar reminder: into this computer's calendar, or
+/// attached to an email for somebody else's. A note with no date asks for one,
+/// and keeps it as its due date. Shown as words, not a bare icon, so it is
+/// found; also on the timeline's job list.
+class TodoReminderButton extends StatelessWidget {
+  final ProjectTodo todo;
+  final AppStateProvider provider;
+  final String scope;
+
+  const TodoReminderButton({
+    super.key,
+    required this.todo,
+    required this.provider,
+    required this.scope,
+  });
+
+  Future<void> _send(BuildContext context, {required bool email}) async {
+    final messenger = ScaffoldMessenger.of(context);
+    var date = todo.due;
+    if (date == null) {
+      final picked = await showProjectDatePicker(
+        context,
+        initial: null,
+        title: 'Remind on',
+      );
+      if (picked?.date == null) return;
+      date = picked!.date!;
+      provider.setProjectTodoDue(todo.id, date);
+    }
+    final ics = todoCalendarFile(
+      todo: todo,
+      date: date,
+      projectName: provider.project.name,
+      scope: scope,
+    );
+    String? problem;
+    try {
+      final file = await writeTodoCalendarFile(ics, todo);
+      problem = email
+          ? await emailCalendarFile(file)
+          : await provider.openInDesktop(file);
+      if (problem != null && email) {
+        // No Outlook: show the file so it can be attached by hand.
+        await provider.revealInFileManager(file);
+        problem = '$problem The reminder file is open in Explorer to attach '
+            'by hand.';
+      }
+    } catch (e) {
+      problem = 'The reminder could not be written: $e';
+    }
+    if (problem == null) {
+      AppLogger.logAction(
+        '${email ? 'Emailed' : 'Opened'} a calendar invite for '
+        '"${todo.text.trim()}" on ${formatScheduleDate(date)}.',
+      );
+    } else {
+      AppLogger.logInfo(
+        'Calendar invite for "${todo.text.trim()}" failed: $problem',
+      );
+    }
+    if (!context.mounted) return;
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(
+          problem ??
+              (email
+                  ? 'A new email has the reminder attached.'
+                  : 'The reminder is open - save it in your calendar.'),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<bool>(
+    key: ValueKey('todo_remind_${todo.id}'),
+    tooltip: 'Add to your calendar, or email it as an invite',
+    padding: EdgeInsets.zero,
+    position: PopupMenuPosition.under,
+    onSelected: (email) => _send(context, email: email),
+    child: Builder(
+      builder: (context) {
+        final theme = Theme.of(context);
+        final color = theme.colorScheme.primary;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.event_note_outlined, size: 12, color: color),
+              const SizedBox(width: 3),
+              Text(
+                'Calendar invite',
+                style: theme.textTheme.bodySmall?.copyWith(color: color),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+    itemBuilder: (_) => const [
+      PopupMenuItem(
+        value: false,
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.calendar_month_outlined),
+          title: Text('Add to my calendar'),
+        ),
+      ),
+      PopupMenuItem(
+        value: true,
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.forward_to_inbox_outlined),
+          title: Text('Email as invite'),
+        ),
+      ),
+    ],
+  );
+}
+
+// ---------------------------------------------------------------------------
+//  ATTACHMENTS
+// ---------------------------------------------------------------------------
+
+const Set<String> _kImageTypes = {
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', //
+};
+
+/// Picks files to keep with a note. They are copied beside the project.
+class _AttachButton extends StatelessWidget {
+  final ProjectTodo todo;
+  final AppStateProvider provider;
+
+  const _AttachButton({required this.todo, required this.provider});
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: ValueKey('todo_attach_${todo.id}'),
+    tooltip: 'Attach pictures or documents',
+    icon: const Icon(Icons.attach_file, size: 18),
+    onPressed: () async {
+      final messenger = ScaffoldMessenger.of(context);
+      final picked = await pickFilesCompat(
+        dialogTitle: 'Attach to this note',
+        allowMultiple: true,
+      );
+      final files = [
+        for (final f in picked?.files ?? const <PlatformFile>[])
+          if (f.path != null) f.path!,
+      ];
+      if (files.isEmpty) return;
+      final problem = await provider.attachToProjectTodo(todo.id, files);
+      if (problem.isNotEmpty) {
+        showTimedSnackBar(messenger, SnackBar(content: Text(problem)));
+      }
+    },
+  );
+}
+
+/// One file kept with a note: pressed, it opens in the app when it can - a
+/// picture in a viewer, a PDF in the PDF viewer - and in its own program when
+/// it cannot.
+class _AttachmentChip extends StatelessWidget {
+  final ProjectTodo todo;
+  final String stored;
+  final AppStateProvider provider;
+
+  /// Kept with what the note is waiting on, and drawn with an hourglass.
+  final bool waiting;
+
+  const _AttachmentChip({
+    required this.todo,
+    required this.stored,
+    required this.provider,
+    this.waiting = false,
+  });
+
+  Future<void> _open(BuildContext context) async {
+    final file = provider.resolveTodoAttachment(stored);
+    final name = p.basename(file);
+    final type = p.extension(file).toLowerCase();
+    if (!File(file).existsSync()) {
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        SnackBar(content: Text('No longer there: $file')),
+      );
+      return;
+    }
+    if (_kImageTypes.contains(type)) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => _ImageViewerDialog(
+          file: file,
+          onOpenExternally: () => provider.openInDesktop(file),
+        ),
+      );
+    } else if (type == '.pdf') {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => PdfViewerDialog(
+          filePath: file,
+          title: name,
+          screenshotStem: p.basenameWithoutExtension(file),
+          onOpenExternally: () => provider.openInDesktop(file),
+        ),
+      );
+    } else {
+      final problem = await provider.openInDesktop(file);
+      if (problem != null && context.mounted) {
+        showTimedSnackBar(
+          ScaffoldMessenger.of(context),
+          SnackBar(content: Text(problem)),
+        );
+      }
+    }
+  }
+
+  Future<void> _remove(BuildContext context) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove ${p.basename(stored)}?'),
+        content: const Text(
+          'The file comes off this note and the project\'s copy of it is '
+          'deleted. The original you attached it from is not touched.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            key: const ValueKey('todo_attachment_remove_go'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (go == true) {
+      await provider.removeProjectTodoAttachment(todo.id, stored);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final type = p.extension(stored).toLowerCase();
+    final icon = waiting
+        ? Icons.hourglass_bottom
+        : _kImageTypes.contains(type)
+        ? Icons.image_outlined
+        : type == '.pdf'
+        ? Icons.picture_as_pdf_outlined
+        : Icons.insert_drive_file_outlined;
+    return InputChip(
+      key: ValueKey('todo_attachment_${todo.id}_${p.basename(stored)}'),
+      visualDensity: VisualDensity.compact,
+      avatar: Icon(icon, size: 16),
+      label: Text(p.basename(stored)),
+      tooltip: waiting ? 'Open - kept with what this is waiting on' : 'Open',
+      onPressed: () => _open(context),
+      deleteButtonTooltipMessage: 'Remove from this note',
+      onDeleted: () => _remove(context),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  WAITING ON
+// ---------------------------------------------------------------------------
+
+/// Sets note [id] to Waiting on, asking what on - in words, with any files
+/// that go with it. Opened again on a waiting note, it edits the same.
+Future<void> showWaitingDialog(
+  BuildContext context,
+  AppStateProvider provider,
+  String id,
+) => showDialog<void>(
+  context: context,
+  builder: (_) => ChangeNotifierProvider<AppStateProvider>.value(
+    value: provider,
+    child: _WaitingDialog(id: id),
+  ),
+);
+
+class _WaitingDialog extends StatefulWidget {
+  final String id;
+
+  const _WaitingDialog({required this.id});
+
+  @override
+  State<_WaitingDialog> createState() => _WaitingDialogState();
+}
+
+class _WaitingDialogState extends State<_WaitingDialog> {
+  late final TextEditingController _note;
+
+  @override
+  void initState() {
+    super.initState();
+    final todo = context
+        .read<AppStateProvider>()
+        .project
+        .todos
+        .where((t) => t.id == widget.id)
+        .firstOrNull;
+    _note = TextEditingController(text: todo?.waitingNote ?? '');
+  }
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _attach(AppStateProvider provider) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final picked = await pickFilesCompat(
+      dialogTitle: 'Attach to what this is waiting on',
+      allowMultiple: true,
+    );
+    final files = [
+      for (final f in picked?.files ?? const <PlatformFile>[])
+        if (f.path != null) f.path!,
+    ];
+    if (files.isEmpty) return;
+    final problem = await provider.attachToProjectTodo(
+      widget.id,
+      files,
+      waiting: true,
+    );
+    if (problem.isNotEmpty) {
+      showTimedSnackBar(messenger, SnackBar(content: Text(problem)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final todo = provider.project.todos
+        .where((t) => t.id == widget.id)
+        .firstOrNull;
+    if (todo == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final blocked = todo.state == ProjectTodoState.blocked;
+    return AlertDialog(
+      key: const ValueKey('todo_waiting_dialog'),
+      title: const Text('What is it waiting on?'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              todo.text,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('todo_waiting_note'),
+              controller: _note,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Waiting on',
+                hintText: 'Extron to confirm the DTP lead time',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (final a in todo.waitingAttachments)
+                  _AttachmentChip(
+                    todo: todo,
+                    stored: a,
+                    provider: provider,
+                    waiting: true,
+                  ),
+                TextButton.icon(
+                  key: const ValueKey('todo_waiting_attach'),
+                  icon: const Icon(Icons.attach_file, size: 18),
+                  label: const Text('Attach files'),
+                  onPressed: () => _attach(provider),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('todo_waiting_save'),
+          onPressed: () {
+            provider.setProjectTodoWaitingNote(widget.id, _note.text);
+            if (!blocked) {
+              provider.setProjectTodoState(
+                widget.id,
+                ProjectTodoState.blocked,
+              );
+            }
+            Navigator.of(context).pop();
+          },
+          child: Text(blocked ? 'Save' : 'Set to waiting'),
+        ),
+      ],
+    );
+  }
+}
+
+/// A picture, zoomable, with a way out to the machine's own viewer.
+class _ImageViewerDialog extends StatelessWidget {
+  final String file;
+  final Future<String?> Function() onOpenExternally;
+
+  const _ImageViewerDialog({
+    required this.file,
+    required this.onOpenExternally,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return AlertDialog(
+      key: const ValueKey('todo_image_viewer'),
+      title: Text(p.basename(file)),
+      content: SizedBox(
+        width: size.width * 0.8,
+        height: size.height * 0.7,
+        child: InteractiveViewer(
+          maxScale: 8,
+          child: Center(
+            child: Image.file(
+              File(file),
+              errorBuilder: (_, _, _) =>
+                  const Text('This picture could not be read.'),
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          icon: const Icon(Icons.open_in_new, size: 18),
+          label: const Text('Open in its program'),
+          onPressed: onOpenExternally,
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 }

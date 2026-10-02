@@ -64,6 +64,9 @@ class DeliveriesView {
   /// The delivery cards folded down to their heading, by id.
   final Set<String> collapsed = <String>{};
 
+  /// Purchase orders folded to their heading line, by id.
+  final Set<String> poCollapsed = <String>{};
+
   bool ordersOpen = true;
   bool deliveredOpen = true;
 }
@@ -192,14 +195,46 @@ List<Widget> deliveriesSlivers(
       )
     else ...[
       SliverToBoxAdapter(
-        child: _SectionLabel(
-          text: searching
-              ? 'PURCHASE ORDERS (${orders.length} of '
-                    '${project.purchaseOrders.length})'
-              : 'PURCHASE ORDERS (${project.purchaseOrders.length})',
-          open: show.ordersOpen,
-          onToggle: () => changed(() => show.ordersOpen = !show.ordersOpen),
-          toggleKey: 'delivery_orders_toggle',
+        child: Row(
+          children: [
+            Expanded(
+              child: _SectionLabel(
+                text: searching
+                    ? 'PURCHASE ORDERS (${orders.length} of '
+                          '${project.purchaseOrders.length})'
+                    : 'PURCHASE ORDERS (${project.purchaseOrders.length})',
+                open: show.ordersOpen,
+                onToggle: () =>
+                    changed(() => show.ordersOpen = !show.ordersOpen),
+                toggleKey: 'delivery_orders_toggle',
+              ),
+            ),
+            // Each PO folds to its heading line, like the deliveries.
+            if (orders.isNotEmpty && show.ordersOpen)
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: () {
+                  final allFolded =
+                      orders.every((po) => show.poCollapsed.contains(po.id));
+                  return TextButton.icon(
+                    key: const ValueKey('po_collapse_all'),
+                    icon: Icon(
+                      allFolded ? Icons.unfold_more : Icons.unfold_less,
+                      size: 18,
+                    ),
+                    label: Text(allFolded ? 'Expand all' : 'Collapse all'),
+                    onPressed: () => changed(() {
+                      final ids = [for (final po in orders) po.id];
+                      if (allFolded) {
+                        show.poCollapsed.removeAll(ids);
+                      } else {
+                        show.poCollapsed.addAll(ids);
+                      }
+                    }),
+                  );
+                }(),
+              ),
+          ],
         ),
       ),
       if (show.ordersOpen)
@@ -211,6 +246,11 @@ List<Widget> deliveriesSlivers(
             po: orders[i],
             provider: provider,
             estimate: estimate,
+            collapsed: show.poCollapsed.contains(orders[i].id),
+            onToggleCollapsed: () => changed(() {
+              final id = orders[i].id;
+              if (!show.poCollapsed.remove(id)) show.poCollapsed.add(id);
+            }),
           ),
         ),
       ),
@@ -732,10 +772,16 @@ class _PoCard extends StatelessWidget {
   final AppStateProvider provider;
   final ProjectEstimate estimate;
 
+  /// Folded to its heading and the one line under it.
+  final bool collapsed;
+  final VoidCallback? onToggleCollapsed;
+
   const _PoCard({
     required this.po,
     required this.provider,
     required this.estimate,
+    this.collapsed = false,
+    this.onToggleCollapsed,
   });
 
   @override
@@ -766,7 +812,19 @@ class _PoCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.receipt_long, size: 18, color: muted),
+                if (onToggleCollapsed != null)
+                  IconButton(
+                    key: ValueKey('po_fold_${po.id}'),
+                    tooltip: collapsed ? 'Expand' : 'Collapse',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      collapsed ? Icons.chevron_right : Icons.expand_more,
+                      size: 20,
+                    ),
+                    onPressed: onToggleCollapsed,
+                  )
+                else
+                  Icon(Icons.receipt_long, size: 18, color: muted),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
@@ -816,6 +874,7 @@ class _PoCard extends StatelessWidget {
               ),
               style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
+            if (!collapsed) ...[
             const SizedBox(height: 6),
             // WHAT IT BOUGHT, from the PO. The Bought? box on a part answers
             // "what did this go out on"; nothing answered "what went out on
@@ -878,6 +937,7 @@ class _PoCard extends StatelessWidget {
               fieldKey: 'po_note_${po.id}',
               onAdd: (text) => provider.addProjectPoNote(po.id, text),
             ),
+            ],
           ],
         ),
       ),

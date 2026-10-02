@@ -139,8 +139,13 @@ void main() {
     expect(rectOf('toolbar_redo').left, greaterThan(rectOf('toolbar_undo').left));
     expect(rectOf('show_history').left, greaterThan(rectOf('toolbar_redo').left));
 
-    expect(barRight - rectOf('banner_app_config').right, lessThan(16),
-        reason: 'Settings is the far-right button');
+    // Your profile in the corner, Settings just left of it - the same way
+    // round as the debugger app.
+    expect(barRight - rectOf('profile_button').right, lessThan(16),
+        reason: 'the profile is the far-right button');
+    expect(rectOf('banner_app_config').right,
+        lessThan(rectOf('profile_button').left + 1),
+        reason: 'Settings sits just left of the profile');
     expect(rectOf('open_help').right,
         lessThan(rectOf('banner_app_config').left + 1),
         reason: 'Help is just left of Settings');

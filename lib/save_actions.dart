@@ -177,28 +177,33 @@ Future<bool> runSave(
   // rather than a guess about where the last pause fell.
   provider.recordUndoPoint();
 
-  // SOMEBODY ELSE MAY HAVE SAVED THIS FILE SINCE WE READ IT. Their changes
-  // are folded in first - anything you both changed is put to you - so the
-  // save that follows writes both people's work rather than only yours. A
-  // Save As writes a new file, so there is nobody else's to keep.
-  final collabKind = switch (scope) {
-    SaveScope.room => CollabDocKind.room,
-    SaveScope.project => CollabDocKind.project,
-    _ => null,
-  };
-  if (collabKind != null && !saveAs) {
-    if (!await reconcileBeforeSave(context, provider, collabKind)) {
-      showTimedSnackBar(
-        messenger,
-        const SnackBar(
-          content: Text('Save canceled - nothing was written.'),
-        ),
-      );
-      return false;
+  // IN THE QUEUE, merge and write together, so no other merge lands between
+  // them - see [CollabController.enqueue].
+  return provider.collab.enqueue(() async {
+    // SOMEBODY ELSE MAY HAVE SAVED THIS FILE SINCE WE READ IT. Their changes
+    // are folded in first - anything you both changed is put to you - so the
+    // save that follows writes both people's work rather than only yours. A
+    // Save As writes a new file, so there is nobody else's to keep.
+    final collabKind = switch (scope) {
+      SaveScope.room => CollabDocKind.room,
+      SaveScope.project => CollabDocKind.project,
+      _ => null,
+    };
+    if (collabKind != null && !saveAs) {
+      if (!context.mounted) return false;
+      if (!await reconcileBeforeSave(context, provider, collabKind)) {
+        showTimedSnackBar(
+          messenger,
+          const SnackBar(
+            content: Text('Save canceled - nothing was written.'),
+          ),
+        );
+        return false;
+      }
+      if (!context.mounted) return false;
     }
-    if (!context.mounted) return false;
-  }
-  return provider.collab.hold(() => _runSave(context, provider, scope, saveAs));
+    return _runSave(context, provider, scope, saveAs);
+  });
 }
 
 Future<bool> _runSave(

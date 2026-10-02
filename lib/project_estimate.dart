@@ -216,6 +216,48 @@ Future<LoadedRoom> readRoomFromDiskAsync(
   });
 }
 
+/// The newest time any of a room's files was written - the config and every
+/// place a sidecar may be - or null when none of them is there.
+///
+/// Cheap next to a read: one stat per file, all at once. What tells the job a
+/// room changed under it, from another window or another computer.
+Future<DateTime?> roomFilesModified(String configPath) async {
+  if (configPath.isEmpty) return null;
+  final files = [
+    configPath,
+    for (final c in _roomPartCandidates(configPath).values) ...c,
+  ];
+  final stats = await Future.wait([
+    for (final f in files)
+      FileStat.stat(f).then<FileStat?>((s) => s, onError: (_) => null),
+  ]);
+  DateTime? newest;
+  for (final s in stats) {
+    if (s == null || s.type == FileSystemEntityType.notFound) continue;
+    if (newest == null || s.modified.isAfter(newest)) newest = s.modified;
+  }
+  return newest;
+}
+
+/// [roomFilesModified] without waiting: a stat per file, on this thread.
+DateTime? roomFilesModifiedSync(String configPath) {
+  if (configPath.isEmpty) return null;
+  DateTime? newest;
+  for (final f in [
+    configPath,
+    for (final c in _roomPartCandidates(configPath).values) ...c,
+  ]) {
+    try {
+      final s = FileStat.statSync(f);
+      if (s.type == FileSystemEntityType.notFound) continue;
+      if (newest == null || s.modified.isAfter(newest)) newest = s.modified;
+    } catch (_) {
+      continue;
+    }
+  }
+  return newest;
+}
+
 /// Where a room's [part] may be, first choice first.
 List<String> roomPartCandidates(String configPath, RoomSidecarPart part) =>
     _roomPartCandidates(configPath)[part] ?? const [];
@@ -1330,10 +1372,17 @@ RoomCostSettings? scopeToCategories(
         line.key,
   ];
   if (keys.isEmpty) return null;
-  return RoomCostSettings()
-    ..readJson(settings.toJson())
-    ..outOfScope.addAll(keys);
+  return copyCostSettings(settings)..outOfScope.addAll(keys);
 }
+
+/// A copy of [settings] to change without touching the room's own.
+///
+/// Through toJson, which writes no rate for a room on the job's rate - so the
+/// rate is put back, or a scoped room quotes untaxed.
+RoomCostSettings copyCostSettings(RoomCostSettings settings) =>
+    RoomCostSettings()
+      ..readJson(settings.toJson())
+      ..taxPercent = settings.taxPercent;
 
 /// Prices every room in [project] and rolls the result up.
 ///
@@ -1407,7 +1456,7 @@ ProjectEstimate computeProjectEstimate({
       // Cost tab. After the scope is worked out, so an add-on is never taken
       // back off as existing.
       if (addOns.isNotEmpty) {
-        scoped ??= RoomCostSettings()..readJson(settings.toJson());
+        scoped ??= copyCostSettings(settings);
         for (var i = 0; i < addOns.length; i++) {
           final a = addOns[i];
           final t = library.templateForModel(a.model);

@@ -941,13 +941,14 @@ class DeviceConfigurationForm extends StatelessWidget {
               if (!commands.contains('')) commands.insert(0, ''); 
 
               return DropdownButtonFormField<String>(
-                initialValue: currentValue, 
+                initialValue: currentValue,
+                isExpanded: true,
                 decoration: InputDecoration(
                   labelText: 'Keep Alive Command',
                   helperText: 'Parsed from $moduleName.py',
                   border: const OutlineInputBorder(),
                 ),
-                items: commands.map((cmd) => DropdownMenuItem(value: cmd, child: Text(cmd.isEmpty ? '-- None --' : cmd))).toList(),
+                items: commands.map((cmd) => DropdownMenuItem(value: cmd, child: Text(cmd.isEmpty ? '-- None --' : cmd, overflow: TextOverflow.ellipsis))).toList(),
                 onChanged: (val) {
                   if (val != null) provider.updateDeviceValue(deviceKey, 'keep_alive_command', val);
                 },

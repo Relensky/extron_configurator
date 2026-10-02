@@ -92,6 +92,11 @@ class EditorPresence {
   /// When they last saved this document, if they have this session.
   final DateTime? savedAt;
 
+  /// The room file they have open - 'BSS 103' - and the tab they are on.
+  /// '' when they have no room open, or their copy is older than this.
+  final String room;
+  final String tab;
+
   const EditorPresence({
     required this.user,
     required this.machine,
@@ -99,7 +104,15 @@ class EditorPresence {
     required this.heartbeat,
     this.unsaved = false,
     this.savedAt,
+    this.room = '',
+    this.tab = '',
   });
+
+  /// Where they are, in words: 'BSS 103, on Cost'.
+  String get whereText => [
+    if (room.trim().isNotEmpty) room.trim(),
+    if (tab.trim().isNotEmpty) 'on ${tab.trim()}',
+  ].join(', ');
 
   CollabIdentity get identity => CollabIdentity(user: user, machine: machine);
 
@@ -112,6 +125,8 @@ class EditorPresence {
         'heartbeat': heartbeat.toUtc().toIso8601String(),
         'unsaved': unsaved,
         if (savedAt != null) 'savedAt': savedAt!.toUtc().toIso8601String(),
+        if (room.isNotEmpty) 'room': room,
+        if (tab.isNotEmpty) 'tab': tab,
       };
 
   static EditorPresence? fromJson(Object? json) {
@@ -128,6 +143,8 @@ class EditorPresence {
       heartbeat: heartbeat,
       unsaved: json['unsaved'] == true,
       savedAt: time('savedAt'),
+      room: json['room']?.toString() ?? '',
+      tab: json['tab']?.toString() ?? '',
     );
   }
 }

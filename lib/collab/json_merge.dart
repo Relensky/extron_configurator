@@ -16,8 +16,9 @@ import 'dart:convert';
 ///  them deleted stays deleted unless the other one edited it meanwhile.
 /// ============================================================================
 
-/// Which side's value a conflict is settled with.
-enum MergeSide { mine, theirs }
+/// Which side's value a conflict is settled with. [both] keeps the two -
+/// see [MergeConflict.canKeepBoth].
+enum MergeSide { mine, theirs, both }
 
 /// One place both people changed, differently.
 class MergeConflict {
@@ -34,6 +35,21 @@ class MergeConflict {
     required this.theirs,
   });
 
+  /// True when nothing has to be thrown away: two pieces of text are kept
+  /// one after the other, and a thing one side deleted and the other changed
+  /// is kept with the change.
+  ///
+  /// TEXT MEANS WORDS. Two notes can sit one after the other; two room
+  /// numbers or two model codes cannot - '103 / 104' is neither - so a value
+  /// with no space in it is chosen between, never joined.
+  bool get canKeepBoth =>
+      (mine is String &&
+          theirs is String &&
+          ((mine as String).trim().contains(' ') ||
+              (theirs as String).trim().contains(' '))) ||
+      mine == null ||
+      theirs == null;
+
   @override
   String toString() => 'MergeConflict($path: base=${describeJsonValue(base)}, '
       'mine=${describeJsonValue(mine)}, theirs=${describeJsonValue(theirs)})';
@@ -46,7 +62,15 @@ class JsonMergeResult {
   /// How many places took the other person's change without a conflict.
   final int takenFromTheirs;
 
-  const JsonMergeResult(this.merged, this.conflicts, this.takenFromTheirs);
+  /// How many of their new rows were renumbered so both people's were kept.
+  final int renumbered;
+
+  const JsonMergeResult(
+    this.merged,
+    this.conflicts,
+    this.takenFromTheirs, [
+    this.renumbered = 0,
+  ]);
 
   bool get clean => conflicts.isEmpty;
 }
@@ -72,10 +96,123 @@ JsonMergeResult mergeJson3(
   Object? mine,
   Object? theirs, {
   MergeSide Function(MergeConflict conflict)? resolve,
+
+  /// This copy as it stood right after it was opened, when known. Opening
+  /// fills in defaults the file did not have - a room number of '000' - and
+  /// those are not this person's edits: where mine still matches it, their
+  /// save wins without a question.
+  Object? loaded = _unknown,
 }) {
+  // TWO NEW ROWS, ONE NUMBER. Ids are handed out from a counter, so two
+  // people adding a note at once both make `todo7`. Merged as one row, one
+  // note was lost. Their row is given the next free id first - along with
+  // everything in their copy that pointed at it - so both are kept.
+  final renames = <String, String>{};
+  _findCollisions(base, mine, theirs, renames, _allStrings([base, mine, theirs]));
+  final theirsKept = renames.isEmpty ? theirs : _renameAll(theirs, renames);
   final m = _Merger(resolve);
-  final merged = m.merge(base, mine, theirs, '');
-  return JsonMergeResult(merged, m.conflicts, m.taken);
+  final merged = m.merge(base, mine, theirsKept, '', loaded);
+  return JsonMergeResult(merged, m.conflicts, m.taken, renames.length);
+}
+
+/// "Not known" for [mergeJson3]'s loaded copy - distinct from a JSON null.
+const Object _unknown = _Unknown();
+
+class _Unknown {
+  const _Unknown();
+}
+
+/// An id handed out from a counter: letters, then a number - `todo7`,
+/// `proc12`, `room3`. Only these are renumbered on a collision; a row keyed
+/// on a model or a name that both people added is the same thing, and its
+/// fields merge.
+final RegExp _counterId = RegExp(r'^([A-Za-z_]+)(\d+)$');
+
+/// Finds rows both sides added under the same counter id with different
+/// contents, and picks a new id for theirs in [renames].
+void _findCollisions(
+  Object? base,
+  Object? mine,
+  Object? theirs,
+  Map<String, String> renames,
+  Set<String> taken,
+) {
+  if (mine is Map && theirs is Map) {
+    for (final k in mine.keys) {
+      if (!theirs.containsKey(k)) continue;
+      _findCollisions(
+        base is Map ? base[k] : null,
+        mine[k],
+        theirs[k],
+        renames,
+        taken,
+      );
+    }
+    return;
+  }
+  if (mine is! List || theirs is! List) return;
+  final baseList = base is List ? base : const [];
+  bool rows(List l) => l.every((e) => e is Map && e['id'] is String);
+  if (!rows(mine) || !rows(theirs) || !rows(baseList)) return;
+  final baseIds = {for (final e in baseList) (e as Map)['id'] as String};
+  final mineById = {for (final e in mine) (e as Map)['id'] as String: e};
+  for (final e in theirs) {
+    final row = e as Map;
+    final id = row['id'] as String;
+    final ours = mineById[id];
+    if (ours == null) continue;
+    if (baseIds.contains(id)) {
+      // The same row, edited: look inside it for lists of its own.
+      final b = baseList.firstWhere((x) => (x as Map)['id'] == id);
+      _findCollisions(b, ours, row, renames, taken);
+      continue;
+    }
+    if (jsonEquals(ours, row)) continue;
+    final m = _counterId.firstMatch(id);
+    if (m == null || renames.containsKey(id)) continue;
+    var n = int.parse(m.group(2)!);
+    String next;
+    do {
+      next = '${m.group(1)}${++n}';
+    } while (taken.contains(next));
+    taken.add(next);
+    renames[id] = next;
+  }
+}
+
+/// Every string in [docs], keys and values - what a new id must not be.
+Set<String> _allStrings(List<Object?> docs) {
+  final out = <String>{};
+  void walk(Object? v) {
+    if (v is String) {
+      out.add(v);
+    } else if (v is Map) {
+      for (final e in v.entries) {
+        out.add('${e.key}');
+        walk(e.value);
+      }
+    } else if (v is List) {
+      v.forEach(walk);
+    }
+  }
+
+  docs.forEach(walk);
+  return out;
+}
+
+/// [doc] with every key and value exactly equal to an old id given its new
+/// one - the row itself and anything that points at it (a note's room, a
+/// part's package).
+Object? _renameAll(Object? doc, Map<String, String> renames) {
+  if (doc is String) return renames[doc] ?? doc;
+  if (doc is Map) {
+    return <String, dynamic>{
+      for (final e in doc.entries)
+        (renames['${e.key}'] ?? '${e.key}'): _renameAll(e.value, renames),
+    };
+  }
+  if (doc is List) return [for (final e in doc) _renameAll(e, renames)];
+  return doc;
 }
 
 /// True when two decoded JSON values are the same document.
@@ -124,13 +261,27 @@ class _Merger {
 
   Object? _out(Object? v) => identical(v, _absent) ? null : v;
 
-  Object? merge(Object? base, Object? mine, Object? theirs, String at) {
+  Object? merge(
+    Object? base,
+    Object? mine,
+    Object? theirs,
+    String at, [
+    Object? loaded = _unknown,
+  ]) {
     if (jsonEquals(mine, theirs)) return mine;
     if (jsonEquals(base, mine)) {
       taken++;
       return theirs;
     }
     if (jsonEquals(base, theirs)) return mine;
+    // Untouched since it was opened: what opening filled in is not an edit,
+    // so their save is taken over it.
+    if (!identical(loaded, _unknown) &&
+        !identical(theirs, _absent) &&
+        jsonEquals(mine, loaded)) {
+      taken++;
+      return theirs;
+    }
 
     // An id counter both sides moved on: the higher one, so neither side's
     // new ids are handed out again.
@@ -140,10 +291,22 @@ class _Merger {
 
     // Both changed it. Structures can still be merged part by part.
     if (mine is Map && theirs is Map && (base is Map || _isAbsent(base))) {
-      return _mergeMaps(base is Map ? base : const {}, mine, theirs, at);
+      return _mergeMaps(
+        base is Map ? base : const {},
+        mine,
+        theirs,
+        at,
+        loaded,
+      );
     }
     if (mine is List && theirs is List && (base is List || _isAbsent(base))) {
-      final merged = _mergeLists(base is List ? base : const [], mine, theirs, at);
+      final merged = _mergeLists(
+        base is List ? base : const [],
+        mine,
+        theirs,
+        at,
+        loaded,
+      );
       if (merged != null) return merged;
     }
     return _conflict(at, base, mine, theirs);
@@ -160,10 +323,36 @@ class _Merger {
     );
     conflicts.add(c);
     final side = resolve?.call(c) ?? MergeSide.mine;
-    return side == MergeSide.mine ? mine : theirs;
+    return switch (side) {
+      MergeSide.mine => mine,
+      MergeSide.theirs => theirs,
+      MergeSide.both => _keepBoth(mine, theirs),
+    };
   }
 
-  Map<String, dynamic> _mergeMaps(Map base, Map mine, Map theirs, String at) {
+  /// Both sides' value: the one that was not deleted, or two texts together -
+  /// on separate lines when either is long or already runs to several.
+  Object? _keepBoth(Object? mine, Object? theirs) {
+    if (_isAbsent(mine)) return theirs;
+    if (_isAbsent(theirs)) return mine;
+    if (mine is String && theirs is String) {
+      if (mine.trim().isEmpty) return theirs;
+      if (theirs.trim().isEmpty) return mine;
+      final long = mine.contains('\n') ||
+          theirs.contains('\n') ||
+          mine.length + theirs.length > 80;
+      return long ? '$mine\n$theirs' : '$mine / $theirs';
+    }
+    return theirs;
+  }
+
+  Map<String, dynamic> _mergeMaps(
+    Map base,
+    Map mine,
+    Map theirs,
+    String at, [
+    Object? loaded = _unknown,
+  ]) {
     final out = <String, dynamic>{};
     // Mine's key order first, then any key only they added - so a merged file
     // reads in the order the person saving it is used to.
@@ -176,7 +365,10 @@ class _Merger {
       final b = base.containsKey(k) ? base[k] : _absent;
       final m = mine.containsKey(k) ? mine[k] : _absent;
       final t = theirs.containsKey(k) ? theirs[k] : _absent;
-      final v = merge(b, m, t, at.isEmpty ? '$k' : '$at.$k');
+      final l = loaded is Map
+          ? (loaded.containsKey(k) ? loaded[k] : _absent)
+          : _unknown;
+      final v = merge(b, m, t, at.isEmpty ? '$k' : '$at.$k', l);
       if (!identical(v, _absent)) out['$k'] = v;
     }
     return out;
@@ -185,13 +377,21 @@ class _Merger {
   /// Merges two lists of objects row by row, or two lists of plain values as
   /// sets. Null when the lists have no usable identity - the caller then
   /// treats the whole list as one value.
-  List? _mergeLists(List base, List mine, List theirs, String at) {
+  List? _mergeLists(
+    List base,
+    List mine,
+    List theirs,
+    String at, [
+    Object? loaded = _unknown,
+  ]) {
     final all = [...base, ...mine, ...theirs];
     if (all.isEmpty) return mine;
 
     if (all.every((e) => e is Map)) {
       final key = _identityKey(base, mine, theirs);
-      if (key != null) return _mergeKeyed(key, base, mine, theirs, at);
+      if (key != null) {
+        return _mergeKeyed(key, base, mine, theirs, at, loaded);
+      }
       return _mergeAppendOnly(base, mine, theirs);
     }
 
@@ -253,13 +453,23 @@ class _Merger {
     return null;
   }
 
-  List _mergeKeyed(String key, List base, List mine, List theirs, String at) {
+  List _mergeKeyed(
+    String key,
+    List base,
+    List mine,
+    List theirs,
+    String at, [
+    Object? loaded = _unknown,
+  ]) {
     Map<String, Map> index(List l) => {
           for (final e in l) '${(e as Map)[key]}': e,
         };
     final b = index(base);
     final m = index(mine);
     final t = index(theirs);
+    final l = loaded is List && loaded.every((e) => e is Map)
+        ? index(loaded)
+        : null;
 
     final out = <Object?>[];
     void put(String id) {
@@ -268,6 +478,7 @@ class _Merger {
         m[id] ?? _absent,
         t[id] ?? _absent,
         '$at[$key=$id]',
+        l == null ? _unknown : (l[id] ?? _absent),
       );
       if (!identical(v, _absent)) out.add(v);
     }

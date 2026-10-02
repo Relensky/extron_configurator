@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// ============================================================================
@@ -301,6 +303,11 @@ class PinnedGrid extends StatefulWidget {
   /// One row of the cells, [bodyWidth] wide by [rowExtent] tall.
   final IndexedWidgetBuilder? bodyRowBuilder;
 
+  /// The id of a column being dragged by its grip, or null. While it is set,
+  /// the cells scroll sideways when the pointer nears either edge - see
+  /// column_drag.dart.
+  final ValueListenable<String?>? dragging;
+
   /// How wide a frozen column has to be to hold [lines] set in [style].
   ///
   /// A NAME THAT IS ELLIPSIZED IS NOT A LABEL. The column was a fixed width
@@ -351,6 +358,7 @@ class PinnedGrid extends StatefulWidget {
     this.frozenRowBuilder,
     this.bodyRowBuilder,
     this.maxHeight,
+    this.dragging,
   }) : assert(
          (frozen != null && body != null) ||
              (rowCount != null &&
@@ -376,15 +384,83 @@ class _PinnedGridState extends State<PinnedGrid> {
   /// Guards the mirror against its own jump coming back round.
   bool _mirroring = false;
 
+  /// The scrolling half's frame, for where the pointer is during a drag.
+  final _view = GlobalKey();
+
+  /// Sideways pixels per tick while a dragged column is near an edge.
+  double _edgeSpeed = 0;
+  Timer? _edgeTimer;
+
+  static const double _kEdge = 64;
+  static const double _kEdgeMaxSpeed = 22;
+
   @override
   void initState() {
     super.initState();
     _cells.addListener(() => _mirror(_cells, _header));
     _rows.addListener(() => _mirror(_rows, _frozen));
+    widget.dragging?.addListener(_dragChanged);
+  }
+
+  @override
+  void didUpdateWidget(PinnedGrid old) {
+    super.didUpdateWidget(old);
+    if (old.dragging != widget.dragging) {
+      old.dragging?.removeListener(_dragChanged);
+      widget.dragging?.addListener(_dragChanged);
+    }
+  }
+
+  void _dragChanged() {
+    if (widget.dragging?.value == null) _stopEdgeScroll();
+  }
+
+  void _stopEdgeScroll() {
+    _edgeSpeed = 0;
+    _edgeTimer?.cancel();
+    _edgeTimer = null;
+  }
+
+  /// Scrolls toward an edge the dragged column is held near: faster the
+  /// closer it is, and past the edge at full speed.
+  void _pointerMoved(PointerMoveEvent event) {
+    if (widget.dragging?.value == null) return;
+    final box = _view.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final x = box.globalToLocal(event.position).dx;
+    final width = box.size.width;
+    final edge = math.min(_kEdge, width / 4);
+    if (x < edge) {
+      _edgeSpeed = -_kEdgeMaxSpeed * ((edge - x) / edge).clamp(0.0, 1.0);
+    } else if (x > width - edge) {
+      _edgeSpeed =
+          _kEdgeMaxSpeed * ((x - (width - edge)) / edge).clamp(0.0, 1.0);
+    } else {
+      _edgeSpeed = 0;
+    }
+    if (_edgeSpeed == 0) {
+      _edgeTimer?.cancel();
+      _edgeTimer = null;
+    } else {
+      _edgeTimer ??= Timer.periodic(const Duration(milliseconds: 16), (_) {
+        if (widget.dragging?.value == null || !_cells.hasClients) {
+          _stopEdgeScroll();
+          return;
+        }
+        final p = _cells.position;
+        final next = (p.pixels + _edgeSpeed).clamp(
+          p.minScrollExtent,
+          p.maxScrollExtent,
+        );
+        if (next != p.pixels) _cells.jumpTo(next);
+      });
+    }
   }
 
   @override
   void dispose() {
+    widget.dragging?.removeListener(_dragChanged);
+    _edgeTimer?.cancel();
     _cells.dispose();
     _rows.dispose();
     _header.dispose();
@@ -526,7 +602,19 @@ class _PinnedGridState extends State<PinnedGrid> {
                 ),
               );
 
-        return SizedBox(
+        // Hears the pointer for the whole of a drag that starts on a grip in
+        // the header, wherever it goes - see [_pointerMoved].
+        //
+        // NO AUTOMATIC BARS. On a desktop every scroll view grows its own bar,
+        // which put a second one beside the frozen column and under the
+        // headings. The cells' two bars, hung above, are the only ones.
+        return Listener(
+          onPointerMove: _pointerMoved,
+          onPointerUp: (_) => _stopEdgeScroll(),
+          onPointerCancel: (_) => _stopEdgeScroll(),
+          child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: SizedBox(
           height: widget.headerHeight + viewHeight,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,6 +631,7 @@ class _PinnedGridState extends State<PinnedGrid> {
               ),
               Expanded(
                 child: Column(
+                  key: _view,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     SizedBox(
@@ -562,6 +651,8 @@ class _PinnedGridState extends State<PinnedGrid> {
                 ),
               ),
             ],
+          ),
+          ),
           ),
         );
       },

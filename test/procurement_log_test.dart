@@ -137,4 +137,69 @@ void main() {
     expect(sections.single.header, isNot(contains('Status')));
     expect(sections.single.header, contains('Company'));
   });
+
+  group('deleted and added columns', () {
+    test('a deleted column leaves the sheet, the device column never does',
+        () {
+      final project = BuildingProject(
+        procurement: [entry],
+        procurementHiddenColumns: ['status', 'device'],
+      );
+      final ids = [for (final c in project.procurementColumns) c.id];
+      expect(ids, isNot(contains('status')));
+      expect(ids, contains('device'));
+
+      final sections = procurementLogSections(
+        [entry],
+        columns: project.procurementColumns,
+      );
+      expect(sections.single.header, isNot(contains('Status')));
+      expect(sections.single.rows.single, isNot(contains('Submitted to DPR')));
+    });
+
+    test('an added column comes after the others, with each line\'s value',
+        () {
+      final line = entry.copyWith(custom: {'custom1': 'Q-1042'});
+      final project = BuildingProject(
+        procurement: [line],
+        procurementCustomColumns: [(id: 'custom1', label: 'Quote #')],
+      );
+      final columns = project.procurementColumns;
+      expect(columns.last.id, 'custom1');
+      expect(columns.last.label, 'Quote #');
+
+      final sections = procurementLogSections([line], columns: columns);
+      expect(sections.single.header.last, 'Quote #');
+      expect(sections.single.rows.single.last, 'Q-1042');
+      expect(
+        buildXlsx([procurementLogSheet('HIL', [line], columns: columns)]),
+        isNotEmpty,
+      );
+      expect(project.nextProcurementColumnId(), 'custom2');
+    });
+
+    test('both are kept with the project', () {
+      final project = BuildingProject(
+        procurement: [entry.copyWith(custom: {'custom1': 'Q-1042'})],
+        procurementHiddenColumns: ['review'],
+        procurementCustomColumns: [(id: 'custom1', label: 'Quote #')],
+      );
+      final back = BuildingProject.fromJson(project.toJson());
+      expect(back.procurementHiddenColumns, ['review']);
+      expect(back.procurementCustomColumns.single.label, 'Quote #');
+      expect(back.procurement.single.custom, {'custom1': 'Q-1042'});
+      expect(back.clone().procurementCustomColumns, hasLength(1));
+    });
+
+    test('an added column can be moved among the built-in ones', () {
+      final project = BuildingProject(
+        procurementColumnOrder: ['custom1', 'device'],
+        procurementCustomColumns: [(id: 'custom1', label: 'Quote #')],
+      );
+      expect(
+        [for (final c in project.procurementColumns) c.id].take(2),
+        ['custom1', 'device'],
+      );
+    });
+  });
 }

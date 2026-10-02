@@ -28,6 +28,7 @@ import 'project_history_view.dart' show ItemHistory;
 import 'project_reminders.dart';
 import 'project_schedule.dart';
 import 'stepped_date_picker.dart';
+import 'timeline_export_view.dart' show TimelineExportBar, TimelineJobList;
 import 'vendor_rfq_view.dart';
 
 /// ============================================================================
@@ -479,6 +480,8 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
     // drawn - at which point the parts arrive and the order dates with them.
     if (provider.project.manualRooms.isEmpty) {
       return [
+        SliverToBoxAdapter(child: TimelineExportBar(estimate: estimate)),
+        SliverToBoxAdapter(child: TimelineJobList(estimate: estimate)),
         // Draws only once there is a date on it, e.g. an install window.
         SliverToBoxAdapter(
           child: ProjectDateGraph(
@@ -507,12 +510,16 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
       ];
     }
     return [
+      SliverToBoxAdapter(child: TimelineExportBar(estimate: estimate)),
+      SliverToBoxAdapter(child: TimelineJobList(estimate: estimate)),
       const SliverToBoxAdapter(child: InstallWindowsCard()),
       ..._lifecycleSlivers(context, estimate, schedule),
     ];
   }
 
   return [
+    // Spreadsheet, list and picture - see timeline_export_view.dart.
+    SliverToBoxAdapter(child: TimelineExportBar(estimate: estimate)),
     // THE WHOLE JOB AS ONE LINE, before the counts and the cards it is made
     // of. See [ProjectDateGraph]: the dates below are a list, and a list is
     // the one shape that cannot show how far apart two dates are.
@@ -526,6 +533,8 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
     SliverToBoxAdapter(
       child: _TimelineSummary(schedule: schedule, provider: provider),
     ),
+    // Every note on the job list, dated or not.
+    SliverToBoxAdapter(child: TimelineJobList(estimate: estimate)),
     // WHEN EACH ROOM CAN BE WORKED ON, off the class schedule - see
     // install_window_finder.dart.
     const SliverToBoxAdapter(child: InstallWindowsCard()),

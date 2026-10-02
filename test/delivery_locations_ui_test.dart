@@ -19,6 +19,8 @@ import 'package:extron_configurator/project_view.dart';
 /// log, a tick that selects nothing, and a move that changes the rows without
 /// leaving anything behind saying where they had been.
 void main() {
+  // Every settings section open, so its fields can be found.
+  SettingsSection.startOpen = true;
   late Directory dir;
 
   setUp(() => dir = Directory.systemTemp.createTempSync('places_ui_'));
@@ -199,11 +201,19 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('edit_delivery_locations')),
-        400,
-        scrollable: find.byType(Scrollable).first,
-      );
+      // Scrolled by the list itself: a drag from the middle of the page can
+      // start on a text box, which takes the drag for itself.
+      final scroll = tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position;
+      while (find
+              .byKey(const ValueKey('edit_delivery_locations'))
+              .evaluate()
+              .isEmpty &&
+          scroll.pixels < scroll.maxScrollExtent) {
+        scroll.jumpTo(scroll.pixels + 400);
+        await tester.pump();
+      }
       // scrollUntilVisible stops as soon as the row EXISTS, which can leave it
       // half under the bottom edge - and a tap there lands on nothing. Where
       // it stops moves whenever anything above it on the tab changes height.

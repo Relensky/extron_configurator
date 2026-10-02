@@ -8,7 +8,9 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'building_project.dart';
 import 'color_wheel_picker.dart';
+import 'column_drag.dart';
 import 'file_dialogs.dart';
 import 'name_colors.dart' show kNameTintWheel;
 import 'pinned_grid.dart';
@@ -60,8 +62,16 @@ const List<_Col> _kCols = [
   (id: 'notes', label: 'Notes/Comments', width: 240),
 ];
 
-ProcurementColumnSpec _spec(String id) =>
-    kProcurementColumnSpecs.firstWhere((c) => c.id == id);
+/// How wide a column added on the job starts.
+const double _kCustomWidth = 160;
+
+/// A column's spec on [project]: built in, or added on the job.
+ProcurementColumnSpec _spec(BuildingProject project, String id) =>
+    kProcurementColumnSpecs.where((c) => c.id == id).firstOrNull ??
+    project.procurementColumns.firstWhere(
+      (c) => c.id == id,
+      orElse: () => (id: id, label: id, group: ProcurementGroup.notes),
+    );
 
 const double _kFrozen = 260;
 const double _kRow = 44;
@@ -240,14 +250,24 @@ class _Toolbar extends StatelessWidget {
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Add a line'),
           ),
+          OutlinedButton.icon(
+            key: const ValueKey('procurement_columns'),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => const _ColumnsDialog(),
+            ),
+            icon: const Icon(Icons.view_column_outlined, size: 18),
+            label: const Text('Columns'),
+          ),
           if (provider.hiddenProcurementCount > 0)
             OutlinedButton.icon(
               key: const ValueKey('procurement_restore'),
-              onPressed: provider.restoreHiddenProcurement,
-              icon: const Icon(Icons.visibility_outlined, size: 18),
-              label: Text(
-                'Put back ${provider.hiddenProcurementCount} removed',
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const _RestoreRoomsDialog(),
               ),
+              icon: const Icon(Icons.playlist_add, size: 18),
+              label: const Text('Add rooms back'),
             ),
           if (entries.isNotEmpty) ...[
             OutlinedButton.icon(
@@ -314,6 +334,18 @@ class _LogGridState extends State<_LogGrid> {
   static const double _kMinWidth = 60;
   static const double _kMaxWidth = 700;
 
+  /// The column being dragged by its grip, or null.
+  final ValueNotifier<String?> _columnDrag = ValueNotifier(null);
+
+  /// Room sections folded to their heading band, by room.
+  final Set<String> _foldedRooms = {};
+
+  @override
+  void dispose() {
+    _columnDrag.dispose();
+    super.dispose();
+  }
+
   /// A column's width before zoom: dragged, kept with the job, or its usual.
   double _baseWidth(String id, double usual) =>
       _dragWidths[id] ??
@@ -327,12 +359,13 @@ class _LogGridState extends State<_LogGrid> {
 
   Widget _sheet(BuildContext context, double available) {
     final theme = Theme.of(context);
-    final order = context.watch<AppStateProvider>().project.procurementColumnOrder;
+    final project = context.watch<AppStateProvider>().project;
     _cols = [
-      for (final spec in orderedProcurementColumns(order))
-        if (spec.id != 'device')
+      for (final spec in project.procurementColumns)
+        if (spec.id != kProcurementFixedColumn)
           () {
-            final c = _kCols.firstWhere((c) => c.id == spec.id);
+            final c = _kCols.where((c) => c.id == spec.id).firstOrNull ??
+                (id: spec.id, label: spec.label, width: _kCustomWidth);
             return (id: c.id, label: c.label, width: _baseWidth(c.id, c.width));
           }(),
     ];
@@ -346,13 +379,18 @@ class _LogGridState extends State<_LogGrid> {
     final zoomed = zoomedTextTheme(theme, zoom);
     double w(double base) => gridMetric(context, base) * zoom;
 
+    final groups = procurementByRoom(widget.entries);
     final rows = <_Row>[
-      for (final g in procurementByRoom(widget.entries)) ...[
+      for (final g in groups) ...[
         (room: g.room, count: g.entries.length, entry: null, index: 0),
-        for (final (i, e) in g.entries.indexed)
-          (room: g.room, count: 0, entry: e, index: i),
+        // A folded room is its band alone.
+        if (!_foldedRooms.contains(g.room))
+          for (final (i, e) in g.entries.indexed)
+            (room: g.room, count: 0, entry: e, index: i),
       ],
     ];
+    final allFolded =
+        groups.isNotEmpty && groups.every((g) => _foldedRooms.contains(g.room));
     final rowH = w(_kRow);
     final bodyWidth = _cols.fold<double>(0, (s, c) => s + w(c.width));
 
@@ -373,13 +411,29 @@ class _LogGridState extends State<_LogGrid> {
                 child: Text(
                   'Press a line to edit it. Press a status or a date to '
                   'change just that. Drag a heading by its grip to move the '
-                  'column, or press it to change its color. Shift and the '
-                  'mouse wheel scroll sideways.',
+                  'column, or press it to rename, recolor or delete it. Shift '
+                  'and the mouse wheel scroll sideways.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
+              TextButton.icon(
+                key: const ValueKey('procurement_fold_all'),
+                icon: Icon(
+                  allFolded ? Icons.unfold_more : Icons.unfold_less,
+                  size: 18,
+                ),
+                label: Text(allFolded ? 'Expand all' : 'Collapse all'),
+                onPressed: () => setState(() {
+                  if (allFolded) {
+                    _foldedRooms.clear();
+                  } else {
+                    _foldedRooms.addAll([for (final g in groups) g.room]);
+                  }
+                }),
+              ),
+              const SizedBox(width: 8),
               GridZoomControls(
                 keyPrefix: 'procurement',
                 zoom: zoom,
@@ -400,6 +454,7 @@ class _LogGridState extends State<_LogGrid> {
             child: LayoutBuilder(
               builder: (context, frame) => PinnedGrid(
             key: const ValueKey('procurement_grid'),
+            dragging: _columnDrag,
             maxHeight: frame.maxHeight,
             frozenWidth: w(frozenBase),
             headerHeight: w(_kHead),
@@ -462,7 +517,13 @@ class _LogGridState extends State<_LogGrid> {
           top: 0,
           bottom: 0,
           width: 8,
-          child: MouseRegion(
+          // Out of the way while a column is being moved, so a drop on the
+          // edge still lands.
+          child: ValueListenableBuilder<String?>(
+            valueListenable: _columnDrag,
+            builder: (context, moving, child) =>
+                IgnorePointer(ignoring: moving != null, child: child),
+            child: MouseRegion(
             cursor: SystemMouseCursors.resizeColumn,
             child: GestureDetector(
               key: ValueKey('procurement_resize_$id'),
@@ -488,6 +549,7 @@ class _LogGridState extends State<_LogGrid> {
                   .setProcurementColumnWidth(id, null),
             ),
           ),
+          ),
         ),
       ],
     ),
@@ -503,24 +565,15 @@ class _LogGridState extends State<_LogGrid> {
   }) {
     final box = _colorBox(zoomed, id, label, width, w, movable: movable);
     if (!movable) return box;
-    return DragTarget<String>(
-      onWillAcceptWithDetails: (d) => d.data != id,
-      onAcceptWithDetails: (d) =>
-          context.read<AppStateProvider>().moveProcurementColumn(d.data, id),
-      // Drawn over the heading, not around it, so the row does not widen.
-      builder: (context, candidate, _) => Container(
-        foregroundDecoration: candidate.isEmpty
-            ? null
-            : BoxDecoration(
-                border: Border(
-                  left: BorderSide(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 3,
-                  ),
-                ),
-              ),
-        child: box,
-      ),
+    // The half it is dropped on says which side it lands - see
+    // column_drag.dart.
+    return ColumnDropTarget(
+      id: id,
+      dragging: _columnDrag,
+      onDrop: (dragged, after) => context
+          .read<AppStateProvider>()
+          .moveProcurementColumn(dragged, id, after: after),
+      child: box,
     );
   }
 
@@ -533,8 +586,9 @@ class _LogGridState extends State<_LogGrid> {
     bool movable = false,
   }) {
     final provider = context.watch<AppStateProvider>();
+    final spec = _spec(provider.project, id);
     final fill = procurementColumnColor(
-      _spec(id),
+      spec,
       provider.project.procurementColors,
     );
     final c = (fill: Color(fill), ink: Color(procurementInkFor(fill)));
@@ -547,12 +601,12 @@ class _LogGridState extends State<_LogGrid> {
       child: Padding(
         padding: EdgeInsets.all(_kGap),
         child: Tooltip(
-          message: 'Press to rename this column or change its color',
+          message: 'Press to rename, recolor or delete this column',
           waitDuration: const Duration(milliseconds: 600),
           child: InkWell(
           key: ValueKey('procurement_head_$id'),
           borderRadius: BorderRadius.circular(6),
-          onTap: () => showProcurementColumnDialog(context, _spec(id)),
+          onTap: () => showProcurementColumnDialog(context, spec),
           child: DecoratedBox(
           decoration: BoxDecoration(
             color: c.fill,
@@ -582,35 +636,20 @@ class _LogGridState extends State<_LogGrid> {
                   left: 0,
                   top: 0,
                   bottom: 0,
-                  child: Draggable<String>(
+                  child: ColumnDragGrip(
                     key: ValueKey('procurement_grip_$id'),
-                    data: id,
-                    dragAnchorStrategy: pointerDragAnchorStrategy,
-                    feedback: Material(
-                      elevation: 4,
-                      color: c.fill,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            color: c.ink,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.grab,
-                      child: Tooltip(
-                        message: 'Drag to move this column',
-                        child: Icon(
-                          Icons.drag_indicator,
-                          size: w(16),
-                          color: c.ink.withValues(alpha: 0.7),
-                        ),
+                    id: id,
+                    label: label,
+                    width: width,
+                    dragging: _columnDrag,
+                    fill: c.fill,
+                    ink: c.ink,
+                    child: Tooltip(
+                      message: 'Drag to move this column',
+                      child: Icon(
+                        Icons.drag_indicator,
+                        size: w(16),
+                        color: c.ink.withValues(alpha: 0.7),
                       ),
                     ),
                   ),
@@ -695,10 +734,26 @@ class _LogGridState extends State<_LogGrid> {
           color: _rowFill(theme, row),
           border: _rule(theme),
         ),
-        padding: EdgeInsets.only(left: w(10)),
+        padding: EdgeInsets.only(left: w(2)),
         alignment: Alignment.centerLeft,
         child: Row(
           children: [
+            // The room folds to this band, and opens again.
+            IconButton(
+              key: ValueKey('procurement_fold_${row.room}'),
+              tooltip: _foldedRooms.contains(row.room) ? 'Expand' : 'Collapse',
+              visualDensity: VisualDensity.compact,
+              iconSize: w(18),
+              color: theme.colorScheme.onPrimaryContainer,
+              icon: Icon(
+                _foldedRooms.contains(row.room)
+                    ? Icons.chevron_right
+                    : Icons.expand_more,
+              ),
+              onPressed: () => setState(() {
+                if (!_foldedRooms.remove(row.room)) _foldedRooms.add(row.room);
+              }),
+            ),
             Expanded(
               child: Text(
                 '${row.room.isEmpty ? 'No room' : row.room}  ·  ${row.count} '
@@ -873,9 +928,31 @@ class _LogGridState extends State<_LogGrid> {
       text(entry.notes),
     ];
 
-    final byId = {
+    final byId = <String, Widget>{
       for (final (i, col) in _kCols.indexed) col.id: cells[i],
     };
+    // A column added on the job: pressed, its value is typed right there.
+    Widget custom(String id) {
+      final value = entry.custom[id] ?? '';
+      return InkWell(
+        key: ValueKey('procurement_custom_${id}_${entry.id}'),
+        borderRadius: BorderRadius.circular(6),
+        onTap: () async {
+          final label = procurementColumnLabel(
+            _spec(provider.project, id),
+            provider.project.procurementColumnLabels,
+          );
+          final typed = await _askText(context, label, value);
+          if (typed == null) return;
+          provider.updateProcurementEntry(
+            entry.copyWith(custom: {...entry.custom, id: typed}),
+          );
+        },
+        child: SizedBox.expand(
+          child: Align(alignment: Alignment.centerLeft, child: text(value)),
+        ),
+      );
+    }
     return Material(
       color: _rowFill(theme, row) ?? Colors.transparent,
       child: InkWell(
@@ -898,7 +975,7 @@ class _LogGridState extends State<_LogGrid> {
                       ),
                     ),
                   ),
-                  child: byId[col.id],
+                  child: byId[col.id] ?? custom(col.id),
                 ),
             ],
           ),
@@ -1159,6 +1236,20 @@ Future<ProcurementEntry?> showProcurementEditor(
   final review = TextEditingController(text: entry.reviewTime);
   final lead = TextEditingController(text: entry.leadTime);
   final notes = TextEditingController(text: entry.notes);
+  // Fields only for the columns this job shows; what a deleted one held is
+  // kept on the line as it was.
+  final project = context.read<AppStateProvider>().project;
+  final columns = project.procurementColumns;
+  final shownIds = {for (final c in columns) c.id};
+  bool shows(String id) => shownIds.contains(id);
+  final custom = {
+    for (final c in columns)
+      if (procurementColumnIsCustom(c.id))
+        c.id: (
+          label: procurementColumnLabel(c, project.procurementColumnLabels),
+          text: TextEditingController(text: entry.custom[c.id] ?? ''),
+        ),
+  };
   var status = entry.status;
   var p6Start = entry.p6Start;
   var submitBy = entry.submitBy;
@@ -1223,7 +1314,8 @@ Future<ProcurementEntry?> showProcurementEditor(
                 spacing: 16,
                 runSpacing: 12,
                 children: [
-                  field(company, 'Company', presets: kProcurementCompanies),
+                  if (shows('company'))
+                    field(company, 'Company', presets: kProcurementCompanies),
                   if (entry.linked)
                     SizedBox(
                       width: 536,
@@ -1242,7 +1334,9 @@ Future<ProcurementEntry?> showProcurementEditor(
                     field(room, 'Room #'),
                     field(device, 'Device', width: 536),
                   ],
-                  field(description, 'Equipment description', width: 536),
+                  if (shows('description'))
+                    field(description, 'Equipment description', width: 536),
+                  if (shows('status') || shows('released'))
                   SizedBox(
                     width: 260,
                     child: DropdownButtonFormField<ProcurementStatus>(
@@ -1268,17 +1362,22 @@ Future<ProcurementEntry?> showProcurementEditor(
                       }),
                     ),
                   ),
-                  field(statusTo, 'Who it goes to (e.g. DPR)'),
-                  field(
-                    phase,
-                    'Install before drywall or after paint?',
-                    presets: kProcurementInstallPhases,
-                  ),
-                  field(lead, 'Lead time (weeks)'),
-                  field(p6Id, 'P6 activity ID'),
-                  field(review, 'Review time'),
-                  field(p6Desc, 'P6 activity description', width: 536),
-                  date('P6 start date', p6Start, (v) => p6Start = v),
+                  if (shows('status'))
+                    field(statusTo, 'Who it goes to (e.g. DPR)'),
+                  if (shows('phase'))
+                    field(
+                      phase,
+                      'Install before drywall or after paint?',
+                      presets: kProcurementInstallPhases,
+                    ),
+                  if (shows('lead')) field(lead, 'Lead time (weeks)'),
+                  if (shows('p6Id')) field(p6Id, 'P6 activity ID'),
+                  if (shows('review')) field(review, 'Review time'),
+                  if (shows('p6Description'))
+                    field(p6Desc, 'P6 activity description', width: 536),
+                  if (shows('p6Start') || shows('onSite'))
+                    date('P6 start date', p6Start, (v) => p6Start = v),
+                  if (shows('onSite'))
                   SizedBox(
                     width: 260,
                     child: InputDecorator(
@@ -1292,11 +1391,28 @@ Future<ProcurementEntry?> showProcurementEditor(
                       ),
                     ),
                   ),
-                  date('Date to be submitted', submitBy, (v) => submitBy = v),
-                  date('Actual release date', releasedOn,
-                      (v) => releasedOn = v),
-                  date('Estimated delivery', delivery, (v) => delivery = v),
-                  field(notes, 'Notes/comments', width: 536, maxLines: 3),
+                  if (shows('submitBy'))
+                    date('Date to be submitted', submitBy,
+                        (v) => submitBy = v),
+                  if (shows('releasedOn'))
+                    date('Actual release date', releasedOn,
+                        (v) => releasedOn = v),
+                  if (shows('delivery'))
+                    date('Estimated delivery', delivery, (v) => delivery = v),
+                  if (shows('notes'))
+                    field(notes, 'Notes/comments', width: 536, maxLines: 3),
+                  for (final c in custom.entries)
+                    SizedBox(
+                      width: 260,
+                      child: TextField(
+                        key: ValueKey('procurement_editor_${c.key}'),
+                        controller: c.value.text,
+                        decoration: InputDecoration(
+                          labelText: c.value.label,
+                          isDense: true,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1330,6 +1446,10 @@ Future<ProcurementEntry?> showProcurementEditor(
                   roomId: entry.roomId,
                   lineKey: entry.lineKey,
                   excluded: entry.excluded,
+                  custom: {
+                    ...entry.custom,
+                    for (final c in custom.entries) c.key: c.value.text.text,
+                  },
                 ),
               ),
               child: const Text('Save'),
@@ -1363,8 +1483,8 @@ Future<void> _exportSpreadsheet(BuildContext context) async {
           project.name,
           liveProcurement(project, provider.priceProject()),
           colors: project.procurementColors,
-          order: project.procurementColumnOrder,
           labels: project.procurementColumnLabels,
+          columns: project.procurementColumns,
         ),
       ]),
     );
@@ -1496,6 +1616,28 @@ Future<void> showProcurementColumnDialog(
             ),
           ),
           actions: [
+            if (column.id != kProcurementFixedColumn)
+              TextButton.icon(
+                key: const ValueKey('procurement_column_delete'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(ctx).colorScheme.error,
+                ),
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: const Text('Delete column'),
+                onPressed: () async {
+                  final go = await _confirmColumnDelete(
+                    ctx,
+                    procurementColumnLabel(
+                      column,
+                      provider.project.procurementColumnLabels,
+                    ),
+                    added: procurementColumnIsCustom(column.id),
+                  );
+                  if (go != true || !ctx.mounted) return;
+                  provider.deleteProcurementColumn(column.id);
+                  Navigator.of(ctx).pop();
+                },
+              ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('Done'),
@@ -1505,6 +1647,328 @@ Future<void> showProcurementColumnDialog(
       },
     ),
   );
+}
+
+/// Asks before a column goes. An added one takes what the lines said in it.
+Future<bool?> _confirmColumnDelete(
+  BuildContext context,
+  String label, {
+  required bool added,
+}) => showDialog<bool>(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    title: Text('Delete "$label"?'),
+    content: Text(
+      added
+          ? 'The column comes off the log, along with what every line says '
+                'in it.'
+          : 'The column comes off the log, the picture and the spreadsheet. '
+                'What the lines say in it is kept, and it can be put back '
+                'from Columns.',
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(ctx).pop(false),
+        child: const Text('Keep it'),
+      ),
+      FilledButton(
+        key: const ValueKey('procurement_column_delete_go'),
+        onPressed: () => Navigator.of(ctx).pop(true),
+        child: const Text('Delete'),
+      ),
+    ],
+  ),
+);
+
+/// Asks for one line of text. Null when canceled.
+Future<String?> _askText(BuildContext context, String label, String initial) {
+  final text = TextEditingController(text: initial);
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(label),
+      content: SizedBox(
+        width: 360,
+        child: TextField(
+          key: const ValueKey('procurement_text_field'),
+          controller: text,
+          autofocus: true,
+          decoration: InputDecoration(labelText: label, isDense: true),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('procurement_text_save'),
+          onPressed: () => Navigator.of(ctx).pop(text.text.trim()),
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+//  COLUMNS AND ROOMS
+// ---------------------------------------------------------------------------
+
+/// Every column on the log: built-in ones ticked on or off, added ones
+/// deleted, new ones added, or all of them deleted to start again.
+class _ColumnsDialog extends StatefulWidget {
+  const _ColumnsDialog();
+
+  @override
+  State<_ColumnsDialog> createState() => _ColumnsDialogState();
+}
+
+class _ColumnsDialogState extends State<_ColumnsDialog> {
+  final _name = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _add(AppStateProvider provider) {
+    final name = _name.text.trim();
+    if (name.isEmpty) return;
+    provider.addProcurementColumn(name);
+    _name.clear();
+  }
+
+  Future<void> _deleteAll(AppStateProvider provider) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete every column?'),
+        content: const Text(
+          'Every column but Device comes off the log, so it can be built up '
+          'again from scratch. Added columns go with what the lines say in '
+          'them; built-in ones can be ticked back on here. The lines stay.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep them'),
+          ),
+          FilledButton(
+            key: const ValueKey('procurement_columns_delete_all_go'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete all'),
+          ),
+        ],
+      ),
+    );
+    if (go == true) provider.deleteAllProcurementColumns();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final project = provider.project;
+    final theme = Theme.of(context);
+    final hidden = project.procurementHiddenColumns.toSet();
+    final labels = project.procurementColumnLabels;
+    return AlertDialog(
+      key: const ValueKey('procurement_columns_dialog'),
+      title: const Text('Columns'),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Built in', style: theme.textTheme.titleSmall),
+              for (final c in kProcurementColumnSpecs)
+                CheckboxListTile(
+                  key: ValueKey('procurement_column_shown_${c.id}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: c.id == kProcurementFixedColumn ||
+                      !hidden.contains(c.id),
+                  title: Text(procurementColumnLabel(c, labels)),
+                  subtitle: c.id == kProcurementFixedColumn
+                      ? const Text('Always on: it names the line')
+                      : null,
+                  onChanged: c.id == kProcurementFixedColumn
+                      ? null
+                      : (v) => provider.setProcurementColumnShown(
+                          c.id,
+                          v ?? false,
+                        ),
+                ),
+              const SizedBox(height: 12),
+              Text('Added on this job', style: theme.textTheme.titleSmall),
+              if (project.procurementCustomColumns.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text(
+                    'None yet.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              for (final c in project.procurementCustomColumns)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    procurementColumnLabel(
+                      (id: c.id, label: c.label, group: ProcurementGroup.notes),
+                      labels,
+                    ),
+                  ),
+                  trailing: IconButton(
+                    key: ValueKey('procurement_column_remove_${c.id}'),
+                    tooltip: 'Delete this column',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () async {
+                      final go = await _confirmColumnDelete(
+                        context,
+                        c.label,
+                        added: true,
+                      );
+                      if (go == true) provider.deleteProcurementColumn(c.id);
+                    },
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('procurement_column_new'),
+                      controller: _name,
+                      decoration: const InputDecoration(
+                        labelText: 'New column',
+                        hintText: 'e.g. Vendor quote #',
+                        isDense: true,
+                      ),
+                      onSubmitted: (_) => _add(provider),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('procurement_column_add'),
+                    onPressed: () => _add(provider),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          key: const ValueKey('procurement_columns_delete_all'),
+          style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+          icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+          label: const Text('Delete all'),
+          onPressed: () => _deleteAll(provider),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
+
+/// The rooms with lines taken off the log, ticked to put back.
+class _RestoreRoomsDialog extends StatefulWidget {
+  const _RestoreRoomsDialog();
+
+  @override
+  State<_RestoreRoomsDialog> createState() => _RestoreRoomsDialogState();
+}
+
+class _RestoreRoomsDialogState extends State<_RestoreRoomsDialog> {
+  final Set<String> _picked = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final rooms = provider.hiddenProcurementRooms;
+    final all = rooms.isNotEmpty && _picked.length == rooms.length;
+    return AlertDialog(
+      key: const ValueKey('procurement_restore_dialog'),
+      title: const Text('Add rooms back to the log'),
+      content: SizedBox(
+        width: 400,
+        child: rooms.isEmpty
+            ? const Text('No room has lines taken off the log.')
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CheckboxListTile(
+                      key: const ValueKey('procurement_restore_all'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: all,
+                      title: const Text('All rooms'),
+                      onChanged: (v) => setState(() {
+                        _picked.clear();
+                        if (v == true) _picked.addAll(rooms.map((r) => r.key));
+                      }),
+                    ),
+                    const Divider(height: 8),
+                    for (final r in rooms)
+                      CheckboxListTile(
+                        key: ValueKey('procurement_restore_${r.key}'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: _picked.contains(r.key),
+                        title: Text(r.room.isEmpty ? 'No room' : r.room),
+                        subtitle: Text(
+                          '${r.lines} line${r.lines == 1 ? '' : 's'}',
+                        ),
+                        onChanged: (v) => setState(() {
+                          if (v == true) {
+                            _picked.add(r.key);
+                          } else {
+                            _picked.remove(r.key);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('procurement_restore_go'),
+          onPressed: _picked.isEmpty
+              ? null
+              : () {
+                  provider.restoreHiddenProcurement(rooms: _picked);
+                  Navigator.of(context).pop();
+                },
+          child: Text(
+            _picked.isEmpty
+                ? 'Add back'
+                : 'Add back ${_picked.length} room'
+                      '${_picked.length == 1 ? '' : 's'}',
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1615,8 +2079,8 @@ class _ProcurementImageDialogState extends State<_ProcurementImageDialog> {
                 context.read<AppStateProvider>().priceProject(),
               ),
               colors: project.procurementColors,
-              order: project.procurementColumnOrder,
               labels: project.procurementColumnLabels,
+              columns: project.procurementColumns,
             ),
           ),
         ),
@@ -1656,6 +2120,10 @@ class ProcurementLogPicture extends StatelessWidget {
   final List<String> order;
   final Map<String, String> labels;
 
+  /// The job's columns - see [BuildingProject.procurementColumns]. [order]
+  /// is used when there are none.
+  final List<ProcurementColumnSpec>? columns;
+
   const ProcurementLogPicture({
     super.key,
     required this.title,
@@ -1663,6 +2131,7 @@ class ProcurementLogPicture extends StatelessWidget {
     required this.colors,
     this.order = const [],
     this.labels = const {},
+    this.columns,
   });
 
   static const double _wide = 180;
@@ -1684,7 +2153,9 @@ class ProcurementLogPicture extends StatelessWidget {
     const line = BorderSide(color: Color(0xFFBDBDBD), width: 0.5);
 
     double widthOf(ProcurementColumnSpec c) =>
-        _wideIds.contains(c.id) ? _wide : _narrow;
+        _wideIds.contains(c.id) || procurementColumnIsCustom(c.id)
+        ? _wide
+        : _narrow;
 
     Widget cell(String text, double width, {Color? fill, TextStyle? style}) =>
         Container(
@@ -1721,7 +2192,7 @@ class ProcurementLogPicture extends StatelessWidget {
       );
     }
 
-    final columns = orderedProcurementColumns(order);
+    final columns = this.columns ?? orderedProcurementColumns(order);
 
     Widget entryRow(ProcurementEntry e, int i) {
       final values = procurementValues(e);

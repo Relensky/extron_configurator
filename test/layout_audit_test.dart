@@ -76,6 +76,8 @@ Set<String> squeezedButtonLabels(WidgetTester tester) {
 }
 
 void main() {
+  // Every settings section open, so its fields can be found.
+  SettingsSection.startOpen = true;
   late Directory dir;
 
   setUp(() => dir = Directory.systemTemp.createTempSync('rcb_layout_'));

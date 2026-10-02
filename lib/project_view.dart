@@ -838,6 +838,16 @@ class _ProjectViewState extends State<ProjectView> {
           const SizedBox(height: 10),
           _identity(provider, compact: compact),
           const SizedBox(height: 10),
+          // Rooms saved since the job last read them, found on the way in -
+          // said once, so a total that differs from last time is explained.
+          if (provider.roomsChangedOnOpen.isNotEmpty) ...[
+            _RoomsChangedNotice(
+              changes: provider.roomsChangedOnOpen,
+              currency: estimate.currency,
+              onDismiss: provider.dismissRoomsChangedOnOpen,
+            ),
+            const SizedBox(height: 10),
+          ],
           // A Wrap rather than a Row: the strip is five items of text whose
           // width is whatever the figures happen to be, and a project total in
           // the millions on a laptop would otherwise push the last chip off
@@ -1422,6 +1432,80 @@ Future<void> showPartPriceDialog(
           result.failures.isEmpty ? null : snackErrorFillOn(messenger),
     ),
   );
+}
+
+/// The rooms whose totals moved since the job was last opened, and by how
+/// much. The project file already records the new figures.
+class _RoomsChangedNotice extends StatelessWidget {
+  final List<({String room, double before, double after})> changes;
+  final String currency;
+  final VoidCallback onDismiss;
+
+  const _RoomsChangedNotice({
+    required this.changes,
+    required this.currency,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      key: const ValueKey('project_rooms_changed'),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              Icons.update,
+              size: 20,
+              color: scheme.onSecondaryContainer,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${changes.length} room${changes.length == 1 ? '' : 's'} '
+                  'changed since this job was last opened. The totals below '
+                  'are current, and the project file has been updated.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                for (final c in changes)
+                  Text(
+                    '${c.room}: ${formatMoney(c.before, currency)} '
+                    '→ ${formatMoney(c.after, currency)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSecondaryContainer,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('project_rooms_changed_dismiss'),
+            tooltip: 'Dismiss',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.close, color: scheme.onSecondaryContainer),
+            onPressed: onDismiss,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // A labeled figure in the header strip.

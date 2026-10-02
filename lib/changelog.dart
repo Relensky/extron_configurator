@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.34+44';
+const String kAppVersion = '0.5.43+53';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,179 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.43',
+    date: 'October 1, 2026',
+    title: 'Original app icon restored',
+    changes: [
+      'The app icon is back to the original hard hat and gear.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.42',
+    date: 'October 1, 2026',
+    title: 'Calendar invites easier to find',
+    changes: [
+      'Every open To-do shows "Calendar invite" beside its date, on the To do '
+          'list and on the timeline\'s job list - add it to your calendar or '
+          'email it as an invite.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.41',
+    date: 'October 1, 2026',
+    title: 'Settings errors fixed, and up to five people editing at once',
+    changes: [
+      'Fixed: opening and shutting a Settings section, then scrolling, made '
+          'the text boxes in it fail - a stream of errors, and boxes that '
+          'could not be clicked or typed in.',
+      'Each room on the procurement log folds to its heading, with Collapse '
+          'all and Expand all.',
+      'The profile holds your name, email and avatar; the theme, colors and '
+          'sizes are back in App Config under Appearance.',
+      'Out of the box the app works from its own folder, devices and '
+          'documentation included. First-Time Setup says whether the file '
+          'server can be reached, and Set to file server only works when it '
+          'can.',
+      'Combining saves no longer treats the defaults a room is given when it '
+          'opens as somebody\'s edit, and never joins two short values such as '
+          'room numbers - only notes and other text are kept side by side.',
+      'History, completed and deleted notes are signed with the same name as '
+          'the editing chips.',
+      'With more than three people editing, the top bar shows three and a '
+          '+N list of the rest. Each person\'s chip and list entry says which '
+          'room they have open and which tab they are on.',
+      'Long options in the System and Devices drop-downs are cut short with '
+          'an ellipsis instead of running past the box.',
+      'A blank av_flow_rules.json is installed with the app.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.40',
+    date: 'October 1, 2026',
+    title: 'Settings in sections, your profile, and deliveries on the order',
+    changes: [
+      'Settings are in sections that fold open and shut: deployment target, '
+          'pricing, editing behavior, updates, autosave, logging, files and '
+          'folders, working together, data files, shared lists and the '
+          'processor connection. Logging has a section of its own.',
+      'A profile button beside the gear shows your avatar, name and email, '
+          'and opens your profile or Application Configuration. Your name, '
+          'email, avatar, theme, colors and sizes are set in your profile.',
+      'Hovering over someone who has the same file open shows their avatar '
+          'large.',
+      'The devices and documentation folders on the file server are the '
+          'default for everybody who can reach it, whatever their Root '
+          'Folder.',
+      'Each purchase order on the Deliveries page folds to its heading, with '
+          'Collapse all and Expand all.',
+      'Logging a delivery of a part puts its PO on that part\'s order on the '
+          'Equipment list, and marks it arrived once the whole quantity is in.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.39',
+    date: 'October 1, 2026',
+    title: 'Combining saves keeps everybody\'s work; reminders, attachments '
+        'and avatars',
+    changes: [
+      'On the job list, Add lights up as soon as you start typing.',
+      'A job note can be sent out as a calendar reminder: Add to my '
+          'calendar opens it in Outlook, and Email as invite opens a new '
+          'email with it attached. A note with no date asks for one.',
+      'Pictures and documents can be attached to a job note. They are '
+          'copied into a folder beside the project file; pictures and PDFs '
+          'open in the app, anything else in its own program.',
+      'Merges and saves of shared files now wait their turn instead of '
+          'running together, with a Syncing chip while they work. Bringing '
+          'in somebody else\'s project save no longer re-reads every room.',
+      'On the Cost tab the tax name, tax rate and PDF boxes sit in one '
+          'line; the rate\'s note no longer pushes its box down.',
+      'Combining somebody else\'s save keeps everybody\'s new items: two '
+          'notes, lines or rooms added at the same time are both kept, where '
+          'one of them used to be lost.',
+      'The combine window says in plain words what was changed, and keeps '
+          'both versions wherever it can. Where it cannot, each one has to be '
+          'chosen before Combine - nobody\'s work is thrown away by default.',
+      'The history has a Finished tasks tab: every completed or deleted '
+          'job-list note, grouped by who finished it, with a filter for one '
+          'person.',
+      'Setting a note to Waiting on asks what it is waiting for, and takes '
+          'files to go with it. The reason shows on the note.',
+      'The timeline lists every job-list note, dated or not, and exports as '
+          'a spreadsheet, a list (copied or saved) or a picture.',
+      'App Config has Your avatar: a picture shown instead of your initials '
+          'when others have the same file open. It is kept in the Root '
+          'Folder\'s assets\\avatars - on the file share when that is the '
+          'root.',
+      'The Root Folder starts with av_flow_rules.json (blank, or the one '
+          'installed with the app) and the devices and documentation '
+          'folders, filled from the installed copies.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.38',
+    date: 'October 1, 2026',
+    title: 'Room for the scroll bar on First-Time Setup',
+    changes: [
+      'First-Time Setup leaves room on the right for its scroll bar, so it '
+          'no longer sits on the Browse buttons.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.37',
+    date: 'October 1, 2026',
+    title: 'Setup starts on the app\'s own folder, with the file server a press away',
+    changes: [
+      'A new install starts with the Root Folder on the app\'s own folder. '
+          'First-Time Setup shows the file server\'s Configurator_Files '
+          'folder with a Set to file server button. An install already '
+          'reading from the file server stays on it.',
+      'Until a first file has been opened, the Open dialog starts in the '
+          'Projects folder on the file server.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.36',
+    date: 'October 1, 2026',
+    title: 'The project total holds still while a room opens',
+    changes: [
+      'Opening a room from a project no longer makes the total jump up and '
+          'back down. While the room is loading it is counted as its file '
+          'says, and from memory once it has loaded.',
+      'The Procurement and Responsibility grids show one scroll bar down '
+          'the right and one along the bottom, instead of an extra pair '
+          'beside the room column and under the headings.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.35',
+    date: 'October 1, 2026',
+    title: 'A steady project total; your own procurement columns',
+    changes: [
+      'The project total no longer jumps when a room is opened. Opening a '
+          'room reads again only the rooms whose files have changed.',
+      'Opening a project checks every room\'s files and records what each '
+          'room priced at in the project file. When rooms changed since the '
+          'last time, the Project tab names them with their old and new '
+          'totals.',
+      'Rooms at a priority that buys only some items, or that adds items, '
+          'are taxed at the job\'s rate again. They had been quoted with no '
+          'tax.',
+      'The procurement log\'s Columns button adds your own columns, deletes '
+          'built-in ones and ticks them back on, and has Delete all to start '
+          'the columns over. Added columns are saved with the project, filled '
+          'in by pressing a cell, and go into the picture and the '
+          'spreadsheet.',
+      'A column can also be deleted from its heading.',
+      'Add rooms back lists the rooms taken off the procurement log with a '
+          'check box each, so only the ones ticked come back.',
+      'Moving a column on the Procurement and Responsibility pages is '
+          'smoother: the line shows which side it will land, the sheet '
+          'scrolls when the column is held near an edge, and a drop on a '
+          'heading\'s edge still lands.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.34',
     date: 'October 1, 2026',

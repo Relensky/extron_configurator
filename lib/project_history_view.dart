@@ -308,6 +308,226 @@ const List<String> _months = [
 ];
 
 // ---------------------------------------------------------------------------
+//  FINISHED TASKS
+// ---------------------------------------------------------------------------
+
+/// One note that left the open list: completed (still listed, or cleared
+/// since) or deleted while open.
+typedef FinishedTask = ({
+  ProjectTodo todo,
+  bool completed,
+
+  /// Who it counts for: whoever completed it, else whoever deleted it.
+  String by,
+
+  /// When it was completed, or deleted.
+  DateTime at,
+
+  /// Who took it off the list, when somebody did; '' while it is still on.
+  String removedBy,
+});
+
+/// Every finished note on [project], newest first.
+List<FinishedTask> finishedTasks(BuildingProject project) {
+  final out = <FinishedTask>[
+    for (final t in project.todos)
+      if (t.isDone)
+        (
+          todo: t,
+          completed: true,
+          by: t.completedBy,
+          at: t.completed ?? t.created,
+          removedBy: '',
+        ),
+    for (final a in project.todoArchive)
+      (
+        todo: a.todo,
+        completed: a.wasCompleted,
+        by: a.by,
+        at: a.wasCompleted ? (a.todo.completed ?? a.removedAt) : a.removedAt,
+        removedBy: a.removedBy,
+      ),
+  ];
+  out.sort((a, b) => b.at.compareTo(a.at));
+  return out;
+}
+
+/// The job list's completed and deleted notes, grouped under the person who
+/// finished each one, with a filter for one person.
+class FinishedTasksPane extends StatefulWidget {
+  final BuildingProject project;
+
+  const FinishedTasksPane({super.key, required this.project});
+
+  @override
+  State<FinishedTasksPane> createState() => _FinishedTasksPaneState();
+}
+
+class _FinishedTasksPaneState extends State<FinishedTasksPane> {
+  /// One person, or null for everybody.
+  String? _person;
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  static String _name(String user) => user.isEmpty ? 'Not recorded' : user;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final all = finishedTasks(widget.project);
+    if (all.isEmpty) {
+      return Padding(
+        padding: _headerPad,
+        child: Text(
+          'Nothing finished yet. Notes ticked off or deleted on the job list '
+          'are kept here, under the login of whoever finished them.',
+          style: theme.textTheme.bodySmall?.copyWith(color: muted),
+        ),
+      );
+    }
+
+    // People in order of how much they finished.
+    final counts = <String, int>{};
+    for (final t in all) {
+      counts[_name(t.by)] = (counts[_name(t.by)] ?? 0) + 1;
+    }
+    final people = counts.keys.toList()
+      ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+    if (_person != null && !counts.containsKey(_person)) _person = null;
+    final shown = [
+      for (final t in all)
+        if (_person == null || _name(t.by) == _person) t,
+    ];
+    final groups = <String, List<FinishedTask>>{
+      for (final p in people)
+        if (_person == null || p == _person)
+          p: [for (final t in shown) if (_name(t.by) == p) t],
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: _headerPad,
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              ChoiceChip(
+                key: const ValueKey('finished_person_all'),
+                label: Text('Everyone (${all.length})'),
+                selected: _person == null,
+                onSelected: (_) => setState(() => _person = null),
+              ),
+              for (final p in people)
+                ChoiceChip(
+                  key: ValueKey('finished_person_$p'),
+                  label: Text('$p (${counts[p]})'),
+                  selected: _person == p,
+                  onSelected: (_) => setState(() => _person = p),
+                ),
+            ],
+          ),
+        ),
+        const Divider(),
+        Expanded(
+          child: Scrollbar(
+            controller: _scroll,
+            thumbVisibility: true,
+            child: ListView(
+              controller: _scroll,
+              padding: const EdgeInsets.only(left: 24, right: 20),
+              children: [
+                for (final g in groups.entries) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10, bottom: 4),
+                    child: Text(
+                      '${g.key} - ${g.value.where((t) => t.completed).length} '
+                      'completed, ${g.value.where((t) => !t.completed).length} '
+                      'deleted',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  for (final t in g.value) _FinishedRow(task: t),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FinishedRow extends StatelessWidget {
+  final FinishedTask task;
+
+  const _FinishedRow({required this.task});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final t = task.todo;
+    final scope = t.scopeLabel.trim();
+    final notes = [
+      task.completed ? 'Completed' : 'Deleted',
+      '${formatEditDay(task.at)}${task.completed ? '' : ' ${formatEditTime(task.at)}'}',
+      if (scope.isNotEmpty) scope,
+      // Cleared by somebody other than who finished it: both are named.
+      if (task.completed &&
+          task.removedBy.isNotEmpty &&
+          task.removedBy != task.by)
+        'cleared by ${task.removedBy}',
+    ];
+    return Padding(
+      key: ValueKey('finished_${t.id}'),
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            task.completed ? Icons.check_circle_outline : Icons.delete_outline,
+            size: 15,
+            color: task.completed ? Colors.green.shade600 : muted,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: t.text,
+                    style: TextStyle(
+                      decoration: task.completed
+                          ? null
+                          : TextDecoration.lineThrough,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '   ${notes.join('  ·  ')}',
+                    style: TextStyle(color: muted),
+                  ),
+                ],
+              ),
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 //  THE WHOLE LOG, FROM ANYWHERE
 // ---------------------------------------------------------------------------
 
@@ -378,20 +598,7 @@ class _HistoryDialogState extends State<_HistoryDialog> {
           (edit: e, from: HistoryScope.room),
     ]..sort((a, b) => b.edit.at.compareTo(a.edit.at));
 
-    return AlertDialog(
-      key: const ValueKey('history_dialog'),
-      title: const Text('What has been changed'),
-      // THE SCROLLBAR RIDES THE DIALOG'S EDGE, not the text's. With the
-      // default content padding the list stops 24px in and the thumb comes
-      // down on top of the last words of every long line. So the padding is
-      // taken off here and put back on the things that are NOT the list -
-      // see [_headerPad] - which leaves the bar out at the edge where a
-      // scrollbar belongs and the rows clear of it.
-      contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 24),
-      content: SizedBox(
-        width: 760,
-        height: 520,
-        child: Column(
+    final changes = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Only offered when there are two logs to choose between. On a
@@ -462,7 +669,54 @@ class _HistoryDialogState extends State<_HistoryDialog> {
                     ),
             ),
           ],
-        ),
+        );
+
+    return AlertDialog(
+      key: const ValueKey('history_dialog'),
+      title: const Text('What has been changed'),
+      // THE SCROLLBAR RIDES THE DIALOG'S EDGE, not the text's. With the
+      // default content padding the list stops 24px in and the thumb comes
+      // down on top of the last words of every long line. So the padding is
+      // taken off here and put back on the things that are NOT the list -
+      // see [_headerPad] - which leaves the bar out at the edge where a
+      // scrollbar belongs and the rows clear of it.
+      contentPadding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
+      content: SizedBox(
+        width: 760,
+        height: 560,
+        // FINISHED TASKS, ON A TAB OF THEIR OWN: the job list's completed and
+        // deleted notes, by who finished them - see [FinishedTasksPane].
+        child: !hasProject
+            ? changes
+            : DefaultTabController(
+                length: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const TabBar(
+                      tabs: [
+                        Tab(
+                          key: ValueKey('history_tab_changes'),
+                          text: 'Changes',
+                        ),
+                        Tab(
+                          key: ValueKey('history_tab_finished'),
+                          text: 'Finished tasks',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          changes,
+                          FinishedTasksPane(project: provider.project),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
       ),
       actions: [
         TextButton(
