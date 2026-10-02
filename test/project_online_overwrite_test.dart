@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/online_copy.dart';
 import 'package:extron_configurator/online_roundtrip.dart';
+import 'package:extron_configurator/online_sheet_merge.dart';
 import 'package:extron_configurator/xlsx_reader.dart';
 import 'package:extron_configurator/xlsx_writer.dart';
 
@@ -158,8 +159,12 @@ void main() {
 
       final hold = job.p.onlineHold;
       expect(hold, isNotNull, reason: 'their typing was found');
-      expect(hold!.changes, hasLength(1));
-      expect(hold.changes.single.what, contains('Qty 18 -> 12'));
+      // The one change an import acts on. (This copy was rewritten with only
+      // the Deliveries tab, so the other tabs are also listed as gone - see
+      // online_sheet_merge.dart.)
+      final applied = appliedChanges(hold!.changes);
+      expect(applied, hasLength(1));
+      expect(applied.single.what, contains('Qty 18 -> 12'));
 
       // AND THE FILE IS UNTOUCHED. Byte for byte: a publish that "mostly"
       // stood down is the same bug wearing a smaller hat.

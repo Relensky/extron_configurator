@@ -145,6 +145,25 @@ void main() {
       expect(p.project.onlinePublishedAt, isNull);
     });
 
+    test('a save whose online copy is locked still saves and names the files',
+        () async {
+      final p = job();
+      final blocked = path.join(dir.path, 'not_a_folder');
+      File(blocked).writeAsStringSync('');
+      p.setProjectOnlineFolder(blocked);
+      p.setProjectOnlineAutoPublish(true);
+
+      final target = path.join(dir.path, 'job_project.json');
+      expect(await p.saveProject(to: target), '');
+      expect(File(target).existsSync(), isTrue);
+      expect(p.lastOnlinePublishFailed, contains('Bessey_Hall_project.xlsx'));
+
+      // Cleared by the next save that publishes.
+      p.setProjectOnlineFolder(syncFolder());
+      expect(await p.saveProject(), '');
+      expect(p.lastOnlinePublishFailed, isEmpty);
+    });
+
     test('nowhere to publish is refused rather than guessed at', () async {
       final p = job();
       final result = await p.publishOnlineCopy();

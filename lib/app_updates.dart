@@ -14,8 +14,9 @@ import 'updater/folder_updater.dart';
 ///
 /// Checks once just after launch, then every half hour - but a half-hourly
 /// check waits while the user is busy: typing or clicking in the last two
-/// minutes (a UserActivityWatcher, started in `main`), or holding unsaved work
-/// (MainDashboard). Check Now in settings is never held back.
+/// minutes (a UserActivityWatcher, started in `main`). Unsaved work does not
+/// hold it - the install asks about that itself, in [confirmClose] below.
+/// Check Now in settings is never held back.
 ///
 /// Started from `main`, so tests never touch the share.
 final FolderUpdater appUpdater = FolderUpdater(

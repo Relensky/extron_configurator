@@ -81,7 +81,7 @@ const int kCollabChipsShown = 3;
 class _MoreEditors extends StatelessWidget {
   final List<({EditorPresence presence, CollabDocKind kind})> editors;
 
-  const _MoreEditors({required this.editors});
+  const _MoreEditors({super.key, required this.editors});
 
   @override
   Widget build(BuildContext context) {
@@ -145,16 +145,33 @@ class CollabPresenceStrip extends StatelessWidget {
         if (!collab.enabled) return const SizedBox.shrink();
         final chips = <Widget>[
           // The queue at work: merges and saves, one at a time.
-          if (collab.queued > 0) _BusyChip(waiting: collab.queued - 1),
+          if (collab.queued > 0)
+            _BusyChip(
+              key: const ValueKey('collab_busy_chip'),
+              waiting: collab.queued - 1,
+            ),
         ];
         // Each person once, on the first document they are editing.
         final editors = <({EditorPresence presence, CollabDocKind kind})>[];
         final seen = <CollabIdentity>{};
-        for (final kind in collabKindsForTab(tab)) {
+        // A save to the open room or project is flagged on every tab, not
+        // only the tab that edits it.
+        final tabKinds = collabKindsForTab(tab);
+        for (final kind in {
+          ...tabKinds,
+          CollabDocKind.room,
+          CollabDocKind.project,
+        }) {
           final incoming = collab.incomingOn(kind);
           if (incoming != null) {
-            chips.add(_IncomingChip(kind: kind, incoming: incoming));
+            chips.add(_IncomingChip(
+              key: ValueKey('collab_incoming_chip_${kind.name}'),
+              kind: kind,
+              incoming: incoming,
+            ));
           }
+        }
+        for (final kind in tabKinds) {
           for (final other in collab.othersOn(kind)) {
             // Only somebody who has CHANGED it. A colleague who merely has
             // the file open is not editing it, and a chip for every reader
@@ -167,10 +184,17 @@ class CollabPresenceStrip extends StatelessWidget {
         // A FEW ON THE BAR, THE REST IN A LIST. Five people editing at once
         // is five chips the bar has no room for.
         for (final e in editors.take(kCollabChipsShown)) {
-          chips.add(CollabEditorAvatar(presence: e.presence, kind: e.kind));
+          chips.add(CollabEditorAvatar(
+            key: ValueKey('collab_editor_chip_${e.presence.user}@${e.presence.machine}'),
+            presence: e.presence,
+            kind: e.kind,
+          ));
         }
         if (editors.length > kCollabChipsShown) {
-          chips.add(_MoreEditors(editors: editors.skip(kCollabChipsShown).toList()));
+          chips.add(_MoreEditors(
+            key: const ValueKey('collab_more_chip'),
+            editors: editors.skip(kCollabChipsShown).toList(),
+          ));
         }
         if (chips.isEmpty) return const SizedBox.shrink();
         return Padding(
@@ -180,7 +204,13 @@ class CollabPresenceStrip extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               for (final c in chips)
-                Padding(padding: const EdgeInsets.only(left: 4), child: c),
+                Padding(
+                  // Keyed, so a chip keeps its place in the tree when the
+                  // busy chip appears in front of it.
+                  key: c.key,
+                  padding: const EdgeInsets.only(left: 4),
+                  child: c,
+                ),
             ],
           ),
         );
@@ -291,7 +321,7 @@ class CollabEditorAvatar extends StatelessWidget {
 class _BusyChip extends StatelessWidget {
   final int waiting;
 
-  const _BusyChip({required this.waiting});
+  const _BusyChip({super.key, required this.waiting});
 
   @override
   Widget build(BuildContext context) => Chip(
@@ -353,7 +383,11 @@ class _IncomingChip extends StatelessWidget {
   final CollabDocKind kind;
   final IncomingChange incoming;
 
-  const _IncomingChip({required this.kind, required this.incoming});
+  const _IncomingChip({
+    super.key,
+    required this.kind,
+    required this.incoming,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -363,20 +397,26 @@ class _IncomingChip extends StatelessWidget {
           '${_clock(incoming.at)}. Press to combine their changes with '
           'yours now - nothing of either of yours is lost, and anything you '
           'both changed is shown for you to choose. Saving combines them too.',
-      child: ActionChip(
-        key: ValueKey('collab_incoming_${kind.name}'),
-        visualDensity: VisualDensity.compact,
-        avatar: Icon(Icons.merge_type, color: theme.colorScheme.onTertiary),
-        backgroundColor: theme.colorScheme.tertiary,
-        label: Text(
-          '${incoming.who} saved - Combine',
-          style: theme.textTheme.labelMedium
-              ?.copyWith(color: theme.colorScheme.onTertiary),
-        ),
-        onPressed: () => mergeIncomingNow(
-          context,
-          context.read<AppStateProvider>(),
-          kind,
+      // The badge: a save is waiting to be brought in.
+      child: Badge(
+        key: ValueKey('collab_incoming_badge_${kind.name}'),
+        smallSize: 10,
+        backgroundColor: theme.colorScheme.error,
+        child: ActionChip(
+          key: ValueKey('collab_incoming_${kind.name}'),
+          visualDensity: VisualDensity.compact,
+          avatar: Icon(Icons.sync, color: theme.colorScheme.onTertiary),
+          backgroundColor: theme.colorScheme.tertiary,
+          label: Text(
+            '${incoming.who} saved the ${collabDocNoun(kind)} - Combine',
+            style: theme.textTheme.labelMedium
+                ?.copyWith(color: theme.colorScheme.onTertiary),
+          ),
+          onPressed: () => mergeIncomingNow(
+            context,
+            context.read<AppStateProvider>(),
+            kind,
+          ),
         ),
       ),
     );
@@ -391,24 +431,34 @@ Future<bool> mergeIncomingNow(
   BuildContext context,
   AppStateProvider provider,
   CollabDocKind kind,
-) => provider.collab.enqueue(() async {
-      // Merged already while it waited - a second press, or a save that
-      // folded it in. Nothing left to bring in.
-      if (provider.collab.incomingOn(kind) == null) return true;
-      // A frame for the busy chip before the work starts.
-      await Future<void>.delayed(const Duration(milliseconds: 16));
-      if (!context.mounted) return false;
-      return _mergeNow(context, provider, kind);
-    });
+) {
+  // The button pressed may be rebuilt away while the merge waits its turn,
+  // so the dialog and the snack bar hang off the navigator, which stays.
+  final host = Navigator.maybeOf(context, rootNavigator: true)?.context;
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  return provider.collab.enqueue(() async {
+    // Merged already while it waited - a second press, or a save that
+    // folded it in. Nothing left to bring in.
+    if (provider.collab.incomingOn(kind) == null) return true;
+    // A frame for the busy chip before the work starts.
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+    final on = host != null && host.mounted ? host : context;
+    if (!on.mounted) return false;
+    return _mergeNow(on, provider, kind, messenger: messenger);
+  });
+}
 
 Future<bool> _mergeNow(
   BuildContext context,
   AppStateProvider provider,
   CollabDocKind kind, {
   bool beforeSave = false,
+  ScaffoldMessengerState? messenger,
 }) async {
   final collab = provider.collab;
-  final messenger = ScaffoldMessenger.maybeOf(context);
+  messenger ??= ScaffoldMessenger.maybeOf(context);
+  // Read before the merge clears it.
+  final who = collab.incomingOn(kind)?.who ?? 'the other editor';
   final preview = collab.previewMerge(kind);
 
   Map<String, MergeSide>? choices;
@@ -431,8 +481,7 @@ Future<bool> _mergeNow(
         choices?[c.path] ??
         (c.canKeepBoth ? MergeSide.both : MergeSide.mine),
   );
-  if (outcome.merged && messenger != null) {
-    final who = collab.incomingOn(kind)?.who ?? 'the other editor';
+  if (outcome.merged && messenger != null && messenger.mounted) {
     final n = outcome.takenFromTheirs;
     final parts = [
       if (n > 0) '$n change${n == 1 ? '' : 's'} from $who added',

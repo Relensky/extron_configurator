@@ -352,42 +352,23 @@ class _MainDashboardState extends State<MainDashboard> {
   /// gets its own prompt.
   String _recoveryAsked = '';
 
-  /// Held so [dispose] can stop listening without reaching for the context.
-  AppStateProvider? _provider;
-  bool _unsavedCheckScheduled = false;
+  // UNSAVED WORK NO LONGER HOLDS THE UPDATE CHECKS BACK. It used to mark the
+  // updater busy until everything was saved, and in this app something is
+  // unsaved for most of a working session - so the half-hourly check never
+  // ran and a release sat unnoticed until the next launch, while the
+  // dashboard beside it had offered its own within the half hour. Nothing is
+  // at risk from the offer: installing asks about unsaved work before the
+  // app closes (confirmClose in app_updates.dart), and the card still waits
+  // out typing and clicking (UserActivityWatcher).
 
   @override
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
-    _provider = context.read<AppStateProvider>()
-      ..addListener(_scheduleUnsavedCheck);
-    _scheduleUnsavedCheck();
-  }
-
-  /// UNSAVED WORK HOLDS THE UPDATE CHECKS BACK.
-  ///
-  /// Somebody with edits that are not on disk is in the middle of something,
-  /// so the half-hourly check waits (and its card stays hidden) until they
-  /// save. Asked at most once a frame: the provider notifies many times a
-  /// frame while editing, and each notify throws away the cached fingerprint
-  /// [AppStateProvider.hasUnsavedWork] compares against.
-  void _scheduleUnsavedCheck() {
-    if (_unsavedCheckScheduled) return;
-    _unsavedCheckScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _unsavedCheckScheduled = false;
-      final provider = _provider;
-      if (!mounted || provider == null) return;
-      appUpdater.setBusy(this, provider.hasUnsavedWork);
-    });
-    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   @override
   void dispose() {
-    _provider?.removeListener(_scheduleUnsavedCheck);
-    appUpdater.setBusy(this, false);
     _lifecycle?.dispose();
     super.dispose();
   }
@@ -3597,12 +3578,44 @@ class AppSettingsView extends StatelessWidget {
           '(and the Google Drive API enabled on its project), Export > Upload '
           'workbook to Google Sheets puts the workbook straight into your '
           'Drive as a Sheet. Without one, the export saves the .xlsx and opens '
-          'Google Sheets for you to upload it.',
+          'Google Sheets for you to upload it. The live Google Sheet in a '
+          'project\'s Online copy needs the Google Sheets API enabled as '
+          'well.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('googleClient_load'),
+            icon: const Icon(Icons.file_open_outlined, size: 18),
+            label: const Text('Load from Google\'s JSON file'),
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final picked = await pickFilesCompat(
+                dialogTitle: 'The client_secret JSON downloaded from Google '
+                    'Cloud',
+                type: FileType.custom,
+                allowedExtensions: const ['json'],
+              );
+              final file = picked?.files.singleOrNull?.path;
+              if (file == null) return;
+              final problem = await provider.loadGoogleClientFile(file);
+              showTimedSnackBar(
+                messenger,
+                SnackBar(
+                  duration: const Duration(seconds: 6),
+                  content: Text(
+                    problem.isEmpty ? 'Google client loaded.' : problem,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
         TextFormField(
-          key: const ValueKey('googleClientId_field'),
+          key: ValueKey('googleClientId_field_${provider.googleClientRevision}'),
           decoration: const InputDecoration(
             labelText: 'Google OAuth client ID',
             border: OutlineInputBorder(),
@@ -3612,7 +3625,9 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TextFormField(
-          key: const ValueKey('googleClientSecret_field'),
+          key: ValueKey(
+            'googleClientSecret_field_${provider.googleClientRevision}',
+          ),
           decoration: const InputDecoration(
             labelText: 'Google OAuth client secret',
             helperText: 'Desktop-app clients are issued one; it is not a '
@@ -5608,7 +5623,7 @@ class _ExportFab extends StatelessWidget {
           if (hasProject)
             item('publish_project', Icons.cloud_sync_outlined,
                 'Publish the project online',
-                'Into the synced folder other people read from'),
+                'To the synced folder, a live Google Sheet, or both'),
         ],
         if (estimate) ...[
           const PopupMenuDivider(),

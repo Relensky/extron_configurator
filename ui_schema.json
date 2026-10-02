@@ -1302,6 +1302,18 @@
       "helperText": "Comma separated - \"Left,Right\" for a stereo feed",
       "description": "Which sides of the annex output are muted, comma separated. 'Left,Right' (the default) is a stereo feed; a mono feed names just the side it is actually wired to, so the mute does not report an error on a channel that carries nothing."
     },
+    "dtp_power_toggle_*": {
+      "type": "dropdown",
+      "options": [
+        { "value": "", "label": "(none - no button)" },
+        { "value": "7", "label": "7 - DTP input 7" },
+        { "value": "8", "label": "8 - DTP input 8" },
+        { "value": "1B", "label": "1B - DTP output 1B" }
+      ],
+      "helperText": "IN1808 only. Needs Btn_DTP_Power_Toggle_<n> on the panel. Blank = no button",
+      "description": "The switcher port that Btn_DTP_Power_Toggle_<n> controls. An IN1808 can feed 12 VDC up the twisted pair to the DTP transmitter on input 7 or 8, or to the receiver on output 1B; the button turns that power off and back on, which reboots a hung endpoint without a trip to the floor box. Blank or absent means no button of that number. Only linked when switcher 1's module has a RemotePower command, and only ever sends 12 V - the 48 V DTP2 setting is left to be set by hand on the switcher.",
+      "__comment": "One wildcard entry covers dtp_power_toggle_1, _2, ... - add a key per button."
+    },
     "dev_source_control": {
       "type": "dropdown",
       "label": "Where Source Selection Lands (dev_source_control)",

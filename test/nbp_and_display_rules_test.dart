@@ -265,6 +265,7 @@ void main() {
       for (final key in const [
         'gui_presenter_mode_available', 'gui_annex_mute_available',
         'annex_mute_label', 'annex_mute_output', 'annex_mute_channels',
+        'dtp_power_toggle_1',
         'dev_source_control', 'dev_volume_control',
         'display_min_volume', 'display_max_volume', 'dev_nbps',
       ]) {

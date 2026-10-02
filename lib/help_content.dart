@@ -1971,11 +1971,25 @@ const List<HelpTopic> kHelpTopics = [
     plain:
         'Keeps a copy of a room or a job somewhere shared, so somebody else '
         'can pick it up or carry on with it.',
-    keywords: ['online', 'share', 'link', 'publish', 'web'],
+    keywords: ['online', 'share', 'link', 'publish', 'web', 'history',
+      'changes', 'google sheet', 'excel'],
     body:
         'Publishes a read-only copy of a report for somebody who does not have '
         'the app. Exports go to people outside your team, so keep '
-        'app-explanatory text out of anything that leaves.',
+        'app-explanatory text out of anything that leaves.\n\n'
+        'Changes brought back in from the published workbook or the live '
+        'Google Sheet are listed before they are applied. Once applied they '
+        'are also added to a history file beside the project, named after '
+        'the project file and ending .online_history.txt: when, who, where '
+        'they came from, and each change.\n\n'
+        'Core Components, Deliveries and Purchase Orders are the tabs the '
+        'app can bring edits back from. Every other tab of the live Google '
+        'Sheet - a room\'s listing, the summary - is a report: an edit typed '
+        'there cannot be brought back into the room, but it is not lost. '
+        'Each pull, and each publish before it writes, compares every tab '
+        'with what was last published and lists what differs, marked to make '
+        'by hand in the app, and keeps the list in the history file. The '
+        'comparison starts from the first publish made with version 0.5.51.',
   ),
 
   // ---------------------------------------------------------------------------
@@ -1998,7 +2012,17 @@ const List<HelpTopic> kHelpTopics = [
         'Google Sheets; you sign in with Google the first time, and only '
         'files this app creates are visible to it. Without a client it saves '
         'the .xlsx and opens Google Sheets for you to upload it (Open > '
-        'Upload).\n\n'
+        'Upload). The client can be typed in or loaded from the JSON file '
+        'Google Cloud downloads for it.\n\n'
+        'Publish the project online has two places it can write, ticked '
+        'separately: a synced folder, and one live Google Sheet that is '
+        'rewritten in place so its link stays current. The Sheet\'s link is '
+        'kept on the project, so everybody who opens the job publishes to the '
+        'same one - share it with them in Google as editors. It needs the '
+        'Google Sheets API enabled for the client, and asks for a second '
+        'sign-in that can edit your Sheets. Edits typed into its deliveries, '
+        'purchase orders and core components tabs come back with Pull '
+        'updates.\n\n'
         'The Screenshot button beside the light/dark toggle is a menu too: the '
         'screen as it is, or - on the Cost tab - the whole estimate as a dated '
         'picture, light or dark. Save AV Setup (the diagram and estimate '

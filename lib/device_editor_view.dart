@@ -26,6 +26,8 @@ import 'spec_sheets.dart';
 import 'responsive.dart';
 import 'side_pane.dart';
 import 'catalog_standards.dart';
+import 'collab/collab_controller.dart';
+import 'collab/collab_widgets.dart';
 import 'catalog_standards_dialog.dart' show showCatalogStandards;
 
 /// ============================================================================
@@ -725,6 +727,26 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           icon: const Icon(Icons.ios_share, size: 18),
           label: const Text('Export a copy...'),
           onPressed: () => _exportCopy(provider),
+        ),
+        // Somebody else saved the catalog: shown beside Reload until their
+        // changes are brought in.
+        ListenableBuilder(
+          listenable: provider.collab,
+          builder: (context, _) {
+            final incoming = provider.collab.incomingOn(CollabDocKind.catalog);
+            if (incoming == null) return const SizedBox.shrink();
+            return IconButton(
+              key: const ValueKey('catalog_incoming'),
+              tooltip: '${incoming.who} saved changes to the catalog. Press '
+                  'to bring them in - your own unsaved edits are kept.',
+              icon: Badge(
+                smallSize: 10,
+                child: Icon(Icons.sync, color: theme.colorScheme.tertiary),
+              ),
+              onPressed: () =>
+                  mergeIncomingNow(context, provider, CollabDocKind.catalog),
+            );
+          },
         ),
         OutlinedButton.icon(
           icon: const Icon(Icons.refresh, size: 18),

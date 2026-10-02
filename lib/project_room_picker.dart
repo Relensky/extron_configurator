@@ -173,6 +173,14 @@ Future<bool> saveOpenRoom(
   return !failed;
 }
 
+/// After a room is picked: the Project tab has no room page to show it on,
+/// so it goes to Cost. Any other tab stays, now showing the new room.
+void showPickedRoom(AppStateProvider provider) {
+  if (provider.selectedTabIndex == AppTab.project.index) {
+    provider.selectTab(AppTab.cost.index);
+  }
+}
+
 class _StepButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
@@ -199,7 +207,7 @@ class _StepButton extends StatelessWidget {
               if (!context.mounted) return;
               final messenger = ScaffoldMessenger.of(context);
               final error = await provider.stepProjectRoom(delta);
-              if (error.isEmpty) return;
+              if (error.isEmpty) return showPickedRoom(provider);
               showTimedSnackBar(
                 messenger,
                 SnackBar(
@@ -270,7 +278,7 @@ class _RoomMenu extends StatelessWidget {
         if (!context.mounted) return;
         final messenger = ScaffoldMessenger.of(context);
         final error = await provider.openProjectRoomRef(ref);
-        if (error.isEmpty) return;
+        if (error.isEmpty) return showPickedRoom(provider);
         showTimedSnackBar(
           messenger,
           SnackBar(

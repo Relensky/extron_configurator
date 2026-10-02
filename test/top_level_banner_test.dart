@@ -480,9 +480,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(p.hasOpenProject, isFalse);
-    // BACK WHERE THE ROOM WORK WAS, not on a tab the app picked: somebody who
-    // closed a project from the middle of cabling a room lands in cabling.
-    expect(p.selectedTabIndex, AppTab.cabling.index);
+    // ON THE ROOM'S COST, whichever tab the room work was last on - see
+    // closeProjectFile. (It used to go back to that tab, here Cabling.)
+    expect(p.selectedTabIndex, AppTab.cost.index);
     expect(find.byKey(const ValueKey('banner_project')), findsNothing);
     expect(find.byKey(const ValueKey('banner_room')), findsOneWidget);
 

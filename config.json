@@ -516,6 +516,7 @@
         "annex_mute_channels": "Left,Right",
         "annex_mute_label": "Annex",
         "annex_mute_output": "1",
+        "dtp_power_toggle_1": "",
         "default_cc_aud_cam": false,
         "conf_display_1": "1",
         "conf_display_2": "2",

@@ -128,6 +128,23 @@ void main() {
       await letTheSnackBarGo(tester);
     });
 
+    // The closed job's own page must not stay on screen, wherever the close
+    // was pressed from. Cost is the start screen when no room is open.
+    for (final from in [AppTab.project, AppTab.appConfig, AppTab.cabling]) {
+      testWidgets('closing from ${from.name} lands on Cost', (tester) async {
+        final p = withProject();
+        p.projectDirty = false;
+        p.selectTab(from.index);
+        await pump(tester, p);
+
+        await tester.tap(closeButton);
+        await tester.pumpAndSettle();
+
+        expect(p.selectedTabIndex, AppTab.cost.index);
+        await letTheSnackBarGo(tester);
+      });
+    }
+
     testWidgets('asks first when there is unsaved work, and Cancel stops it', (
       tester,
     ) async {

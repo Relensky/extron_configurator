@@ -39,7 +39,15 @@ import 'package:xml/xml.dart';
 /// Rows are ragged — trailing blank cells are not padded — so callers should
 /// index defensively. Blank rows are kept, because a row's POSITION is
 /// sometimes the only thing tying it to what a reader saw on screen.
-Map<String, List<List<String>>> readXlsxSheets(Uint8List bytes) {
+///
+/// [formulas], when given, is filled with each sheet's formula cells as
+/// 'row:column' (zero-based). A formula's text is what it last came to, which
+/// moves whenever what it adds up moves; a comparison that wants to know what
+/// somebody TYPED has to know which cells those are.
+Map<String, List<List<String>>> readXlsxSheets(
+  Uint8List bytes, {
+  Map<String, Set<String>>? formulas,
+}) {
   final archive = ZipDecoder().decodeBytes(bytes);
 
   String? fileText(String name) {
@@ -100,7 +108,11 @@ Map<String, List<List<String>>> readXlsxSheets(Uint8List bytes) {
         : 'xl/$target';
     final xml = fileText(part);
     if (xml == null) continue;
-    out[name] = _readSheet(xml, shared);
+    out[name] = _readSheet(
+      xml,
+      shared,
+      formulas == null ? null : (formulas[name] = <String>{}),
+    );
   }
   return out;
 }
@@ -126,8 +138,19 @@ List<Map<String, String>> readXlsxTable(
   String sheet, {
   int headerRow = 0,
   String headerMarker = '',
+}) => xlsxTableFromGrid(
+  readXlsxSheet(bytes, sheet),
+  headerRow: headerRow,
+  headerMarker: headerMarker,
+);
+
+/// [readXlsxTable] over a grid already in hand - a sheet read off Google
+/// Sheets comes as rows of text with no file behind it.
+List<Map<String, String>> xlsxTableFromGrid(
+  List<List<String>>? grid, {
+  int headerRow = 0,
+  String headerMarker = '',
 }) {
-  final grid = readXlsxSheet(bytes, sheet);
   if (grid == null) return const [];
   // FOUND, NOT COUNTED, when the caller knows what the first column is called.
   // A sheet with a title and a line of instructions above the table is a sheet
@@ -161,19 +184,27 @@ List<Map<String, String>> readXlsxTable(
 }
 
 /// One worksheet part, as a grid of text.
-List<List<String>> _readSheet(String xml, List<String> shared) {
+List<List<String>> _readSheet(
+  String xml,
+  List<String> shared, [
+  Set<String>? formulas,
+]) {
   final rows = <List<String>>[];
   for (final row in XmlDocument.parse(xml).findAllElements('row')) {
     // The row's own number when it has one: a sheet with gaps in it would
     // otherwise close them up and move every row under the gap.
     final at = int.tryParse(row.getAttribute('r') ?? '');
+    if (at != null) {
+      while (rows.length < at - 1) {
+        rows.add(const []);
+      }
+    }
     final cells = <String>[];
     for (final cell in row.findElements('c')) {
-      final index = _columnOf(cell.getAttribute('r'));
+      final index = _columnOf(cell.getAttribute('r')) ?? cells.length;
       final value = _cellText(cell, shared);
-      if (index == null) {
-        cells.add(value);
-        continue;
+      if (formulas != null && cell.findElements('f').isNotEmpty) {
+        formulas.add('${rows.length}:$index');
       }
       while (cells.length < index) {
         cells.add('');
@@ -182,11 +213,6 @@ List<List<String>> _readSheet(String xml, List<String> shared) {
         cells.add(value);
       } else {
         cells[index] = value;
-      }
-    }
-    if (at != null) {
-      while (rows.length < at - 1) {
-        rows.add(const []);
       }
     }
     rows.add(cells);

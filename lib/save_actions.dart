@@ -15,6 +15,7 @@ import 'app_state.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_flow_swap_dialogs.dart' show applyModelSwap;
 import 'contrast.dart';
+import 'google_sheets_live.dart' show kOnlineSheetLabel;
 import 'control_prefill.dart' show buildControlSideForPreset;
 import 'new_room_dialog.dart';
 import 'online_copy_dialog.dart' show offerHeldOnlineEdits;
@@ -229,11 +230,13 @@ Future<bool> _runSave(
         final ok = await provider.exportRoomConfig();
         if (!context.mounted) return ok;
         if (ok) {
+          // No Open file: the room is the one already open here.
           showSavedFileSnack(
             context,
             provider,
             'Room',
             provider.currentConfigPath,
+            offerOpenFile: false,
           );
         } else if (provider.lastRoomSaveError.isNotEmpty) {
           showTimedSnackBar(
@@ -257,7 +260,13 @@ Future<bool> _runSave(
         return false;
       }
       if (!context.mounted) return true;
-      showSavedFileSnack(context, provider, 'Room', result);
+      showSavedFileSnack(
+        context,
+        provider,
+        'Room',
+        result,
+        offerOpenFile: false,
+      );
       return true;
 
     case SaveScope.project:
@@ -288,7 +297,45 @@ Future<bool> _runSave(
         return false;
       }
       if (!context.mounted) return true;
-      showSavedFileSnack(context, provider, 'The project', target);
+      // The online copy was open or locked: said briefly, then the usual bar.
+      final locked = provider.lastOnlinePublishFailed;
+      if (locked.isNotEmpty) {
+        final theme = Theme.of(context);
+        showTimedSnackBar(
+          messenger,
+          SnackBar(
+            key: const ValueKey('online_copy_locked'),
+            duration: const Duration(seconds: 2),
+            content: Text(
+              locked.every((f) => f == kOnlineSheetLabel)
+                  ? 'The Google Sheet was not updated. See the log.'
+                  : 'Online copy not updated - ${locked.join(', ')} is open '
+                      'or locked. See the log.',
+            ),
+            backgroundColor: snackErrorFillOn(messenger),
+          ),
+        ).closed.then((_) {
+          if (!messenger.mounted) return;
+          showSavedSnackBar(
+            messenger: messenger,
+            theme: theme,
+            provider: provider,
+            message:
+                'The project saved as ${roomConfigDisplayName(target)}',
+            savedPath: target,
+            offerOpenFile: false,
+          );
+        });
+      } else {
+        // No Open file: the project is the one already open here.
+        showSavedFileSnack(
+          context,
+          provider,
+          'The project',
+          target,
+          offerOpenFile: false,
+        );
+      }
       // A JOB THAT PUBLISHES ON SAVE MAY HAVE STOOD ITS PUBLISH DOWN, because
       // somebody had typed into the copy in the sync folder since we last
       // wrote it. The save itself is done and reported above; this offers
@@ -911,10 +958,14 @@ Future<bool> closeProjectFile(
 
   // AND OUT OF PROJECT MODE. Closing a job while standing on the Project tab
   // used to leave the user looking at the empty room list of the job they had
-  // just put away, which reads as a close that did not work. The session goes
-  // back to where the room work was - see [AppStateProvider.lastRoomTabIndex]
-  // - or, with no room open, to the start screen that offers both documents.
-  provider.selectTab(provider.lastRoomTabIndex);
+  // just put away, which reads as a close that did not work.
+  //
+  // ALWAYS COST, not "the tab the room work was last on". That tab could be
+  // the Project tab itself (an undo moves the view there), which left the
+  // closed job's page on screen, or Settings or the catalog, which are no
+  // more an answer to "close this". Cost is the room's front page, and with
+  // no room open it is the start screen, with the recent files on it.
+  provider.selectTab(AppTab.cost.index);
 
   showTimedSnackBar(
     ScaffoldMessenger.of(context),

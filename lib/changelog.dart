@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.45+55';
+const String kAppVersion = '0.5.52+62';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,124 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.52',
+    date: 'October 2, 2026',
+    title: 'The Excel workbook is checked tab by tab; avatars show at once',
+    changes: [
+      'The workbook in the synced folder is now compared with what was last '
+          'published on every tab and every cell, the same as the live '
+          'Google Sheet. Edits to a room\'s tab are listed before a save or a '
+          'publish writes over them, and kept in the history file. Formula '
+          'cells are compared as formulas, so a total that moved because a '
+          'quantity changed is not listed as an edit of its own; a formula '
+          'typed over with a figure is.',
+      'Avatars are drawn from a copy on this computer, so they show as soon '
+          'as the app opens. The copy is checked against the file share in '
+          'the background and replaced when the share\'s picture changes, or '
+          'removed when it is taken off the share.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.51',
+    date: 'October 2, 2026',
+    title: 'Nothing typed in the Google Sheet is written over unseen; '
+        'updates are noticed while you work',
+    changes: [
+      'Every tab of a project\'s live Google Sheet is now compared with '
+          'what was last published, cell by cell - not only Core Components, '
+          'Deliveries and Purchase Orders. A row changed in a room\'s tab '
+          'used to be found by no pull and written over by the next save.',
+      'Those edits are listed with the rest whenever you pull, and before '
+          'every publish - on save and from the Online copy box - saying the '
+          'tab, the row, the column, and what it said before and now. The '
+          'app cannot bring an edit to a report tab back into the room, so '
+          'they are marked to make by hand, and the whole list is kept in '
+          'the project\'s .online_history.txt file before the Sheet is '
+          'written over.',
+      'Publish in the Online copy box now checks for edits first, the same '
+          'as a save does. It used to write straight over them.',
+      'Edits typed before this version\'s first publish cannot be found: '
+          'the comparison starts from the next publish.',
+      'A new release is offered within half an hour of landing, the same as '
+          'the CTS Dashboard. The check used to wait until nothing was '
+          'unsaved, which could be the rest of the session. Installing still '
+          'asks about unsaved work before the app closes.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.50',
+    date: 'October 2, 2026',
+    title: 'Closing a project leaves the Project page; online edits are '
+        'kept in a history file',
+    changes: [
+      'Changes brought in from a project\'s Online copy - the workbook in '
+          'the synced folder or the live Google Sheet - are also listed in a '
+          'history file beside the project, named after it and ending '
+          '.online_history.txt: when, who, where they came from, and each '
+          'change as the review showed it.',
+      'Closing a project always goes to the Cost tab. With a room open that '
+          'is the room\'s cost; with none it is the start screen, with the '
+          'recent files. It could stay on the closed project\'s page, or go '
+          'to Settings or the catalog.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.49',
+    date: 'October 2, 2026',
+    title: 'Publish a project to a live Google Sheet',
+    changes: [
+      'A project\'s Online copy can publish to one live Google Sheet as well '
+          'as, or instead of, the synced folder. The Sheet is rewritten in '
+          'place, its link is kept on the project so everybody publishes to '
+          'the same one, and edits typed into it are pulled back the same way '
+          'as from the folder.',
+      'The Google client in App Config can be loaded from the JSON file '
+          'Google Cloud downloads for it.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.48',
+    date: 'October 2, 2026',
+    title: 'Combine works again, and saves by others are flagged',
+    changes: [
+      'The Combine button on the top bar works again when somebody else '
+          'saves a room or project you have open.',
+      'A save by somebody else to the open room or project shows a badged '
+          'Combine button on every tab, naming which file they saved.',
+      'The Catalog tab shows a sync icon beside Reload when somebody else '
+          'saves the catalog. Pressing it brings their changes in.',
+      'Saving a room or a project no longer offers to open the file - it '
+          'is the one already open. Open folder is still offered.',
+      'Picking a room from the title bar while on the Project tab goes to '
+          'that room\'s Cost tab. On any room tab, the tab stays and shows '
+          'the room picked.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.47',
+    date: 'October 2, 2026',
+    title: 'Save a changed Cost line to the catalog',
+    changes: [
+      'A Cost line whose manufacturer, part number or price was changed '
+          'from the catalog has a button at the right of its row that saves '
+          'those changes to the catalog.',
+      'Saving a project whose online copy is open or locked shows a brief '
+          'notice naming the file, and the log records it. The project '
+          'itself still saves.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.46',
+    date: 'October 2, 2026',
+    title: 'DTP power toggle buttons',
+    changes: [
+      'System settings have a dtp_power_toggle_1 key for the panel button '
+          'that turns DTP power off and on at an IN1808 port. It is a '
+          'dropdown of the ports that can do it - 7, 8 or 1B - and blank '
+          'means no button.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.45',
     date: 'October 2, 2026',

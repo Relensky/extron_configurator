@@ -502,9 +502,24 @@ OnlineImport readOnlineEdits(
   BuildingProject? against,
   /// The job's parts, for reading Core Components back.
   List<MasterPartLine> master = const [],
+}) => readOnlineEditsFromSheets(
+  readXlsxSheets(bytes),
+  roomIdsByName: roomIdsByName,
+  vendorIdsByName: vendorIdsByName,
+  against: against,
+  master: master,
+);
+
+/// [readOnlineEdits] over sheets already read as text - what a live Google
+/// Sheet hands back. See google_sheets_live.dart.
+OnlineImport readOnlineEditsFromSheets(
+  Map<String, List<List<String>>> sheets, {
+  Map<String, String> roomIdsByName = const {},
+  Map<String, String> vendorIdsByName = const {},
+  BuildingProject? against,
+  List<MasterPartLine> master = const [],
 }) {
   final problems = <String>[];
-  final sheets = readXlsxSheets(bytes);
   final hasDeliveries = sheets.containsKey(kEditableDeliveriesSheet);
   final hasPos = sheets.containsKey(kEditablePosSheet);
   final masterEdits = readMasterEdits(sheets, master, problems);
@@ -532,9 +547,8 @@ OnlineImport readOnlineEdits(
 
   final deliveries = <ParsedDelivery>[];
   if (hasDeliveries) {
-    final rows = readXlsxTable(
-      bytes,
-      kEditableDeliveriesSheet,
+    final rows = xlsxTableFromGrid(
+      sheets[kEditableDeliveriesSheet],
       headerMarker: kRoundTripIdColumn,
     );
     for (final row in rows) {
@@ -617,9 +631,8 @@ OnlineImport readOnlineEdits(
 
   final pos = <ParsedPo>[];
   if (hasPos) {
-    final rows = readXlsxTable(
-      bytes,
-      kEditablePosSheet,
+    final rows = xlsxTableFromGrid(
+      sheets[kEditablePosSheet],
       headerMarker: kRoundTripIdColumn,
     );
     for (final row in rows) {
@@ -831,6 +844,10 @@ typedef OnlineHold = ({
 
   /// When that file was last written to.
   DateTime modified,
+
+  /// True when it was found in the live Google Sheet rather than a file -
+  /// [file] is then its link and [modified] is not known.
+  bool sheet,
 
   /// What it says, parsed.
   OnlineImport read,

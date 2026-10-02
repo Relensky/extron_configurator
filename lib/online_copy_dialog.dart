@@ -10,8 +10,12 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart' show formatMoney;
+import 'google_sheets_live.dart';
 import 'online_copy.dart';
+import 'online_pull_history.dart';
 import 'online_roundtrip.dart';
+import 'online_sheet_merge.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// ============================================================================
 ///  PUBLISHING THE JOB WHERE OTHER PEOPLE CAN READ IT
@@ -167,6 +171,22 @@ class _OnlineCopyDialog extends StatefulWidget {
 class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
   late String _folder = widget.provider.project.onlineFolder;
 
+  /// The Sheet's link or id, as typed. Blank has the publish make one.
+  late final TextEditingController _sheetText = TextEditingController(
+    text: widget.provider.project.onlineSheetId.isEmpty
+        ? ''
+        : liveSheetUrl(widget.provider.project.onlineSheetId),
+  );
+
+  bool get _toFolder => !widget.provider.project.onlineFolderOff;
+  bool get _toSheet => widget.provider.project.onlineSheetOn;
+  bool get _hasGoogleClient =>
+      widget.provider.googleClientId.trim().isNotEmpty;
+
+  /// Somewhere to write: a folder that is picked, or the Sheet.
+  bool get _hasDestination =>
+      (_toFolder && _folder.trim().isNotEmpty) || _toSheet;
+
   /// The folder, typed or picked. Editable, so a long path can be read and
   /// fixed in place.
   late final TextEditingController _folderText =
@@ -175,6 +195,7 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
   @override
   void dispose() {
     _folderText.dispose();
+    _sheetText.dispose();
     super.dispose();
   }
 
@@ -209,17 +230,35 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
   }
 
   Future<void> _publish() async {
-    if (_folder.trim().isEmpty) return;
+    if (!_hasDestination) return;
     setState(() {
       _busy = true;
       _result = '';
       _failed = false;
     });
+    final toFolder = _toFolder && _folder.trim().isNotEmpty;
+    if (_toSheet) widget.provider.setProjectOnlineSheet(_sheetText.text);
+    if (!await _mergeBeforePublish()) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _failed = true;
+        _result = 'Not published: the online copy has edits in it that were '
+            'not dealt with. Nothing was written over.';
+      });
+      return;
+    }
+    if (!mounted) return;
     final result = await widget.provider.publishOnlineCopy(
-      folder: _folder,
+      folder: toFolder ? _folder : null,
       includeProjectFile: _includeProject,
+      // Pressed by a person, so the Google sign-in may open the browser.
+      interactive: true,
     );
     if (!mounted) return;
+    // A Sheet made just now has a link to show.
+    final id = widget.provider.project.onlineSheetId;
+    if (id.isNotEmpty) _sheetText.text = liveSheetUrl(id);
     setState(() {
       _busy = false;
       _failed = result.written.isEmpty;
@@ -239,6 +278,12 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
   /// is just as often the one somebody downloaded out of Excel Online and
   /// emailed, and refusing that would send them back to retyping it.
   Future<void> _pull() async {
+    // The Sheet first when the job has one, then the file as before.
+    final id = widget.provider.project.onlineSheetId.trim();
+    if (_toSheet && id.isNotEmpty) {
+      await _pullSheet();
+      if (!mounted || !_toFolder || _folder.trim().isEmpty) return;
+    }
     var file = _folder.trim().isEmpty
         ? ''
         : path.join(_folder.trim(), onlineWorkbookName(widget.provider.project));
@@ -258,7 +303,8 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
     String? error;
     try {
       final bytes = await File(file).readAsBytes();
-      review = widget.provider.reviewOnlineImport(bytes);
+      // The three tabs that are read back, and what was typed in the others.
+      review = widget.provider.reviewOnlineWorkbook(bytes);
     } catch (e) {
       error = '$e';
     }
@@ -283,22 +329,99 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
       return;
     }
 
+    await _offer(review, file);
+  }
+
+  /// Shows what [review] would change and says what came of it.
+  Future<void> _offer(
+    ({OnlineImport read, List<OnlineChange> changes}) review,
+    String source,
+  ) async {
     final applied = await showDialog<int>(
       context: context,
       builder: (_) => _ImportReviewDialog(
         provider: widget.provider,
-        read: review!.read,
+        read: review.read,
         changes: review.changes,
-        source: file,
+        source: source,
       ),
     );
     if (!mounted || applied == null) return;
+    final listed = listedOnlyChanges(review.changes).length;
     setState(() {
       _failed = false;
-      _result = applied == 0
-          ? 'Nothing to bring back - the copy matches the job.'
-          : '$applied change${applied == 1 ? '' : 's'} brought back in.';
+      _result = [
+        if (applied > 0)
+          '$applied change${applied == 1 ? '' : 's'} brought back in.',
+        if (listed > 0)
+          '$listed edit${listed == 1 ? '' : 's'} in other tabs listed in the '
+              'history file - make ${listed == 1 ? 'it' : 'them'} in the app.',
+        if (applied == 0 && listed == 0)
+          'Nothing to bring back - the copy matches the job.',
+      ].join(' ');
     });
+  }
+
+  /// NOTHING IS WRITTEN OVER UNSEEN. Before a publish pressed by hand, both
+  /// copies are checked for typing since the last one, exactly as a save
+  /// checks them; whatever is found is listed, brought in or kept in the
+  /// history, and only then written over. False when the person backed out.
+  Future<bool> _mergeBeforePublish() async {
+    final provider = widget.provider;
+    final toFolder = _toFolder && _folder.trim().isNotEmpty;
+    for (final sheet in [true, false]) {
+      if (sheet ? !_toSheet : !toFolder) continue;
+      final held = await provider.findHeldOnlineEdits(
+        folder: sheet ? null : _folder,
+        folderCopy: !sheet,
+        sheetCopy: sheet,
+      );
+      if (held == null) continue;
+      if (!mounted) return false;
+      final applied = await showDialog<int>(
+        context: context,
+        builder: (_) => _ImportReviewDialog(
+          provider: provider,
+          read: held.read,
+          changes: held.changes,
+          source: held.sheet ? kOnlineSheetLabel : held.file,
+          beforePublish: true,
+        ),
+      );
+      if (applied == null) return false;
+    }
+    return true;
+  }
+
+  /// Reads the live Google Sheet back and offers what it would change.
+  Future<void> _pullSheet() async {
+    setState(() => _busy = true);
+    ({OnlineImport read, List<OnlineChange> changes})? review;
+    String? error;
+    try {
+      // The three tabs that are read back, and what was typed in the others.
+      review = await widget.provider.reviewLiveSheet();
+    } catch (e) {
+      error = '$e';
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (review == null) {
+      setState(() {
+        _failed = true;
+        _result = 'The Google Sheet could not be read: $error';
+      });
+      return;
+    }
+    if (review.read.wrongFile) {
+      setState(() {
+        _failed = true;
+        _result = 'That Sheet has no "$kEditableDeliveriesSheet" tab in it, '
+            'so there is nothing to read back. Publish this job to it first.';
+      });
+      return;
+    }
+    await _offer(review, kOnlineSheetLabel);
   }
 
   @override
@@ -308,7 +431,7 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
     final project = widget.provider.project;
     final surface =
         theme.dialogTheme.backgroundColor ?? theme.colorScheme.surface;
-    final ready = _folder.trim().isNotEmpty && !_busy;
+    final ready = _hasDestination && !_busy;
 
     return AlertDialog(
       key: const ValueKey('online_copy_dialog'),
@@ -321,10 +444,9 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Writes the project workbook into a folder that OneDrive or '
-                'Google Drive keeps in sync, so the job can be read in Excel '
-                'Online or opened as a Google Sheet by anybody the folder is '
-                'shared with.',
+                'Puts the project workbook where other people can read it: a '
+                'folder that OneDrive or Google Drive keeps in sync, one '
+                'Google Sheet kept current, or both.',
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 12),
@@ -342,14 +464,34 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
                     'with the button below. Everything else is a picture of '
                     'the job and is overwritten on the next publish.',
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              // THE TWO PLACES IT CAN GO. Either, or both at once.
+              CheckboxListTile(
+                key: const ValueKey('online_copy_to_folder'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _toFolder,
+                title: const Text('A synced folder (OneDrive or Google Drive)'),
+                subtitle: Text(
+                  'An .xlsx that opens in Excel Online, rewritten in place.',
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+                onChanged: _busy
+                    ? null
+                    : (v) => setState(
+                        () => widget.provider.setProjectOnlineToFolder(
+                          v ?? false,
+                        ),
+                      ),
+              ),
               Row(
                 children: [
                   Expanded(
                     child: TextField(
                       key: const ValueKey('online_copy_folder'),
                       controller: _folderText,
-                      enabled: !_busy,
+                      enabled: !_busy && _toFolder,
                       decoration: const InputDecoration(
                         labelText: 'Folder',
                         hintText: 'None picked yet - type a path or choose one',
@@ -364,7 +506,62 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
                     key: const ValueKey('online_copy_pick'),
                     icon: const Icon(Icons.folder_open, size: 18),
                     label: const Text('Choose'),
-                    onPressed: _busy ? null : _pickFolder,
+                    onPressed: _busy || !_toFolder ? null : _pickFolder,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              CheckboxListTile(
+                key: const ValueKey('online_copy_to_sheet'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _toSheet,
+                title: const Text('A live Google Sheet'),
+                subtitle: Text(
+                  _hasGoogleClient
+                      ? 'One Sheet, written cell by cell. Everybody who opens '
+                            'this job publishes to the same one - share it '
+                            'with them in Google as editors.'
+                      : 'Needs a Google client first - App Config > Working '
+                            'together.',
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+                onChanged: _busy || (!_hasGoogleClient && !_toSheet)
+                    ? null
+                    : (v) => setState(
+                        () => widget.provider.setProjectOnlineToSheet(
+                          v ?? false,
+                        ),
+                      ),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('online_copy_sheet'),
+                      controller: _sheetText,
+                      enabled: !_busy && _toSheet,
+                      decoration: const InputDecoration(
+                        labelText: 'Sheet link',
+                        hintText: 'Blank - a new Sheet is made on the first '
+                            'publish',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    key: const ValueKey('online_copy_sheet_open'),
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                    label: const Text('Open'),
+                    onPressed: project.onlineSheetId.isEmpty
+                        ? null
+                        : () => launchUrl(
+                            Uri.parse(liveSheetUrl(project.onlineSheetId)),
+                            mode: LaunchMode.externalApplication,
+                          ),
                   ),
                 ],
               ),
@@ -381,7 +578,7 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
                   'read as a spreadsheet.',
                   style: theme.textTheme.bodySmall?.copyWith(color: muted),
                 ),
-                onChanged: _busy
+                onChanged: _busy || !_toFolder
                     ? null
                     : (v) => setState(() => _includeProject = v ?? false),
               ),
@@ -393,28 +590,38 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
                 value: project.onlineAutoPublish,
                 title: const Text('Update it every time the project is saved'),
                 subtitle: Text(
-                  _folder.trim().isEmpty
-                      ? 'Pick a folder first - there would be nowhere to '
-                            'write.'
+                  !_hasDestination
+                      ? 'Pick a folder or the Sheet first - there would be '
+                            'nowhere to write.'
                       : 'The copy people are reading is never older than your '
                             'last save.',
                   style: theme.textTheme.bodySmall?.copyWith(color: muted),
                 ),
-                onChanged: (_busy || _folder.trim().isEmpty)
+                onChanged: (_busy || !_hasDestination)
                     ? null
                     : (v) => setState(() {
                         // The folder has to be on the job before the switch
                         // can mean anything, and it may only have been picked
                         // a moment ago in this box.
-                        widget.provider.setProjectOnlineFolder(_folder);
+                        if (_toFolder && _folder.trim().isNotEmpty) {
+                          widget.provider.setProjectOnlineFolder(_folder);
+                        }
                         widget.provider.setProjectOnlineAutoPublish(v ?? false);
                       }),
               ),
               const SizedBox(height: 8),
               Text(
-                'Writes ${onlineWorkbookName(project)}'
-                '${_includeProject ? ' and ${onlineProjectFileName(project)}' : ''}'
-                '.',
+                [
+                  if (_toFolder && _folder.trim().isNotEmpty)
+                    'Writes ${onlineWorkbookName(project)}'
+                        '${_includeProject ? ' and ${onlineProjectFileName(project)}' : ''}'
+                        '.',
+                  if (_toSheet)
+                    project.onlineSheetId.isEmpty
+                        ? 'Makes a Google Sheet and opens a Google sign-in '
+                              'the first time.'
+                        : 'Updates the Google Sheet.',
+                ].join(' '),
                 style: theme.textTheme.bodySmall?.copyWith(color: muted),
               ),
               const SizedBox(height: 4),
@@ -569,11 +776,15 @@ class _ImportReviewDialog extends StatefulWidget {
   /// The file it came out of, so the box can say what it is looking at.
   final String source;
 
+  /// Shown on the way to writing the copy over, rather than on a pull.
+  final bool beforePublish;
+
   const _ImportReviewDialog({
     required this.provider,
     required this.read,
     required this.changes,
     required this.source,
+    this.beforePublish = false,
   });
 
   @override
@@ -591,6 +802,22 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
     final offers = provider.catalogOffersFor(widget.read.master);
     var touched = provider.applyOnlineImport(widget.read);
     touched += await provider.applyMasterEdits(widget.read.master);
+    // KEPT IN A FILE AS WELL. The list on screen is gone when this box
+    // closes; the same lines go beside the project - see
+    // online_pull_history.dart. The edits that could only be listed are the
+    // ones that most need it: the next publish writes over them.
+    if (widget.changes.isNotEmpty) {
+      final sheet = widget.source == kOnlineSheetLabel;
+      await recordOnlinePull(
+        projectFile: provider.currentProjectPath,
+        project: provider.projectDisplayName,
+        source: sheet
+            ? '$kOnlineSheetLabel '
+                '${liveSheetUrl(provider.project.onlineSheetId.trim())}'
+            : widget.source,
+        changes: widget.changes,
+      );
+    }
     if (!mounted) return;
     // THE CATALOG IS ASKED ABOUT, not written. The pull changed this job;
     // whether every job should follow is a separate decision.
@@ -628,14 +855,23 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
         theme.dialogTheme.backgroundColor ?? theme.colorScheme.surface;
     final changes = widget.changes;
     final problems = widget.read.problems;
+    // What Apply acts on, and what it can only list - see
+    // online_sheet_merge.dart.
+    final applicable = appliedChanges(changes).length;
+    final listed = changes.length - applicable;
+    String count(int n, String word) => '$n $word${n == 1 ? '' : 's'}';
 
     return AlertDialog(
       key: const ValueKey('online_import_dialog'),
       title: Text(
         changes.isEmpty
             ? 'Nothing to bring back'
-            : '${changes.length} change${changes.length == 1 ? '' : 's'} to '
-                  'bring back',
+            : applicable == 0
+                ? '${count(listed, 'edit')} found in the online copy'
+                : listed == 0
+                    ? '${count(applicable, 'change')} to bring back'
+                    : '${count(applicable, 'change')} to bring back, '
+                        '${count(listed, 'edit')} to make by hand',
       ),
       content: SizedBox(
         width: 620,
@@ -663,17 +899,24 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
                     itemCount: changes.length,
                     itemBuilder: (context, i) {
                       final c = changes[i];
+                      final listOnly = c.kind == kSheetEditKind;
                       return ListTile(
                         dense: true,
                         visualDensity: VisualDensity.compact,
                         leading: Icon(
-                          c.id.isEmpty ? Icons.add_circle_outline : Icons.edit,
+                          listOnly
+                              ? Icons.back_hand_outlined
+                              : c.id.isEmpty
+                                  ? Icons.add_circle_outline
+                                  : Icons.edit,
                           size: 18,
-                          color: muted,
+                          color: listOnly ? warningOn(surface) : muted,
                         ),
                         title: Text(c.name),
                         subtitle: Text(
-                          '${c.kind} - ${c.what}',
+                          listOnly
+                              ? 'not brought in, make it in the app - ${c.what}'
+                              : '${c.kind} - ${c.what}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: muted,
                           ),
@@ -710,6 +953,22 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
                 ],
               ),
             ],
+            if (listed > 0) ...[
+              const Divider(height: 20),
+              Text(
+                // SAID PLAINLY, because the next publish writes over them.
+                '${count(listed, 'edit')} ${listed == 1 ? 'is' : 'are'} in '
+                'tabs the app writes but cannot read back, such as a room\'s '
+                'listing. ${listed == 1 ? 'It is' : 'They are'} not brought '
+                'in: make ${listed == 1 ? 'it' : 'them'} in the app. Apply '
+                'keeps the whole list in the history file beside the project'
+                '${widget.beforePublish ? ', and the copy is then written over' : ''}.',
+                key: const ValueKey('online_import_listed_only'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: warningOn(surface),
+                ),
+              ),
+            ],
             const Divider(height: 20),
             Text(
               'Nothing is ever deleted by an import: a row missing from the '
@@ -727,7 +986,13 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
         FilledButton(
           key: const ValueKey('online_import_apply'),
           onPressed: (changes.isEmpty || _busy) ? null : _apply,
-          child: const Text('Apply'),
+          child: Text(
+            applicable == 0
+                ? (widget.beforePublish
+                    ? 'Keep in history and publish'
+                    : 'Keep in history')
+                : (widget.beforePublish ? 'Apply and publish' : 'Apply'),
+          ),
         ),
       ],
     );
@@ -800,13 +1065,35 @@ Future<void> offerHeldOnlineEdits(
         provider: provider,
         read: hold.read,
         changes: hold.changes,
-        source: hold.file,
+        source: hold.sheet ? kOnlineSheetLabel : hold.file,
+        beforePublish: true,
       ),
     );
     // Backed out at the review: nothing came in, so nothing goes out. The hold
     // stands and the next save asks again, which is the right nag - the copy
     // people are reading is stale until somebody decides about it.
     if (applied == null || !context.mounted) return;
+
+    // THE OTHER COPY MAY HAVE BEEN TYPED IN AS WELL. The save below goes over
+    // both, so what is in the second one is brought in first too.
+    final other = await provider.findHeldOnlineEdits(
+      folderCopy: hold.sheet,
+      sheetCopy: !hold.sheet,
+    );
+    if (!context.mounted) return;
+    if (other != null) {
+      final more = await showDialog<int>(
+        context: context,
+        builder: (_) => _ImportReviewDialog(
+          provider: provider,
+          read: other.read,
+          changes: other.changes,
+          source: other.sheet ? kOnlineSheetLabel : other.file,
+          beforePublish: true,
+        ),
+      );
+      if (more == null || !context.mounted) return;
+    }
 
     // SAVED AGAIN, not just published. Applying the import changed the job, so
     // the file written a moment ago is already behind it; publishing without
@@ -883,16 +1170,21 @@ class _HeldPublishDialog extends StatelessWidget {
           children: [
             Text(
               'The job has been saved. The online copy has NOT been updated, '
-              'because ${path.basename(hold.file)} has been typed in since '
+              'because '
+              '${hold.sheet ? 'the Google Sheet' : path.basename(hold.file)} '
+              'has been typed in since '
               'this app last wrote it - updating it now would write over '
               '$count change${count == 1 ? '' : 's'}.',
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),
-            _Point(
-              icon: Icons.schedule_outlined,
-              text: 'That file was last edited ${_editedWhen(hold.modified)}.',
-            ),
+            // A Sheet does not say when it was last typed in.
+            if (!hold.sheet)
+              _Point(
+                icon: Icons.schedule_outlined,
+                text:
+                    'That file was last edited ${_editedWhen(hold.modified)}.',
+              ),
             const _Point(
               icon: Icons.download_outlined,
               text: 'Bringing the changes in first costs nothing: every one is '

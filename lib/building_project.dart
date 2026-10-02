@@ -2797,6 +2797,28 @@ class BuildingProject {
   /// online_copy.dart.
   DateTime? onlineFileStamp;
 
+  /// The folder is kept but not written to - the job publishes to the Google
+  /// Sheet alone.
+  bool onlineFolderOff;
+
+  /// Publish to the live Google Sheet as well. See google_sheets_live.dart.
+  bool onlineSheetOn;
+
+  /// The Sheet's id. Shared with the project file on purpose, unlike
+  /// [onlineFolder]: it names one document in the cloud, so everybody who
+  /// opens the job publishes to the same Sheet. '' until the first publish
+  /// makes one, or somebody pastes a link.
+  String onlineSheetId;
+
+  /// What the Sheet's read-back tabs said when this app last wrote them - the
+  /// Sheet's answer to [onlineFileStamp].
+  String onlineSheetStamp;
+
+  bool get publishesToFolder =>
+      !onlineFolderOff && onlineFolder.trim().isNotEmpty;
+  bool get publishesToSheet => onlineSheetOn;
+  bool get hasOnlineDestination => publishesToFolder || publishesToSheet;
+
   /// Rooms on the refresh plan that have no config file — see [ManualRoom].
   /// They are counted, aged and budgeted; they are not priced, ordered or
   /// drawn, because there is nothing in them to price.
@@ -3050,6 +3072,10 @@ class BuildingProject {
     this.onlineAutoPublish = false,
     this.onlinePublishedAt,
     this.onlineFileStamp,
+    this.onlineFolderOff = false,
+    this.onlineSheetOn = false,
+    this.onlineSheetId = '',
+    this.onlineSheetStamp = '',
     List<ManualRoom>? manualRooms,
     List<ProjectVendor>? vendors,
     List<ProjectRfq>? rfqs,
@@ -3164,6 +3190,7 @@ class BuildingProject {
       budgetLines.isEmpty &&
       installWindows.isEmpty &&
       onlineFolder.trim().isEmpty &&
+      onlineSheetId.trim().isEmpty &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
       projectNumber.trim().isEmpty &&
@@ -4666,6 +4693,10 @@ class BuildingProject {
       'onlinePublishedAt': onlinePublishedAt!.toIso8601String(),
     if (onlineFileStamp != null)
       'onlineFileStamp': onlineFileStamp!.toIso8601String(),
+    if (onlineFolderOff) 'onlineFolderOff': true,
+    if (onlineSheetOn) 'onlineSheetOn': true,
+    if (onlineSheetId.trim().isNotEmpty) 'onlineSheetId': onlineSheetId.trim(),
+    if (onlineSheetStamp.isNotEmpty) 'onlineSheetStamp': onlineSheetStamp,
     if (manualRooms.isNotEmpty)
       'manualRooms': [for (final r in manualRooms) r.toJson()],
     'vendors': [for (final v in vendors) v.toJson()],
@@ -5111,6 +5142,10 @@ class BuildingProject {
       onlineFileStamp: DateTime.tryParse(
         json['onlineFileStamp']?.toString() ?? '',
       ),
+      onlineFolderOff: json['onlineFolderOff'] == true,
+      onlineSheetOn: json['onlineSheetOn'] == true,
+      onlineSheetId: json['onlineSheetId']?.toString().trim() ?? '',
+      onlineSheetStamp: json['onlineSheetStamp']?.toString() ?? '',
       manualRooms: manualRooms,
       vendors: vendors,
       rfqs: rfqs,
@@ -5296,6 +5331,10 @@ class BuildingProject {
     onlineAutoPublish: onlineAutoPublish,
     onlinePublishedAt: onlinePublishedAt,
     onlineFileStamp: onlineFileStamp,
+    onlineFolderOff: onlineFolderOff,
+    onlineSheetOn: onlineSheetOn,
+    onlineSheetId: onlineSheetId,
+    onlineSheetStamp: onlineSheetStamp,
     manualRooms: List<ManualRoom>.from(manualRooms),
     vendors: List<ProjectVendor>.from(vendors),
     rfqs: List<ProjectRfq>.from(rfqs),

@@ -1306,15 +1306,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           avRowIcon(
                             catalogPart.isEmpty
                                 ? Icons.library_add_outlined
-                                : Icons.edit_note,
+                                : _linkedIcon(line),
                             catalogPart.isEmpty
                                 ? 'Add this line to the device catalog'
-                                : 'Edit $catalogPart in the catalog',
+                                : _linkedTip(line, catalogPart, 'catalog'),
                             catalogPart.isNotEmpty
-                                ? () => _addToCatalog(
+                                ? () => _editCatalogFromLine(
                                     context,
                                     provider,
-                                    suggestedModel: catalogPart,
+                                    catalogPart,
+                                    line,
                                   )
                                 : extra != null
                                 ? () => _addLineToCatalog(
@@ -1631,15 +1632,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           avRowIcon(
                             catalogPart.isEmpty
                                 ? Icons.library_add_outlined
-                                : Icons.edit_note,
+                                : _linkedIcon(line),
                             catalogPart.isEmpty
                                 ? 'Add this line to the parts list'
-                                : 'Edit $catalogPart in the parts list',
+                                : _linkedTip(line, catalogPart, 'parts list'),
                             catalogPart.isNotEmpty
-                                ? () => _addToCatalog(
+                                ? () => _editCatalogFromLine(
                                     context,
                                     provider,
-                                    suggestedModel: catalogPart,
+                                    catalogPart,
+                                    line,
                                   )
                                 : extra != null
                                 ? () => _addLineToCatalog(
@@ -1968,15 +1970,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               avRowIcon(
                                 catalog == null
                                     ? Icons.library_add_outlined
-                                    : Icons.edit_note,
+                                    : _linkedIcon(line),
                                 catalog == null
                                     ? 'Add this cable type to the catalog'
-                                    : 'Edit ${catalog.model} in the catalog',
+                                    : _linkedTip(line, catalog.model, 'catalog'),
                                 catalog != null
-                                    ? () => _addToCatalog(
+                                    ? () => _editCatalogFromLine(
                                           context,
                                           provider,
-                                          suggestedModel: catalog.model,
+                                          catalog.model,
+                                          line,
                                         )
                                     : () => _addToCatalog(
                                           context,
@@ -2155,16 +2158,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               avRowIcon(
                                 item.catalogModel.isEmpty
                                     ? Icons.library_add_outlined
-                                    : Icons.edit_note,
+                                    : _linkedIcon(line),
                                 item.catalogModel.isEmpty
                                     ? 'Add this line to the device catalog'
-                                    : 'Edit ${item.catalogModel} in the '
-                                          'catalog',
+                                    : _linkedTip(
+                                        line,
+                                        item.catalogModel,
+                                        'catalog',
+                                      ),
                                 item.catalogModel.isNotEmpty
-                                    ? () => _addToCatalog(
+                                    ? () => _editCatalogFromLine(
                                           context,
                                           provider,
-                                          suggestedModel: item.catalogModel,
+                                          item.catalogModel,
+                                          line,
                                         )
                                     : () => _addLineToCatalog(
                                           context,
@@ -4440,6 +4447,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     BuildContext context,
     AppStateProvider provider, {
     required String suggestedModel,
+    String manufacturer = '',
     String partNumber = '',
     String category = '',
     int rackUnits = 0,
@@ -4450,6 +4458,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     String? rackItemLabel,
     /// The room override to clear once the catalog is the source of the price.
     String? priceKey,
+    /// The line whose typed maker and part number go once the catalog has them.
+    String? partKey,
     /// Said in the dialog when the entry cannot be tied to this row.
     String? unlinkedNote,
   }) async {
@@ -4474,7 +4484,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final modelController =
         TextEditingController(text: suggestedModel.trim());
     final makerController =
-        TextEditingController(text: current?.manufacturer ?? '');
+        TextEditingController(
+          text: manufacturer.trim().isNotEmpty
+              ? manufacturer.trim()
+              : (current?.manufacturer ?? ''),
+        );
     final partController = TextEditingController(
       text: partNumber.trim().isNotEmpty
           ? partNumber.trim()
@@ -4890,6 +4904,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             catalogModel: model,
           );
     final key = priceKey ?? link?.id;
+    if (partKey != null) provider.clearAvCostLinePart(partKey);
     if (key != null) provider.setAvCostPrice(key, null);
 
     final file = await provider.saveAvDeviceLibrary();
@@ -5246,6 +5261,48 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
         ],
       ),
+    );
+  }
+
+  /// The estimate's line for an item typed under Other items.
+  CostLine? _extraLineOf(CostEstimate estimate, CostLineItem item) =>
+      estimate.extras.where((l) => l.key == item.id).firstOrNull;
+
+  /// True when a line carries a maker, part number or price typed here in
+  /// place of the catalog's.
+  bool _lineChanged(CostLine? line) =>
+      line != null &&
+      (line.offCatalog || line.source == PriceSource.override);
+
+  IconData _linkedIcon(CostLine? line) =>
+      _lineChanged(line) ? Icons.library_add_outlined : Icons.edit_note;
+
+  String _linkedTip(CostLine? line, String part, String where) =>
+      _lineChanged(line)
+      ? "Save this line's changes to $part in the $where"
+      : 'Edit $part in the $where';
+
+  /// Opens [part]'s catalog entry from its row. A line with its own maker,
+  /// part number or price opens with those filled in, and saving puts the
+  /// line back on the catalog.
+  Future<void> _editCatalogFromLine(
+    BuildContext context,
+    AppStateProvider provider,
+    String part,
+    CostLine? line,
+  ) {
+    if (line == null || !_lineChanged(line)) {
+      return _addToCatalog(context, provider, suggestedModel: part);
+    }
+    return _addToCatalog(
+      context,
+      provider,
+      suggestedModel: part,
+      manufacturer: line.offCatalog ? line.manufacturer : '',
+      partNumber: line.offCatalog ? line.partNumber : '',
+      price: line.source == PriceSource.override ? line.unitPrice : 0,
+      priceKey: line.key,
+      partKey: line.key,
     );
   }
 
@@ -5913,15 +5970,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         avRowIcon(
                           item.catalogModel.isEmpty
                               ? Icons.library_add_outlined
-                              : Icons.edit_note,
+                              : _linkedIcon(_extraLineOf(estimate, item)),
                           item.catalogModel.isEmpty
                               ? 'Add this item to the device catalog'
-                              : 'Edit ${item.catalogModel} in the catalog',
+                              : _linkedTip(
+                                  _extraLineOf(estimate, item),
+                                  item.catalogModel,
+                                  'catalog',
+                                ),
                           item.catalogModel.isNotEmpty
-                              ? () => _addToCatalog(
+                              ? () => _editCatalogFromLine(
                                     context,
                                     provider,
-                                    suggestedModel: item.catalogModel,
+                                    item.catalogModel,
+                                    _extraLineOf(estimate, item),
                                   )
                               : () => _addLineToCatalog(
                                     context,

@@ -2643,6 +2643,26 @@ List<ReportSection> vendorPackageSections(
 Uint8List buildProjectWorkbookBytes({
   required ProjectEstimate estimate,
   DateTime? generated,
+  AvDeviceLibrary? library,
+  BaseCostBook? baseCosts,
+  PricingTier tier = PricingTier.msrp,
+  bool editable = false,
+  ClassScheduleIndex? classSchedule,
+}) => buildXlsx(buildProjectWorkbookSheets(
+  estimate: estimate,
+  generated: generated,
+  library: library,
+  baseCosts: baseCosts,
+  tier: tier,
+  editable: editable,
+  classSchedule: classSchedule,
+));
+
+/// The project workbook's sheets, before they are a file - the live Google
+/// Sheet is written from these directly. See google_sheets_live.dart.
+List<XlsxSheet> buildProjectWorkbookSheets({
+  required ProjectEstimate estimate,
+  DateTime? generated,
 
   /// The catalog and the base card, for pricing the replacement plan. Both
   /// optional because the estimate does not carry either and a caller that
@@ -2977,7 +2997,7 @@ Uint8List buildProjectWorkbookBytes({
     }
   }
 
-  return buildXlsx(sheets);
+  return sheets;
 }
 
 /// One vendor's quote request, as its own file.

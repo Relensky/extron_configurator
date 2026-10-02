@@ -33,6 +33,37 @@ import 'secret_store.dart';
 
 const kGoogleRefreshTokenKey = 'google_sheets_refresh_token';
 const kGoogleDriveFileScope = 'https://www.googleapis.com/auth/drive.file';
+
+/// The live Sheet's own sign-in - see google_sheets_live.dart. It has to
+/// reach a Sheet somebody else made, which `drive.file` cannot, so it is asked
+/// for separately and only by a job that publishes to one.
+const kGoogleLiveRefreshTokenKey = 'google_sheets_live_refresh_token';
+const kGoogleSpreadsheetsScope = 'https://www.googleapis.com/auth/spreadsheets';
+
+/// The client id and secret out of the JSON Google Cloud's "Download JSON"
+/// hands over for an OAuth client, or null when [text] is not one.
+({String clientId, String clientSecret, bool desktop})? parseGoogleClientJson(
+  String text,
+) {
+  try {
+    final doc = jsonDecode(text);
+    if (doc is! Map) return null;
+    // 'installed' is a Desktop app client, 'web' a web one.
+    final desktop = doc['installed'] is Map;
+    final inner = doc['installed'] ?? doc['web'] ?? doc;
+    if (inner is! Map) return null;
+    final id = inner['client_id']?.toString().trim() ?? '';
+    if (id.isEmpty) return null;
+    return (
+      clientId: id,
+      clientSecret: inner['client_secret']?.toString().trim() ?? '',
+      desktop: desktop,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
 const kXlsxMime =
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const kGoogleSheetMime = 'application/vnd.google-apps.spreadsheet';
@@ -66,10 +97,16 @@ class GoogleSheetsUploader {
   final UrlOpener openUrl;
   final HttpClient Function() httpClient;
 
+  /// What is asked for at sign-in, and where its refresh token is kept.
+  final String scope;
+  final String tokenKey;
+
   GoogleSheetsUploader({
     required this.clientId,
     required this.clientSecret,
     required this.secrets,
+    this.scope = kGoogleDriveFileScope,
+    this.tokenKey = kGoogleRefreshTokenKey,
     UrlOpener? openUrl,
     HttpClient Function()? httpClient,
   })  : openUrl = openUrl ?? _openInBrowser,
@@ -77,27 +114,39 @@ class GoogleSheetsUploader {
 
   bool get configured => clientId.trim().isNotEmpty;
 
-  /// Uploads [xlsx] as a new Google Sheet called [title]. Signs in first when
-  /// there is no stored refresh token (or it has been revoked).
-  Future<GoogleSheetsResult> upload(Uint8List xlsx, String title) async {
+  /// A token for [scope]. Opens the browser to sign in when there is no stored
+  /// one - unless [interactive] is off, as it is on a save, where a browser
+  /// window nobody asked for would be the wrong thing to open.
+  Future<String> accessToken({bool interactive = true}) async {
     if (!configured) {
       throw const GoogleSheetsException(
         'No Google client is set up - add one under App Config > Google '
         'Sheets.',
       );
     }
-    var token = await _accessTokenFromRefresh();
-    token ??= await _signIn();
-    return _uploadWith(token, xlsx, title);
+    final token = await _accessTokenFromRefresh();
+    if (token != null) return token;
+    if (!interactive) {
+      throw const GoogleSheetsException(
+        'not signed in to Google - press Publish in the Online copy box once',
+      );
+    }
+    return _signIn();
+  }
+
+  /// Uploads [xlsx] as a new Google Sheet called [title]. Signs in first when
+  /// there is no stored refresh token (or it has been revoked).
+  Future<GoogleSheetsResult> upload(Uint8List xlsx, String title) async {
+    return _uploadWith(await accessToken(), xlsx, title);
   }
 
   /// Forgets the stored sign-in, so the next upload asks again.
-  Future<void> signOut() => secrets.delete(kGoogleRefreshTokenKey);
+  Future<void> signOut() => secrets.delete(tokenKey);
 
   // --- signing in ----------------------------------------------------------
 
   Future<String?> _accessTokenFromRefresh() async {
-    final refresh = await secrets.read(kGoogleRefreshTokenKey);
+    final refresh = await secrets.read(tokenKey);
     if (refresh == null || refresh.isEmpty) return null;
     try {
       final json = await _postForm(Uri.parse('https://oauth2.googleapis.com/token'), {
@@ -110,7 +159,7 @@ class GoogleSheetsUploader {
     } catch (e) {
       // Revoked, expired or the client changed: sign in again.
       AppLogger.logInfo('Google sign-in needs renewing: $e');
-      await secrets.delete(kGoogleRefreshTokenKey);
+      await secrets.delete(tokenKey);
       return null;
     }
   }
@@ -128,7 +177,7 @@ class GoogleSheetsUploader {
       'client_id': clientId,
       'redirect_uri': redirect,
       'response_type': 'code',
-      'scope': kGoogleDriveFileScope,
+      'scope': scope,
       'code_challenge': challenge,
       'code_challenge_method': 'S256',
       'state': state,
@@ -158,7 +207,7 @@ class GoogleSheetsUploader {
       });
       final refresh = json['refresh_token']?.toString() ?? '';
       if (refresh.isNotEmpty) {
-        await secrets.write(kGoogleRefreshTokenKey, refresh);
+        await secrets.write(tokenKey, refresh);
       }
       final access = json['access_token']?.toString() ?? '';
       if (access.isEmpty) {

@@ -25,11 +25,16 @@ import 'av_flow_routing.dart' show autoDrawRoutingFromConfig;
 import 'processor_prompt.dart' show isControlProcessorCategory;
 import 'av_flow_view.dart' show buildAvFlowModel, seedAvFlowFromConfig;
 import 'export_tools.dart' show roomFileStem;
+import 'google_sheets_export.dart';
+import 'google_sheets_live.dart';
+import 'project_workbook.dart' show buildProjectWorkbookSheets;
 import 'online_copy.dart';
 import 'online_index.dart';
 import 'online_roundtrip.dart';
+import 'online_sheet_merge.dart';
 import 'room_workbook.dart';
 import 'cost_estimate.dart';
+import 'xlsx_reader.dart' show readXlsxSheets;
 import 'xlsx_writer.dart' show XlsxTheme;
 import 'labor_rates.dart';
 import 'model_swap.dart' as swap;
@@ -864,32 +869,145 @@ class AppStateProvider extends ChangeNotifier {
   static String _avatarStem(String user) =>
       user.trim().toLowerCase().replaceAll(RegExp(r'[^\w\-.]+'), '_');
 
-  /// Looked up at most once a minute per person - the presence strip is
-  /// redrawn every few seconds and the folder is on a share - so a picture a
-  /// colleague sets turns up within the minute.
-  final Map<String, ({String? file, DateTime at})> _avatarCache = {};
+  //  A LOCAL COPY IS WHAT IS SHOWN. The pictures used to be read off the
+  //  share every time a chip was drawn, so at startup - share not yet
+  //  answering, nothing in the image cache - the initials showed for a while
+  //  before the picture came. Each avatar is now copied into this computer's
+  //  own folder ([localAvatarFolder]) and drawn from there, at once; the copy
+  //  is checked against the share in the background, at most once a minute
+  //  per person, and replaced the moment the share's file differs - or taken
+  //  away when the share no longer has one. A share that cannot be reached
+  //  leaves the copy as it is.
 
-  /// [user]'s avatar on disk, or null when they have none.
+  /// This computer's copies of the avatars: `%APPDATA%\RoomConfigBuilder\
+  /// avatars`. Under test a scratch folder, unless [localAvatarFolderOverride]
+  /// names one.
+  String get localAvatarFolder =>
+      localAvatarFolderOverride ??
+      (runningUnderTest
+          ? path.join(Directory.systemTemp.path, 'rcb_test_avatars_$pid')
+          : path.join(userDataDirOrNull() ?? _appBaseDir(), 'avatars'));
+
+  /// Where this provider keeps its local avatar copies, for tests.
+  String? localAvatarFolderOverride;
+
+  /// stem -> the local copy shown for it, or null for none. Absent until the
+  /// local folder has been looked in once.
+  final Map<String, String?> _avatarCache = {};
+
+  /// stem -> when the copy was last checked against the share.
+  final Map<String, DateTime> _avatarCheckedAt = {};
+  final Map<String, Future<void>> _avatarChecking = {};
+
+  /// The local copy of [stem]'s avatar, whatever type it is, or null.
+  String? _localAvatar(String stem) {
+    for (final ext in _kAvatarTypes) {
+      final f = path.join(localAvatarFolder, '$stem$ext');
+      try {
+        if (File(f).existsSync()) return f;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// [user]'s avatar to draw - the local copy, which is on this computer's
+  /// own disk - or null when they have none. Checks it against the share in
+  /// the background when it has not been checked in the last minute.
   String? avatarFileFor(String user) {
     if (user.trim().isEmpty) return null;
     final stem = _avatarStem(user);
-    final cached = _avatarCache[stem];
     final now = DateTime.now();
-    if (cached != null && now.difference(cached.at).inSeconds < 60) {
-      return cached.file;
+    final checked = _avatarCheckedAt[stem];
+    if (checked == null || now.difference(checked).inSeconds >= 60) {
+      _avatarCheckedAt[stem] = now;
+      unawaited(_syncAvatar(stem));
     }
-    String? found;
+    return _avatarCache.putIfAbsent(stem, () => _localAvatar(stem));
+  }
+
+  /// Checks [user]'s local copy against the share now. For a caller that
+  /// wants the answer rather than the next redraw - and for tests.
+  Future<void> refreshAvatar(String user) {
+    final stem = _avatarStem(user);
+    _avatarCheckedAt[stem] = DateTime.now();
+    return _syncAvatar(stem);
+  }
+
+  /// Makes the local copy of [stem]'s avatar the same file the share holds.
+  /// Never throws.
+  Future<void> _syncAvatar(String stem) =>
+      _avatarChecking[stem] ??= () async {
+        try {
+          // The share not answering is not the share saying "no picture":
+          // the copy stays until the folder can actually be read.
+          if (!await Directory(avatarFolder).exists()) return;
+          String? shared;
+          for (final ext in _kAvatarTypes) {
+            final f = path.join(avatarFolder, '$stem$ext');
+            if (await File(f).exists()) {
+              shared = f;
+              break;
+            }
+          }
+          final local = _localAvatar(stem);
+          if (shared == null) {
+            if (local == null) {
+              _avatarCache[stem] = null;
+              return;
+            }
+            await _deleteLocalAvatars(stem);
+            _avatarCache[stem] = null;
+            AppLogger.logInfo('Avatar $stem removed on the share; local copy '
+                'taken away.');
+            notifyListeners();
+            return;
+          }
+          final target =
+              path.join(localAvatarFolder, path.basename(shared));
+          final bytes = await File(shared).readAsBytes();
+          if (local == target &&
+              _sameBytes(await File(local!).readAsBytes(), bytes)) {
+            _avatarCache[stem] = local;
+            return;
+          }
+          // A different file on the share: the copy is replaced whole -
+          // written beside it and renamed over, so a chip never draws half
+          // a picture.
+          await Directory(localAvatarFolder).create(recursive: true);
+          await _deleteLocalAvatars(stem, except: target);
+          final part = File('$target.part');
+          await part.writeAsBytes(bytes, flush: true);
+          await part.rename(target);
+          await FileImage(File(target)).evict();
+          _avatarCache[stem] = target;
+          AppLogger.logInfo('Avatar $stem copied from the share to $target.');
+          notifyListeners();
+        } catch (e) {
+          AppLogger.logError('Could not check the avatar $stem', e);
+        } finally {
+          _avatarChecking.remove(stem);
+        }
+      }();
+
+  static bool _sameBytes(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  Future<void> _deleteLocalAvatars(String stem, {String? except}) async {
     for (final ext in _kAvatarTypes) {
-      final f = path.join(avatarFolder, '$stem$ext');
+      final f = File(path.join(localAvatarFolder, '$stem$ext'));
+      if (f.path == except) continue;
       try {
-        if (File(f).existsSync()) {
-          found = f;
-          break;
+        if (await f.exists()) {
+          await FileImage(f).evict();
+          await f.delete();
         }
       } catch (_) {}
     }
-    _avatarCache[stem] = (file: found, at: now);
-    return found;
   }
 
   /// This copy's own avatar, or null.
@@ -909,9 +1027,16 @@ class AppStateProvider extends ChangeNotifier {
       await _deleteMyAvatarFiles(stem);
       final target = path.join(avatarFolder, '$stem$ext');
       await File(picture).copy(target);
+      // And the local copy straight away, so it shows without waiting on
+      // the next check against the share.
+      await Directory(localAvatarFolder).create(recursive: true);
+      await _deleteLocalAvatars(stem);
+      final local = path.join(localAvatarFolder, '$stem$ext');
+      await File(picture).copy(local);
       imageCache.clear();
       imageCache.clearLiveImages();
-      _avatarCache.remove(stem);
+      _avatarCache[stem] = local;
+      _avatarCheckedAt[stem] = DateTime.now();
       AppLogger.logInfo('Avatar set from $picture to $target.');
       notifyListeners();
       return '';
@@ -925,9 +1050,11 @@ class AppStateProvider extends ChangeNotifier {
   Future<void> removeMyAvatar() async {
     final stem = _avatarStem(collab.me.user);
     await _deleteMyAvatarFiles(stem);
+    await _deleteLocalAvatars(stem);
     imageCache.clear();
     imageCache.clearLiveImages();
-    _avatarCache.remove(stem);
+    _avatarCache[stem] = null;
+    _avatarCheckedAt[stem] = DateTime.now();
     notifyListeners();
   }
 
@@ -2063,15 +2190,6 @@ class AppStateProvider extends ChangeNotifier {
   int selectedTabIndex = AppTab.cost.index;
 
   void selectTab(int index) {
-    // WHERE THE ROOM WORK WAS. Closing a job puts the user back in room mode,
-    // and "back" has to mean the tab they were actually on rather than a tab
-    // the app picked - somebody who closed a project from the middle of
-    // cabling a room should land in cabling.
-    if (index != AppTab.project.index &&
-        index >= 0 &&
-        index < AppTab.values.length) {
-      _lastRoomTabIndex = index;
-    }
     // A CHANGE OF PAGE ENDS THE UNDO STEP. The histories otherwise close a
     // step when the document has sat still for a moment, which is right while
     // somebody types and arbitrary the rest of the time. Leaving a page is a
@@ -2106,11 +2224,6 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   int _tabBeforeSettings = AppTab.cost.index;
-
-  /// The last tab that was not the Project tab — where [closeProject] hands
-  /// the session back to. Starts at the tab a cold session opens on.
-  int get lastRoomTabIndex => _lastRoomTabIndex;
-  int _lastRoomTabIndex = AppTab.cost.index;
 
   // ---------------------------------------------------------------------
   //  SCHEMATIC TAB STATE
@@ -9322,8 +9435,8 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'rootFolderPath':
         rootFolderPath = value;
-        // Avatars live under the root, so they are looked up there afresh.
-        _avatarCache.clear();
+        // Avatars live under the root, so they are checked there afresh.
+        _avatarCheckedAt.clear();
         // A new root gets what it should hold before anything reads it.
         await ensureRootDefaults();
         // The root folder is the default base for every other path, so
@@ -13530,7 +13643,6 @@ class AppStateProvider extends ChangeNotifier {
     final index = tab.index;
     if (index == selectedTabIndex) return;
     selectedTabIndex = index;
-    _lastRoomTabIndex = index;
     notifyListeners();
   }
 
@@ -13986,6 +14098,10 @@ class AppStateProvider extends ChangeNotifier {
     _projectDocumentReplaced();
   }
 
+  /// The online copy's files the last [saveProject] could not write - open in
+  /// Excel, or held by the sync client. Empty when they all went.
+  List<String> lastOnlinePublishFailed = const [];
+
   /// Writes the project. Returns the error to show, or '' on success.
   ///
   /// [to] re-homes it — and re-homing a project REWRITES ITS ROOM PATHS,
@@ -14002,6 +14118,7 @@ class AppStateProvider extends ChangeNotifier {
   }) async {
     final target = to.isNotEmpty ? to : currentProjectPath;
     if (target.isEmpty) return 'The project has no file to save to yet.';
+    lastOnlinePublishFailed = const [];
 
     if (to.isNotEmpty && to != currentProjectPath) {
       // The campus pointer is stored relative to the project file too, so it
@@ -14043,7 +14160,10 @@ class AppStateProvider extends ChangeNotifier {
     // in the file being written — publishing afterwards would leave the job
     // dirty the instant it was saved, every time, and a save button that never
     // clears is a save button people stop believing.
-    if (project.onlineAutoPublish && project.onlineFolder.trim().isNotEmpty) {
+    if (project.onlineAutoPublish && project.hasOnlineDestination) {
+      // The file this save is on its way to, for what is kept beside it -
+      // see [_sheetBaselineFile].
+      _savingProjectTo = target;
       // FIRST, IS THERE ANYBODY IN THERE. A publish that would write over
       // somebody's typing stands down and says so, and the room's own save
       // goes ahead regardless: the two are different documents, and holding a
@@ -14056,21 +14176,33 @@ class AppStateProvider extends ChangeNotifier {
           'The online copy was not updated on save: '
           '${held.changes.length} change'
           '${held.changes.length == 1 ? '' : 's'} typed into '
-          '${path.basename(held.file)} would have been written over.',
+          '${held.sheet ? 'the Google Sheet' : path.basename(held.file)} '
+          'would have been written over.',
         );
       } else {
         final published = await publishOnlineCopy();
+        lastOnlinePublishFailed = [
+          for (final f in published.failed) f.split(' - ').first,
+        ];
+        if (published.written.isNotEmpty && published.failed.isNotEmpty) {
+          AppLogger.logError(
+            'The online copy was only partly updated on save - a file may be '
+            'open or locked: ${published.failed.join('; ')}',
+          );
+        }
         if (published.written.isEmpty) {
           // Logged, not thrown: a sync folder is a place another program has
           // its hands on, and a locked file must not cost somebody their save.
           // The stamp is left alone by publishOnlineCopy, so the box on the
           // Project tab still says how old the copy people are reading is.
           AppLogger.logError(
-            'The online copy could not be updated on save: '
+            'The online copy could not be updated on save - a file may be '
+            'open or locked: '
             '${published.failed.join('; ')}',
           );
         }
       }
+      _savingProjectTo = '';
     }
 
     try {
@@ -14978,7 +15110,7 @@ class AppStateProvider extends ChangeNotifier {
     project.onlineFolder = next;
     // Nowhere to write means nothing to write on save. A switch left reading
     // as on while doing nothing is worse than one that is off.
-    if (next.isEmpty) project.onlineAutoPublish = false;
+    if (!project.hasOnlineDestination) project.onlineAutoPublish = false;
     _logProjectEdit(
       itemKey: 'project',
       itemName: project.name,
@@ -14995,7 +15127,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Refused without a folder: there would be nowhere to write, and a switch
   /// that reads as on while doing nothing is worse than one that is off.
   void setProjectOnlineAutoPublish(bool on) {
-    final next = on && project.onlineFolder.trim().isNotEmpty;
+    final next = on && project.hasOnlineDestination;
     if (next == project.onlineAutoPublish) return;
     project.onlineAutoPublish = next;
     _logProjectEdit(
@@ -15008,6 +15140,100 @@ class AppStateProvider extends ChangeNotifier {
     );
     _projectChanged(repricing: false);
   }
+
+  /// Whether the sync folder is written to. Off keeps the path for later.
+  void setProjectOnlineToFolder(bool on) {
+    if (project.onlineFolderOff == !on) return;
+    project.onlineFolderOff = !on;
+    if (!project.hasOnlineDestination) project.onlineAutoPublish = false;
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Online copy',
+      summary: on
+          ? 'published into the sync folder again'
+          : 'no longer published into the sync folder',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Whether the live Google Sheet is written to.
+  void setProjectOnlineToSheet(bool on) {
+    if (project.onlineSheetOn == on) return;
+    project.onlineSheetOn = on;
+    if (!project.hasOnlineDestination) project.onlineAutoPublish = false;
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Online copy',
+      summary: on
+          ? 'published to a Google Sheet'
+          : 'no longer published to a Google Sheet',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Points the job at a Sheet by its link or id; '' has the next publish
+  /// make a new one.
+  void setProjectOnlineSheet(String linkOrId) {
+    final next = liveSheetIdFrom(linkOrId);
+    if (next == project.onlineSheetId) return;
+    project.onlineSheetId = next;
+    // A different Sheet: what the last one said is no guide to this one.
+    project.onlineSheetStamp = '';
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Online copy',
+      summary: next.isEmpty
+          ? 'Google Sheet cleared - the next publish makes a new one'
+          : 'pointed at a Google Sheet',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Stands in for Google in a test.
+  @visibleForTesting
+  GoogleLiveSheet? liveSheetOverride;
+
+  GoogleLiveSheet _liveSheet({required bool interactive}) =>
+      liveSheetOverride ??
+      GoogleLiveSheet.signedIn(
+        GoogleSheetsUploader(
+          clientId: googleClientId,
+          clientSecret: googleClientSecret,
+          secrets: _secrets,
+          scope: kGoogleSpreadsheetsScope,
+          tokenKey: kGoogleLiveRefreshTokenKey,
+        ),
+        interactive: interactive,
+      );
+
+  /// Fills the Google client in from the JSON Google Cloud exports for it.
+  /// Returns what to tell the person: '' when it went in as a Desktop client.
+  Future<String> loadGoogleClientFile(String file) async {
+    final String text;
+    try {
+      text = await File(file).readAsString();
+    } catch (e) {
+      return 'That file could not be read: $e';
+    }
+    final client = parseGoogleClientJson(text);
+    if (client == null) {
+      return 'That is not a Google OAuth client file - it has no client_id.';
+    }
+    await updateSetting('googleClientId', client.clientId);
+    await updateSetting('googleClientSecret', client.clientSecret);
+    googleClientRevision++;
+    notifyListeners();
+    return client.desktop
+        ? ''
+        : 'Loaded, but this is not a "Desktop app" client - the sign-in will '
+            'be refused. Make a Desktop app client in Google Cloud.';
+  }
+
+  /// Bumped when the client is loaded from a file, so its fields redraw.
+  int googleClientRevision = 0;
 
   // -------------------------------------------------------------------------
   //  NOT WRITING OVER SOMEBODY ELSE'S TYPING
@@ -15052,8 +15278,70 @@ class AppStateProvider extends ChangeNotifier {
   /// Nothing is written and nothing is thrown: a workbook that cannot be read
   /// is not evidence of edits, and refusing to save because a file was locked
   /// would be a worse bug than the one this fixes.
-  Future<OnlineHold?> findHeldOnlineEdits({String? folder}) async {
-    final target = (folder ?? project.onlineFolder).trim();
+  ///
+  /// Both destinations are looked at, the folder first. [folderCopy] and
+  /// [sheetCopy] narrow it to one.
+  Future<OnlineHold?> findHeldOnlineEdits({
+    String? folder,
+    bool folderCopy = true,
+    bool sheetCopy = true,
+  }) async {
+    if (folderCopy && (folder != null || !project.onlineFolderOff)) {
+      final held = await _heldInFolder((folder ?? project.onlineFolder).trim());
+      if (held != null) return held;
+    }
+    return sheetCopy ? _heldInSheet() : null;
+  }
+
+  /// What somebody typed into the live Google Sheet since this app wrote it.
+  ///
+  /// The fingerprint is the cheap gate here: the read-back tabs are fetched,
+  /// and only when they no longer say what the last publish left are they
+  /// compared with the job.
+  Future<OnlineHold?> _heldInSheet() async {
+    final id = project.onlineSheetId.trim();
+    if (!project.publishesToSheet || id.isEmpty) return null;
+    try {
+      final live = _liveSheet(interactive: false);
+      final grids = await live.read(id, kLiveReadBackSheets);
+      // The three tabs that are read back, when they have moved...
+      OnlineImport read = (
+        deliveries: const <ParsedDelivery>[],
+        pos: const <ParsedPo>[],
+        master: const <MasterEdit>[],
+        problems: const <String>[],
+        wrongFile: false,
+      );
+      var changes = const <OnlineChange>[];
+      if (liveSheetStamp(grids) != project.onlineSheetStamp) {
+        final review = reviewOnlineSheets(grids);
+        if (!review.read.wrongFile) {
+          read = review.read;
+          changes = review.changes;
+        }
+      }
+      // ...and every other tab, where typing cannot be brought in but must
+      // not be written over unseen.
+      changes = [...changes, ...await _liveSheetEdits(live)];
+      if (changes.isEmpty) return null;
+      return (
+        file: liveSheetUrl(id),
+        modified: DateTime.now(),
+        sheet: true,
+        read: read,
+        changes: changes,
+      );
+    } catch (e, stack) {
+      AppLogger.logError(
+        'The Google Sheet could not be checked for edits',
+        e,
+        stack,
+      );
+      return null;
+    }
+  }
+
+  Future<OnlineHold?> _heldInFolder(String target) async {
     if (target.isEmpty) return null;
 
     final stamp = onlineWorkbookStamp(
@@ -15070,7 +15358,7 @@ class AppStateProvider extends ChangeNotifier {
 
     try {
       final bytes = await File(stamp!.file).readAsBytes();
-      final review = reviewOnlineImport(bytes);
+      final review = reviewOnlineWorkbook(bytes);
       // A workbook with no editable sheets in it is not this job's published
       // copy — somebody dropped a different file in the folder under the same
       // name. Not our edits to rescue, and not our publish to stop.
@@ -15079,6 +15367,7 @@ class AppStateProvider extends ChangeNotifier {
       return (
         file: stamp.file,
         modified: stamp.modified,
+        sheet: false,
         read: review.read,
         changes: review.changes,
       );
@@ -15108,14 +15397,47 @@ class AppStateProvider extends ChangeNotifier {
     String? folder,
     bool includeProjectFile = true,
     DateTime? at,
+
+    /// Let the Google sign-in open a browser. Off on a save.
+    bool interactive = false,
   }) async {
     final target = (folder ?? project.onlineFolder).trim();
-    if (target.isEmpty) {
+    // A folder handed in is a folder asked for, whatever the switch says.
+    final toFolder =
+        target.isNotEmpty && (folder != null || !project.onlineFolderOff);
+    final toSheet = project.publishesToSheet;
+    final stamp = at ?? DateTime.now();
+    if (!toFolder && !toSheet) {
       return (
         folder: '',
         written: const <String>[],
         failed: const ['no folder has been picked'],
-        at: at ?? DateTime.now(),
+        at: stamp,
+      );
+    }
+    final estimate = priceProject();
+    final classes = await classScheduleForExport();
+
+    // THE SHEET GOES ALONGSIDE THE FOLDER, and neither waits on the other: a
+    // locked file must not keep the Sheet stale, nor Google being unreachable
+    // the folder.
+    String? sheetError;
+    if (toSheet) {
+      try {
+        await _publishLiveSheet(estimate, classes, stamp, interactive);
+      } catch (e, stack) {
+        sheetError = '$e';
+        AppLogger.logError('The Google Sheet could not be updated', e, stack);
+      }
+    }
+    if (!toFolder) {
+      final ok = sheetError == null;
+      if (ok) _notePublished(stamp, written: 1, failed: 0);
+      return (
+        folder: '',
+        written: [if (ok) kOnlineSheetLabel],
+        failed: [if (!ok) '$kOnlineSheetLabel - $sheetError'],
+        at: stamp,
       );
     }
     if (target != project.onlineFolder) setProjectOnlineFolder(target);
@@ -15129,8 +15451,8 @@ class AppStateProvider extends ChangeNotifier {
         BuildingProject.resolvePath(room.configPath, currentProjectPath),
     ];
 
-    final result = await writeOnlineCopy(
-      estimate: priceProject(),
+    final files = await writeOnlineCopy(
+      estimate: estimate,
       folder: target,
       source: currentProjectPath,
       roomPaths: roomPaths,
@@ -15140,36 +15462,163 @@ class AppStateProvider extends ChangeNotifier {
       library: avDeviceLibrary,
       baseCosts: baseCosts,
       tier: pricingTier,
-      classSchedule: await classScheduleForExport(),
+      classSchedule: classes,
       includeProjectFile: includeProjectFile,
-      at: at,
+      at: stamp,
+    );
+    final OnlineCopyResult result = (
+      folder: files.folder,
+      written: [
+        ...files.written,
+        if (toSheet && sheetError == null) kOnlineSheetLabel,
+      ],
+      failed: [
+        ...files.failed,
+        if (sheetError != null) '$kOnlineSheetLabel - $sheetError',
+      ],
+      at: files.at,
     );
 
-    if (result.written.isNotEmpty) {
-      project.onlinePublishedAt = result.at;
+    if (files.written.isNotEmpty) {
       // THE TIMESTAMP WE ARE RESPONSIBLE FOR, read back off the file we just
       // wrote rather than assumed from [result.at] — which is taken before the
       // bytes go down, and so is never what the filesystem ends up recording.
       // The next publish compares against this to find out whether anybody
       // else has been in the workbook since. See online_copy.dart.
-      project.onlineFileStamp = onlineWorkbookStamp(
+      final written = onlineWorkbookStamp(
         folder: target,
         workbookName: onlineWorkbookName(project),
-      )?.modified;
-      _onlineHold = null;
-      _logProjectEdit(
-        itemKey: 'project',
-        itemName: project.name,
-        field: 'Online copy',
-        summary: result.failed.isEmpty
-            ? 'published - ${result.written.length} file'
-                  '${result.written.length == 1 ? '' : 's'}'
-            : 'published - ${result.written.length} written, '
-                  '${result.failed.length} failed',
       );
-      _projectChanged(repricing: false);
+      project.onlineFileStamp = written?.modified;
+      // EVERY TAB, as for the live Sheet - what the next publish and every
+      // pull compare the workbook against. See online_sheet_merge.dart.
+      if (written != null) {
+        try {
+          writeSheetBaseline(
+            _sheetBaselineFile,
+            workbookGrids(await File(written.file).readAsBytes()),
+            workbook: true,
+          );
+        } catch (e, stack) {
+          AppLogger.logError(
+            'What the published workbook says could not be kept for the next '
+            'comparison',
+            e,
+            stack,
+          );
+        }
+      }
+    }
+    if (result.written.isNotEmpty) {
+      _notePublished(
+        result.at,
+        written: result.written.length,
+        failed: result.failed.length,
+      );
     }
     return result;
+  }
+
+  /// Records that a publish landed somewhere.
+  void _notePublished(DateTime at, {required int written, required int failed}) {
+    project.onlinePublishedAt = at;
+    _onlineHold = null;
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Online copy',
+      summary: failed == 0
+          ? 'published - $written file${written == 1 ? '' : 's'}'
+          : 'published - $written written, $failed failed',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Writes the job into its Google Sheet, making the Sheet on the first go.
+  Future<void> _publishLiveSheet(
+    ProjectEstimate estimate,
+    ClassScheduleIndex? classes,
+    DateTime stamp,
+    bool interactive,
+  ) async {
+    final live = _liveSheet(interactive: interactive);
+    final sheets = buildProjectWorkbookSheets(
+      estimate: estimate,
+      library: avDeviceLibrary,
+      baseCosts: baseCosts,
+      tier: pricingTier,
+      classSchedule: classes,
+      generated: stamp,
+      editable: true,
+    );
+    var id = project.onlineSheetId.trim();
+    if (id.isEmpty) {
+      id = await live.create(
+        onlineFileStem(project).replaceAll('_', ' '),
+        firstTab: sheets.first.name,
+      );
+      project.onlineSheetId = id;
+    }
+    await live.write(id, sheets);
+    // What it says now, so the next publish can tell whether anybody typed.
+    try {
+      project.onlineSheetStamp =
+          liveSheetStamp(await live.read(id, kLiveReadBackSheets));
+    } catch (_) {
+      project.onlineSheetStamp = '';
+    }
+    // EVERY TAB, kept beside the project - what the next publish and every
+    // pull compare the Sheet against, cell by cell. See
+    // online_sheet_merge.dart.
+    try {
+      writeSheetBaseline(
+        _sheetBaselineFile,
+        await live.read(id, [for (final s in sheets) s.name], entered: true),
+      );
+    } catch (e, stack) {
+      AppLogger.logError(
+        'What the Google Sheet says could not be kept for the next comparison',
+        e,
+        stack,
+      );
+    }
+  }
+
+  /// The project file the Sheet's baseline is kept beside.
+  ///
+  /// A save publishes BEFORE it writes the file, so on a first save or a Save
+  /// As the job's path is not yet the one it is being saved to; the save says
+  /// where it is going.
+  String get _sheetBaselineFile =>
+      _savingProjectTo.isNotEmpty ? _savingProjectTo : currentProjectPath;
+  String _savingProjectTo = '';
+
+  /// What has been typed into the Sheet's report tabs since the last publish
+  /// - the tabs the app writes and cannot read back. Listed, never applied.
+  /// Empty when no publish has kept a baseline yet.
+  Future<List<OnlineChange>> _liveSheetEdits(GoogleLiveSheet live) async {
+    final id = project.onlineSheetId.trim();
+    // On a Save As the baseline is still beside the file the job came from.
+    final baseline = readSheetBaseline(_sheetBaselineFile) ??
+        readSheetBaseline(currentProjectPath);
+    if (id.isEmpty || baseline == null) return const [];
+    final now = await live.read(id, baseline.keys.toList(), entered: true);
+    return sheetEdits(baseline, now, skip: kLiveReadBackSheets.toSet());
+  }
+
+  /// Everything a pull of the live Sheet finds: what [reviewOnlineSheets]
+  /// would bring in, then the edits in the other tabs, which are only listed.
+  /// Signs in when it has to - somebody pressed a button.
+  Future<({OnlineImport read, List<OnlineChange> changes})>
+      reviewLiveSheet() async {
+    final live = _liveSheet(interactive: true);
+    final review = reviewOnlineSheets(
+      await live.read(project.onlineSheetId.trim(), kLiveReadBackSheets),
+    );
+    return (
+      read: review.read,
+      changes: [...review.changes, ...await _liveSheetEdits(live)],
+    );
   }
 
   /// Reads the published workbook back and hands over what it would change.
@@ -15180,10 +15629,44 @@ class AppStateProvider extends ChangeNotifier {
   /// straight in is one people would be right to be frightened of.
   ({OnlineImport read, List<OnlineChange> changes}) reviewOnlineImport(
     Uint8List bytes,
+  ) => reviewOnlineSheets(readXlsxSheets(bytes));
+
+  /// [reviewOnlineImport], and then every other tab of the workbook compared
+  /// cell by cell with what the last publish wrote - see
+  /// online_sheet_merge.dart. Those are listed, never applied.
+  ({OnlineImport read, List<OnlineChange> changes}) reviewOnlineWorkbook(
+    Uint8List bytes,
+  ) {
+    final review = reviewOnlineImport(bytes);
+    final baseline = readSheetBaseline(_sheetBaselineFile, workbook: true) ??
+        readSheetBaseline(currentProjectPath, workbook: true);
+    if (baseline == null || review.read.wrongFile) return review;
+    return (
+      read: review.read,
+      changes: [
+        ...review.changes,
+        ...sheetEdits(
+          baseline,
+          workbookGrids(bytes),
+          skip: kLiveReadBackSheets.toSet(),
+        ),
+      ],
+    );
+  }
+
+  /// The live Google Sheet's tabs, for [reviewOnlineSheets]. Signs in when
+  /// it has to - this is only ever asked for by somebody pressing a button.
+  Future<Map<String, List<List<String>>>> readLiveSheet() => _liveSheet(
+        interactive: true,
+      ).read(project.onlineSheetId.trim(), kLiveReadBackSheets);
+
+  /// [reviewOnlineImport] over sheets already read as text.
+  ({OnlineImport read, List<OnlineChange> changes}) reviewOnlineSheets(
+    Map<String, List<List<String>>> sheets,
   ) {
     final estimate = priceProject();
-    final read = readOnlineEdits(
-      bytes,
+    final read = readOnlineEditsFromSheets(
+      sheets,
       roomIdsByName: {
         for (final entry in estimate.roomCodeNames.entries)
           entry.value.toLowerCase(): entry.key,

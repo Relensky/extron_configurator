@@ -125,6 +125,9 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showSavedSnackBar({
   required String message,
   required String savedPath,
   bool isFolder = false,
+
+  /// False for the document that is already open in the app.
+  bool offerOpenFile = true,
 }) {
   Future<void> run(Future<String?> Function() action) async {
     final error = await action();
@@ -152,7 +155,7 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showSavedSnackBar({
       content: Row(
         children: [
           Expanded(child: Text(message, overflow: TextOverflow.ellipsis)),
-          if (!isFolder)
+          if (!isFolder && offerOpenFile)
             TextButton(
               key: const ValueKey('saved_open_file'),
               style: actionStyle,
@@ -180,13 +183,15 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showSavedFileSnack(
   BuildContext context,
   AppStateProvider provider,
   String what,
-  String savedPath,
-) => showSavedSnackBar(
+  String savedPath, {
+  bool offerOpenFile = true,
+}) => showSavedSnackBar(
   messenger: ScaffoldMessenger.of(context),
   theme: Theme.of(context),
   provider: provider,
   message: '$what saved as ${roomConfigDisplayName(savedPath)}',
   savedPath: savedPath,
+  offerOpenFile: offerOpenFile,
 );
 
 /// And for an export that wrote several files into one folder.
