@@ -275,6 +275,11 @@ Map<RoomSidecarPart, List<String>> _roomPartCandidates(String configPath) {
     for (final part in RoomSidecarPart.values)
       part: [
         roomSidecarPath(configPath, part),
+        // Named for `upload_to_root` by an older build, in a room nobody has
+        // opened since - see [roomStem].
+        if (formerRoomFilePath(configPath, '${kRoomSidecarSuffix[part]}.json')
+            case final former when former.isNotEmpty)
+          former,
         legacyRoomSidecarPath(configPath, part),
         if (part == RoomSidecarPart.flow) ...[
           roomFilePath(configPath, 'avflow.json'),

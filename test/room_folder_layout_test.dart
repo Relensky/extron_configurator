@@ -45,6 +45,70 @@ void main() {
       expect(roomConfigDisplayName(config), path.join('ARTS_111', 'config.json'));
     });
 
+    test('in the processor\'s layout the room is the folder above code\\'
+        'upload_to_root', () {
+      final config = path.join(
+          'rooms', 'SCI248', 'code', 'upload_to_root', 'config.json');
+      expect(roomStem(config), 'SCI248');
+      expect(
+        roomSidecarPath(config, RoomSidecarPart.cost),
+        path.join('rooms', 'SCI248', 'code', 'upload_to_root', 'room_files',
+            'SCI248_cost.json'),
+      );
+      // Only those two folders are stepped over.
+      expect(roomStem(path.join('rooms', 'SCI248', 'config.json')), 'SCI248');
+      expect(
+          roomStem(path.join('upload_to_root', 'config.json')), 'upload_to_root');
+    });
+
+    test('files named for upload_to_root are renamed for the room on open, '
+        'and still read until then', () {
+      final config = write(path.join(
+          'rooms', 'SCI248', 'code', 'upload_to_root', 'config.json'));
+      final files = path.join(path.dirname(config), 'room_files');
+      for (final suffix in ['av_flow', 'cabling', 'cost', 'floor_plans',
+          'history', 'racks']) {
+        write(path.relative(
+            path.join(files, 'upload_to_root_$suffix.json'),
+            from: dir.path));
+      }
+      write(path.relative(path.join(files, 'upload_to_root_plan.png'),
+          from: dir.path), 'png');
+      // A part already under the room's name wins over the old one.
+      write(path.relative(path.join(files, 'SCI248_cost.json'), from: dir.path),
+          {'mine': true});
+
+      // Before the rename the old names are still found.
+      expect(
+        readableRoomSidecarPath(config, RoomSidecarPart.racks),
+        path.join(files, 'upload_to_root_racks.json'),
+      );
+
+      final renamed = renameRoomFilesToStem(config);
+
+      expect(renamed.toSet(), {
+        'SCI248_av_flow.json',
+        'SCI248_cabling.json',
+        'SCI248_floor_plans.json',
+        'SCI248_history.json',
+        'SCI248_racks.json',
+      });
+      expect(File(path.join(files, 'SCI248_racks.json')).existsSync(), isTrue);
+      expect(
+          File(path.join(files, 'upload_to_root_racks.json')).existsSync(),
+          isFalse);
+      // The kept one is untouched, and the old cost file left beside it.
+      expect(File(path.join(files, 'SCI248_cost.json')).readAsStringSync(),
+          contains('mine'));
+      expect(
+          File(path.join(files, 'upload_to_root_cost.json')).existsSync(),
+          isTrue);
+      // Pictures keep their names - the plans name them.
+      expect(File(path.join(files, 'upload_to_root_plan.png')).existsSync(),
+          isTrue);
+      expect(renameRoomFilesToStem(config), isEmpty);
+    });
+
     test('an older room keeps its old paths', () {
       final config = path.join('jobs', 'ARTS_111_config.json');
       expect(isFolderLayoutConfig(config), isFalse);

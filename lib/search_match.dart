@@ -129,3 +129,56 @@ Iterable<String> searchFilter(Iterable<String> candidates, String query) {
   final q = SearchQuery(query);
   return candidates.where(q.matches);
 }
+
+/// [searchFilter] for buildings and rooms, BEST MATCH FIRST - the way the
+/// CTS Dashboard's room search orders them.
+///
+/// Typing "SCI" means the Science building. Filtering in list order put
+/// Behavioral and Social Science (BSS) above it, because "Science" contains
+/// the letters and B comes before S. So matches are ranked, and each rank is
+/// alphabetical:
+///
+///  1. the building code IS what was typed - SCI for "sci";
+///  2. the code or the room name STARTS with it - SCI 101 for "sci", or for
+///     "sci 1";
+///  3. a word of the name starts with it - Behavioral and Social SCIence;
+///  4. everything else that matches.
+///
+/// [codeOf] gives a candidate's building code ("SCI"); [leadOf] the text it
+/// is known by first - the room name "SCI 101", or the code again for a
+/// building - and defaults to [codeOf].
+List<String> searchByBuilding(
+  Iterable<String> candidates,
+  String query, {
+  required String Function(String candidate) codeOf,
+  String Function(String candidate)? leadOf,
+}) {
+  final q = SearchQuery(query);
+  final whole = searchKey(query);
+  final first = q.terms.isEmpty ? '' : q.terms.first;
+  final lead = leadOf ?? codeOf;
+
+  int rank(String c) {
+    if (whole.isEmpty) return 3;
+    final code = searchKey(codeOf(c));
+    if (code.isNotEmpty && code == whole) return 0;
+    final l = searchKey(lead(c));
+    if ((code.isNotEmpty && code.startsWith(whole)) ||
+        (l.isNotEmpty && l.startsWith(whole))) {
+      return 1;
+    }
+    for (final word in c.split(_whitespace)) {
+      if (searchKey(word).startsWith(first)) return 2;
+    }
+    return 3;
+  }
+
+  final ranked = [
+    for (final c in candidates)
+      if (q.matches(c)) (rank: rank(c), text: c, key: c.toLowerCase()),
+  ]..sort((a, b) {
+      final byRank = a.rank.compareTo(b.rank);
+      return byRank != 0 ? byRank : a.key.compareTo(b.key);
+    });
+  return [for (final r in ranked) r.text];
+}

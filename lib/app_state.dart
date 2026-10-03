@@ -8624,6 +8624,13 @@ class AppStateProvider extends ChangeNotifier {
       AppLogger.logInfo('Moved the config folder beside '
           '$currentConfigPath into $kRoomFilesFolder.');
     }
+    // Named for the room (SCI248_cost.json), not for the processor's folder
+    // the config sits in (upload_to_root_cost.json) - see [roomStem].
+    final renamed = renameRoomFilesToStem(currentConfigPath);
+    if (renamed.isNotEmpty) {
+      AppLogger.logInfo('Renamed the room\'s files for the room: '
+          '${renamed.join(', ')}.');
+    }
     final moved = moveRoomFilesIntoFolder(currentConfigPath);
     if (moved.isEmpty) return;
     AppLogger.logInfo('Moved ${moved.join(', ')} into the '

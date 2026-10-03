@@ -74,4 +74,54 @@ void main() {
       expect(searchFilter(rooms, 'zzz').toList(), isEmpty);
     });
   });
+
+  group('searchByBuilding', () {
+    // The Setup Wizard's list: "Full Name (CODE)".
+    const buildings = [
+      'BEHAVIORAL AND SOCIAL SCIENCE (BSS)',
+      'ACKER GYMNASIUM (AGYM)',
+      'SCIENCE BUILDING (SCI)',
+      'SCIENCE ANNEX (SCIA)',
+      'PHYSICAL SCIENCE (PHSC)',
+    ];
+    String codeOf(String b) =>
+        RegExp(r'\(([^()]*)\)$').firstMatch(b)?.group(1) ?? '';
+
+    test('the building whose code was typed comes first, then the rest '
+        'alphabetically by how well they match', () {
+      expect(searchByBuilding(buildings, 'sci', codeOf: codeOf), [
+        'SCIENCE BUILDING (SCI)', // the code itself
+        'SCIENCE ANNEX (SCIA)', // a code that starts with it
+        'BEHAVIORAL AND SOCIAL SCIENCE (BSS)', // a word that starts with it
+        'PHYSICAL SCIENCE (PHSC)',
+      ]);
+    });
+
+    test('a name works too, and nothing matching gives nothing', () {
+      expect(searchByBuilding(buildings, 'acker', codeOf: codeOf),
+          ['ACKER GYMNASIUM (AGYM)']);
+      expect(searchByBuilding(buildings, 'zzz', codeOf: codeOf), isEmpty);
+    });
+
+    test('rooms: the typed building\'s rooms first, in room order', () {
+      const rooms = [
+        'BSS 103 - Behavioral and Social Science (10.0.0.1)',
+        'SCI 120 - Science Building (10.0.0.3)',
+        'SCI 101 - Science Building (10.0.0.2)',
+        'AGYM 129 - Acker Gymnasium (10.0.0.4)',
+      ];
+      List<String> search(String q) => searchByBuilding(
+            rooms,
+            q,
+            codeOf: (d) => d.split(' ').first,
+            leadOf: (d) => d.split(' - ').first,
+          );
+      expect(search('sci'), [
+        'SCI 101 - Science Building (10.0.0.2)',
+        'SCI 120 - Science Building (10.0.0.3)',
+        'BSS 103 - Behavioral and Social Science (10.0.0.1)',
+      ]);
+      expect(search('sci 12'), ['SCI 120 - Science Building (10.0.0.3)']);
+    });
+  });
 }

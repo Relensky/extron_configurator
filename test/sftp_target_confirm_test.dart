@@ -126,7 +126,8 @@ void main() {
     await tester.tap(search());
     await tester.pumpAndSettle();
     // Both rooms match, so the highlight starts on the first and Down moves
-    // it to the second.
+    // it to the second. Equally good matches are alphabetical (see
+    // searchByBuilding): AJH 125B first, BSS 103 second.
     await tester.enterText(search(), '10.248.1');
     await tester.pumpAndSettle();
 
@@ -135,7 +136,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    expect(provider.selectedProcessor?['roomName'], 'AJH 125B');
+    expect(provider.selectedProcessor?['roomName'], 'BSS 103');
   });
 
   testWidgets('typing in the search also clears, before any pick',

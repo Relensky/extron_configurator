@@ -2467,7 +2467,14 @@ class ProcessorSearchField extends StatelessWidget {
         if (text.isEmpty || text == initialText) return byDisplay.keys;
         // Separator-insensitive: "BSS103", "BSS 103" and "bss-103" all find
         // the same room, and an IP can be typed with or without its dots.
-        return searchFilter(byDisplay.keys, text);
+        // Best match first: the rooms of the building whose code was typed,
+        // then the rest - see searchByBuilding.
+        return searchByBuilding(
+          byDisplay.keys,
+          text,
+          codeOf: (d) => d.split(' ').first,
+          leadOf: (d) => d.split(' - ').first.split(' (').first,
+        );
       },
       onSelected: (String selection) {
         fieldFocus?.unfocus(); // Close the options overlay

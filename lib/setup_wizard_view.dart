@@ -81,9 +81,17 @@ class SetupWizardView extends StatelessWidget {
                     optionsBuilder: (TextEditingValue textEditingValue) {
                       if (textEditingValue.text.isEmpty) return formattedBuildings;
                       // Separator-insensitive, so the code and the full name
-                      // both match however they're spaced or punctuated.
-                      return searchFilter(
-                          formattedBuildings, textEditingValue.text);
+                      // both match however they're spaced or punctuated -
+                      // and the building whose CODE was typed comes first
+                      // ("sci" -> Science before Behavioral and Social
+                      // Science); see searchByBuilding.
+                      return searchByBuilding(
+                        formattedBuildings,
+                        textEditingValue.text,
+                        codeOf: (b) =>
+                            RegExp(r'\(([^()]*)\)$').firstMatch(b)?.group(1) ??
+                            '',
+                      );
                     },
                     onSelected: (String selection) {
                       // Store the building CODE from buildings.json - e.g.

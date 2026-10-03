@@ -209,16 +209,91 @@ bool isFolderLayoutConfig(String configPath) =>
     configPath.isNotEmpty &&
     path.basename(configPath).toLowerCase() == kRoomConfigFileName;
 
+/// Folders of the processor's own layout that sit between a room's folder and
+/// its `config.json`: `SCI248\code\upload_to_root\config.json`. They name a
+/// place on the processor, not the room.
+const Set<String> kProcessorLayoutFolders = {'upload_to_root', 'code'};
+
 /// The room's name on disk: the folder for a `config.json`, else the file
 /// name - `ARTS_111\config.json` and `ARTS_111_config.json` -> `ARTS_111` and
 /// `ARTS_111_config`.
+///
+/// PAST THE PROCESSOR'S FOLDERS. In the layout the processor is loaded from,
+/// `rooms\SCI248\code\upload_to_root\config.json`, the folder the config is
+/// in is `upload_to_root` - and every room's files were named
+/// `upload_to_root_av_flow.json`, `upload_to_root_cost.json`... So `code`
+/// and `upload_to_root` are stepped over, and the room is `SCI248`.
 String roomStem(String configPath) {
   if (configPath.isEmpty) return '';
   if (isFolderLayoutConfig(configPath)) {
-    final folder = path.basename(path.dirname(configPath));
-    if (folder.isNotEmpty && folder != '.') return folder;
+    var dir = path.dirname(configPath);
+    var folder = path.basename(dir);
+    while (kProcessorLayoutFolders.contains(folder.toLowerCase())) {
+      final up = path.dirname(dir);
+      final name = path.basename(up);
+      if (up == dir || name.isEmpty || name == '.') break;
+      dir = up;
+      folder = name;
+    }
+    if (folder.isNotEmpty &&
+        folder != '.' &&
+        !kProcessorLayoutFolders.contains(folder.toLowerCase())) {
+      return folder;
+    }
+    final own = path.basename(path.dirname(configPath));
+    if (own.isNotEmpty && own != '.') return own;
   }
   return path.basenameWithoutExtension(configPath);
+}
+
+/// What [roomStem] said before it stepped over the processor's folders -
+/// the folder the config is in - when that differs. The files a room wrote
+/// then are named for it.
+String _formerRoomStem(String configPath) {
+  if (!isFolderLayoutConfig(configPath)) return '';
+  final own = path.basename(path.dirname(configPath));
+  return own == roomStem(configPath) ? '' : own;
+}
+
+/// Where [roomFilePath] was while rooms in the processor's layout were named
+/// for `upload_to_root` - or '' when this room's name never differed.
+String formerRoomFilePath(String configPath, String suffix) {
+  final former = _formerRoomStem(configPath);
+  if (former.isEmpty) return '';
+  return path.join(roomFolderPath(configPath), '${former}_$suffix');
+}
+
+/// Renames the room's files from the stem an older build named them for
+/// (`upload_to_root_cost.json`) to the room's (`SCI248_cost.json`). A file
+/// already under the new name wins and the old one is left. Returns the new
+/// names. Called when a room is opened.
+List<String> renameRoomFilesToStem(String configPath) {
+  final old = _formerRoomStem(configPath);
+  if (old.isEmpty) return const [];
+  final folder = Directory(roomFolderPath(configPath));
+  if (!folder.existsSync()) return const [];
+  final stem = roomStem(configPath);
+  final prefix = '${old.toLowerCase()}_';
+  final companions = {for (final s in kRoomCompanionSuffixes) s.toLowerCase()};
+  final renamed = <String>[];
+  for (final entity in folder.listSync(followLinks: false)) {
+    if (entity is! File) continue;
+    final name = path.basename(entity.path);
+    final lower = name.toLowerCase();
+    if (!lower.startsWith(prefix) ||
+        !companions.contains(lower.substring(prefix.length))) {
+      continue;
+    }
+    final target = '${stem}_${name.substring(prefix.length)}';
+    try {
+      if (_moveEntity(entity, path.join(folder.path, target))) {
+        renamed.add(target);
+      }
+    } catch (_) {
+      // Left under its old name; the readers still find it there.
+    }
+  }
+  return renamed;
 }
 
 /// The file name to show for a room: `ARTS_111\config.json` for a
@@ -302,6 +377,11 @@ String legacyRoomFilePath(String configPath, String suffix) {
 String readableRoomFilePath(String configPath, String suffix) {
   final current = roomFilePath(configPath, suffix);
   if (current.isNotEmpty && File(current).existsSync()) return current;
+  // Still under the name an older build gave it (`upload_to_root_...`) - a
+  // file that could not be renamed, or one written since by a copy of the
+  // app that has not been updated.
+  final old = formerRoomFilePath(configPath, suffix);
+  if (old.isNotEmpty && File(old).existsSync()) return old;
   final legacy = legacyRoomFilePath(configPath, suffix);
   if (legacy.isNotEmpty && File(legacy).existsSync()) return legacy;
   return '';

@@ -161,7 +161,9 @@ Future<void> _writeOverrides(
     throw StateError('the config is not at $configPath');
   }
 
-  // Written, so filed where the room is written now.
+  // Written, so filed where the room is written now - and under the room's
+  // name rather than the processor folder's; see [roomStem].
+  renameRoomFilesToStem(configPath);
   moveRoomFilesIntoFolder(configPath);
 
   var cost =

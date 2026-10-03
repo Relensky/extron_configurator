@@ -35,8 +35,20 @@ const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
     version: '0.5.52',
     date: 'October 2, 2026',
-    title: 'The Excel workbook is checked tab by tab; avatars show at once',
+    title: 'Room files named for the room; best match first in building '
+        'search; the Excel workbook checked tab by tab; avatars show at once',
     changes: [
+      'A room loaded from the processor layout - rooms\\SCI248\\code\\'
+          'upload_to_root\\config.json - names its AV flow, cabling, cost, '
+          'floor plan, history and racks files for the room '
+          '(SCI248_cost.json), not for the folder (upload_to_root_cost.json). '
+          'Files already named for upload_to_root are renamed when the room '
+          'is opened. config.json keeps its name. Recent files, project '
+          'pricing and the campus view show the room\'s name too.',
+      'Building and room searches put the building whose code was typed '
+          'first: "SCI" lists Science before Behavioral and Social Science. '
+          'Then codes and rooms that start with what was typed, then names '
+          'with a word that does, each alphabetical.',
       'The workbook in the synced folder is now compared with what was last '
           'published on every tab and every cell, the same as the live '
           'Google Sheet. Edits to a room\'s tab are listed before a save or a '
