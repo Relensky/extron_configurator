@@ -108,6 +108,13 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
   /// every chat and project in the other.
   bool _full = false;
 
+  /// The chat docked across the top or bottom: its height follows a drag of
+  /// its inner edge as it happens; the page makes room for the height it
+  /// settles on, once the edge is let go, so the page is not laid out again
+  /// on every movement.
+  final ValueNotifier<double> _dockHeight = ValueNotifier(300);
+  double _dockRoom = 300;
+
   static const double _panelWidth = 440;
   static const Size _floatSize = Size(560, 600);
 
@@ -127,6 +134,7 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
     _link?.dispose();
     _floatAt.dispose();
     _slideWidth.dispose();
+    _dockHeight.dispose();
     super.dispose();
   }
 
@@ -196,13 +204,83 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
         final top = media.padding.top + kToolbarHeight;
         final slide = chat.open && mode == ChatMode.slideOut;
         final float = chat.open && mode == ChatMode.floating;
+        final dockTop = chat.open && mode == ChatMode.top;
+        final dockBottom = chat.open && mode == ChatMode.bottom;
+        final docked = dockTop || dockBottom;
+        final maxDock = (media.size.height * 0.8).clamp(160.0, 4000.0);
+        final room = _dockRoom.clamp(160.0, maxDock);
         final home = Offset(
           (media.size.width - _floatSize.width - 24).clamp(0, double.infinity),
           top + 24,
         );
         return Stack(
           children: [
-            widget.child,
+            // The page gives way to a chat docked at the top or bottom, so
+            // its scroll bars reach their last rows.
+            AnimatedPadding(
+              duration: const Duration(milliseconds: 150),
+              padding: EdgeInsets.only(
+                top: dockTop ? room : 0,
+                bottom: dockBottom ? room : 0,
+              ),
+              child: widget.child,
+            ),
+            // DOCKED ACROSS THE TOP OR BOTTOM, made taller from its inner
+            // edge.
+            if (docked && _link != null)
+              ValueListenableBuilder<double>(
+                valueListenable: _dockHeight,
+                child: RepaintBoundary(
+                  child: Material(
+                    key: const ValueKey('chat_docked'),
+                    elevation: 12,
+                    color: theme.colorScheme.surface,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          top: dockBottom ? 6 : 0,
+                          bottom: dockTop ? 6 : 0,
+                          child: ChatView(
+                            link: _link!,
+                            actions: [_searchButton()],
+                          ),
+                        ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: dockBottom ? 0 : null,
+                          bottom: dockTop ? 0 : null,
+                          height: 6,
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.resizeUpDown,
+                            child: GestureDetector(
+                              key: const ValueKey('chat_dock_resize'),
+                              behavior: HitTestBehavior.opaque,
+                              dragStartBehavior: DragStartBehavior.down,
+                              onVerticalDragUpdate: (d) => _dockHeight.value =
+                                  (_dockHeight.value +
+                                          (dockTop ? d.delta.dy : -d.delta.dy))
+                                      .clamp(160.0, maxDock),
+                              onVerticalDragEnd: (_) => setState(
+                                  () => _dockRoom = _dockHeight.value),
+                              child: Container(
+                                  color: theme.colorScheme.outlineVariant),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                builder: (context, height, child) => Positioned(
+                  left: 0,
+                  right: 0,
+                  top: dockTop ? 0 : null,
+                  bottom: dockBottom ? 0 : null,
+                  height: height.clamp(160.0, maxDock),
+                  child: child!,
+                ),
+              ),
             // THE SLIDE-OUT, from the right under the title bar: widened
             // from its left edge, or filling the screen beside the search.
             if (slide && _full && _link != null)

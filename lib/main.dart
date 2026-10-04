@@ -1034,7 +1034,8 @@ class _MainDashboardState extends State<MainDashboard> {
             control: true, shift: true): () =>
             _undoOnCurrentTab(context, provider, redo: true),
       },
-      child: CollabNoticeListener(child: ProjectChatLayer(child: page)),
+      child: CollabNoticeListener(
+          child: ProjectChatLayer(child: InAppBrowserInset(child: page))),
     );
   }
 

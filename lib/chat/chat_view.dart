@@ -211,6 +211,8 @@ class _ChatViewState extends State<ChatView> {
             onPressed: () => setState(() => _showPeople = !_showPeople),
           ),
           mode(ChatMode.slideOut, Icons.view_sidebar_outlined),
+          mode(ChatMode.top, Icons.border_top),
+          mode(ChatMode.bottom, Icons.border_bottom),
           mode(ChatMode.floating, Icons.picture_in_picture_alt_outlined),
           mode(ChatMode.window, Icons.open_in_new),
           IconButton(

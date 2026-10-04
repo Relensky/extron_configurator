@@ -257,8 +257,13 @@ class ChatChannel {
 /// How the chat is shown.
 enum ChatMode {
   slideOut('Slide-out'),
+  top('Top'),
+  bottom('Bottom'),
   floating('Floating panel'),
   window('Separate window');
+
+  /// Docked across the top or bottom of the window.
+  bool get docked => this == ChatMode.top || this == ChatMode.bottom;
 
   final String label;
   const ChatMode(this.label);

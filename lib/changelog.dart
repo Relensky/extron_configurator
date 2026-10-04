@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.57+67';
+const String kAppVersion = '0.5.58+68';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,23 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.58',
+    date: 'October 3, 2026',
+    title: 'Tabs in the built-in browser; the chat docks at the top or bottom',
+    changes: [
+      'The built-in browser has tabs: a link opened while it is up becomes a '
+          'new tab, + opens an empty one (type an address or something to '
+          'search for), and each tab closes on its own. Tabs not in front '
+          'keep their pages.',
+      'A docked browser takes its share of the window and the rest of the '
+          'app makes room for it, so scroll bars reach their last rows.',
+      'The chat can be docked across the top or the bottom of the window '
+          'too - the buttons in its title bar, or App Config > Working '
+          'together. Drag its inner edge to make it taller; the page makes '
+          'room for it.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.57',
     date: 'October 3, 2026',
