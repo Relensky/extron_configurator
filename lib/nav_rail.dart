@@ -95,6 +95,12 @@ const Set<AppTab> kRoomTabs = {
   AppTab.racks,
 };
 
+/// The rail's first row while no room is open: the start page - a new file,
+/// a new project or campus. It is what a room tab shows with no room, so it
+/// selects Cost; the row folds away once a room is open.
+const NavTab kStartNavTab =
+    NavTab(AppTab.cost, Icons.note_add_outlined, 'New File');
+
 /// The rail's tabs for a room, less the ones an estimate-only room hides.
 List<NavTab> visibleNavTabs({required bool estimateOnly}) => estimateOnly
     ? [
@@ -171,12 +177,16 @@ class AppNavRail extends StatefulWidget {
   /// when taken out of this set.
   final Set<AppTab> hidden;
 
+  /// Shows [kStartNavTab] at the top - while no room is open.
+  final bool showStart;
+
   const AppNavRail({
     super.key,
     required this.selectedIndex,
     required this.onDestinationSelected,
     this.tabs = kNavTabs,
     this.hidden = const {},
+    this.showStart = false,
   });
 
   @override
@@ -186,6 +196,7 @@ class AppNavRail extends StatefulWidget {
 class _AppNavRailState extends State<AppNavRail> {
   /// The rows actually showing.
   List<NavTab> get _shown => [
+        if (widget.showStart) kStartNavTab,
         for (final t in widget.tabs)
           if (!widget.hidden.contains(t.tab)) t,
       ];
@@ -400,6 +411,22 @@ class _AppNavRailState extends State<AppNavRail> {
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: Column(
                 children: [
+                  _FoldingRow(
+                    key: const ValueKey('rail_fold_start'),
+                    shown: widget.showStart,
+                    delay: Duration.zero,
+                    child: NavRailRow(
+                      key: const ValueKey('rail_start'),
+                      tab: kStartNavTab,
+                      // The start page is what a room tab shows with no room.
+                      selected: kRoomTabs.any(
+                          (t) => t.index == widget.selectedIndex),
+                      fit: fit,
+                      style: base,
+                      onTap: () =>
+                          widget.onDestinationSelected(kStartNavTab.tab.index),
+                    ),
+                  ),
                   for (var i = 0; i < widget.tabs.length; i++)
                     _FoldingRow(
                       key: ValueKey('rail_fold_${widget.tabs[i].tab.name}'),
@@ -479,13 +506,22 @@ class _FoldingRowState extends State<_FoldingRow>
 
   @override
   Widget build(BuildContext context) {
-    return SizeTransition(
+    final row = SizeTransition(
       sizeFactor: _curve,
       alignment: Alignment.topCenter,
       child: FadeTransition(
         opacity: _curve,
         child: IgnorePointer(ignoring: !widget.shown, child: widget.child),
       ),
+    );
+    // Folded right away: nothing built at all, only the empty slot it comes
+    // back into.
+    return AnimatedBuilder(
+      animation: _c,
+      child: row,
+      builder: (context, child) => _c.isDismissed && !widget.shown
+          ? const SizedBox(width: double.infinity, height: 0)
+          : child!,
     );
   }
 }

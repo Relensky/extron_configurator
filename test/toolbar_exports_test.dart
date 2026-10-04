@@ -270,12 +270,18 @@ void main() {
     expect(tester.getSize(fold('cost')).height, 0);
     expect(tester.getSize(fold('racks')).height, 0);
     expect(heightOf('Catalog'), greaterThan(0));
+    // New File in their place, opening the start page.
+    expect(tester.getSize(fold('start')).height, greaterThan(0));
+    await tester.tap(find.byKey(const ValueKey('rail_start')));
+    await tester.pumpAndSettle();
+    expect(p.selectedTabIndex, AppTab.cost.index);
 
     p.roomConfig = {'SYSTEM_SETUP': {}};
     p.notifyListeners();
     await tester.pumpAndSettle();
     expect(tester.getSize(fold('cost')).height, greaterThan(0));
     expect(tester.getSize(fold('racks')).height, greaterThan(0));
+    expect(tester.getSize(fold('start')).height, 0);
   });
 
   testWidgets('the rail folds away and comes back', (tester) async {

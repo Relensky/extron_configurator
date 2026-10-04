@@ -962,6 +962,9 @@ class _MainDashboardState extends State<MainDashboard> {
               // The room's own tabs wait until there is a room - opened, or
               // a new one started - and then drop in.
               hidden: hasConfig ? const {} : kRoomTabs,
+              // And the start page - new file, project or campus - in their
+              // place.
+              showStart: !hasConfig,
             ),
           ),
           Expanded(
