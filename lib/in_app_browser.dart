@@ -10,23 +10,69 @@ import 'package:webview_windows/webview_windows.dart';
 ///  A BROWSER INSIDE THE APP
 /// ============================================================================
 ///  Web pages - a Google Sheet, a processor's touch panel page - open in a
-///  floating window over the app instead of in the default browser, so the
-///  page and the work it is about sit side by side. Several can be open at
-///  once; each is dragged by its title bar, resized from its corner, and can
-///  fill the window or hand its page to the real browser.
+///  window over the app instead of in the default browser, so the page and
+///  the work it is about sit side by side. Several can be open at once. Each
+///  floats - dragged by its title bar, resized from its corner - or is docked
+///  to a side of the window and made larger from its inner edge; it can fill
+///  the window or hand its page to the real browser.
+///
+///  It sits in the app's own navigator layer, beside dialogs and menus, so
+///  it is placed and scaled the same way they are when the app is zoomed.
+///
+///  A resize is drawn as an outline while the pointer moves and applied once
+///  it is let go: resizing the page itself on every movement is what made it
+///  lag.
 ///
 ///  It is Microsoft Edge WebView2, which Windows 11 has built in. Sign-ins
-///  are kept in [userDataFolder], so Google asks once. Turned off in settings,
-///  or on a PC without WebView2, links open in the default browser as before.
+///  are kept in [InAppBrowser.userDataFolder], so Google asks once. Turned off
+///  in settings, or on a PC without WebView2, links open in the default
+///  browser as before.
 ///
 ///  Google's own sign-in for the app (OAuth) always uses the real browser:
 ///  Google refuses it inside an embedded one.
 /// ============================================================================
+
+/// Where the browser sits: a floating window, or docked to one side of the
+/// app's window, filling that side.
+enum BrowserDock {
+  floating('Floating window'),
+  left('Left side'),
+  right('Right side'),
+  top('Top'),
+  bottom('Bottom');
+
+  final String label;
+  const BrowserDock(this.label);
+
+  static BrowserDock byName(Object? name) => BrowserDock.values
+      .firstWhere((d) => d.name == name, orElse: () => BrowserDock.floating);
+
+  IconData get icon => switch (this) {
+        BrowserDock.floating => Icons.picture_in_picture_alt,
+        BrowserDock.left => Icons.border_left,
+        BrowserDock.right => Icons.border_right,
+        BrowserDock.top => Icons.border_top,
+        BrowserDock.bottom => Icons.border_bottom,
+      };
+}
+
 class InAppBrowser {
   InAppBrowser._();
 
   /// Whether links open here. Set from the app's settings.
   static bool enabled = true;
+
+  /// Where browsers sit - the app's setting. Windows already open follow a
+  /// change to it.
+  static final ValueNotifier<BrowserDock> dockSetting =
+      ValueNotifier(BrowserDock.floating);
+
+  static BrowserDock get dock => dockSetting.value;
+  static set dock(BrowserDock value) => dockSetting.value = value;
+
+  /// How much of the window a docked browser takes - dragged larger or
+  /// smaller from its inner edge, and kept for the next one this session.
+  static double dockFraction = 0.45;
 
   /// Where cookies and sign-ins are kept. Set by the app at start-up.
   static String userDataFolder = '';
@@ -47,8 +93,8 @@ class InAppBrowser {
     return _available!;
   }
 
-  /// Opens [url] in a floating browser over the app. False when it could not
-  /// be, so the caller can fall back to the default browser.
+  /// Opens [url] in a browser over the app. False when it could not be, so
+  /// the caller can fall back to the default browser.
   static Future<bool> open(BuildContext context, String url,
       {String? title}) async {
     if (!await available() || !context.mounted) return false;
@@ -64,7 +110,10 @@ class InAppBrowser {
       _environmentReady = true;
     }
     if (!context.mounted) return false;
-    final overlay = Overlay.of(context, rootOverlay: true);
+    // The navigator's layer - where dialogs and menus go - so the window is
+    // inside whatever zoom the app is drawn at, and its menus line up.
+    final overlay = Navigator.maybeOf(context, rootNavigator: true)?.overlay ??
+        Overlay.of(context);
     late OverlayEntry entry;
     final offset = Offset(60.0 + 28 * (_opened % 6), 80.0 + 28 * (_opened % 6));
     _opened++;
@@ -119,49 +168,30 @@ class _BrowserPanelState extends State<_BrowserPanel> {
   final WebviewController _web = WebviewController();
   final TextEditingController _address = TextEditingController();
   final List<StreamSubscription> _subs = [];
-  /// Where the window is and how big. A drag changes only this, so the
-  /// page inside is moved as it stands rather than rebuilt on every tick.
+
+  /// Where the floating window is and how big. A move changes only this, so
+  /// the page inside is moved as it stands rather than rebuilt.
   late final ValueNotifier<Rect> _frame =
       ValueNotifier(widget.start & const Size(1000, 700));
 
-  /// Where it was before it filled the screen.
-  Rect? _restore;
+  /// This window's share of the app's window when docked.
+  final ValueNotifier<double> _fraction =
+      ValueNotifier(InAppBrowser.dockFraction);
+
+  /// The outline drawn while a resize is under way; applied when let go.
+  final ValueNotifier<Rect?> _preview = ValueNotifier(null);
+  double? _previewFraction;
+
   bool _full = false;
 
-  Size _screen = Size.zero;
+  /// This window's side, starting on the app's setting.
+  late BrowserDock _dock = InAppBrowser.dock;
 
-  void _move(Offset delta) {
-    final r = _frame.value.shift(delta);
-    _frame.value = Rect.fromLTWH(
-      r.left.clamp(-r.width + 120, (_screen.width - 120).clamp(0, 1e9)),
-      r.top.clamp(0, (_screen.height - 48).clamp(0, 1e9)),
-      r.width,
-      r.height,
-    );
-  }
+  bool get _docked => _dock != BrowserDock.floating;
 
-  void _resize(Offset delta) {
-    final r = _frame.value;
-    _frame.value = Rect.fromLTWH(
-      r.left,
-      r.top,
-      (r.width + delta.dx).clamp(360, _screen.width),
-      (r.height + delta.dy).clamp(260, _screen.height),
-    );
-  }
+  /// The space the window has: the layer it is drawn in, measured.
+  Size _area = Size.zero;
 
-  void _toggleFull() {
-    setState(() {
-      _full = !_full;
-      if (_full) {
-        _restore = _frame.value;
-        _frame.value = Rect.fromLTWH(
-            8, 8, _screen.width - 16, _screen.height - 16);
-      } else {
-        _frame.value = _restore ?? (widget.start & const Size(1000, 700));
-      }
-    });
-  }
   bool _ready = false;
   bool _loading = true;
   bool _canBack = false;
@@ -169,11 +199,86 @@ class _BrowserPanelState extends State<_BrowserPanel> {
   String _title = '';
   String _error = '';
 
+  /// Where the window is drawn, docked or not, at docked share [f].
+  Rect _rect([double? f]) {
+    final w = _area.width;
+    final h = _area.height;
+    if (_full) return Rect.fromLTWH(8, 8, w - 16, h - 16);
+    final share = f ?? _fraction.value;
+    return switch (_dock) {
+      BrowserDock.floating => _frame.value,
+      BrowserDock.left => Rect.fromLTWH(0, 0, w * share, h),
+      BrowserDock.right => Rect.fromLTWH(w - w * share, 0, w * share, h),
+      BrowserDock.top => Rect.fromLTWH(0, 0, w, h * share),
+      BrowserDock.bottom => Rect.fromLTWH(0, h - h * share, w, h * share),
+    };
+  }
+
+  void _move(Offset delta) {
+    final r = _frame.value.shift(delta);
+    _frame.value = Rect.fromLTWH(
+      r.left.clamp(-r.width + 120, (_area.width - 120).clamp(0, 1e9)),
+      r.top.clamp(0, (_area.height - 48).clamp(0, 1e9)),
+      r.width,
+      r.height,
+    );
+  }
+
+  /// A docked window's inner edge, dragged: an outline until let go.
+  void _dragDockEdge(Offset d) {
+    if (_area.width <= 0 || _area.height <= 0) return;
+    final change = switch (_dock) {
+      BrowserDock.left => d.dx / _area.width,
+      BrowserDock.right => -d.dx / _area.width,
+      BrowserDock.top => d.dy / _area.height,
+      BrowserDock.bottom => -d.dy / _area.height,
+      BrowserDock.floating => 0.0,
+    };
+    final f = ((_previewFraction ?? _fraction.value) + change).clamp(0.2, 0.9);
+    _previewFraction = f;
+    _preview.value = _rect(f);
+  }
+
+  /// The floating window's corner, dragged: an outline until let go.
+  void _dragCorner(Offset d) {
+    final r = _preview.value ?? _frame.value;
+    _preview.value = Rect.fromLTWH(
+      r.left,
+      r.top,
+      (r.width + d.dx).clamp(360, _area.width),
+      (r.height + d.dy).clamp(260, _area.height),
+    );
+  }
+
+  /// The resize, applied.
+  void _endResize() {
+    final f = _previewFraction;
+    if (f != null) {
+      _fraction.value = f;
+      InAppBrowser.dockFraction = f;
+    } else if (_preview.value != null && !_docked) {
+      _frame.value = _preview.value!;
+    }
+    _previewFraction = null;
+    _preview.value = null;
+  }
+
+  void _setDock(BrowserDock d) {
+    if (!mounted) return;
+    setState(() {
+      _dock = d;
+      _full = false;
+    });
+  }
+
+  void _followSetting() => _setDock(InAppBrowser.dockSetting.value);
+
   @override
   void initState() {
     super.initState();
     _address.text = widget.url;
     _title = widget.title ?? '';
+    InAppBrowser.dockSetting.addListener(_followSetting);
     _start();
   }
 
@@ -210,12 +315,15 @@ class _BrowserPanelState extends State<_BrowserPanel> {
 
   @override
   void dispose() {
+    InAppBrowser.dockSetting.removeListener(_followSetting);
     for (final s in _subs) {
       s.cancel();
     }
     _web.dispose();
     _address.dispose();
     _frame.dispose();
+    _fraction.dispose();
+    _preview.dispose();
     super.dispose();
   }
 
@@ -226,9 +334,30 @@ class _BrowserPanelState extends State<_BrowserPanel> {
     _web.loadUrl(u);
   }
 
+  Widget _dockMenu() => MenuAnchor(
+        builder: (context, controller, _) => IconButton(
+          key: const ValueKey('browser_dock'),
+          tooltip: 'Where this window sits',
+          visualDensity: VisualDensity.compact,
+          icon: Icon(_dock.icon, size: 18),
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+        ),
+        menuChildren: [
+          for (final d in BrowserDock.values)
+            MenuItemButton(
+              key: ValueKey('browser_dock_${d.name}'),
+              leadingIcon: Icon(d.icon, size: 18),
+              trailingIcon:
+                  d == _dock ? const Icon(Icons.check, size: 16) : null,
+              onPressed: () => _setDock(d),
+              child: Text(d.label),
+            ),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
-    _screen = MediaQuery.of(context).size;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
@@ -236,10 +365,10 @@ class _BrowserPanelState extends State<_BrowserPanel> {
       behavior: HitTestBehavior.opaque,
       // Starts at once, not after the double-tap test has had its say.
       dragStartBehavior: DragStartBehavior.down,
-      onPanUpdate: _full ? null : (d) => _move(d.delta),
-      onDoubleTap: _toggleFull,
+      onPanUpdate: _full || _docked ? null : (d) => _move(d.delta),
+      onDoubleTap: () => setState(() => _full = !_full),
       child: MouseRegion(
-        cursor: _full ? MouseCursor.defer : SystemMouseCursors.move,
+        cursor: _full || _docked ? MouseCursor.defer : SystemMouseCursors.move,
         child: Container(
           color: scheme.surfaceContainerHigh,
           padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
@@ -294,12 +423,13 @@ class _BrowserPanelState extends State<_BrowserPanel> {
                 onPressed: () => launchUrl(Uri.parse(_address.text),
                     mode: LaunchMode.externalApplication),
               ),
+              _dockMenu(),
               IconButton(
                 tooltip: _full ? 'Restore' : 'Fill the window',
                 visualDensity: VisualDensity.compact,
                 icon: Icon(_full ? Icons.fullscreen_exit : Icons.fullscreen,
                     size: 18),
-                onPressed: _toggleFull,
+                onPressed: () => setState(() => _full = !_full),
               ),
               IconButton(
                 tooltip: 'Close',
@@ -313,10 +443,11 @@ class _BrowserPanelState extends State<_BrowserPanel> {
       ),
     );
 
+    final sideways = _dock == BrowserDock.left || _dock == BrowserDock.right;
     final window = RepaintBoundary(
       child: Material(
         elevation: 18,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_docked && !_full ? 0 : 10),
         clipBehavior: Clip.antiAlias,
         color: scheme.surface,
         child: Stack(
@@ -351,14 +482,40 @@ class _BrowserPanelState extends State<_BrowserPanel> {
                 ),
               ],
             ),
-            // Resized from the lower-right corner.
-            if (!_full)
+            // Docked: made larger or smaller from the inner edge.
+            if (_docked && !_full)
+              Positioned(
+                left: _dock == BrowserDock.left ? null : 0,
+                right: _dock == BrowserDock.right ? null : 0,
+                top: _dock == BrowserDock.top ? null : 0,
+                bottom: _dock == BrowserDock.bottom ? null : 0,
+                width: sideways ? 8 : null,
+                height: sideways ? null : 8,
+                child: MouseRegion(
+                  cursor: sideways
+                      ? SystemMouseCursors.resizeLeftRight
+                      : SystemMouseCursors.resizeUpDown,
+                  child: GestureDetector(
+                    key: const ValueKey('browser_dock_resize'),
+                    behavior: HitTestBehavior.opaque,
+                    dragStartBehavior: DragStartBehavior.down,
+                    onPanUpdate: (d) => _dragDockEdge(d.delta),
+                    onPanEnd: (_) => _endResize(),
+                    onPanCancel: _endResize,
+                    child: Container(color: scheme.outlineVariant),
+                  ),
+                ),
+              ),
+            // Floating: resized from the lower-right corner.
+            if (!_full && !_docked)
               Positioned(
                 right: 0,
                 bottom: 0,
                 child: GestureDetector(
                   dragStartBehavior: DragStartBehavior.down,
-                  onPanUpdate: (d) => _resize(d.delta),
+                  onPanUpdate: (d) => _dragCorner(d.delta),
+                  onPanEnd: (_) => _endResize(),
+                  onPanCancel: _endResize,
                   child: MouseRegion(
                     cursor: SystemMouseCursors.resizeDownRight,
                     child: Container(
@@ -375,10 +532,36 @@ class _BrowserPanelState extends State<_BrowserPanel> {
         ),
       ),
     );
-    return ValueListenableBuilder<Rect>(
-      valueListenable: _frame,
-      child: window,
-      builder: (context, r, child) => Positioned.fromRect(rect: r, child: child!),
+
+    // The layer it is drawn in, measured - not the window, which the app's
+    // zoom makes a different size.
+    return Positioned.fill(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          _area = constraints.biggest;
+          return ListenableBuilder(
+            listenable: Listenable.merge([_frame, _fraction, _preview]),
+            child: window,
+            builder: (context, child) => Stack(
+              children: [
+                Positioned.fromRect(rect: _rect(), child: child!),
+                if (_preview.value case final outline?)
+                  Positioned.fromRect(
+                    rect: outline,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: scheme.primary.withValues(alpha: 0.08),
+                          border: Border.all(color: scheme.primary, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

@@ -21,11 +21,13 @@ import 'package:extron_configurator/nav_rail.dart';
 /// is which, so a regression that quietly brings the scrollbar back on a
 /// laptop fails rather than passing.
 void main() {
+  // A room open, so every tab is in the rail - see kRoomTabs.
   AppStateProvider room({double scale = 1.0}) =>
       AppStateProvider(autoLoadSettings: false)
         ..settingsLoaded = true
         ..firstRunSetupNeeded = false
-        ..textScale = scale;
+        ..textScale = scale
+        ..roomConfig = {'SYSTEM_SETUP': {}};
 
   Future<void> pumpApp(
     WidgetTester tester,
@@ -163,6 +165,14 @@ void main() {
     });
 
     testWidgets('and brings a tab picked elsewhere into view', (tester) async {
+      // The pages themselves cannot lay out in a window this short; this is
+      // about the rail, so their overflow is not the failure here.
+      final previous = FlutterError.onError;
+      FlutterError.onError = (details) {
+        if (details.exceptionAsString().contains('overflowed')) return;
+        previous?.call(details);
+      };
+      addTearDown(() => FlutterError.onError = previous);
       final p = room();
       await pumpApp(tester, p, size: tiny);
       final pos = railScroll(tester);
@@ -177,7 +187,7 @@ void main() {
       // and a page that is a canvas: the Flow Rules editor at the very bottom
       // of the rail cannot lay itself out in 250 pixels at all, and this test
       // is about the rail rather than about that.
-      p.selectTab(AppTab.cabling.index);
+      p.selectTab(AppTab.schemaEditor.index);
       await tester.pumpAndSettle();
       expect(pos.pixels, greaterThan(0));
 

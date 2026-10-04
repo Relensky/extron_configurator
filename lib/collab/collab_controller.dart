@@ -140,6 +140,10 @@ class CollabController extends ChangeNotifier {
   int _held = 0;
   final _notices = StreamController<CollabNotice>.broadcast();
 
+  /// Who has already been announced on which file this session. A presence
+  /// file that drops out for a moment and comes back is not news.
+  final Set<String> _announced = {};
+
   /// Documents whose last check failed, so an outage is logged once.
   final Set<CollabDocKind> _failing = {};
 
@@ -260,6 +264,9 @@ class CollabController extends ChangeNotifier {
       changed = true;
     }
     for (final o in arrived) {
+      final key = '${doc.kind.name}|${o.user.toLowerCase()}@'
+          '${o.machine.toLowerCase()}|${file.toLowerCase()}';
+      if (!_announced.add(key)) continue;
       _notices.add(CollabNotice(
         doc.kind,
         '${o.user} (${o.machine}) has opened this ${collabDocNoun(doc.kind)} '
@@ -279,12 +286,18 @@ class CollabController extends ChangeNotifier {
           s.incoming = null;
         } else {
           final by = _latestSaver(others, file);
+          // Said once when changes start waiting; their next saves - an
+          // autosave every few minutes - only update the merge chip.
+          final news = s.incoming == null;
           s.incoming = IncomingChange(by: by, at: now);
-          _notices.add(CollabNotice(
-            doc.kind,
-            '${s.incoming!.who} saved changes to this '
-            '${collabDocNoun(doc.kind)}.',
-          ));
+          if (news) {
+            _notices.add(CollabNotice(
+              doc.kind,
+              '${s.incoming!.who} saved changes to this '
+              '${collabDocNoun(doc.kind)}. The merge button at the top brings '
+              'them in.',
+            ));
+          }
         }
         changed = true;
       }

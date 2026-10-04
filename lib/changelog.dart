@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.55+65';
+const String kAppVersion = '0.5.57+67';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -33,6 +33,61 @@ class ChangelogEntry {
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
+    version: '0.5.57',
+    date: 'October 3, 2026',
+    title: 'The built-in browser docks where it should; a clearer deployment '
+        'target',
+    changes: [
+      'The built-in browser sits in the same layer as dialogs and menus, so '
+          'its "where this window sits" menu opens by its button, docking to '
+          'a side works at any interface size, and a docked browser is made '
+          'larger by dragging its inner edge. A resize shows an outline and '
+          'is applied when the mouse is let go, which takes away the lag.',
+      'File > Deployment target: the X that clears the target is inside the '
+          'search field, where it reads as clearing the field rather than '
+          'closing the window.',
+
+      'The side menu: Cost, Lifecycle, Wizard, Devices, System, Raw JSON, '
+          'Schematic, AV Flow, Floor Plan, Cabling and Racks stay folded away '
+          'until a room is open or a new one started, then drop in one after '
+          'another.',
+      'Combining the changes a colleague saved always shows first what will '
+          'be added - each change, where it is and what it was - and waits '
+          'for you to confirm. Places you both changed are still asked about '
+          'after.',
+      'Somebody else editing is shown by their picture at the top - dimmed '
+          'while they are only looking - with the Combine button beside it. '
+          'The message that they opened the file shows once, and a waiting '
+          'save is announced once rather than at every autosave.',
+      'Chat: delete your own messages (the bin by the time), add a picture '
+          'with the picture button by Send - click it to see it full size - '
+          'and each message shows the picture of whoever wrote it beside '
+          'the name.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.56',
+    date: 'October 3, 2026',
+    title: 'An Everyone chat; search every chat and project; a wider chat; '
+        'older rooms show their data again',
+    changes: [
+      'An Everyone channel for anybody who uses the app, kept in the chat '
+          'folder in the Root Folder on the share. It is there with or without '
+          'a project open; @ names anybody who has opened the app.',
+      'Search every chat and every project: the search button on the title '
+          'bar, or in the chat. Projects are found by name anywhere under the '
+          'Root Folder, messages by what was said, who said it or the room. '
+          'Clicking one opens it - the project first when it is not open.',
+      'The chat slide-out is made wider by dragging its left edge. Its fill '
+          'the screen button puts the chat in one half and the search in the '
+          'other.',
+      'Rooms whose files were named for config.json by an older version '
+          '(config_cost.json and the rest, beside config.json or in a config '
+          'folder) show their data again, and are moved into room_files '
+          'under the name of the room when opened.',
+    ],
+  ),
+  ChangelogEntry(
     version: '0.5.55',
     date: 'October 3, 2026',
     title: 'Export by Convert; the chat on the title bar only; your logo kept '
@@ -53,6 +108,7 @@ const List<ChangelogEntry> kChangelog = [
       'Your profile is wider, so the scroll bar no longer sits on the '
           'Estimate PDF settings, and has a button by its title to make it '
           'fill the window.',
+
     ],
   ),
   ChangelogEntry(

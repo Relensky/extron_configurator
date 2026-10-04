@@ -150,6 +150,32 @@ void main() {
   });
 
   group('moving an older room', () {
+    test('files named for config.json itself are read, then moved in under '
+        'the name of the room', () {
+      final config = write(
+          path.join('BSS103', 'code', 'upload_to_root', 'config.json'));
+      final dir103 = path.dirname(config);
+      write(path.join('BSS103', 'code', 'upload_to_root', 'config_cost.json'),
+          {'cost': {}});
+      write(path.join('BSS103', 'code', 'upload_to_root', 'config', 'config_racks.json'),
+          {'racks': []});
+
+      // Found where they are, before anything moves.
+      expect(readableRoomSidecarPath(config, RoomSidecarPart.cost),
+          path.join(dir103, 'config_cost.json'));
+      expect(readableRoomSidecarPath(config, RoomSidecarPart.racks),
+          path.join(dir103, 'config', 'config_racks.json'));
+
+      moveOldConfigFolderIntoRoomFiles(config);
+      moveRoomFilesIntoFolder(config);
+
+      expect(readableRoomSidecarPath(config, RoomSidecarPart.cost),
+          path.join(dir103, 'room_files', 'BSS103_cost.json'));
+      expect(readableRoomSidecarPath(config, RoomSidecarPart.racks),
+          path.join(dir103, 'room_files', 'BSS103_racks.json'));
+      expect(File(path.join(dir103, 'config_cost.json')).existsSync(), isFalse);
+    });
+
     test('the config, its folder, loose files and pictures all move', () {
       final old = write('ARTS_111_config.json', {'SYSTEM_SETUP': {}});
       write(path.join('ARTS_111_config', 'ARTS_111_config_av_flow.json'));

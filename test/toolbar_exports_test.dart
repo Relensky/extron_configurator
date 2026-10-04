@@ -254,6 +254,30 @@ void main() {
     expect(labels, isNot(contains('App Config')));
   });
 
+  testWidgets('the room tabs wait in the rail until there is a room, then '
+      'drop in', (tester) async {
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..settingsLoaded = true
+      ..firstRunSetupNeeded = false;
+    await pumpApp(tester, p);
+    await tester.pumpAndSettle();
+    double heightOf(String label) => tester
+        .getSize(find.ancestor(
+            of: find.text(label), matching: find.byType(NavRailRow)))
+        .height;
+    Finder fold(String name) =>
+        find.byKey(ValueKey('rail_fold_$name'));
+    expect(tester.getSize(fold('cost')).height, 0);
+    expect(tester.getSize(fold('racks')).height, 0);
+    expect(heightOf('Catalog'), greaterThan(0));
+
+    p.roomConfig = {'SYSTEM_SETUP': {}};
+    p.notifyListeners();
+    await tester.pumpAndSettle();
+    expect(tester.getSize(fold('cost')).height, greaterThan(0));
+    expect(tester.getSize(fold('racks')).height, greaterThan(0));
+  });
+
   testWidgets('the rail folds away and comes back', (tester) async {
     await pumpApp(tester, room());
     expect(find.text('Devices'), findsWidgets);

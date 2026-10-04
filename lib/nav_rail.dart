@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'third_party/auris/auris.dart';
@@ -78,6 +79,22 @@ const List<NavTab> kNavTabs = [
   NavTab(AppTab.flowRules, Icons.rule_folder, 'Flow Rules'),
 ];
 
+/// The tabs about one room. They are out of the rail until a room is open
+/// or a new one started, and drop in one after another when one is.
+const Set<AppTab> kRoomTabs = {
+  AppTab.cost,
+  AppTab.lifecycle,
+  AppTab.wizard,
+  AppTab.devices,
+  AppTab.system,
+  AppTab.rawJson,
+  AppTab.schematic,
+  AppTab.avFlow,
+  AppTab.floorPlan,
+  AppTab.cabling,
+  AppTab.racks,
+};
+
 /// The rail's tabs for a room, less the ones an estimate-only room hides.
 List<NavTab> visibleNavTabs({required bool estimateOnly}) => estimateOnly
     ? [
@@ -150,11 +167,16 @@ class AppNavRail extends StatefulWidget {
   /// The rows to show. See [visibleNavTabs].
   final List<NavTab> tabs;
 
+  /// Tabs folded out of the rail for now - see [kRoomTabs]. They animate in
+  /// when taken out of this set.
+  final Set<AppTab> hidden;
+
   const AppNavRail({
     super.key,
     required this.selectedIndex,
     required this.onDestinationSelected,
     this.tabs = kNavTabs,
+    this.hidden = const {},
   });
 
   @override
@@ -162,6 +184,12 @@ class AppNavRail extends StatefulWidget {
 }
 
 class _AppNavRailState extends State<AppNavRail> {
+  /// The rows actually showing.
+  List<NavTab> get _shown => [
+        for (final t in widget.tabs)
+          if (!widget.hidden.contains(t.tab)) t,
+      ];
+
   /// Ours rather than the framework's, so the scrollbar has something to drag
   /// and so the rail can scroll the selected tab back into view on the short
   /// windows where scrolling is still needed.
@@ -194,13 +222,13 @@ class _AppNavRailState extends State<AppNavRail> {
     if (!_scroll.hasClients) return;
     final pos = _scroll.position;
     if (pos.maxScrollExtent <= 0) return; // everything is already on screen
+    final shown = _shown;
     final rowHeight =
-        (pos.viewportDimension + pos.maxScrollExtent) / widget.tabs.length;
+        (pos.viewportDimension + pos.maxScrollExtent) / shown.length;
     // The rail's own position, not the tab's: the two stopped being the same
     // number when Project and App Config moved into the banner. A tab that is
     // not in the rail has no row to reveal.
-    final row =
-        widget.tabs.indexWhere((t) => t.tab.index == widget.selectedIndex);
+    final row = shown.indexWhere((t) => t.tab.index == widget.selectedIndex);
     if (row < 0) return;
     final top = rowHeight * row;
     final bottom = top + rowHeight;
@@ -317,7 +345,7 @@ class _AppNavRailState extends State<AppNavRail> {
 
     for (int step = 0; step <= 8; step++) {
       final fit = candidate(1 - step / 8);
-      if (fit.rowHeight * widget.tabs.length <= height) return fit;
+      if (fit.rowHeight * _shown.length <= height) return fit;
     }
 
     // THE WORDS COME OFF. Fifteen legible labeled rows need more height than
@@ -328,14 +356,14 @@ class _AppNavRailState extends State<AppNavRail> {
     // tooltip so the word is still a hover away.
     final iconOnly = math.max(
       12.0,
-      math.min(_kIconMax, height / widget.tabs.length - _kPadMin * 2 - 1),
+      math.min(_kIconMax, height / _shown.length - _kPadMin * 2 - 1),
     );
     return (
       icon: iconOnly,
       font: math.max(_kFontMin, widthFont),
       pad: _kPadMin,
       rowHeight:
-          math.max(iconOnly + _kPadMin * 2, height / widget.tabs.length),
+          math.max(iconOnly + _kPadMin * 2, height / _shown.length),
       labels: false,
     );
   }
@@ -352,14 +380,13 @@ class _AppNavRailState extends State<AppNavRail> {
       builder: (context, constraints) {
         final key =
             '${constraints.maxWidth}x${constraints.maxHeight}'
-            '@${scaler.scale(10)}:${base.fontSize}:${widget.tabs.length}';
+            '@${scaler.scale(10)}:${base.fontSize}:${_shown.length}';
         if (key != _fitKey || _fit == null) {
           _fit = _computeFit(constraints.maxWidth, constraints.maxHeight, base);
           _fitKey = key;
         }
         final fit = _fit!;
-        final fits =
-            fit.rowHeight * widget.tabs.length <= constraints.maxHeight;
+        final fits = fit.rowHeight * _shown.length <= constraints.maxHeight;
 
         return Scrollbar(
           controller: _scroll,
@@ -373,14 +400,22 @@ class _AppNavRailState extends State<AppNavRail> {
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: Column(
                 children: [
-                  for (final tab in widget.tabs)
-                    NavRailRow(
-                      tab: tab,
-                      selected: tab.tab.index == widget.selectedIndex,
-                      fit: fit,
-                      style: base,
-                      onTap: () =>
-                          widget.onDestinationSelected(tab.tab.index),
+                  for (var i = 0; i < widget.tabs.length; i++)
+                    _FoldingRow(
+                      key: ValueKey('rail_fold_${widget.tabs[i].tab.name}'),
+                      shown: !widget.hidden.contains(widget.tabs[i].tab),
+                      // One after another, top first, so the eye follows
+                      // them down the rail.
+                      delay: Duration(milliseconds: 45 * i),
+                      child: NavRailRow(
+                        tab: widget.tabs[i],
+                        selected:
+                            widget.tabs[i].tab.index == widget.selectedIndex,
+                        fit: fit,
+                        style: base,
+                        onTap: () =>
+                            widget.onDestinationSelected(widget.tabs[i].tab.index),
+                      ),
                     ),
                 ],
               ),
@@ -388,6 +423,69 @@ class _AppNavRailState extends State<AppNavRail> {
           ),
         );
       },
+    );
+  }
+}
+
+/// A rail row that folds away to nothing and drops back in - growing to its
+/// height and fading up, after [delay] so a set of them arrives in order.
+class _FoldingRow extends StatefulWidget {
+  final bool shown;
+  final Duration delay;
+  final Widget child;
+
+  const _FoldingRow({
+    super.key,
+    required this.shown,
+    required this.delay,
+    required this.child,
+  });
+
+  @override
+  State<_FoldingRow> createState() => _FoldingRowState();
+}
+
+class _FoldingRowState extends State<_FoldingRow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: widget.shown ? 1 : 0,
+  );
+  late final Animation<double> _curve =
+      CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
+  Timer? _wait;
+
+  @override
+  void didUpdateWidget(_FoldingRow old) {
+    super.didUpdateWidget(old);
+    if (old.shown == widget.shown) return;
+    _wait?.cancel();
+    if (widget.shown) {
+      _wait = Timer(widget.delay, () {
+        if (mounted) _c.forward();
+      });
+    } else {
+      _c.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _wait?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizeTransition(
+      sizeFactor: _curve,
+      alignment: Alignment.topCenter,
+      child: FadeTransition(
+        opacity: _curve,
+        child: IgnorePointer(ignoring: !widget.shown, child: widget.child),
+      ),
     );
   }
 }

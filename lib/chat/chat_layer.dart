@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import 'chat_link.dart';
+import 'chat_search_view.dart';
 import 'chat_view.dart';
 import 'project_chat.dart';
 
@@ -98,6 +99,15 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
   final ValueNotifier<Offset?> _floatAt = ValueNotifier(null);
   final Map<String, Timer> _noticeTimers = {};
 
+  /// The slide-out's width, dragged from its left edge. Only the panel's
+  /// frame follows a drag; the chat inside is not rebuilt.
+  final ValueNotifier<double> _slideWidth = ValueNotifier(_panelWidth);
+  bool _resizing = false;
+
+  /// The slide-out filling the screen: the chat in one half, the search of
+  /// every chat and project in the other.
+  bool _full = false;
+
   static const double _panelWidth = 440;
   static const Size _floatSize = Size(560, 600);
 
@@ -116,6 +126,7 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
     }
     _link?.dispose();
     _floatAt.dispose();
+    _slideWidth.dispose();
     super.dispose();
   }
 
@@ -124,7 +135,7 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
     final provider = context.read<AppStateProvider>();
     final chat = provider.chat;
     final forMe = m.mentionsUser(chat.me.user);
-    final showing = chat.open && chat.channel == m.channel;
+    final showing = chat.open && chat.shownChannel == m.channel;
     if (showing) return;
     // A question, or my name: the chat comes up by itself.
     if (provider.chatPopUp && !chat.open && (forMe || m.text.contains('?'))) {
@@ -141,6 +152,25 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
       dismissChatNotice(m);
     });
   }
+
+  Widget _fullButton() => IconButton(
+        key: const ValueKey('chat_fill_screen'),
+        tooltip: _full
+            ? 'Back to the side'
+            : 'Fill the screen, with the search in the other half',
+        visualDensity: VisualDensity.compact,
+        icon: Icon(_full ? Icons.close_fullscreen : Icons.open_in_full,
+            size: 18),
+        onPressed: () => setState(() => _full = !_full),
+      );
+
+  Widget _searchButton() => IconButton(
+        key: const ValueKey('chat_search'),
+        tooltip: 'Search every chat and project',
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.manage_search, size: 18),
+        onPressed: () => showChatSearch(context),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -173,23 +203,96 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
         return Stack(
           children: [
             widget.child,
-            // THE SLIDE-OUT, from the right under the title bar.
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              top: top,
-              bottom: 0,
-              right: slide ? 0 : -_panelWidth - 16,
-              width: _panelWidth,
-              child: Material(
-                key: const ValueKey('chat_slide_out'),
-                elevation: 12,
-                color: theme.colorScheme.surface,
-                child: slide && _link != null
-                    ? ChatView(link: _link!)
-                    : const SizedBox.shrink(),
+            // THE SLIDE-OUT, from the right under the title bar: widened
+            // from its left edge, or filling the screen beside the search.
+            if (slide && _full && _link != null)
+              Positioned(
+                top: top,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Material(
+                  key: const ValueKey('chat_slide_out'),
+                  elevation: 12,
+                  color: theme.colorScheme.surface,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: ChatView(
+                          link: _link!,
+                          actions: [_fullButton()],
+                        ),
+                      ),
+                      const VerticalDivider(width: 1),
+                      const Expanded(
+                        child: ChatSearchPane(
+                          key: ValueKey('chat_full_search'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ValueListenableBuilder<double>(
+                valueListenable: _slideWidth,
+                child: RepaintBoundary(
+                  child: Material(
+                    key: const ValueKey('chat_slide_out'),
+                    elevation: 12,
+                    color: theme.colorScheme.surface,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: slide && _link != null
+                              ? ChatView(
+                                  link: _link!,
+                                  actions: [_searchButton(), _fullButton()],
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                        // The edge to drag.
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 8,
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.resizeLeftRight,
+                            child: GestureDetector(
+                              key: const ValueKey('chat_slide_resize'),
+                              behavior: HitTestBehavior.opaque,
+                              dragStartBehavior: DragStartBehavior.down,
+                              onHorizontalDragStart: (_) =>
+                                  setState(() => _resizing = true),
+                              onHorizontalDragUpdate: (d) =>
+                                  _slideWidth.value = (_slideWidth.value -
+                                          d.delta.dx)
+                                      .clamp(320.0, media.size.width * 0.9),
+                              onHorizontalDragEnd: (_) =>
+                                  setState(() => _resizing = false),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                builder: (context, width, child) => AnimatedPositioned(
+                  // Slides in and out; follows the pointer exactly while it
+                  // is being widened.
+                  duration: _resizing
+                      ? Duration.zero
+                      : const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  top: top,
+                  bottom: 0,
+                  right: slide ? 0 : -width - 16,
+                  width: width,
+                  child: child!,
+                ),
               ),
-            ),
             // THE FLOATING PANEL, dragged by its title.
             if (float && _link != null)
               ValueListenableBuilder<Offset?>(

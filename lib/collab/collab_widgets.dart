@@ -171,16 +171,18 @@ class CollabPresenceStrip extends StatelessWidget {
             ));
           }
         }
-        for (final kind in tabKinds) {
+        // Everybody with the room, the job or this page's document open:
+        // at full strength once they have changed something, dimmed while
+        // they are only looking - see [CollabEditorAvatar].
+        for (final kind in {...tabKinds, CollabDocKind.room, CollabDocKind.project}) {
           for (final other in collab.othersOn(kind)) {
-            // Only somebody who has CHANGED it. A colleague who merely has
-            // the file open is not editing it, and a chip for every reader
-            // made every open file look like it was being worked on.
-            if (!collabHasChanged(other)) continue;
             if (!seen.add(other.identity)) continue;
             editors.add((presence: other, kind: kind));
           }
         }
+        // Editors first.
+        editors.sort((a, b) => (collabHasChanged(b.presence) ? 1 : 0)
+            .compareTo(collabHasChanged(a.presence) ? 1 : 0));
         // A FEW ON THE BAR, THE REST IN A LIST. Five people editing at once
         // is five chips the bar has no room for.
         for (final e in editors.take(kCollabChipsShown)) {
@@ -283,7 +285,10 @@ class CollabEditorAvatar extends StatelessWidget {
                 TextSpan(text: '\n$about'),
               ],
             ),
-      child: Chip(
+      child: Opacity(
+        // Only looking: dimmed, so the people actually editing stand out.
+        opacity: collabHasChanged(presence) ? 1 : 0.55,
+        child: Chip(
         key: ValueKey('collab_editor_${presence.user}'),
         visualDensity: VisualDensity.compact,
         padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -311,6 +316,7 @@ class CollabEditorAvatar extends StatelessWidget {
           style: theme.textTheme.labelMedium,
         ),
         side: BorderSide(color: color, width: 1.5),
+      ),
       ),
     );
   }
@@ -461,6 +467,21 @@ Future<bool> _mergeNow(
   final who = collab.incomingOn(kind)?.who ?? 'the other editor';
   final preview = collab.previewMerge(kind);
 
+  // ALWAYS SHOWN FIRST: what their save brings in, before anything moves.
+  if (preview != null) {
+    if (!context.mounted) return false;
+    final go = await showMergeReviewDialog(
+      context,
+      kind: kind,
+      who: who,
+      preview: preview,
+      doc: collab.currentOf(kind),
+      beforeSave: beforeSave,
+    );
+    if (go != true) return false;
+    if (!context.mounted) return false;
+  }
+
   Map<String, MergeSide>? choices;
   if (preview != null && preview.conflicts.isNotEmpty) {
     choices = await showMergeConflictDialog(
@@ -519,6 +540,113 @@ Future<bool> reconcileBeforeSave(
   final preview = collab.previewMerge(kind);
   if (preview == null) return true;
   return _mergeNow(context, provider, kind, beforeSave: true);
+}
+
+/// What combining would bring in from [who]'s save - every change, in words -
+/// and how many places you both changed. True to go ahead.
+Future<bool?> showMergeReviewDialog(
+  BuildContext context, {
+  required CollabDocKind kind,
+  required String who,
+  required JsonMergeResult preview,
+  Object? doc,
+  bool beforeSave = false,
+}) {
+  final noun = collabDocNoun(kind);
+  final changes = preview.changes;
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) {
+      final theme = Theme.of(ctx);
+      final muted = theme.colorScheme.onSurfaceVariant;
+      String what(MergeChange c) {
+        if (c.added) return 'added: ${describeMergeValue(c.after)}';
+        if (c.removed) return 'removed (was ${describeMergeValue(c.before)})';
+        return 'was ${describeMergeValue(c.before)}, now '
+            '${describeMergeValue(c.after)}';
+      }
+
+      return AlertDialog(
+        key: const ValueKey('collab_review_dialog'),
+        title: Text('Combine the changes $who saved to this $noun?'),
+        content: SizedBox(
+          width: 680,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                changes.isEmpty
+                    ? 'Nothing of theirs is new to this copy.'
+                    : '${changes.length} change${changes.length == 1 ? '' : 's'} '
+                        'from $who will be added to your copy. Your own '
+                        'changes are kept.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              if (preview.conflicts.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '${preview.conflicts.length} '
+                  'place${preview.conflicts.length == 1 ? '' : 's'} you both '
+                  'changed will be shown next, for you to choose.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.tertiary),
+                ),
+              ],
+              if (changes.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(ctx).size.height * 0.5,
+                    ),
+                    child: ListView(
+                      key: const ValueKey('collab_review_list'),
+                      shrinkWrap: true,
+                      children: [
+                        for (final c in changes)
+                          ListTile(
+                            dense: true,
+                            leading: Icon(
+                              c.added
+                                  ? Icons.add_circle_outline
+                                  : c.removed
+                                      ? Icons.remove_circle_outline
+                                      : Icons.edit_outlined,
+                              size: 18,
+                              color: muted,
+                            ),
+                            title: Text(describeMergePlace(c.path, doc)),
+                            subtitle: Text(what(c),
+                                style: theme.textTheme.bodySmall
+                                    ?.copyWith(color: muted)),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(beforeSave ? 'Cancel the save' : 'Not now'),
+          ),
+          FilledButton(
+            key: const ValueKey('collab_review_confirm'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(preview.conflicts.isNotEmpty
+                ? 'Next'
+                : beforeSave
+                    ? 'Combine and save'
+                    : 'Combine'),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 /// Lists every place both people changed, in words, each with a choice.
@@ -689,11 +817,21 @@ class CollabNoticeListener extends StatefulWidget {
 class _CollabNoticeListenerState extends State<CollabNoticeListener> {
   StreamSubscription<CollabNotice>? _sub;
 
+  /// When each message was last shown: the same words again within a couple
+  /// of minutes are left to the chips at the top.
+  final Map<String, DateTime> _shown = {};
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _sub ??= context.read<AppStateProvider>().collab.notices.listen((n) {
       if (!mounted) return;
+      final now = DateTime.now();
+      final last = _shown[n.message];
+      if (last != null && now.difference(last) < const Duration(minutes: 2)) {
+        return;
+      }
+      _shown[n.message] = now;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 6),

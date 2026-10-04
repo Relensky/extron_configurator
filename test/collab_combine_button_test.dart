@@ -86,6 +86,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump();
 
+    // What will come in is shown first, and nothing moves until confirmed.
+    expect(find.byKey(const ValueKey('collab_review_dialog')), findsOneWidget);
+    expect(p.project.budgetLines.map((l) => l.item).toSet(), {'Mine'});
+    await tester.tap(find.byKey(const ValueKey('collab_review_confirm')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump();
+
     expect(
       p.project.budgetLines.map((l) => l.item).toSet(),
       {'Mine', 'Theirs'},

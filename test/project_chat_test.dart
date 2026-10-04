@@ -88,6 +88,85 @@ void main() {
     a.dispose();
   });
 
+  test('Everyone is shared through the root folder, project or not', () async {
+    final root = path.join(dir.path, 'share');
+    final a = person('alice', 'PC1');
+    final b = person('bob', 'PC2');
+    await a.attachEveryone(root);
+    await b.attachEveryone(root);
+    expect(a.channels.map((c) => c.id), [kChatEveryone]);
+    expect(a.shownChannel, kChatEveryone);
+
+    expect(await a.post('Anyone have a spare HDMI plate, @bob?'), '');
+    await b.poll();
+    expect(b.messages.single.channel, kChatEveryone);
+    expect(b.mentionCount, 1);
+    expect(Directory(everyoneChatFolder(root)).existsSync(), isTrue);
+
+    // A project alongside: its channels join, and its file never carries
+    // the shared channel's messages.
+    await b.attach(project);
+    expect(b.channels.first.id, kChatEveryone);
+    expect(b.channels.map((c) => c.id), contains(kChatGeneral));
+    await b.post('project only', to: kChatGeneral);
+    final projectFiles =
+        Directory(path.join(chatFolderFor(project), 'messages')).listSync();
+    final written = projectFiles
+        .whereType<File>()
+        .map((f) => f.readAsStringSync())
+        .join();
+    expect(written, contains('project only'));
+    expect(written, isNot(contains('HDMI')));
+    a.dispose();
+    b.dispose();
+  });
+
+  test('a message deleted by its author goes from every copy, and nobody '
+      'else can delete it', () async {
+    final a = person('alice', 'PC1');
+    final b = person('bob', 'PC2');
+    await a.attach(project);
+    await b.attach(project);
+    await a.post('wrong room, ignore', to: kChatGeneral);
+    await b.poll();
+    final id = b.messages.single.id;
+
+    expect(await b.deleteMessage(id), isNotEmpty);
+    expect(b.messages, hasLength(1));
+
+    expect(await a.deleteMessage(id), '');
+    expect(a.messages, isEmpty);
+    await b.poll();
+    expect(b.messages, isEmpty);
+
+    // A copy opened afterwards never shows it either.
+    final c = person('carol', 'PC3');
+    await c.attach(project);
+    expect(c.messages, isEmpty);
+    a.dispose();
+    b.dispose();
+    c.dispose();
+  });
+
+  test('a picture is copied into the chat folder and travels with the '
+      'message', () async {
+    final picture = File(path.join(dir.path, 'rack.png'))
+      ..writeAsBytesSync([1, 2, 3]);
+    final a = person('alice', 'PC1');
+    final b = person('bob', 'PC2');
+    await a.attach(project);
+    await b.attach(project);
+    expect(await a.post('', to: kChatGeneral, image: picture.path), '');
+    await b.poll();
+    final m = b.messages.single;
+    expect(m.text, '');
+    expect(m.image, startsWith('images/'));
+    expect(File(path.join(chatFolderFor(project), m.image)).readAsBytesSync(),
+        [1, 2, 3]);
+    a.dispose();
+    b.dispose();
+  });
+
   test('a snapshot survives the trip to the chat window', () async {
     final a = person('alice', 'PC1');
     await a.attach(project);

@@ -34,8 +34,12 @@ const MethodChannel kWindowChromeChannel = MethodChannel('rcb/window_chrome');
 abstract class ChatLink {
   ValueListenable<ChatSnapshot?> get snapshot;
 
-  /// Posts [text] to [channel]. Returns what went wrong, or ''.
-  Future<String> post(String channel, String text);
+  /// Posts [text] to [channel], with the picture at [image] when given.
+  /// Returns what went wrong, or ''.
+  Future<String> post(String channel, String text, {String? image});
+
+  /// Takes back one of this person's own messages.
+  Future<String> deleteMessage(String id);
 
   void select(String channel);
 
@@ -75,8 +79,11 @@ class LocalChatLink implements ChatLink {
   ValueListenable<ChatSnapshot?> get snapshot => _value;
 
   @override
-  Future<String> post(String channel, String text) =>
-      provider.chat.post(text, to: channel);
+  Future<String> post(String channel, String text, {String? image}) =>
+      provider.chat.post(text, to: channel, image: image);
+
+  @override
+  Future<String> deleteMessage(String id) => provider.chat.deleteMessage(id);
 
   @override
   void select(String channel) => provider.chat.selectChannel(channel);
@@ -234,8 +241,13 @@ class ChatWindowHost {
     if (p == null || msg['cmd'] != 'action') return;
     switch (msg['action']) {
       case 'post':
+        final image = msg['image']?.toString();
         final error = await p.chat.post('${msg['text'] ?? ''}',
-            to: '${msg['channel'] ?? kChatGeneral}');
+            to: '${msg['channel'] ?? kChatGeneral}',
+            image: image == null || image.isEmpty ? null : image);
+        if (error.isNotEmpty) _send({'cmd': 'error', 'text': error});
+      case 'delete':
+        final error = await p.chat.deleteMessage('${msg['id'] ?? ''}');
         if (error.isNotEmpty) _send({'cmd': 'error', 'text': error});
       case 'select':
         p.chat.selectChannel('${msg['channel'] ?? kChatGeneral}');
@@ -344,8 +356,19 @@ class SocketChatLink implements ChatLink {
   ValueListenable<ChatSnapshot?> get snapshot => _value;
 
   @override
-  Future<String> post(String channel, String text) async {
-    _action('post', {'channel': channel, 'text': text});
+  Future<String> post(String channel, String text, {String? image}) async {
+    // Same computer, so the app can copy the picture from where it is.
+    _action('post', {
+      'channel': channel,
+      'text': text,
+      'image': ?image,
+    });
+    return '';
+  }
+
+  @override
+  Future<String> deleteMessage(String id) async {
+    _action('delete', {'id': id});
     return '';
   }
 

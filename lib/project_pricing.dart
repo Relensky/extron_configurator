@@ -163,6 +163,7 @@ Future<void> _writeOverrides(
 
   // Written, so filed where the room is written now - and under the room's
   // name rather than the processor folder's; see [roomStem].
+  moveOldConfigFolderIntoRoomFiles(configPath);
   renameRoomFilesToStem(configPath);
   moveRoomFilesIntoFolder(configPath);
 

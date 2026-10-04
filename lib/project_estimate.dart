@@ -281,9 +281,13 @@ Map<RoomSidecarPart, List<String>> _roomPartCandidates(String configPath) {
             case final former when former.isNotEmpty)
           former,
         legacyRoomSidecarPath(configPath, part),
+        // Named for the config itself (`config_cost.json`) by an older build.
+        ...configNamedRoomFilePaths(
+            configPath, '${kRoomSidecarSuffix[part]}.json'),
         if (part == RoomSidecarPart.flow) ...[
           roomFilePath(configPath, 'avflow.json'),
           legacyRoomFilePath(configPath, 'avflow.json'),
+          ...configNamedRoomFilePaths(configPath, 'avflow.json'),
         ],
       ],
   };

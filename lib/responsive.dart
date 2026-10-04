@@ -76,11 +76,15 @@ class ClearFieldButton extends StatelessWidget {
 
   final double size;
 
+  /// What the button says it clears.
+  final String tooltip;
+
   const ClearFieldButton({
     super.key,
     required this.controller,
     this.onCleared,
     this.size = 18,
+    this.tooltip = 'Clear',
   });
 
   @override
@@ -90,7 +94,7 @@ class ClearFieldButton extends StatelessWidget {
       builder: (context, value, _) {
         if (value.text.isEmpty) return const SizedBox.shrink();
         return IconButton(
-          tooltip: 'Clear',
+          tooltip: tooltip,
           icon: Icon(Icons.close, size: size),
           visualDensity: VisualDensity.compact,
           onPressed: () {

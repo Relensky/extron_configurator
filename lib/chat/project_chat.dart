@@ -74,6 +74,14 @@ class ChatMessage {
   final String room;
   final String tab;
 
+  /// A picture with the message: its path inside the chat folder
+  /// (`images/...`). '' for none.
+  final String image;
+
+  /// Set on a deletion: the id of the message its author took back. Such a
+  /// line is never shown; it removes the message it names.
+  final String deletes;
+
   const ChatMessage({
     required this.id,
     required this.channel,
@@ -84,7 +92,23 @@ class ChatMessage {
     this.mentions = const [],
     this.room = '',
     this.tab = '',
+    this.image = '',
+    this.deletes = '',
   });
+
+  ChatMessage withChannel(String to) => ChatMessage(
+        id: id,
+        channel: to,
+        user: user,
+        name: name,
+        at: at,
+        text: text,
+        mentions: mentions,
+        room: room,
+        tab: tab,
+        image: image,
+        deletes: deletes,
+      );
 
   String get who => name.trim().isEmpty ? user : name.trim();
 
@@ -101,13 +125,19 @@ class ChatMessage {
         if (mentions.isNotEmpty) 'mentions': mentions,
         if (room.isNotEmpty) 'room': room,
         if (tab.isNotEmpty) 'tab': tab,
+        if (image.isNotEmpty) 'image': image,
+        if (deletes.isNotEmpty) 'deletes': deletes,
       };
 
   static ChatMessage? fromJson(Object? json) {
     if (json is! Map) return null;
     final at = DateTime.tryParse(json['at']?.toString() ?? '');
     final text = json['text']?.toString() ?? '';
-    if (at == null || text.isEmpty) return null;
+    final image = json['image']?.toString() ?? '';
+    final deletes = json['deletes']?.toString() ?? '';
+    if (at == null || (text.isEmpty && image.isEmpty && deletes.isEmpty)) {
+      return null;
+    }
     return ChatMessage(
       id: json['id']?.toString() ?? '${at.microsecondsSinceEpoch}',
       channel: json['channel']?.toString() ?? kChatGeneral,
@@ -120,8 +150,24 @@ class ChatMessage {
       ],
       room: json['room']?.toString() ?? '',
       tab: json['tab']?.toString() ?? '',
+      image: image,
+      deletes: deletes,
     );
   }
+}
+
+/// [messages] less every deletion line and every message a deletion names -
+/// a message is only taken back by the person who wrote it.
+List<ChatMessage> withoutDeleted(List<ChatMessage> messages) {
+  final gone = <String>{
+    for (final m in messages)
+      if (m.deletes.isNotEmpty) '${m.user.toLowerCase()}|${m.deletes}',
+  };
+  return [
+    for (final m in messages)
+      if (m.deletes.isEmpty && !gone.contains('${m.user.toLowerCase()}|${m.id}'))
+        m,
+  ];
 }
 
 /// Somebody who has opened the job.
@@ -239,6 +285,19 @@ class ChatStore {
     final file = File(path.join(messagesDir, '${me.fileStem}.jsonl'));
     await file.writeAsString('${jsonEncode(m.toJson())}\n',
         mode: FileMode.append, flush: true);
+  }
+
+  String get imagesDir => path.join(folder, 'images');
+
+  /// Copies the picture at [source] into the chat's images folder. Returns
+  /// its path inside the chat folder, as a message keeps it.
+  Future<String> saveImage(CollabIdentity me, String source) async {
+    await Directory(imagesDir).create(recursive: true);
+    final ext = path.extension(source).toLowerCase();
+    final name =
+        '${me.fileStem}-${DateTime.now().microsecondsSinceEpoch}$ext';
+    await File(source).copy(path.join(imagesDir, name));
+    return 'images/$name';
   }
 
   /// Every message added since the last call. The first call reads all.
@@ -360,6 +419,12 @@ class ChatSnapshot {
   final bool attached;
   final String project;
   final String folder;
+
+  /// The shared chat's folder, for the pictures sent to Everyone.
+  final String everyoneFolder;
+
+  /// Login -> avatar picture on this computer, for those who have one.
+  final Map<String, String> avatars;
   final List<ChatPerson> people;
   final List<ChatChannel> channels;
   final List<ChatMessage> messages;
@@ -375,6 +440,8 @@ class ChatSnapshot {
     required this.attached,
     required this.project,
     required this.folder,
+    this.everyoneFolder = '',
+    this.avatars = const {},
     required this.people,
     required this.channels,
     required this.messages,
@@ -389,6 +456,8 @@ class ChatSnapshot {
         'attached': attached,
         'project': project,
         'folder': folder,
+        'everyoneFolder': everyoneFolder,
+        'avatars': avatars,
         'people': [for (final p in people) p.toJson()],
         'channels': [for (final c in channels) c.toJson()],
         'messages': [for (final m in messages) m.toJson()],
@@ -403,6 +472,11 @@ class ChatSnapshot {
         attached: json['attached'] == true,
         project: '${json['project'] ?? ''}',
         folder: '${json['folder'] ?? ''}',
+        everyoneFolder: '${json['everyoneFolder'] ?? ''}',
+        avatars: {
+          for (final e in ((json['avatars'] as Map?) ?? const {}).entries)
+            '${e.key}': '${e.value}',
+        },
         people: [
           for (final p in (json['people'] as List? ?? const []))
             ?ChatPerson.fromJson(p),
@@ -424,6 +498,15 @@ class ChatSnapshot {
 }
 
 /// The chat for whichever project is open. Owned by the app state.
+/// The channel everybody who uses the app shares, kept on the file share
+/// rather than with any one project.
+const kChatEveryone = 'everyone';
+
+/// Where the shared chat is kept: `<root>\chat`.
+String everyoneChatFolder(String rootFolder) => path.join(rootFolder, 'chat');
+
+/// The chat: the shared [kChatEveryone] channel, and the open project's own
+/// channels when a saved project is open. Owned by the app state.
 class ProjectChat extends ChangeNotifier {
   final CollabIdentity me;
 
@@ -445,11 +528,22 @@ class ProjectChat extends ChangeNotifier {
   /// Called with each message that arrives from somebody else.
   void Function(ChatMessage message)? onIncoming;
 
+  /// The avatar picture for a login on this computer, or null.
+  String? Function(String login) avatarFor = (_) => null;
+
+  /// Messages taken back, as author|id, so one read before its deletion
+  /// arrived goes, and one read after never shows.
+  final Set<String> _deleted = {};
+  static String _deleteKey(String user, String id) =>
+      '${user.toLowerCase()}|$id';
+
   ProjectChat({CollabIdentity? identity})
       : me = identity ?? CollabIdentity.current();
 
   ChatStore? _store;
+  ChatStore? _everyone;
   String _projectPath = '';
+  String _everyonePath = '';
   Timer? _timer;
   DateTime _lastPeopleRead = DateTime.fromMillisecondsSinceEpoch(0);
   bool _polling = false;
@@ -457,65 +551,125 @@ class ProjectChat extends ChangeNotifier {
   final List<ChatMessage> _messages = [];
   final Set<String> _ids = {};
   List<ChatPerson> _people = [];
-  Map<String, DateTime> _marks = {};
+  List<ChatPerson> _everyonePeople = [];
+  final Map<String, DateTime> _marks = {};
 
   /// Whether the chat is on screen, and which channel it shows.
   bool open = false;
-  String channel = kChatGeneral;
+  String channel = kChatEveryone;
   ChatMode mode = ChatMode.slideOut;
 
-  bool get attached => _store != null;
+  /// Whether there is anything to chat in: the shared channel or a project.
+  bool get attached => _store != null || _everyone != null;
+  bool get projectAttached => _store != null;
   String get projectPath => _projectPath;
   String get folder => _store?.folder ?? '';
+  String get everyoneFolder => _everyone?.folder ?? '';
   List<ChatMessage> get messages => List.unmodifiable(_messages);
+
+  ChatStore _ensureTimer(ChatStore s) {
+    _timer ??= Timer.periodic(kChatPoll, (_) => poll());
+    return s;
+  }
+
+  ChatPerson get _meAsPerson => ChatPerson(
+        login: me.user,
+        name: myName(),
+        email: myEmail(),
+        machine: me.machine,
+      );
+
+  /// Starts following the shared chat in [rootFolder]'s `chat` folder, or
+  /// stops with ''. Everybody who opens the app is added to its people.
+  Future<void> attachEveryone(String rootFolder) async {
+    final folder = rootFolder.isEmpty ? '' : everyoneChatFolder(rootFolder);
+    if (folder == _everyonePath) return;
+    _everyonePath = folder;
+    _drop((m) => m.channel == kChatEveryone);
+    _marks.remove(kChatEveryone);
+    _everyonePeople = [];
+    if (folder.isEmpty) {
+      _everyone = null;
+      notifyListeners();
+      return;
+    }
+    final store = _ensureTimer(ChatStore(folder));
+    _everyone = store;
+    await store.announce(_meAsPerson);
+    if (_everyone != store) return;
+    final marks = await store.readMarks(me.user);
+    if (marks[kChatEveryone] != null) _marks[kChatEveryone] = marks[kChatEveryone]!;
+    await poll(initial: true);
+  }
 
   /// Starts following [projectPath]'s chat, or stops with ''.
   Future<void> attach(String projectPath) async {
     if (projectPath == _projectPath) return;
-    _timer?.cancel();
-    _timer = null;
     _projectPath = projectPath;
-    _messages.clear();
-    _ids.clear();
+    _drop((m) => m.channel != kChatEveryone);
+    _marks.removeWhere((k, _) => k != kChatEveryone);
     _people = [];
-    _marks = {};
-    channel = kChatGeneral;
+    if (channel != kChatEveryone) channel = kChatGeneral;
     if (projectPath.isEmpty) {
       _store = null;
+      channel = kChatEveryone;
       notifyListeners();
       return;
     }
-    final store = ChatStore(chatFolderFor(projectPath));
+    final store = _ensureTimer(ChatStore(chatFolderFor(projectPath)));
     _store = store;
-    await store.announce(ChatPerson(
-      login: me.user,
-      name: myName(),
-      email: myEmail(),
-      machine: me.machine,
-    ));
+    await store.announce(_meAsPerson);
     if (_store != store) return;
-    _marks = await store.readMarks(me.user);
+    final marks = await store.readMarks(me.user);
+    marks.remove(kChatEveryone);
+    _marks.addAll(marks);
     await poll(initial: true);
-    _timer = Timer.periodic(kChatPoll, (_) => poll());
   }
 
-  /// Reads whatever has arrived. Never throws.
+  void _drop(bool Function(ChatMessage m) which) {
+    for (final m in _messages.where(which)) {
+      _ids.remove(m.id);
+    }
+    _messages.removeWhere(which);
+  }
+
+  /// Reads whatever has arrived in either chat. Never throws.
   Future<void> poll({bool initial = false}) async {
-    final store = _store;
-    if (store == null || _polling) return;
+    if (_polling || !attached) return;
     _polling = true;
     try {
-      final fresh = await store.readNew();
-      if (_store != store) return;
+      final project = _store;
+      final everyone = _everyone;
+      final fresh = <ChatMessage>[
+        if (project != null)
+          for (final m in await project.readNew())
+            // A project's file never speaks for the shared channel.
+            if (m.channel != kChatEveryone) m,
+        if (everyone != null)
+          for (final m in await everyone.readNew())
+            m.withChannel(kChatEveryone),
+      ];
+      if (project != _store || everyone != _everyone) return;
       final now = DateTime.now();
       var changed = false;
       if (initial || now.difference(_lastPeopleRead) > kChatPeoplePoll) {
         _lastPeopleRead = now;
-        _people = await store.readPeople();
+        if (project != null) _people = await project.readPeople();
+        if (everyone != null) _everyonePeople = await everyone.readPeople();
         changed = true;
       }
+      // Deletions first - a message and its deletion can arrive in one read.
+      // A message is only taken back by whoever wrote it.
+      for (final m in fresh) {
+        if (m.deletes.isNotEmpty) _deleted.add(_deleteKey(m.user, m.deletes));
+      }
+      final before = _messages.length;
+      _messages.removeWhere((x) => _deleted.contains(_deleteKey(x.user, x.id)));
+      if (_messages.length != before) changed = true;
       final added = <ChatMessage>[];
       for (final m in fresh) {
+        if (m.deletes.isNotEmpty) continue;
+        if (_deleted.contains(_deleteKey(m.user, m.id))) continue;
         if (_ids.add(m.id)) added.add(m);
       }
       if (added.isNotEmpty) {
@@ -529,7 +683,7 @@ class ProjectChat extends ChangeNotifier {
           }
         }
       }
-      if (open && _markRead(channel)) changed = true;
+      if (open && _markRead(shownChannel)) changed = true;
       if (changed) notifyListeners();
     } catch (_) {
     } finally {
@@ -537,12 +691,27 @@ class ProjectChat extends ChangeNotifier {
     }
   }
 
+  /// The channel actually shown: Everyone needs the shared folder, a
+  /// project channel needs a project; each falls back to the other.
+  String get shownChannel {
+    if (channel == kChatEveryone && _everyone == null && _store != null) {
+      return kChatGeneral;
+    }
+    if (channel != kChatEveryone && _store == null && _everyone != null) {
+      return kChatEveryone;
+    }
+    return channel;
+  }
+
   bool _isMine(ChatMessage m) => m.user.toLowerCase() == me.user.toLowerCase();
 
-  /// Everyone who can be @mentioned: who has opened the job, and who is in its
-  /// history. Me included, so the list reads true.
+  /// Everyone who can be @mentioned: who has opened the app or the job, and
+  /// who is in the job's history. Me included, so the list reads true.
   List<ChatPerson> get people {
-    final byLogin = {for (final p in _people) p.login.toLowerCase(): p};
+    final byLogin = {
+      for (final p in _everyonePeople) p.login.toLowerCase(): p,
+      for (final p in _people) p.login.toLowerCase(): p,
+    };
     for (final login in historyLogins()) {
       byLogin.putIfAbsent(login.toLowerCase(), () => ChatPerson(login: login));
     }
@@ -557,17 +726,40 @@ class ProjectChat extends ChangeNotifier {
     return out;
   }
 
-  /// Posts [text] to [channel]. Returns what went wrong, or ''.
-  Future<String> post(String text, {String? to}) async {
-    final store = _store;
+  /// Posts [text] to [to] (the open channel when null), with the picture at
+  /// [image] when given. Returns what went wrong, or ''.
+  Future<String> post(String text, {String? to, String? image}) async {
+    final target = to ?? shownChannel;
+    final shared = target == kChatEveryone;
+    final store = shared ? _everyone : _store;
     final body = text.trim();
-    if (store == null) return 'Save the project first - its chat is kept beside it.';
-    if (body.isEmpty) return '';
+    if (store == null) {
+      return shared
+          ? 'The shared chat folder in the Root Folder cannot be reached.'
+          : 'Save the project first - its chat is kept beside it.';
+    }
+    if (body.isEmpty && (image == null || image.isEmpty)) return '';
+    var picture = '';
+    if (image != null && image.isNotEmpty) {
+      try {
+        picture = await store.saveImage(me, image);
+      } catch (e) {
+        return 'The picture could not be copied to the chat folder: $e';
+      }
+    }
+    // Somebody may have joined since the last look; an @ is checked against
+    // who is there now.
+    if (body.contains('@')) {
+      try {
+        if (_everyone != null) _everyonePeople = await _everyone!.readPeople();
+        if (_store != null) _people = await _store!.readPeople();
+      } catch (_) {}
+    }
     final where = whereAmI?.call();
     final now = DateTime.now();
     final m = ChatMessage(
       id: '${me.fileStem}-${now.microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}',
-      channel: to ?? channel,
+      channel: target,
       user: me.user,
       name: myName(),
       at: now,
@@ -575,6 +767,7 @@ class ProjectChat extends ChangeNotifier {
       mentions: mentionsIn(body, people),
       room: where?.roomLabel ?? '',
       tab: where?.tabLabel ?? '',
+      image: picture,
     );
     try {
       await store.append(me, m);
@@ -583,6 +776,38 @@ class ProjectChat extends ChangeNotifier {
     }
     if (_ids.add(m.id)) _messages.add(m);
     _markRead(m.channel);
+    notifyListeners();
+    return '';
+  }
+
+  /// Takes back one of this person's own messages: a deletion line in their
+  /// own file, so every copy drops it. Returns what went wrong, or ''.
+  Future<String> deleteMessage(String id) async {
+    final i = _messages.indexWhere((m) => m.id == id);
+    if (i < 0) return '';
+    final m = _messages[i];
+    if (!_isMine(m)) return 'Only the person who wrote a message can delete it.';
+    final store = m.channel == kChatEveryone ? _everyone : _store;
+    if (store == null) return 'The chat folder cannot be reached.';
+    final now = DateTime.now();
+    try {
+      await store.append(
+        me,
+        ChatMessage(
+          id: '${me.fileStem}-${now.microsecondsSinceEpoch}-d',
+          channel: m.channel,
+          user: me.user,
+          name: myName(),
+          at: now,
+          text: '',
+          deletes: id,
+        ),
+      );
+    } catch (e) {
+      return 'The message could not be deleted: $e';
+    }
+    _deleted.add(_deleteKey(me.user, id));
+    _messages.removeAt(i);
     notifyListeners();
     return '';
   }
@@ -596,7 +821,7 @@ class ProjectChat extends ChangeNotifier {
 
   void setOpen(bool value) {
     open = value;
-    if (open) _markRead(channel);
+    if (open) _markRead(shownChannel);
     notifyListeners();
   }
 
@@ -610,8 +835,21 @@ class ProjectChat extends ChangeNotifier {
     final mark = _marks[id];
     if (mark != null && !last.at.isAfter(mark)) return false;
     _marks[id] = last.at;
-    final store = _store;
-    if (store != null) unawaited(store.writeMarks(me.user, Map.of(_marks)));
+    // Each chat keeps its own marks: the shared one in the shared folder.
+    if (id == kChatEveryone) {
+      final store = _everyone;
+      if (store != null) {
+        unawaited(store.writeMarks(me.user, {kChatEveryone: last.at}));
+      }
+    } else {
+      final store = _store;
+      if (store != null) {
+        unawaited(store.writeMarks(me.user, {
+          for (final e in _marks.entries)
+            if (e.key != kChatEveryone) e.key: e.value,
+        }));
+      }
+    }
     return true;
   }
 
@@ -626,9 +864,25 @@ class ProjectChat extends ChangeNotifier {
   int get mentionCount =>
       _messages.where((m) => _isUnread(m) && m.mentionsUser(me.user)).length;
 
-  /// General, every room on the job, and every tab that has been talked
-  /// about - plus where this person is now.
+  /// Everyone, then - with a project open - General, every room on the job,
+  /// and every tab that has been talked about, plus where this person is now.
   List<ChatChannel> get channels {
+    ChatChannel make(String id, String label, String kind) {
+      final mine = _messages.where((m) => m.channel == id && _isUnread(m));
+      return ChatChannel(
+        id: id,
+        label: label.isEmpty ? id : label,
+        kind: kind,
+        unread: mine.length,
+        mentions: mine.where((m) => m.mentionsUser(me.user)).length,
+      );
+    }
+
+    final out = <ChatChannel>[
+      if (_everyone != null) make(kChatEveryone, 'Everyone', 'everyone'),
+    ];
+    if (_store == null) return out;
+
     final where = whereAmI?.call();
     final roomLabels = {...rooms()};
     if (where != null && where.roomId.isNotEmpty) {
@@ -645,20 +899,10 @@ class ProjectChat extends ChangeNotifier {
     if (where != null && where.tabId.isNotEmpty) {
       tabLabels[where.tabId] = where.tabLabel;
     }
-    ChatChannel make(String id, String label, String kind) {
-      final mine = _messages.where((m) => m.channel == id && _isUnread(m));
-      return ChatChannel(
-        id: id,
-        label: label.isEmpty ? id : label,
-        kind: kind,
-        unread: mine.length,
-        mentions: mine.where((m) => m.mentionsUser(me.user)).length,
-      );
-    }
-
     final roomList = roomLabels.entries.toList()
       ..sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
     return [
+      ...out,
       make(kChatGeneral, 'General', 'general'),
       for (final e in roomList) make('room:${e.key}', e.value, 'room'),
       for (final e in tabLabels.entries) make('tab:${e.key}', e.value, 'tab'),
@@ -674,15 +918,25 @@ class ProjectChat extends ChangeNotifier {
       final n = counts[m.channel] = (counts[m.channel] ?? 0) + 1;
       if (n <= perChannel) kept.add(m);
     }
+    final showing = shownChannel;
     return ChatSnapshot(
       me: me.user,
       attached: attached,
       project: _projectPath.isEmpty ? '' : path.basename(_projectPath),
       folder: folder,
+      everyoneFolder: everyoneFolder,
+      avatars: {
+        for (final login in {
+          for (final p in people) p.login,
+          for (final m in kept) m.user,
+        })
+          if (avatarFor(login) case final file? when file.isNotEmpty)
+            login: file,
+      },
       people: people,
       channels: channels,
       messages: kept.reversed.toList(),
-      channel: channel,
+      channel: showing,
       hereRoomChannel: where == null || where.roomId.isEmpty
           ? ''
           : 'room:${where.roomId}',

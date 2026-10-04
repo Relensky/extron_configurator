@@ -1,6 +1,11 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as path;
 
+import '../file_dialogs.dart';
 import 'chat_link.dart';
 import 'project_chat.dart';
 
@@ -13,7 +18,15 @@ class ChatView extends StatefulWidget {
   /// drag handle wraps it.
   final Widget Function(Widget title)? wrapHeader;
 
-  const ChatView({super.key, required this.link, this.wrapHeader});
+  /// Buttons the container adds to the title bar - search, fill the screen.
+  final List<Widget> actions;
+
+  const ChatView({
+    super.key,
+    required this.link,
+    this.wrapHeader,
+    this.actions = const [],
+  });
 
   @override
   State<ChatView> createState() => _ChatViewState();
@@ -72,6 +85,49 @@ class _ChatViewState extends State<ChatView> {
       selection: TextSelection.collapsed(offset: next.length),
     );
     _focus.requestFocus();
+  }
+
+  /// Picks a picture and sends it, with whatever has been typed.
+  Future<void> _attachImage(ChatSnapshot snap) async {
+    final picked = await pickFilesCompat(
+      dialogTitle: 'A picture to send',
+      type: FileType.custom,
+      allowedExtensions: const ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'],
+    );
+    final file = picked?.files.singleOrNull?.path;
+    if (file == null) return;
+    final text = _text.text.trim();
+    _text.clear();
+    final error = await widget.link.post(snap.channel, text, image: file);
+    if (mounted) setState(() => _error = error);
+  }
+
+  Future<void> _confirmDelete(ChatMessage m) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete this message?'),
+        content: Text(
+          m.text.isEmpty ? 'The picture is taken out of the chat for everyone.'
+              : '"${m.text.length > 120 ? '${m.text.substring(0, 119)}…' : m.text}"'
+                  '\n\nIt is taken out of the chat for everyone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            key: const ValueKey('chat_delete_confirm'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final error = await widget.link.deleteMessage(m.id);
+    if (mounted) setState(() => _error = error);
   }
 
   Future<void> _send(ChatSnapshot snap) async {
@@ -145,6 +201,7 @@ class _ChatViewState extends State<ChatView> {
       child: Row(
         children: [
           Expanded(child: wrapped),
+          ...widget.actions,
           IconButton(
             key: const ValueKey('chat_people'),
             tooltip: 'Who has opened this job',
@@ -172,9 +229,9 @@ class _ChatViewState extends State<ChatView> {
         padding: const EdgeInsets.all(24),
         child: Center(
           child: Text(
-            'Open a saved project to chat about it. The conversation is kept '
-            'in a folder beside the project file, so everybody who opens the '
-            'job sees it.',
+            'The shared chat is kept in the chat folder in the Root Folder, which '
+            'cannot be reached right now. Open a saved project to chat about '
+            'it - its conversation is kept beside the project file.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
@@ -221,6 +278,10 @@ class _ChatViewState extends State<ChatView> {
     final tabs = snap.channels.where((c) => c.kind == 'tab').toList();
     return ListView(
       children: [
+        for (final c in snap.channels.where((c) => c.kind == 'everyone'))
+          tile(c),
+        if (snap.channels.any((c) => c.kind == 'general'))
+          heading('THIS PROJECT'),
         for (final c in snap.channels.where((c) => c.kind == 'general')) tile(c),
         if (rooms.isNotEmpty) ...[heading('ROOMS'), for (final c in rooms) tile(c)],
         if (tabs.isNotEmpty) ...[heading('TABS'), for (final c in tabs) tile(c)],
@@ -266,10 +327,19 @@ class _ChatViewState extends State<ChatView> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: shown.length,
                   itemBuilder: (context, i) => _MessageTile(
+                    key: ValueKey('chat_message_${shown[i].id}'),
                     message: shown[i],
                     me: snap.me,
                     people: snap.people,
                     showDay: i == 0 || !_sameDay(shown[i].at, shown[i - 1].at),
+                    avatar: snap.avatars[shown[i].user] ?? '',
+                    imageRoot: shown[i].channel == kChatEveryone
+                        ? snap.everyoneFolder
+                        : snap.folder,
+                    onDelete: shown[i].user.toLowerCase() ==
+                            snap.me.toLowerCase()
+                        ? () => _confirmDelete(shown[i])
+                        : null,
                   ),
                 ),
         ),
@@ -328,7 +398,12 @@ class _ChatViewState extends State<ChatView> {
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
+              IconButton(
+                key: const ValueKey('chat_attach_image'),
+                tooltip: 'Add a picture',
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                onPressed: () => _attachImage(snap),
+              ),
               IconButton.filled(
                 key: const ValueKey('chat_send'),
                 tooltip: 'Send (Enter)',
@@ -405,11 +480,24 @@ class _MessageTile extends StatelessWidget {
   final List<ChatPerson> people;
   final bool showDay;
 
+  /// The writer's picture on this computer, or ''.
+  final String avatar;
+
+  /// The chat folder a picture with the message is kept under.
+  final String imageRoot;
+
+  /// Offered on this person's own messages.
+  final VoidCallback? onDelete;
+
   const _MessageTile({
+    super.key,
     required this.message,
     required this.me,
     required this.people,
     required this.showDay,
+    this.avatar = '',
+    this.imageRoot = '',
+    this.onDelete,
   });
 
   @override
@@ -474,6 +562,12 @@ class _MessageTile extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  // The writer's picture beside the name, or their initials.
+                  _ChatAvatar(
+                    file: avatar,
+                    name: message.who,
+                  ),
+                  const SizedBox(width: 6),
                   if (forMe) ...[
                     Icon(Icons.alternate_email, size: 14, color: scheme.error),
                     const SizedBox(width: 4),
@@ -503,20 +597,117 @@ class _MessageTile extends StatelessWidget {
                               ?.copyWith(color: scheme.onSurfaceVariant)),
                     ),
                   ],
+                  if (onDelete != null) ...[
+                    const Spacer(),
+                    IconButton(
+                      key: ValueKey('chat_delete_${message.id}'),
+                      tooltip: 'Delete this message',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints(minWidth: 28, minHeight: 28),
+                      icon: Icon(Icons.delete_outline,
+                          color: scheme.onSurfaceVariant),
+                      onPressed: onDelete,
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 2),
-              SelectableText.rich(
-                TextSpan(children: spans),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: forMe ? FontWeight.bold : null,
-                  color: forMe ? scheme.onErrorContainer : null,
+              if (message.text.isNotEmpty)
+                SelectableText.rich(
+                  TextSpan(children: spans),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: forMe ? FontWeight.bold : null,
+                    color: forMe ? scheme.onErrorContainer : null,
+                  ),
                 ),
-              ),
+              if (message.image.isNotEmpty && imageRoot.isNotEmpty)
+                _ChatPicture(
+                  file: path.join(imageRoot, message.image),
+                ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A person's picture, small, or their initials when they have none.
+class _ChatAvatar extends StatelessWidget {
+  final String file;
+  final String name;
+
+  const _ChatAvatar({required this.file, required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final picture = file.isNotEmpty && File(file).existsSync();
+    return CircleAvatar(
+      radius: 11,
+      backgroundColor: scheme.secondaryContainer,
+      foregroundImage: picture ? FileImage(File(file)) : null,
+      child: Text(
+        _initials(name),
+        style: TextStyle(fontSize: 9, color: scheme.onSecondaryContainer),
+      ),
+    );
+  }
+}
+
+/// A picture sent with a message: a thumbnail that opens full size.
+class _ChatPicture extends StatelessWidget {
+  final String file;
+
+  const _ChatPicture({required this.file});
+
+  @override
+  Widget build(BuildContext context) {
+    final image = File(file);
+    if (!image.existsSync()) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text('(picture not found: ${path.basename(file)})',
+            style: Theme.of(context).textTheme.bodySmall),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: InkWell(
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (ctx) => Dialog(
+            insetPadding: const EdgeInsets.all(24),
+            child: Stack(
+              children: [
+                InteractiveViewer(
+                  maxScale: 6,
+                  child: Image.file(image, fit: BoxFit.contain),
+                ),
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: IconButton.filledTonal(
+                    tooltip: 'Close',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 220, maxWidth: 320),
+            child: Image.file(image, fit: BoxFit.cover),
+          ),
+        ),
+      ),
     );
   }
 }

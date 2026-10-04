@@ -8225,6 +8225,7 @@ class AppStateProvider extends ChangeNotifier {
             for (final r in project.rooms) r.id: projectRoomCode(r.id),
           })
       ..historyLogins = (() => project.historyUsers)
+      ..avatarFor = avatarFileFor
       ..whereAmI = () {
         final ref = projectRefForConfig(currentConfigPath);
         final tab = selectedTabIndex >= 0 &&
@@ -8325,6 +8326,9 @@ class AppStateProvider extends ChangeNotifier {
   /// chat folder written beside their fixtures.
   void _syncChat() {
     if (!_persistenceEnabled) return;
+    // The shared Everyone channel lives in the Root Folder's chat folder.
+    // ignore: unawaited_futures
+    chat.attachEveryone(effectiveRootFolder);
     // ignore: unawaited_futures
     chat.attach(currentProjectPath);
   }
@@ -8672,6 +8676,7 @@ class AppStateProvider extends ChangeNotifier {
     } finally {
       // Update the UI once all heavy lifting is done
       settingsLoaded = true; // Safe for the UI to show (or skip) first-run setup
+      _syncChat();
       // The interval is a setting, so the clock can only start once the
       // settings have been read.
       _restartAutosaveTimer();
@@ -9642,6 +9647,7 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'rootFolderPath':
         rootFolderPath = value;
+        _syncChat();
         // Avatars live under the root, so they are checked there afresh.
         _avatarCheckedAt.clear();
         // A new root gets what it should hold before anything reads it.

@@ -55,6 +55,18 @@ class MergeConflict {
       'mine=${describeJsonValue(mine)}, theirs=${describeJsonValue(theirs)})';
 }
 
+/// One change taken from the other person's copy: where, what this copy had
+/// (null when it had nothing there - an addition), and what it becomes.
+class MergeChange {
+  final String path;
+  final Object? before;
+  final Object? after;
+  const MergeChange(this.path, this.before, this.after);
+
+  bool get added => before == null;
+  bool get removed => after == null;
+}
+
 class JsonMergeResult {
   final Object? merged;
   final List<MergeConflict> conflicts;
@@ -65,11 +77,15 @@ class JsonMergeResult {
   /// How many of their new rows were renumbered so both people's were kept.
   final int renumbered;
 
+  /// Each change taken from theirs, for showing before it is applied.
+  final List<MergeChange> changes;
+
   const JsonMergeResult(
     this.merged,
     this.conflicts,
     this.takenFromTheirs, [
     this.renumbered = 0,
+    this.changes = const [],
   ]);
 
   bool get clean => conflicts.isEmpty;
@@ -112,7 +128,8 @@ JsonMergeResult mergeJson3(
   final theirsKept = renames.isEmpty ? theirs : _renameAll(theirs, renames);
   final m = _Merger(resolve);
   final merged = m.merge(base, mine, theirsKept, '', loaded);
-  return JsonMergeResult(merged, m.conflicts, m.taken, renames.length);
+  return JsonMergeResult(
+      merged, m.conflicts, m.taken, renames.length, m.changes);
 }
 
 /// "Not known" for [mergeJson3]'s loaded copy - distinct from a JSON null.
@@ -255,7 +272,14 @@ class _Absent {
 class _Merger {
   final MergeSide Function(MergeConflict)? resolve;
   final conflicts = <MergeConflict>[];
+  final changes = <MergeChange>[];
   int taken = 0;
+
+  void _took(String at, Object? before, Object? after) {
+    taken++;
+    changes.add(MergeChange(
+        at.isEmpty ? '(whole document)' : at, _out(before), _out(after)));
+  }
 
   _Merger(this.resolve);
 
@@ -270,7 +294,7 @@ class _Merger {
   ]) {
     if (jsonEquals(mine, theirs)) return mine;
     if (jsonEquals(base, mine)) {
-      taken++;
+      _took(at, mine, theirs);
       return theirs;
     }
     if (jsonEquals(base, theirs)) return mine;
@@ -279,7 +303,7 @@ class _Merger {
     if (!identical(loaded, _unknown) &&
         !identical(theirs, _absent) &&
         jsonEquals(mine, loaded)) {
-      taken++;
+      _took(at, mine, theirs);
       return theirs;
     }
 
@@ -392,7 +416,7 @@ class _Merger {
       if (key != null) {
         return _mergeKeyed(key, base, mine, theirs, at, loaded);
       }
-      return _mergeAppendOnly(base, mine, theirs);
+      return _mergeAppendOnly(base, mine, theirs, at);
     }
 
     if (all.every((e) => e is String || e is num || e is bool)) {
@@ -400,7 +424,7 @@ class _Merger {
       // copy repeats a value - otherwise order and count mean something.
       bool unique(List l) => l.toSet().length == l.length;
       if (!unique(base) || !unique(mine) || !unique(theirs)) {
-        return _mergeAppendOnly(base, mine, theirs);
+        return _mergeAppendOnly(base, mine, theirs, at);
       }
       final baseSet = base.toSet();
       final theirSet = theirs.toSet();
@@ -411,7 +435,7 @@ class _Merger {
         for (final v in theirs)
           if (!baseSet.contains(v) && !mine.contains(v)) v,
       ];
-      if (!jsonEquals(out, mine)) taken++;
+      if (!jsonEquals(out, mine)) _took(at, mine, out);
       return out;
     }
     return null;
@@ -419,7 +443,7 @@ class _Merger {
 
   /// A log both sides only appended to - a history, a list of notes - keeps
   /// both sides' new entries, theirs after mine. Null for anything else.
-  List? _mergeAppendOnly(List base, List mine, List theirs) {
+  List? _mergeAppendOnly(List base, List mine, List theirs, [String at = '']) {
     bool startsWithBase(List l) {
       if (l.length < base.length) return false;
       for (var i = 0; i < base.length; i++) {
@@ -429,11 +453,15 @@ class _Merger {
     }
 
     if (!startsWithBase(mine) || !startsWithBase(theirs)) return null;
-    taken++;
-    return [
+    final out = [
       ...mine,
       ...theirs.sublist(base.length),
     ];
+    taken++;
+    for (final row in theirs.sublist(base.length)) {
+      changes.add(MergeChange(at.isEmpty ? '(whole document)' : at, null, row));
+    }
+    return out;
   }
 
   String? _identityKey(List base, List mine, List theirs) {

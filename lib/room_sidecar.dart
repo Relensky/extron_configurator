@@ -263,6 +263,19 @@ String formerRoomFilePath(String configPath, String suffix) {
   return path.join(roomFolderPath(configPath), '${former}_$suffix');
 }
 
+/// Where an older build put [suffix] for a `config.json` room: named for the
+/// config itself, `config_cost.json` - loose beside it, or in a `config`
+/// folder beside it. Nearest first; empty for any other room.
+List<String> configNamedRoomFilePaths(String configPath, String suffix) {
+  if (!isFolderLayoutConfig(configPath)) return const [];
+  final dir = path.dirname(configPath);
+  final base = path.basenameWithoutExtension(configPath);
+  return [
+    path.join(dir, '${base}_$suffix'),
+    path.join(dir, base, '${base}_$suffix'),
+  ];
+}
+
 /// Renames the room's files from the stem an older build named them for
 /// (`upload_to_root_cost.json`) to the room's (`SCI248_cost.json`). A file
 /// already under the new name wins and the old one is left. Returns the new
@@ -384,6 +397,9 @@ String readableRoomFilePath(String configPath, String suffix) {
   if (old.isNotEmpty && File(old).existsSync()) return old;
   final legacy = legacyRoomFilePath(configPath, suffix);
   if (legacy.isNotEmpty && File(legacy).existsSync()) return legacy;
+  for (final named in configNamedRoomFilePaths(configPath, suffix)) {
+    if (File(named).existsSync()) return named;
+  }
   return '';
 }
 
@@ -443,6 +459,18 @@ List<String> moveRoomFilesIntoFolder(String configPath) {
       if (moveIntoRoomFolder(loose, folder)) moved.add(path.basename(loose));
     } catch (_) {
       // Left where it is; the readers still find it there.
+    }
+    // Named for the config by an older build (`config_cost.json`): moved in
+    // under the room's name.
+    final target = roomFilePath(configPath, suffix);
+    for (final old in configNamedRoomFilePaths(configPath, suffix)) {
+      final file = File(old);
+      if (!file.existsSync()) continue;
+      try {
+        Directory(folder).createSync(recursive: true);
+        if (_moveEntity(file, target)) moved.add(path.basename(old));
+      } catch (_) {}
+      break;
     }
   }
   return moved;

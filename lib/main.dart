@@ -55,6 +55,7 @@ import 'chat/chat_layer.dart';
 import 'chat/chat_link.dart' show kChatWindowFlag;
 import 'chat/project_chat.dart' show ChatMode;
 import 'chat/chat_window_app.dart';
+import 'chat/chat_search_view.dart';
 import 'google_sheets_export.dart' show kBuiltInGoogleClientId;
 import 'undo_bar.dart'
     show ToolbarUndoButtons, ToolbarUndoTarget, toolbarUndoTarget;
@@ -384,6 +385,13 @@ class _MainDashboardState extends State<MainDashboard> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
+    // A project picked in the chat search opens the way the File menu opens
+    // one, unsaved-work question and all.
+    chatSearchOpenProject = (file) async {
+      if (!mounted) return;
+      await _openDocumentAtPath(
+          context, context.read<AppStateProvider>(), file);
+    };
   }
 
   @override
@@ -905,6 +913,12 @@ class _MainDashboardState extends State<MainDashboard> {
               onCost: onCost,
               onScreen: () => _takeScreenshot(context, selectedIndex),
             ),
+          IconButton(
+            key: const ValueKey('global_search'),
+            tooltip: 'Search every chat and project',
+            icon: const Icon(Icons.manage_search),
+            onPressed: () => showChatSearch(context),
+          ),
           const ChatToolbarButton(),
           // YOU, in the corner - and the way into Settings, Help and the
           // light/dark switch. See [ProfileButton].
@@ -945,6 +959,9 @@ class _MainDashboardState extends State<MainDashboard> {
               selectedIndex: selectedIndex,
               onDestinationSelected: provider.selectTab,
               tabs: visibleNavTabs(estimateOnly: provider.isEstimateRoom),
+              // The room's own tabs wait until there is a room - opened, or
+              // a new one started - and then drop in.
+              hidden: hasConfig ? const {} : kRoomTabs,
             ),
           ),
           Expanded(
@@ -2415,6 +2432,11 @@ class ProcessorSearchField extends StatelessWidget {
   /// replacement.
   final VoidCallback? onInteracted;
 
+  /// Called when the X inside the field clears it - for a field whose
+  /// choice should go too, like the Active Deployment Target.
+  final VoidCallback? onCleared;
+  final String clearTooltip;
+
   const ProcessorSearchField({
     super.key,
     required this.label,
@@ -2423,6 +2445,8 @@ class ProcessorSearchField extends StatelessWidget {
     this.initialProcessor,
     this.enabled = true,
     this.onInteracted,
+    this.onCleared,
+    this.clearTooltip = 'Clear',
   });
 
   /// IP/hostname of one processors.json entry (same fallbacks as the
@@ -2508,7 +2532,12 @@ class ProcessorSearchField extends StatelessWidget {
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.search),
               suffixIcon: enabled
-                  ? ClearFieldButton(controller: controller)
+                  ? ClearFieldButton(
+                      key: const ValueKey('processor_search_clear'),
+                      controller: controller,
+                      onCleared: onCleared,
+                      tooltip: clearTooltip,
+                    )
                   : null,
             ),
             // Typing counts too, for anyone who tabs in or pastes.
@@ -5437,29 +5466,18 @@ class _DeploymentTargetDialog extends StatelessWidget {
       title: const Text('Deployment target'),
       content: SizedBox(
         width: 640,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ProcessorSearchField(
-                label: 'Select Room Deployment',
-                helperText:
-                    'Search by building name, code, room number, or IP - '
-                    'rooms from processors.json, names from buildings.json.',
-                initialProcessor: provider.selectedProcessor,
-                onSelected: (proc) => provider.selectProcessor(proc),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: IconButton(
-                icon: const Icon(Icons.clear),
-                tooltip: 'Clear Active Room',
-                onPressed: () => provider.selectProcessor(null),
-              ),
-            ),
-          ],
+        // The X that clears the target sits inside the field, so it cannot be
+        // taken for the window's close button.
+        child: ProcessorSearchField(
+          label: 'Select Room Deployment',
+          helperText:
+              'Search by building name, code, room number, or IP - '
+              'rooms from processors.json, names from buildings.json. '
+              'The X in the field clears the target.',
+          initialProcessor: provider.selectedProcessor,
+          onSelected: (proc) => provider.selectProcessor(proc),
+          onCleared: () => provider.selectProcessor(null),
+          clearTooltip: 'Clear the deployment target',
         ),
       ),
       actions: [
