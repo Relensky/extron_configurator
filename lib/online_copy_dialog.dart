@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 
 import 'file_dialogs.dart';
 import 'app_snack.dart';
+import 'in_app_browser.dart';
 import 'app_state.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart' show formatMoney;
@@ -15,7 +16,6 @@ import 'online_copy.dart';
 import 'online_pull_history.dart';
 import 'online_roundtrip.dart';
 import 'online_sheet_merge.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 /// ============================================================================
 ///  PUBLISHING THE JOB WHERE OTHER PEOPLE CAN READ IT
@@ -180,8 +180,7 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
 
   bool get _toFolder => !widget.provider.project.onlineFolderOff;
   bool get _toSheet => widget.provider.project.onlineSheetOn;
-  bool get _hasGoogleClient =>
-      widget.provider.googleClientId.trim().isNotEmpty;
+  bool get _hasGoogleClient => widget.provider.hasGoogleClient;
 
   /// Somewhere to write: a folder that is picked, or the Sheet.
   bool get _hasDestination =>
@@ -523,8 +522,8 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
                       ? 'One Sheet, written cell by cell. Everybody who opens '
                             'this job publishes to the same one - share it '
                             'with them in Google as editors.'
-                      : 'Needs a Google client first - App Config > Working '
-                            'together.',
+                      : 'Needs Google sign-in, which this copy lacks - App '
+                            'Config > Working together > Advanced.',
                   style: theme.textTheme.bodySmall?.copyWith(color: muted),
                 ),
                 onChanged: _busy || (!_hasGoogleClient && !_toSheet)
@@ -558,9 +557,10 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
                     label: const Text('Open'),
                     onPressed: project.onlineSheetId.isEmpty
                         ? null
-                        : () => launchUrl(
-                            Uri.parse(liveSheetUrl(project.onlineSheetId)),
-                            mode: LaunchMode.externalApplication,
+                        : () => openWebLink(
+                            context,
+                            liveSheetUrl(project.onlineSheetId),
+                            title: 'Google Sheet',
                           ),
                   ),
                 ],
@@ -874,7 +874,7 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
                         '${count(listed, 'edit')} to make by hand',
       ),
       content: SizedBox(
-        width: 620,
+        width: 720,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -884,75 +884,74 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
               style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
             const SizedBox(height: 12),
-            if (changes.isEmpty)
+            if (changes.isEmpty && problems.isEmpty)
               Text(
                 'Every row in that copy already matches the job.',
                 key: const ValueKey('online_import_nothing'),
                 style: theme.textTheme.bodyMedium,
               )
             else
+              // THE WHOLE PICTURE BEFORE ANYTHING MOVES: every change that
+              // will be merged into the job, and every edit that will be
+              // dropped - not brought in, and written over by the next
+              // publish - each in full.
               Flexible(
-                child: SizedBox(
-                  height: 260,
-                  child: ListView.builder(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.55,
+                  ),
+                  child: ListView(
                     key: const ValueKey('online_import_changes'),
-                    itemCount: changes.length,
-                    itemBuilder: (context, i) {
-                      final c = changes[i];
-                      final listOnly = c.kind == kSheetEditKind;
-                      return ListTile(
-                        dense: true,
-                        visualDensity: VisualDensity.compact,
-                        leading: Icon(
-                          listOnly
-                              ? Icons.back_hand_outlined
-                              : c.id.isEmpty
-                                  ? Icons.add_circle_outline
-                                  : Icons.edit,
-                          size: 18,
-                          color: listOnly ? warningOn(surface) : muted,
+                    shrinkWrap: true,
+                    children: [
+                      _ReviewHeading(
+                        key: const ValueKey('online_import_merged_heading'),
+                        icon: Icons.merge_type,
+                        color: successOn(surface),
+                        text: applicable == 0
+                            ? 'Nothing will be merged into the job'
+                            : 'Merged into the job - '
+                                '${count(applicable, 'change')}',
+                      ),
+                      for (final c in appliedChanges(changes))
+                        _ReviewLine(
+                          icon: c.id.isEmpty
+                              ? Icons.add_circle_outline
+                              : Icons.edit,
+                          title: c.name,
+                          detail: '${c.kind} - ${c.what}',
                         ),
-                        title: Text(c.name),
-                        subtitle: Text(
-                          listOnly
-                              ? 'not brought in, make it in the app - ${c.what}'
-                              : '${c.kind} - ${c.what}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: muted,
+                      if (listed > 0 || problems.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _ReviewHeading(
+                          key: const ValueKey('online_import_dropped_heading'),
+                          icon: Icons.warning_amber,
+                          color: warningOn(surface),
+                          text: 'Dropped - '
+                              '${count(listed + problems.length, 'edit')} not '
+                              'brought in',
+                        ),
+                        for (final c in listedOnlyChanges(changes))
+                          _ReviewLine(
+                            icon: Icons.back_hand_outlined,
+                            color: warningOn(surface),
+                            title: c.name,
+                            detail: '${c.what} - make it in the app; the '
+                                'next publish writes over it',
                           ),
-                        ),
-                      );
-                    },
+                        for (final problem in problems)
+                          _ReviewLine(
+                            key: const ValueKey('online_import_problems'),
+                            icon: Icons.block,
+                            color: warningOn(surface),
+                            title: 'Could not be read',
+                            detail: problem,
+                          ),
+                      ],
+                    ],
                   ),
                 ),
               ),
-            if (problems.isNotEmpty) ...[
-              const Divider(height: 20),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.warning_amber,
-                    size: 16,
-                    color: warningOn(surface),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      // NOT SILENTLY DROPPED. A cell this could not read left
-                      // the record alone; saying which one, and why, is what
-                      // lets somebody go and fix the sheet rather than wonder
-                      // why their edit did not arrive.
-                      problems.join('\n'),
-                      key: const ValueKey('online_import_problems'),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: warningOn(surface),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
             if (listed > 0) ...[
               const Divider(height: 20),
               Text(
@@ -998,6 +997,86 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
     );
   }
 }
+/// A section heading in the pull review: what is merged, what is dropped.
+class _ReviewHeading extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  const _ReviewHeading({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 4),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+/// One change in the pull review, shown in full.
+class _ReviewLine extends StatelessWidget {
+  final IconData icon;
+  final Color? color;
+  final String title;
+  final String detail;
+
+  const _ReviewLine({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.detail,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.only(left: 26, bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: color ?? muted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SelectableText.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$title\n',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(text: detail, style: TextStyle(color: muted)),
+                ],
+              ),
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// One line of "here is what this actually does", with its icon.
 class _Point extends StatelessWidget {
   final IconData icon;

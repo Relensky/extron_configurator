@@ -1,7 +1,7 @@
 name: extron_configurator
 description: "A new Flutter project."
 publish_to: 'none'
-version: 0.5.52+62
+version: 0.5.55+65
 
 environment:
   sdk: ^3.11.5
@@ -34,6 +34,7 @@ dependencies:
   # spreadsheet XML itself rather than only writing it.
   xml: ^7.0.1
   material_ui: ^1.5.0
+  webview_windows: ^0.4.0
 
 dev_dependencies:
   flutter_test:

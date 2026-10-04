@@ -72,3 +72,7 @@ app_config.json.invalid
 /room_presets/Hyflex.roompreset.json
 /room_presets/Huddle.roompreset.json
 /room_presets/Active learning.roompreset.json
+
+# Build-time values compiled in with --dart-define-from-file (the built-in
+# Google sign-in client). secrets.example.json is the tracked template.
+secrets.json

@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.52+62';
+const String kAppVersion = '0.5.55+65';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,95 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.55',
+    date: 'October 3, 2026',
+    title: 'Export by Convert; the chat on the title bar only; your logo kept '
+        'on the share; a roomier profile',
+    changes: [
+      'Export has moved down a row, beside Convert. The chat opens from its '
+          'button on the title bar; the button that floated in the lower '
+          'left is gone (notices of new messages still show there).',
+      'The chat opens as a slide-out unless App Config > Working together '
+          'says otherwise. Moving it from its own title bar lasts until the '
+          'app is closed; turn on "Remember the last way it was opened" to '
+          'keep it.',
+      'The estimate logo chosen in Your profile is copied to the shared '
+          'folder beside the avatars (assets\\logos, under your login), with '
+          'a copy kept on this computer, so an estimate always has its logo '
+          'even when the file it was picked from moves or the share is out '
+          'of reach.',
+      'Your profile is wider, so the scroll bar no longer sits on the '
+          'Estimate PDF settings, and has a button by its title to make it '
+          'fill the window.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.54',
+    date: 'October 3, 2026',
+    title: 'Smoother dragging of the browser and the chat',
+    changes: [
+      'Dragging the built-in browser window or the floating chat panel '
+          'now follows the pointer smoothly: the window is moved as it '
+          'stands instead of being redrawn on every movement, and it '
+          'starts moving the moment the button goes down.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.53',
+    date: 'October 3, 2026',
+    title: 'Project chat; a fuller history; Google sign-in with no setup; '
+        'the toolbar rearranged; smoother typing',
+    changes: [
+      'Project chat: a conversation kept with the job, in a '
+          '"<project>_chat" folder beside the project file, so everybody who '
+          'opens it sees the same thing - no server needed. General, a '
+          'channel per room, and one per tab people talk about. Open it from '
+          'the chat button in the top right or the hover button in the lower '
+          'left, as a slide-out, a floating panel you can drag, or a window '
+          'of its own; the buttons in its title bar move it between the '
+          'three.',
+      'Type @ in the chat to name anybody who has opened the job or is in '
+          'its history. A message that names you is drawn bold in the '
+          'warning color, and the chat icon turns into a red @ until you '
+          'read it. Other new messages show a count, and a notice in the '
+          'lower left. A question, or a message naming you, opens the chat '
+          'by itself (App Config > Working together turns that off).',
+      'History: every change now records the name, email and computer '
+          'beside the Windows login, and the room and tab it was made on. '
+          'Rows read "Name (login)"; click one for everything recorded about '
+          'it. The history can be searched and narrowed to one person, and '
+          'a new People tab lists everybody who has opened the job, with '
+          'when they first and last did and how many changes are theirs.',
+      'The toolbar: the screenshot, Export and the chat are in the top '
+          'right. Light/dark and Help are in the menu under your picture.',
+      'Google sign-in with no setup: App Config > Working together has a '
+          'Sign in with Google button that covers both the workbook upload '
+          'and the live Google Sheet. The OAuth client is built into the app '
+          '(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in secrets.json), so '
+          'nobody needs a JSON file. Your own client still works, under '
+          'Advanced.',
+      'Smoother typing in a room: the unsaved dot on Save is checked a '
+          'quarter of a second after the keys pause instead of on every '
+          'keystroke, and the check for who else has a file open no longer '
+          'reads the file share on the screen\'s own thread.',
+      'Who else is editing shows up within a few seconds: your copy tells '
+          'the others as soon as you change something, and checks for them '
+          'every two seconds instead of five.',
+      'The live Google Sheet is no longer cleared and rewritten on each '
+          'publish: only the cells that changed are written, so the Sheet\'s '
+          'own version history shows what actually changed.',
+      'Pull updates shows the whole picture first: every change that will '
+          'be merged into the job, and every edit that will be dropped - '
+          'typed in a tab the app cannot read back, or a cell it could not '
+          'read - each listed in full.',
+      'A built-in browser: Google Sheets open in a floating window inside '
+          'the app that can be dragged, resized or made to fill the screen. '
+          'App Config > Working together turns it off.',
+      'Updates are one click: the notice offers Close and Update, which '
+          'installs straight away - no second Update to press.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.52',
     date: 'October 2, 2026',

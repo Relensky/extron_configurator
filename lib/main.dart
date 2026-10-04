@@ -49,6 +49,13 @@ import 'color_wheel_picker.dart';
 import 'floor_plan_view.dart';
 import 'model_defaults_dialog.dart';
 import 'online_copy_dialog.dart';
+import 'in_app_browser.dart';
+import 'app_paths.dart' show userDataDirOrNull;
+import 'chat/chat_layer.dart';
+import 'chat/chat_link.dart' show kChatWindowFlag;
+import 'chat/project_chat.dart' show ChatMode;
+import 'chat/chat_window_app.dart';
+import 'google_sheets_export.dart' show kBuiltInGoogleClientId;
 import 'undo_bar.dart'
     show ToolbarUndoButtons, ToolbarUndoTarget, toolbarUndoTarget;
 import 'nav_rail.dart';
@@ -74,7 +81,14 @@ import 'system_settings_view.dart';
 import 'tab_export.dart';
 import 'workbook_export.dart';
 
-void main() {
+void main(List<String> args) {
+  // A chat window is this .exe started again with a flag - it runs the chat
+  // and nothing else. See chat/chat_link.dart.
+  final chatAt = args.indexOf(kChatWindowFlag);
+  if (chatAt >= 0) {
+    runChatWindow(chatAt + 1 < args.length ? args[chatAt + 1] : '');
+    return;
+  }
   // FIRST, before anything that could throw. See error_reporting.dart: without
   // these, an unhandled error in a release build goes to a console that a
   // double-clicked .exe does not have, and the log this app asks people to send
@@ -89,6 +103,11 @@ void main() {
   // 10" on every Windows 11 machine. See lib/log_viewer/os_name.dart.
   unawaited(AppLogger.logInfo(
       'Room Config Builder $kAppVersion started on ${describeOperatingSystem()}.'));
+  // Sign-ins made in the built-in browser are kept here, per user.
+  final dataDir = userDataDirOrNull();
+  if (dataDir != null) {
+    InAppBrowser.userDataFolder = path.join(dataDir, 'WebView2');
+  }
   runApp(
     ChangeNotifierProvider(
       create: (_) => AppStateProvider(),
@@ -787,6 +806,8 @@ class _MainDashboardState extends State<MainDashboard> {
             ? () => _showMigrationLogDialog(context, provider.systemLogs)
             : null,
       ),
+      // EXPORT, beside Convert: every way a document leaves the app.
+      _ExportButton(selectedIndex: selectedIndex, hasConfig: hasConfig),
       // SAVE, AND EVERY OTHER WAY OF SAVING, in the corner of this row. One
       // button that writes whatever document the tab on screen belongs to,
       // with a dot when it is behind its file and a menu beside it - see
@@ -795,33 +816,14 @@ class _MainDashboardState extends State<MainDashboard> {
     ];
 
     final page = Scaffold(
-      // THE LOWER RIGHT CORNER: the screenshot, and under it every way a
-      // document leaves the app. Both fade and shrink until the pointer
-      // comes near, so they do not sit over the page's last rows.
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!provider.settingsOpen)
-            _FadeUntilHovered(
-              child: _ScreenshotFab(
-                onCost: onCost,
-                onScreen: () => _takeScreenshot(context, selectedIndex),
-              ),
-            ),
-          _ExportFab(
-            selectedIndex: selectedIndex,
-            hasConfig: hasConfig,
-          ),
-        ],
-      ),
       appBar: AppBar(
         // THE FILE MENU AND THE STEPS AT THE LEFT, THE APP AT THE RIGHT.
         //
         // The hamburger holds everything that starts, opens or transfers a
         // document; Undo, Redo and the history sit beside it. The far corner
-        // is the application: the light/dark toggle, Help, and Settings in
-        // the corner itself. The screenshot floats above Export.
+        // has the screenshot and the chat, then you - whose menu holds
+        // light/dark, Help and Settings. Export sits on the row below, by
+        // Convert.
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -898,18 +900,14 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
         titleSpacing: 4,
         actions: [
-          IconButton(
-            key: const ValueKey('toggle_theme'),
-            icon: Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
-            tooltip: provider.isDarkMode
-                ? 'Switch to light mode'
-                : 'Switch to dark mode',
-            onPressed: () => provider.toggleTheme(),
-          ),
-          // HELP, just left of the profile.
-          const HelpButton(),
-          // YOU, in the corner - and the way into Settings. See
-          // [ProfileButton].
+          if (!provider.settingsOpen)
+            _ScreenshotButton(
+              onCost: onCost,
+              onScreen: () => _takeScreenshot(context, selectedIndex),
+            ),
+          const ChatToolbarButton(),
+          // YOU, in the corner - and the way into Settings, Help and the
+          // light/dark switch. See [ProfileButton].
           const ProfileButton(),
           const SizedBox(width: 4),
         ],
@@ -950,7 +948,10 @@ class _MainDashboardState extends State<MainDashboard> {
             ),
           ),
           Expanded(
-            child: RepaintBoundary(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: RepaintBoundary(
               key: _captureKey,
               // A floor under every page: narrower than this and the page
               // scrolls sideways with a scrollbar instead of being cut off.
@@ -964,6 +965,13 @@ class _MainDashboardState extends State<MainDashboard> {
                         provider.isEstimateRoom,
                       ),
               ),
+                  ),
+                ),
+                // NOTICES OF NEW CHAT MESSAGES, in the page's lower left -
+                // beside the rail rather than over it, and out of
+                // screenshots.
+                const Positioned(left: 12, bottom: 12, child: ChatCorner()),
+              ],
             ),
           )
         ],
@@ -1009,7 +1017,7 @@ class _MainDashboardState extends State<MainDashboard> {
             control: true, shift: true): () =>
             _undoOnCurrentTab(context, provider, redo: true),
       },
-      child: CollabNoticeListener(child: page),
+      child: CollabNoticeListener(child: ProjectChatLayer(child: page)),
     );
   }
 
@@ -2642,6 +2650,8 @@ class ProfileButton extends StatelessWidget {
         if (v == 'settings' && !provider.settingsOpen) {
           provider.toggleSettings();
         }
+        if (v == 'theme') provider.toggleTheme();
+        if (v == 'help') showHelpBook(context);
       },
       itemBuilder: (context) => [
         PopupMenuItem<String>(
@@ -2676,6 +2686,29 @@ class ProfileButton extends StatelessWidget {
             title: Text('Application Configuration'),
           ),
         ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'theme',
+          child: ListTile(
+            key: const ValueKey('toggle_theme'),
+            contentPadding: EdgeInsets.zero,
+            leading:
+                Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            title: Text(provider.isDarkMode
+                ? 'Switch to light mode'
+                : 'Switch to dark mode'),
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'help',
+          child: ListTile(
+            key: ValueKey('open_help'),
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.help_outline),
+            title: Text('Help'),
+            subtitle: Text('Every feature, searchable (F1)'),
+          ),
+        ),
       ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -2692,21 +2725,57 @@ Future<void> showProfileDialog(BuildContext context) => showDialog<void>(
   builder: (_) => const _ProfileDialog(),
 );
 
-class _ProfileDialog extends StatelessWidget {
+class _ProfileDialog extends StatefulWidget {
   const _ProfileDialog();
+
+  @override
+  State<_ProfileDialog> createState() => _ProfileDialogState();
+}
+
+class _ProfileDialogState extends State<_ProfileDialog> {
+  /// Filling the window, from the button by the title.
+  bool _max = false;
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
     final theme = Theme.of(context);
+    final screen = MediaQuery.of(context).size;
     return AlertDialog(
       key: const ValueKey('profile_dialog'),
-      title: const Text('Your profile'),
-      contentPadding: const EdgeInsets.fromLTRB(24, 16, 8, 0),
+      insetPadding: _max
+          ? const EdgeInsets.all(16)
+          : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      title: Row(
+        children: [
+          const Expanded(child: Text('Your profile')),
+          IconButton(
+            key: const ValueKey('profile_maximize'),
+            tooltip: _max ? 'Restore' : 'Make it larger',
+            icon: Icon(_max ? Icons.fullscreen_exit : Icons.fullscreen),
+            onPressed: () => setState(() => _max = !_max),
+          ),
+        ],
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 4, 0),
       content: SizedBox(
-        width: 640,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(right: 16),
+        width: _max ? screen.width - 32 : 820,
+        height: _max ? screen.height - 200 : null,
+        // The bar runs in a lane of its own right of the content, so it
+        // never sits on the estimate settings' text.
+        child: Scrollbar(
+          controller: _scroll,
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+          controller: _scroll,
+          padding: const EdgeInsets.only(right: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2758,6 +2827,7 @@ class _ProfileDialog extends StatelessWidget {
               ),
               const SizedBox(height: 4),
             ],
+          ),
           ),
         ),
       ),
@@ -3575,19 +3645,98 @@ class AppSettingsView extends StatelessWidget {
           value: provider.collabEnabled,
           onChanged: provider.setCollabEnabled,
         ),
+        const SizedBox(height: 12),
+        // PROJECT CHAT - see chat/project_chat.dart.
+        Text('Project chat', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Kept in a "<project>_chat" folder beside the project file, so '
+          'everybody who opens the job sees it. Open it from the chat button '
+          'in the top right or the lower left.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Text('Opens as', style: Theme.of(context).textTheme.bodyMedium),
+        const SizedBox(height: 4),
+        SegmentedButton<ChatMode>(
+          key: const ValueKey('chat_mode_setting'),
+          segments: [
+            for (final m in ChatMode.values)
+              ButtonSegment(value: m, label: Text(m.label)),
+          ],
+          selected: {provider.chatDefaultMode},
+          onSelectionChanged: (v) => provider.setChatDefaultMode(v.first),
+        ),
+        SwitchListTile(
+          key: const ValueKey('chat_remember_mode'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Remember the last way it was opened'),
+          subtitle: const Text(
+            'Off: each time the app starts, the chat opens as chosen above, '
+            'whatever it was moved to last time. On: it opens the way it was '
+            'left.',
+          ),
+          value: provider.chatRememberMode,
+          onChanged: provider.setChatRememberMode,
+        ),
+        SwitchListTile(
+          key: const ValueKey('chat_popup_switch'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Open the chat when somebody asks a question'),
+          subtitle: const Text(
+            'A message with a question mark in it, or one that names you, '
+            'opens the chat. Anything else shows a notice in the lower left.',
+          ),
+          value: provider.chatPopUp,
+          onChanged: provider.setChatPopUp,
+        ),
         const SizedBox(height: 20),
 
         // GOOGLE SHEETS - see google_sheets_export.dart.
         Text('Google Sheets', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(
-          'Optional. With a Google Cloud OAuth client of type "Desktop app" '
-          '(and the Google Drive API enabled on its project), Export > Upload '
-          'workbook to Google Sheets puts the workbook straight into your '
-          'Drive as a Sheet. Without one, the export saves the .xlsx and opens '
-          'Google Sheets for you to upload it. The live Google Sheet in a '
-          'project\'s Online copy needs the Google Sheets API enabled as '
-          'well.',
+          'Sign in with your Google account to upload workbooks to Google '
+          'Sheets and to publish a project to its live Google Sheet and read '
+          'changes back. Only Sheets this app makes, or that are shared with '
+          'you, are touched.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        const _GoogleSignInRow(),
+        SwitchListTile(
+          key: const ValueKey('use_built_in_browser'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Open Google Sheets in the built-in browser'),
+          subtitle: const Text(
+            'A floating window inside the app you can drag, resize and fill '
+            'the screen with. Off opens them in your default browser.',
+          ),
+          value: provider.useBuiltInBrowser,
+          onChanged: provider.setUseBuiltInBrowser,
+        ),
+        const SizedBox(height: 4),
+        ExpansionTile(
+          key: const ValueKey('googleClient_advanced'),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 8),
+          title: Text(
+            'Advanced: your own Google Cloud client',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          subtitle: Text(
+            provider.googleClientId.trim().isNotEmpty
+                ? 'In use instead of the built-in sign-in'
+                : kBuiltInGoogleClientId.isNotEmpty
+                    ? 'Not needed - leave blank to use the built-in sign-in'
+                    : 'Needed - this copy has no built-in sign-in',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          children: [
+        Text(
+          'A Google Cloud OAuth client of type "Desktop app", with the Google '
+          'Drive and Google Sheets APIs enabled on its project. Blank uses '
+          'the sign-in built into the app.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
@@ -3643,6 +3792,8 @@ class AppSettingsView extends StatelessWidget {
           ),
           initialValue: provider.googleClientSecret,
           onChanged: (val) => provider.updateSetting('googleClientSecret', val),
+        ),
+          ],
         ),
           ],
         ),
@@ -5443,49 +5594,14 @@ class _SettingsWindow extends StatelessWidget {
   }
 }
 
-/// Faded and shrunk into its lower-right corner until the pointer is over
-/// it. The hover area stays full size, so it grows back as the pointer
-/// arrives rather than once it lands on the smaller button.
-class _FadeUntilHovered extends StatefulWidget {
-  final Widget child;
-
-  const _FadeUntilHovered({required this.child});
-
-  @override
-  State<_FadeUntilHovered> createState() => _FadeUntilHoveredState();
-}
-
-class _FadeUntilHoveredState extends State<_FadeUntilHovered> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    const duration = Duration(milliseconds: 150);
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedOpacity(
-        opacity: _hover ? 1 : 0.45,
-        duration: duration,
-        child: AnimatedScale(
-          scale: _hover ? 1 : 0.8,
-          alignment: Alignment.bottomRight,
-          duration: duration,
-          child: widget.child,
-        ),
-      ),
-    );
-  }
-}
-
-/// SCREENSHOT, floating above Export - a menu, because there are two
-/// pictures somebody means: the screen as it is, and on the Cost tab the
-/// whole estimate rendered as a dated quote.
-class _ScreenshotFab extends StatelessWidget {
+/// SCREENSHOT, on the top bar - a menu, because there are two pictures
+/// somebody means: the screen as it is, and on the Cost tab the whole
+/// estimate rendered as a dated quote.
+class _ScreenshotButton extends StatelessWidget {
   final bool onCost;
   final VoidCallback onScreen;
 
-  const _ScreenshotFab({required this.onCost, required this.onScreen});
+  const _ScreenshotButton({required this.onCost, required this.onScreen});
 
   @override
   Widget build(BuildContext context) {
@@ -5494,7 +5610,8 @@ class _ScreenshotFab extends StatelessWidget {
       tooltip: onCost
           ? 'Screenshot - the screen, or the estimate as a picture'
           : 'Screenshot & annotate',
-      position: PopupMenuPosition.over,
+      position: PopupMenuPosition.under,
+      icon: const Icon(Icons.photo_camera_outlined),
       onSelected: (v) {
         switch (v) {
           case 'screen':
@@ -5540,29 +5657,22 @@ class _ScreenshotFab extends StatelessWidget {
           ),
         ],
       ],
-      child: IgnorePointer(
-        child: FloatingActionButton(
-          heroTag: 'screenshot_fab',
-          onPressed: () {},
-          child: const Icon(Icons.photo_camera),
-        ),
-      ),
     );
   }
 }
 
-/// EXPORT, AS A BUTTON FLOATING IN THE LOWER RIGHT.
+/// EXPORT, on the document row beside Convert.
 ///
 /// It lists what is actually open: the room's workbook when a room is, the
 /// job's when a job is, the campus when the job has one - each once - then
 /// Google Sheets and the online copy for the same documents, and the page's
 /// own tables (on the Cost tab, the estimate as PDF, Excel, text or
 /// clipboard).
-class _ExportFab extends StatelessWidget {
+class _ExportButton extends StatelessWidget {
   final int selectedIndex;
   final bool hasConfig;
 
-  const _ExportFab({required this.selectedIndex, required this.hasConfig});
+  const _ExportButton({required this.selectedIndex, required this.hasConfig});
 
   @override
   Widget build(BuildContext context) {
@@ -5665,10 +5775,11 @@ class _ExportFab extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final menu = PopupMenuButton<String>(
+    return PopupMenuButton<String>(
       key: const ValueKey('export_menu'),
       tooltip: 'Export',
-      position: PopupMenuPosition.over,
+      position: PopupMenuPosition.under,
+      icon: const Icon(Icons.ios_share),
       onSelected: (v) async {
         switch (v) {
           case 'room_workbook':
@@ -5699,27 +5810,98 @@ class _ExportFab extends StatelessWidget {
         }
       },
       itemBuilder: (ctx) => buildItems(),
-      child: IgnorePointer(
-        child: FloatingActionButton.extended(
-          heroTag: 'export_fab',
-          onPressed: () {},
-          icon: const Icon(Icons.ios_share),
-          label: const Text('Export'),
-        ),
-      ),
-    );
-    // The gap to the screenshot above goes with the button, so the
-    // screenshot drops into the corner when there is nothing to export.
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: _FadeUntilHovered(child: menu),
     );
   }
 
   static String _sheetsHint(AppStateProvider provider) =>
-      provider.googleClientId.trim().isEmpty
+      !provider.hasGoogleClient
           ? 'Saves the .xlsx and opens Google Sheets to import it'
           : 'Straight into your Google Drive, as a Sheet';
+}
+
+
+/// Whether this copy is signed in to Google, and the button to change that.
+class _GoogleSignInRow extends StatefulWidget {
+  const _GoogleSignInRow();
+
+  @override
+  State<_GoogleSignInRow> createState() => _GoogleSignInRowState();
+}
+
+class _GoogleSignInRowState extends State<_GoogleSignInRow> {
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fresh each time: an upload or publish may have signed in since.
+    context.read<AppStateProvider>().refreshGoogleSignedIn();
+  }
+
+  Future<void> _signIn(AppStateProvider provider) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    final problem = await provider.signInToGoogle();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text(problem.isEmpty ? 'Signed in to Google.' : problem),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final signedIn = provider.googleSignedIn ?? false;
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Icon(
+          signedIn ? Icons.check_circle : Icons.account_circle_outlined,
+          size: 20,
+          color: signedIn ? Colors.green : theme.disabledColor,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            !provider.hasGoogleClient
+                ? 'Google sign-in is not available in this copy - see '
+                    'Advanced below.'
+                : signedIn
+                    ? 'Signed in to Google.'
+                    : _busy
+                        ? 'Finish signing in in your browser...'
+                        : 'Not signed in.',
+            style: theme.textTheme.bodyMedium,
+          ),
+        ),
+        if (signedIn)
+          TextButton(
+            key: const ValueKey('google_sign_out'),
+            onPressed: _busy ? null : provider.signOutOfGoogle,
+            child: const Text('Sign out'),
+          ),
+        const SizedBox(width: 8),
+        FilledButton.icon(
+          key: const ValueKey('google_sign_in'),
+          icon: _busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.login, size: 18),
+          label: Text(signedIn ? 'Switch account' : 'Sign in with Google'),
+          onPressed:
+              _busy || !provider.hasGoogleClient ? null : () => _signIn(provider),
+        ),
+      ],
+    );
+  }
 }
 
 

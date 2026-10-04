@@ -151,7 +151,7 @@ bool saveScopeNeedsFile(AppStateProvider provider, SaveScope scope) =>
 bool saveScopeIsDirty(AppStateProvider provider, SaveScope scope) =>
     switch (scope) {
       SaveScope.room =>
-        provider.roomNeverSaved || provider.roomHasUnsavedChanges,
+        provider.roomNeverSaved || provider.roomShowsUnsaved,
       SaveScope.project => provider.projectDirty,
       _ => false,
     };

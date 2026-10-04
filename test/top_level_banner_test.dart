@@ -105,7 +105,7 @@ void main() {
         reason: 'Save is in the corner of the second row');
 
     // THE TITLE BAR: the File menu, Undo, Redo and History at the left;
-    // light/dark, Help and the profile at the right.
+    // the screenshot, Export, the chat and the profile at the right.
     const leftKeys = [
       'file_menu',
       'toolbar_undo',
@@ -114,8 +114,8 @@ void main() {
       'revert_to_backup',
     ];
     const rightKeys = [
-      'toggle_theme',
-      'open_help',
+      'screenshot_menu',
+      'chat_button',
       'profile_button',
     ];
     for (final key in [...leftKeys, ...rightKeys]) {
@@ -147,23 +147,20 @@ void main() {
     expect(rectOf('toolbar_redo').left, greaterThan(rectOf('toolbar_undo').left));
     expect(rectOf('show_history').left, greaterThan(rectOf('toolbar_redo').left));
 
-    // Your profile in the corner, Help just left of it, and no gear.
+    // Your profile in the corner, the chat just left of it, and no gear.
     expect(barRight - rectOf('profile_button').right, lessThan(16),
         reason: 'the profile is the far-right button');
     expect(find.byKey(const ValueKey('banner_app_config')), findsNothing,
         reason: 'Settings is on the profile menu');
-    expect(rectOf('open_help').right,
+    expect(rectOf('chat_button').right,
         lessThan(rectOf('profile_button').left + 1),
-        reason: 'Help is just left of the profile');
-    expect(rectOf('toggle_theme').right, lessThan(rectOf('open_help').left + 1));
-    expect(
-      find.descendant(
-        of: find.byType(AppBar),
-        matching: find.byKey(const ValueKey('screenshot_menu')),
-      ),
-      findsNothing,
-      reason: 'the screenshot floats above Export',
-    );
+        reason: 'the chat is just left of the profile');
+    expect(rectOf('screenshot_menu').right,
+        lessThan(rectOf('chat_button').left + 1));
+    // Light/dark and Help moved onto the profile menu.
+    for (final key in ['toggle_theme', 'open_help']) {
+      expect(find.byKey(ValueKey(key)), findsNothing, reason: key);
+    }
 
     await tester.tap(find.byKey(const ValueKey('banner_project')));
     await tester.pumpAndSettle();

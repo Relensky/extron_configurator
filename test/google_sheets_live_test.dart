@@ -17,6 +17,8 @@ class _FakeGoogle {
   final tabs = <String, ({int id, List<List<String>> grid})>{};
   int created = 0;
   int batches = 0;
+  /// Cells written, per tab.
+  final written = <String, int>{};
   bool down = false;
 
   GoogleLiveSheet get client => GoogleLiveSheet(_send);
@@ -51,13 +53,38 @@ class _FakeGoogle {
         if (cells != null) {
           final id = (cells['range'] ?? cells['start'])['sheetId'];
           final name = tabs.keys.firstWhere((k) => tabs[k]!.id == id);
-          tabs[name] = (
-            id: id as int,
-            grid: [
-              for (final Map row in cells['rows'] ?? const [])
-                [for (final Map cell in row['values']) _text(cell)],
-            ],
-          );
+          // A whole-tab range clears it; a start writes cells in place.
+          final grid = cells['range'] != null
+              ? <List<String>>[]
+              : [for (final row in tabs[name]!.grid) List.of(row)];
+          final start = cells['start'] as Map?;
+          final r0 = (start?['rowIndex'] as int?) ?? 0;
+          final c0 = (start?['columnIndex'] as int?) ?? 0;
+          final rows = (cells['rows'] as List?) ?? const [];
+          for (var r = 0; r < rows.length; r++) {
+            final values = (rows[r] as Map)['values'] as List;
+            while (grid.length <= r0 + r) {
+              grid.add([]);
+            }
+            final row = grid[r0 + r];
+            for (var c = 0; c < values.length; c++) {
+              while (row.length <= c0 + c) {
+                row.add('');
+              }
+              row[c0 + c] = _text(values[c] as Map);
+              written[name] = (written[name] ?? 0) + 1;
+            }
+          }
+          // Trailing blanks trimmed, the way Google returns a grid.
+          for (final row in grid) {
+            while (row.isNotEmpty && row.last.isEmpty) {
+              row.removeLast();
+            }
+          }
+          while (grid.isNotEmpty && grid.last.isEmpty) {
+            grid.removeLast();
+          }
+          tabs[name] = (id: id as int, grid: grid);
         }
       }
       return {};
@@ -228,6 +255,23 @@ void main() {
 
       await p.publishOnlineCopy();
       expect(google.created, 1);
+    });
+
+    test('a second publish writes only the cells that changed', () async {
+      final (:p, :google) = job();
+      await p.publishOnlineCopy();
+
+      // Nothing changed: only the History tab, which logs the publish and
+      // the time it was made, is written to.
+      google.written.clear();
+      await p.publishOnlineCopy();
+      expect(google.written.keys.toSet().difference({'History'}), isEmpty);
+
+      // One quantity changed: that cell on the deliveries tab, not the tab.
+      p.updateProjectDelivery(p.project.deliveries.single.copyWith(qty: 20));
+      google.written.clear();
+      await p.publishOnlineCopy();
+      expect(google.written[kEditableDeliveriesSheet], 1);
     });
 
     test('goes to the folder and the Sheet in one publish', () async {

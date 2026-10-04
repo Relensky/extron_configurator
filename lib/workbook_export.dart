@@ -4,12 +4,12 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
-import 'package:url_launcher/url_launcher.dart';
 
 import 'file_dialogs.dart';
 import 'app_logger.dart';
 
 import 'app_snack.dart';
+import 'in_app_browser.dart';
 import 'app_state.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'diagram_capture.dart';
@@ -302,9 +302,9 @@ String projectFileStem(BuildingProject project) {
 
 /// The same workbook, uploaded as a Google Sheet.
 ///
-/// With a Google client set up in App Config this signs in (once) and uploads
-/// the book straight into the person's Drive, converted to a Sheet, and opens
-/// it. Without one it saves the .xlsx and opens Google Sheets, whose
+/// With a Google client (built in, or set in App Config) this signs in (once)
+/// and uploads the book straight into the person's Drive, converted to a
+/// Sheet, and opens it. Without one it saves the .xlsx and opens Google Sheets, whose
 /// Open > Upload takes the file as it is - the same result, one drag later.
 Future<void> exportWorkbookToGoogleSheets(
   BuildContext context,
@@ -316,8 +316,8 @@ Future<void> exportWorkbookToGoogleSheets(
   final messenger = ScaffoldMessenger.of(context);
 
   final uploader = GoogleSheetsUploader(
-    clientId: provider.googleClientId,
-    clientSecret: provider.googleClientSecret,
+    clientId: provider.effectiveGoogleClientId,
+    clientSecret: provider.effectiveGoogleClientSecret,
     secrets: provider.secretStore,
   );
 
@@ -330,8 +330,8 @@ Future<void> exportWorkbookToGoogleSheets(
         content: const SizedBox(
           width: 480,
           child: Text(
-            'Direct upload needs a Google client, set once under App Config > '
-            'Google Sheets.\n\n'
+            'This copy has no Google sign-in built in. One can be set up '
+            'under App Config > Working together > Advanced.\n\n'
             'Without one, the workbook is saved as an .xlsx and Google Sheets '
             'opens in your browser: choose Open (the folder icon) > Upload and '
             'drop the file in. Google converts it to a Sheet with every tab '
@@ -357,7 +357,9 @@ Future<void> exportWorkbookToGoogleSheets(
     } else {
       await exportProjectWorkbook(context, provider);
     }
-    await launchUrl(kGoogleSheetsHome, mode: LaunchMode.externalApplication);
+    if (!context.mounted) return;
+    await openWebLink(context, kGoogleSheetsHome.toString(),
+        title: 'Google Sheets');
     return;
   }
 
@@ -410,7 +412,9 @@ Future<void> exportWorkbookToGoogleSheets(
 
     final result = await uploader.upload(bytes, title);
     AppLogger.logInfo('Workbook uploaded to Google Sheets: ${result.url}');
-    await launchUrl(Uri.parse(result.url), mode: LaunchMode.externalApplication);
+    if (context.mounted) {
+      await openWebLink(context, result.url, title: 'Google Sheet');
+    }
     showTimedSnackBar(
       messenger,
       SnackBar(

@@ -211,6 +211,15 @@ String currentUserName() {
   return name.trim();
 }
 
+/// The who and where stamped on a new [ProjectEdit] beside the login.
+typedef EditContext = ({
+  String name,
+  String email,
+  String machine,
+  String room,
+  String tab,
+});
+
 /// One recorded change.
 class ProjectEdit {
   /// What was changed, as `<kind>:<id>` — `part:<masterKey>`, `todo:<id>`,
@@ -241,6 +250,16 @@ class ProjectEdit {
   /// date-only value.
   final DateTime at;
 
+  /// Who [user] is, as their profile has it: display name and email, and the
+  /// computer they were at. '' on entries older than these fields.
+  final String name;
+  final String email;
+  final String machine;
+
+  /// Where they were standing: the room open and the tab on screen.
+  final String room;
+  final String tab;
+
   const ProjectEdit({
     required this.itemKey,
     required this.itemName,
@@ -248,7 +267,24 @@ class ProjectEdit {
     required this.summary,
     required this.user,
     required this.at,
+    this.name = '',
+    this.email = '',
+    this.machine = '',
+    this.room = '',
+    this.tab = '',
   });
+
+  /// 'Derek Stanley (dstanley)', or the login alone when the name is it.
+  String get userLabel {
+    final n = name.trim();
+    if (user.isEmpty) return n;
+    if (n.isEmpty || n.toLowerCase() == user.toLowerCase()) return user;
+    return '$n ($user)';
+  }
+
+  /// Supplies the who and where for new entries. Set by the app; null in
+  /// tests that don't care.
+  static EditContext Function()? context;
 
   /// The kind of thing this was — 'part', 'todo', 'room', 'track', 'project'.
   String get itemKind {
@@ -263,6 +299,11 @@ class ProjectEdit {
     'summary': summary,
     if (user.isNotEmpty) 'user': user,
     'at': at.toIso8601String(),
+    if (name.isNotEmpty) 'name': name,
+    if (email.isNotEmpty) 'email': email,
+    if (machine.isNotEmpty) 'machine': machine,
+    if (room.isNotEmpty) 'room': room,
+    if (tab.isNotEmpty) 'tab': tab,
   };
 
   factory ProjectEdit.fromJson(Map<String, dynamic> json) => ProjectEdit(
@@ -271,6 +312,11 @@ class ProjectEdit {
     field: json['field']?.toString() ?? '',
     summary: json['summary']?.toString() ?? '',
     user: json['user']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    email: json['email']?.toString() ?? '',
+    machine: json['machine']?.toString() ?? '',
+    room: json['room']?.toString() ?? '',
+    tab: json['tab']?.toString() ?? '',
     // An entry with no readable time is dated to the epoch rather than
     // dropped: something happened, and losing the record because the stamp is
     // unreadable is worse than showing it at the bottom of the list.
@@ -5424,6 +5470,20 @@ void appendEdit(
 }) {
   final when = at ?? DateTime.now();
   final who = user ?? currentUserName();
+  final ctx = ProjectEdit.context?.call();
+  ProjectEdit entry(String name) => ProjectEdit(
+        itemKey: itemKey,
+        itemName: name,
+        field: field,
+        summary: summary,
+        user: who,
+        at: when,
+        name: ctx?.name ?? '',
+        email: ctx?.email ?? '',
+        machine: ctx?.machine ?? '',
+        room: ctx?.room ?? '',
+        tab: ctx?.tab ?? '',
+      );
 
   if (coalesce && log.isNotEmpty) {
     final last = log.last;
@@ -5431,28 +5491,13 @@ void appendEdit(
         last.field == field &&
         last.user == who &&
         when.difference(last.at).abs() < kEditCoalesceWindow) {
-      log[log.length - 1] = ProjectEdit(
-        itemKey: itemKey,
-        itemName: itemName.isEmpty ? last.itemName : itemName,
-        field: field,
-        summary: summary,
-        user: who,
-        at: when,
-      );
+      log[log.length - 1] =
+          entry(itemName.isEmpty ? last.itemName : itemName);
       return;
     }
   }
 
-  log.add(
-    ProjectEdit(
-      itemKey: itemKey,
-      itemName: itemName,
-      field: field,
-      summary: summary,
-      user: who,
-      at: when,
-    ),
-  );
+  log.add(entry(itemName));
   if (log.length > limit) {
     log.removeRange(0, log.length - limit);
   }

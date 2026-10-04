@@ -120,7 +120,10 @@ class EstimateSettingsSection extends StatelessWidget {
                 initialValue: logoPath,
                 decoration: InputDecoration(
                   labelText: 'Logo',
-                  helperText: 'PNG or JPEG, printed in a top corner',
+                  helperText: 'PNG or JPEG, printed in a top corner. Kept '
+                      'on the share beside your avatar, with a copy on '
+                      'this computer.',
+                  helperMaxLines: 2,
                   errorText: logoMissing ? 'File not found' : null,
                   border: const OutlineInputBorder(),
                   suffixIcon: Row(
@@ -137,13 +140,20 @@ class EstimateSettingsSection extends StatelessWidget {
                         icon: const Icon(Icons.image_outlined),
                         tooltip: 'Choose an image',
                         onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
                           final result = await pickFilesCompat(
                             type: FileType.custom,
                             allowedExtensions: const ['png', 'jpg', 'jpeg'],
                           );
                           final picked = result?.files.single.path;
-                          if (picked != null) {
-                            provider.updateSetting('estimateLogoPath', picked);
+                          if (picked == null) return;
+                          // Copied to the share beside the avatars, and
+                          // kept on this computer too.
+                          final problem =
+                              await provider.setMyEstimateLogo(picked);
+                          if (problem.isNotEmpty) {
+                            messenger.showSnackBar(
+                                SnackBar(content: Text(problem)));
                           }
                         },
                       ),

@@ -5071,7 +5071,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final messenger = ScaffoldMessenger.of(context);
     final theme = Theme.of(context);
     final settings = provider.avCost;
-    final logoPath = provider.estimateLogoPath;
+    final logoPath = provider.estimateLogoForExport;
     final logo = readEstimateLogo(logoPath);
 
     String? outputFile = await saveFileCompat(

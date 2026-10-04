@@ -9,10 +9,10 @@ import 'package:extron_configurator/main.dart';
 
 /// HELP HAS TO BE REACHABLE FROM THE APP, not just exist inside it.
 ///
-/// Two ways in, both of them where somebody would already be looking: a button
-/// on the title bar beside the gear - help is a property of the app rather than
-/// of whichever tab is open, so it does not move - and F1, which every Windows
-/// tool has meant help on for thirty years.
+/// Two ways in, both of them where somebody would already be looking: Help on
+/// the menu under your picture in the title bar - help is a property of the
+/// app rather than of whichever tab is open, so it does not move - and F1,
+/// which every Windows tool has meant help on for thirty years.
 void main() {
   AppStateProvider ready() => AppStateProvider(autoLoadSettings: false)
     ..settingsLoaded = true
@@ -31,14 +31,23 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('the title bar carries a help button', (tester) async {
+  /// Help is on the profile menu, with light/dark and Settings.
+  Future<void> openHelp(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('profile_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open_help')));
+  }
+
+  testWidgets('the profile menu carries Help', (tester) async {
     await pumpApp(tester, ready());
+    await tester.tap(find.byKey(const ValueKey('profile_button')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('open_help')), findsOneWidget);
   });
 
   testWidgets('pressing it opens the book on its search box', (tester) async {
     await pumpApp(tester, ready());
-    await tester.tap(find.byKey(const ValueKey('open_help')));
+    await openHelp(tester);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('help_book')), findsOneWidget);
@@ -58,7 +67,7 @@ void main() {
   ) async {
     addTearDown(() => helpBookExpanded.value = false);
     await pumpApp(tester, ready());
-    await tester.tap(find.byKey(const ValueKey('open_help')));
+    await openHelp(tester);
     await tester.pumpAndSettle();
 
     Rect book() => tester.getRect(
@@ -80,7 +89,7 @@ void main() {
     // Closed and opened again, it is still expanded.
     await tester.tap(find.byKey(const ValueKey('help_close')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('open_help')));
+    await openHelp(tester);
     await tester.pumpAndSettle();
     expect(book().width, closeTo(1400 - 16, 0.5));
 
@@ -94,7 +103,7 @@ void main() {
     await pumpApp(tester, provider);
     final tabBefore = provider.selectedTabIndex;
 
-    await tester.tap(find.byKey(const ValueKey('open_help')));
+    await openHelp(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('help_close')));
     await tester.pumpAndSettle();

@@ -121,7 +121,7 @@ class ProjectRoomPicker extends StatelessWidget {
               tooltip: 'Next room on the project',
               delta: 1,
             ),
-          if (open != null && provider.roomHasUnsavedChanges)
+          if (open != null && provider.roomShowsUnsaved)
             Padding(
               padding: const EdgeInsets.only(left: 4),
               child: Tooltip(

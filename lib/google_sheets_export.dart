@@ -40,6 +40,14 @@ const kGoogleDriveFileScope = 'https://www.googleapis.com/auth/drive.file';
 const kGoogleLiveRefreshTokenKey = 'google_sheets_live_refresh_token';
 const kGoogleSpreadsheetsScope = 'https://www.googleapis.com/auth/spreadsheets';
 
+/// The OAuth client compiled in from secrets.json (GOOGLE_CLIENT_ID and
+/// GOOGLE_CLIENT_SECRET), so nobody has to make one of their own: they just
+/// sign in. A client entered in App Config wins over it. A desktop client's
+/// secret is not a secret in Google's eyes - it ships in every copy.
+const kBuiltInGoogleClientId = String.fromEnvironment('GOOGLE_CLIENT_ID');
+const kBuiltInGoogleClientSecret =
+    String.fromEnvironment('GOOGLE_CLIENT_SECRET');
+
 /// The client id and secret out of the JSON Google Cloud's "Download JSON"
 /// hands over for an OAuth client, or null when [text] is not one.
 ({String clientId, String clientSecret, bool desktop})? parseGoogleClientJson(
@@ -120,8 +128,8 @@ class GoogleSheetsUploader {
   Future<String> accessToken({bool interactive = true}) async {
     if (!configured) {
       throw const GoogleSheetsException(
-        'No Google client is set up - add one under App Config > Google '
-        'Sheets.',
+        'Google sign-in is not available in this copy - set up a client '
+        'under App Config > Working together > Advanced.',
       );
     }
     final token = await _accessTokenFromRefresh();

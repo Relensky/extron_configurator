@@ -1984,7 +1984,7 @@ class _RoomRowState extends State<_RoomRow> {
     final e = room.estimate;
     final dimmed = !room.ref.included;
     final isOpen = provider.openProjectRoom?.id == room.ref.id;
-    final unsaved = isOpen && provider.roomHasUnsavedChanges;
+    final unsaved = isOpen && provider.roomShowsUnsaved;
 
     // The card's fill changes with the row's state — primaryContainer when it
     // is the open room, errorContainer when it could not be read — so the ink

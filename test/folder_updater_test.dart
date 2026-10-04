@@ -324,7 +324,7 @@ void main() {
       await tester.pump();
       expect(find.text('Update available'), findsNothing);
       // Still installable from settings.
-      expect(find.text('Update to 2.0.0'), findsOneWidget);
+      expect(find.text('Close and Update to 2.0.0'), findsOneWidget);
       u.dispose();
     });
 
@@ -341,21 +341,12 @@ void main() {
       u.dispose();
     });
 
-    testWidgets('Options asks before closing, and Cancel backs out',
-        (tester) async {
+    testWidgets('there is no second step to press through', (tester) async {
       final u = availableUpdater();
       await tester.pumpWidget(app(u));
-      await tester.tap(find.text('Options...'));
-      await tester.pump();
-      expect(find.text('Update to version 2.0.0?'), findsOneWidget);
-      final close = tester.widget<FilledButton>(
-          find.widgetWithText(FilledButton, 'Close and Update'));
-      // Tests are not release builds, so installing is refused up front.
-      expect(close.onPressed, isNull);
-
-      await tester.tap(find.text('Cancel'));
-      await tester.pump();
-      expect(find.text('Update available'), findsOneWidget);
+      expect(find.text('Options...'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Close and Update'),
+          findsOneWidget);
       u.dispose();
     });
 
@@ -364,7 +355,7 @@ void main() {
       final u = availableUpdater();
       await tester.pumpWidget(app(u, hidden: true));
       expect(find.text('Update available'), findsNothing);
-      await tester.tap(find.text('Update to 2.0.0'));
+      u.requestInstall();
       await tester.pump();
       expect(find.text('Update to version 2.0.0?'), findsOneWidget);
       u.dispose();
@@ -395,14 +386,10 @@ void main() {
       expect(find.text('Update available'), findsOneWidget);
 
       // The pointer-down marks the user busy before the tap lands.
-      await tester.tap(find.text('Options...'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Close and Update'),
+          warnIfMissed: false);
       await tester.pump();
       expect(u.userBusy, isTrue);
-      expect(find.text('Update to version 2.0.0?'), findsOneWidget);
-      expect(find.text('Close and Update'), findsOneWidget);
-
-      await tester.tap(find.text('Cancel'));
-      await tester.pump();
       expect(find.text('Update available'), findsOneWidget,
           reason: 'already on screen, so busy does not take it away');
       watcher.dispose();

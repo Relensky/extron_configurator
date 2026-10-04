@@ -160,7 +160,7 @@ class CollabController extends ChangeNotifier {
       enabled ? _state[kind]!.incoming : null;
 
   /// Starts the heartbeat. Idempotent.
-  void start({Duration every = const Duration(seconds: 5)}) {
+  void start({Duration every = const Duration(seconds: 2)}) {
     if (!enabled || _timer != null) return;
     _timer = Timer.periodic(every, (_) => tick());
     tick();
@@ -169,6 +169,20 @@ class CollabController extends ChangeNotifier {
   void stop() {
     _timer?.cancel();
     _timer = null;
+    _nudge?.cancel();
+    _nudge = null;
+  }
+
+  Timer? _nudge;
+
+  /// Asks for a tick soon - after an edit, so a colleague sees "editing"
+  /// without waiting for the next heartbeat. Repeated calls fold into one.
+  void nudge() {
+    if (!enabled || _timer == null || _nudge != null) return;
+    _nudge = Timer(const Duration(milliseconds: 600), () {
+      _nudge = null;
+      tick();
+    });
   }
 
   /// One pass: follow each document to its current file, refresh this copy's
@@ -254,7 +268,7 @@ class CollabController extends ChangeNotifier {
     }
 
     // Did the file move without us moving it?
-    final stamp = _stampOf(doc.watchedFiles);
+    final stamp = await _stampOfAsync(doc.watchedFiles);
     if (stamp != s.stamp) {
       s.stamp = stamp;
       final disk = doc.readDisk();
@@ -485,6 +499,26 @@ class CollabController extends ChangeNotifier {
   }
 
   // --- helpers -------------------------------------------------------------
+
+  /// [_stampOf] without blocking the screen on a slow share.
+  static Future<String> _stampOfAsync(List<String> files) async {
+    final stats = await Future.wait([
+      for (final f in files)
+        if (f.isNotEmpty)
+          File(f).stat().then<FileStat?>((st) => st, onError: (_) => null),
+    ]);
+    final b = StringBuffer();
+    for (final st in stats) {
+      if (st == null) {
+        b.write('?|');
+      } else if (st.type == FileSystemEntityType.notFound) {
+        b.write('-|');
+      } else {
+        b.write('${st.modified.microsecondsSinceEpoch}:${st.size}|');
+      }
+    }
+    return b.toString();
+  }
 
   static String _stampOf(List<String> files) {
     final b = StringBuffer();

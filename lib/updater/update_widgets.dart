@@ -5,15 +5,13 @@
 //     card in the corner when a newer release is in the folder. It never
 //     blocks anything: "Later" hides it for that version, it waits to appear
 //     while the updater is marked userBusy (once up, it stays), and nothing
-//     installs until the user presses
-//     Update and then confirms.
+//     installs until the user presses Close and Update - one click.
 //   * [UserActivityWatcher] marks the updater busy while someone is typing or
 //     clicking, so neither the checks nor the card land in the middle of it.
 //   * [UpdateSettingsSection] goes in a settings screen: the running version,
 //     the folder being watched - which can be changed there and is remembered
-//     - the last check, Check now / Update, and Desktop / Start menu shortcut
-//     buttons. The card's "Close and Update" step also offers the shortcuts
-//     the app does not have yet.
+//     - the last check, Check now / Close and Update, and Desktop / Start menu
+//     shortcut buttons.
 //
 // The card sits above the Navigator, so it uses no dialogs, tooltips or
 // routes - only what MaterialApp.builder's context already provides.
@@ -162,7 +160,8 @@ class _UpdateCardState extends State<_UpdateCard> {
         TextButton(onPressed: u.dismissNotice, child: const Text('Dismiss')),
         if (available != null)
           FilledButton(
-              onPressed: u.requestInstall, child: const Text('Try Again')),
+              onPressed: u.canInstall ? () => unawaited(u.install()) : null,
+              child: const Text('Try Again')),
       ];
     } else if (u.confirming && available != null) {
       title = 'Update to version ${available.version}?';
@@ -207,14 +206,9 @@ class _UpdateCardState extends State<_UpdateCard> {
           'You have ${u.currentVersion}.';
       // ONE CLICK: Close and Update downloads, closes and reopens on the new
       // version straight away (unsaved work is still asked about first - see
-      // confirmClose). Options... is the step that also offers shortcuts.
+      // confirmClose). Shortcuts are in the settings section.
       actions = [
         TextButton(onPressed: u.dismissNotice, child: const Text('Later')),
-        TextButton(
-          key: const ValueKey('update_options'),
-          onPressed: u.requestInstall,
-          child: const Text('Options...'),
-        ),
         FilledButton(
           key: const ValueKey('update_close_and_update'),
           onPressed: u.canInstall ? () => unawaited(u.install()) : null,
@@ -576,10 +570,6 @@ class _UpdateSettingsSectionState extends State<UpdateSettingsSection> {
                       onPressed: busy || !u.canInstall
                           ? null
                           : () => unawaited(u.install()),
-                    ),
-                    OutlinedButton(
-                      onPressed: busy ? null : u.requestInstall,
-                      child: Text('Update to ${u.available!.version}'),
                     ),
                   ],
                 ],

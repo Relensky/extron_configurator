@@ -64,6 +64,8 @@ import 'ui_schema.dart';
 import 'vendor_book.dart';
 import 'undo_history.dart';
 import 'safe_write.dart';
+import 'chat/project_chat.dart';
+import 'in_app_browser.dart';
 import 'shared_json.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -654,6 +656,15 @@ class AppStateProvider extends ChangeNotifier {
   /// Google Sheets' own import instead. See google_sheets_export.dart.
   String googleClientId = '';
   String googleClientSecret = '';
+
+  /// The client actually used: the one entered here, else the one built in.
+  String get effectiveGoogleClientId => googleClientId.trim().isNotEmpty
+      ? googleClientId.trim()
+      : kBuiltInGoogleClientId;
+  String get effectiveGoogleClientSecret => googleClientId.trim().isNotEmpty
+      ? googleClientSecret.trim()
+      : kBuiltInGoogleClientSecret;
+  bool get hasGoogleClient => effectiveGoogleClientId.isNotEmpty;
 
   /// Your name and email, as the profile menu shows them. The name defaults
   /// to the Windows login - see [profileName].
@@ -1353,6 +1364,11 @@ class AppStateProvider extends ChangeNotifier {
       'classSchedulePath': classSchedulePath,
       'logFolderPath': logFolderPath,
       'collabEnabled': collabEnabled,
+      'chatDefaultMode': chatDefaultMode.name,
+      'chatRememberMode': chatRememberMode,
+      'chatLastMode': chatLastMode.name,
+      'chatPopUp': chatPopUp,
+      'useBuiltInBrowser': useBuiltInBrowser,
       'googleClientId': googleClientId,
       'googleClientSecret': googleClientSecret,
       'userDisplayName': userDisplayName,
@@ -1709,6 +1725,72 @@ class AppStateProvider extends ChangeNotifier {
 
   /// The image in the top corner of an estimate PDF. '' prints none.
   String estimateLogoPath = '';
+
+  /// Where logos are kept on the share, beside the avatars:
+  /// `<root>/assets/logos`.
+  String get logoFolder => path.join(effectiveRootFolder, 'assets', 'logos');
+
+  /// This computer's copy, for when the share cannot be reached.
+  String get localLogoFolder => runningUnderTest
+      ? path.join(Directory.systemTemp.path, 'rcb_test_logos_$pid')
+      : path.join(userDataDirOrNull() ?? _appBaseDir(), 'logos');
+
+  /// The logo an export prints: the one set, else this login's copy on the
+  /// share, else the local copy - so an estimate still has its logo when the
+  /// file it was picked from has moved or the share is down.
+  String get estimateLogoForExport {
+    final candidates = [
+      estimateLogoPath,
+      for (final ext in _kAvatarTypes) ...[
+        path.join(logoFolder, '${_avatarStem(collab.me.user)}$ext'),
+        path.join(localLogoFolder, '${_avatarStem(collab.me.user)}$ext'),
+      ],
+    ];
+    for (final c in candidates) {
+      if (c.trim().isNotEmpty && File(c).existsSync()) return c;
+    }
+    return estimateLogoPath;
+  }
+
+  /// Sets the estimate logo from [picture]: copied to the share beside the
+  /// avatars, under this login, with a copy on this computer. Returns what
+  /// went wrong, or ''.
+  Future<String> setMyEstimateLogo(String picture) async {
+    final ext = path.extension(picture).toLowerCase();
+    if (!_kAvatarTypes.contains(ext)) return 'Pick a PNG or JPEG picture.';
+    final stem = _avatarStem(collab.me.user);
+    if (stem.isEmpty) return 'This computer has no login name to file it under.';
+    String? shared;
+    try {
+      await Directory(logoFolder).create(recursive: true);
+      for (final e in _kAvatarTypes) {
+        final old = File(path.join(logoFolder, '$stem$e'));
+        if (await old.exists()) await old.delete();
+      }
+      shared = path.join(logoFolder, '$stem$ext');
+      await File(picture).copy(shared);
+    } catch (e) {
+      AppLogger.logError('Could not copy the logo to $logoFolder', e);
+      shared = null;
+    }
+    try {
+      await Directory(localLogoFolder).create(recursive: true);
+      for (final e in _kAvatarTypes) {
+        final old = File(path.join(localLogoFolder, '$stem$e'));
+        if (await old.exists()) await old.delete();
+      }
+      await File(picture).copy(path.join(localLogoFolder, '$stem$ext'));
+    } catch (e) {
+      AppLogger.logError('Could not keep a local copy of the logo', e);
+    }
+    await updateSetting('estimateLogoPath', shared ?? picture);
+    imageCache.clear();
+    imageCache.clearLiveImages();
+    AppLogger.logInfo('Estimate logo set from $picture to ${shared ?? picture}.');
+    return shared == null
+        ? 'The logo is set, but it could not be copied to the shared folder.'
+        : '';
+  }
 
   /// Which top corner the logo prints in: 'right' (default) or 'left'. The
   /// title takes the other side.
@@ -8135,6 +8217,38 @@ class AppStateProvider extends ChangeNotifier {
             : '';
         return (room: room, tab: tab);
       };
+    _collabReady = true;
+    chat = ProjectChat(identity: collab.me)
+      ..myName = (() => userDisplayName.trim())
+      ..myEmail = (() => userEmail.trim())
+      ..rooms = (() => {
+            for (final r in project.rooms) r.id: projectRoomCode(r.id),
+          })
+      ..historyLogins = (() => project.historyUsers)
+      ..whereAmI = () {
+        final ref = projectRefForConfig(currentConfigPath);
+        final tab = selectedTabIndex >= 0 &&
+                selectedTabIndex < AppTab.values.length
+            ? AppTab.values[selectedTabIndex]
+            : null;
+        return (
+          roomId: ref?.id ?? '',
+          roomLabel: ref == null ? '' : projectRoomCode(ref.id),
+          tabId: tab?.token ?? '',
+          tabLabel: tab == null ? '' : navTabLabel(tab),
+        );
+      };
+    // Every history entry also says who that login is and where they were.
+    ProjectEdit.context = () {
+      final where = collab.whereAmI?.call();
+      return (
+        name: userDisplayName.trim(),
+        email: userEmail.trim(),
+        machine: collab.me.machine,
+        room: where?.room ?? '',
+        tab: where?.tab ?? '',
+      );
+    };
     if (autoLoadSettings) _loadSavedSettings();
   }
 
@@ -8143,6 +8257,77 @@ class AppStateProvider extends ChangeNotifier {
   /// Who else has the room, the job or the catalog open, and whether they
   /// saved it under us. See collab/collab_controller.dart.
   late final CollabController collab;
+  bool _collabReady = false;
+
+  /// The open project's chat - see chat/project_chat.dart.
+  late final ProjectChat chat;
+
+  /// Web pages (Google Sheets) open in a floating browser inside the app
+  /// rather than the default browser - see in_app_browser.dart.
+  bool useBuiltInBrowser = true;
+
+  void setUseBuiltInBrowser(bool value) {
+    useBuiltInBrowser = value;
+    InAppBrowser.enabled = value;
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
+  }
+
+  /// How the chat opens this session, and whether a new message pops it up.
+  ChatMode chatMode = ChatMode.slideOut;
+  bool chatPopUp = true;
+
+  /// How it opens when the app starts - App Config. The slide-out unless
+  /// somebody picks otherwise.
+  ChatMode chatDefaultMode = ChatMode.slideOut;
+
+  /// Start where it was last left instead of on [chatDefaultMode].
+  bool chatRememberMode = false;
+  ChatMode chatLastMode = ChatMode.slideOut;
+
+  /// Moves the chat for this session - the buttons in its title bar. Kept
+  /// for the next launch only when [chatRememberMode] is on.
+  void setChatMode(ChatMode mode) {
+    chatMode = mode;
+    chat.mode = mode;
+    chatLastMode = mode;
+    // ignore: unawaited_futures
+    if (chatRememberMode) _persistSettings();
+    notifyListeners();
+  }
+
+  void setChatDefaultMode(ChatMode mode) {
+    chatDefaultMode = mode;
+    chatMode = mode;
+    chat.mode = mode;
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void setChatRememberMode(bool value) {
+    chatRememberMode = value;
+    chatLastMode = chatMode;
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void setChatPopUp(bool value) {
+    chatPopUp = value;
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
+  }
+
+  /// Follows the project file with the chat. The real app only: tests get no
+  /// chat folder written beside their fixtures.
+  void _syncChat() {
+    if (!_persistenceEnabled) return;
+    // ignore: unawaited_futures
+    chat.attach(currentProjectPath);
+  }
 
   /// Turns the presence notes and the watcher on or off to match
   /// [collabEnabled]. Only ever on in the real app - a test provider never
@@ -8330,6 +8515,21 @@ class AppStateProvider extends ChangeNotifier {
       collabEnabled = saved['collabEnabled'] is bool
           ? saved['collabEnabled'] as bool
           : true;
+      ChatMode mode(String key) => ChatMode.values.firstWhere(
+            (m) => m.name == saved[key],
+            orElse: () => ChatMode.slideOut,
+          );
+      chatDefaultMode = mode('chatDefaultMode');
+      chatRememberMode = saved['chatRememberMode'] == true;
+      chatLastMode = mode('chatLastMode');
+      // Each launch starts on the default, or where it was left.
+      chatMode = chatRememberMode ? chatLastMode : chatDefaultMode;
+      chat.mode = chatMode;
+      chatPopUp = saved['chatPopUp'] is bool ? saved['chatPopUp'] as bool : true;
+      useBuiltInBrowser = saved['useBuiltInBrowser'] is bool
+          ? saved['useBuiltInBrowser'] as bool
+          : true;
+      InAppBrowser.enabled = useBuiltInBrowser;
       googleClientId = str('googleClientId', '');
       googleClientSecret = str('googleClientSecret', '');
       userDisplayName = str('userDisplayName', '');
@@ -13109,6 +13309,7 @@ class AppStateProvider extends ChangeNotifier {
   /// an undoable step whose Undo pastes the job as it was read back over
   /// whatever has happened since. Nothing to file: the baseline IS the document.
   void _projectDocumentReplaced() {
+    _syncChat();
     _restartProjectHistory();
     _projectUndo.applying(notifyListeners);
   }
@@ -14215,6 +14416,7 @@ class AppStateProvider extends ChangeNotifier {
     try {
       await project.save(target);
       currentProjectPath = target;
+      _syncChat();
       projectDirty = false;
       collab.noteInSync(CollabDocKind.project, saved: true);
       clearProjectRecovery();
@@ -15207,14 +15409,63 @@ class AppStateProvider extends ChangeNotifier {
       liveSheetOverride ??
       GoogleLiveSheet.signedIn(
         GoogleSheetsUploader(
-          clientId: googleClientId,
-          clientSecret: googleClientSecret,
+          clientId: effectiveGoogleClientId,
+          clientSecret: effectiveGoogleClientSecret,
           secrets: _secrets,
           scope: kGoogleSpreadsheetsScope,
           tokenKey: kGoogleLiveRefreshTokenKey,
         ),
         interactive: interactive,
       );
+
+  /// Whether a Google sign-in is stored. Null until first looked up.
+  bool? googleSignedIn;
+
+  Future<void> refreshGoogleSignedIn() async {
+    final live = await _secrets.read(kGoogleLiveRefreshTokenKey);
+    final upload = await _secrets.read(kGoogleRefreshTokenKey);
+    googleSignedIn =
+        (live ?? '').isNotEmpty || (upload ?? '').isNotEmpty;
+    notifyListeners();
+  }
+
+  /// Signs in once for both the upload and the live Sheet, so neither asks
+  /// again later. Returns what went wrong, or '' when signed in.
+  Future<String> signInToGoogle() async {
+    if (!hasGoogleClient) {
+      return 'This copy has no Google sign-in built in - set up your own '
+          'client under Advanced.';
+    }
+    await signOutOfGoogle();
+    final both = GoogleSheetsUploader(
+      clientId: effectiveGoogleClientId,
+      clientSecret: effectiveGoogleClientSecret,
+      secrets: _secrets,
+      scope: '$kGoogleDriveFileScope $kGoogleSpreadsheetsScope',
+      tokenKey: kGoogleLiveRefreshTokenKey,
+    );
+    try {
+      await both.accessToken();
+    } on GoogleSheetsException catch (e) {
+      return e.message;
+    } catch (e) {
+      return 'Google sign-in failed: $e';
+    } finally {
+      // The one token carries both permissions; the upload keeps its own copy.
+      final refresh = await _secrets.read(kGoogleLiveRefreshTokenKey);
+      if ((refresh ?? '').isNotEmpty) {
+        await _secrets.write(kGoogleRefreshTokenKey, refresh!);
+      }
+      await refreshGoogleSignedIn();
+    }
+    return '';
+  }
+
+  Future<void> signOutOfGoogle() async {
+    await _secrets.delete(kGoogleLiveRefreshTokenKey);
+    await _secrets.delete(kGoogleRefreshTokenKey);
+    await refreshGoogleSignedIn();
+  }
 
   /// Fills the Google client in from the JSON Google Cloud exports for it.
   /// Returns what to tell the person: '' when it went in as a Desktop client.
@@ -18917,10 +19168,29 @@ class AppStateProvider extends ChangeNotifier {
   ///
   /// Covers the config AND the sidecars, because "unsaved work" on this app is
   /// as often a diagram or a typed price as it is a field on a form.
-  bool get roomHasUnsavedChanges =>
+  bool get roomHasUnsavedChanges => _roomLooksUnsaved =
       currentConfigPath.isNotEmpty &&
       _savedRoomFingerprint.isNotEmpty &&
       _roomFingerprint() != _savedRoomFingerprint;
+
+  /// [roomHasUnsavedChanges] for what is only DRAWN - the save dot, the room
+  /// lists. While somebody types it answers with the last result and checks
+  /// again once the keys pause, instead of encoding the room per keystroke.
+  /// Anything that decides whether work could be lost asks the real one.
+  bool get roomShowsUnsaved {
+    if (!_persistenceEnabled || _cachedRoomFingerprint != null) {
+      return roomHasUnsavedChanges;
+    }
+    _roomDirtyCheck ??= Timer(const Duration(milliseconds: 250), () {
+      _roomDirtyCheck = null;
+      final was = _roomLooksUnsaved;
+      if (roomHasUnsavedChanges != was) notifyListeners();
+    });
+    return _roomLooksUnsaved;
+  }
+
+  bool _roomLooksUnsaved = false;
+  Timer? _roomDirtyCheck;
 
   /// Writes the room back over the file it came from, with no dialog, and its
   /// sidecars with it.
@@ -19179,6 +19449,9 @@ class AppStateProvider extends ChangeNotifier {
     _projectUndo.touch();
     _touchConfigHistory();
     _touchAppDataHistories();
+    // Tells colleagues "editing" soon after the first edit, not a heartbeat
+    // later.
+    if (_collabReady) collab.nudge();
     super.notifyListeners();
   }
 
@@ -19635,7 +19908,9 @@ class AppStateProvider extends ChangeNotifier {
   void dispose() {
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
+    _roomDirtyCheck?.cancel();
     collab.dispose();
+    chat.dispose();
     super.dispose();
   }
 

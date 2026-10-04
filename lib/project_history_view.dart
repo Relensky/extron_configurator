@@ -96,8 +96,8 @@ List<Widget> historySlivers(BuildContext context, ProjectEstimate estimate) {
 bool _sameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
-/// One logged change.
-class _EditRow extends StatelessWidget {
+/// One logged change. Clicked, it opens to everything recorded about it.
+class _EditRow extends StatefulWidget {
   final ProjectEdit edit;
   final bool showDay;
 
@@ -108,7 +108,17 @@ class _EditRow extends StatelessWidget {
   const _EditRow({required this.edit, required this.showDay, this.source});
 
   @override
+  State<_EditRow> createState() => _EditRowState();
+}
+
+class _EditRowState extends State<_EditRow> {
+  bool _open = false;
+
+  @override
   Widget build(BuildContext context) {
+    final edit = widget.edit;
+    final showDay = widget.showDay;
+    final source = widget.source;
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
 
@@ -126,7 +136,9 @@ class _EditRow extends StatelessWidget {
               ),
             ),
           ),
-        Padding(
+        InkWell(
+          onTap: () => setState(() => _open = !_open),
+          child: Padding(
           padding: const EdgeInsets.only(bottom: 3),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,15 +188,114 @@ class _EditRow extends StatelessWidget {
               Text(
                 // A blank login is left blank rather than dressed up as a
                 // name — see [currentUserName].
-                edit.user.isEmpty ? '-' : edit.user,
+                edit.user.isEmpty ? '-' : edit.userLabel,
                 style: theme.textTheme.bodySmall?.copyWith(color: muted),
               ),
+              Icon(_open ? Icons.expand_less : Icons.expand_more,
+                  size: 14, color: muted),
             ],
           ),
+          ),
         ),
+        if (_open) _EditDetails(edit: edit, source: source),
       ],
     );
   }
+}
+
+/// Everything recorded about one change.
+class _EditDetails extends StatelessWidget {
+  final ProjectEdit edit;
+  final HistoryScope? source;
+
+  const _EditDetails({required this.edit, this.source});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final at = edit.at;
+    String two(int n) => n.toString().padLeft(2, '0');
+    final rows = <(String, String)>[
+      ('When',
+          '${_weekdays[at.weekday - 1]} ${formatEditDay(at)}, '
+              '${two(at.hour)}:${two(at.minute)}:${two(at.second)}'),
+      ('Windows login', edit.user.isEmpty ? 'not recorded' : edit.user),
+      if (edit.name.isNotEmpty) ('Name', edit.name),
+      if (edit.email.isNotEmpty) ('Email', edit.email),
+      if (edit.machine.isNotEmpty) ('Computer', edit.machine),
+      if (edit.room.isNotEmpty) ('Room open', edit.room),
+      if (edit.tab.isNotEmpty) ('On the tab', edit.tab),
+      ('Item',
+          [
+            _kindNames[edit.itemKind] ?? edit.itemKind,
+            if (edit.itemName.isNotEmpty) edit.itemName,
+          ].join(' - ')),
+      ('Change', '${edit.field} ${edit.summary}'),
+      if (source != null)
+        ('Kept in',
+            source == HistoryScope.room
+                ? "the room's history file"
+                : 'the project file'),
+    ];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(46, 0, 0, 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final (label, value) in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 110,
+                    child: Text(label,
+                        style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+                  ),
+                  Expanded(
+                    child: SelectableText(value,
+                        style: theme.textTheme.bodySmall),
+                  ),
+                ],
+              ),
+            ),
+          if (edit.name.isEmpty && edit.machine.isEmpty)
+            Text(
+              'Recorded before names and computers were kept with each change.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: muted, fontStyle: FontStyle.italic),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const _kindNames = {
+  'part': 'Part',
+  'todo': 'Task',
+  'room': 'Room',
+  'track': 'Tracking',
+  'po': 'Purchase order',
+  'delivery': 'Delivery',
+  'project': 'The job',
+};
+
+/// Whether [e] matches what was typed in the search box.
+bool _matches(ProjectEdit e, String q) {
+  if (q.isEmpty) return true;
+  final t = q.toLowerCase();
+  return [e.itemName, e.field, e.summary, e.user, e.name, e.room, e.tab]
+      .any((s) => s.toLowerCase().contains(t));
 }
 
 /// What has happened to ONE item, for showing on that item's own editor.
@@ -240,7 +351,7 @@ class _ItemHistoryState extends State<ItemHistory> {
                   child: Text(
                     '${entries.first.field} ${entries.first.summary}'
                     '${entries.first.user.isEmpty ? '' : ' — '
-                        '${entries.first.user}'}',
+                        '${entries.first.userLabel}'}',
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(color: muted),
                   ),
@@ -256,7 +367,7 @@ class _ItemHistoryState extends State<ItemHistory> {
               child: Text(
                 '${formatEditDay(e.at)} ${formatEditTime(e.at)}  ·  '
                 '${e.field} ${e.summary}'
-                '${e.user.isEmpty ? '' : '  ·  ${e.user}'}',
+                '${e.user.isEmpty ? '' : '  ·  ${e.userLabel}'}',
                 style: theme.textTheme.bodySmall?.copyWith(color: muted),
               ),
             ),
@@ -567,6 +678,10 @@ const EdgeInsets _headerPad = EdgeInsets.symmetric(horizontal: 24);
 class _HistoryDialogState extends State<_HistoryDialog> {
   HistoryScope _scope = HistoryScope.both;
 
+  /// Typed in the search box, and the one login picked, if any.
+  String _query = '';
+  String? _person;
+
   /// Shared by the bar and the list, because a Scrollbar with no controller
   /// and a ListView with none are two different scroll positions and the
   /// thumb ends up tracking nothing.
@@ -589,7 +704,7 @@ class _HistoryDialogState extends State<_HistoryDialog> {
     // Tagged as they are merged, so a combined list can still say which
     // document each line came out of — otherwise "Deadline set to 14 Jun" and
     // "Baud rate was 9600, now 115200" read as entries in the same file.
-    final rows = <({ProjectEdit edit, HistoryScope from})>[
+    final all = <({ProjectEdit edit, HistoryScope from})>[
       if (_scope != HistoryScope.room)
         for (final e in provider.project.history)
           (edit: e, from: HistoryScope.project),
@@ -597,6 +712,20 @@ class _HistoryDialogState extends State<_HistoryDialog> {
         for (final e in provider.roomHistory)
           (edit: e, from: HistoryScope.room),
     ]..sort((a, b) => b.edit.at.compareTo(a.edit.at));
+    // Each login once, under the newest name it was recorded with.
+    final people = <String, String>{};
+    for (final r in all) {
+      final login = r.edit.user;
+      if (login.isEmpty) continue;
+      people.putIfAbsent(login.toLowerCase(), () => r.edit.userLabel);
+    }
+    if (_person != null && !people.containsKey(_person)) _person = null;
+    final rows = [
+      for (final r in all)
+        if ((_person == null || r.edit.user.toLowerCase() == _person) &&
+            _matches(r.edit, _query))
+          r,
+    ];
 
     final changes = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -628,14 +757,51 @@ class _HistoryDialogState extends State<_HistoryDialog> {
             const SizedBox(height: 8),
             Padding(
               padding: _headerPad,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('history_search'),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        prefixIcon: Icon(Icons.search, size: 18),
+                        hintText: 'Search items, fields, people, rooms',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (v) => setState(() => _query = v.trim()),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  DropdownButton<String?>(
+                    key: const ValueKey('history_person'),
+                    value: _person,
+                    hint: const Text('Everyone'),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                          value: null, child: Text('Everyone')),
+                      for (final e in people.entries)
+                        DropdownMenuItem<String?>(
+                            value: e.key, child: Text(e.value)),
+                    ],
+                    onChanged: (v) => setState(() => _person = v),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: _headerPad,
               child: Text(
-              rows.isEmpty
+              rows.isEmpty && all.isNotEmpty
+                  ? 'Nothing matches that search.'
+                  : rows.isEmpty
                   ? 'Nothing recorded yet. Edits to this room and decisions on '
                       'the job are logged here as they are made, with the '
                       'login of whoever made them.'
                   : '${rows.length} change${rows.length == 1 ? '' : 's'}, '
-                      'newest first. Every one is stamped with the Windows '
-                      'login it was made under.',
+                      'newest first, each stamped with the Windows login, '
+                      'name and computer it was made under. Click one for '
+                      'everything recorded about it.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -689,7 +855,7 @@ class _HistoryDialogState extends State<_HistoryDialog> {
         child: !hasProject
             ? changes
             : DefaultTabController(
-                length: 2,
+                length: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -703,6 +869,10 @@ class _HistoryDialogState extends State<_HistoryDialog> {
                           key: ValueKey('history_tab_finished'),
                           text: 'Finished tasks',
                         ),
+                        Tab(
+                          key: ValueKey('history_tab_people'),
+                          text: 'People',
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -711,6 +881,7 @@ class _HistoryDialogState extends State<_HistoryDialog> {
                         children: [
                           changes,
                           FinishedTasksPane(project: provider.project),
+                          _PeoplePane(provider: provider),
                         ],
                       ),
                     ),
@@ -724,6 +895,72 @@ class _HistoryDialogState extends State<_HistoryDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
         ),
+      ],
+    );
+  }
+}
+
+/// Everybody who has opened the job or changed it: login, name, email,
+/// computer, when they were last in, and how many changes are theirs.
+class _PeoplePane extends StatelessWidget {
+  final AppStateProvider provider;
+
+  const _PeoplePane({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final counts = <String, int>{};
+    final latest = <String, ProjectEdit>{};
+    for (final e in provider.project.history) {
+      final k = e.user.toLowerCase();
+      if (k.isEmpty) continue;
+      counts[k] = (counts[k] ?? 0) + 1;
+      latest[k] = e;
+    }
+    final people = provider.chat.people;
+    String when(DateTime t) => '${formatEditDay(t)} ${formatEditTime(t)}';
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      children: [
+        Text(
+          'Everybody who has opened this job or is in its history. Opening '
+          'a saved project adds you here.',
+          style: theme.textTheme.bodySmall?.copyWith(color: muted),
+        ),
+        const SizedBox(height: 8),
+        for (final p in people)
+          Builder(builder: (context) {
+            final k = p.login.toLowerCase();
+            final last = latest[k];
+            final name = p.name.isNotEmpty ? p.name : (last?.name ?? '');
+            final email = p.email.isNotEmpty ? p.email : (last?.email ?? '');
+            final machine =
+                p.machine.isNotEmpty ? p.machine : (last?.machine ?? '');
+            final n = counts[k] ?? 0;
+            return ListTile(
+              key: ValueKey('history_person_${p.login}'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.person_outline),
+              title: Text(name.isEmpty || name.toLowerCase() == k
+                  ? p.login
+                  : '$name (${p.login})'),
+              subtitle: Text([
+                'Windows login ${p.login}',
+                if (email.isNotEmpty) email,
+                if (machine.isNotEmpty) 'on $machine',
+                if (p.firstSeen != null) 'first opened ${when(p.firstSeen!)}',
+                if (p.lastSeen != null) 'last opened ${when(p.lastSeen!)}',
+                if (last != null) 'last change ${when(last.at)}',
+              ].join('  ·  ')),
+              trailing: Text(
+                '$n change${n == 1 ? '' : 's'}',
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              ),
+            );
+          }),
       ],
     );
   }

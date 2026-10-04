@@ -24,6 +24,11 @@ import 'xlsx_writer.dart';
 ///  Only the tabs this app writes are touched. A tab somebody added by hand is
 ///  left alone, and so is a tab for a room since taken off the job.
 ///
+///  A tab that is already there is not cleared and rewritten: what it holds
+///  is read first and only the cells that differ are written, so the Sheet's
+///  own version history shows the cells that changed rather than the whole
+///  tab replaced on every publish. See [liveSheetDiffRequests].
+///
 ///  The three sheets that are read back (online_roundtrip.dart) are read back
 ///  from here too, and a publish that would write over somebody's typing
 ///  stands down exactly as it does for the file in the sync folder.
@@ -343,6 +348,153 @@ List<Map<String, dynamic>> liveSheetRequests(
   ];
 }
 
+/// What Google reports a cell as holding when asked for entered values
+/// (valueRenderOption FORMULA) - the same text a [GoogleLiveSheet.read] with
+/// entered on gives back - so a cell can be compared with what is about to be
+/// written.
+String liveEnteredText(dynamic value, Map<String, int> sheetIds) {
+  if (value == null) return '';
+  if (value is XlsxLink) {
+    final gid = sheetIds[value.sheet];
+    final text = value.formula ?? '"${value.text.replaceAll('"', '""')}"';
+    if (gid != null) return '=HYPERLINK("#gid=$gid&range=${value.cell}",$text)';
+    return value.formula != null ? '=${value.formula}' : value.text;
+  }
+  if (value is XlsxTint) return value.text;
+  if (value is XlsxMoney) return '${value.value}';
+  if (value is XlsxFormula) return '=${value.formula}';
+  if (value is XlsxNumberFormula) return '=${value.formula}';
+  if (value is XlsxTextFormula) return '=${value.formula}';
+  return value.toString();
+}
+
+/// Whether a cell Google holds as [have] already says [want].
+bool _sameEntered(String have, String want) {
+  if (have == want) return true;
+  final a = num.tryParse(have.trim());
+  final b = num.tryParse(want.trim());
+  if (a != null && b != null) return (a - b).abs() < 1e-9;
+  // Google writes function names in capitals and drops spaces.
+  if (have.startsWith('=') && want.startsWith('=')) {
+    String squash(String f) => f.replaceAll(' ', '').toUpperCase();
+    return squash(have) == squash(want);
+  }
+  return false;
+}
+
+/// A merge as Google reports it, in the shape [_parseRange] gives.
+(int, int, int, int) _mergeKey(Map m) => (
+      (m['startColumnIndex'] as num?)?.toInt() ?? 0,
+      (m['startRowIndex'] as num?)?.toInt() ?? 0,
+      ((m['endColumnIndex'] as num?)?.toInt() ?? 1) - 1,
+      ((m['endRowIndex'] as num?)?.toInt() ?? 1) - 1,
+    );
+
+/// Only what has changed on a tab that is already there: each run of cells
+/// in a row whose value differs from [current] (the tab's entered values) is
+/// written with its format, cells that have emptied are cleared, the grid
+/// grows when it must, and merges are added or taken off one by one. Nothing
+/// that already says the right thing is touched.
+List<Map<String, dynamic>> liveSheetDiffRequests(
+  XlsxSheet sheet, {
+  required int sheetId,
+  required Map<String, int> sheetIds,
+  required List<List<String>> current,
+  List<Map> merges = const [],
+  int haveRows = 0,
+  int haveColumns = 0,
+  String? accentHex,
+}) {
+  final accent = accentHex ?? XlsxTheme.accentHex;
+  final out = <Map<String, dynamic>>[];
+  final width = sheet.rows.fold<int>(0, (w, r) => math.max(w, r.length));
+  final wantRows = sheet.rows.length + kLiveSpareRows;
+  final wantCols = width + 1;
+  if (wantRows > haveRows || wantCols > haveColumns) {
+    out.add({
+      'updateSheetProperties': {
+        'properties': {
+          'sheetId': sheetId,
+          'gridProperties': {
+            'rowCount': math.max(haveRows, wantRows),
+            'columnCount': math.max(haveColumns, wantCols),
+          },
+        },
+        'fields': 'gridProperties(rowCount,columnCount)',
+      },
+    });
+  }
+
+  final rows = math.max(sheet.rows.length, current.length);
+  for (var r = 0; r < rows; r++) {
+    final want = r < sheet.rows.length ? sheet.rows[r] : const [];
+    final have = r < current.length ? current[r] : const <String>[];
+    final style = sheet.rowStyles[r] ?? XlsxRowStyle.normal;
+    final cols = math.max(want.length, have.length);
+    int? runStart;
+    final run = <Map<String, dynamic>>[];
+    void flush() {
+      final start = runStart;
+      if (start == null) return;
+      out.add({
+        'updateCells': {
+          'start': {
+            'sheetId': sheetId,
+            'rowIndex': r,
+            'columnIndex': start,
+          },
+          'rows': [
+            {'values': List.of(run)},
+          ],
+          'fields': 'userEnteredValue,userEnteredFormat',
+        },
+      });
+      runStart = null;
+      run.clear();
+    }
+
+    for (var c = 0; c < cols; c++) {
+      final value = c < want.length ? want[c] : null;
+      final old = c < have.length ? have[c] : '';
+      if (_sameEntered(old, liveEnteredText(value, sheetIds))) {
+        flush();
+        continue;
+      }
+      runStart ??= c;
+      // Past the end of the new row: cleared outright, format and all.
+      run.add(c >= want.length
+          ? const <String, dynamic>{}
+          : liveCell(value, style, accent, sheetIds));
+    }
+    flush();
+  }
+
+  // Merges: only the ones that differ.
+  final wanted = {
+    for (final m in sheet.merges)
+      if (_parseRange(m) != null) _parseRange(m)!,
+  };
+  final existing = {for (final m in merges) _mergeKey(m)};
+  Map<String, dynamic> range((int, int, int, int) m) => {
+        'sheetId': sheetId,
+        'startColumnIndex': m.$1,
+        'endColumnIndex': m.$3 + 1,
+        'startRowIndex': m.$2,
+        'endRowIndex': m.$4 + 1,
+      };
+  for (final m in existing.difference(wanted)) {
+    out.add({
+      'unmergeCells': {'range': range(m)},
+    });
+  }
+  for (final m in wanted.difference(existing)) {
+    out.add({
+      'mergeCells': {'range': range(m), 'mergeType': 'MERGE_ALL'},
+    });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 //  TALKING TO GOOGLE
 // ---------------------------------------------------------------------------
@@ -355,8 +507,14 @@ typedef LiveSheetTransport = Future<Map<String, dynamic>> Function(
   Object? body,
 );
 
-/// One tab as the Sheet reports it.
-typedef LiveTab = ({String title, int id, int rows, int columns});
+/// One tab as the Sheet reports it, with its merged ranges.
+typedef LiveTab = ({
+  String title,
+  int id,
+  int rows,
+  int columns,
+  List<Map> merges,
+});
 
 class GoogleLiveSheet {
   final LiveSheetTransport send;
@@ -429,7 +587,7 @@ class GoogleLiveSheet {
   Future<List<LiveTab>> tabs(String id) async {
     final json = await send(
       'GET',
-      Uri.parse('$_api/$id?fields=sheets.properties'),
+      Uri.parse('$_api/$id?fields=sheets(properties,merges)'),
       null,
     );
     return [
@@ -445,6 +603,10 @@ class GoogleLiveSheet {
                 (s['properties']['gridProperties']?['columnCount'] as num?)
                         ?.toInt() ??
                     0,
+            merges: [
+              for (final m in (s['merges'] as List? ?? const []))
+                if (m is Map) m,
+            ],
           ),
     ];
   }
@@ -475,6 +637,15 @@ class GoogleLiveSheet {
   }) async {
     final have = {for (final t in await tabs(id)) t.title: t};
     final ids = {for (final t in have.values) t.title: t.id};
+    // What the tabs already there hold, so only the differences are written.
+    final current = await read(
+      id,
+      [
+        for (final sheet in sheets)
+          if (have.containsKey(sheet.name)) sheet.name,
+      ],
+      entered: true,
+    );
     final used = ids.values.toSet();
     var next = 1;
 
@@ -507,14 +678,24 @@ class GoogleLiveSheet {
 
     for (final sheet in sheets) {
       final tab = have[sheet.name];
-      final batch = liveSheetRequests(
-        sheet,
-        sheetId: ids[sheet.name]!,
-        sheetIds: ids,
-        haveRows: tab?.rows ?? 0,
-        haveColumns: tab?.columns ?? 0,
-        accentHex: accentHex,
-      );
+      final batch = tab == null
+          ? liveSheetRequests(
+              sheet,
+              sheetId: ids[sheet.name]!,
+              sheetIds: ids,
+              accentHex: accentHex,
+            )
+          : liveSheetDiffRequests(
+              sheet,
+              sheetId: tab.id,
+              sheetIds: ids,
+              current: current[sheet.name] ?? const [],
+              merges: tab.merges,
+              haveRows: tab.rows,
+              haveColumns: tab.columns,
+              accentHex: accentHex,
+            );
+      if (batch.isEmpty) continue;
       final chars = jsonEncode(batch).length;
       if (size > 0 && size + chars > kLiveBatchChars) await flush();
       requests.addAll(batch);
