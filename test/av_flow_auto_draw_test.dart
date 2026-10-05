@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as path;
 
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_device_library.dart';
@@ -1412,5 +1415,25 @@ void main() {
         isFalse,
       );
     });
+  });
+
+  test('a room it draws into on open does not open as changed', () async {
+    // Saved before the pass had drawn anything: the config names a PC, the
+    // drawing has no lead for it.
+    final dir = Directory.systemTemp.createTempSync('rcb_route_on_open');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final saved = room()..currentConfigPath = path.join(dir.path, 'config.json');
+    await saved.saveCurrentConfigToFile();
+    expect(saved.avCables, isEmpty);
+
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..uiSchema = schema
+      ..avDeviceLibrary = library;
+    await p.openConfigAtPath(saved.currentConfigPath, remember: false);
+    p.loadAvFlowForCurrentConfig();
+
+    expect(p.avCables, isNotEmpty, reason: 'the pass still draws on open');
+    expect(p.roomHasUnsavedChanges, isFalse,
+        reason: 'filling in what the config says is not an edit');
   });
 }

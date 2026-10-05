@@ -58,7 +58,24 @@ class _ChatViewState extends State<ChatView> {
     super.dispose();
   }
 
+  /// What the list last showed, so only a new message or another channel
+  /// moves it - not every refresh while somebody is reading back.
+  String _shownKey = '';
+
   void _scrollToEnd() {
+    final snap = widget.link.snapshot.value;
+    if (snap == null) return;
+    final last = snap.messages.where((m) => m.channel == snap.channel).lastOrNull;
+    final key = '${snap.channel}|${last?.id ?? ''}';
+    if (key == _shownKey) return;
+    final sameChannel = _shownKey.startsWith('${snap.channel}|');
+    _shownKey = key;
+    // Reading back in the same channel: stay put unless it is your own post.
+    final reading = sameChannel &&
+        _scroll.hasClients &&
+        _scroll.position.maxScrollExtent - _scroll.position.pixels > 80 &&
+        last?.user.toLowerCase() != snap.me.toLowerCase();
+    if (reading) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
       _scroll.jumpTo(_scroll.position.maxScrollExtent);
@@ -100,6 +117,18 @@ class _ChatViewState extends State<ChatView> {
     _text.clear();
     final error = await widget.link.post(snap.channel, text, image: file);
     if (mounted) setState(() => _error = error);
+    _restoreIfFailed(error, text);
+  }
+
+  /// A message that could not be sent goes back in the box, not nowhere.
+  void _restoreIfFailed(String error, String text) {
+    if (!mounted || error.isEmpty || text.isEmpty || _text.text.isNotEmpty) {
+      return;
+    }
+    _text.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
   }
 
   Future<void> _confirmDelete(ChatMessage m) async {
@@ -136,7 +165,8 @@ class _ChatViewState extends State<ChatView> {
     _text.clear();
     final error = await widget.link.post(snap.channel, text);
     if (mounted) setState(() => _error = error);
-    _focus.requestFocus();
+    _restoreIfFailed(error, text);
+    if (mounted) _focus.requestFocus();
   }
 
   @override

@@ -71,7 +71,10 @@ class LocalChatLink implements ChatLink {
     _pending = true;
     scheduleMicrotask(() {
       _pending = false;
-      if (!_disposed) _value.value = provider.chat.snapshot();
+      // Hidden, nothing reads it; opening the chat notifies and refreshes it.
+      if (!_disposed && provider.chat.open) {
+        _value.value = provider.chat.snapshot();
+      }
     });
   }
 
@@ -167,32 +170,29 @@ class ChatWindowHost {
   void pushTheme() => _send({'cmd': 'theme', 'dark': dark, 'accent': accent});
 
   void _onConnection(Socket socket) {
-    var buffer = '';
     var subscribed = false;
-    socket.listen(
-      (bytes) {
-        buffer += utf8.decode(bytes, allowMalformed: true);
-        int nl;
-        while ((nl = buffer.indexOf('\n')) >= 0) {
-          final line = buffer.substring(0, nl);
-          buffer = buffer.substring(nl + 1);
-          Map msg;
-          try {
-            msg = jsonDecode(line) as Map;
-          } catch (_) {
-            continue;
-          }
-          if (!subscribed) {
-            if (msg['cmd'] != 'subscribe' || msg['token'] != _token) {
-              socket.destroy();
-              return;
-            }
-            subscribed = true;
-            _attach(socket);
-            continue;
-          }
-          if (identical(socket, _client)) _handle(msg);
+    var refused = false;
+    // Decoded as one stream: a character split across two reads stays whole.
+    utf8.decoder.bind(socket).transform(const LineSplitter()).listen(
+      (line) {
+        if (refused) return;
+        Map msg;
+        try {
+          msg = jsonDecode(line) as Map;
+        } catch (_) {
+          return;
         }
+        if (!subscribed) {
+          if (msg['cmd'] != 'subscribe' || msg['token'] != _token) {
+            refused = true;
+            socket.destroy();
+            return;
+          }
+          subscribed = true;
+          _attach(socket);
+          return;
+        }
+        if (identical(socket, _client)) _handle(msg);
       },
       onDone: () => _drop(socket),
       onError: (_) => _drop(socket),
@@ -302,18 +302,11 @@ class SocketChatLink implements ChatLink {
     try {
       final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
       _socket = socket;
-      var buffer = '';
-      socket.listen(
-        (bytes) {
-          buffer += utf8.decode(bytes, allowMalformed: true);
-          int nl;
-          while ((nl = buffer.indexOf('\n')) >= 0) {
-            final line = buffer.substring(0, nl);
-            buffer = buffer.substring(nl + 1);
-            try {
-              _handle(jsonDecode(line) as Map);
-            } catch (_) {}
-          }
+      utf8.decoder.bind(socket).transform(const LineSplitter()).listen(
+        (line) {
+          try {
+            _handle(jsonDecode(line) as Map);
+          } catch (_) {}
         },
         onDone: () => onGone?.call(),
         onError: (_) => onGone?.call(),

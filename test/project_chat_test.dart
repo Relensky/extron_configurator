@@ -177,4 +177,29 @@ void main() {
     expect(back.channels.first.id, kChatGeneral);
     a.dispose();
   });
+
+  test('opening another job mid-read still loads it, quietly', () async {
+    final other = path.join(dir.path, 'LIB_project.json');
+    await File(other).writeAsString('{}');
+    final a = person('alice', 'PC1');
+    await a.attach(other);
+    await a.post('old news', to: kChatGeneral);
+    a.dispose();
+
+    final b = person('bob', 'PC2');
+    await b.attach(project);
+    final incoming = <ChatMessage>[];
+    b.onIncoming = incoming.add;
+    // A timed read fires while the other job is still opening.
+    final opening = b.attach(other);
+    final timed = b.poll();
+    await opening;
+    await timed;
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(b.messages.map((m) => m.text), ['old news']);
+    expect(incoming, isEmpty, reason: 'history is not news');
+    expect(b.people.map((p) => p.login), contains('alice'));
+    b.dispose();
+  });
 }

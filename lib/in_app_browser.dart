@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart' show DragStartBehavior;
@@ -60,8 +61,26 @@ enum BrowserDock {
       };
 }
 
+/// A saved sign-in the browser can fill into a page.
+class BrowserLogin {
+  final String label;
+  final String username;
+  final String password;
+
+  const BrowserLogin(
+      {required this.label, required this.username, required this.password});
+}
+
 class InAppBrowser {
   InAppBrowser._();
+
+  /// The app's saved sign-ins for [page], or null for no sign-in button.
+  /// [ask] is true when the person pressed the button, so the app may ask
+  /// them to unlock its store first; false for the fill when a page loads,
+  /// which must never ask - it returns nothing while the store is locked.
+  /// Only sign-ins meant for [page]'s own site may be returned.
+  static Future<List<BrowserLogin>> Function(BuildContext context, Uri page,
+      {required bool ask})? loginsFor;
 
   /// Whether links open here. Set from the app's settings.
   static bool enabled = true;
@@ -77,7 +96,8 @@ class InAppBrowser {
   }
 
   /// Where the browser sits - the app's setting. A window already open
-  /// follows a change to it.
+  /// follows a change to it, and the window's own menu changes it, so an app
+  /// that listens can save the last choice.
   static final ValueNotifier<BrowserDock> dockSetting =
       ValueNotifier(BrowserDock.floating);
 
@@ -85,8 +105,17 @@ class InAppBrowser {
   static set dock(BrowserDock value) => dockSetting.value = allowed(value);
 
   /// How much of the window a docked browser takes - dragged larger or
-  /// smaller from its inner edge, and kept for the next one this session.
-  static double dockFraction = 0.45;
+  /// smaller from its inner edge, and kept for the next one. An app that
+  /// listens can save it across restarts.
+  static final ValueNotifier<double> dockShare = ValueNotifier(0.45);
+
+  static double get dockFraction => dockShare.value;
+  static set dockFraction(double value) =>
+      dockShare.value = value.clamp(0.2, 0.9).toDouble();
+
+  /// Where the floating window was last left (app layout pixels), or null
+  /// for the default spot. An app that listens can save it too.
+  static final ValueNotifier<Rect?> floatingFrame = ValueNotifier(null);
 
   /// The edge of the app's window a docked browser covers, so the app can
   /// lay its pages out in what is left. Zero while it floats or is shut.
@@ -207,6 +236,11 @@ class _BrowserTab {
   bool canForward = false;
   String error = '';
 
+  /// Saved sign-ins for the page showing, and the page they were filled on
+  /// (so a reload does not fill over what was typed by hand).
+  List<BrowserLogin> logins = const [];
+  String filledOn = '';
+
   _BrowserTab(String url, String? title) : title = title ?? '' {
     address.text = url;
   }
@@ -249,8 +283,9 @@ class _BrowserPanelState extends State<_BrowserPanel> {
 
   /// Where the floating window is and how big. A move changes only this, so
   /// the page inside is moved as it stands rather than rebuilt.
-  final ValueNotifier<Rect> _frame =
-      ValueNotifier(const Offset(60, 80) & const Size(1000, 700));
+  final ValueNotifier<Rect> _frame = ValueNotifier(
+      InAppBrowser.floatingFrame.value ??
+          const Offset(60, 80) & const Size(1000, 700));
 
   /// This window's share of the app's window when docked.
   final ValueNotifier<double> _fraction =
@@ -314,6 +349,7 @@ class _BrowserPanelState extends State<_BrowserPanel> {
         }))
         ..add(tab.web.loadingState.listen((s) {
           if (mounted) setState(() => tab.loading = s == LoadingState.loading);
+          if (s == LoadingState.navigationCompleted) _offerLogins(tab);
         }))
         ..add(tab.web.historyChanged.listen((h) {
           if (mounted) {
@@ -362,6 +398,134 @@ class _BrowserPanelState extends State<_BrowserPanel> {
           : 'https://www.google.com/search?q=${Uri.encodeQueryComponent(u)}';
     }
     _tab.web.loadUrl(u);
+  }
+
+  // --- saved sign-ins ---------------------------------------------------
+
+  /// A page finished loading: look up its saved sign-ins without asking, and
+  /// fill the one there is when there is exactly one.
+  Future<void> _offerLogins(_BrowserTab tab) async {
+    final lookup = InAppBrowser.loginsFor;
+    if (lookup == null || !mounted) return;
+    final at = tab.address.text;
+    final page = Uri.tryParse(at);
+    if (page == null || page.host.isEmpty) return;
+    List<BrowserLogin> found;
+    try {
+      found = await lookup(context, page, ask: false);
+    } catch (_) {
+      found = const [];
+    }
+    if (!mounted || tab.address.text != at) return;
+    setState(() => tab.logins = found);
+    if (found.length == 1 && tab.filledOn != at) {
+      tab.filledOn = at;
+      await _fill(tab, found.single);
+    }
+  }
+
+  /// The key button: may ask the app to unlock, then offers what it has.
+  Future<void> _pickLogin(MenuController menu) async {
+    final lookup = InAppBrowser.loginsFor;
+    final tab = _tab;
+    final page = Uri.tryParse(tab.address.text);
+    if (lookup == null || page == null || page.host.isEmpty) return;
+    List<BrowserLogin> found;
+    try {
+      found = await lookup(context, page, ask: true);
+    } catch (_) {
+      found = const [];
+    }
+    if (!mounted) return;
+    setState(() => tab.logins = found);
+    if (found.length == 1) {
+      tab.filledOn = tab.address.text;
+      await _fill(tab, found.single);
+    } else {
+      menu.open();
+    }
+  }
+
+  /// Types [login] into the page's sign-in form. Never submits it.
+  Future<void> _fill(_BrowserTab tab, BrowserLogin login) async {
+    final script = '''
+(function(u, p) {
+  const vis = e => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
+  const set = (el, v) => {
+    const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    d.set.call(el, v);
+    el.dispatchEvent(new Event('input', {bubbles: true}));
+    el.dispatchEvent(new Event('change', {bubbles: true}));
+  };
+  const pw = [...document.querySelectorAll('input[type=password]')].filter(vis)[0];
+  const scope = (pw && pw.form) || document;
+  const texts = [...scope.querySelectorAll('input')].filter(e =>
+      vis(e) && /^(text|email|tel|)\$/i.test(e.getAttribute('type') || ''));
+  let user = null;
+  if (pw) {
+    for (const t of texts) {
+      if (t.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING) user = t;
+    }
+  } else {
+    user = texts.find(e => /user|login|email|name|account/i.test(
+        (e.name || '') + (e.id || '') + (e.autocomplete || ''))) || null;
+  }
+  if (user && u) set(user, u);
+  if (pw && p) set(pw, p);
+  return (user ? 1 : 0) + (pw ? 2 : 0);
+})(${jsonEncode(login.username)}, ${jsonEncode(login.password)});
+''';
+    try {
+      await tab.web.executeScript(script);
+    } catch (_) {
+      // A page mid-navigation refuses scripts; the next load tries again.
+    }
+  }
+
+  Widget _loginButton() {
+    final tab = _tab;
+    final has = tab.logins.isNotEmpty;
+    return MenuAnchor(
+      builder: (context, controller, _) => IconButton(
+        key: const ValueKey('browser_login'),
+        tooltip: has
+            ? 'Fill a saved sign-in (${tab.logins.length})'
+            : 'Saved sign-ins for this site',
+        visualDensity: VisualDensity.compact,
+        icon: Badge(
+          isLabelVisible: tab.logins.length > 1,
+          label: Text('${tab.logins.length}'),
+          child: Icon(has ? Icons.key : Icons.key_outlined,
+              size: 18,
+              color: has ? Theme.of(context).colorScheme.primary : null),
+        ),
+        onPressed: !tab.ready
+            ? null
+            : () => controller.isOpen
+                ? controller.close()
+                : _pickLogin(controller),
+      ),
+      menuChildren: tab.logins.isEmpty
+          ? [
+              const MenuItemButton(
+                onPressed: null,
+                child: Text('No saved sign-in for this site'),
+              ),
+            ]
+          : [
+              for (final l in tab.logins)
+                MenuItemButton(
+                  leadingIcon: const Icon(Icons.person_outline, size: 18),
+                  onPressed: () {
+                    tab.filledOn = tab.address.text;
+                    _fill(tab, l);
+                  },
+                  child: Text(l.username.isEmpty
+                      ? l.label
+                      : '${l.label} - ${l.username}'),
+                ),
+            ],
+    );
   }
 
   // --- where the window sits --------------------------------------------
@@ -443,6 +607,7 @@ class _BrowserPanelState extends State<_BrowserPanel> {
       InAppBrowser.dockFraction = f;
     } else if (_preview.value != null && !_docked) {
       _frame.value = _preview.value!;
+      InAppBrowser.floatingFrame.value = _frame.value;
     }
     _previewFraction = null;
     _preview.value = null;
@@ -483,7 +648,11 @@ class _BrowserPanelState extends State<_BrowserPanel> {
                 leadingIcon: Icon(d.icon, size: 18),
                 trailingIcon:
                     d == _dock ? const Icon(Icons.check, size: 16) : null,
-                onPressed: () => _setDock(d),
+                // Becomes the setting, so the next window opens here too.
+                onPressed: () {
+                  InAppBrowser.dock = d;
+                  _setDock(d);
+                },
                 child: Text(d.label),
               ),
         ],
@@ -497,6 +666,9 @@ class _BrowserPanelState extends State<_BrowserPanel> {
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
       onPanUpdate: _full || _docked ? null : (d) => _move(d.delta),
+      onPanEnd: _full || _docked
+          ? null
+          : (_) => InAppBrowser.floatingFrame.value = _frame.value,
       onDoubleTap: () => _setFull(!_full),
       child: MouseRegion(
         cursor: _full || _docked ? MouseCursor.defer : SystemMouseCursors.move,
@@ -597,6 +769,7 @@ class _BrowserPanelState extends State<_BrowserPanel> {
               ),
             ),
           ),
+          if (InAppBrowser.loginsFor != null) _loginButton(),
           IconButton(
             tooltip: 'Open in your browser',
             visualDensity: VisualDensity.compact,

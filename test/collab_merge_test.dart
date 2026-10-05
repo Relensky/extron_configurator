@@ -299,6 +299,59 @@ void main() {
       me.dispose();
     });
 
+    test('the catalog only speaks up once somebody is editing it', () async {
+      // Every copy of the app opens the catalog at launch, so just having it
+      // open is not news.
+      final me = CollabController(
+        identity: const CollabIdentity(user: 'me', machine: 'PC'),
+        enabled: true,
+      )..register(_MapDoc(file, kind: CollabDocKind.catalog));
+      final heard = <String>[];
+      final sub = me.notices.listen((n) => heard.add(n.message));
+      await me.tick();
+
+      final theirs = _MapDoc(file, kind: CollabDocKind.catalog);
+      final them = CollabController(
+        identity: const CollabIdentity(user: 'csaid', machine: 'PC-9'),
+        enabled: true,
+      )..register(theirs);
+      await them.tick();
+      await me.tick();
+      await Future<void>.delayed(Duration.zero);
+      expect(me.othersOn(CollabDocKind.catalog).map((p) => p.user),
+          ['csaid']);
+      expect(heard, isEmpty);
+
+      theirs.dirty = true;
+      await them.tick();
+      await me.tick();
+      await Future<void>.delayed(Duration.zero);
+      expect(heard, hasLength(1));
+      expect(heard.single, contains('csaid (PC-9) is editing the catalog'));
+
+      await sub.cancel();
+      me.dispose();
+      them.dispose();
+    });
+
+    test('a project still says who else has opened it', () async {
+      final me = controllerFor('me');
+      final heard = <String>[];
+      final sub = me.notices.listen((n) => heard.add(n.message));
+      await me.tick();
+      final them = CollabController(
+        identity: const CollabIdentity(user: 'jsmith', machine: 'PC-9'),
+        enabled: true,
+      )..register(_MapDoc(file));
+      await them.tick();
+      await me.tick();
+      await Future<void>.delayed(Duration.zero);
+      expect(heard.single, contains('has opened this project too'));
+      await sub.cancel();
+      me.dispose();
+      them.dispose();
+    });
+
     test('our own save is not reported as somebody else\'s', () async {
       final me = controllerFor('me');
       await me.tick();
@@ -319,14 +372,13 @@ class _MapDoc extends CollabDocument {
   final String file;
   Map<String, dynamic> memory;
   bool dirty = false;
+  @override
+  final CollabDocKind kind;
 
-  _MapDoc(this.file)
+  _MapDoc(this.file, {this.kind = CollabDocKind.project})
       : memory = Map<String, dynamic>.from(
           jsonDecode(File(file).readAsStringSync()) as Map,
         );
-
-  @override
-  CollabDocKind get kind => CollabDocKind.project;
 
   @override
   String get filePath => file;

@@ -338,6 +338,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(p.currentConfigPath, isEmpty);
       expect(p.project.rooms, isNotEmpty);
+      expect(p.selectedTabIndex, AppTab.project.index,
+          reason: 'closing a room of the job goes back to the job');
       await tester.pump(const Duration(seconds: 5));
     });
 

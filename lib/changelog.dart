@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.59+69';
+const String kAppVersion = '0.5.64+74';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,87 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.64',
+    date: 'October 5, 2026',
+    title: 'Quieter about the catalog',
+    changes: [
+      'Starting the app no longer says a colleague has the catalog open just '
+          'because they have the app running. It speaks up when they are '
+          'actually editing it.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.63',
+    date: 'October 5, 2026',
+    title: 'Where it stands, wider and optional',
+    changes: [
+      'The "where it stands" pop-up when a project opens can be turned off: '
+          'untick "Show when a project opens" on it, or use the switch in App '
+          'Config. The button on the Project tab still shows it any time.',
+      'On a wide screen "where it stands" is wider, with the details beside '
+          'the overview, so more of it fits without scrolling. Narrow screens '
+          'keep the tall single column.',
+      'The scroll bar in "where it stands" no longer covers the text.',
+      'Closing a room while a project is open takes you back to the Project '
+          'tab.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.62',
+    date: 'October 5, 2026',
+    title: 'Rooms no longer open as changed',
+    changes: [
+      'Opening a room no longer marks it as changed when you have not '
+          'touched it. Leads and boxes the config calls for are still drawn '
+          'in on open, and are saved with your next save.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.61',
+    date: 'October 4, 2026',
+    title: 'Chat and room type fixes, and the Auris look',
+    changes: [
+      'Opening another project while the chat was checking for messages '
+          'could skip loading that project\'s chat, then pop up every old '
+          'message as new. New messages in Everyone could also go missing at '
+          'that moment. Both are fixed.',
+      'In the separate chat window, accented letters and symbols no longer '
+          'turn into garbage characters now and then.',
+      'A chat message that could not be sent is put back in the box instead '
+          'of being lost.',
+      'The chat stays where you scrolled to while you read back; it only '
+          'jumps to the bottom for a new message or another channel.',
+      'The chat does less work while it is closed.',
+      'Hyflex room type: the matrix and the DSP are joined on their DMP '
+          'expansion sockets (the lead used to land on the DSP\'s audio '
+          'output), and the power controller has all eight outlets, so the '
+          'doc cam and USB switch get their power leads.',
+      'Active learning room type: the ceiling speakers are driven by the '
+          'matrix\'s 70V amplifier rather than straight off a DSP line '
+          'output.',
+      'Room types already saved in a shared folder keep their old wiring; '
+          'delete the Hyflex and Active learning files there to get the fixed '
+          'ones.',
+      'In the Auris style, dialogs, menus, tooltips and messages lift off '
+          'the page with a soft glow in dark mode and a soft shadow in light.',
+      'When the device info editor cannot write a driver because its '
+          'folder is read-only, it says so and how to fix it.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.60',
+    date: 'October 4, 2026',
+    title: 'A cleaner look and smoother motion',
+    changes: [
+      'In the Classic style, cards are flat with a thin outline, dialogs and '
+          'menus have rounder corners, tooltips are easier to read and '
+          'messages along the bottom float above the page.',
+      'Switching tabs fades the new page in, and the highlight in the side '
+          'menu glides to the tab you picked.',
+      'Changing the theme settings is quicker.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.59',
     date: 'October 3, 2026',

@@ -552,6 +552,11 @@ class ProjectChat extends ChangeNotifier {
   Timer? _timer;
   DateTime _lastPeopleRead = DateTime.fromMillisecondsSinceEpoch(0);
   bool _polling = false;
+  bool _again = false;
+  bool _againInitial = false;
+
+  /// Stores attached but not read yet; their first read is history.
+  final Set<ChatStore?> _unreadStores = {};
 
   final List<ChatMessage> _messages = [];
   final Set<String> _ids = {};
@@ -593,6 +598,7 @@ class ProjectChat extends ChangeNotifier {
     _drop((m) => m.channel == kChatEveryone);
     _marks.remove(kChatEveryone);
     _everyonePeople = [];
+    _unreadStores.remove(_everyone);
     if (folder.isEmpty) {
       _everyone = null;
       notifyListeners();
@@ -600,11 +606,15 @@ class ProjectChat extends ChangeNotifier {
     }
     final store = _ensureTimer(ChatStore(folder));
     _everyone = store;
+    _unreadStores.add(store);
     await store.announce(_meAsPerson);
     if (_everyone != store) return;
     final marks = await store.readMarks(me.user);
+    if (_everyone != store) return;
     if (marks[kChatEveryone] != null) _marks[kChatEveryone] = marks[kChatEveryone]!;
-    await poll(initial: true);
+    // A timed read may have landed first; its counts used no marks.
+    notifyListeners();
+    await poll();
   }
 
   /// Starts following [projectPath]'s chat, or stops with ''.
@@ -614,6 +624,7 @@ class ProjectChat extends ChangeNotifier {
     _drop((m) => m.channel != kChatEveryone);
     _marks.removeWhere((k, _) => k != kChatEveryone);
     _people = [];
+    _unreadStores.remove(_store);
     if (channel != kChatEveryone) channel = kChatGeneral;
     if (projectPath.isEmpty) {
       _store = null;
@@ -623,12 +634,15 @@ class ProjectChat extends ChangeNotifier {
     }
     final store = _ensureTimer(ChatStore(chatFolderFor(projectPath)));
     _store = store;
+    _unreadStores.add(store);
     await store.announce(_meAsPerson);
     if (_store != store) return;
     final marks = await store.readMarks(me.user);
+    if (_store != store) return;
     marks.remove(kChatEveryone);
     _marks.addAll(marks);
-    await poll(initial: true);
+    notifyListeners();
+    await poll();
   }
 
   void _drop(bool Function(ChatMessage m) which) {
@@ -639,28 +653,49 @@ class ProjectChat extends ChangeNotifier {
   }
 
   /// Reads whatever has arrived in either chat. Never throws.
+  ///
+  /// A call made while one is running is not lost: it runs once that one
+  /// finishes, so a project opened mid-read still gets its first read.
   Future<void> poll({bool initial = false}) async {
-    if (_polling || !attached) return;
+    if (!attached) return;
+    if (_polling) {
+      _again = true;
+      _againInitial |= initial;
+      return;
+    }
     _polling = true;
     try {
       final project = _store;
       final everyone = _everyone;
+      // A store read for the first time holds history, not news.
+      final firstProject = initial || _unreadStores.contains(project);
+      final firstEveryone = initial || _unreadStores.contains(everyone);
+      final fromProject =
+          project == null ? const <ChatMessage>[] : await project.readNew();
+      final fromEveryone =
+          everyone == null ? const <ChatMessage>[] : await everyone.readNew();
+      // Each chat is kept only if it is still the one being followed: a
+      // project closed mid-read must not cost the shared channel its news.
+      final keepProject = project != null && project == _store;
+      final keepEveryone = everyone != null && everyone == _everyone;
+      if (keepProject) _unreadStores.remove(project);
+      if (keepEveryone) _unreadStores.remove(everyone);
       final fresh = <ChatMessage>[
-        if (project != null)
-          for (final m in await project.readNew())
+        if (keepProject)
+          for (final m in fromProject)
             // A project's file never speaks for the shared channel.
             if (m.channel != kChatEveryone) m,
-        if (everyone != null)
-          for (final m in await everyone.readNew())
-            m.withChannel(kChatEveryone),
+        if (keepEveryone)
+          for (final m in fromEveryone) m.withChannel(kChatEveryone),
       ];
-      if (project != _store || everyone != _everyone) return;
       final now = DateTime.now();
       var changed = false;
-      if (initial || now.difference(_lastPeopleRead) > kChatPeoplePoll) {
+      if (firstProject ||
+          firstEveryone ||
+          now.difference(_lastPeopleRead) > kChatPeoplePoll) {
         _lastPeopleRead = now;
-        if (project != null) _people = await project.readPeople();
-        if (everyone != null) _everyonePeople = await everyone.readPeople();
+        if (keepProject) _people = await project.readPeople();
+        if (keepEveryone) _everyonePeople = await everyone.readPeople();
         changed = true;
       }
       // Deletions first - a message and its deletion can arrive in one read.
@@ -682,10 +717,10 @@ class ProjectChat extends ChangeNotifier {
           ..addAll(added)
           ..sort((a, b) => a.at.compareTo(b.at));
         changed = true;
-        if (!initial) {
-          for (final m in added) {
-            if (!_isMine(m)) onIncoming?.call(m);
-          }
+        for (final m in added) {
+          final first =
+              m.channel == kChatEveryone ? firstEveryone : firstProject;
+          if (!first && !_isMine(m)) onIncoming?.call(m);
         }
       }
       if (open && _markRead(shownChannel)) changed = true;
@@ -693,6 +728,12 @@ class ProjectChat extends ChangeNotifier {
     } catch (_) {
     } finally {
       _polling = false;
+      if (_again) {
+        final initial = _againInitial;
+        _again = false;
+        _againInitial = false;
+        unawaited(poll(initial: initial));
+      }
     }
   }
 

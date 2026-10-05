@@ -441,7 +441,15 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
       await file.writeAsString(applyDeviceInfoBlock(content, block));
     } catch (e, stack) {
       AppLogger.logError('Could not write DEVICE_INFO into $path', e, stack);
-      _snack('Could not write $path - $e', error: true);
+      // The bundled drivers live under Program Files, which is read-only.
+      _snack(
+        e is FileSystemException && e.osError?.errorCode == 5
+            ? 'Could not write $path - that folder is read-only. Copy the '
+                'drivers to a folder you can edit (such as the shared '
+                'folder) and set Modules Path in App Config to it.'
+            : 'Could not write $path - $e',
+        error: true,
+      );
       return;
     }
 

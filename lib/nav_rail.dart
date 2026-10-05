@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'app_state.dart';
 import 'contrast.dart';
+import 'theme_polish.dart';
 
 /// ============================================================================
 ///  THE LEFT RAIL
@@ -598,11 +599,20 @@ class NavRailRow extends StatelessWidget {
           onTap: onTap,
           // The whole row is the target, so a pane dragged narrow is still
           // easy to hit.
-          child: Ink(
-            decoration: BoxDecoration(
-              color: selected ? background : null,
+          // The band fades between rows rather than jumping. Keyed by its
+          // color so a theme change snaps, like the rest of the app.
+          child: TweenAnimationBuilder<Color?>(
+            key: ValueKey(band),
+            tween: ColorTween(end: selected ? background : band.withAlpha(0)),
+            duration: kMotionShort,
+            curve: kMotionCurve,
+            builder: (context, fill, child) => Ink(
+              decoration: BoxDecoration(
+                color: fill == null || fill.a == 0 ? null : fill,
+              ),
+              padding: EdgeInsets.symmetric(vertical: fit.pad, horizontal: 4),
+              child: child,
             ),
-            padding: EdgeInsets.symmetric(vertical: fit.pad, horizontal: 4),
             // BoxFit.scaleDown is the belt to the measurement's braces. The
             // row height comes from measuring these very words, so it should
             // always be enough — but a fallback font, a rounding scaler or a

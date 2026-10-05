@@ -1399,6 +1399,7 @@ class AppStateProvider extends ChangeNotifier {
       'estimatePreparerContact': estimatePreparerContact,
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
       'confirmBeforeDelete': confirmBeforeDelete,
+      'briefingOnProjectOpen': briefingOnProjectOpen,
       'snapDiagramsToGrid': snapDiagramsToGrid,
       'showDiagramGrid': showDiagramGrid,
       'autosaveEnabled': autosaveEnabled,
@@ -7046,6 +7047,7 @@ class AppStateProvider extends ChangeNotifier {
     if (parts.values.every((p) => p == null)) {
       // No sidecars is still a state that matches the files — an estimate room
       // nobody has drawn yet is not an unsaved one.
+      autoDrawRoutingFromConfig(this); // see below
       markRoomSaved();
       checkForRoomRecovery();
       notifyListeners();
@@ -7074,6 +7076,11 @@ class AppStateProvider extends ChangeNotifier {
     // here rather than at the end of the config load because that runs before
     // this does, and a baseline captured with no diagram in it would report
     // every freshly opened room as unsaved.
+    //
+    // The routing pass goes first for the same reason: it fills in what the
+    // config already says, which is not an edit. Run after the baseline, it
+    // showed a room nobody touched as changed. The next save writes it.
+    autoDrawRoutingFromConfig(this);
     markRoomSaved();
 
     // ...which is also the moment the recovery copy can be compared against
@@ -8322,6 +8329,17 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Pop up "where it stands" when a project opens. The button on the
+  /// Project tab shows it either way.
+  bool briefingOnProjectOpen = true;
+
+  void setBriefingOnProjectOpen(bool value) {
+    briefingOnProjectOpen = value;
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
+  }
+
   /// Follows the project file with the chat. The real app only: tests get no
   /// chat folder written beside their fixtures.
   void _syncChat() {
@@ -8530,6 +8548,9 @@ class AppStateProvider extends ChangeNotifier {
       chatMode = chatRememberMode ? chatLastMode : chatDefaultMode;
       chat.mode = chatMode;
       chatPopUp = saved['chatPopUp'] is bool ? saved['chatPopUp'] as bool : true;
+      briefingOnProjectOpen = saved['briefingOnProjectOpen'] is bool
+          ? saved['briefingOnProjectOpen'] as bool
+          : true;
       useBuiltInBrowser = saved['useBuiltInBrowser'] is bool
           ? saved['useBuiltInBrowser'] as bool
           : true;

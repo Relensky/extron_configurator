@@ -51,6 +51,7 @@ Future<void> showProjectBriefing(
     builder: (_) => _BriefingDialog(
       briefing: briefing,
       title: provider.projectDisplayName,
+      provider: provider,
     ),
   );
 }
@@ -361,12 +362,36 @@ class _Overview extends StatelessWidget {
 class _BriefingDialog extends StatelessWidget {
   final ProjectBriefing briefing;
   final String title;
+  final AppStateProvider provider;
 
-  const _BriefingDialog({required this.briefing, required this.title});
+  const _BriefingDialog({
+    required this.briefing,
+    required this.title,
+    required this.provider,
+  });
+
+  /// Screens at least this wide get two columns, so it all fits without
+  /// scrolling. Narrower ones keep the single tall column.
+  static const double _wideScreen = 1100;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final screen = MediaQuery.sizeOf(context).width;
+    final wide = screen >= _wideScreen;
+
+    final overview =
+        _Overview(overview: briefing.overview, asOf: briefing.asOf);
+    final lines = <Widget>[
+      if (briefing.lateLines.isNotEmpty)
+        _block(context, 'Already late', briefing.lateLines),
+      if (briefing.soonLines.isNotEmpty)
+        _block(context, 'Coming up', briefing.soonLines),
+      if (briefing.openLines.isNotEmpty)
+        _block(context, 'Still open', briefing.openLines),
+      for (final line in briefing.lines)
+        if (line.urgency == BriefingUrgency.clear) _lineTile(context, line),
+    ];
 
     return AlertDialog(
       key: const ValueKey('project_briefing'),
@@ -383,8 +408,11 @@ class _BriefingDialog extends StatelessWidget {
         ],
       ),
       content: SizedBox(
-        width: 620,
+        key: const ValueKey('briefing_body'),
+        width: wide ? (screen - 160).clamp(620.0, 1240.0) : 620,
         child: SingleChildScrollView(
+          // Room for the scrollbar, so it never sits on the text.
+          padding: const EdgeInsets.only(right: 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,42 +435,81 @@ class _BriefingDialog extends StatelessWidget {
               // mean something different on a nine-room building due in March
               // than on a one-room job with no date on it, and the reader
               // needs the second fact to weigh the first.
-              _Overview(overview: briefing.overview, asOf: briefing.asOf),
-              const SizedBox(height: 4),
-              // In urgency order, with a heading on each block. The headings
-              // are what make it skimmable: somebody who only has a moment
-              // reads the first block and stops, and the first block is the
-              // one that cannot wait.
-              if (briefing.lateLines.isNotEmpty)
-                _block(context, 'Already late', briefing.lateLines),
-              if (briefing.soonLines.isNotEmpty)
-                _block(context, 'Coming up', briefing.soonLines),
-              if (briefing.openLines.isNotEmpty)
-                _block(context, 'Still open', briefing.openLines),
-              for (final line in briefing.lines)
-                if (line.urgency == BriefingUrgency.clear)
-                  _lineTile(context, line),
+              //
+              // The lines in urgency order, with a heading on each block. The
+              // headings are what make it skimmable: somebody who only has a
+              // moment reads the first block and stops, and the first block
+              // is the one that cannot wait. Beside the overview when the
+              // screen is wide enough, under it when not.
+              if (wide)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 4, child: overview),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: lines,
+                      ),
+                    ),
+                  ],
+                )
+              else ...[
+                overview,
+                const SizedBox(height: 4),
+                ...lines,
+              ],
             ],
           ),
         ),
       ),
+      actionsAlignment: MainAxisAlignment.spaceBetween,
       actions: [
+        ListenableBuilder(
+          listenable: provider,
+          builder: (context, _) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Checkbox(
+                key: const ValueKey('briefing_on_open'),
+                value: provider.briefingOnProjectOpen,
+                onChanged: (v) =>
+                    provider.setBriefingOnProjectOpen(v ?? true),
+              ),
+              GestureDetector(
+                onTap: () => provider.setBriefingOnProjectOpen(
+                  !provider.briefingOnProjectOpen,
+                ),
+                child: const Text('Show when a project opens'),
+              ),
+            ],
+          ),
+        ),
         // COPY, beside the dismissal rather than buried in the title. "Where
         // does this job stand" is almost never asked by the person reading the
         // screen — it is asked on email, on a call, or in a chat window — and
         // until this button the answer was retyped by somebody reading it off,
         // which is how a status loses its dates.
-        TextButton.icon(
-          key: const ValueKey('briefing_copy'),
-          icon: const Icon(Icons.copy_all_outlined, size: 18),
-          label: const Text('Copy'),
-          onPressed: () => _copy(context),
-        ),
-        FilledButton(
-          key: const ValueKey('briefing_close'),
-          autofocus: true,
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Got it'),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton.icon(
+              key: const ValueKey('briefing_copy'),
+              icon: const Icon(Icons.copy_all_outlined, size: 18),
+              label: const Text('Copy'),
+              onPressed: () => _copy(context),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              key: const ValueKey('briefing_close'),
+              autofocus: true,
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Got it'),
+            ),
+          ],
         ),
       ],
     );

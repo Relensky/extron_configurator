@@ -991,7 +991,8 @@ Future<bool> closeProjectFile(
 /// starts the day on could not be got back to without restarting.
 ///
 /// With a job still open the job stays open, exactly as closing a job leaves
-/// the room alone. Closing means the room, not everything on screen.
+/// the room alone, and the Project tab is shown. Closing means the room, not
+/// everything on screen.
 Future<bool> closeRoomFile(
   BuildContext context,
   AppStateProvider provider,
@@ -1004,6 +1005,8 @@ Future<bool> closeRoomFile(
       : roomConfigDisplayName(provider.currentConfigPath);
   final hasProject = provider.hasOpenProject;
   provider.closeRoom();
+  // Back to the job the room belonged to, not an empty room tab.
+  if (hasProject) provider.selectTab(AppTab.project.index);
 
   showTimedSnackBar(
     ScaffoldMessenger.of(context),
@@ -1108,8 +1111,8 @@ Future<bool> openProjectAtPath(
   );
   // Where the job stands, once, on the way in — see project_briefing.dart. It
   // puts nothing on screen unless something is actually time-critical, so a
-  // healthy project still opens straight onto the tab.
-  if (context.mounted) {
+  // healthy project still opens straight onto the tab. Off in App Config.
+  if (context.mounted && provider.briefingOnProjectOpen) {
     await showProjectBriefing(context, provider);
   }
   return true;

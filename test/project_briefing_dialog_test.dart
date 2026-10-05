@@ -163,4 +163,75 @@ void main() {
     expect(find.textContaining('copied to the clipboard'), findsOneWidget);
     await drainSnack(tester);
   });
+
+  group('size and the startup switch', () {
+    Future<AppStateProvider> openAt(WidgetTester tester, Size size) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final provider = AppStateProvider(autoLoadSettings: false)
+        ..newProject(name: 'Bessey refresh', building: 'BSS');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showProjectBriefing(
+                  context,
+                  provider,
+                  force: true,
+                  asOf: DateTime(2026, 3, 4),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      return provider;
+    }
+
+    double dialogWidth(WidgetTester tester) =>
+        tester.getSize(find.byKey(const ValueKey('briefing_body'))).width;
+
+    testWidgets('wide on a wide screen, the old column on a narrow one',
+        (tester) async {
+      await openAt(tester, const Size(1600, 1000));
+      expect(tester.takeException(), isNull);
+      expect(dialogWidth(tester), greaterThan(1000));
+
+      await tester.tap(find.byKey(const ValueKey('briefing_close')));
+      await tester.pumpAndSettle();
+
+      await openAt(tester, const Size(900, 1000));
+      expect(tester.takeException(), isNull);
+      expect(dialogWidth(tester), lessThan(700));
+    });
+
+    testWidgets('the text stops short of the scrollbar', (tester) async {
+      await openAt(tester, const Size(1600, 1000));
+      final scroll = tester.widget<SingleChildScrollView>(
+        find.descendant(
+          of: find.byKey(const ValueKey('briefing_body')),
+          matching: find.byType(SingleChildScrollView),
+        ).first,
+      );
+      expect((scroll.padding as EdgeInsets).right, greaterThanOrEqualTo(12));
+    });
+
+    testWidgets('the checkbox turns the pop-up on open off', (tester) async {
+      final provider = await openAt(tester, const Size(1600, 1000));
+      expect(provider.briefingOnProjectOpen, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('briefing_on_open')));
+      await tester.pump();
+      expect(provider.briefingOnProjectOpen, isFalse);
+      final box = tester.widget<Checkbox>(
+        find.byKey(const ValueKey('briefing_on_open')),
+      );
+      expect(box.value, isFalse);
+    });
+  });
 }

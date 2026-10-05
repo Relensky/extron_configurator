@@ -256,9 +256,14 @@ class CollabController extends ChangeNotifier {
     }
 
     final others = await board.others(me, now: now);
-    final arrived = others
-        .where((o) => !s.others.any((p) => p.identity == o.identity))
-        .toList();
+    // Every copy of the app opens the catalog at launch, so having it open
+    // says nothing. It is only news once they have edits to it.
+    final catalog = doc.kind == CollabDocKind.catalog;
+    final arrived = catalog
+        ? others.where((o) => o.unsaved).toList()
+        : others
+            .where((o) => !s.others.any((p) => p.identity == o.identity))
+            .toList();
     if (!_samePresence(others, s.others)) {
       s.others = others;
       changed = true;
@@ -269,8 +274,12 @@ class CollabController extends ChangeNotifier {
       if (!_announced.add(key)) continue;
       _notices.add(CollabNotice(
         doc.kind,
-        '${o.user} (${o.machine}) has opened this ${collabDocNoun(doc.kind)} '
-        'too. Their saves will be merged with yours.',
+        catalog
+            ? '${o.user} (${o.machine}) is editing the catalog too. Their '
+                'saves will be merged with yours.'
+            : '${o.user} (${o.machine}) has opened this '
+                '${collabDocNoun(doc.kind)} too. Their saves will be merged '
+                'with yours.',
       ));
     }
 

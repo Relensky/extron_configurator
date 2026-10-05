@@ -1012,8 +1012,7 @@ RoomPreset _hyflexClassroom() {
             PortDirection.output),
         _p('ma_out_70v', '70V AMP OUT', SignalType.speaker,
             PortDirection.output),
-        _p('dmp_exp', 'DMP EXPANSION', SignalType.network,
-            PortDirection.output),
+        _p('dmp_exp', 'DMP EXP', SignalType.dante, PortDirection.output),
         _p('lan', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
       pos: const Offset(500, 240),
@@ -1032,6 +1031,7 @@ RoomPreset _hyflexClassroom() {
         _p('audio_2', 'AUDIO OUT 2', SignalType.analogAudio,
             PortDirection.output),
         _p(_dmpUsbOut, 'USB OUT', SignalType.usbData, PortDirection.output),
+        _p(_dmpExpIn, 'DMP EXP', SignalType.dante, PortDirection.input),
       ],
       pos: const Offset(960, 700),
       rackUnits: 1,
@@ -1105,6 +1105,11 @@ RoomPreset _hyflexClassroom() {
         _p('out_pwr_2', 'OUTLET 2', SignalType.power, PortDirection.output),
         _p('out_pwr_3', 'OUTLET 3', SignalType.power, PortDirection.output),
         _p('out_pwr_4', 'OUTLET 4', SignalType.power, PortDirection.output),
+        // All eight, as on the unit and in the catalog.
+        _p('out_pwr_5', 'OUTLET 5', SignalType.power, PortDirection.output),
+        _p('out_pwr_6', 'OUTLET 6', SignalType.power, PortDirection.output),
+        _p('out_pwr_7', 'OUTLET 7', SignalType.power, PortDirection.output),
+        _p('out_pwr_8', 'OUTLET 8', SignalType.power, PortDirection.output),
         _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
       pos: const Offset(960, 1420),
@@ -1252,8 +1257,9 @@ RoomPreset _hyflexClassroom() {
           SignalType.analogAudio, label: 'AUD-03'),
       _cable('C15', 'SWITCHERDEVICE_1', 'ma_out_70v', 'AVNODE_7', 'in_spk_1',
           SignalType.speaker, label: 'SPK-01'),
-      _cable('C16', 'SWITCHERDEVICE_1', 'dmp_exp', 'DSPDEVICE_1', 'audio_1',
-          SignalType.network, label: 'NET-01'),
+      // The matrix and the DSP on the expansion bus.
+      _cable('C16', 'SWITCHERDEVICE_1', 'dmp_exp', 'DSPDEVICE_1', _dmpExpIn,
+          SignalType.dante, label: 'NET-01'),
     ],
     racks: const [
       RackFrame(
@@ -1644,6 +1650,8 @@ RoomPreset _activeLearningSpace() {
         _p('dtp_out_4', 'DTP OUT 4', SignalType.hdbaset, PortDirection.output),
         _p('audio_1_2', 'AUDIO 1', SignalType.analogAudio,
             PortDirection.output),
+        _p('ma_out_70v', 'MA OUT 70V', SignalType.speaker,
+            PortDirection.output),
         _p('dmp_exp', 'DMP EXP', SignalType.network, PortDirection.output),
         _p('lan', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
@@ -1982,7 +1990,9 @@ RoomPreset _activeLearningSpace() {
           SignalType.micLine, label: 'AUD-01'),
       _cable('C15', 'SWITCHERDEVICE_1', 'audio_1_2', 'DSPDEVICE_1', 'acp',
           SignalType.analogAudio, label: 'AUD-02'),
-      _cable('C16', 'DSPDEVICE_1', 'audio_1', 'AVNODE_8', 'in_spk_1',
+      // The DSP feeds the matrix over the expansion bus; the matrix's own
+      // amplifier drives the ceiling.
+      _cable('C16', 'SWITCHERDEVICE_1', 'ma_out_70v', 'AVNODE_8', 'in_spk_1',
           SignalType.speaker, label: 'SPK-01'),
       _cable('C17', 'DSPDEVICE_1', 'audio_2', 'RECORDERDEVICE_1', 'in_aud_1',
           SignalType.analogAudio, label: 'AUD-03'),

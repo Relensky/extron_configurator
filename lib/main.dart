@@ -74,6 +74,7 @@ import 'schematic_view.dart';
 import 'setup_wizard_view.dart';
 import 'json_editor_view.dart';
 import 'legible_theme.dart';
+import 'theme_polish.dart';
 import 'lifecycle_view.dart';
 import 'screenshot_tools.dart';
 import 'search_match.dart';
@@ -182,11 +183,20 @@ class RoomConfigApp extends StatelessWidget {
   /// wheel and neither measures the result — see legible_theme.dart for what
   /// that costs and which pairings it repairs.
   static ThemeData themeFor(String style, bool isDark, String classicColor,
-          String aurisColor, String classicSecondary) =>
-      legibleTheme(
-        rawThemeFor(style, isDark, classicColor, aurisColor,
-            classicSecondary),
-      );
+      String aurisColor, String classicSecondary) {
+    // Measuring a theme walks many tones; the same settings give the same
+    // theme, so the last one is kept.
+    final key = (style, isDark, classicColor, aurisColor, classicSecondary);
+    if (key == _lastThemeKey) return _lastTheme!;
+    final theme = legibleTheme(
+      rawThemeFor(style, isDark, classicColor, aurisColor, classicSecondary),
+    );
+    _lastThemeKey = key;
+    return _lastTheme = theme;
+  }
+
+  static Object? _lastThemeKey;
+  static ThemeData? _lastTheme;
 
   /// The theme as its generator hands it over, BEFORE it is measured.
   ///
@@ -203,9 +213,9 @@ class RoomConfigApp extends StatelessWidget {
         final Color? accent = aurisColor.toUpperCase() == 'F0A500'
             ? null
             : parseHexColor(aurisColor, fallback: const Color(0xFFF0A500));
-        return isDark
+        return polishAuris(isDark
             ? AurisTheme.dark(accent: accent)
-            : AurisTheme.light(accent: accent);
+            : AurisTheme.light(accent: accent));
       case 'classic':
       default:
         final scheme = FlexSchemeColor.from(
@@ -214,9 +224,9 @@ class RoomConfigApp extends StatelessWidget {
               ? null
               : parseHexColor(classicSecondary),
         );
-        return isDark
+        return polishClassic(isDark
             ? FlexThemeData.dark(colors: scheme.toDark())
-            : FlexThemeData.light(colors: scheme);
+            : FlexThemeData.light(colors: scheme));
     }
   }
 
@@ -955,7 +965,9 @@ class _MainDashboardState extends State<MainDashboard> {
             initialWidth: 108,
             minWidth: 72,
             maxWidth: 220,
-            child: AppNavRail(
+            // Its own layer, so the rail's animations repaint only the rail.
+            child: RepaintBoundary(
+              child: AppNavRail(
               selectedIndex: selectedIndex,
               onDestinationSelected: provider.selectTab,
               tabs: visibleNavTabs(estimateOnly: provider.isEstimateRoom),
@@ -966,12 +978,17 @@ class _MainDashboardState extends State<MainDashboard> {
               // place.
               showStart: !hasConfig,
             ),
+            ),
           ),
           Expanded(
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: RepaintBoundary(
+                  // A new tab fades in; outside the capture boundary so a
+                  // screenshot never catches it half drawn.
+                  child: FadeInPage(
+                    key: ValueKey('page_${selectedIndex}_$hasConfig'),
+                    child: RepaintBoundary(
               key: _captureKey,
               // A floor under every page: narrower than this and the page
               // scrolls sideways with a scrollbar instead of being cut off.
@@ -985,6 +1002,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         provider.isEstimateRoom,
                       ),
               ),
+                    ),
                   ),
                 ),
                 // NOTICES OF NEW CHAT MESSAGES, in the page's lower left -
@@ -3230,6 +3248,16 @@ class AppSettingsView extends StatelessWidget {
               '"Check Defaults" can re-add anything removed by mistake.'),
           value: provider.confirmBeforeDelete,
           onChanged: (val) => provider.setConfirmBeforeDelete(val),
+        ),
+
+        SwitchListTile(
+          key: const ValueKey('briefing_on_open_switch'),
+          title: const Text('Show where a project stands when it opens'),
+          subtitle: const Text(
+              'Pops up when something is late or due soon. The "Where it '
+              'stands" button on the Project tab shows it any time.'),
+          value: provider.briefingOnProjectOpen,
+          onChanged: provider.setBriefingOnProjectOpen,
         ),
         const SizedBox(height: 20),
 
