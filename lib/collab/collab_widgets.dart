@@ -129,11 +129,50 @@ class _MoreEditors extends StatelessWidget {
   }
 }
 
+/// The width the document name keeps beside the strip; below it, editors
+/// shrink to their icon.
+const double kCollabNameRoom = 240;
+
+/// True when editor chips with [labels] would leave the name less than
+/// [kCollabNameRoom] of [shareWidth]. [otherChips] are the busy, incoming
+/// and '+N' chips, which keep their size.
+bool collabStripCompact({
+  required double shareWidth,
+  required List<String> labels,
+  required int otherChips,
+  TextStyle? style,
+  TextScaler textScaler = TextScaler.noScaling,
+}) {
+  var needed = 12.0 + otherChips * 100;
+  for (final label in labels) {
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: textScaler,
+      maxLines: 1,
+    )..layout();
+    // Avatar, chip padding and border, and the gap before it.
+    needed += painter.width + 60;
+    painter.dispose();
+  }
+  return shareWidth - needed < kCollabNameRoom;
+}
+
+/// The label on an editor's chip: their name, and the room they are in.
+String collabEditorLabel(EditorPresence presence) =>
+    presence.room.trim().isEmpty
+        ? presence.user
+        : '${presence.user} · ${presence.room.trim()}';
+
 /// The people and pending saves for the page on screen, on the banner.
 class CollabPresenceStrip extends StatelessWidget {
   final AppTab tab;
 
-  const CollabPresenceStrip({super.key, required this.tab});
+  /// The width the strip shares with the document name. When the full chips
+  /// would crowd the name, editors show only their icon. Null: always full.
+  final double? shareWidth;
+
+  const CollabPresenceStrip({super.key, required this.tab, this.shareWidth});
 
   @override
   Widget build(BuildContext context) {
@@ -185,11 +224,24 @@ class CollabPresenceStrip extends StatelessWidget {
             .compareTo(collabHasChanged(a.presence) ? 1 : 0));
         // A FEW ON THE BAR, THE REST IN A LIST. Five people editing at once
         // is five chips the bar has no room for.
-        for (final e in editors.take(kCollabChipsShown)) {
+        final shown = editors.take(kCollabChipsShown).toList();
+        final width = shareWidth;
+        final compact = width != null &&
+            shown.isNotEmpty &&
+            collabStripCompact(
+              shareWidth: width,
+              labels: [for (final e in shown) collabEditorLabel(e.presence)],
+              otherChips: chips.length +
+                  (editors.length > kCollabChipsShown ? 1 : 0),
+              style: Theme.of(context).textTheme.labelMedium,
+              textScaler: MediaQuery.textScalerOf(context),
+            );
+        for (final e in shown) {
           chips.add(CollabEditorAvatar(
             key: ValueKey('collab_editor_chip_${e.presence.user}@${e.presence.machine}'),
             presence: e.presence,
             kind: e.kind,
+            compact: compact,
           ));
         }
         if (editors.length > kCollabChipsShown) {
@@ -238,15 +290,17 @@ Decoration _solidTooltipBox(BuildContext context) {
 }
 
 /// One other editor: their initials in a colored circle, and their Windows
-/// user name beside it.
+/// user name beside it. [compact]: the circle alone, the rest on hover.
 class CollabEditorAvatar extends StatelessWidget {
   final EditorPresence presence;
   final CollabDocKind kind;
+  final bool compact;
 
   const CollabEditorAvatar({
     super.key,
     required this.presence,
     required this.kind,
+    this.compact = false,
   });
 
   @override
@@ -263,6 +317,23 @@ class CollabEditorAvatar extends StatelessWidget {
         '${presence.unsaved ? '\nThey have changes they have not saved yet '
             '- when they save, you will be offered their changes to combine.' : ''}'
         '${presence.savedAt != null ? '\nLast saved at ${_clock(presence.savedAt!)}.' : ''}';
+    // A pencil on the circle while they have unsaved work.
+    final badged = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        CollabAvatarCircle(user: presence.user, picture: picture),
+        if (presence.unsaved)
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Icon(
+              Icons.edit,
+              size: 11,
+              color: theme.colorScheme.tertiary,
+            ),
+          ),
+      ],
+    );
     return Tooltip(
       decoration: _solidTooltipBox(context),
       // Their picture, large, above the words - so who it is can be seen,
@@ -288,35 +359,29 @@ class CollabEditorAvatar extends StatelessWidget {
       child: Opacity(
         // Only looking: dimmed, so the people actually editing stand out.
         opacity: collabHasChanged(presence) ? 1 : 0.55,
-        child: Chip(
-        key: ValueKey('collab_editor_${presence.user}'),
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        avatar: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CollabAvatarCircle(user: presence.user, picture: picture),
-            if (presence.unsaved)
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: Icon(
-                  Icons.edit,
-                  size: 11,
-                  color: theme.colorScheme.tertiary,
+        child: compact
+            // Their color as a ring, where the chip's border was.
+            ? Container(
+                key: ValueKey('collab_editor_compact_${presence.user}'),
+                padding: const EdgeInsets.all(1.5),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color, width: 1.5),
                 ),
+                child: badged,
+              )
+            : Chip(
+                key: ValueKey('collab_editor_${presence.user}'),
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                avatar: badged,
+                // The room they are in beside the name, when they are in one.
+                label: Text(
+                  collabEditorLabel(presence),
+                  style: theme.textTheme.labelMedium,
+                ),
+                side: BorderSide(color: color, width: 1.5),
               ),
-          ],
-        ),
-        // The room they are in beside the name, when they are in one.
-        label: Text(
-          presence.room.trim().isEmpty
-              ? presence.user
-              : '${presence.user} · ${presence.room.trim()}',
-          style: theme.textTheme.labelMedium,
-        ),
-        side: BorderSide(color: color, width: 1.5),
-      ),
       ),
     );
   }

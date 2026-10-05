@@ -1905,27 +1905,46 @@ class TopLevelBar extends StatelessWidget {
             // how a corner button ends up sitting in the middle of the window.
             // One tight child that eats everything going puts it back in the
             // corner, and the name still ellipsizes when it is long.
+            // The name and WHO ELSE HAS THIS OPEN share this slot, so the
+            // strip can see how much room is left and drop to icons only
+            // when the bar fills. See collab/collab_widgets.dart.
             Expanded(
-              child: Text(
-                // The name of whatever this strip is about - see
-                // [_bannerDocumentName].
-                state.documentName,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: hasProject && state.projectDirty
-                      // The banner is a fill, so the container answer — but
-                      // held to the small-text bar, because "— unsaved" is
-                      // the smallest and most important red on the page.
-                      ? legibleTone(
-                          errorOn(theme.colorScheme, bannerFill), bannerFill)
-                      : readableOn(
-                          bannerFill,
-                          prefer: [
-                            theme.textTheme.bodySmall?.color ??
-                                theme.colorScheme.onSurfaceVariant,
-                            theme.colorScheme.onSurface,
-                          ],
+              child: LayoutBuilder(
+                builder: (context, slot) => Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        // The name of whatever this strip is about - see
+                        // [_bannerDocumentName].
+                        state.documentName,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: hasProject && state.projectDirty
+                              // The banner is a fill, so the container answer
+                              // — but held to the small-text bar, because
+                              // "— unsaved" is the smallest and most
+                              // important red on the page.
+                              ? legibleTone(
+                                  errorOn(theme.colorScheme, bannerFill),
+                                  bannerFill)
+                              : readableOn(
+                                  bannerFill,
+                                  prefer: [
+                                    theme.textTheme.bodySmall?.color ??
+                                        theme.colorScheme.onSurfaceVariant,
+                                    theme.colorScheme.onSurface,
+                                  ],
+                                ),
                         ),
+                      ),
+                    ),
+                    if (selectedIndex >= 0 &&
+                        selectedIndex < AppTab.values.length)
+                      CollabPresenceStrip(
+                        tab: AppTab.values[selectedIndex],
+                        shareWidth: slot.maxWidth,
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -1949,11 +1968,6 @@ class TopLevelBar extends StatelessWidget {
             // spend most of a session grayed out, and "grayed out" should mean
             // a fainter version of the row's ink and not a color picked
             // against a surface this row is not.
-            // WHO ELSE HAS THIS OPEN - a person icon with their Windows
-            // sign-in name, and a Merge button when one of them has saved.
-            // See collab/collab_widgets.dart.
-            if (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
-              CollabPresenceStrip(tab: AppTab.values[selectedIndex]),
             IconButtonTheme(
               data: IconButtonThemeData(
                 style: ButtonStyle(

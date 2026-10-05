@@ -76,6 +76,75 @@ void main() {
     p.dispose();
   });
 
+  testWidgets('a full bar shows editors as icons, names on hover',
+      (tester) async {
+    final p = AppStateProvider(
+      autoLoadSettings: false,
+      collabIdentity: const CollabIdentity(user: 'me', machine: 'MY-PC'),
+    )..collab.enabled = true;
+    final file = path.join(dir.path, 'Job_project.json');
+    await tester.runAsync(() async {
+      p.newProject(name: 'Job');
+      await p.saveProject(to: file);
+      final now = DateTime.now();
+      for (final user in ['ann', 'ben']) {
+        await PresenceBoard(file).announce(EditorPresence(
+          user: user,
+          machine: '$user-PC',
+          since: now,
+          heartbeat: now,
+          room: 'BSS 100',
+          tab: 'Cost',
+        ));
+      }
+      await p.collab.tick();
+    });
+
+    tester.view.physicalSize = const Size(1400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    Future<void> pumpAt(double shareWidth) => tester.pumpWidget(
+          ChangeNotifierProvider<AppStateProvider>.value(
+            value: p,
+            child: MaterialApp(
+              home: Scaffold(
+                body: Center(
+                  child: CollabPresenceStrip(
+                    tab: AppTab.project,
+                    shareWidth: shareWidth,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    // Plenty of room: names on the chips.
+    await pumpAt(1200);
+    await tester.pumpAndSettle();
+    expect(find.text('ann · BSS 100'), findsOneWidget);
+    expect(find.byKey(const ValueKey('collab_editor_compact_ann')),
+        findsNothing);
+
+    // Crowded: icons only, the rest in the hover.
+    await pumpAt(400);
+    await tester.pumpAndSettle();
+    expect(find.text('ann · BSS 100'), findsNothing);
+    expect(find.byKey(const ValueKey('collab_editor_compact_ann')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('collab_editor_compact_ben')),
+        findsOneWidget);
+    final tip = tester.widget<Tooltip>(find
+        .ancestor(
+          of: find.byKey(const ValueKey('collab_editor_compact_ann')),
+          matching: find.byType(Tooltip),
+        )
+        .first);
+    expect(tip.richMessage!.toPlainText(), contains('ann on ann-PC'));
+    expect(tip.richMessage!.toPlainText(), contains('BSS 100, on Cost'));
+    p.dispose();
+  });
+
   test('this copy says which room and tab it is on', () async {
     final p = AppStateProvider(
       autoLoadSettings: false,
