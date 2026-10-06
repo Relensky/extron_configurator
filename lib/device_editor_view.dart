@@ -22,9 +22,12 @@ import 'device_merge.dart';
 import 'equipment_lifecycle.dart' show kDefaultEquipmentLifeYears;
 import 'live_text_field.dart';
 import 'pdf_viewer_dialog.dart';
+import 'projection_calc.dart';
+import 'projection_calculator_dialog.dart';
 import 'spec_sheets.dart';
 import 'responsive.dart';
 import 'side_pane.dart';
+import 'catalog_filters.dart';
 import 'catalog_standards.dart';
 import 'collab/collab_controller.dart';
 import 'collab/collab_widgets.dart';
@@ -115,6 +118,28 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   /// rebuilds on it, which is what made typing lag.
   Timer? _notifyTimer;
 
+  /// Waits for a pause in the search box before the list is filtered again.
+  /// The box itself keeps up with every key; re-filtering and rebuilding the
+  /// page on each one is what made typing a model name stutter.
+  Timer? _searchTimer;
+
+  /// The last filtered list and what it was filtered by, so a rebuild for
+  /// anything else does not search the catalog again.
+  Object? _filteredKey;
+  List<AvDeviceTemplate> _filteredCache = const [];
+
+  /// The filter chips' counts, worked out once per catalog revision.
+  int _countsRevision = -1;
+  int _warrantyCount = 0;
+  int _foreignCount = 0;
+
+  void _countFilters(AvDeviceLibrary library) {
+    if (_countsRevision == library.revision) return;
+    _countsRevision = library.revision;
+    _warrantyCount = library.all.where(isWarrantyItem).length;
+    _foreignCount = library.all.where((t) => nonUsMarket(t) != null).length;
+  }
+
   String get _selectedKey => _m.selectedKey;
   set _selectedKey(String v) => _m.selectedKey = v;
   String get _search => _m.search;
@@ -149,6 +174,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
       final provider = _provider;
       scheduleMicrotask(provider.avDeviceLibraryChanged);
     }
+    _searchTimer?.cancel();
     _listScroll.dispose();
     _detailScroll.dispose();
     super.dispose();
@@ -212,6 +238,166 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   // --- spec sheets ----------------------------------------------------------
 
   /// Points the catalog at the shared spec sheet folder.
+  /// Throw ratio range and lumens for a projector or lens. Blank fields fall
+  /// back to whatever the notes say, which is shown underneath.
+  Widget _projectionRow(ThemeData theme, AvDeviceTemplate entry, String key) {
+    String num(double v) => v <= 0 ? '' : trimNumber(v);
+    final fromNotes = projectorSpecsOf(
+      entry.copyWith(throwRatioMin: 0, throwRatioMax: 0, lumens: 0),
+    );
+    final hint = [
+      if (entry.throwRatioMin <= 0 && (fromNotes?.hasThrow ?? false))
+        'throw ${fromNotes!.throwLabel}',
+      if (entry.lumens <= 0 && (fromNotes?.hasLumens ?? false))
+        '${fromNotes!.lumens.round()} lumens',
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: LiveTextField(
+              fieldId: 'throwmin_$key',
+              initial: num(entry.throwRatioMin),
+              label: 'Throw ratio min',
+              suffix: ':1',
+              numeric: true,
+              onChanged: (v) => setState(
+                () => _apply(
+                  entry.copyWith(throwRatioMin: double.tryParse(v.trim()) ?? 0),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 120,
+            child: LiveTextField(
+              fieldId: 'throwmax_$key',
+              initial: num(entry.throwRatioMax),
+              label: 'Throw ratio max',
+              suffix: ':1',
+              helper: 'blank = fixed lens',
+              numeric: true,
+              onChanged: (v) => setState(
+                () => _apply(
+                  entry.copyWith(throwRatioMax: double.tryParse(v.trim()) ?? 0),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 120,
+            child: LiveTextField(
+              fieldId: 'lumens_$key',
+              initial: num(entry.lumens),
+              label: 'Brightness',
+              suffix: 'lm',
+              numeric: true,
+              onChanged: (v) => setState(
+                () => _apply(
+                  entry.copyWith(lumens: double.tryParse(v.trim()) ?? 0),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                hint.isEmpty
+                    ? 'Used by the projection calculator on the floor plan.'
+                    : 'From the notes: ${hint.join(', ')}. Type a figure to '
+                          'override it.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            key: const ValueKey('catalog_projection_calculator'),
+            icon: const Icon(Icons.calculate_outlined, size: 16),
+            label: const Text('Calculator'),
+            onPressed: () => showProjectionCalculator(
+              context,
+              title: 'Projection calculator - ${entry.model}',
+              specs: _catalogProjectionSpecs(entry),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A display's brightness, which the floor plan uses to show where it can
+  /// be read in the room's light.
+  Widget _displayRow(ThemeData theme, AvDeviceTemplate entry, String key) {
+    final fromNotes = parseNits('${entry.model} ${entry.notes}');
+    final size = displayDiagonalOf(entry);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: LiveTextField(
+              fieldId: 'nits_$key',
+              initial: entry.nits <= 0 ? '' : trimNumber(entry.nits),
+              label: 'Brightness',
+              suffix: 'nits',
+              numeric: true,
+              onChanged: (v) => setState(
+                () => _apply(
+                  entry.copyWith(nits: double.tryParse(v.trim()) ?? 0),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                [
+                  if (entry.nits <= 0 && fromNotes > 0)
+                    'From the notes: ${fromNotes.round()} nits.',
+                  if (size > 0) 'Size read as ${size.round()}".',
+                  'The floor plan uses these to show where it can be read '
+                      'in the room\'s light.',
+                ].join(' '),
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// [entry]'s throw and lumens, then the same maker's lenses from the
+  /// catalog, for a projector sold without one. A lens on its own is just
+  /// itself.
+  List<ProjectorSpecs> _catalogProjectionSpecs(AvDeviceTemplate entry) {
+    final isLens = RegExp(r'\blens\b', caseSensitive: false)
+        .hasMatch(entry.model);
+    final maker = entry.manufacturer.trim().toLowerCase();
+    final lenses = isLens
+        ? const <AvDeviceTemplate>[]
+        : _provider.avDeviceLibrary.all.where(
+            (t) =>
+                !t.retired &&
+                t.model != entry.model &&
+                t.manufacturer.trim().toLowerCase() == maker &&
+                RegExp(r'\blens\b', caseSensitive: false).hasMatch(t.model),
+          );
+    return projectorSpecChoices([entry], lenses);
+  }
+
   Future<void> _pickSpecSheetFolder(AppStateProvider provider) async {
     final picked = await FilePicker.getDirectoryPath(
       dialogTitle: 'Choose the shared spec sheet folder',
@@ -483,6 +669,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     final provider = context.watch<AppStateProvider>();
     final library = provider.avDeviceLibrary;
     final entries = _filtered(library);
+    _countFilters(library);
 
     return LayoutBuilder(
       builder: (context, box) => Column(
@@ -550,9 +737,28 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   }
 
   List<AvDeviceTemplate> _filtered(AvDeviceLibrary library) {
+    final key = (
+      library,
+      library.revision,
+      _search,
+      _categoryFilter,
+      _customOnly,
+      _showRetired,
+      _sort,
+      _provider.catalogHideWarranties,
+      _provider.catalogUsOnly,
+    );
+    if (key == _filteredKey) return _filteredCache;
+    _filteredKey = key;
+    return _filteredCache = _filter(library);
+  }
+
+  List<AvDeviceTemplate> _filter(AvDeviceLibrary library) {
     final narrowed = library.all.where((t) {
       if (!_showRetired && t.retired) return false;
       if (_customOnly && !t.addedByUser) return false;
+      if (_provider.catalogHideWarranties && isWarrantyItem(t)) return false;
+      if (_provider.catalogUsOnly && nonUsMarket(t) != null) return false;
       if (_categoryFilter.isNotEmpty && t.category != _categoryFilter) {
         return false;
       }
@@ -813,7 +1019,17 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   initial: _search,
                   hint: 'Search model, maker, part number',
                   clearable: true,
-                  onChanged: (v) => setState(() => _search = v),
+                  onChanged: (v) {
+                    _searchTimer?.cancel();
+                    _searchTimer = Timer(
+                      const Duration(milliseconds: 150),
+                      () {
+                        if (mounted && v != _search) {
+                          setState(() => _search = v);
+                        }
+                      },
+                    );
+                  },
                 ),
               ),
               SizedBox(
@@ -873,6 +1089,29 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 selected: _showRetired,
                 onSelected: (v) => setState(() => _showRetired = v),
               ),
+              // Service plans and other markets' models are real entries,
+              // just not ones you pick for a US room. Remembered between
+              // launches.
+              FilterChip(
+                key: const ValueKey('catalog_hide_warranties'),
+                avatar: const Icon(Icons.verified_user_outlined, size: 18),
+                label: Text('Hide warranties ($_warrantyCount)'),
+                tooltip: 'Hide warranty extensions and service plans',
+                selected: provider.catalogHideWarranties,
+                onSelected: (v) =>
+                    provider.setCatalogFilters(hideWarranties: v),
+              ),
+              FilterChip(
+                key: const ValueKey('catalog_us_only'),
+                avatar: const Icon(Icons.public_off_outlined, size: 18),
+                label: Text('US models only ($_foreignCount hidden)'),
+                tooltip: 'Hide models made for other markets: UK, EU and '
+                    'other plug and plate versions, Epson EB- and CB- '
+                    'projectors, and Panasonic projectors for China, Europe '
+                    'and Asia',
+                selected: provider.catalogUsOnly,
+                onSelected: (v) => provider.setCatalogFilters(usOnly: v),
+              ),
               // Bounded rather than Expanded: a Wrap gives a child whatever
               // width it asks for, and a long share path would ask for the
               // page. This asks for at most a column of it and ellipsizes.
@@ -915,7 +1154,11 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 
   /// True when a filter other than the search box is narrowing the list.
   bool get _filtering =>
-      _categoryFilter.isNotEmpty || _customOnly || !_showRetired;
+      _categoryFilter.isNotEmpty ||
+      _customOnly ||
+      !_showRetired ||
+      _provider.catalogHideWarranties ||
+      _provider.catalogUsOnly;
 
   /// How many entries match the search once the filters are ignored — the
   /// ones a category, "My entries only" or a retired flag is hiding.
@@ -929,6 +1172,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         _categoryFilter = '';
         _customOnly = false;
         _showRetired = true;
+        _provider.setCatalogFilters(hideWarranties: false, usOnly: false);
       });
 
   Widget _buildList(List<AvDeviceTemplate> entries, AvDeviceLibrary library) {
@@ -1553,6 +1797,10 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             ],
           ),
         ],
+        // Throw and brightness, for the projection calculator.
+        if (templateTakesProjection(entry)) _projectionRow(theme, entry, key),
+        if (entry.category.toLowerCase().contains('display'))
+          _displayRow(theme, entry, key),
         const SizedBox(height: 12),
         Row(
           children: [

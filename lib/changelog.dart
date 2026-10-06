@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.65+75';
+const String kAppVersion = '0.5.74+84';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,180 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.74',
+    date: 'October 6, 2026',
+    title: 'Keyboard shortcuts and a throw diagram',
+    changes: [
+      'The projection calculator draws its answer like Projector Central '
+          'does: a side view with the screen, the projector, the beam, the '
+          'zoom range and where lens shift lets the lens sit, and a top view. '
+          'The ceiling height is a new field.',
+      'The calculator\'s screen size can be typed in feet as well as inches.',
+      'Typing in the Catalog search no longer stutters: the list catches up '
+          'when you pause.',
+      'Boxes on the cabling drawing grow to show all of their text. Select '
+          'one and drag its corner to resize it; right-click and Fit to text '
+          'sizes it to the text again.',
+      'Keyboard shortcuts for what is selected on a drawing: Delete removes '
+          'it and the arrows move it (Shift for a bigger step) on the floor '
+          'plan, the signal flow in Edit mode, the cabling drawing and a '
+          'picked-up rack device, which moves a U at a time. Esc lets go.',
+      'A selected projector, camera, display or screen on the floor plan '
+          'turns with [ and ], widens and narrows its cone with . and , , '
+          'reaches further or less with = and -, and shows or hides the cone '
+          'with V.',
+      'Keyboard shortcuts in Application Configuration lists every shortcut '
+          'and what it does, and any of them can be changed: click the keys '
+          'and press new ones.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.73',
+    date: 'October 6, 2026',
+    title: 'Extron prices updated',
+    changes: [
+      'The shared catalog has Extron\'s current list and education prices '
+          'for 339 products, read off extron.com. Most went up about 10 '
+          'percent; 32 products gained an education price they did not '
+          'have, and two list prices that were typed wrong are corrected.',
+      '206 Extron products that Extron has retired are now marked retired, '
+          'so they drop out of the pickers. Rooms that already use them keep '
+          'their prices and connectors.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.72',
+    date: 'October 6, 2026',
+    title: 'Where screens and displays work',
+    changes: [
+      'Every projector and lens in the catalog has a Calculator button that '
+          'opens the projection calculator with its throw ratio and lumens. '
+          'A projector sold without a lens is offered the same maker\'s '
+          'lenses.',
+      'Displays in the catalog have a Brightness field in nits.',
+      'Room light on the Floor Plan toolbar: how much light lands on the '
+          'screens and what the content needs, from passive viewing to '
+          'full-motion video. Screens and displays then show where the '
+          'picture holds that contrast, out to six image heights, or say '
+          'when it is too dim.',
+      'Displays on a floor plan are drawn as wide as the panel, sized from '
+          'the model on a scaled sheet, with the viewing area flaring from '
+          'their edges like a screen. The calculator also sets a screen\'s '
+          'gain and width.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.71',
+    date: 'October 6, 2026',
+    title: 'Projector specs and catalog filters',
+    changes: [
+      'The catalog has throw ratios and lumens for most projectors, from '
+          'projectorcentral.com, so the projection calculator fills itself '
+          'in. Models sold without a lens take the throw from the lens on '
+          'the estimate.',
+      'Hide warranties on the Catalog tab hides warranty extensions and '
+          'service plans.',
+      'US models only on the Catalog tab hides models made for other '
+          'markets: UK, EU and other plug and plate versions, Epson EB- and '
+          'CB- projectors, and Panasonic projectors for China, Europe and '
+          'Asia. Both switches are remembered.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.70',
+    date: 'October 5, 2026',
+    title: 'Projection calculator and measuring',
+    changes: [
+      'The Floor Plan toolbar is grouped: the sheet and its look on the '
+          'first line, with the exports at the right; the drawing tools, the '
+          'lists and the measuring tools on the second. Sheet, label and '
+          'cable colors share one Colors menu.',
+      'Projection calculator: throw distance from the screen size, or the '
+          'image size from the distance, with brightness in foot-lamberts '
+          'and nits, contrast in room light, lens shift and mounting height, '
+          'brightness over distance and how it falls off to the side.',
+      'The calculator takes the throw ratio and lumens off the catalog. '
+          'Projectors and lenses have Throw ratio and Brightness fields in '
+          'the Device Editor, and fall back to what their notes say; a lens '
+          'on the estimate is offered for the projector beside it.',
+      'Each room has a throw distance: set it with Throw distance on the '
+          'Floor Plan toolbar, or save it from the calculator. The calculator '
+          'starts from it.',
+      'Projection screens on a floor plan are drawn as wide as the screen, '
+          'and can show a viewing area that flares out from both edges, '
+          'shaded brighter toward the middle.',
+      'A projector\'s throw is shaded by distance; on a scaled sheet it '
+          'carries rings giving the distance and how bright the image would '
+          'be there.',
+      'Select a projector or screen to see how far the projector sits off '
+          'the screen\'s center line. Square to screen moves and turns the '
+          'projector onto it, Aim at screen just turns it, and Square to '
+          'projector turns the screen.',
+      'Measure on the Floor Plan toolbar, once the sheet has a scale: click '
+          'two points to get the length in feet and inches.',
+      'Export PNG can leave the viewing angles, throws and their labels off '
+          'the picture.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.69',
+    date: 'October 5, 2026',
+    title: 'Live device edits and Set scale',
+    changes: [
+      'Selecting a device on a floor plan puts sliders for its direction, '
+          'cone angle and reach above the sheet, and the cone moves as you '
+          'drag. The edit dialog shows its changes on the sheet as you make '
+          'them too, and Cancel puts them back.',
+      'Set scale on the Floor Plan toolbar: click both ends of something '
+          'whose length you know, type its length in feet and inches, and '
+          'the sheet is scaled from it. The button then shows the scale.',
+      'The Floor Plan toolbar is laid out in two lines: the sheet\'s own '
+          'settings first, starting with Plan settings, then the drawing '
+          'tools, with the exports at the right.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.68',
+    date: 'October 5, 2026',
+    title: 'Devices on floor plans and cabling',
+    changes: [
+      'Floor plans have an Add device menu listing the equipment on the '
+          'room\'s estimate, A to Z and each name once. Pick one and click '
+          'the sheet to place its icon; a sheet takes as many of each as the '
+          'estimate buys, and raising the quantity there makes room for more.',
+      'Projectors, cameras and displays on a floor plan can be turned to '
+          'face the way they point, and can show a field of view, throw or '
+          'viewing angle cone with its own width and reach.',
+      'The Device button on the Cabling tab offers the same estimate list '
+          'with the same limits, and a projector or camera box can be turned. '
+          'Other device still picks any icon.',
+      'Duplicating a floor plan sheet now keeps its paper color.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.67',
+    date: 'October 5, 2026',
+    title: 'Animated menu button',
+    changes: [
+      'The menu button at the top left turns into an X while the menu is '
+          'open, and back when it closes.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.66',
+    date: 'October 5, 2026',
+    title: 'Driver logins filled in',
+    changes: [
+      'The driver defaults review now ticks the driver\'s username and '
+          'password when the device has none, so a Kramer VIA GO picks up its '
+          'default login. A login already set is still left alone.',
+      'Moving a device into another family now keeps its username along with '
+          'its address and password.',
+      'In the menu under your picture, the light and dark mode switch now sits '
+          'with Your profile, and Application Configuration sits above Help.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.65',
     date: 'October 5, 2026',

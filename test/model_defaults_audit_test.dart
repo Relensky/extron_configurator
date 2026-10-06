@@ -196,6 +196,37 @@ void main() {
       expect(apc.defaultSelection, contains('keep_alive_trigger'));
     });
 
+    test('the VIA GO is given its driver login when the room has none',
+        () async {
+      await convert(legacyRoom());
+      final block = provider.roomConfig['WIRELESSDEVICE_1'] as Map;
+      block.remove('user');
+      block.remove('password');
+
+      final via = forSection(
+        auditModelDefaults(provider),
+        'WIRELESSDEVICE_1',
+      )!;
+      final byKey = {for (final d in via.diffs) d.key: d};
+
+      expect(byKey['user']?.fromModule, 'admin');
+      expect(via.defaultSelection, contains('user'));
+      expect(via.defaultSelection, contains('password'));
+    });
+
+    test('a login the site set is offered but not ticked', () async {
+      await convert(legacyRoom());
+      final block = provider.roomConfig['WIRELESSDEVICE_1'] as Map;
+      block['user'] = 'siteadmin';
+
+      final via = forSection(
+        auditModelDefaults(provider),
+        'WIRELESSDEVICE_1',
+      )!;
+      expect(via.diffs.map((d) => d.key), contains('user'));
+      expect(via.defaultSelection, isNot(contains('user')));
+    });
+
     test('a real address is never proposed away by a driver blank', () async {
       // Every DEVICE_INFO leaves ip_address, password and serial_port empty
       // because they are site-specific. "Apply the defaults" must not be a way

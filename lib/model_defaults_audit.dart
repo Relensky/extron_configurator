@@ -52,6 +52,10 @@ const Set<String> kConnectionDefaultKeys = {
   'auto_reconnect',
 };
 
+/// The login keys. Ticked only when the room has none, so the driver's
+/// default login fills a gap but never replaces one the site set.
+const Set<String> kCredentialKeys = {'user', 'password'};
+
 /// The keys whose zero is an ABSENCE rather than a value.
 ///
 /// `service_port: 0` means "the processor assigns one" — the dictionary says
@@ -84,7 +88,8 @@ class ModelDefaultDiff {
   final dynamic current;
   final dynamic fromModule;
 
-  /// True when this is one of [kConnectionDefaultKeys] — ticked by default.
+  /// True when this is one of [kConnectionDefaultKeys], or a blank
+  /// [kCredentialKeys] — ticked by default.
   final bool connection;
 
   const ModelDefaultDiff({
@@ -347,7 +352,8 @@ List<ModelDefaultMismatch> auditModelDefaults(
         key: d.key,
         current: d.current,
         fromModule: proposed,
-        connection: kConnectionDefaultKeys.contains(d.key),
+        connection: kConnectionDefaultKeys.contains(d.key) ||
+            (kCredentialKeys.contains(d.key) && !hasCurrent),
       ));
     }
     final styles = provider.comTypeStylesFor(preview.newModule);

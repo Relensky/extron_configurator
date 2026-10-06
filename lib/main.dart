@@ -64,6 +64,8 @@ import 'project_room_picker.dart';
 import 'project_history_view.dart' show showHistoryDialog;
 import 'estimate_settings_section.dart';
 import 'help_view.dart';
+import 'keyboard_shortcuts.dart';
+import 'keyboard_shortcuts_settings.dart';
 import 'project_view.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
@@ -287,8 +289,11 @@ class RoomConfigApp extends StatelessWidget {
           // fl_chart still reads the theme from package:flutter/material;
           // this hands it the app's colors and text. Drop it once fl_chart
           // moves to material_ui.
-          // ignore: deprecated_member_use
-          child: _helpShortcuts(MaterialUiCompatibilityBridge(child: child!)),
+          child: _helpShortcuts(
+            context.select((AppStateProvider p) => p.shortcuts),
+            // ignore: deprecated_member_use
+            MaterialUiCompatibilityBridge(child: child!),
+          ),
         ),
       ),
       ),
@@ -315,9 +320,11 @@ class RoomConfigApp extends StatelessWidget {
   ///  MaterialApp's builder inserts above the Navigator, so the key event
   ///  bubbling up out of that scope passes through here. The dialog still has
   ///  to open INSIDE the navigator, which is what [navigatorKey] is for.
-  static Widget _helpShortcuts(Widget child) => Shortcuts(
-    shortcuts: const {
-      SingleActivator(LogicalKeyboardKey.f1): _OpenHelpIntent(),
+  static Widget _helpShortcuts(KeyboardShortcuts keys, Widget child) =>
+      Shortcuts(
+    shortcuts: {
+      for (final k in keys.bindingsFor(Shortcut.help))
+        k.activator: const _OpenHelpIntent(),
     },
     child: Actions(
       actions: {
@@ -1019,41 +1026,45 @@ class _MainDashboardState extends State<MainDashboard> {
       ),
     );
 
+    // The keys come from the shortcut list (App Config > Keyboard
+    // shortcuts), so a changed key works here the moment it is picked.
+    final keys = provider.shortcuts;
+    Map<ShortcutActivator, VoidCallback> bind(String id, VoidCallback run) => {
+      for (final k in keys.bindingsFor(id)) k.activator: run,
+    };
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
+        ...bind(Shortcut.save, () {
           // runSave already opens the "where should this go" dialog for a
           // document that has no file yet, so there is one branch here, not
           // two.
           if (saveBlockedReason(provider, saveScope).isEmpty) {
             runSave(context, provider, saveScope);
           }
-        },
-        // CTRL+SHIFT+S IS SAVE ALL - every open document that is behind its
-        // file, the room and the job together. Save As moved to Ctrl+Alt+S.
-        const SingleActivator(LogicalKeyboardKey.keyS,
-                control: true, shift: true):
-            () => saveEverything(context, provider),
-        const SingleActivator(LogicalKeyboardKey.keyS,
-            control: true, alt: true): () {
+        }),
+        // SAVE ALL - every open document that is behind its file, the room
+        // and the job together.
+        ...bind(Shortcut.saveAll, () => saveEverything(context, provider)),
+        ...bind(Shortcut.saveAs, () {
           if (saveScopeSupportsSaveAs(saveScope)) {
             runSave(context, provider, saveScope, saveAs: true);
           }
-        },
+        }),
         // UNDO AND REDO ON WHATEVER THIS PAGE EDITS, by the same rule the save
         // keys follow: the shortcut acts on the document the tab in front of
         // you belongs to. Every room page now answers that with the ROOM, so
         // Ctrl+Z on the estimate takes back the last thing done in this room
         // wherever it was done — and, like the button, moves the view to it.
-        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () =>
-            _undoOnCurrentTab(context, provider, redo: false),
-        // Both spellings, because both are muscle memory and neither is used
-        // for anything else here.
-        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () =>
-            _undoOnCurrentTab(context, provider, redo: true),
-        const SingleActivator(LogicalKeyboardKey.keyZ,
-            control: true, shift: true): () =>
-            _undoOnCurrentTab(context, provider, redo: true),
+        ...bind(
+          Shortcut.undo,
+          () => _undoOnCurrentTab(context, provider, redo: false),
+        ),
+        // Redo starts on both spellings, Ctrl+Y and Ctrl+Shift+Z, because
+        // both are muscle memory.
+        ...bind(
+          Shortcut.redo,
+          () => _undoOnCurrentTab(context, provider, redo: true),
+        ),
       },
       child: CollabNoticeListener(
           child: ProjectChatLayer(child: InAppBrowserInset(child: page))),
@@ -2742,16 +2753,6 @@ class ProfileButton extends StatelessWidget {
             title: Text('Your profile'),
           ),
         ),
-        const PopupMenuItem<String>(
-          value: 'settings',
-          child: ListTile(
-            key: ValueKey('profile_menu_settings'),
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.settings),
-            title: Text('Application Configuration'),
-          ),
-        ),
-        const PopupMenuDivider(),
         PopupMenuItem<String>(
           value: 'theme',
           child: ListTile(
@@ -2762,6 +2763,16 @@ class ProfileButton extends StatelessWidget {
             title: Text(provider.isDarkMode
                 ? 'Switch to light mode'
                 : 'Switch to dark mode'),
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(
+          value: 'settings',
+          child: ListTile(
+            key: ValueKey('profile_menu_settings'),
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.settings),
+            title: Text('Application Configuration'),
           ),
         ),
         const PopupMenuItem<String>(
@@ -3258,7 +3269,8 @@ class AppSettingsView extends StatelessWidget {
           title: const Text('Confirm before deleting settings'),
           subtitle: const Text(
               'Ask before a trash button removes a property from the config '
-              '(Devices & System tabs). Turn off for one-click deletes - '
+              '(Devices & System tabs), and before the Delete key removes a '
+              'device from the signal flow. Turn off for one-click deletes - '
               '"Check Defaults" can re-add anything removed by mistake.'),
           value: provider.confirmBeforeDelete,
           onChanged: (val) => provider.setConfirmBeforeDelete(val),
@@ -3319,6 +3331,18 @@ class AppSettingsView extends StatelessWidget {
           ),
         ),
           ],
+        ),
+
+        // --- KEYBOARD SHORTCUTS ---
+        // Every shortcut in the app, documented, and changeable. See
+        // keyboard_shortcuts.dart.
+        const SettingsSection(
+          id: 'shortcuts',
+          title: 'Keyboard shortcuts',
+          summary: 'Save, undo, and the keys that delete, move and turn what '
+              'is selected on a drawing',
+          icon: Icons.keyboard_outlined,
+          children: [KeyboardShortcutsSettings()],
         ),
 
         // --- APP UPDATES ---
@@ -5429,7 +5453,7 @@ class _FileMenu extends StatelessWidget {
     return MenuAnchor(
       builder: (context, controller, _) => IconButton(
         key: const ValueKey('file_menu'),
-        icon: const Icon(Icons.menu),
+        icon: _MenuToggleIcon(open: controller.isOpen),
         tooltip: 'File - new, open, recent files, processor transfers',
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),
@@ -5580,6 +5604,42 @@ Future<void> _useSharedFolder(
               'reached right now - check the network connection.'),
     ),
   );
+}
+
+/// The File menu's hamburger, turning into a close mark while the menu is open.
+class _MenuToggleIcon extends StatefulWidget {
+  final bool open;
+  const _MenuToggleIcon({required this.open});
+
+  @override
+  State<_MenuToggleIcon> createState() => _MenuToggleIconState();
+}
+
+class _MenuToggleIconState extends State<_MenuToggleIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _turn = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 250),
+    value: widget.open ? 1 : 0,
+  );
+
+  @override
+  void didUpdateWidget(_MenuToggleIcon old) {
+    super.didUpdateWidget(old);
+    if (widget.open != old.open) {
+      widget.open ? _turn.forward() : _turn.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _turn.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      AnimatedIcon(icon: AnimatedIcons.menu_close, progress: _turn);
 }
 
 /// One line of the File menu, shown in full.

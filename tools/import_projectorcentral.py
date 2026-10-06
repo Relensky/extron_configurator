@@ -41,6 +41,35 @@ import re
 from collections import defaultdict
 
 
+# Panasonic marks a lens-less model with an L before the color and market
+# letters: PT-REZ10LBU8, PT-MZ11KLWU8, PT-SLW65CL.
+PANASONIC_NO_LENS = re.compile(r"^PT-[A-Z]+\d+[A-Z]*?L[BW]?(U[78G]?)?$", re.I)
+
+
+def lens_not_included(dev):
+    text = f"{dev.get('model', '')} {dev.get('notes', '')}".lower()
+    if re.search(r"lens (not included|sold separately)|without (a )?lens",
+                 text):
+        return True
+    return (dev.get("manufacturer", "").lower() == "panasonic"
+            and bool(PANASONIC_NO_LENS.match(dev.get("model", "").strip())))
+
+
+def put(dev, key, value):
+    """Sets [key] where the app writes it, ahead of the notes and ports, so
+    the app's next save does not move it."""
+    if key in dev:
+        dev[key] = value
+        return
+    items = list(dev.items())
+    at = next((i for i, (k, _) in enumerate(items)
+               if k in ("notes", "ports", "addedBy", "addedAt",
+                        "changedBy", "changedAt")), len(items))
+    items.insert(at, (key, value))
+    dev.clear()
+    dev.update(items)
+
+
 def read_crawl(path):
     rows = []
     for line in open(path, encoding="utf-8"):
@@ -60,6 +89,8 @@ def main():
     ap.add_argument("--report")
     ap.add_argument("--exact-only", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--projection-only", action="store_true",
+                    help="write throw ratio and lumens only")
     a = ap.parse_args()
 
     crawl = read_crawl(a.crawl)
@@ -88,6 +119,31 @@ def main():
             stats["skippedInexact"] += 1
             notes["skipped, not an exact name match"].append(
                 f"{dev['manufacturer']} {dev['model']}  ->  {row['url']}")
+            continue
+
+        # Throw ratio and brightness, for the projection calculator. Only
+        # filled where the catalog has none, like the watts. A projector sold
+        # without a lens gets no throw ratio: the page's figure is for a lens
+        # that is not in the box, and the lens on the estimate supplies it.
+        lo, hi = row.get("throwRatioMin"), row.get("throwRatioMax")
+        if lo and not dev.get("throwRatioMin"):
+            if lens_not_included(dev):
+                notes["sold without a lens, throw ratio left blank"].append(
+                    f"{dev['model']}  (page says {lo}-{hi}:1)")
+            else:
+                put(dev, "throwRatioMin", lo)
+                if hi and hi > lo:
+                    put(dev, "throwRatioMax", hi)
+                stats["throwWritten"] += 1
+        elif not lo:
+            notes["no throw ratio published"].append(dev["model"])
+        lumens = row.get("lumens")
+        if lumens and not dev.get("lumens"):
+            put(dev, "lumens", lumens)
+            stats["lumensWritten"] += 1
+
+        # --projection-only fills those two and leaves everything else.
+        if a.projection_only:
             continue
 
         if row.get("match") != "exact":
@@ -138,6 +194,8 @@ def main():
         f"  newly marked retired:    {stats['retired']}",
         f"  still shipping:          {stats['stillShipping']}",
         f"  product page written:    {stats['urlWritten']}",
+        f"  throw ratio written:     {stats['throwWritten']}",
+        f"  lumens written:          {stats['lumensWritten']}",
         "",
         f"  no page on the site:     {stats['noPage']}",
         f"  fetch failed:            {stats['fetchFailed']}",
@@ -155,6 +213,14 @@ def main():
 
     if a.dry_run:
         print("(dry run: catalog not written)")
+        return
+
+    if a.projection_only:
+        # Written the way the app writes it, so the diff is only the new
+        # figures.
+        with open(a.catalog, "w", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps(cat, indent=2, ensure_ascii=False))
+        print(f"wrote {a.catalog}")
         return
 
     cat.setdefault("__pricing", {})["projectorSpecs"] = {

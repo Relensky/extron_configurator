@@ -30,6 +30,7 @@ import 'equipment_lifecycle.dart'
 import 'dynamic_devices_view.dart' show getActiveDeviceKeys;
 import 'view_zoom.dart';
 import 'diagram_grid.dart';
+import 'keyboard_shortcuts.dart';
 import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'room_locations.dart';
@@ -307,6 +308,11 @@ class _AvFlowViewState extends State<AvFlowView>
   /// Cable whose route handles are showing.
   String? _selectedCableId;
 
+  /// The device picked with a click in Edit mode, which the keyboard
+  /// shortcuts act on.
+  String? _selectedNodeId;
+  final FocusNode _canvasFocus = FocusNode(debugLabel: 'signal flow canvas');
+
   /// Polylines from the last build, for cable hit-testing and handles.
   Map<String, List<Offset>> _paths = {};
 
@@ -363,6 +369,7 @@ class _AvFlowViewState extends State<AvFlowView>
     capturingDiagram.removeListener(_captureChanged);
     _transform.dispose();
     _signalFlow.dispose();
+    _canvasFocus.dispose();
     super.dispose();
   }
 
@@ -1009,16 +1016,20 @@ class _AvFlowViewState extends State<AvFlowView>
             children: [
               Expanded(
                 key: _viewportKey,
-                child: InteractiveViewer(
-                  transformationController: _transform,
-                  constrained: false,
-                  // Low enough that a twenty-device room fits the window.
-                  minScale: 0.08,
-                  maxScale: 3.0,
-                  boundaryMargin: const EdgeInsets.all(400),
-                  child: RepaintBoundary(
-                    key: _diagramKey,
-                    child: _buildCanvas(provider, model, theme),
+                child: Focus(
+                  focusNode: _canvasFocus,
+                  onKeyEvent: (_, event) => _onCanvasKey(provider, event),
+                  child: InteractiveViewer(
+                    transformationController: _transform,
+                    constrained: false,
+                    // Low enough that a twenty-device room fits the window.
+                    minScale: 0.08,
+                    maxScale: 3.0,
+                    boundaryMargin: const EdgeInsets.all(400),
+                    child: RepaintBoundary(
+                      key: _diagramKey,
+                      child: _buildCanvas(provider, model, theme),
+                    ),
                   ),
                 ),
               ),
@@ -1066,6 +1077,7 @@ class _AvFlowViewState extends State<AvFlowView>
             onSelected: (v) {
               _selectCable(null);
               setState(() {
+                _selectedNodeId = null;
                 _editMode = v;
                 _cableMode = false;
                 _pendingPort = null;
@@ -1238,7 +1250,92 @@ class _AvFlowViewState extends State<AvFlowView>
   Offset _snapped(AppStateProvider provider, Offset p) =>
       snapToGrid(p, enabled: provider.snapDiagramsToGrid);
 
+  /// Picks a device for the keyboard: Delete, the arrows, Esc.
+  void _selectNode(String id) {
+    setState(() => _selectedNodeId = id);
+    _canvasFocus.requestFocus();
+  }
+
+  /// The shortcut keys on the selected device. The keys are the ones in App
+  /// Config > Keyboard shortcuts.
+  KeyEventResult _onCanvasKey(AppStateProvider provider, KeyEvent event) {
+    final id = _selectedNodeId;
+    if (id == null || !_editMode) return KeyEventResult.ignored;
+    final node = provider.avNodeById(id);
+    if (node == null) return KeyEventResult.ignored;
+    final action = provider.shortcuts.match(event, [
+      Shortcut.delete,
+      Shortcut.deselect,
+      ...Shortcut.moves,
+    ]);
+    if (action == null) return KeyEventResult.ignored;
+    if (action == Shortcut.deselect) {
+      setState(() => _selectedNodeId = null);
+      return KeyEventResult.handled;
+    }
+    if (action == Shortcut.delete) {
+      _deleteNode(provider, node);
+      return KeyEventResult.handled;
+    }
+    const step = 4.0, far = 40.0;
+    final by = switch (action) {
+      Shortcut.moveLeft => const Offset(-step, 0),
+      Shortcut.moveRight => const Offset(step, 0),
+      Shortcut.moveUp => const Offset(0, -step),
+      Shortcut.moveDown => const Offset(0, step),
+      Shortcut.moveLeftFar => const Offset(-far, 0),
+      Shortcut.moveRightFar => const Offset(far, 0),
+      Shortcut.moveUpFar => const Offset(0, -far),
+      _ => const Offset(0, far),
+    };
+    final to = node.pos + by;
+    provider.setAvNodePosition(
+      id,
+      Offset(to.dx < 0 ? 0 : to.dx, to.dy < 0 ? 0 : to.dy),
+      coalesce: 'flow:move:$id',
+    );
+    return KeyEventResult.handled;
+  }
+
+  /// Removes a device and its cables, asking first unless App Config says
+  /// not to.
+  Future<void> _deleteNode(AppStateProvider provider, AvNode node) async {
+    if (provider.confirmBeforeDelete) {
+      final cables = provider.avCables
+          .where((c) => c.fromNodeId == node.id || c.toNodeId == node.id)
+          .length;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Remove ${node.label}?'),
+          content: Text(
+            cables == 0
+                ? 'It comes off the drawing. Ctrl+Z brings it back.'
+                : 'It comes off the drawing with its $cables '
+                      'cable${cables == 1 ? '' : 's'}. Ctrl+Z brings it back.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    provider.removeAvNode(node.id);
+    setState(() => _selectedNodeId = null);
+    _canvasFocus.requestFocus();
+    _snack('${node.label} removed, along with its cables.');
+  }
+
   void _onNodeDragStart(String nodeId) {
+    _selectNode(nodeId);
     setState(() {
       _dragNodeId = nodeId;
       _dragOffset = Offset.zero;
@@ -1484,6 +1581,10 @@ class _AvFlowViewState extends State<AvFlowView>
                   palette: provider.avSignalColors,
                   cableMode: _cableMode,
                   dragging: _dragNodeId == node.id,
+                  selected: _selectedNodeId == node.id,
+                  onSelect: _editMode && !_cableMode
+                      ? () => _selectNode(node.id)
+                      : null,
                   pendingNodeId: _pendingPort?.$1,
                   pendingPortId: _pendingPort?.$2,
                   pendingPort: pendingPort,
@@ -4340,6 +4441,12 @@ class _AvNodeBox extends StatelessWidget {
   /// This device is the one currently under the cursor.
   final bool dragging;
 
+  /// Picked for the keyboard shortcuts.
+  final bool selected;
+
+  /// Null when it cannot be picked (view mode, or cable mode).
+  final VoidCallback? onSelect;
+
   final bool racked;
   final String? pendingNodeId;
   final String? pendingPortId;
@@ -4361,6 +4468,8 @@ class _AvNodeBox extends StatelessWidget {
     required this.palette,
     required this.cableMode,
     required this.dragging,
+    this.selected = false,
+    this.onSelect,
     required this.racked,
     required this.pendingNodeId,
     required this.pendingPortId,
@@ -4389,6 +4498,7 @@ class _AvNodeBox extends StatelessWidget {
         children: [
           // The box itself, and the drag surface.
           GestureDetector(
+            onTap: onSelect,
             onPanStart: _canDrag ? (_) => onDragStart!() : null,
             onPanUpdate: _canDrag ? (d) => onDragUpdate(d.delta) : null,
             onPanEnd: _canDrag ? (_) => onDragEnd() : null,
@@ -4406,10 +4516,10 @@ class _AvNodeBox extends StatelessWidget {
                   color: dark ? const Color(0xFF1E242B) : Colors.white,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: dragging
+                    color: dragging || selected
                         ? theme.colorScheme.primary
                         : theme.colorScheme.outlineVariant,
-                    width: dragging ? 2 : 1.2,
+                    width: dragging || selected ? 2 : 1.2,
                   ),
                   boxShadow: [
                     BoxShadow(

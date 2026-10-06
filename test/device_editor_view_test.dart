@@ -56,6 +56,25 @@ void main() {
   }
 
   group('the device editor', () {
+    testWidgets('the search filters once typing pauses', (tester) async {
+      final provider = withCatalog();
+      provider.avDeviceLibrary.upsert(
+        const AvDeviceTemplate(model: 'Projector Z', ports: []),
+      );
+      await pump(tester, provider, const DeviceEditorView());
+      expect(find.text('Switcher Y'), findsOneWidget);
+      expect(find.text('Projector Z'), findsOneWidget);
+
+      // The search box is the first field on the page.
+      await tester.enterText(find.byType(TextField).first, 'proj');
+      // Not yet: the list waits for a pause.
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('Switcher Y'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Switcher Y'), findsNothing);
+      expect(find.text('Projector Z'), findsOneWidget);
+    });
+
     testWidgets('lists the catalog and opens a model for editing', (
       tester,
     ) async {

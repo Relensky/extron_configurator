@@ -29,7 +29,7 @@ DEVICE_INFO = {
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
-        "user": "",
+        "user": "admin",
         "password": "ATEC2008",
     },
     # How this driver is reached on each connection style, read by the app:

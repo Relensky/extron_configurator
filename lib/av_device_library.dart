@@ -496,6 +496,17 @@ class AvDeviceTemplate {
   /// apart the way null and zero do on [leadTimeDays].
   final int lifeYears;
 
+  /// For a projector or a lens: the throw ratio range, distance over image
+  /// width. 0 when nobody has recorded one; the notes are read instead.
+  final double throwRatioMin;
+  final double throwRatioMax;
+
+  /// For a projector: its rated brightness. 0 when not recorded.
+  final double lumens;
+
+  /// For a display: its rated brightness in nits. 0 when not recorded.
+  final double nits;
+
   final String notes;
 
   final List<AvPort> ports;
@@ -541,6 +552,10 @@ class AvDeviceTemplate {
     this.specSheet = '',
     this.leadTimeDays,
     this.lifeYears = 0,
+    this.throwRatioMin = 0,
+    this.throwRatioMax = 0,
+    this.lumens = 0,
+    this.nits = 0,
     this.notes = '',
     required this.ports,
     this.custom = false,
@@ -622,6 +637,10 @@ class AvDeviceTemplate {
     // time back OFF an entry needs its own flag.
     bool clearLeadTime = false,
     int? lifeYears,
+    double? throwRatioMin,
+    double? throwRatioMax,
+    double? lumens,
+    double? nits,
     String? notes,
     List<AvPort>? ports,
     bool? custom,
@@ -652,6 +671,10 @@ class AvDeviceTemplate {
     specSheet: specSheet ?? this.specSheet,
     leadTimeDays: clearLeadTime ? null : (leadTimeDays ?? this.leadTimeDays),
     lifeYears: lifeYears ?? this.lifeYears,
+    throwRatioMin: throwRatioMin ?? this.throwRatioMin,
+    throwRatioMax: throwRatioMax ?? this.throwRatioMax,
+    lumens: lumens ?? this.lumens,
+    nits: nits ?? this.nits,
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
     custom: custom ?? this.custom,
@@ -685,6 +708,10 @@ class AvDeviceTemplate {
     if (specSheet.isNotEmpty) 'specSheet': specSheet,
     if (leadTimeDays != null) 'leadTimeDays': leadTimeDays,
     if (lifeYears > 0) 'lifeYears': lifeYears,
+    if (throwRatioMin > 0) 'throwRatioMin': throwRatioMin,
+    if (throwRatioMax > 0) 'throwRatioMax': throwRatioMax,
+    if (lumens > 0) 'lumens': lumens,
+    if (nits > 0) 'nits': nits,
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
     if (addedBy.isNotEmpty) 'addedBy': addedBy,
@@ -717,6 +744,12 @@ class AvDeviceTemplate {
     final years = raw is num ? raw.toInt() : int.tryParse(raw.toString().trim());
     if (years == null || years <= 0 || years > 100) return 0;
     return years;
+  }
+
+  /// A positive number off a catalog file, or 0.
+  static double _positive(Object? raw) {
+    final v = raw is num ? raw.toDouble() : double.tryParse('${raw ?? ''}');
+    return (v == null || v <= 0 || !v.isFinite) ? 0 : v;
   }
 
   factory AvDeviceTemplate.fromJson(
@@ -772,6 +805,10 @@ class AvDeviceTemplate {
     // has recorded one" - see [lifeYears] on why zero and unrecorded are the
     // same answer here.
     lifeYears: _lifeYearsFromJson(json['lifeYears']),
+    throwRatioMin: _positive(json['throwRatioMin']),
+    throwRatioMax: _positive(json['throwRatioMax']),
+    lumens: _positive(json['lumens']),
+    nits: _positive(json['nits']),
     notes: json['notes']?.toString() ?? '',
     ports: [
       for (final p in (json['ports'] as List? ?? []))

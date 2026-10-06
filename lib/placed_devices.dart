@@ -1,0 +1,756 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:material_ui/material_ui.dart';
+
+import 'cabling_schematic.dart';
+import 'cost_estimate.dart';
+import 'projection_calc.dart';
+
+/// ============================================================================
+///  ROOM DEVICES ON THE DRAWINGS
+/// ============================================================================
+///  The equipment on the room's estimate, offered for placing on the floor
+///  plan and the cabling drawing. Each name is offered once, A to Z, and can
+///  be placed as many times as the estimate buys it and no more.
+/// ============================================================================
+
+/// One entry in the add-device menu.
+class RoomDeviceChoice {
+  /// [name], lowercased and trimmed. What a placed device is filed under.
+  final String key;
+  final String name;
+
+  /// How many the estimate buys, across every line with this name.
+  final int qty;
+
+  /// Which of [kCablingDeviceShapes] it draws as.
+  final String shape;
+
+  const RoomDeviceChoice({
+    required this.key,
+    required this.name,
+    required this.qty,
+    required this.shape,
+  });
+}
+
+/// The key a device name is filed under.
+String roomDeviceKey(String name) => name.trim().toLowerCase();
+
+/// The estimate's equipment, one entry per name, sorted by name.
+///
+/// Lines sharing a name are merged and their quantities added, so two models
+/// both called "Display" are one menu entry for both.
+List<RoomDeviceChoice> roomDeviceChoices(Iterable<CostLine> equipment) {
+  final names = <String, String>{};
+  final qty = <String, double>{};
+  final hints = <String, String>{};
+  for (final line in equipment) {
+    final name = line.description.trim();
+    if (name.isEmpty || line.spare || line.qty <= 0) continue;
+    final key = roomDeviceKey(name);
+    names.putIfAbsent(key, () => name);
+    qty[key] = (qty[key] ?? 0) + line.qty;
+    hints[key] = '${hints[key] ?? ''} $name ${line.model} ${line.category}';
+  }
+  final out = [
+    for (final key in names.keys)
+      RoomDeviceChoice(
+        key: key,
+        name: names[key]!,
+        qty: qty[key]!.ceil(),
+        shape: guessDeviceShape(hints[key]!),
+      ),
+  ];
+  out.sort((a, b) {
+    final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    return byName != 0 ? byName : a.name.compareTo(b.name);
+  });
+  return out;
+}
+
+/// The icon a device most likely is, from its name, model and category.
+/// First match wins, so the specific words go before the general ones.
+String guessDeviceShape(String text) {
+  final t = ' ${text.toLowerCase()} ';
+  bool any(List<String> words) => words.any(t.contains);
+  if (any(['projector', 'projection lens'])) return 'projector';
+  if (any(['screen'])) return 'screen';
+  if (any(['camera', 'ptz', ' cam '])) return 'camera';
+  if (any(['touch panel', 'touchpanel', 'tlp', 'tlc ', 'keypad'])) {
+    return 'touchPanel';
+  }
+  if (any(['display', 'monitor', ' tv ', 'television', 'lcd', 'led wall'])) {
+    return 'display';
+  }
+  if (any(['ceiling mic', 'ceiling array', 'tcc2', 'mxa9', 'mxa7'])) {
+    return 'ceilingMic';
+  }
+  if (any(['mic', 'microphone'])) return 'tableMic';
+  if (any(['speaker', 'loudspeaker', 'soundbar'])) return 'speaker';
+  if (any(['amplifier', ' amp ', 'xpa', 'netpa'])) return 'amplifier';
+  if (any(['dsp', 'tesira', 'q-sys core', 'dmp'])) return 'dsp';
+  if (any(['network switch', 'poe switch', 'ethernet switch'])) {
+    return 'networkSwitch';
+  }
+  if (any(['switcher', 'scaler', 'presenter', 'matrix', ' sw '])) {
+    return 'switcher';
+  }
+  if (any(['transmitter', ' tx', 'wall plate', 'wallplate'])) {
+    return 'transmitter';
+  }
+  if (any(['receiver', ' rx'])) return 'receiver';
+  if (any(['patch panel'])) return 'patchPanel';
+  if (any(['floor box'])) return 'floorBox';
+  if (any(['laptop', 'byod'])) return 'laptop';
+  if (any([' pc ', 'computer', 'nuc'])) return 'pc';
+  if (any(['rack'])) return 'rack';
+  if (any(['power', 'ups', 'ipcp', 'ipl'])) return 'power';
+  if (any(['wireless', 'access point', 'airmedia', 'via '])) return 'wireless';
+  return 'other';
+}
+
+/// True when [shape] has a direction worth turning on a drawing.
+bool deviceShapeAims(String shape) =>
+    shape == 'projector' || shape == 'camera' || shape == 'display';
+
+/// True when [shape] can be turned and show a cone on the floor plan. A
+/// projector screen faces the room here, though it does not turn on the
+/// cabling drawing.
+bool deviceShapeHasFov(String shape) =>
+    deviceShapeAims(shape) || shape == 'screen';
+
+/// Field of view a new device starts with, in degrees. A screen's is where
+/// it looks half as bright, either side: a matte screen's 60 each way.
+double defaultDeviceFov(String shape) => switch (shape) {
+  'camera' => 70,
+  'projector' => 30,
+  'display' => 120,
+  'screen' => 120,
+  _ => 60,
+};
+
+/// What the cone is called in the editor and the key.
+String deviceFovLabel(String shape) => switch (shape) {
+  'projector' => 'Throw',
+  'display' || 'screen' => 'Viewing angle',
+  _ => 'Field of view',
+};
+
+/// The cone's color.
+Color deviceFovColor(String shape) => switch (shape) {
+  'camera' => const Color(0xFF43A047),
+  'projector' => const Color(0xFFFFA000),
+  'screen' => const Color(0xFF8E24AA),
+  _ => const Color(0xFF1E88E5),
+};
+
+/// The screen a projector throws at, or the projector that throws at a
+/// screen: the nearest of the other kind on the sheet. Null for anything
+/// else, or when there is none.
+PlanDevice? projectionPartner(List<PlanDevice> devices, PlanDevice device) {
+  final want = switch (device.shape) {
+    'projector' => 'screen',
+    'screen' => 'projector',
+    _ => '',
+  };
+  if (want.isEmpty) return null;
+  PlanDevice? best;
+  var bestDist = double.infinity;
+  for (final d in devices) {
+    if (d.shape != want || d.id == device.id) continue;
+    final dist = (d.pos - device.pos).distanceSquared;
+    if (dist < bestDist) {
+      best = d;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+/// Reach of a new cone, in plan pixels.
+const double kDefaultDeviceRange = 260;
+
+/// Width of a new projection screen, in plan pixels, until the sheet has a
+/// scale.
+const double kDefaultScreenWidth = 120;
+
+/// Width of a new projection screen once the sheet has a scale, in feet.
+const double kDefaultScreenWidthFt = 8;
+
+/// Radius of the disc a device is drawn in on the floor plan.
+const double kPlanDeviceRadius = 15;
+
+/// One piece of gear placed on a floor plan sheet.
+class PlanDevice {
+  /// `DEV_<n>`, unique on its sheet.
+  final String id;
+
+  /// The [RoomDeviceChoice.key] it was placed from.
+  final String deviceKey;
+
+  /// Printed under the icon.
+  final String label;
+
+  /// Which of [kCablingDeviceShapes] it draws as.
+  final String shape;
+
+  /// Center, in the sheet's own coordinates.
+  final Offset pos;
+
+  /// Which way it faces, degrees clockwise from the top of the sheet.
+  final double rotation;
+
+  final bool showFov;
+
+  /// Width of the cone, in degrees.
+  final double fov;
+
+  /// Reach of the cone, in plan pixels.
+  final double range;
+
+  /// For a projection screen or a display: how wide it is, in plan pixels.
+  final double width;
+
+  /// For a projection screen: its gain. 1.0 is matte white.
+  final double gain;
+
+  const PlanDevice({
+    required this.id,
+    required this.deviceKey,
+    required this.label,
+    required this.shape,
+    required this.pos,
+    this.rotation = 0,
+    this.showFov = false,
+    this.fov = 60,
+    this.range = kDefaultDeviceRange,
+    this.width = kDefaultScreenWidth,
+    this.gain = 1.0,
+  });
+
+  /// True when it is drawn as a flat face as wide as [width].
+  bool get hasFace => shape == 'screen' || shape == 'display';
+
+  /// The way it faces, as a unit vector on screen.
+  Offset get facing {
+    final r = rotation * math.pi / 180;
+    return Offset(math.sin(r), -math.cos(r));
+  }
+
+  PlanDevice copyWith({
+    String? id,
+    String? label,
+    String? shape,
+    Offset? pos,
+    double? rotation,
+    bool? showFov,
+    double? fov,
+    double? range,
+    double? width,
+    double? gain,
+  }) => PlanDevice(
+    id: id ?? this.id,
+    deviceKey: deviceKey,
+    label: label ?? this.label,
+    shape: shape ?? this.shape,
+    pos: pos ?? this.pos,
+    rotation: rotation ?? this.rotation,
+    showFov: showFov ?? this.showFov,
+    fov: fov ?? this.fov,
+    range: range ?? this.range,
+    width: width ?? this.width,
+    gain: gain ?? this.gain,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'device': deviceKey,
+    'label': label,
+    'shape': shape,
+    'x': pos.dx,
+    'y': pos.dy,
+    if (rotation != 0) 'rotation': rotation,
+    if (showFov) 'showFov': true,
+    'fov': fov,
+    'range': range,
+    if (hasFace) 'width': width,
+    if (shape == 'screen' && gain != 1.0) 'gain': gain,
+  };
+
+  factory PlanDevice.fromJson(Map<String, dynamic> json) {
+    final shape = json['shape']?.toString() ?? 'other';
+    return PlanDevice(
+      id: json['id']?.toString() ?? '',
+      deviceKey: json['device']?.toString() ?? '',
+      label: json['label']?.toString() ?? '',
+      shape: shape,
+      pos: Offset(
+        (json['x'] as num?)?.toDouble() ?? 0,
+        (json['y'] as num?)?.toDouble() ?? 0,
+      ),
+      rotation: normalizeDegrees((json['rotation'] as num?)?.toDouble() ?? 0),
+      showFov: json['showFov'] == true,
+      fov: ((json['fov'] as num?)?.toDouble() ?? defaultDeviceFov(shape))
+          .clamp(5.0, 180.0),
+      range: ((json['range'] as num?)?.toDouble() ?? kDefaultDeviceRange)
+          .clamp(20.0, 20000.0),
+      width: ((json['width'] as num?)?.toDouble() ?? kDefaultScreenWidth)
+          .clamp(4.0, 20000.0),
+      gain: ((json['gain'] as num?)?.toDouble() ?? 1.0).clamp(0.1, 5.0),
+    );
+  }
+}
+
+/// [degrees] folded into 0 to 360.
+double normalizeDegrees(double degrees) {
+  final d = degrees % 360;
+  return d < 0 ? d + 360 : d;
+}
+
+/// How many of [deviceKey] are already among [placedKeys].
+int placedCount(Iterable<String> placedKeys, String deviceKey) =>
+    placedKeys.where((k) => k == deviceKey).length;
+
+/// Draws the field-of-view cones of a sheet's devices.
+class PlanDeviceFovPainter extends CustomPainter {
+  final List<PlanDevice> devices;
+
+  /// The device being dragged and how far it has come, so its cone follows.
+  final String dragId;
+  final Offset drag;
+
+  /// A projector and screen to draw the screen's center line and the angle
+  /// between them for, usually the selected one and its partner.
+  final String squareScreenId;
+  final String squareProjectorId;
+
+  /// False draws the screens but no cones, angles or rings, for an export
+  /// without them.
+  final bool showCones;
+
+  /// Rated lumens of each projector by id, for the brightness rings.
+  final Map<String, double> lumens;
+
+  /// The sheet's scale; 0 leaves the rings unlabeled.
+  final double pixelsPerFoot;
+
+  /// Straight-on brightness of each screen and display by id, in nits.
+  final Map<String, double> nits;
+
+  /// Light landing on the screens, in foot-candles; 0 when not set, and no
+  /// working area is drawn.
+  final double roomLightFc;
+
+  /// Contrast the content needs, as N:1.
+  final double contrast;
+
+  const PlanDeviceFovPainter({
+    required this.devices,
+    this.dragId = '',
+    this.drag = Offset.zero,
+    this.squareScreenId = '',
+    this.squareProjectorId = '',
+    this.showCones = true,
+    this.lumens = const {},
+    this.pixelsPerFoot = 0,
+    this.nits = const {},
+    this.roomLightFc = 0,
+    this.contrast = 15,
+  });
+
+  Offset _at(PlanDevice d) => d.pos + (d.id == dragId ? drag : Offset.zero);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (showCones) _paintCones(canvas);
+    for (final d in devices) {
+      if (d.hasFace) _paintScreen(canvas, d);
+    }
+  }
+
+  /// The two ends of a screen: clockwise of its facing, then counterclockwise.
+  (Offset, Offset) _screenEnds(PlanDevice d) {
+    final f = d.facing;
+    final across = Offset(-f.dy, f.dx);
+    final c = _at(d);
+    return (c + across * (d.width / 2), c - across * (d.width / 2));
+  }
+
+  /// A screen or display from above: a bar as wide as it is, with a white
+  /// face on the side it is viewed from.
+  void _paintScreen(Canvas canvas, PlanDevice d) {
+    final (a, b) = _screenEnds(d);
+    canvas.drawLine(
+      a,
+      b,
+      Paint()
+        ..color = d.shape == 'screen'
+            ? const Color(0xFF4A148C)
+            : const Color(0xFF263238)
+        ..strokeWidth = d.shape == 'screen' ? 5 : 7,
+    );
+    final face = d.facing * 2.5;
+    canvas.drawLine(
+      a + face,
+      b + face,
+      Paint()
+        ..color = const Color(0xFFFFFFFF)
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  /// [v] turned [deg] degrees clockwise on screen.
+  static Offset _turn(Offset v, double deg) {
+    final r = deg * math.pi / 180;
+    final c = math.cos(r);
+    final s = math.sin(r);
+    return Offset(v.dx * c - v.dy * s, v.dx * s + v.dy * c);
+  }
+
+  /// A screen's viewing area, flaring out from both edges at [angle] either
+  /// side of square, [reach] out.
+  Path _flare(PlanDevice d, double angle, double reach) {
+    final (a, b) = _screenEnds(d);
+    final (oa, ob) = _flareDirs(d, angle);
+    return Path()
+      ..moveTo(a.dx, a.dy)
+      ..lineTo(a.dx + oa.dx * reach, a.dy + oa.dy * reach)
+      ..lineTo(b.dx + ob.dx * reach, b.dy + ob.dy * reach)
+      ..lineTo(b.dx, b.dy)
+      ..close();
+  }
+
+  /// Which way each end flares, away from the other: the first end sits
+  /// clockwise of the facing, so it turns clockwise.
+  (Offset, Offset) _flareDirs(PlanDevice d, double angle) =>
+      (_turn(d.facing, angle), _turn(d.facing, -angle));
+
+  void _paintCones(Canvas canvas) {
+    for (final d in devices) {
+      if (!d.showFov || !deviceShapeHasFov(d.shape)) continue;
+      if (d.hasFace) {
+        _paintScreenView(canvas, d);
+        continue;
+      }
+      final center = _at(d);
+      final color = deviceFovColor(d.shape);
+      // Rotation 0 is up the sheet; canvas angle 0 is to the right.
+      final mid = (d.rotation - 90) * math.pi / 180;
+      final half = d.fov / 2 * math.pi / 180;
+      final rect = Rect.fromCircle(center: center, radius: d.range);
+      final wedge = Path()
+        ..moveTo(center.dx, center.dy)
+        ..arcTo(rect, mid - half, half * 2, false)
+        ..close();
+      if (d.shape == 'projector') {
+        _paintThrow(canvas, d, center, mid, half, color);
+      } else {
+        canvas.drawPath(wedge, Paint()..color = color.withValues(alpha: 0.18));
+      }
+      canvas.drawPath(
+        wedge,
+        Paint()
+          ..color = color.withValues(alpha: 0.85)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
+    _paintSquare(canvas);
+  }
+
+  /// A screen's viewing area, flaring from its edges out to where it looks
+  /// half as bright. Nested bands make it brighter toward square on.
+  void _paintScreenView(Canvas canvas, PlanDevice d) {
+    final color = deviceFovColor(d.shape);
+    final halfGain = d.fov / 2;
+    if (_paintWorking(canvas, d, halfGain)) return;
+    for (final k in const [1.0, 0.8, 0.6, 0.4, 0.2]) {
+      canvas.drawPath(
+        _flare(d, halfGain * k, d.range),
+        Paint()..color = color.withValues(alpha: 0.07),
+      );
+    }
+    canvas.drawPath(
+      _flare(d, halfGain, d.range),
+      Paint()
+        ..color = color.withValues(alpha: 0.85)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+    final (a, _) = _screenEnds(d);
+    final (oa, _) = _flareDirs(d, halfGain);
+    _label(canvas, '50% at ±${halfGain.round()}°', a + oa * d.range, color);
+  }
+
+  /// Where the image holds the contrast its content needs against the room
+  /// light: out to the angle where it is still bright enough, and as far
+  /// back as six image heights. False when there is not enough to go on
+  /// (no room light set, or no brightness), so the plain viewing angle is
+  /// drawn instead.
+  bool _paintWorking(Canvas canvas, PlanDevice d, double halfGain) {
+    final peak = nits[d.id] ?? 0;
+    if (roomLightFc <= 0 || peak <= 0) return false;
+    final reflect = d.shape == 'screen' ? d.gain : kDisplayReflectance;
+    final need = neededNits(contrast, ambientNits(roomLightFc, reflect));
+    final angle = workingAngle(peak, need, halfGain);
+    final (a, b) = _screenEnds(d);
+    final mid = Offset.lerp(a, b, 0.5)!;
+    final contrastLabel = '${contrast.round()}:1';
+    if (angle <= 0) {
+      _label(
+        canvas,
+        'Too dim: ${peak.round()} of ${need.round()} nits for $contrastLabel',
+        mid + d.facing * 24,
+        const Color(0xFFC62828),
+      );
+      return true;
+    }
+    final heightFt = pixelsPerFoot > 0
+        ? imageHeightFromWidth(
+            d.width / pixelsPerFoot,
+            d.shape == 'screen' ? 16 / 10 : 16 / 9,
+          )
+        : 0.0;
+    final reach = heightFt > 0
+        ? farthestViewer(heightFt) * pixelsPerFoot
+        : d.range;
+    const ok = Color(0xFF2E7D32);
+    // Brighter toward square on, as with the plain viewing angle.
+    for (final k in const [1.0, 0.75, 0.5, 0.25]) {
+      canvas.drawPath(
+        _flare(d, angle * k, reach),
+        Paint()..color = ok.withValues(alpha: 0.08),
+      );
+    }
+    canvas.drawPath(
+      _flare(d, angle, reach),
+      Paint()
+        ..color = ok.withValues(alpha: 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8,
+    );
+    final (_, ob) = _flareDirs(d, angle);
+    _label(
+      canvas,
+      'Works to ±${angle.round()}°'
+      '${heightFt > 0 ? ' · ${farthestViewer(heightFt).round()} ft' : ''}'
+      ' · ${peak.round()} nits',
+      b + ob * reach,
+      ok,
+    );
+    return true;
+  }
+
+  /// A projector's throw, brighter near the lens. With a scale, rings mark
+  /// the distance, and with the projector's lumens how bright an image would
+  /// be on a screen that far away (gain 1.0, 16:10).
+  void _paintThrow(
+    Canvas canvas,
+    PlanDevice d,
+    Offset center,
+    double mid,
+    double half,
+    Color color,
+  ) {
+    const steps = 4;
+    for (var i = steps; i >= 1; i--) {
+      final r = d.range * i / steps;
+      final band = Path()
+        ..moveTo(center.dx, center.dy)
+        ..arcTo(
+          Rect.fromCircle(center: center, radius: r),
+          mid - half,
+          half * 2,
+          false,
+        )
+        ..close();
+      canvas.drawPath(band, Paint()..color = color.withValues(alpha: 0.07));
+    }
+    if (pixelsPerFoot <= 0) return;
+    final lm = lumens[d.id] ?? 0;
+    final ring = Paint()
+      ..color = color.withValues(alpha: 0.6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    for (var i = 1; i <= steps; i++) {
+      final r = d.range * i / steps;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: r),
+        mid - half,
+        half * 2,
+        false,
+        ring,
+      );
+      final feet = r / pixelsPerFoot;
+      final w = 2 * feet * math.tan(half);
+      final at = center + Offset(math.cos(mid), math.sin(mid)) * r;
+      final fl = footLamberts(lm, 1, w * w / 1.6);
+      _label(
+        canvas,
+        lm > 0 && w > 0
+            ? '${feet.round()} ft · ${fl.toStringAsFixed(1)} ft-L'
+            : '${feet.round()} ft',
+        at,
+        color,
+      );
+    }
+  }
+
+  void _label(Canvas canvas, String text, Offset at, Color color) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: Color.lerp(color, const Color(0xFF000000), 0.45),
+          backgroundColor: const Color(0xCCFFFFFF),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, at - Offset(painter.width / 2, painter.height / 2));
+  }
+
+  /// The screen's center line out to the projector, the line to the
+  /// projector and the angle between them.
+  void _paintSquare(Canvas canvas) {
+    final screen = devices.where((d) => d.id == squareScreenId).firstOrNull;
+    final projector = devices
+        .where((d) => d.id == squareProjectorId)
+        .firstOrNull;
+    if (!showCones || screen == null || projector == null) return;
+    final s = _at(screen);
+    final p = _at(projector);
+    final dist = (p - s).distance;
+    if (dist < 1) return;
+    final ink = Paint()
+      ..color = const Color(0xFF8E24AA)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    // Dashed center line, square to the screen.
+    final end = pointOnCenterLine(s, screen.rotation, dist);
+    final dir = (end - s) / dist;
+    for (var t = 0.0; t < dist; t += 12) {
+      canvas.drawLine(s + dir * t, s + dir * math.min(t + 7, dist), ink);
+    }
+    // A small square at the screen marks the right angle.
+    final across = Offset(-dir.dy, dir.dx);
+    const k = 9.0;
+    canvas.drawPath(
+      Path()
+        ..moveTo(s.dx + across.dx * k, s.dy + across.dy * k)
+        ..lineTo(
+          s.dx + (across.dx + dir.dx) * k,
+          s.dy + (across.dy + dir.dy) * k,
+        )
+        ..lineTo(s.dx + dir.dx * k, s.dy + dir.dy * k),
+      ink,
+    );
+    final off = offAxisAngle(s, screen.rotation, p);
+    canvas.drawLine(
+      s,
+      p,
+      Paint()
+        ..color = const Color(0xFFFFA000)
+        ..strokeWidth = 1.5,
+    );
+    final toward = (p - s) / dist;
+    if (off >= 0.5) {
+      final r = math.min(40.0, dist / 2);
+      final a0 = (screen.rotation - 90) * math.pi / 180;
+      final a1 = (rotationToward(s, p) - 90) * math.pi / 180;
+      var sweep = a1 - a0;
+      while (sweep > math.pi) {
+        sweep -= 2 * math.pi;
+      }
+      while (sweep < -math.pi) {
+        sweep += 2 * math.pi;
+      }
+      canvas.drawArc(
+        Rect.fromCircle(center: s, radius: r),
+        a0,
+        sweep,
+        false,
+        ink,
+      );
+    }
+    final label = TextPainter(
+      text: TextSpan(
+        text: '${off.toStringAsFixed(off < 10 ? 1 : 0)}°',
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF6A1B9A),
+          backgroundColor: Color(0xCCFFFFFF),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final at = s + (dir + toward) * 26;
+    label.paint(canvas, at - Offset(label.width / 2, label.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(PlanDeviceFovPainter old) =>
+      old.devices != devices ||
+      old.dragId != dragId ||
+      old.drag != drag ||
+      old.squareScreenId != squareScreenId ||
+      old.squareProjectorId != squareProjectorId ||
+      old.showCones != showCones ||
+      old.pixelsPerFoot != pixelsPerFoot ||
+      old.roomLightFc != roomLightFc ||
+      old.contrast != contrast ||
+      !mapEquals(old.lumens, lumens) ||
+      !mapEquals(old.nits, nits);
+}
+
+/// The add-device menu: every device on the estimate, A to Z, each once,
+/// with how many are placed out of how many are bought. A device that is
+/// all placed is shown but cannot be picked.
+List<PopupMenuEntry<RoomDeviceChoice>> roomDeviceMenuItems(
+  BuildContext context,
+  List<RoomDeviceChoice> choices,
+  Iterable<String> placedKeys,
+) {
+  final theme = Theme.of(context);
+  if (choices.isEmpty) {
+    return [
+      const PopupMenuItem(
+        enabled: false,
+        child: Text('No equipment on the estimate yet'),
+      ),
+    ];
+  }
+  final placed = placedKeys.toList();
+  final items = <PopupMenuEntry<RoomDeviceChoice>>[];
+  for (final c in choices) {
+    final used = placedCount(placed, c.key);
+    final full = used >= c.qty;
+    items.add(
+      PopupMenuItem<RoomDeviceChoice>(
+        key: ValueKey('add_device_${c.key}'),
+        value: c,
+        enabled: !full,
+        child: Row(
+          children: [
+            Icon(cablingDeviceIcon(c.shape), size: 18),
+            const SizedBox(width: 10),
+            Expanded(child: Text(c.name, overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 12),
+            Text(
+              '$used / ${c.qty}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: full ? theme.disabledColor : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  return items;
+}

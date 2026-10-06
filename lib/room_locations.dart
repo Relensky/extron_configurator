@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 
+import 'placed_devices.dart';
+
 /// ============================================================================
 ///  WHERE THINGS ARE IN THE ROOM
 /// ============================================================================
@@ -1014,6 +1016,9 @@ class FloorPlan {
   /// opt-in, is a drawing that gets issued without one.
   final bool keyHidden;
 
+  /// Gear placed on this sheet from the room's estimate.
+  final List<PlanDevice> devices;
+
   const FloorPlan({
     required this.id,
     required this.name,
@@ -1031,6 +1036,7 @@ class FloorPlan {
     this.margins = EdgeInsets.zero,
     this.keyPos = kDefaultPlanKeyPosition,
     this.keyHidden = false,
+    this.devices = const [],
   });
 
   /// How [kind] is printed on this sheet.
@@ -1139,6 +1145,7 @@ class FloorPlan {
     EdgeInsets? margins,
     Offset? keyPos,
     bool? keyHidden,
+    List<PlanDevice>? devices,
   }) => FloorPlan(
     id: id,
     name: name ?? this.name,
@@ -1158,6 +1165,7 @@ class FloorPlan {
     margins: margins ?? this.margins,
     keyPos: keyPos ?? this.keyPos,
     keyHidden: keyHidden ?? this.keyHidden,
+    devices: devices ?? this.devices,
   );
 
   FloorPlan withId(String newId) => FloorPlan(
@@ -1166,6 +1174,7 @@ class FloorPlan {
     imageFile: imageFile,
     imageSize: imageSize,
     opacity: opacity,
+    paperColor: paperColor,
     pixelsPerFoot: pixelsPerFoot,
     callouts: callouts,
     annotations: annotations,
@@ -1176,6 +1185,7 @@ class FloorPlan {
     margins: margins,
     keyPos: keyPos,
     keyHidden: keyHidden,
+    devices: devices,
   );
 
   Map<String, dynamic> toJson() => {
@@ -1227,6 +1237,7 @@ class FloorPlan {
     if (keyPos != kDefaultPlanKeyPosition)
       'key': {'x': keyPos.dx, 'y': keyPos.dy},
     if (keyHidden) 'keyHidden': true,
+    if (devices.isNotEmpty) 'devices': [for (final d in devices) d.toJson()],
   };
 
   factory FloorPlan.fromJson(Map<String, dynamic> json) => FloorPlan(
@@ -1302,6 +1313,10 @@ class FloorPlan {
           )
         : kDefaultPlanKeyPosition,
     keyHidden: json['keyHidden'] == true,
+    devices: [
+      for (final d in (json['devices'] as List? ?? []))
+        if (d is Map) PlanDevice.fromJson(Map<String, dynamic>.from(d)),
+    ],
   );
 }
 

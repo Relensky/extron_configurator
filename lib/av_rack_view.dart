@@ -14,6 +14,7 @@ import 'av_flow_swap_dialogs.dart'
 import 'av_flow_view.dart' show iconForAvNode;
 import 'cost_estimate.dart' show formatMoney, trimNumber;
 import 'device_recheck_dialog.dart';
+import 'keyboard_shortcuts.dart';
 import 'view_zoom.dart';
 import 'responsive.dart';
 
@@ -77,6 +78,9 @@ class _AvRackViewState extends State<AvRackView> {
   /// small target.
   String? _carriedNodeId;
 
+  /// Takes the keyboard when something is picked up, for the shortcuts.
+  final FocusNode _rackFocus = FocusNode(debugLabel: 'rack elevation');
+
   /// The typed-U path: enter the number instead of finding the row.
   final TextEditingController _uController = TextEditingController();
   RackFace _typedFace = RackFace.front;
@@ -88,6 +92,7 @@ class _AvRackViewState extends State<AvRackView> {
   void dispose() {
     _transform.dispose();
     _uController.dispose();
+    _rackFocus.dispose();
     super.dispose();
   }
 
@@ -136,6 +141,56 @@ class _AvRackViewState extends State<AvRackView> {
 
   /// Puts the carried device on [startU]. Sharing is automatic: if something
   /// is already on that rail the row re-splits to fit them side by side.
+  /// The shortcut keys on what is picked up in a frame: Delete takes it out
+  /// of the rack, Up and Down move it a U (five with Shift), Esc puts it
+  /// down. The keys are the ones in App Config > Keyboard shortcuts.
+  KeyEventResult _onRackKey(AppStateProvider provider, KeyEvent event) {
+    final id = _carriedNodeId;
+    if (id == null || !widget.editMode) return KeyEventResult.ignored;
+    final action = provider.shortcuts.match(event, [
+      Shortcut.delete,
+      Shortcut.deselect,
+      Shortcut.moveUp,
+      Shortcut.moveDown,
+      Shortcut.moveUpFar,
+      Shortcut.moveDownFar,
+    ]);
+    if (action == null) return KeyEventResult.ignored;
+    if (action == Shortcut.deselect) {
+      setState(() => _carriedNodeId = null);
+      return KeyEventResult.handled;
+    }
+    final slot = provider.avRackSlots[id];
+    if (slot == null) return KeyEventResult.ignored;
+    if (action == Shortcut.delete) {
+      provider.setAvRackSlot(id, null);
+      setState(() => _carriedNodeId = null);
+      return KeyEventResult.handled;
+    }
+    final rack = provider.avRacks.where((r) => r.id == slot.rackId).firstOrNull;
+    if (rack == null) return KeyEventResult.ignored;
+    // U1 is at the bottom, so Up is a higher U.
+    final by = switch (action) {
+      Shortcut.moveUp => 1,
+      Shortcut.moveDown => -1,
+      Shortcut.moveUpFar => 5,
+      _ => -5,
+    };
+    final height = provider.rackOccupantHeight(id);
+    final to = (slot.startU + by).clamp(1, rack.heightU - height + 1);
+    if (to == slot.startU) return KeyEventResult.handled;
+    if (!_canDrop(provider, id, rack, slot.face, to) ||
+        !provider.avRackPlaceSharing(
+          nodeId: id,
+          rackId: rack.id,
+          face: slot.face,
+          startU: to,
+        )) {
+      _snack('U$to has no room for it.', error: true);
+    }
+    return KeyEventResult.handled;
+  }
+
   void _place(
     AppStateProvider provider,
     RackFrame rack,
@@ -201,16 +256,20 @@ class _AvRackViewState extends State<AvRackView> {
           key: _viewportKey,
           child: provider.avRacks.isEmpty
               ? _buildEmptyState(provider, theme)
-              : InteractiveViewer(
-                  transformationController: _transform,
-                  constrained: false,
-                  // Low enough that a row of 42U frames can be fitted whole.
-                  minScale: 0.08,
-                  maxScale: 2.5,
-                  boundaryMargin: const EdgeInsets.all(200),
-                  child: RepaintBoundary(
-                    key: widget.captureKey,
-                    child: _buildRacksCanvas(provider, theme),
+              : Focus(
+                  focusNode: _rackFocus,
+                  onKeyEvent: (_, event) => _onRackKey(provider, event),
+                  child: InteractiveViewer(
+                    transformationController: _transform,
+                    constrained: false,
+                    // Low enough that a row of 42U frames can be fitted whole.
+                    minScale: 0.08,
+                    maxScale: 2.5,
+                    boundaryMargin: const EdgeInsets.all(200),
+                    child: RepaintBoundary(
+                      key: widget.captureKey,
+                      child: _buildRacksCanvas(provider, theme),
+                    ),
                   ),
                 ),
         ),
@@ -862,10 +921,15 @@ class _AvRackViewState extends State<AvRackView> {
               onTap: widget.editMode
                   // Carrying something already? Then a click here means "put
                   // it on this rail too", not "pick this one up instead".
-                  ? () => _carriedNodeId != null &&
-                            _carriedNodeId != entry.key
-                        ? _place(provider, rack, face, slot.startU)
-                        : setState(() => _carriedNodeId = entry.key)
+                  ? () {
+                      if (_carriedNodeId != null &&
+                          _carriedNodeId != entry.key) {
+                        _place(provider, rack, face, slot.startU);
+                      } else {
+                        setState(() => _carriedNodeId = entry.key);
+                        _rackFocus.requestFocus();
+                      }
+                    }
                   : null,
             // Typing the position beats dragging when the frame is tall or the
             // device needs to land on an exact U.

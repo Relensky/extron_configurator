@@ -139,6 +139,17 @@ class CablingBox {
   /// place on this drawing, it is the edge of it.
   final RoomZone zone;
 
+  /// The estimate line a device box was placed from, by
+  /// [roomDeviceKey]. Empty on a device picked by icon alone.
+  final String deviceKey;
+
+  /// Which way a device box's icon faces, degrees clockwise from up.
+  final double rotation;
+
+  /// A size somebody dragged the box to, or null to size it to its text.
+  /// The box is never shorter than its text either way.
+  final Size? customSize;
+
   const CablingBox({
     required this.id,
     required this.label,
@@ -147,6 +158,9 @@ class CablingBox {
     this.body = '',
     this.shape = '',
     this.zone = RoomZone.unspecified,
+    this.deviceKey = '',
+    this.rotation = 0,
+    this.customSize,
   });
 
   /// True when cable reaching this box carries on out of the room — the
@@ -160,7 +174,66 @@ class CablingBox {
   /// hidden, because deleting it would just bring it back on the next rebuild.
   bool get isDerived => id.startsWith('loc:');
 
-  Size get size => switch (kind) {
+  Size get size {
+    final base = _baseSize;
+    if (kind == CablingBoxKind.pathway) return customSize ?? base;
+    final width = customSize?.width ?? base.width;
+    final fit = _fitHeight(width);
+    final height = customSize?.height ?? base.height;
+    return Size(width, height < fit ? fit : height);
+  }
+
+  /// The smallest a box can be dragged to.
+  static const Size kMinSize = Size(80, 40);
+
+  /// How tall the box has to be at [width] to show its name and all of its
+  /// text, measured in the type the drawing uses.
+  double _fitHeight(double width) {
+    final inner = (width - 16).clamp(20.0, 4000.0);
+    final isNote = kind == CablingBoxKind.note;
+    var h = 16.0; // padding
+    if (kind == CablingBoxKind.device) h += 32 + 4; // the icon
+    h += _measure(label, inner, isNote ? 13 : 12.5, 1.2, bold: true, maxLines: 2);
+    if (body.trim().isNotEmpty) {
+      h += 4 + _measure(body, inner, 11, 1.35);
+    }
+    return h.clamp(kMinSize.height, 4000.0) + 2;
+  }
+
+  static final Map<(String, double, double, bool, int?), double> _heights = {};
+
+  /// Height of [text] wrapped at [width]. Remembered, because the router and
+  /// the hit tests ask for a box's size many times a frame.
+  static double _measure(
+    String text,
+    double width,
+    double fontSize,
+    double lineHeight, {
+    bool bold = false,
+    int? maxLines,
+  }) {
+    final key = (text, width.roundToDouble(), fontSize, bold, maxLines);
+    final cached = _heights[key];
+    if (cached != null) return cached;
+    if (_heights.length > 4000) _heights.clear();
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: fontSize,
+          height: lineHeight,
+          fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: maxLines,
+    )..layout(maxWidth: width);
+    final h = painter.height;
+    painter.dispose();
+    return _heights[key] = h;
+  }
+
+  Size get _baseSize => switch (kind) {
     CablingBoxKind.pathway => const Size(46, 420),
     // Sized to what is IN it. The scope notes down the side of a cabling sheet
     // are the part that says whose contract each half of the job is, and a
@@ -206,6 +279,10 @@ class CablingBox {
     String? body,
     String? shape,
     RoomZone? zone,
+    String? deviceKey,
+    double? rotation,
+    Size? customSize,
+    bool clearCustomSize = false,
   }) => CablingBox(
     id: id,
     label: label ?? this.label,
@@ -214,6 +291,9 @@ class CablingBox {
     body: body ?? this.body,
     shape: shape ?? this.shape,
     zone: zone ?? this.zone,
+    deviceKey: deviceKey ?? this.deviceKey,
+    rotation: rotation ?? this.rotation,
+    customSize: clearCustomSize ? null : (customSize ?? this.customSize),
   );
 
   Map<String, dynamic> toJson() => {
@@ -225,6 +305,8 @@ class CablingBox {
     if (body.isNotEmpty) 'body': body,
     if (shape.isNotEmpty) 'shape': shape,
     if (zone != RoomZone.unspecified) 'zone': zone.name,
+    if (deviceKey.isNotEmpty) 'device': deviceKey,
+    if (rotation != 0) 'rotation': rotation,
   };
 
   factory CablingBox.fromJson(Map<String, dynamic> json) => CablingBox(
@@ -238,6 +320,8 @@ class CablingBox {
     body: json['body']?.toString() ?? '',
     shape: json['shape']?.toString() ?? '',
     zone: roomZoneFromName(json['zone']?.toString()),
+    deviceKey: json['device']?.toString() ?? '',
+    rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
   );
 }
 
@@ -411,6 +495,9 @@ class CablingOverrides {
   /// Box id -> the text under its label.
   final Map<String, String> bodies;
 
+  /// Box id -> a size it was dragged to.
+  final Map<String, Size> sizes;
+
   /// Bundle id -> a count typed over the derived one.
   final Map<String, double> counts;
 
@@ -498,6 +585,7 @@ class CablingOverrides {
     Map<String, Offset>? positions,
     Map<String, String>? labels,
     Map<String, String>? bodies,
+    Map<String, Size>? sizes,
     Map<String, double>? counts,
     Map<String, String>? cableTypes,
     Map<String, int>? colors,
@@ -514,6 +602,7 @@ class CablingOverrides {
   }) : positions = positions ?? {},
        labels = labels ?? {},
        bodies = bodies ?? {},
+       sizes = sizes ?? {},
        counts = counts ?? {},
        cableTypes = cableTypes ?? {},
        colors = colors ?? {},
@@ -532,6 +621,7 @@ class CablingOverrides {
       positions.isEmpty &&
       labels.isEmpty &&
       bodies.isEmpty &&
+      sizes.isEmpty &&
       counts.isEmpty &&
       cableTypes.isEmpty &&
       colors.isEmpty &&
@@ -550,6 +640,7 @@ class CablingOverrides {
     positions.clear();
     labels.clear();
     bodies.clear();
+    sizes.clear();
     counts.clear();
     cableTypes.clear();
     colors.clear();
@@ -581,6 +672,11 @@ class CablingOverrides {
       },
     if (labels.isNotEmpty) 'labels': Map<String, String>.of(labels),
     if (bodies.isNotEmpty) 'bodies': Map<String, String>.of(bodies),
+    if (sizes.isNotEmpty)
+      'sizes': {
+        for (final e in sizes.entries)
+          e.key: {'w': e.value.width, 'h': e.value.height},
+      },
     if (counts.isNotEmpty) 'counts': Map<String, double>.of(counts),
     if (cableTypes.isNotEmpty) 'cableTypes': Map<String, String>.of(cableTypes),
     if (colors.isNotEmpty) 'colors': Map<String, int>.of(colors),
@@ -614,6 +710,16 @@ class CablingOverrides {
 
   void readJson(Map<String, dynamic> json) {
     clear();
+    final sz = json['sizes'];
+    if (sz is Map) {
+      sz.forEach((key, value) {
+        if (value is Map) {
+          final w = (value['w'] as num?)?.toDouble() ?? 0;
+          final h = (value['h'] as num?)?.toDouble() ?? 0;
+          if (w > 0 && h > 0) sizes[key.toString()] = Size(w, h);
+        }
+      });
+    }
     final p = json['positions'];
     if (p is Map) {
       p.forEach((key, value) {
@@ -1510,6 +1616,8 @@ CablingSchematic buildCablingSchematic({
     if (body != null) out = out.copyWith(body: body);
     final pos = overrides.positions[box.id];
     if (pos != null) out = out.copyWith(pos: pos);
+    final size = overrides.sizes[box.id];
+    if (size != null) out = out.copyWith(customSize: size);
     return out;
   }
 

@@ -205,6 +205,8 @@ void main() {
 
       await tester.tap(find.widgetWithText(OutlinedButton, 'Device'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Other device (pick an icon)...'));
+      await tester.pumpAndSettle();
       expect(find.text('Which device?'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('cabling_device_projector')));
@@ -221,6 +223,36 @@ void main() {
       expect(find.byIcon(Icons.connected_tv), findsWidgets);
     });
 
+    testWidgets('the estimate\'s devices are offered once each, capped', (
+      tester,
+    ) async {
+      final provider = room();
+      provider.addAvCostExtraEquipment(description: 'Projector');
+      await pumpTab(tester, provider);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Device'));
+      await tester.pumpAndSettle();
+      expect(find.text('0 / 1'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('add_device_projector')));
+      await tester.pumpAndSettle();
+
+      final box = provider.avCabling.extraBoxes.single;
+      expect(box.label, 'Projector');
+      expect(box.deviceKey, 'projector');
+      expect(box.shape, 'projector');
+
+      // All bought are placed, so the entry no longer adds one.
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Device'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 / 1'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('add_device_projector')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      expect(provider.avCabling.extraBoxes, hasLength(1));
+    });
+
     testWidgets('a second box does not land on top of the first', (
       tester,
     ) async {
@@ -229,10 +261,14 @@ void main() {
 
       await tester.tap(find.widgetWithText(OutlinedButton, 'Device'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Other device (pick an icon)...'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('cabling_device_projector')));
       await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(OutlinedButton, 'Device'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Other device (pick an icon)...'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('cabling_device_speaker')));
       await tester.pumpAndSettle();
@@ -251,6 +287,8 @@ void main() {
       await pumpTab(tester, provider);
 
       await tester.tap(find.widgetWithText(OutlinedButton, 'Device'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Other device (pick an icon)...'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('cabling_device_projector')));
       await tester.pumpAndSettle();

@@ -101,7 +101,12 @@ const Map<RoomSidecarPart, List<String>> kRoomSidecarKeys = {
   // The locations travel with the plans: a callout is a marker on a sheet
   // pointing at one of them, and a plan whose places had gone would be a sheet
   // of unlabeled dots.
-  RoomSidecarPart.floorPlans: ['floorPlans', 'locations'],
+  RoomSidecarPart.floorPlans: [
+    'floorPlans',
+    'locations',
+    'throwDistanceFt',
+    'roomLight',
+  ],
   RoomSidecarPart.cabling: ['screenSwitches', 'cablingSchematic'],
   RoomSidecarPart.cost: ['cost'],
   RoomSidecarPart.history: ['roomHistory'],

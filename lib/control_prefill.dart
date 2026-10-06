@@ -603,7 +603,7 @@ const List<String> kInstallFacts = [
   'baud_rate',
   'control_id',
   'device_id',
-  'username',
+  'user',
   'password',
   'gve_id',
 ];

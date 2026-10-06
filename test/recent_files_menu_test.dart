@@ -96,6 +96,25 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    testWidgets('the hamburger turns into a close mark while open',
+        (tester) async {
+      await pump(tester, withRecents(midSession: true));
+      double progress() => tester
+          .widget<AnimatedIcon>(find.descendant(
+            of: find.byKey(const ValueKey('file_menu')),
+            matching: find.byType(AnimatedIcon),
+          ))
+          .progress
+          .value;
+      expect(progress(), 0);
+      await tester.tap(find.byKey(const ValueKey('file_menu')));
+      await tester.pumpAndSettle();
+      expect(progress(), 1);
+      await tester.tap(find.byKey(const ValueKey('file_menu')));
+      await tester.pumpAndSettle();
+      expect(progress(), 0);
+    });
+
     testWidgets('has New, Open and Open Recent, each opening to the side',
         (tester) async {
       await pump(tester, withRecents(midSession: true));

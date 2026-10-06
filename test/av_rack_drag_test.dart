@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -229,5 +230,33 @@ void main() {
     expect(provider.avRackSlots['SMALL']!.startU, 6);
     expect(provider.avRackSlots['SMALL']!.slice.columns, 2);
     expect(provider.avRackSlots['TALL']!.slice.column, 0);
+  });
+
+  testWidgets('a picked-up device steps a U with the arrows and leaves '
+      'the rack with Delete', (tester) async {
+    final (provider, rack) = rackWith([device('AMP')]);
+    provider.setAvRackSlot('AMP', RackSlot(rackId: rack.id, startU: 2));
+    await pumpRacks(tester, provider);
+
+    await tester.tap(find.text('AMP'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(provider.avRackSlots['AMP']!.startU, 3);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(provider.avRackSlots['AMP']!.startU, 8);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(provider.avRackSlots['AMP']!.startU, 7);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pump();
+    expect(provider.avRackSlots['AMP'], isNull);
+    expect(tester.takeException(), isNull);
   });
 }

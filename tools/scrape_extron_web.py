@@ -35,7 +35,7 @@ WHAT COMES OFF A PAGE
 Writes one JSON object per page and skips URLs already in the output, so an
 interrupted run resumes instead of starting over.
 """
-import argparse, json, os, re, sys, time
+import argparse, json, os, random, re, sys, time
 
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
@@ -229,6 +229,29 @@ def scrape(d, url):
     return rec
 
 
+SITEMAP = "https://www.extron.com/sitemap.xml"
+
+
+def sitemap_products(d, delay):
+    """Every product page listed in the sitemap, following a sitemap index
+    one level down. Read through the browser: the site refuses plain HTTP."""
+    def locs(url):
+        d.get(url)
+        time.sleep(2)
+        return re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", d.page_source)
+
+    first = locs(SITEMAP)
+    pages = []
+    for u in first:
+        if u.lower().endswith(".xml"):
+            time.sleep(delay)
+            pages += locs(u)
+        else:
+            pages.append(u)
+    products = sorted({u for u in pages if "/product/" in u.lower()})
+    return products
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", required=True,
@@ -240,9 +263,29 @@ def main():
     # The catalog, so the log can say how much of what we actually need is
     # covered — that is the number that decides when the crawl can stop.
     ap.add_argument("--catalog")
+    # Seconds between pages, plus up to --jitter more at random. The default
+    # is slow on purpose: an overnight run, not a burst.
+    ap.add_argument("--delay", type=float, default=10.0)
+    ap.add_argument("--jitter", type=float, default=5.0)
+    ap.add_argument("--sitemap", metavar="FILE",
+                    help="read the product URLs off extron.com's sitemap "
+                         "(through the browser) into FILE, then crawl them")
     a = ap.parse_args()
-    if not a.url and not a.urls:
-        ap.error("give --urls <file> or --url <address> ...")
+    if not a.url and not a.urls and not a.sitemap:
+        ap.error("give --urls <file>, --sitemap <file> or --url <address> ...")
+
+    if a.sitemap:
+        if not os.path.exists(a.sitemap):
+            d = driver(a.profile)
+            try:
+                found_urls = sitemap_products(d, a.delay)
+            finally:
+                d.quit()
+            json.dump(found_urls, open(a.sitemap, "w", encoding="utf-8"),
+                      indent=1)
+            flush(f"{len(found_urls)} product pages in the sitemap -> "
+                  f"{a.sitemap}")
+        a.urls = a.sitemap
 
     targets = set()
     if a.catalog:
@@ -284,6 +327,7 @@ def main():
                 for s in rec.get("skus", []):
                     if s.get("education") is not None:
                         found.add(s["partNumber"])
+                time.sleep(a.delay + random.uniform(0, a.jitter))
                 if i % 25 == 0 or i == len(todo):
                     rate = (time.time() - started) / i
                     hit = len(found & targets) if targets else 0

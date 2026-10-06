@@ -95,7 +95,31 @@ def parse(html):
     m = RELEASED.search(html)
     if m:
         out["released"] = text(m.group(1))
+
+    # Throw ratio, brightness and lenses, for the projection calculator.
+    specs = spec_rows(html)
+    ratio = specs.get("throw ratio", "")
+    nums = [float(n) for n in re.findall(r"(\d+(?:\.\d+)?)\s*:\s*1", ratio)]
+    if nums:
+        out["throwRatioMin"] = min(nums)
+        out["throwRatioMax"] = max(nums)
+    m = re.search(r"([\d,]+)\s*Lumens", specs.get("white brightness", ""))
+    if m:
+        out["lumens"] = float(m.group(1).replace(",", ""))
+    for key, name in (("optional lenses", "optionalLenses"),
+                      ("lens shift", "lensShift")):
+        if key in specs:
+            out[name] = specs[key]
     return out
+
+
+# <dl><dd>Throw Ratio</dd><dt>1.37:1 - 2.19:1 <label>(D:W)</label></dt></dl>
+SPEC_ROW = re.compile(r"<dl>\s*<dd>(.*?)</dd>\s*<dt[^>]*>(.*?)</dt>", re.S)
+
+
+def spec_rows(html):
+    """Every label: value row in the spec table, labels lowercased."""
+    return {text(k).lower(): text(v) for k, v in SPEC_ROW.findall(html)}
 
 
 def main():

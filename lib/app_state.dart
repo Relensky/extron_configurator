@@ -48,8 +48,10 @@ import 'project_schedule.dart' show formatScheduleDate;
 import 'project_swap.dart';
 import 'project_swap.dart' as project_swap
     show applyProjectRename, planProjectRename;
+import 'keyboard_shortcuts.dart';
 import 'layout_tools.dart';
 import 'room_locations.dart';
+import 'placed_devices.dart';
 import 'recent_files.dart';
 import 'room_presets.dart';
 import 'room_sidecar.dart';
@@ -1400,6 +1402,10 @@ class AppStateProvider extends ChangeNotifier {
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
       'confirmBeforeDelete': confirmBeforeDelete,
       'briefingOnProjectOpen': briefingOnProjectOpen,
+      'catalogHideWarranties': catalogHideWarranties,
+      'catalogUsOnly': catalogUsOnly,
+      if (shortcuts.overrides.isNotEmpty)
+        'keyboardShortcuts': shortcuts.toJson(),
       'snapDiagramsToGrid': snapDiagramsToGrid,
       'showDiagramGrid': showDiagramGrid,
       'autosaveEnabled': autosaveEnabled,
@@ -3778,6 +3784,17 @@ class AppStateProvider extends ChangeNotifier {
   /// Floor plans, with their callouts.
   final List<FloorPlan> avFloorPlans = [];
 
+  /// Lens to screen for this room's projector, in feet. 0 when nobody has
+  /// entered one. Typed in for now; meant to come off the room's document.
+  double avThrowDistanceFt = 0;
+
+  /// Light landing on the screens, in foot-candles. 0 when nobody has said;
+  /// the floor plan then shows viewing angles without a working area.
+  double avRoomLightFc = 0;
+
+  /// Contrast the room's content needs, as N:1.
+  double avContrastTarget = 15;
+
   int _avLocationCounter = 0;
   int _avScreenSwitchCounter = 0;
   int _avFloorPlanCounter = 0;
@@ -3950,6 +3967,9 @@ class AppStateProvider extends ChangeNotifier {
             e.key: [for (final w in e.value) w + shift],
         },
         keyPos: sheet.keyPos + shift,
+        devices: [
+          for (final d in sheet.devices) d.copyWith(pos: d.pos + shift),
+        ],
       );
     }
     avFloorPlans[index] = next;
@@ -4281,6 +4301,95 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Places [device] on [planId], unless the sheet already has as many of it
+  /// as the estimate buys. Returns it, or null when it was refused.
+  PlanDevice? addAvPlanDevice(String planId, PlanDevice device) {
+    final index = avFloorPlans.indexWhere((p) => p.id == planId);
+    if (index < 0) return null;
+    final plan = avFloorPlans[index];
+    final limit = planDeviceLimit(device.deviceKey);
+    final placed = placedCount(
+      plan.devices.map((d) => d.deviceKey),
+      device.deviceKey,
+    );
+    if (limit != null && placed >= limit) return null;
+    _pushAvUndo('Place ${device.label}', _plansScope);
+    final taken = {for (final d in plan.devices) d.id};
+    var n = plan.devices.length;
+    String id;
+    do {
+      n++;
+      id = 'DEV_$n';
+    } while (taken.contains(id));
+    final stored = device.copyWith(id: id);
+    avFloorPlans[index] = plan.copyWith(devices: [...plan.devices, stored]);
+    notifyListeners();
+    return stored;
+  }
+
+  /// How many of [deviceKey] the estimate buys, or null when it is not on
+  /// the estimate (nothing to hold it to).
+  int? planDeviceLimit(String deviceKey) {
+    for (final c in roomDeviceChoices(roomCost.equipment)) {
+      if (c.key == deviceKey) return c.qty;
+    }
+    return null;
+  }
+
+  /// [coalesce] folds a run of the same edit into one undo step: a device
+  /// nudged ten times with the arrow keys is one move.
+  void updateAvPlanDevice(String planId, PlanDevice device,
+      {String what = 'Edit device', String coalesce = ''}) {
+    final index = avFloorPlans.indexWhere((p) => p.id == planId);
+    if (index < 0) return;
+    final plan = avFloorPlans[index];
+    final at = plan.devices.indexWhere((d) => d.id == device.id);
+    if (at < 0) return;
+    _pushAvUndo(what, _plansScope, coalesce: coalesce);
+    final next = List<PlanDevice>.from(plan.devices);
+    next[at] = device;
+    avFloorPlans[index] = plan.copyWith(devices: next);
+    notifyListeners();
+  }
+
+  /// Sets the room's throw distance, in feet. 0 clears it.
+  void setAvThrowDistance(double feet) {
+    final next = feet.isFinite && feet > 0 ? feet : 0.0;
+    if (next == avThrowDistanceFt) return;
+    _pushAvUndo(
+      next > 0 ? 'Set the throw distance' : 'Clear the throw distance',
+      _plansScope,
+    );
+    avThrowDistanceFt = next;
+    notifyListeners();
+  }
+
+  /// Sets the room's light on the screens and the contrast its content
+  /// needs. 0 foot-candles clears it.
+  void setAvRoomLight(double fc, double contrast) {
+    final nextFc = fc.isFinite && fc > 0 ? fc : 0.0;
+    final nextContrast = contrast.isFinite && contrast > 1 ? contrast : 15.0;
+    if (nextFc == avRoomLightFc && nextContrast == avContrastTarget) return;
+    _pushAvUndo('Set the room light', _plansScope);
+    avRoomLightFc = nextFc;
+    avContrastTarget = nextContrast;
+    notifyListeners();
+  }
+
+  void removeAvPlanDevice(String planId, String deviceId) {
+    final index = avFloorPlans.indexWhere((p) => p.id == planId);
+    if (index < 0) return;
+    _pushAvUndo('Remove device', _plansScope);
+    final plan = avFloorPlans[index];
+    avFloorPlans[index] = plan.copyWith(
+      devices: [
+        for (final d in plan.devices)
+          if (d.id != deviceId) d,
+      ],
+    );
+    notifyListeners();
+  }
+
   void removeAvCallout(String planId, String calloutId) {
     final index = avFloorPlans.indexWhere((p) => p.id == planId);
     if (index < 0) return;
@@ -4434,8 +4543,13 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// [recordUndo] false while a drag is in flight — one entry for the move.
-  void setCablingBoxPosition(String id, Offset pos, {bool recordUndo = true}) {
-    if (recordUndo) _pushAvUndo('Move box', _cablingScope);
+  void setCablingBoxPosition(
+    String id,
+    Offset pos, {
+    bool recordUndo = true,
+    String coalesce = '',
+  }) {
+    if (recordUndo) _pushAvUndo('Move box', _cablingScope, coalesce: coalesce);
     avCabling.positions[id] = pos;
     notifyListeners();
   }
@@ -4443,6 +4557,24 @@ class AppStateProvider extends ChangeNotifier {
   void setCablingBoxLabel(String id, String label) {
     _pushAvUndo('Rename box', _cablingScope, coalesce: 'cabling:label:$id');
     avCabling.labels[id] = label;
+    notifyListeners();
+  }
+
+  /// Sets the size a box was dragged to; null sizes it to its text again.
+  void setCablingBoxSize(String id, Size? size) {
+    _pushAvUndo(size == null ? 'Fit box to text' : 'Resize box', _cablingScope);
+    if (size == null) {
+      avCabling.sizes.remove(id);
+    } else {
+      avCabling.sizes[id] = Size(
+        size.width < CablingBox.kMinSize.width
+            ? CablingBox.kMinSize.width
+            : size.width,
+        size.height < CablingBox.kMinSize.height
+            ? CablingBox.kMinSize.height
+            : size.height,
+      );
+    }
     notifyListeners();
   }
 
@@ -4664,6 +4796,7 @@ class AppStateProvider extends ChangeNotifier {
     avCabling.positions.remove(id);
     avCabling.labels.remove(id);
     avCabling.bodies.remove(id);
+    avCabling.sizes.remove(id);
     avCabling.counts.remove(id);
     avCabling.cableTypes.remove(id);
     avCabling.colors.remove(id);
@@ -4693,6 +4826,7 @@ class AppStateProvider extends ChangeNotifier {
     Offset? pos,
     String body = '',
     String shape = '',
+    String deviceKey = '',
     List<Rect> occupied = const [],
   }) {
     _pushAvUndo('Add ${kCablingBoxKindLabels[kind]?.toLowerCase() ?? 'box'}', _cablingScope);
@@ -4725,6 +4859,7 @@ class AppStateProvider extends ChangeNotifier {
             ),
       body: body,
       shape: shape,
+      deviceKey: deviceKey,
     );
     avCabling.extraBoxes.add(box);
     notifyListeners();
@@ -4749,6 +4884,17 @@ class AppStateProvider extends ChangeNotifier {
     if (at < 0) return;
     _pushAvUndo('Change the device', _cablingScope);
     avCabling.extraBoxes[at] = avCabling.extraBoxes[at].copyWith(shape: shape);
+    notifyListeners();
+  }
+
+  /// Turns a device box's icon to face [degrees].
+  void setCablingBoxRotation(String id, double degrees) {
+    final at = avCabling.extraBoxes.indexWhere((b) => b.id == id);
+    if (at < 0) return;
+    _pushAvUndo('Turn the device', _cablingScope);
+    avCabling.extraBoxes[at] = avCabling.extraBoxes[at].copyWith(
+      rotation: normalizeDegrees(degrees),
+    );
     notifyListeners();
   }
 
@@ -6430,12 +6576,12 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Moves a node without a full rebuild round-trip — the drag path.
-  void setAvNodePosition(String nodeId, Offset pos) {
+  void setAvNodePosition(String nodeId, Offset pos, {String coalesce = ''}) {
     final index = avNodes.indexWhere((n) => n.id == nodeId);
     if (index < 0) return;
     // Called once, on release — the drag itself is previewed in the view, so
     // one undo entry per move rather than one per pointer event.
-    _pushAvUndo('Move ${avNodes[index].label}', _flowScope);
+    _pushAvUndo('Move ${avNodes[index].label}', _flowScope, coalesce: coalesce);
     avNodes[index] = avNodes[index].copyWith(pos: pos);
     notifyListeners();
   }
@@ -6956,6 +7102,9 @@ class AppStateProvider extends ChangeNotifier {
     avLocations.clear();
     avScreenSwitches.clear();
     avFloorPlans.clear();
+    avThrowDistanceFt = 0;
+    avRoomLightFc = 0;
+    avContrastTarget = 15;
     avFlowBackground = const DiagramBackground();
     avDismissedDevices.clear();
     avDismissedCables.clear();
@@ -7162,6 +7311,15 @@ class AppStateProvider extends ChangeNotifier {
           final plan = FloorPlan.fromJson(Map<String, dynamic>.from(p));
           if (plan.id.isNotEmpty) avFloorPlans.add(plan);
         }
+      }
+      final throwFt = (doc['throwDistanceFt'] as num?)?.toDouble() ?? 0;
+      avThrowDistanceFt = throwFt.isFinite && throwFt > 0 ? throwFt : 0;
+      final light = doc['roomLight'];
+      if (light is Map) {
+        final fc = (light['fc'] as num?)?.toDouble() ?? 0;
+        final contrast = (light['contrast'] as num?)?.toDouble() ?? 15;
+        avRoomLightFc = fc.isFinite && fc > 0 ? fc : 0;
+        avContrastTarget = contrast.isFinite && contrast > 1 ? contrast : 15;
       }
       final slots = doc['rackSlots'];
       if (slots is Map) {
@@ -7371,6 +7529,9 @@ class AppStateProvider extends ChangeNotifier {
         if (avFlowBackground.hasImage)
           'flowBackground': avFlowBackground.toJson(),
         'floorPlans': avFloorPlans.map((p) => p.toJson()).toList(),
+        if (avThrowDistanceFt > 0) 'throwDistanceFt': avThrowDistanceFt,
+        if (avRoomLightFc > 0)
+          'roomLight': {'fc': avRoomLightFc, 'contrast': avContrastTarget},
         'dismissedDevices': avDismissedDevices.toList(),
         'dismissedCables': avDismissedCables.toList(),
         if (avRoutedFingerprint.isNotEmpty)
@@ -8340,6 +8501,31 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The catalog list hides warranty extensions and service plans.
+  bool catalogHideWarranties = false;
+
+  /// The catalog list hides models made for markets other than the US.
+  bool catalogUsOnly = false;
+
+  /// The keys every shortcut answers to, with anything changed in
+  /// Application Configuration on top of the defaults.
+  KeyboardShortcuts shortcuts = const KeyboardShortcuts();
+
+  void setShortcuts(KeyboardShortcuts value) {
+    shortcuts = value;
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void setCatalogFilters({bool? hideWarranties, bool? usOnly}) {
+    catalogHideWarranties = hideWarranties ?? catalogHideWarranties;
+    catalogUsOnly = usOnly ?? catalogUsOnly;
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
+  }
+
   /// Follows the project file with the chat. The real app only: tests get no
   /// chat folder written beside their fixtures.
   void _syncChat() {
@@ -8551,6 +8737,9 @@ class AppStateProvider extends ChangeNotifier {
       briefingOnProjectOpen = saved['briefingOnProjectOpen'] is bool
           ? saved['briefingOnProjectOpen'] as bool
           : true;
+      catalogHideWarranties = saved['catalogHideWarranties'] == true;
+      catalogUsOnly = saved['catalogUsOnly'] == true;
+      shortcuts = KeyboardShortcuts.fromJson(saved['keyboardShortcuts']);
       useBuiltInBrowser = saved['useBuiltInBrowser'] is bool
           ? saved['useBuiltInBrowser'] as bool
           : true;

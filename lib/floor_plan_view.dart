@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'av_device_library.dart' show AvDeviceTemplate;
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
 import 'av_port_editor.dart' show avRowIcon;
@@ -22,7 +23,11 @@ import 'export_tools.dart';
 import 'layout_tools.dart'
     show pushOutOfRects, rightAngleTurn, snapToRightAngle;
 import 'live_text_field.dart';
+import 'keyboard_shortcuts.dart';
+import 'placed_devices.dart';
 import 'plan_annotations.dart';
+import 'projection_calc.dart';
+import 'projection_calculator_dialog.dart';
 import 'report_tools.dart';
 import 'run_painting.dart';
 import 'room_locations.dart';
@@ -74,7 +79,10 @@ import 'xlsx_writer.dart';
 List<FloorPlan> sheetsWorthDrawing(AppStateProvider provider) => provider
     .avFloorPlans
     .where((s) =>
-        s.hasImage || s.markers.isNotEmpty || s.annotations.isNotEmpty)
+        s.hasImage ||
+        s.markers.isNotEmpty ||
+        s.annotations.isNotEmpty ||
+        s.devices.isNotEmpty)
     .toList();
 
 /// Paper colors offered before the wheel. Papers, not paints: a sheet is
@@ -166,6 +174,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// captures, then put back; see [printSkin] and [_exportPng].
   bool _printMode = false;
 
+  /// True while an export without the cones and angles is being drawn.
+  bool _hideCones = false;
+
   /// How far the key has been dragged since the pointer went down, or null
   /// while nobody is dragging it. Live, so the panel follows the cursor
   /// without a provider write (and an undo entry) per frame.
@@ -207,6 +218,53 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   String _calloutDragId = '';
   Offset _calloutDrag = Offset.zero;
 
+  /// The device the next click on the sheet places, while [_tool] is
+  /// [_PlanTool.device].
+  RoomDeviceChoice? _pendingDevice;
+
+  /// The placed device being worked on, or ''.
+  String _selectedDeviceId = '';
+
+  /// The device being dragged, on the same terms as the markers above.
+  String _deviceDragId = '';
+
+  /// The first end of the line being drawn to set the scale, and where the
+  /// pointer is while the other end is being found.
+  Offset? _scaleStart;
+  Offset? _scaleHover;
+
+  /// True once the second end of a measurement is down; it stays drawn
+  /// until the next click starts another.
+  bool _measureDone = false;
+
+  /// A device mid-edit, drawn in place of the stored one so a slider moves
+  /// the cone live. Written to the provider once, when the edit ends.
+  PlanDevice? _devicePreview;
+
+  /// [plan]'s devices with any edit in progress shown.
+  List<PlanDevice> _shownDevices(FloorPlan plan) {
+    final preview = _devicePreview;
+    if (preview == null) return plan.devices;
+    return [
+      for (final d in plan.devices) d.id == preview.id ? preview : d,
+    ];
+  }
+
+  void _previewDevice(PlanDevice device) {
+    setState(() => _devicePreview = device);
+    _dragTick.value++;
+  }
+
+  /// Saves the edit in progress as one undo entry.
+  void _commitPreview(AppStateProvider provider, FloorPlan plan, String what) {
+    final preview = _devicePreview;
+    setState(() => _devicePreview = null);
+    if (preview != null) {
+      provider.updateAvPlanDevice(plan.id, preview, what: what);
+    }
+  }
+  Offset _deviceDrag = Offset.zero;
+
   final ValueNotifier<int> _dragTick = ValueNotifier<int>(0);
 
   @override
@@ -241,24 +299,131 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     if (id.isNotEmpty) _planFocus.requestFocus();
   }
 
-  /// Delete / Backspace removes whatever is selected on the drawing.
+  /// The keyboard on whatever is selected on the sheet: delete it, nudge it,
+  /// and for a device with a cone, turn it and size the cone. The keys are
+  /// the ones in App Config > Keyboard shortcuts.
   ///
-  /// Every other handled key is passed through, so typing into the label
-  /// dialog — or anywhere else on the page — is untouched.
+  /// Every other key is passed through, so typing into the label dialog — or
+  /// anywhere else on the page — is untouched.
   KeyEventResult _onPlanKey(FloorPlan? plan, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final isDelete = event.logicalKey == LogicalKeyboardKey.delete ||
-        event.logicalKey == LogicalKeyboardKey.backspace;
-    if (!isDelete || plan == null || _selectedNoteId.isEmpty) {
+    if (plan == null) return KeyEventResult.ignored;
+    final provider = context.read<AppStateProvider>();
+    final keys = provider.shortcuts;
+
+    if (_selectedNoteId.isNotEmpty) {
+      switch (keys.match(event, [Shortcut.delete, Shortcut.deselect])) {
+        case Shortcut.delete:
+          provider.removeAvAnnotation(plan.id, _selectedNoteId);
+          setState(() => _selectedNoteId = '');
+          return KeyEventResult.handled;
+        case Shortcut.deselect:
+          setState(() => _selectedNoteId = '');
+          return KeyEventResult.handled;
+      }
       return KeyEventResult.ignored;
     }
-    context.read<AppStateProvider>().removeAvAnnotation(
+
+    final device = plan.devices
+        .where((d) => d.id == _selectedDeviceId)
+        .firstOrNull;
+    final callout = plan.callouts
+        .where((c) => c.id == _selectedCalloutId)
+        .firstOrNull;
+    if (device == null && callout == null) return KeyEventResult.ignored;
+
+    final action = keys.match(event, [
+      Shortcut.delete,
+      Shortcut.deselect,
+      ...Shortcut.moves,
+      if (device != null && deviceShapeHasFov(device.shape)) ...Shortcut.cone,
+    ]);
+    if (action == null) return KeyEventResult.ignored;
+
+    if (action == Shortcut.deselect) {
+      setState(() {
+        _selectedDeviceId = '';
+        _selectedCalloutId = null;
+      });
+      return KeyEventResult.handled;
+    }
+    if (action == Shortcut.delete) {
+      if (device != null) {
+        provider.removeAvPlanDevice(plan.id, device.id);
+        setState(() => _selectedDeviceId = '');
+      } else {
+        provider.removeAvCallout(plan.id, callout!.id);
+        setState(() => _selectedCalloutId = null);
+      }
+      return KeyEventResult.handled;
+    }
+
+    // Half a foot, or five feet with Shift, once the sheet is to scale.
+    final ppf = plan.pixelsPerFoot;
+    final step = ppf > 0 ? ppf / 2 : 4.0;
+    final far = ppf > 0 ? ppf * 5 : 40.0;
+    final move = switch (action) {
+      Shortcut.moveLeft => Offset(-step, 0),
+      Shortcut.moveRight => Offset(step, 0),
+      Shortcut.moveUp => Offset(0, -step),
+      Shortcut.moveDown => Offset(0, step),
+      Shortcut.moveLeftFar => Offset(-far, 0),
+      Shortcut.moveRightFar => Offset(far, 0),
+      Shortcut.moveUpFar => Offset(0, -far),
+      Shortcut.moveDownFar => Offset(0, far),
+      _ => null,
+    };
+    if (move != null) {
+      if (device != null) {
+        provider.updateAvPlanDevice(
+          plan.id,
+          device.copyWith(pos: device.pos + move),
+          what: 'Move ${device.label}',
+          coalesce: 'plan:move:${device.id}',
+        );
+      } else {
+        provider.updateAvCallout(
+          plan.id,
+          callout!.copyWith(pos: callout.pos + move),
+        );
+      }
+      return KeyEventResult.handled;
+    }
+
+    // The cone. Reach steps a foot on a scaled sheet.
+    final d = device!;
+    final reachStep = ppf > 0 ? ppf : 20.0;
+    final next = switch (action) {
+      Shortcut.turnLeft =>
+        d.copyWith(rotation: normalizeDegrees(d.rotation - 15)),
+      Shortcut.turnRight =>
+        d.copyWith(rotation: normalizeDegrees(d.rotation + 15)),
+      Shortcut.wider =>
+        d.copyWith(fov: (d.fov + 5).clamp(5.0, 180.0), showFov: true),
+      Shortcut.narrower =>
+        d.copyWith(fov: (d.fov - 5).clamp(5.0, 180.0), showFov: true),
+      Shortcut.longer => d.copyWith(
+        range: (d.range + reachStep).clamp(20.0, 20000.0),
+        showFov: true,
+      ),
+      Shortcut.shorter => d.copyWith(
+        range: (d.range - reachStep).clamp(20.0, 20000.0),
+        showFov: true,
+      ),
+      Shortcut.toggleCone => d.copyWith(showFov: !d.showFov),
+      _ => d,
+    };
+    provider.updateAvPlanDevice(
       plan.id,
-      _selectedNoteId,
+      next,
+      what: 'Edit ${d.label}',
+      coalesce: action == Shortcut.toggleCone ? '' : 'plan:$action:${d.id}',
     );
-    setState(() => _selectedNoteId = '');
     return KeyEventResult.handled;
   }
+
+  /// Selects a device or callout and takes the keyboard, so the shortcuts
+  /// land on it.
+  void _focusSheet() => _planFocus.requestFocus();
 
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
@@ -375,6 +540,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   Future<List<PlanDrawing>> _captureSheets({
     bool perLayer = false,
     bool monochrome = false,
+    bool cones = true,
   }) async {
     final provider = context.read<AppStateProvider>();
     final drawing = provider.cablingDrawing;
@@ -395,10 +561,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     // up on a sheet somebody is issued. Put it down for the walk and pick it
     // back up after.
     final heldRun = _selectedRunId;
-    if (heldRun.isNotEmpty || monochrome) {
+    final heldDevice = _selectedDeviceId;
+    if (heldRun.isNotEmpty || heldDevice.isNotEmpty || monochrome || !cones) {
       setState(() {
         _selectedRunId = '';
+        _selectedDeviceId = '';
         if (monochrome) _printMode = true;
+        _hideCones = !cones;
       });
       await WidgetsBinding.instance.endOfFrame;
     }
@@ -455,7 +624,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         setState(() {
           _cableLayer = wasLayer;
           _selectedRunId = heldRun;
+          _selectedDeviceId = heldDevice;
           _printMode = false;
+          _hideCones = false;
         });
         if (startingSheet.isNotEmpty) provider.selectFloorPlan(startingSheet);
       }
@@ -498,6 +669,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   Future<void> _exportPng(
     AppStateProvider provider, {
     bool monochrome = false,
+    bool cones = true,
   }) async {
     final stem = roomFileStem(
       provider,
@@ -515,14 +687,17 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       await _writePngFolder(
         provider,
         folder,
-        await _captureSheets(monochrome: monochrome),
+        await _captureSheets(monochrome: monochrome, cones: cones),
         monochrome ? 'sheet for printing' : 'sheet image',
         suffix: monochrome ? 'floor_plan_bw' : 'floor_plan',
       );
       return;
     }
 
-    final drawings = await _captureSheets(monochrome: monochrome);
+    final drawings = await _captureSheets(
+      monochrome: monochrome,
+      cones: cones,
+    );
     if (drawings.isEmpty) {
       _snack('Could not render the plan to an image.', error: true);
       return;
@@ -655,6 +830,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         if (plan != null) _layerBar(provider, plan, drawing),
         if (plan != null && _selectedRunId.isNotEmpty)
           _runBar(provider, plan, drawing),
+        if (plan != null && _selectedDeviceId.isNotEmpty)
+          _deviceBar(provider, plan),
         if (_tool == _PlanTool.notation && plan != null)
           _notationBar(provider, plan),
         const Divider(height: 1),
@@ -1231,221 +1408,420 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   }
 
   Widget _toolbar(AppStateProvider provider, FloorPlan? plan) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Wrap(
-        spacing: 8,
+    // The sheet and what comes off it on the first line; what goes on it,
+    // and what measures it, on the second.
+    Widget line(List<Widget> children) => Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: children,
+    );
+
+    final theme = Theme.of(context);
+    // A thin rule between groups of buttons that belong together.
+    Widget rule() => SizedBox(
+      height: 28,
+      child: VerticalDivider(width: 12, color: theme.dividerColor),
+    );
+    // Groups wrap as a whole where they can, so related buttons stay
+    // side by side.
+    Widget groups(List<List<Widget>> parts) {
+      final shown = parts.where((g) => g.isNotEmpty).toList();
+      return Wrap(
+        spacing: 4,
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text('Floor Plan', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(width: 4),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.image_outlined, size: 18),
-            label: Text(plan == null ? 'Import a plan' : 'Replace the image'),
-            onPressed: () => _importPlan(provider),
-          ),
-          if (plan != null)
-            OutlinedButton.icon(
-              key: const ValueKey('plan_paper_color'),
-              icon: Container(
-                width: 16,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: plan.paper,
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-              label: const Text('Sheet color'),
-              onPressed: () => _showPaperColorDialog(provider, plan),
-            ),
-          if (plan != null) ...[
-            FilterChip(
-              avatar: const Icon(Icons.add_location_alt_outlined, size: 18),
-              label: const Text('Place locations'),
-              selected: _tool == _PlanTool.location,
-              onSelected: (v) => setState(
-                () => _tool = v ? _PlanTool.location : _PlanTool.none,
-              ),
-            ),
-            FilterChip(
-              avatar: const Icon(Icons.pin_drop_outlined, size: 18),
-              label: const Text('Add callouts'),
-              selected: _tool == _PlanTool.callout,
-              onSelected: (v) => setState(
-                () => _tool = v ? _PlanTool.callout : _PlanTool.none,
-              ),
-            ),
-            // Everything a drawing has to say that a marker cannot: which way
-            // the cable leaves, which corner is out of scope, "core drill
-            // here".
-            FilterChip(
-              avatar: const Icon(Icons.draw_outlined, size: 18),
-              label: const Text('Notation'),
-              selected: _tool == _PlanTool.notation,
-              onSelected: (v) => setState(() {
-                _tool = v ? _PlanTool.notation : _PlanTool.none;
-                if (!v) _selectedNoteId = '';
-              }),
-            ),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.fit_screen, size: 18),
-              label: const Text('Fit to view'),
-              onPressed: () {
-                final fitted = fitToViewport(
-                  controller: _transform,
-                  contentKey: _planKey,
-                  viewportKey: _viewportKey,
-                );
-                if (!fitted) _snack('The plan is still drawing - try again.');
-              },
-            ),
-            // The legend that travels with the exported image. On by default:
-            // a sheet coded by icon, color and dash pattern whose key is
-            // opt-in is a sheet that gets mailed out without one.
-            FilterChip(
-              avatar: const Icon(Icons.legend_toggle, size: 18),
-              label: const Text('Key'),
-              tooltip: 'Draw the key on the sheet - it is part of the '
-                  'exported image',
-              selected: !plan.keyHidden,
-              onSelected: (v) => provider.updateAvFloorPlan(
-                plan.copyWith(keyHidden: !v),
-              ),
-            ),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.tune, size: 18),
-              label: const Text('Plan settings'),
-              onPressed: () => _showPlanSettings(provider, plan),
+          for (var i = 0; i < shown.length; i++) ...[
+            if (i > 0) rule(),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: shown[i],
             ),
           ],
-          OutlinedButton.icon(
-            icon: const Icon(Icons.place_outlined, size: 18),
-            // How many of the room's places are on THIS sheet, out of how many
-            // there are. A bare total said nothing about the drawing in front
-            // of you, which is the number that matters once a room has more
-            // than one sheet.
-            label: Text(
-              plan == null
-                  ? 'Locations (${provider.avLocations.length})'
-                  : 'Locations (${plan.markers.length}'
-                        '/${provider.avLocations.length} on this sheet)',
-            ),
-            onPressed: () => showLocationManager(context, provider),
-          ),
-          // How many captions are off the sheet, and the one way back.
-          Builder(
-            builder: (ctx) {
-              final hidden = provider.avCabling.hiddenLabels.length;
-              return OutlinedButton.icon(
-                key: const ValueKey('plan_labels'),
-                icon: const Icon(Icons.label_outline, size: 18),
-                label: Text(
-                  hidden == 0 ? 'Labels' : 'Labels ($hidden hidden)',
-                ),
-                onPressed: hidden == 0
-                    ? null
-                    : () {
-                        final back = provider.showAllCablingLabels();
-                        _snack(
-                          'Showing $back label${back == 1 ? '' : 's'} again.',
-                        );
-                      },
-              );
-            },
-          ),
-          // Every cable type's color, the same dialog the Cabling tab
-          // opens: the two are drawings of one room's cable, and a network
-          // run blue on one and green on the other is two sheets nobody can
-          // read together.
-          OutlinedButton.icon(
-            key: const ValueKey('plan_cable_colors'),
-            icon: const Icon(Icons.palette_outlined, size: 18),
-            label: const Text('Cable colors'),
-            onPressed: () => showCableColorsDialog(context, provider),
-          ),
-          // How the writing on this sheet is printed. On the toolbar rather
-          // than buried in a settings page: a plan is recolored while looking
-          // at the plan, usually because the drawing underneath it is dark
-          // exactly where the labels landed.
+        ],
+      );
+    }
+
+    // The sheet itself: what it is, what it is drawn on, how it looks.
+    final sheet = <Widget>[
+      if (plan != null)
+        OutlinedButton.icon(
+          key: const ValueKey('plan_settings'),
+          icon: const Icon(Icons.tune, size: 18),
+          label: const Text('Plan settings'),
+          onPressed: () => _showPlanSettings(provider, plan),
+        ),
+      OutlinedButton.icon(
+        icon: const Icon(Icons.image_outlined, size: 18),
+        label: Text(plan == null ? 'Import a plan' : 'Replace the image'),
+        onPressed: () => _importPlan(provider),
+      ),
+    ];
+
+    final look = <Widget>[
+      // Sheet, label and cable colors in one menu. Cable colors are the
+      // same dialog the Cabling tab opens: the two are drawings of one
+      // room's cable and must agree.
+      PopupMenuButton<String>(
+        key: const ValueKey('plan_colors_menu'),
+        tooltip: 'Sheet, label and cable colors',
+        onSelected: (v) {
+          if (v == 'cables') {
+            showCableColorsDialog(context, provider);
+          } else if (plan != null && v == 'paper') {
+            _showPaperColorDialog(provider, plan);
+          } else if (plan != null && v == 'labels') {
+            _showLabelColorDialog(provider, plan);
+          }
+        },
+        itemBuilder: (ctx) => [
           if (plan != null)
-            OutlinedButton.icon(
-              key: const ValueKey('plan_label_colors'),
-              icon: const Icon(Icons.format_color_text, size: 18),
-              label: const Text('Label colors'),
-              onPressed: () => _showLabelColorDialog(provider, plan),
-            ),
-          if (plan != null)
-            PopupMenuButton<String>(
-              tooltip: 'Export the plan',
-              onSelected: (v) => switch (v) {
-                'layers' => _exportLayers(provider),
-                'bw' => _exportPng(provider, monochrome: true),
-                _ => _exportPng(provider),
-              },
-              // The menu says how many files each of these writes, because
-              // that decides whether it asks for a file or a folder: a room
-              // with one sheet still writes one image, exactly as before.
-              itemBuilder: (ctx) {
-                final drawn = sheetsWorthDrawing(provider).length;
-                final each = drawn > 1
-                    ? 'Every sheet ($drawn .png files)'
-                    : 'This view (.png)';
-                return [
-                  PopupMenuItem(value: 'one', child: Text(each)),
-                  // The one that gets printed and marked up on a clipboard.
-                  // The runs carry a dash pattern as well as a color
-                  // precisely so this stays readable.
-                  PopupMenuItem(
-                    value: 'bw',
-                    child: Text(
-                      drawn > 1
-                          ? 'Every sheet, black & white for print (.png)'
-                          : 'This view, black & white for print (.png)',
+            PopupMenuItem(
+              key: const ValueKey('plan_paper_color'),
+              value: 'paper',
+              child: Row(
+                children: [
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: plan.paper,
+                      border: Border.all(color: theme.dividerColor),
+                      borderRadius: BorderRadius.circular(3),
                     ),
                   ),
-                  // A drawing per trade: the network contractor gets the
-                  // network drawing, the AV contractor gets theirs.
-                  const PopupMenuItem(
-                    value: 'layers',
-                    child: Text('One image per sheet and cable type...'),
-                  ),
-                ];
-              },
-              child: IgnorePointer(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.image, size: 18),
-                  label: const Text('Export PNG'),
-                  onPressed: () {},
-                ),
+                  const SizedBox(width: 12),
+                  const Text('Sheet color'),
+                ],
               ),
             ),
-          PopupMenuButton<String>(
-            key: const ValueKey('plan_report_menu'),
-            tooltip: 'Export the location report',
-            onSelected: (v) => v == 'copy'
-                ? _copyReportText(provider)
-                : _exportReport(provider, asXlsx: v == 'xlsx'),
-            itemBuilder: (ctx) => const [
-              PopupMenuItem(
-                value: 'xlsx',
-                child: Text('Workbook with the drawings (.xlsx)'),
+          if (plan != null)
+            const PopupMenuItem(
+              key: ValueKey('plan_label_colors'),
+              value: 'labels',
+              child: Row(
+                children: [
+                  Icon(Icons.format_color_text, size: 18),
+                  SizedBox(width: 12),
+                  Text('Label colors'),
+                ],
               ),
-              PopupMenuItem(value: 'txt', child: Text('Plain text (.txt)')),
-              PopupMenuItem(
-                value: 'copy',
-                child: Text('Copy text to clipboard'),
-              ),
-            ],
-            child: IgnorePointer(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.summarize, size: 18),
-                label: const Text('Location report'),
-                onPressed: () {},
-              ),
+            ),
+          const PopupMenuItem(
+            key: ValueKey('plan_cable_colors'),
+            value: 'cables',
+            child: Row(
+              children: [
+                Icon(Icons.palette_outlined, size: 18),
+                SizedBox(width: 12),
+                Text('Cable colors'),
+              ],
             ),
           ),
+        ],
+        child: IgnorePointer(
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.palette_outlined, size: 18),
+            label: const Text('Colors'),
+            onPressed: () {},
+          ),
+        ),
+      ),
+      if (plan != null) ...[
+        // The legend that travels with the exported image. On by default:
+        // a sheet coded by icon, color and dash pattern whose key is
+        // opt-in is a sheet that gets mailed out without one.
+        FilterChip(
+          avatar: const Icon(Icons.legend_toggle, size: 18),
+          label: const Text('Key'),
+          tooltip: 'Draw the key on the sheet - it is part of the '
+              'exported image',
+          selected: !plan.keyHidden,
+          onSelected: (v) => provider.updateAvFloorPlan(
+            plan.copyWith(keyHidden: !v),
+          ),
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.fit_screen, size: 18),
+          label: const Text('Fit to view'),
+          onPressed: () {
+            final fitted = fitToViewport(
+              controller: _transform,
+              contentKey: _planKey,
+              viewportKey: _viewportKey,
+            );
+            if (!fitted) _snack('The plan is still drawing - try again.');
+          },
+        ),
+      ],
+    ];
+
+    // What gets drawn on the sheet.
+    final drawing = <Widget>[
+      if (plan != null) ...[
+        FilterChip(
+          avatar: const Icon(Icons.add_location_alt_outlined, size: 18),
+          label: const Text('Place locations'),
+          selected: _tool == _PlanTool.location,
+          onSelected: (v) => setState(
+            () => _tool = v ? _PlanTool.location : _PlanTool.none,
+          ),
+        ),
+        FilterChip(
+          avatar: const Icon(Icons.pin_drop_outlined, size: 18),
+          label: const Text('Add callouts'),
+          selected: _tool == _PlanTool.callout,
+          onSelected: (v) => setState(
+            () => _tool = v ? _PlanTool.callout : _PlanTool.none,
+          ),
+        ),
+        _addDeviceMenu(provider, plan),
+        // Everything a drawing has to say that a marker cannot: which way
+        // the cable leaves, which corner is out of scope, "core drill
+        // here".
+        FilterChip(
+          avatar: const Icon(Icons.draw_outlined, size: 18),
+          label: const Text('Notation'),
+          selected: _tool == _PlanTool.notation,
+          onSelected: (v) => setState(() {
+            _tool = v ? _PlanTool.notation : _PlanTool.none;
+            if (!v) _selectedNoteId = '';
+          }),
+        ),
+      ],
+    ];
+
+    // The lists behind what is drawn.
+    final lists = <Widget>[
+      OutlinedButton.icon(
+        icon: const Icon(Icons.place_outlined, size: 18),
+        // How many of the room's places are on THIS sheet, out of how many
+        // there are. A bare total said nothing about the drawing in front
+        // of you, which is the number that matters once a room has more
+        // than one sheet.
+        label: Text(
+          plan == null
+              ? 'Locations (${provider.avLocations.length})'
+              : 'Locations (${plan.markers.length}'
+                    '/${provider.avLocations.length} on this sheet)',
+        ),
+        onPressed: () => showLocationManager(context, provider),
+      ),
+      // How many captions are off the sheet, and the one way back.
+      Builder(
+        builder: (ctx) {
+          final hidden = provider.avCabling.hiddenLabels.length;
+          return OutlinedButton.icon(
+            key: const ValueKey('plan_labels'),
+            icon: const Icon(Icons.label_outline, size: 18),
+            label: Text(
+              hidden == 0 ? 'Labels' : 'Labels ($hidden hidden)',
+            ),
+            onPressed: hidden == 0
+                ? null
+                : () {
+                    final back = provider.showAllCablingLabels();
+                    _snack(
+                      'Showing $back label${back == 1 ? '' : 's'} again.',
+                    );
+                  },
+          );
+        },
+      ),
+    ];
+
+    // Lengths and projection: the scale first, since Measure and the drawn
+    // throw both need it.
+    final measuring = <Widget>[
+      if (plan != null)
+        FilterChip(
+          key: const ValueKey('plan_set_scale'),
+          avatar: const Icon(Icons.straighten, size: 18),
+          label: Text(
+            plan.pixelsPerFoot > 0
+                ? 'Scale: ${plan.pixelsPerFoot.toStringAsFixed(1)} px/ft'
+                : 'Set scale',
+          ),
+          tooltip: 'Draw a line over something of known length, then type '
+              'how long it really is',
+          selected: _tool == _PlanTool.scale,
+          onSelected: (v) {
+            setState(() {
+              _tool = v ? _PlanTool.scale : _PlanTool.none;
+              _scaleStart = null;
+              _scaleHover = null;
+            });
+            if (v) {
+              _snack(
+                'Click one end of something whose length you know, then '
+                'the other end.',
+              );
+            }
+          },
+        ),
+      if (plan != null && plan.pixelsPerFoot > 0)
+        FilterChip(
+          key: const ValueKey('plan_measure'),
+          avatar: const Icon(Icons.square_foot, size: 18),
+          label: const Text('Measure'),
+          tooltip: 'Click two points to measure between them',
+          selected: _tool == _PlanTool.measure,
+          onSelected: (v) {
+            setState(() {
+              _tool = v ? _PlanTool.measure : _PlanTool.none;
+              _scaleStart = null;
+              _scaleHover = null;
+              _measureDone = false;
+            });
+            if (v) _snack('Click where to measure from, then where to.');
+          },
+        ),
+      if (plan != null || provider.avThrowDistanceFt > 0)
+        OutlinedButton.icon(
+          key: const ValueKey('plan_throw_distance'),
+          icon: const Icon(Icons.settings_ethernet, size: 18),
+          label: Text(
+            provider.avThrowDistanceFt > 0
+                ? 'Throw ${formatFeetInches(provider.avThrowDistanceFt)}'
+                : 'Throw distance',
+          ),
+          onPressed: () => _editThrowDistance(provider),
+        ),
+      if (plan != null)
+        OutlinedButton.icon(
+          key: const ValueKey('plan_room_light'),
+          icon: const Icon(Icons.light_mode_outlined, size: 18),
+          label: Text(
+            provider.avRoomLightFc > 0
+                ? 'Room light ${trimFeetInches(provider.avRoomLightFc)} fc · '
+                      '${provider.avContrastTarget.round()}:1'
+                : 'Room light',
+          ),
+          onPressed: () => _editRoomLight(provider),
+        ),
+      OutlinedButton.icon(
+        key: const ValueKey('plan_projection_calculator'),
+        icon: const Icon(Icons.calculate_outlined, size: 18),
+        label: const Text('Projection calculator'),
+        onPressed: () => _openProjectionCalculator(provider, plan, null),
+      ),
+    ];
+
+    final output = <Widget>[
+      if (plan != null)
+        PopupMenuButton<String>(
+          tooltip: 'Export the plan',
+          onSelected: (v) => switch (v) {
+            'layers' => _exportLayers(provider),
+            'bw' => _exportPng(provider, monochrome: true),
+            'plain' => _exportPng(provider, cones: false),
+            _ => _exportPng(provider),
+          },
+          // The menu says how many files each of these writes, because
+          // that decides whether it asks for a file or a folder: a room
+          // with one sheet still writes one image, exactly as before.
+          itemBuilder: (ctx) {
+            final drawn = sheetsWorthDrawing(provider).length;
+            final each = drawn > 1
+                ? 'Every sheet ($drawn .png files)'
+                : 'This view (.png)';
+            final sheets = [
+              ...sheetsWorthDrawing(provider),
+              ?provider.activeFloorPlan,
+            ];
+            final angles = sheets.any(
+              (s) => s.devices.any((d) => d.showFov),
+            );
+            return [
+              PopupMenuItem(
+                value: 'one',
+                child: Text(angles ? '$each, with viewing angles' : each),
+              ),
+              // The same drawing with the cones, throws and angles left off,
+              // for the trades who only need where things go.
+              if (angles)
+                PopupMenuItem(
+                  key: const ValueKey('plan_export_plain'),
+                  value: 'plain',
+                  child: Text('$each, without viewing angles'),
+                ),
+              // The one that gets printed and marked up on a clipboard.
+              // The runs carry a dash pattern as well as a color
+              // precisely so this stays readable.
+              PopupMenuItem(
+                value: 'bw',
+                child: Text(
+                  drawn > 1
+                      ? 'Every sheet, black & white for print (.png)'
+                      : 'This view, black & white for print (.png)',
+                ),
+              ),
+              // A drawing per trade: the network contractor gets the
+              // network drawing, the AV contractor gets theirs.
+              const PopupMenuItem(
+                value: 'layers',
+                child: Text('One image per sheet and cable type...'),
+              ),
+            ];
+          },
+          child: IgnorePointer(
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.image, size: 18),
+              label: const Text('Export PNG'),
+              onPressed: () {},
+            ),
+          ),
+        ),
+      PopupMenuButton<String>(
+        key: const ValueKey('plan_report_menu'),
+        tooltip: 'Export the location report',
+        onSelected: (v) => v == 'copy'
+            ? _copyReportText(provider)
+            : _exportReport(provider, asXlsx: v == 'xlsx'),
+        itemBuilder: (ctx) => const [
+          PopupMenuItem(
+            value: 'xlsx',
+            child: Text('Workbook with the drawings (.xlsx)'),
+          ),
+          PopupMenuItem(value: 'txt', child: Text('Plain text (.txt)')),
+          PopupMenuItem(
+            value: 'copy',
+            child: Text('Copy text to clipboard'),
+          ),
+        ],
+        child: IgnorePointer(
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.summarize, size: 18),
+            label: const Text('Location report'),
+            onPressed: () {},
+          ),
+        ),
+      ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // The sheet on the left, the exports pushed to the right.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 4, right: 12),
+                child: Text('Floor Plan', style: theme.textTheme.titleLarge),
+              ),
+              Expanded(child: groups([sheet, look])),
+              const SizedBox(width: 16),
+              line(output),
+            ],
+          ),
+          const SizedBox(height: 8),
+          groups([drawing, lists, measuring]),
         ],
       ),
     );
@@ -1590,7 +1966,16 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         onPanEnd: _tool == _PlanTool.notation
             ? (_) => _noteDragEnd(provider, plan)
             : null,
-        child: Stack(
+        child: MouseRegion(
+          onHover: (_tool == _PlanTool.scale ||
+                      (_tool == _PlanTool.measure && !_measureDone)) &&
+                  _scaleStart != null
+              ? (e) {
+                  _scaleHover = e.localPosition;
+                  _dragTick.value++;
+                }
+              : null,
+          child: Stack(
           children: [
             // The paper: the image's own area plus whatever blank space has
             // been added round it, in one color so the margin cannot be told
@@ -1646,6 +2031,31 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   ),
                 ),
               ),
+            // Under the markers, so a cone never hides what it points from.
+            if (plan.devices.isNotEmpty)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: () {
+                      final shown = _shownDevices(plan);
+                      final pair = _squarePair(shown);
+                      return PlanDeviceFovPainter(
+                        devices: shown,
+                        dragId: _deviceDragId,
+                        drag: _deviceDrag,
+                        squareScreenId: pair?.screen.id ?? '',
+                        squareProjectorId: pair?.projector.id ?? '',
+                        showCones: !_hideCones,
+                        lumens: _projectorLumens(provider, shown),
+                        nits: _faceNits(provider, plan, shown),
+                        roomLightFc: provider.avRoomLightFc,
+                        contrast: provider.avContrastTarget,
+                        pixelsPerFoot: plan.pixelsPerFoot,
+                      );
+                    }(),
+                  ),
+                ),
+              ),
             // Only the locations dropped on THIS sheet. A room's locations
             // belong to the room; where they are drawn belongs to the drawing.
             for (final location in provider.avLocations)
@@ -1663,6 +2073,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 ),
             for (final callout in plan.callouts)
               _calloutMarker(context, provider, model, plan, callout),
+            for (final device in _shownDevices(plan))
+              _deviceMarker(provider, plan, device),
             // Over the markers: notation is a mark-up ON the drawing, and an
             // arrow that disappeared behind a location dot would be pointing
             // at nothing anybody can see.
@@ -1696,7 +2108,25 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             // a marked-up drawing whose marks nobody can read.
             if (!plan.keyHidden)
               _keyPanel(context, provider, model, plan, runs),
+            // The line being drawn to set the scale. Only while the tool is
+            // on, so it never reaches an export.
+            if ((_tool == _PlanTool.scale || _tool == _PlanTool.measure) &&
+                _scaleStart != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _ScaleLinePainter(
+                      start: _scaleStart!,
+                      end: _scaleHover ?? _scaleStart!,
+                      pixelsPerFoot: _tool == _PlanTool.measure
+                          ? plan.pixelsPerFoot
+                          : 0,
+                    ),
+                  ),
+                ),
+              ),
           ],
+        ),
         ),
       ),
     );
@@ -1751,8 +2181,25 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       if (a.text.trim().isNotEmpty) notes[a.color]!.add(a.text.trim());
     }
 
-    final bool empty =
-        zones.isEmpty && cables.isEmpty && plan.callouts.isEmpty && notes.isEmpty;
+    // One row per device name, with how many of it are on this sheet.
+    final devices = <String, ({PlanDevice first, int count})>{};
+    for (final d in plan.devices) {
+      final had = devices[d.deviceKey];
+      devices[d.deviceKey] = (
+        first: had?.first ?? d,
+        count: (had?.count ?? 0) + 1,
+      );
+    }
+    final cones = {
+      for (final d in plan.devices)
+        if (d.showFov && deviceShapeHasFov(d.shape)) d.shape,
+    };
+
+    final bool empty = zones.isEmpty &&
+        cables.isEmpty &&
+        plan.callouts.isEmpty &&
+        notes.isEmpty &&
+        devices.isEmpty;
     if (empty) return const SizedBox.shrink();
 
     final at = plan.keyPos + (_keyDrag ?? Offset.zero);
@@ -1843,6 +2290,38 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                         color: dark ? Colors.white70 : Colors.black87,
                       ),
                       text: kRoomZoneLabels[zone] ?? zone.name,
+                    ),
+                ],
+                if (devices.isNotEmpty) ...[
+                  _keyHeading('Devices', dark),
+                  for (final e in devices.values.take(_kPlanKeyMaxRows))
+                    _keyRow(
+                      dark,
+                      leading: Icon(
+                        cablingDeviceIcon(e.first.shape),
+                        size: 13,
+                        color: dark ? Colors.white70 : Colors.black87,
+                      ),
+                      text: e.count == 1
+                          ? e.first.label
+                          : '${e.first.label} (${e.count})',
+                    ),
+                  if (devices.length > _kPlanKeyMaxRows)
+                    _keyMore(dark, devices.length - _kPlanKeyMaxRows),
+                  for (final shape in cones)
+                    _keyRow(
+                      dark,
+                      leading: Container(
+                        width: _kPlanKeySwatch,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: deviceFovColor(shape).withValues(alpha: 0.35),
+                          border: Border.all(color: deviceFovColor(shape)),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      text: '${deviceFovLabel(shape)} - '
+                          '${kCablingDeviceShapes[shape]?.label ?? shape}',
                     ),
                 ],
                 if (cables.isNotEmpty) ...[
@@ -3032,7 +3511,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       left: at.dx - r,
       top: at.dy - r,
       child: GestureDetector(
-        onTap: () => setState(() => _selectedCalloutId = callout.id),
+        onTap: () {
+          setState(() {
+            _selectedCalloutId = callout.id;
+            _selectedDeviceId = '';
+          });
+          _focusSheet();
+        },
         onPanStart: (_) => setState(() {
           _calloutDragId = callout.id;
           _calloutDrag = Offset.zero;
@@ -3104,6 +3589,1080 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
   }
 
+  // --- devices --------------------------------------------------------------
+
+  /// The menu of the estimate's equipment. Picking one arms the sheet: the
+  /// next click places it.
+  Widget _addDeviceMenu(AppStateProvider provider, FloorPlan plan) {
+    final pending = _tool == _PlanTool.device ? _pendingDevice : null;
+    return PopupMenuButton<RoomDeviceChoice>(
+      key: const ValueKey('plan_add_device'),
+      tooltip: 'Place a device from the estimate',
+      onSelected: (choice) {
+        setState(() {
+          _tool = _PlanTool.device;
+          _pendingDevice = choice;
+        });
+        _snack('Click the sheet to place ${choice.name}.');
+      },
+      itemBuilder: (ctx) => roomDeviceMenuItems(
+        ctx,
+        roomDeviceChoices(provider.roomCost.equipment),
+        plan.devices.map((d) => d.deviceKey),
+      ),
+      child: IgnorePointer(
+        child: FilterChip(
+          avatar: Icon(
+            pending == null
+                ? Icons.developer_board
+                : cablingDeviceIcon(pending.shape),
+            size: 18,
+          ),
+          label: Text(
+            pending == null ? 'Add device' : 'Placing ${pending.name}',
+          ),
+          selected: pending != null,
+          onSelected: (_) {},
+        ),
+      ),
+    );
+  }
+
+  void _placeDeviceAt(AppStateProvider provider, Offset at) {
+    final plan = provider.activeFloorPlan;
+    final choice = _pendingDevice;
+    if (plan == null || choice == null) return;
+    final placed = provider.addAvPlanDevice(
+      plan.id,
+      PlanDevice(
+        id: '',
+        deviceKey: choice.key,
+        label: choice.name,
+        shape: choice.shape,
+        pos: at,
+        fov: defaultDeviceFov(choice.shape),
+        width: _startingWidth(provider, plan, choice),
+      ),
+    );
+    if (placed == null) {
+      _snack(
+        'All ${choice.qty} ${choice.name} on the estimate are already on '
+        'this sheet. Raise the quantity in the cost section to add more.',
+        error: true,
+      );
+      setState(() {
+        _tool = _PlanTool.none;
+        _pendingDevice = null;
+      });
+      return;
+    }
+    final now = provider.activeFloorPlan ?? plan;
+    final left = choice.qty -
+        placedCount(now.devices.map((d) => d.deviceKey), choice.key);
+    _focusSheet();
+    setState(() {
+      _selectedDeviceId = placed.id;
+      // Stays armed while there are more of it to place.
+      if (left <= 0) {
+        _tool = _PlanTool.none;
+        _pendingDevice = null;
+      }
+    });
+  }
+
+  Widget _deviceMarker(
+    AppStateProvider provider,
+    FloorPlan plan,
+    PlanDevice device,
+  ) {
+    const r = kPlanDeviceRadius;
+    const box = r * 2 + 16;
+    const w = 140.0;
+    final selected = _selectedDeviceId == device.id;
+    final at = device.pos +
+        (_deviceDragId == device.id ? _deviceDrag : Offset.zero);
+    final style = plan.styleFor(PlanTextKind.location);
+
+    return Positioned(
+      left: at.dx - w / 2,
+      top: at.dy - box / 2,
+      width: w,
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _selectedDeviceId = device.id;
+          _selectedRunId = '';
+          _selectedCalloutId = null;
+          _focusSheet();
+        }),
+        onPanStart: (_) => setState(() {
+          _deviceDragId = device.id;
+          _deviceDrag = Offset.zero;
+        }),
+        onPanUpdate: (d) {
+          _deviceDrag += d.delta;
+          _dragTick.value++;
+        },
+        onPanEnd: (_) {
+          final moved = _deviceDrag;
+          setState(() {
+            _deviceDragId = '';
+            _deviceDrag = Offset.zero;
+          });
+          if (moved == Offset.zero) return;
+          provider.updateAvPlanDevice(
+            plan.id,
+            device.copyWith(pos: device.pos + moved),
+            what: 'Move ${device.label}',
+          );
+        },
+        onPanCancel: () => setState(() {
+          _deviceDragId = '';
+          _deviceDrag = Offset.zero;
+        }),
+        onDoubleTap: () => _showDeviceEditor(provider, plan, device),
+        onSecondaryTap: () {
+          provider.removeAvPlanDevice(plan.id, device.id);
+          if (selected) setState(() => _selectedDeviceId = '');
+          _snack('${device.label} taken off ${plan.name}.');
+        },
+        child: Tooltip(
+          message: '${device.label}\n'
+              'Click to select · drag to move · double-click to edit · '
+              'right-click to remove',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: box,
+                height: box,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Which way it faces.
+                    if (deviceShapeHasFov(device.shape))
+                      Transform.rotate(
+                        angle: device.rotation * math.pi / 180,
+                        child: SizedBox(
+                          width: box,
+                          height: box,
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: Icon(
+                              Icons.arrow_drop_up,
+                              size: 20,
+                              color: selected
+                                  ? Colors.yellow
+                                  : deviceFovColor(device.shape),
+                            ),
+                          ),
+                        ),
+                      ),
+                    Container(
+                      width: r * 2,
+                      height: r * 2,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF37474F),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected ? Colors.yellow : Colors.white,
+                          width: selected ? 3 : 2,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        cablingDeviceIcon(device.shape),
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (device.label.trim().isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  color: planLabelBackground(style, const Color(0xD9FFFFFF)),
+                  child: Text(
+                    device.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: kLocationLabelFontSize,
+                      color: planLabelInk(style, Colors.black87),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Rated lumens of each projector on the sheet, off the catalog.
+  /// The catalog entries behind a placed device, off the room's estimate.
+  List<AvDeviceTemplate> _templatesFor(
+    AppStateProvider provider,
+    String deviceKey,
+  ) {
+    final library = provider.avDeviceLibrary;
+    return [
+      for (final line in provider.roomCost.equipment)
+        if (roomDeviceKey(line.description) == deviceKey)
+          ?library.templateForModel(line.model),
+    ];
+  }
+
+  /// How wide a device starts on the sheet: a display at its catalog size,
+  /// a screen at 8 ft, once the sheet is to scale.
+  double _startingWidth(
+    AppStateProvider provider,
+    FloorPlan plan,
+    RoomDeviceChoice choice,
+  ) {
+    final ppf = plan.pixelsPerFoot;
+    if (ppf <= 0) return kDefaultScreenWidth;
+    if (choice.shape == 'display') {
+      for (final t in _templatesFor(provider, choice.key)) {
+        final diagonal = displayDiagonalOf(t);
+        if (diagonal > 0) return widthFromDiagonalInches(diagonal) * ppf;
+      }
+      return 4 * ppf;
+    }
+    return kDefaultScreenWidthFt * ppf;
+  }
+
+  /// Straight-on brightness of each screen and display, in nits. A display's
+  /// comes off the catalog; a screen's from the projector paired with it,
+  /// the screen's size and its gain, so only on a scaled sheet.
+  Map<String, double> _faceNits(
+    AppStateProvider provider,
+    FloorPlan plan,
+    List<PlanDevice> shown,
+  ) {
+    if (provider.avRoomLightFc <= 0) return const {};
+    final ppf = plan.pixelsPerFoot;
+    final out = <String, double>{};
+    for (final d in shown) {
+      if (!d.showFov) continue;
+      if (d.shape == 'display') {
+        final nits = _templatesFor(provider, d.deviceKey)
+            .map(displayNitsOf)
+            .firstWhere((n) => n > 0, orElse: () => 0);
+        if (nits > 0) out[d.id] = nits;
+      } else if (d.shape == 'screen' && ppf > 0) {
+        final projector = projectionPartner(shown, d);
+        if (projector == null) continue;
+        final lumens = _projectorSpecs(provider, projector)
+            .where((s) => s.hasLumens)
+            .firstOrNull
+            ?.lumens;
+        if (lumens == null) continue;
+        final widthFt = d.width / ppf;
+        final fl = footLamberts(lumens, d.gain, widthFt * widthFt / 1.6);
+        out[d.id] = nitsFromFootLamberts(fl);
+      }
+    }
+    return out;
+  }
+
+  /// Asks for the light on the room's screens and the contrast its content
+  /// needs.
+  Future<void> _editRoomLight(AppStateProvider provider) async {
+    final fc = TextEditingController(
+      text: provider.avRoomLightFc > 0
+          ? trimFeetInches(provider.avRoomLightFc)
+          : '',
+    );
+    var contrast = provider.avContrastTarget;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Room light'),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'How much light lands on the screens with the room in use. '
+                  'Screens and displays showing their viewing angle then '
+                  'show where the picture holds the contrast below.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const ValueKey('room_light_fc'),
+                  controller: fc,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Light on the screen',
+                    suffixText: 'fc',
+                    helperText: 'about 5 dimmed, 15 to 25 with lights on, '
+                        '50 near windows',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<double>(
+                  key: const ValueKey('room_light_contrast'),
+                  initialValue: kContrastTargets.any((t) => t.$1 == contrast)
+                      ? contrast
+                      : 15,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Content'),
+                  items: [
+                    for (final (n, what) in kContrastTargets)
+                      DropdownMenuItem(
+                        value: n,
+                        child: Text('$what (${n.round()}:1)'),
+                      ),
+                  ],
+                  onChanged: (v) => setLocal(() => contrast = v ?? contrast),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (provider.avRoomLightFc > 0)
+              TextButton(
+                onPressed: () {
+                  fc.clear();
+                  Navigator.of(ctx).pop(true);
+                },
+                child: const Text('Clear'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    // Not disposed here: the dialog is still animating closed.
+    if (saved != true) return;
+    provider.setAvRoomLight(double.tryParse(fc.text.trim()) ?? 0, contrast);
+  }
+
+  Map<String, double> _projectorLumens(
+    AppStateProvider provider,
+    List<PlanDevice> shown,
+  ) => {
+    for (final d in shown)
+      if (d.shape == 'projector' && d.showFov)
+        d.id: _projectorSpecs(provider, d)
+                .where((s) => s.hasLumens)
+                .firstOrNull
+                ?.lumens ??
+            0,
+  };
+
+  /// The selected projector or screen and the other half of its pair.
+  ({PlanDevice screen, PlanDevice projector})? _squarePair(
+    List<PlanDevice> shown,
+  ) {
+    final device = shown.where((d) => d.id == _selectedDeviceId).firstOrNull;
+    if (device == null) return null;
+    final partner = projectionPartner(shown, device);
+    if (partner == null) return null;
+    return device.shape == 'screen'
+        ? (screen: device, projector: partner)
+        : (screen: partner, projector: device);
+  }
+
+  /// Throw and lumens for a projector on the plan: off its own catalog entry
+  /// and any lens bought on the room's estimate.
+  List<ProjectorSpecs> _projectorSpecs(
+    AppStateProvider provider,
+    PlanDevice? device,
+  ) {
+    final library = provider.avDeviceLibrary;
+    final own = <AvDeviceTemplate>[];
+    final lenses = <AvDeviceTemplate>[];
+    final seen = <String>{};
+    for (final line in provider.roomCost.equipment) {
+      final t = library.templateForModel(line.model);
+      if (t == null || !templateTakesProjection(t) || !seen.add(t.model)) {
+        continue;
+      }
+      final mine =
+          device != null && roomDeviceKey(line.description) == device.deviceKey;
+      final isLens = RegExp(r'\blens\b', caseSensitive: false)
+          .hasMatch('${t.model} ${line.description}');
+      if (mine) {
+        own.add(t);
+      } else if (isLens) {
+        lenses.add(t);
+      } else if (device == null) {
+        own.add(t);
+      }
+    }
+    return projectorSpecChoices(own, lenses);
+  }
+
+  /// Asks for the room's throw distance in feet and inches.
+  Future<void> _editThrowDistance(AppStateProvider provider) async {
+    final current = provider.avThrowDistanceFt;
+    final whole = current.floor();
+    final feet = TextEditingController(text: current > 0 ? '$whole' : '');
+    final inches = TextEditingController(
+      text: current > 0 ? trimFeetInches((current - whole) * 12) : '',
+    );
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Throw distance'),
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Lens to screen for this room's projector. The projection "
+                'calculator starts from it.',
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('throw_distance_feet'),
+                      controller: feet,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Feet',
+                        suffixText: 'ft',
+                      ),
+                      onSubmitted: (_) => Navigator.of(ctx).pop(true),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('throw_distance_inches'),
+                      controller: inches,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Inches',
+                        suffixText: 'in',
+                      ),
+                      onSubmitted: (_) => Navigator.of(ctx).pop(true),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          if (current > 0)
+            TextButton(
+              onPressed: () {
+                feet.clear();
+                inches.clear();
+                Navigator.of(ctx).pop(true);
+              },
+              child: const Text('Clear'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final ft = double.tryParse(feet.text.trim()) ?? 0;
+    final inch = double.tryParse(inches.text.trim()) ?? 0;
+    // Not disposed here: the dialog is still animating closed.
+    if (saved != true) return;
+    provider.setAvThrowDistance(ft + inch / 12);
+  }
+
+  /// Opens the projection calculator for [device], or on its own when null.
+  /// For a projector, Apply sets the throw cone to the beam; for a screen, it
+  /// sets the viewing angle.
+  Future<void> _openProjectionCalculator(
+    AppStateProvider provider,
+    FloorPlan? plan,
+    PlanDevice? device,
+  ) async {
+    final ppf = plan?.pixelsPerFoot ?? 0;
+    final shown = plan == null ? const <PlanDevice>[] : _shownDevices(plan);
+    final partner = device == null ? null : projectionPartner(shown, device);
+    final projector = device?.shape == 'screen' ? partner : device;
+    // The room's throw distance first, then the distance on the sheet once
+    // it is to scale.
+    double? distance;
+    String? note;
+    if (provider.avThrowDistanceFt > 0) {
+      distance = provider.avThrowDistanceFt;
+      note = "the room's throw distance";
+    } else if (device != null && partner != null && ppf > 0) {
+      distance = (partner.pos - device.pos).distance / ppf;
+      note = 'measured on the plan';
+    }
+    final result = await showProjectionCalculator(
+      context,
+      title: device == null
+          ? 'Projection calculator'
+          : 'Projection calculator - ${device.label}',
+      specs: _projectorSpecs(provider, projector),
+      distanceFt: distance,
+      distanceNote: note,
+      onSaveDistance: provider.setAvThrowDistance,
+      applyLabel: device == null
+          ? null
+          : device.shape == 'screen'
+          ? 'Set viewing angle'
+          : ppf > 0
+          ? 'Set throw'
+          : 'Set throw angle',
+    );
+    if (result == null || device == null || plan == null || !mounted) return;
+    final now = _shownDevices(plan).where((d) => d.id == device.id).firstOrNull;
+    if (now == null) return;
+    // A screen takes the calculator's viewing angle, gain and, on a scaled
+    // sheet, the image width.
+    final updated = device.shape == 'screen'
+        ? now.copyWith(
+            fov: (result.halfGain * 2).clamp(5.0, 180.0),
+            gain: result.gain,
+            width: ppf > 0 ? result.imageWidthFt * ppf : now.width,
+            showFov: true,
+          )
+        : now.copyWith(
+            fov: result.beamAngle.clamp(5.0, 180.0),
+            range: ppf > 0 ? result.distanceFt * ppf : now.range,
+            showFov: true,
+          );
+    provider.updateAvPlanDevice(plan.id, updated, what: 'Edit ${device.label}');
+    if (device.shape != 'screen' && ppf <= 0) {
+      _snack('Use Set scale so the throw can be drawn to length too.');
+    }
+  }
+
+  /// Turns or moves the selected half of a projector and screen pair so the
+  /// projector hits the screen square on.
+  List<Widget> _squareControls(
+    AppStateProvider provider,
+    FloorPlan plan,
+    PlanDevice device,
+  ) {
+    final theme = Theme.of(context);
+    final pair = _squarePair(_shownDevices(plan));
+    if (pair == null) return const [];
+    final screen = pair.screen;
+    final projector = pair.projector;
+    final off = offAxisAngle(screen.pos, screen.rotation, projector.pos);
+    final aim = angleBetweenRotations(
+      projector.rotation,
+      rotationToward(projector.pos, screen.pos),
+    );
+    final ppf = plan.pixelsPerFoot;
+    final dist = (projector.pos - screen.pos).distance;
+    String deg(double v) => '${v.toStringAsFixed(v < 10 ? 1 : 0)}°';
+    void save(PlanDevice d, String what) =>
+        provider.updateAvPlanDevice(plan.id, d, what: what);
+
+    return [
+      const SizedBox(width: 8),
+      Tooltip(
+        message: 'How far ${projector.label} sits off the line square to '
+            '${screen.label}, and how far it is aimed off the screen',
+        child: Text(
+          '${deg(off)} off square · aimed ${deg(aim)} off'
+          '${ppf > 0 ? ' · ${(dist / ppf).toStringAsFixed(1)} ft' : ''}',
+          key: const ValueKey('plan_square_readout'),
+          style: theme.textTheme.bodySmall,
+        ),
+      ),
+      if (device.shape == 'projector') ...[
+        TextButton.icon(
+          key: const ValueKey('plan_square_projector'),
+          icon: const Icon(Icons.crop_square, size: 16),
+          label: const Text('Square to screen'),
+          // Faces the screen's way back and steps onto its center line,
+          // keeping the distance.
+          onPressed: () => save(
+            projector.copyWith(
+              rotation: squareToScreen(screen.rotation),
+              pos: pointOnCenterLine(screen.pos, screen.rotation, dist),
+            ),
+            'Square ${projector.label} to ${screen.label}',
+          ),
+        ),
+        TextButton.icon(
+          key: const ValueKey('plan_aim_projector'),
+          icon: const Icon(Icons.center_focus_strong, size: 16),
+          label: const Text('Aim at screen'),
+          onPressed: () => save(
+            projector.copyWith(
+              rotation: rotationToward(projector.pos, screen.pos),
+            ),
+            'Aim ${projector.label} at ${screen.label}',
+          ),
+        ),
+      ] else
+        TextButton.icon(
+          key: const ValueKey('plan_square_screen'),
+          icon: const Icon(Icons.crop_square, size: 16),
+          label: const Text('Square to projector'),
+          onPressed: () => save(
+            screen.copyWith(
+              rotation: rotationToward(screen.pos, projector.pos),
+            ),
+            'Square ${screen.label} to ${projector.label}',
+          ),
+        ),
+    ];
+  }
+
+  /// The bar for the selected device: which way it faces and its cone.
+  Widget _deviceBar(AppStateProvider provider, FloorPlan plan) {
+    final theme = Theme.of(context);
+    final device = _shownDevices(plan)
+        .where((d) => d.id == _selectedDeviceId)
+        .firstOrNull;
+    if (device == null) return const SizedBox.shrink();
+    final ppf = plan.pixelsPerFoot;
+    final reachMin = ppf > 0 ? 1.0 : 20.0;
+    final reachMax = ppf > 0 ? 150.0 : 3000.0;
+    final reach = (ppf > 0 ? device.range / ppf : device.range).clamp(
+      reachMin,
+      reachMax,
+    );
+    // Live while dragging, saved once on release.
+    Widget slider({
+      required Key key,
+      required String label,
+      required double value,
+      required double min,
+      required double max,
+      int? divisions,
+      required PlanDevice Function(double) apply,
+      required String what,
+    }) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: theme.textTheme.bodySmall),
+        SizedBox(
+          width: 150,
+          child: Slider(
+            key: key,
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: (v) => _previewDevice(apply(v)),
+            onChangeEnd: (_) => _commitPreview(provider, plan, what),
+          ),
+        ),
+      ],
+    );
+    void turn(double by) => provider.updateAvPlanDevice(
+      plan.id,
+      device.copyWith(rotation: normalizeDegrees(device.rotation + by)),
+      what: 'Turn ${device.label}',
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Icon(cablingDeviceIcon(device.shape), size: 18),
+          Text(device.label, style: theme.textTheme.bodySmall),
+          if (deviceShapeHasFov(device.shape)) ...[
+            const SizedBox(width: 8),
+            avRowIcon(Icons.rotate_left, 'Turn 15° left', () => turn(-15)),
+            Text(
+              '${device.rotation.round()}°',
+              style: theme.textTheme.bodySmall,
+            ),
+            avRowIcon(Icons.rotate_right, 'Turn 15° right', () => turn(15)),
+            slider(
+              key: const ValueKey('plan_device_bar_rotation'),
+              label: 'Facing',
+              value: device.rotation.clamp(0.0, 355.0),
+              min: 0,
+              max: 355,
+              divisions: 71,
+              apply: (v) => device.copyWith(rotation: v),
+              what: 'Turn ${device.label}',
+            ),
+          ],
+          if (deviceShapeHasFov(device.shape))
+            FilterChip(
+              key: const ValueKey('plan_device_fov'),
+              avatar: const Icon(Icons.change_history, size: 16),
+              label: Text(
+                '${deviceFovLabel(device.shape)} ${device.fov.round()}°',
+              ),
+              selected: device.showFov,
+              onSelected: (v) => provider.updateAvPlanDevice(
+                plan.id,
+                device.copyWith(showFov: v),
+                what: v ? 'Show the cone' : 'Hide the cone',
+              ),
+            ),
+          if (deviceShapeHasFov(device.shape) && device.showFov) ...[
+            slider(
+              key: const ValueKey('plan_device_bar_fov'),
+              label: 'Angle',
+              value: device.fov.clamp(5.0, 180.0),
+              min: 5,
+              max: 180,
+              divisions: 35,
+              apply: (v) => device.copyWith(fov: v),
+              what: 'Edit ${device.label}',
+            ),
+            slider(
+              key: const ValueKey('plan_device_bar_reach'),
+              label: ppf > 0 ? 'Reach ${reach.round()} ft' : 'Reach',
+              value: reach,
+              min: reachMin,
+              max: reachMax,
+              apply: (v) => device.copyWith(range: ppf > 0 ? v * ppf : v),
+              what: 'Edit ${device.label}',
+            ),
+          ],
+          if (device.hasFace)
+            slider(
+              key: const ValueKey('plan_device_bar_width'),
+              label: ppf > 0
+                  ? 'Width ${formatFeetInches(device.width / ppf)}'
+                  : 'Width',
+              value: (ppf > 0 ? device.width / ppf : device.width).clamp(
+                ppf > 0 ? 2.0 : 20.0,
+                ppf > 0 ? 40.0 : 1000.0,
+              ),
+              min: ppf > 0 ? 2 : 20,
+              max: ppf > 0 ? 40 : 1000,
+              apply: (v) => device.copyWith(width: ppf > 0 ? v * ppf : v),
+              what: 'Resize ${device.label}',
+            ),
+          if (device.shape == 'projector' || device.shape == 'screen')
+            TextButton.icon(
+              key: const ValueKey('plan_device_calculator'),
+              icon: const Icon(Icons.calculate_outlined, size: 16),
+              label: const Text('Calculator'),
+              onPressed: () =>
+                  _openProjectionCalculator(provider, plan, device),
+            ),
+          ..._squareControls(provider, plan, device),
+          TextButton.icon(
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            label: const Text('Edit'),
+            onPressed: () => _showDeviceEditor(provider, plan, device),
+          ),
+          avRowIcon(
+            Icons.delete_outline,
+            'Take it off this sheet',
+            () {
+              provider.removeAvPlanDevice(plan.id, device.id);
+              setState(() => _selectedDeviceId = '');
+            },
+            danger: true,
+          ),
+          TextButton.icon(
+            icon: const Icon(Icons.close, size: 16),
+            label: const Text('Done'),
+            onPressed: () => setState(() => _selectedDeviceId = ''),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Name, direction and cone for one placed device. The reach is in feet
+  /// once the sheet is calibrated, in plan pixels until then.
+  Future<void> _showDeviceEditor(
+    AppStateProvider provider,
+    FloorPlan plan,
+    PlanDevice device,
+  ) async {
+    final name = TextEditingController(text: device.label);
+    final ppf = plan.pixelsPerFoot;
+    final feet = ppf > 0;
+    var rotation = device.rotation.clamp(0.0, 355.0);
+    var showFov = device.showFov;
+    var fov = device.fov;
+    final reachMin = feet ? 1.0 : 20.0;
+    final reachMax = feet ? 150.0 : 3000.0;
+    var reach = (feet ? device.range / ppf : device.range).clamp(
+      reachMin,
+      reachMax,
+    );
+    final widthMin = feet ? 2.0 : 20.0;
+    final widthMax = feet ? 40.0 : 1000.0;
+    var width = (feet ? device.width / ppf : device.width).clamp(
+      widthMin,
+      widthMax,
+    );
+
+    // Every change is drawn on the sheet behind the dialog as it is made.
+    void live(void Function() change) {
+      change();
+      _previewDevice(
+        device.copyWith(
+          rotation: normalizeDegrees(rotation),
+          showFov: showFov,
+          fov: fov,
+          range: feet ? reach * ppf : reach,
+          width: feet ? width * ppf : width,
+        ),
+      );
+    }
+
+    final saved = await showDialog<bool>(
+      context: context,
+      // Clear, and off to the side, so the sheet stays in view.
+      barrierColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          alignment: Alignment.bottomLeft,
+          title: Row(
+            children: [
+              Icon(cablingDeviceIcon(device.shape)),
+              const SizedBox(width: 10),
+              Expanded(child: Text(device.label)),
+            ],
+          ),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  key: const ValueKey('plan_device_name'),
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'Label'),
+                ),
+                if (deviceShapeHasFov(device.shape)) ...[
+                  const SizedBox(height: 16),
+                  Text('Facing ${rotation.round()}°'),
+                  Slider(
+                    key: const ValueKey('plan_device_rotation'),
+                    value: rotation,
+                    min: 0,
+                    max: 355,
+                    divisions: 71,
+                    label: '${rotation.round()}°',
+                    onChanged: (v) => setLocal(() => live(() => rotation = v)),
+                  ),
+                ],
+                if (device.hasFace) ...[
+                  Text(
+                    feet
+                        ? 'Width ${formatFeetInches(width)}'
+                        : 'Width ${width.round()} px',
+                  ),
+                  Slider(
+                    key: const ValueKey('plan_device_width'),
+                    value: width,
+                    min: widthMin,
+                    max: widthMax,
+                    onChanged: (v) => setLocal(() => live(() => width = v)),
+                  ),
+                ],
+                if (deviceShapeHasFov(device.shape)) ...[
+                  SwitchListTile(
+                    key: const ValueKey('plan_device_show_fov'),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Show ${deviceFovLabel(device.shape)}'),
+                    value: showFov,
+                    onChanged: (v) => setLocal(() => live(() => showFov = v)),
+                  ),
+                  Text('${deviceFovLabel(device.shape)} ${fov.round()}°'),
+                  Slider(
+                    key: const ValueKey('plan_device_fov_angle'),
+                    value: fov,
+                    min: 5,
+                    max: 180,
+                    divisions: 35,
+                    label: '${fov.round()}°',
+                    // Moving the angle shows the cone it is moving.
+                    onChanged: (v) => setLocal(
+                      () => live(() {
+                        fov = v;
+                        showFov = true;
+                      }),
+                    ),
+                  ),
+                  Text(
+                    feet
+                        ? 'Reach ${reach.round()} ft'
+                        : 'Reach ${reach.round()} px (use Set scale '
+                              'to set this in feet)',
+                  ),
+                  Slider(
+                    key: const ValueKey('plan_device_reach'),
+                    value: reach,
+                    min: reachMin,
+                    max: reachMax,
+                    onChanged: (v) => setLocal(
+                      () => live(() {
+                        reach = v;
+                        showFov = true;
+                      }),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final label = name.text.trim();
+    if (mounted) setState(() => _devicePreview = null);
+    if (saved != true) return;
+    provider.updateAvPlanDevice(
+      plan.id,
+      device.copyWith(
+        label: label.isEmpty ? device.label : label,
+        rotation: normalizeDegrees(rotation),
+        showFov: showFov,
+        fov: fov,
+        range: feet ? reach * ppf : reach,
+        width: feet ? width * ppf : width,
+      ),
+      what: 'Edit ${device.label}',
+    );
+  }
+
+  /// Asks how long the line just drawn really is, and sets the sheet's scale
+  /// from it.
+  Future<void> _finishScale(
+    AppStateProvider provider,
+    Offset start,
+    Offset end,
+  ) async {
+    final plan = provider.activeFloorPlan;
+    final pixels = (end - start).distance;
+    void reset() => setState(() {
+      _tool = _PlanTool.none;
+      _scaleStart = null;
+      _scaleHover = null;
+    });
+    if (plan == null) return reset();
+    if (pixels < 5) {
+      setState(() {
+        _scaleStart = null;
+        _scaleHover = null;
+      });
+      _snack('That line is too short - click two points further apart.');
+      return;
+    }
+    final feetField = TextEditingController();
+    final inchField = TextEditingController();
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (ctx) => AlertDialog(
+        alignment: Alignment.bottomLeft,
+        title: const Text('How long is that line?'),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('It is ${pixels.round()} px on the sheet.'),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('plan_scale_feet'),
+                      controller: feetField,
+                      autofocus: true,
+                      decoration: const InputDecoration(labelText: 'Feet'),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      onSubmitted: (_) => Navigator.of(ctx).pop(true),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('plan_scale_inches'),
+                      controller: inchField,
+                      decoration: const InputDecoration(labelText: 'Inches'),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      onSubmitted: (_) => Navigator.of(ctx).pop(true),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('plan_scale_save'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Set scale'),
+          ),
+        ],
+      ),
+    );
+    final feet = (double.tryParse(feetField.text.trim()) ?? 0) +
+        (double.tryParse(inchField.text.trim()) ?? 0) / 12;
+    if (!mounted) return;
+    reset();
+    if (saved != true) return;
+    if (feet <= 0) {
+      _snack('Enter a length to set the scale.', error: true);
+      return;
+    }
+    final ppf = pixels / feet;
+    provider.updateAvFloorPlan(plan.copyWith(pixelsPerFoot: ppf));
+    _snack('Scale set: ${ppf.toStringAsFixed(1)} px per foot.');
+  }
+
   void _onPlanTap(
     AppStateProvider provider,
     Offset at,
@@ -3126,8 +4685,35 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         final bundle = _runAt(drawing, runs, at);
         setState(() {
           _selectedCalloutId = null;
+          _selectedDeviceId = '';
           _selectedRunId = bundle?.id ?? '';
         });
+      case _PlanTool.device:
+        _placeDeviceAt(provider, at);
+      case _PlanTool.scale:
+        final start = _scaleStart;
+        if (start == null) {
+          setState(() {
+            _scaleStart = at;
+            _scaleHover = at;
+          });
+        } else {
+          setState(() => _scaleHover = at);
+          _finishScale(provider, start, at);
+        }
+      case _PlanTool.measure:
+        if (_scaleStart == null || _measureDone) {
+          setState(() {
+            _scaleStart = at;
+            _scaleHover = at;
+            _measureDone = false;
+          });
+        } else {
+          setState(() {
+            _scaleHover = at;
+            _measureDone = true;
+          });
+        }
       case _PlanTool.location:
         _placeLocationAt(provider, at);
       case _PlanTool.callout:
@@ -3683,7 +5269,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   controller: scaleController,
                   decoration: const InputDecoration(
                     labelText: 'Scale (plan pixels per foot)',
-                    helperText: 'Leave blank if the plan is not to scale',
+                    helperText: 'Leave blank if the plan is not to scale, '
+                        'or use Set scale to draw it',
                   ),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -4316,7 +5903,7 @@ class _RunSpecimenPainter extends CustomPainter {
       old.color != color || old.style != style || old.offSheet != offSheet;
 }
 
-enum _PlanTool { none, location, callout, notation }
+enum _PlanTool { none, location, callout, notation, device, scale, measure }
 
 /// Sentinels for [_FloorPlanViewState._cableLayer]. Not cable types, so they
 /// are spelled in a way no cable ever will be.
@@ -4549,4 +6136,65 @@ List<LocationTally> countLinesByLocation(AvFlowModel model) {
     }
   }
   return out;
+}
+
+/// The line drawn to set a sheet's scale, with its length in pixels.
+class _ScaleLinePainter extends CustomPainter {
+  final Offset start;
+  final Offset end;
+
+  /// The sheet's scale, to label the line in feet and inches. 0 labels it
+  /// in pixels, for setting the scale.
+  final double pixelsPerFoot;
+
+  const _ScaleLinePainter({
+    required this.start,
+    required this.end,
+    this.pixelsPerFoot = 0,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const color = Color(0xFFFFC107);
+    final line = Paint()
+      ..color = color
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(start, end, line);
+    for (final p in [start, end]) {
+      canvas.drawCircle(p, 5, Paint()..color = color);
+      canvas.drawCircle(
+        p,
+        5,
+        Paint()
+          ..color = Colors.black
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+    }
+    final px = (end - start).distance;
+    if (px < 1) return;
+    final text = TextPainter(
+      text: TextSpan(
+        text: pixelsPerFoot > 0
+            ? measureLabel(px / pixelsPerFoot)
+            : '${px.round()} px',
+        style: const TextStyle(
+          fontSize: 12,
+          color: Colors.black,
+          backgroundColor: color,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final mid = Offset.lerp(start, end, 0.5)!;
+    text.paint(canvas, mid - Offset(text.width / 2, text.height + 6));
+  }
+
+  @override
+  bool shouldRepaint(_ScaleLinePainter old) =>
+      old.start != start ||
+      old.end != end ||
+      old.pixelsPerFoot != pixelsPerFoot;
 }

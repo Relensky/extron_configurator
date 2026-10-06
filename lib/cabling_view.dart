@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
@@ -17,6 +18,7 @@ import 'av_flow_model.dart'
 import 'av_flow_report.dart' show cablingSections;
 import 'av_port_editor.dart' show avRowIcon;
 import 'cabling_schematic.dart';
+import 'keyboard_shortcuts.dart';
 import 'color_wheel_picker.dart';
 import 'diagram_capture.dart';
 import 'cable_colors_dialog.dart';
@@ -24,6 +26,7 @@ import 'export_tools.dart';
 import 'diagram_grid.dart';
 import 'layout_tools.dart';
 import 'live_text_field.dart';
+import 'placed_devices.dart';
 import 'report_tools.dart';
 import 'run_painting.dart';
 import 'screenshot_tools.dart';
@@ -53,6 +56,14 @@ class CablingView extends StatefulWidget {
   State<CablingView> createState() => _CablingViewState();
 }
 
+/// The "Other device" entry at the foot of the Device menu.
+const RoomDeviceChoice _kOtherDevice = RoomDeviceChoice(
+  key: '',
+  name: 'Other device',
+  qty: 0,
+  shape: 'other',
+);
+
 class _CablingViewState extends State<CablingView> {
   final GlobalKey _canvasKey = GlobalKey();
   final GlobalKey _viewportKey = GlobalKey();
@@ -76,6 +87,11 @@ class _CablingViewState extends State<CablingView> {
   /// dragged on exactly the same terms.
   String _dragId = '';
   Offset _dragOffset = Offset.zero;
+
+  /// The box whose corner is being dragged, and the size it has reached.
+  /// Saved once, on release.
+  String _resizeId = '';
+  Size _resizeSize = Size.zero;
 
   /// Which cable type the drawing is showing, or '' for all of them.
   ///
@@ -295,18 +311,21 @@ class _CablingViewState extends State<CablingView> {
     CablingSchematic drawing,
     KeyEvent event,
   ) {
-    if (event is! KeyDownEvent || _selectedId.isEmpty) {
-      return KeyEventResult.ignored;
-    }
-    final key = event.logicalKey;
+    if (_selectedId.isEmpty) return KeyEventResult.ignored;
+    // The keys are the ones in App Config > Keyboard shortcuts.
+    final action = provider.shortcuts.match(event, [
+      Shortcut.delete,
+      Shortcut.deselect,
+      ...Shortcut.moves,
+    ]);
+    if (action == null) return KeyEventResult.ignored;
 
-    if (key == LogicalKeyboardKey.delete ||
-        key == LogicalKeyboardKey.backspace) {
+    if (action == Shortcut.delete) {
       _deleteSelection(provider, drawing);
       return KeyEventResult.handled;
     }
 
-    if (key == LogicalKeyboardKey.escape) {
+    if (action == Shortcut.deselect) {
       setState(() {
         _selectedId = '';
         _runFrom = '';
@@ -314,12 +333,32 @@ class _CablingViewState extends State<CablingView> {
       return KeyEventResult.handled;
     }
 
-    final forward = key == LogicalKeyboardKey.arrowDown ||
-        key == LogicalKeyboardKey.arrowRight;
-    final back = key == LogicalKeyboardKey.arrowUp ||
-        key == LogicalKeyboardKey.arrowLeft;
-    if (!forward && !back) return KeyEventResult.ignored;
+    // A selected box moves; a selected run steps along its stack.
+    final box = drawing.boxes.where((b) => b.id == _selectedId).firstOrNull;
+    if (box != null) {
+      const step = 4.0, far = 40.0;
+      final by = switch (action) {
+        Shortcut.moveLeft => const Offset(-step, 0),
+        Shortcut.moveRight => const Offset(step, 0),
+        Shortcut.moveUp => const Offset(0, -step),
+        Shortcut.moveDown => const Offset(0, step),
+        Shortcut.moveLeftFar => const Offset(-far, 0),
+        Shortcut.moveRightFar => const Offset(far, 0),
+        Shortcut.moveUpFar => const Offset(0, -far),
+        _ => const Offset(0, far),
+      };
+      provider.setCablingBoxPosition(
+        box.id,
+        _clamped(box.pos + by),
+        coalesce: 'cabling:move:${box.id}',
+      );
+      return KeyEventResult.handled;
+    }
 
+    final forward = action == Shortcut.moveDown ||
+        action == Shortcut.moveRight ||
+        action == Shortcut.moveDownFar ||
+        action == Shortcut.moveRightFar;
     return _stepRun(drawing, forward: forward)
         ? KeyEventResult.handled
         : KeyEventResult.ignored;
@@ -452,10 +491,29 @@ class _CablingViewState extends State<CablingView> {
             ),
           // The gear itself, drawn the way the schematic draws it, so a run
           // can be pulled to "the ceiling mic" rather than to a location code.
-          OutlinedButton.icon(
-            icon: const Icon(Icons.developer_board, size: 18),
-            label: const Text('Device'),
-            onPressed: () => _addDevice(provider, drawing),
+          PopupMenuButton<RoomDeviceChoice>(
+            key: const ValueKey('cabling_add_device'),
+            tooltip: 'Add a device from the estimate',
+            onSelected: (choice) => _addDevice(provider, drawing, choice),
+            itemBuilder: (ctx) => [
+              ...roomDeviceMenuItems(
+                ctx,
+                roomDeviceChoices(provider.roomCost.equipment),
+                provider.avCabling.extraBoxes.map((b) => b.deviceKey),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: _kOtherDevice,
+                child: Text('Other device (pick an icon)...'),
+              ),
+            ],
+            child: IgnorePointer(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.developer_board, size: 18),
+                label: const Text('Device'),
+                onPressed: () {},
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           // The key is part of the drawing, not a view setting: it exports
@@ -718,6 +776,21 @@ class _CablingViewState extends State<CablingView> {
           if (shape != null) provider.setCablingBoxShape(box.id, shape);
         },
       ),
+    if (box.kind == CablingBoxKind.device &&
+        !box.isDerived &&
+        deviceShapeAims(box.shape)) ...[
+      avRowIcon(
+        Icons.rotate_left,
+        'Turn 15° left',
+        () => provider.setCablingBoxRotation(box.id, box.rotation - 15),
+      ),
+      Text('${box.rotation.round()}°', style: const TextStyle(fontSize: 11)),
+      avRowIcon(
+        Icons.rotate_right,
+        'Turn 15° right',
+        () => provider.setCablingBoxRotation(box.id, box.rotation + 15),
+      ),
+    ],
     TextButton.icon(
       icon: const Icon(Icons.notes, size: 16),
       label: Text(box.body.trim().isEmpty ? 'Add text' : 'Edit text'),
@@ -1030,6 +1103,14 @@ class _CablingViewState extends State<CablingView> {
       ),
       if (box.kind == CablingBoxKind.device && !box.isDerived)
         const PopupMenuItem(value: 'shape', child: Text('Device type...')),
+      if (box.kind == CablingBoxKind.device &&
+          !box.isDerived &&
+          deviceShapeAims(box.shape)) ...[
+        const PopupMenuItem(value: 'left', child: Text('Turn 15° left')),
+        const PopupMenuItem(value: 'right', child: Text('Turn 15° right')),
+      ],
+      if (box.customSize != null)
+        const PopupMenuItem(value: 'fit', child: Text('Fit to text')),
       const PopupMenuItem(value: 'run', child: Text('Draw a run from here')),
       const PopupMenuDivider(),
       PopupMenuItem(
@@ -1051,6 +1132,12 @@ class _CablingViewState extends State<CablingView> {
       case 'shape':
         final shape = await _pickDeviceShape(box.shape);
         if (shape != null) provider.setCablingBoxShape(box.id, shape);
+      case 'left':
+        provider.setCablingBoxRotation(box.id, box.rotation - 15);
+      case 'right':
+        provider.setCablingBoxRotation(box.id, box.rotation + 15);
+      case 'fit':
+        provider.setCablingBoxSize(box.id, null);
       case 'run':
         setState(() => _runFrom = box.id);
       case 'delete':
@@ -1261,18 +1348,78 @@ class _CablingViewState extends State<CablingView> {
 
   // --- devices --------------------------------------------------------------
 
+  /// Adds [choice] from the estimate, or asks for an icon when it is
+  /// [_kOtherDevice]. A device is refused once the drawing has as many of it
+  /// as the estimate buys.
   Future<void> _addDevice(
     AppStateProvider provider,
     CablingSchematic drawing,
+    RoomDeviceChoice choice,
   ) async {
-    final shape = await _pickDeviceShape('');
-    if (shape == null) return;
+    if (choice.key.isEmpty) {
+      final shape = await _pickDeviceShape('');
+      if (shape == null) return;
+      final box = provider.addCablingBox(
+        kind: CablingBoxKind.device,
+        shape: shape,
+        occupied: _occupied(provider, drawing),
+      );
+      setState(() => _selectedId = box.id);
+      return;
+    }
+    final placed = placedCount(
+      provider.avCabling.extraBoxes.map((b) => b.deviceKey),
+      choice.key,
+    );
+    if (placed >= choice.qty) {
+      _snack(
+        'All ${choice.qty} ${choice.name} on the estimate are already on the '
+        'drawing. Raise the quantity in the cost section to add more.',
+      );
+      return;
+    }
     final box = provider.addCablingBox(
       kind: CablingBoxKind.device,
-      shape: shape,
+      label: choice.name,
+      shape: choice.shape,
+      deviceKey: choice.key,
       occupied: _occupied(provider, drawing),
     );
     setState(() => _selectedId = box.id);
+  }
+
+  /// A device box's icon, with a pointer showing which way it faces when it
+  /// is a device that faces somewhere.
+  Widget _deviceGlyph(CablingBox box, Color color) {
+    if (!deviceShapeAims(box.shape)) {
+      return Icon(cablingDeviceIcon(box.shape), size: 26, color: color);
+    }
+    const size = 34.0;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Transform.rotate(
+            angle: box.rotation * math.pi / 180,
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Icon(
+                  Icons.arrow_drop_up,
+                  size: 16,
+                  color: deviceFovColor(box.shape),
+                ),
+              ),
+            ),
+          ),
+          Icon(cablingDeviceIcon(box.shape), size: 20, color: color),
+        ],
+      ),
+    );
   }
 
   /// Everything already taking up room on the sheet: the boxes, and the key
@@ -2297,12 +2444,17 @@ class _CablingViewState extends State<CablingView> {
     final isNote = box.kind == CablingBoxKind.note;
     final isPathway = box.kind == CablingBoxKind.pathway;
     final isDevice = box.kind == CablingBoxKind.device;
+    // Mid-resize, drawn at the size it is being dragged to, and never
+    // shorter than its text.
+    final size = _resizeId == box.id
+        ? box.copyWith(customSize: _resizeSize).size
+        : box.size;
 
     return Positioned(
       left: box.pos.dx,
       top: box.pos.dy,
-      width: box.size.width,
-      height: box.size.height,
+      width: size.width,
+      height: size.height,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
@@ -2345,111 +2497,186 @@ class _CablingViewState extends State<CablingView> {
           _dragId = '';
           _dragOffset = Offset.zero;
         }),
-        child: MouseRegion(
-          cursor: SystemMouseCursors.grab,
-          child: Container(
-            decoration: BoxDecoration(
-              color: isNote
-                  ? (theme.brightness == Brightness.dark
-                        ? const Color(0xFF1B2026)
-                        : const Color(0xFFFAFAFA))
-                  : (theme.brightness == Brightness.dark
-                        ? const Color(0xFF2A3038)
-                        : const Color(0xFFDDDDDD)),
-              border: Border.all(
-                color: selected
-                    ? theme.colorScheme.primary
-                    : (theme.brightness == Brightness.dark
-                          ? const Color(0xFF3A424C)
-                          : const Color(0xFF9E9E9E)),
-                width: selected ? 2.5 : 1.2,
-              ),
-              borderRadius: BorderRadius.circular(isPathway ? 3 : 4),
-            ),
-            padding: const EdgeInsets.all(8),
-            child: isPathway
-                // The label the user typed, not a fixed caption: a room whose
-                // route out is "Conduit to IDF-2B" said so on the drawing and
-                // then had it painted over with somebody else's wording.
-                ? RotatedBox(
-                    quarterTurns: 3,
-                    child: Center(
-                      child: Text(
-                        box.label,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          fontStyle: FontStyle.italic,
-                          color: theme.brightness == Brightness.dark
-                              ? Colors.white
-                              : Colors.black87,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.grab,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isNote
+                        ? (theme.brightness == Brightness.dark
+                              ? const Color(0xFF1B2026)
+                              : const Color(0xFFFAFAFA))
+                        : (theme.brightness == Brightness.dark
+                              ? const Color(0xFF2A3038)
+                              : const Color(0xFFDDDDDD)),
+                    border: Border.all(
+                      color: selected
+                          ? theme.colorScheme.primary
+                          : (theme.brightness == Brightness.dark
+                                ? const Color(0xFF3A424C)
+                                : const Color(0xFF9E9E9E)),
+                      width: selected ? 2.5 : 1.2,
                     ),
-                  )
-                : Column(
-                    crossAxisAlignment: isNote
-                        ? CrossAxisAlignment.start
-                        : CrossAxisAlignment.center,
-                    mainAxisAlignment: isNote
-                        ? MainAxisAlignment.start
-                        : MainAxisAlignment.center,
-                    children: [
-                      // The same icon the schematic gives the same device, so
-                      // the projector is the same picture on every sheet.
-                      if (isDevice) ...[
-                        Icon(
-                          cablingDeviceIcon(box.shape),
-                          size: 26,
-                          color: theme.brightness == Brightness.dark
-                              ? Colors.white70
-                              : Colors.black87,
-                        ),
-                        const SizedBox(height: 4),
-                      ],
-                      Text(
-                        box.label,
-                        textAlign: isNote ? TextAlign.left : TextAlign.center,
-                        style: TextStyle(
-                          fontSize: isNote ? 13 : 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: theme.brightness == Brightness.dark
-                              ? Colors.white
-                              : Colors.black87,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (box.body.trim().isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Expanded(
-                          child: Text(
-                            box.body,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: theme.brightness == Brightness.dark
-                                  ? Colors.white70
-                                  : Colors.black87,
-                              height: 1.35,
-                            ),
-                            // The box is sized to the text, so the text is
-                            // allowed to use it. The cap is a backstop for a
-                            // note somebody pasted a page into, not a limit
-                            // anybody should meet.
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: isNote ? 90 : 14,
-                          ),
-                        ),
-                      ],
-                    ],
+                    borderRadius: BorderRadius.circular(isPathway ? 3 : 4),
                   ),
-          ),
+                  padding: const EdgeInsets.all(8),
+                  child: isPathway
+                      // The label the user typed, not a fixed caption: a room whose
+                      // route out is "Conduit to IDF-2B" said so on the drawing and
+                      // then had it painted over with somebody else's wording.
+                      ? RotatedBox(
+                          quarterTurns: 3,
+                          child: Center(
+                            child: Text(
+                              box.label,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                fontStyle: FontStyle.italic,
+                                color: theme.brightness == Brightness.dark
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: isNote
+                              ? CrossAxisAlignment.start
+                              : CrossAxisAlignment.center,
+                          mainAxisAlignment: isNote
+                              ? MainAxisAlignment.start
+                              : MainAxisAlignment.center,
+                          children: [
+                            // The same icon the schematic gives the same device, so
+                            // the projector is the same picture on every sheet.
+                            if (isDevice) ...[
+                              _deviceGlyph(
+                                box,
+                                theme.brightness == Brightness.dark
+                                    ? Colors.white70
+                                    : Colors.black87,
+                              ),
+                              const SizedBox(height: 4),
+                            ],
+                            Text(
+                              box.label,
+                              textAlign: isNote ? TextAlign.left : TextAlign.center,
+                              style: TextStyle(
+                                fontSize: isNote ? 13 : 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: theme.brightness == Brightness.dark
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (box.body.trim().isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Expanded(
+                                child: Text(
+                                  box.body,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: theme.brightness == Brightness.dark
+                                        ? Colors.white70
+                                        : Colors.black87,
+                                    height: 1.35,
+                                  ),
+                                  // The box is sized to the text, so the text is
+                                  // allowed to use it. The cap is a backstop for a
+                                  // note somebody pasted a page into, not a limit
+                                  // anybody should meet.
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: isNote ? 90 : 14,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                ),
+              ),
+            ),
+            // Drag the corner to size the box. The text still sets how short
+            // it can go.
+            if (selected && !isPathway)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: _resizeHandle(provider, box, size, theme),
+              ),
+          ],
         ),
       ),
     );
   }
+
+  Widget _resizeHandle(
+    AppStateProvider provider,
+    CablingBox box,
+    Size size,
+    ThemeData theme,
+  ) => MouseRegion(
+    cursor: SystemMouseCursors.resizeDownRight,
+    child: GestureDetector(
+      key: ValueKey('cabling_resize_${box.id}'),
+      behavior: HitTestBehavior.opaque,
+      onPanStart: (_) => setState(() {
+        _resizeId = box.id;
+        _resizeSize = size;
+      }),
+      onPanUpdate: (d) => setState(() {
+        final next = _resizeSize + d.delta;
+        _resizeSize = Size(
+          next.width.clamp(CablingBox.kMinSize.width, 2000.0),
+          next.height.clamp(CablingBox.kMinSize.height, 4000.0),
+        );
+      }),
+      onPanEnd: (_) {
+        final id = _resizeId;
+        final to = _resizeSize;
+        setState(() => _resizeId = '');
+        if (id.isNotEmpty) provider.setCablingBoxSize(id, to);
+      },
+      onPanCancel: () => setState(() => _resizeId = ''),
+      child: SizedBox(
+        width: 16,
+        height: 16,
+        child: CustomPaint(
+          painter: _ResizeGripPainter(theme.colorScheme.primary),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Three short diagonal strokes in a box's corner.
+class _ResizeGripPainter extends CustomPainter {
+  final Color color;
+  const _ResizeGripPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+    for (final k in [4.0, 8.0, 12.0]) {
+      canvas.drawLine(
+        Offset(size.width - k, size.height - 2),
+        Offset(size.width - 2, size.height - k),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ResizeGripPainter old) => old.color != color;
 }
 
 /// Draws the bundles and their labels.

@@ -30,6 +30,7 @@ enum DeviceField {
   price,
   educationPrice,
   lifeYears,
+  projection,
   notes,
   ports,
 }
@@ -45,6 +46,7 @@ const Map<DeviceField, String> kDeviceFieldLabels = {
   DeviceField.price: 'Unit price (list)',
   DeviceField.educationPrice: 'Unit price (education)',
   DeviceField.lifeYears: 'Average life (years)',
+  DeviceField.projection: 'Throw ratio, lumens and nits',
   DeviceField.notes: 'Notes',
   DeviceField.ports: 'Connectors',
 };
@@ -104,6 +106,13 @@ class DeviceFieldDiff {
         return base.copyWith(educationPrice: theirs.educationPrice);
       case DeviceField.lifeYears:
         return base.copyWith(lifeYears: theirs.lifeYears);
+      case DeviceField.projection:
+        return base.copyWith(
+          throwRatioMin: theirs.throwRatioMin,
+          throwRatioMax: theirs.throwRatioMax,
+          lumens: theirs.lumens,
+          nits: theirs.nits,
+        );
       case DeviceField.notes:
         return base.copyWith(notes: theirs.notes);
       case DeviceField.ports:
@@ -282,6 +291,22 @@ List<DeviceFieldDiff> fieldDiffs(
     theirs.educationPrice,
     decimals: 2,
   );
+  String projection(AvDeviceTemplate t) =>
+      t.throwRatioMin <= 0 && t.lumens <= 0 && t.nits <= 0
+          ? '-'
+          : '${t.throwRatioMin}-${t.throwRatioMax}:1, ${t.lumens.round()} lm'
+              '${t.nits > 0 ? ', ${t.nits.round()} nits' : ''}';
+  final theirsProjects =
+      theirs.throwRatioMin > 0 || theirs.lumens > 0 || theirs.nits > 0;
+  if (theirsProjects && projection(mine) != projection(theirs)) {
+    out.add(DeviceFieldDiff(
+      field: DeviceField.projection,
+      mine: projection(mine),
+      theirs: projection(theirs),
+      mineIsBlank:
+          mine.throwRatioMin <= 0 && mine.lumens <= 0 && mine.nits <= 0,
+    ));
+  }
   text(DeviceField.notes, mine.notes, theirs.notes);
 
   if (theirs.ports.isNotEmpty && !_samePorts(mine.ports, theirs.ports)) {

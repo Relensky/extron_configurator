@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -397,5 +398,32 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('av_cable_lengths')), findsNothing);
     });
+  });
+
+  testWidgets('a device clicked in Edit mode moves with the arrows and is '
+      'removed with Delete', (tester) async {
+    final provider = seeded();
+    await pumpTab(tester, provider);
+    await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Projector'));
+    await tester.pumpAndSettle();
+    final before = provider.avNodeById('PROJECTORDEVICE_1')!.pos;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    expect(
+      provider.avNodeById('PROJECTORDEVICE_1')!.pos.dx,
+      greaterThan(before.dx),
+    );
+
+    // Asks first, since its cables go with it.
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pumpAndSettle();
+    expect(find.text('Remove Projector?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Remove'));
+    await tester.pumpAndSettle();
+    expect(provider.avNodeById('PROJECTORDEVICE_1'), isNull);
+    expect(tester.takeException(), isNull);
   });
 }
