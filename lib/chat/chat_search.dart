@@ -96,7 +96,7 @@ List<ChatMessage> readChatFolder(String folder) {
       }
     }
   } catch (_) {}
-  return withoutDeleted(out);
+  return resolveChat(out);
 }
 
 /// What a search compares: lower case, spaces gone, so "bss103" finds

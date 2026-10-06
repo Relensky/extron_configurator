@@ -541,6 +541,20 @@ class FlowUsbRule {
 /// built-in sources, the same way `device_types` works in ui_schema.json. That
 /// is what makes a rule removable — a shop that does not put doc cams in can
 /// say so.
+/// What can drive a projection screen's motor, by the id a rule file uses.
+const Map<String, String> kScreenControlOptions = {
+  'controller': 'Screen controller',
+  'processor': 'Relay on the control processor',
+  'wallSwitch': 'Wall switch',
+};
+
+/// The order the routing pass tries them in, when a rule file says nothing.
+const List<String> kDefaultScreenControl = [
+  'controller',
+  'processor',
+  'wallSwitch',
+];
+
 class FlowRules {
   final List<FlowBoxRule> sourceBoxes;
   final List<FlowDeviceRule> sourceDevices;
@@ -560,6 +574,11 @@ class FlowRules {
   /// a coin toss between the matrix and the USB switcher.
   final Map<String, String> outletAliases;
 
+  /// What a projection screen's motor control runs to, tried in this order:
+  /// ids from [kScreenControlOptions]. One left out is never used; an empty
+  /// list leaves screens alone.
+  final List<String> screenControl;
+
   /// Where this came from, for the tab to show.
   String source;
 
@@ -573,6 +592,7 @@ class FlowRules {
     required this.usbSwitchers,
     required this.expansionKeywords,
     required this.outletAliases,
+    this.screenControl = kDefaultScreenControl,
     this.source = 'Built-in defaults',
   });
 
@@ -846,6 +866,7 @@ class FlowRules {
     final usbRaw = doc['usbSwitchers'];
     final keywordsRaw = doc['expansionKeywords'];
     final aliasesRaw = doc['outletAliases'];
+    final screensRaw = doc['screenControl'];
 
     return FlowRules(
       sourceBoxes: boxes('sourceBoxes', rules.sourceBoxes),
@@ -894,6 +915,13 @@ class FlowRules {
                 if (!e.key.toString().startsWith('__'))
                   e.key.toString().toLowerCase(): e.value.toString(),
             },
+      screenControl: screensRaw is! List
+          ? rules.screenControl
+          : [
+              for (final e in screensRaw)
+                if (kScreenControlOptions.containsKey(e.toString()))
+                  e.toString(),
+            ],
     );
   }
 
@@ -931,6 +959,7 @@ class FlowRules {
         'usbSwitchers': [for (final r in usbSwitchers) r.toJson()],
         'expansionKeywords': expansionKeywords,
         'outletAliases': outletAliases,
+        'screenControl': screenControl,
       };
 
   FlowRules copyWith({
@@ -943,6 +972,7 @@ class FlowRules {
     List<FlowUsbRule>? usbSwitchers,
     List<String>? expansionKeywords,
     Map<String, String>? outletAliases,
+    List<String>? screenControl,
   }) =>
       FlowRules(
         sourceBoxes: sourceBoxes ?? this.sourceBoxes,
@@ -954,6 +984,7 @@ class FlowRules {
         usbSwitchers: usbSwitchers ?? this.usbSwitchers,
         expansionKeywords: expansionKeywords ?? this.expansionKeywords,
         outletAliases: outletAliases ?? this.outletAliases,
+        screenControl: screenControl ?? this.screenControl,
         source: source,
       );
 

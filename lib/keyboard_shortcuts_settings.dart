@@ -7,49 +7,80 @@ import 'keyboard_shortcuts.dart';
 
 /// The Keyboard shortcuts section of Application Configuration: every
 /// shortcut, what it does, its keys, and a way to change them.
+///
+/// Rebuilds only when the shortcuts change, and draws each one on a single
+/// line with its help in a tooltip: the section is kept built while it is
+/// shut, and a page of wrapped paragraphs was what made opening it stutter.
 class KeyboardShortcutsSettings extends StatelessWidget {
   const KeyboardShortcutsSettings({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppStateProvider>();
-    final keys = provider.shortcuts;
+    final keys = context.select((AppStateProvider p) => p.shortcuts);
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Click a shortcut\'s keys to change them. A drawing\'s shortcuts '
-          'work once something on it is selected: click a device, callout or '
-          'box, or pick a device up in a rack. On the signal flow, turn on '
-          'Edit first.',
-          style: theme.textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
-        for (final area in ShortcutArea.values) ...[
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 4),
-            child: Text(
-              kShortcutAreaLabels[area]!,
-              style: theme.textTheme.titleSmall,
+    return RepaintBoundary(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Click a shortcut to change its keys. Drawing shortcuts work '
+                  'on whatever is selected; on the signal flow, turn on Edit '
+                  'first.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              TextButton.icon(
+                key: const ValueKey('shortcuts_reset_all'),
+                icon: const Icon(Icons.restart_alt, size: 18),
+                label: const Text('Reset all'),
+                onPressed: keys.overrides.isEmpty
+                    ? null
+                    : () => context.read<AppStateProvider>().setShortcuts(
+                        const KeyboardShortcuts(),
+                      ),
+              ),
+            ],
+          ),
+          for (final area in ShortcutArea.values) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 4),
+              child: Text(
+                kShortcutAreaLabels[area]!.toUpperCase(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  letterSpacing: 0.8,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
             ),
-          ),
-          for (final action in kShortcutActions.where((a) => a.area == area))
-            _ShortcutRow(action: action, keys: keys),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  for (final (i, action) in kShortcutActions
+                      .where((a) => a.area == area)
+                      .indexed) ...[
+                    if (i > 0)
+                      Divider(
+                        height: 1,
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                    _ShortcutRow(action: action, keys: keys),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ],
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            key: const ValueKey('shortcuts_reset_all'),
-            icon: const Icon(Icons.restart_alt, size: 18),
-            label: const Text('Put every shortcut back'),
-            onPressed: keys.overrides.isEmpty
-                ? null
-                : () => provider.setShortcuts(const KeyboardShortcuts()),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -64,48 +95,80 @@ class _ShortcutRow extends StatelessWidget {
     final theme = Theme.of(context);
     final provider = context.read<AppStateProvider>();
     final changed = keys.isChanged(action.id);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(action.label),
-                if (action.help.isNotEmpty)
-                  Text(
-                    action.help,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+    final bindings = keys.bindingsFor(action.id);
+    return InkWell(
+      key: ValueKey('shortcut_${action.id}'),
+      onTap: () => _change(context, provider),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          children: [
+            // The name takes the free space, so the keys line up on the
+            // right of every row.
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      action.label,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium,
                     ),
                   ),
-              ],
+                  if (action.help.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: action.help,
+                      child: Icon(
+                        Icons.info_outline,
+                        size: 15,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          OutlinedButton(
-            key: ValueKey('shortcut_${action.id}'),
-            style: OutlinedButton.styleFrom(
-              textStyle: const TextStyle(fontFamily: 'monospace'),
-              foregroundColor: changed ? theme.colorScheme.primary : null,
+            const SizedBox(width: 12),
+            if (bindings.isEmpty)
+              Text(
+                'none',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.disabledColor,
+                ),
+              )
+            else
+              Wrap(
+                spacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  for (final (i, b) in bindings.indexed) ...[
+                    if (i > 0)
+                      Text('or', style: theme.textTheme.bodySmall),
+                    _KeyCombo(b, highlight: changed),
+                  ],
+                ],
+              ),
+            SizedBox(
+              width: 36,
+              height: 28,
+              child: changed
+                  ? IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 28,
+                        height: 28,
+                      ),
+                      tooltip: 'Back to '
+                          '${action.defaults.map((k) => k.label).join(' or ')}',
+                      icon: const Icon(Icons.undo, size: 16),
+                      onPressed: () =>
+                          provider.setShortcuts(keys.reset(action.id)),
+                    )
+                  : null,
             ),
-            onPressed: () => _change(context, provider),
-            child: Text(keys.labelFor(action.id)),
-          ),
-          SizedBox(
-            width: 40,
-            child: changed
-                ? IconButton(
-                    tooltip: 'Back to ${action.defaults.map((k) => k.label).join(' or ')}',
-                    icon: const Icon(Icons.undo, size: 18),
-                    onPressed: () =>
-                        provider.setShortcuts(keys.reset(action.id)),
-                  )
-                : null,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -120,6 +183,53 @@ class _ShortcutRow extends StatelessWidget {
     );
     if (picked == null) return;
     provider.setShortcuts(provider.shortcuts.withBindings(action.id, picked));
+  }
+}
+
+/// One key combination drawn as keycaps: Ctrl + Shift + S.
+class _KeyCombo extends StatelessWidget {
+  final KeyBinding binding;
+  final bool highlight;
+  const _KeyCombo(this.binding, {this.highlight = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final parts = binding.label.split('+');
+    // "Ctrl+=" splits into an empty last part; put the plus back.
+    if (binding.label.endsWith('+')) parts[parts.length - 1] = '+';
+    Widget cap(String text) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: highlight
+            ? theme.colorScheme.primaryContainer
+            : theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(4),
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outline, width: 1.5),
+        ),
+      ),
+      child: Text(
+        text,
+        style: theme.textTheme.labelMedium?.copyWith(
+          fontFamily: 'monospace',
+          color: highlight ? theme.colorScheme.onPrimaryContainer : null,
+        ),
+      ),
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final (i, p) in parts.where((p) => p.isNotEmpty).indexed) ...[
+          if (i > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text('+', style: theme.textTheme.bodySmall),
+            ),
+          cap(p),
+        ],
+      ],
+    );
   }
 }
 

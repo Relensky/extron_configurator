@@ -200,6 +200,24 @@ void main() {
     expect(find.byKey(const ValueKey('plan_square_readout')), findsOneWidget);
     expect(find.byKey(const ValueKey('plan_device_calculator')), findsOneWidget);
 
+    // Pair it with the screen by name, not just by nearness.
+    await tester.tap(find.byKey(const ValueKey('plan_pair_menu')));
+    await tester.pumpAndSettle();
+    final screenId = p.activeFloorPlan!.devices
+        .firstWhere((d) => d.shape == 'screen')
+        .id;
+    await tester.tap(find.byKey(ValueKey('plan_pair_$screenId')).last);
+    await tester.pumpAndSettle();
+    final paired = p.activeFloorPlan!.devices;
+    expect(
+      paired.firstWhere((d) => d.shape == 'projector').pairedWith,
+      screenId,
+    );
+    expect(
+      paired.firstWhere((d) => d.shape == 'screen').pairedWith,
+      paired.firstWhere((d) => d.shape == 'projector').id,
+    );
+
     await tester.tap(find.byKey(const ValueKey('plan_square_projector')));
     await tester.pumpAndSettle();
     final projector = p.activeFloorPlan!.devices.firstWhere(

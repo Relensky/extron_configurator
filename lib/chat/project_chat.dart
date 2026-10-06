@@ -82,6 +82,22 @@ class ChatMessage {
   /// line is never shown; it removes the message it names.
   final String deletes;
 
+  /// Set on an edit: the id of the message its author rewrote. Never shown;
+  /// its [text] replaces that message's, the latest edit winning.
+  final String edits;
+
+  /// Set on a reaction: the id of the message reacted to, with [emoji], and
+  /// [off] when it takes the reaction back. Never shown.
+  final String reacts;
+  final String emoji;
+  final bool off;
+
+  /// On a message as shown: when it was last edited, or null.
+  final DateTime? editedAt;
+
+  /// On a message as shown: emoji -> the logins who reacted with it.
+  final Map<String, List<String>> reactions;
+
   const ChatMessage({
     required this.id,
     required this.channel,
@@ -94,21 +110,45 @@ class ChatMessage {
     this.tab = '',
     this.image = '',
     this.deletes = '',
+    this.edits = '',
+    this.reacts = '',
+    this.emoji = '',
+    this.off = false,
+    this.editedAt,
+    this.reactions = const {},
   });
 
-  ChatMessage withChannel(String to) => ChatMessage(
-        id: id,
-        channel: to,
-        user: user,
-        name: name,
-        at: at,
-        text: text,
-        mentions: mentions,
-        room: room,
-        tab: tab,
-        image: image,
-        deletes: deletes,
-      );
+  /// True for a line that changes another message rather than being one.
+  bool get isEvent =>
+      deletes.isNotEmpty || edits.isNotEmpty || reacts.isNotEmpty;
+
+  ChatMessage withChannel(String to) => copyWith(channel: to);
+
+  ChatMessage copyWith({
+    String? channel,
+    String? text,
+    List<String>? mentions,
+    DateTime? editedAt,
+    Map<String, List<String>>? reactions,
+  }) => ChatMessage(
+    id: id,
+    channel: channel ?? this.channel,
+    user: user,
+    name: name,
+    at: at,
+    text: text ?? this.text,
+    mentions: mentions ?? this.mentions,
+    room: room,
+    tab: tab,
+    image: image,
+    deletes: deletes,
+    edits: edits,
+    reacts: reacts,
+    emoji: emoji,
+    off: off,
+    editedAt: editedAt ?? this.editedAt,
+    reactions: reactions ?? this.reactions,
+  );
 
   String get who => name.trim().isEmpty ? user : name.trim();
 
@@ -127,6 +167,12 @@ class ChatMessage {
         if (tab.isNotEmpty) 'tab': tab,
         if (image.isNotEmpty) 'image': image,
         if (deletes.isNotEmpty) 'deletes': deletes,
+        if (edits.isNotEmpty) 'edits': edits,
+        if (reacts.isNotEmpty) 'reacts': reacts,
+        if (emoji.isNotEmpty) 'emoji': emoji,
+        if (off) 'off': true,
+        if (editedAt != null) 'editedAt': editedAt!.toUtc().toIso8601String(),
+        if (reactions.isNotEmpty) 'reactions': reactions,
       };
 
   static ChatMessage? fromJson(Object? json) {
@@ -135,9 +181,18 @@ class ChatMessage {
     final text = json['text']?.toString() ?? '';
     final image = json['image']?.toString() ?? '';
     final deletes = json['deletes']?.toString() ?? '';
-    if (at == null || (text.isEmpty && image.isEmpty && deletes.isEmpty)) {
+    final edits = json['edits']?.toString() ?? '';
+    final reacts = json['reacts']?.toString() ?? '';
+    final emoji = json['emoji']?.toString() ?? '';
+    if (at == null ||
+        (text.isEmpty &&
+            image.isEmpty &&
+            deletes.isEmpty &&
+            edits.isEmpty &&
+            (reacts.isEmpty || emoji.isEmpty))) {
       return null;
     }
+    final reactionsRaw = json['reactions'];
     return ChatMessage(
       id: json['id']?.toString() ?? '${at.microsecondsSinceEpoch}',
       channel: json['channel']?.toString() ?? kChatGeneral,
@@ -152,8 +207,71 @@ class ChatMessage {
       tab: json['tab']?.toString() ?? '',
       image: image,
       deletes: deletes,
+      edits: edits,
+      reacts: reacts,
+      emoji: emoji,
+      off: json['off'] == true,
+      editedAt: DateTime.tryParse(json['editedAt']?.toString() ?? '')?.toLocal(),
+      reactions: reactionsRaw is! Map
+          ? const {}
+          : {
+              for (final e in reactionsRaw.entries)
+                if (e.value is List)
+                  '${e.key}': [for (final u in e.value as List) '$u'],
+            },
     );
   }
+}
+
+/// Every line read from the chat files, as it is shown: deletions, edits and
+/// reactions applied to the messages they name and then left out. Only the
+/// writer of a message can delete or edit it; anybody can react.
+List<ChatMessage> resolveChat(List<ChatMessage> lines) => applyChatEvents(
+  withoutDeleted(lines),
+  [for (final l in lines) if (l.edits.isNotEmpty || l.reacts.isNotEmpty) l],
+);
+
+/// [messages] with [events] - edit and reaction lines - applied.
+List<ChatMessage> applyChatEvents(
+  List<ChatMessage> messages,
+  List<ChatMessage> events,
+) {
+  if (events.isEmpty) return messages;
+  final edits = <String, ChatMessage>{};
+  // message id -> 'login|emoji' -> (when, on)
+  final reacts = <String, Map<String, (DateTime, bool)>>{};
+  for (final e in events) {
+    if (e.edits.isNotEmpty) {
+      final key = '${e.user.toLowerCase()}|${e.edits}';
+      final had = edits[key];
+      if (had == null || !e.at.isBefore(had.at)) edits[key] = e;
+    } else if (e.reacts.isNotEmpty && e.emoji.isNotEmpty) {
+      final byMessage = reacts[e.reacts] ??= {};
+      final key = '${e.user}|${e.emoji}';
+      final had = byMessage[key];
+      if (had == null || !e.at.isBefore(had.$1)) byMessage[key] = (e.at, !e.off);
+    }
+  }
+  return [
+    for (final m in messages)
+      () {
+        final edit = edits['${m.user.toLowerCase()}|${m.id}'];
+        final byMessage = reacts[m.id];
+        if (edit == null && byMessage == null) return m;
+        final shown = <String, List<String>>{};
+        for (final r in (byMessage ?? const {}).entries) {
+          if (!r.value.$2) continue;
+          final at = r.key.lastIndexOf('|');
+          (shown[r.key.substring(at + 1)] ??= []).add(r.key.substring(0, at));
+        }
+        return m.copyWith(
+          text: edit?.text,
+          mentions: edit?.mentions,
+          editedAt: edit?.at,
+          reactions: shown,
+        );
+      }(),
+  ];
 }
 
 /// [messages] less every deletion line and every message a deletion names -
@@ -165,7 +283,7 @@ List<ChatMessage> withoutDeleted(List<ChatMessage> messages) {
   };
   return [
     for (final m in messages)
-      if (m.deletes.isEmpty && !gone.contains('${m.user.toLowerCase()}|${m.id}'))
+      if (!m.isEvent && !gone.contains('${m.user.toLowerCase()}|${m.id}'))
         m,
   ];
 }
@@ -440,6 +558,10 @@ class ChatSnapshot {
   final String hereTabChannel;
   final ChatMode mode;
 
+  /// The key the GIF search uses, from Application Configuration. '' when
+  /// none is set, and the GIF button says so.
+  final String gifKey;
+
   const ChatSnapshot({
     required this.me,
     required this.attached,
@@ -454,6 +576,7 @@ class ChatSnapshot {
     required this.hereRoomChannel,
     required this.hereTabChannel,
     required this.mode,
+    this.gifKey = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -470,6 +593,7 @@ class ChatSnapshot {
         'hereRoom': hereRoomChannel,
         'hereTab': hereTabChannel,
         'mode': mode.name,
+        if (gifKey.isNotEmpty) 'gifKey': gifKey,
       };
 
   static ChatSnapshot fromJson(Map json) => ChatSnapshot(
@@ -499,6 +623,7 @@ class ChatSnapshot {
         hereTabChannel: '${json['hereTab'] ?? ''}',
         mode: ChatMode.values.firstWhere((m) => m.name == json['mode'],
             orElse: () => ChatMode.slideOut),
+        gifKey: '${json['gifKey'] ?? ''}',
       );
 }
 
@@ -518,6 +643,9 @@ class ProjectChat extends ChangeNotifier {
   /// Who [me] is, as the profile has it.
   String Function() myName = () => '';
   String Function() myEmail = () => '';
+
+  /// The GIF search key, for the snapshot.
+  String Function() gifKey = () => '';
 
   /// Where this person is: the open room's id and code, and the tab.
   ({String roomId, String roomLabel, String tabId, String tabLabel})
@@ -559,6 +687,9 @@ class ProjectChat extends ChangeNotifier {
   final Set<ChatStore?> _unreadStores = {};
 
   final List<ChatMessage> _messages = [];
+
+  /// Edit and reaction lines, applied to [_messages] when they are shown.
+  final List<ChatMessage> _events = [];
   final Set<String> _ids = {};
   List<ChatPerson> _people = [];
   List<ChatPerson> _everyonePeople = [];
@@ -575,7 +706,9 @@ class ProjectChat extends ChangeNotifier {
   String get projectPath => _projectPath;
   String get folder => _store?.folder ?? '';
   String get everyoneFolder => _everyone?.folder ?? '';
-  List<ChatMessage> get messages => List.unmodifiable(_messages);
+  /// The messages as shown: edits and reactions applied.
+  List<ChatMessage> get messages =>
+      List.unmodifiable(applyChatEvents(_messages, _events));
 
   ChatStore _ensureTimer(ChatStore s) {
     _timer ??= Timer.periodic(kChatPoll, (_) => poll());
@@ -646,10 +779,11 @@ class ProjectChat extends ChangeNotifier {
   }
 
   void _drop(bool Function(ChatMessage m) which) {
-    for (final m in _messages.where(which)) {
+    for (final m in [..._messages, ..._events].where(which)) {
       _ids.remove(m.id);
     }
     _messages.removeWhere(which);
+    _events.removeWhere(which);
   }
 
   /// Reads whatever has arrived in either chat. Never throws.
@@ -708,7 +842,14 @@ class ProjectChat extends ChangeNotifier {
       if (_messages.length != before) changed = true;
       final added = <ChatMessage>[];
       for (final m in fresh) {
-        if (m.deletes.isNotEmpty) continue;
+        if (m.isEvent) {
+          // An edit or a reaction: kept, and applied when shown.
+          if (m.deletes.isEmpty && _ids.add(m.id)) {
+            _events.add(m);
+            changed = true;
+          }
+          continue;
+        }
         if (_deleted.contains(_deleteKey(m.user, m.id))) continue;
         if (_ids.add(m.id)) added.add(m);
       }
@@ -858,6 +999,71 @@ class ProjectChat extends ChangeNotifier {
     return '';
   }
 
+  /// Rewrites one of this person's own messages: an edit line in their own
+  /// file, so every copy shows the new text, marked edited. Returns what
+  /// went wrong, or ''.
+  Future<String> editMessage(String id, String text) async {
+    final m = _messages.where((x) => x.id == id).firstOrNull;
+    if (m == null) return '';
+    if (!_isMine(m)) return 'Only the person who wrote a message can edit it.';
+    final body = text.trim();
+    if (body.isEmpty && m.image.isEmpty) {
+      return 'A message cannot be edited down to nothing - delete it instead.';
+    }
+    final store = m.channel == kChatEveryone ? _everyone : _store;
+    if (store == null) return 'The chat folder cannot be reached.';
+    final now = DateTime.now();
+    final edit = ChatMessage(
+      id: '${me.fileStem}-${now.microsecondsSinceEpoch}-e',
+      channel: m.channel,
+      user: me.user,
+      name: myName(),
+      at: now,
+      text: body,
+      mentions: mentionsIn(body, people),
+      edits: id,
+    );
+    try {
+      await store.append(me, edit);
+    } catch (e) {
+      return 'The message could not be edited: $e';
+    }
+    if (_ids.add(edit.id)) _events.add(edit);
+    notifyListeners();
+    return '';
+  }
+
+  /// Adds this person's [emoji] to a message, or takes it back when it is
+  /// already there. Returns what went wrong, or ''.
+  Future<String> react(String id, String emoji) async {
+    final shown = messages.where((x) => x.id == id).firstOrNull;
+    if (shown == null || emoji.isEmpty) return '';
+    final store = shown.channel == kChatEveryone ? _everyone : _store;
+    if (store == null) return 'The chat folder cannot be reached.';
+    final already = (shown.reactions[emoji] ?? const <String>[])
+        .any((u) => u.toLowerCase() == me.user.toLowerCase());
+    final now = DateTime.now();
+    final line = ChatMessage(
+      id: '${me.fileStem}-${now.microsecondsSinceEpoch}-r',
+      channel: shown.channel,
+      user: me.user,
+      name: myName(),
+      at: now,
+      text: '',
+      reacts: id,
+      emoji: emoji,
+      off: already,
+    );
+    try {
+      await store.append(me, line);
+    } catch (e) {
+      return 'The reaction could not be saved: $e';
+    }
+    if (_ids.add(line.id)) _events.add(line);
+    notifyListeners();
+    return '';
+  }
+
   /// Shows [id] and marks it read.
   void selectChannel(String id) {
     channel = id;
@@ -960,7 +1166,7 @@ class ProjectChat extends ChangeNotifier {
     final where = whereAmI?.call();
     final counts = <String, int>{};
     final kept = <ChatMessage>[];
-    for (final m in _messages.reversed) {
+    for (final m in messages.reversed) {
       final n = counts[m.channel] = (counts[m.channel] ?? 0) + 1;
       if (n <= perChannel) kept.add(m);
     }
@@ -989,6 +1195,7 @@ class ProjectChat extends ChangeNotifier {
       hereTabChannel:
           where == null || where.tabId.isEmpty ? '' : 'tab:${where.tabId}',
       mode: mode,
+      gifKey: gifKey(),
     );
   }
 

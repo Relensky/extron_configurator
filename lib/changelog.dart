@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.74+84';
+const String kAppVersion = '0.5.76+86';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,57 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.76',
+    date: 'October 6, 2026',
+    title: 'GIF search works out of the box',
+    changes: [
+      'GIF search in the chat now uses KLIPY, with a key built into the app, '
+          'so it works with nothing to set up. A key of your own can still '
+          'be set under Application Configuration > Working together.',
+      'With no GIF key at all, the GIF button takes a link to a GIF and '
+          'sends that.',
+      'The log now notes when the screen stops drawing and when it comes '
+          'back, very slow frames, the window being hidden or moved to '
+          'another screen, and the key pressed just before the window '
+          'closed - to help track down freezes and black screens.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.75',
+    date: 'October 6, 2026',
+    title: 'Room quantities from the Sheet, and a better chat',
+    changes: [
+      'A projection screen on the signal flow gets its motor control wired '
+          'automatically: to a screen controller, a relay on the control '
+          'processor, or a wall switch placed beside it - whichever is free '
+          'first. The order, and which of the three are allowed, are set on '
+          'the Flow Rules tab under Projection screens.',
+      'In the published workbook and Google Sheet, every other figure follows '
+          'a room tab\'s Qty: the line\'s Extended and the room totals, All '
+          'Items, Parts by Room and Core Components all read it.',
+      'Pull brings room quantities back: change a Qty on a room\'s tab, set '
+          'it to 0 or delete the row, and the room\'s estimate follows. A '
+          'line added by hand changes or comes off; a device counted off the '
+          'drawing takes the typed count, staying on the drawing at 0. Other '
+          'edits on a room\'s tab are still listed in the history file.',
+      'The Keyboard shortcuts section is one line per shortcut with its keys '
+          'drawn as keycaps, and opens without the stutter.',
+      'Chat: the search is a button that opens a bar over the conversation, '
+          'filtering it and marking what matched, with All chats beside it '
+          'for every project. The chat is laid out more cleanly, with the '
+          'window choices in one Layout menu and messages from one person '
+          'grouped.',
+      'Chat messages can be edited after posting, and say (edited) for '
+          'everybody once they have been.',
+      'Emoji reactions on chat messages: point at a message for quick ones '
+          'or the full set, and click a reaction to add or take back yours.',
+      'Pictures and GIFs in the chat. Paste a screenshot straight into the '
+          'message box with Ctrl+V, add a picture from a file, or search '
+          'GIFs online and pick one to send. GIF search needs a Tenor key, '
+          'set under Application Configuration > Working together.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.74',
     date: 'October 6, 2026',

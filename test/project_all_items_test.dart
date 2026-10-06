@@ -391,13 +391,17 @@ void main() {
             i++; // :
             final (_, b) = readRef();
             i++; // )
-            final c = col(RegExp(r'[A-Z]+').firstMatch(a)!.group(0)!);
+            final c1 = col(RegExp(r'[A-Z]+').firstMatch(a)!.group(0)!);
+            final c2 = col(RegExp(r'[A-Z]+').firstMatch(b)!.group(0)!);
             final r1 = int.parse(RegExp(r'\d+').firstMatch(a)!.group(0)!);
             final r2 = int.parse(RegExp(r'\d+').firstMatch(b)!.group(0)!);
             var sum = 0.0;
-            for (var r = r1; r <= r2; r++) {
-              final v = valueOf(sh, '${letter(c)}$r');
-              if (v is double) sum += v;
+            // Down a column or across a row (Parts by Room's totals).
+            for (var c = c1; c <= c2; c++) {
+              for (var r = r1; r <= r2; r++) {
+                final v = valueOf(sh, '${letter(c)}$r');
+                if (v is double) sum += v;
+              }
             }
             return sum;
           }

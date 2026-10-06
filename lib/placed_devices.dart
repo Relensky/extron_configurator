@@ -146,20 +146,41 @@ Color deviceFovColor(String shape) => switch (shape) {
   _ => const Color(0xFF1E88E5),
 };
 
+/// The shape a projector or screen pairs with; '' for anything else.
+String partnerShape(String shape) => switch (shape) {
+  'projector' => 'screen',
+  'screen' => 'projector',
+  _ => '',
+};
+
 /// The screen a projector throws at, or the projector that throws at a
-/// screen: the nearest of the other kind on the sheet. Null for anything
-/// else, or when there is none.
+/// screen. A pair somebody set wins - see [PlanDevice.pairedWith]; failing
+/// that, the nearest of the other kind that nobody has paired. Null for
+/// anything else, or when there is none.
 PlanDevice? projectionPartner(List<PlanDevice> devices, PlanDevice device) {
-  final want = switch (device.shape) {
-    'projector' => 'screen',
-    'screen' => 'projector',
-    _ => '',
-  };
+  final want = partnerShape(device.shape);
   if (want.isEmpty) return null;
+  bool live(PlanDevice d) => d.shape == want && d.id != device.id;
+  // Set on this one, or on the other end.
+  if (device.pairedWith.isNotEmpty) {
+    final set = devices
+        .where((d) => d.id == device.pairedWith && live(d))
+        .firstOrNull;
+    if (set != null) return set;
+  }
+  final claimed = devices
+      .where((d) => d.pairedWith == device.id && live(d))
+      .firstOrNull;
+  if (claimed != null) return claimed;
+  // Paired elsewhere: not this one's to take.
+  bool taken(PlanDevice d) =>
+      d.pairedWith.isNotEmpty &&
+      d.pairedWith != device.id &&
+      devices.any((o) => o.id == d.pairedWith);
   PlanDevice? best;
   var bestDist = double.infinity;
   for (final d in devices) {
-    if (d.shape != want || d.id == device.id) continue;
+    if (!live(d) || taken(d)) continue;
     final dist = (d.pos - device.pos).distanceSquared;
     if (dist < bestDist) {
       best = d;
@@ -216,6 +237,10 @@ class PlanDevice {
   /// For a projection screen: its gain. 1.0 is matte white.
   final double gain;
 
+  /// For a projector or screen: the id of the one it is paired with, for
+  /// squaring up and brightness. '' pairs with the nearest.
+  final String pairedWith;
+
   const PlanDevice({
     required this.id,
     required this.deviceKey,
@@ -228,6 +253,7 @@ class PlanDevice {
     this.range = kDefaultDeviceRange,
     this.width = kDefaultScreenWidth,
     this.gain = 1.0,
+    this.pairedWith = '',
   });
 
   /// True when it is drawn as a flat face as wide as [width].
@@ -250,6 +276,7 @@ class PlanDevice {
     double? range,
     double? width,
     double? gain,
+    String? pairedWith,
   }) => PlanDevice(
     id: id ?? this.id,
     deviceKey: deviceKey,
@@ -262,6 +289,7 @@ class PlanDevice {
     range: range ?? this.range,
     width: width ?? this.width,
     gain: gain ?? this.gain,
+    pairedWith: pairedWith ?? this.pairedWith,
   );
 
   Map<String, dynamic> toJson() => {
@@ -277,6 +305,7 @@ class PlanDevice {
     'range': range,
     if (hasFace) 'width': width,
     if (shape == 'screen' && gain != 1.0) 'gain': gain,
+    if (pairedWith.isNotEmpty) 'pair': pairedWith,
   };
 
   factory PlanDevice.fromJson(Map<String, dynamic> json) {
@@ -299,6 +328,7 @@ class PlanDevice {
       width: ((json['width'] as num?)?.toDouble() ?? kDefaultScreenWidth)
           .clamp(4.0, 20000.0),
       gain: ((json['gain'] as num?)?.toDouble() ?? 1.0).clamp(0.1, 5.0),
+      pairedWith: json['pair']?.toString() ?? '',
     );
   }
 }

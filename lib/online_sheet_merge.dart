@@ -174,10 +174,15 @@ bool _sameCell(String a, String b) {
 ///
 /// Only tabs the app wrote are looked at: a tab somebody added by hand is
 /// never written over, so there is nothing of theirs to lose.
+///
+/// [ignore] passes over what something else brings in: a row of [tab] whose
+/// cell under [column] it accounts for, or with [column] empty, a whole row
+/// that went - the room quantities, see online_room_edits.dart.
 List<OnlineChange> sheetEdits(
   Map<String, List<List<String>>> before,
   Map<String, List<List<String>>> now, {
   Set<String> skip = const {},
+  bool Function(String tab, List<String> row, String column)? ignore,
 }) {
   final out = <OnlineChange>[];
   for (final tab in before.keys) {
@@ -204,6 +209,9 @@ List<OnlineChange> sheetEdits(
           final x = c < was.length ? was[c] : '';
           final y = c < is_.length ? is_[c] : '';
           if (_sameCell(x, y)) continue;
+          if (ignore != null && ignore(tab, was, _columnName(a, r, c))) {
+            continue;
+          }
           cells.add('${_columnName(a, r, c)}: '
               '${x.isEmpty ? '(blank)' : '"${_clip(x)}"'} -> '
               '${y.isEmpty ? '(blank)' : '"${_clip(y)}"'}');
@@ -234,7 +242,15 @@ List<OnlineChange> sheetEdits(
       return m;
     }
 
-    final ca = counts(a), cb = counts(b);
+    // A row gone because something else brings its going in is not listed.
+    final ca = counts([
+      for (final r in a)
+        if (ignore == null || !ignore(tab, r, '')) r,
+    ]);
+    final cb = counts([
+      for (final r in b)
+        if (ignore == null || !ignore(tab, r, '')) r,
+    ]);
     for (final e in cb.entries) {
       for (var i = ca[e.key] ?? 0; i < e.value; i++) {
         out.add((

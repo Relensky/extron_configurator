@@ -63,6 +63,7 @@ import 'nav_rail.dart';
 import 'project_room_picker.dart';
 import 'project_history_view.dart' show showHistoryDialog;
 import 'estimate_settings_section.dart';
+import 'display_watch.dart';
 import 'help_view.dart';
 import 'keyboard_shortcuts.dart';
 import 'keyboard_shortcuts_settings.dart';
@@ -118,6 +119,9 @@ void main(List<String> args) {
       child: const RoomConfigApp(),
     ),
   );
+  // Notes stalls, slow frames, screen changes and the key before a close -
+  // a screen that froze or went black left nothing in the log otherwise.
+  DisplayWatch.instance.start();
   // Looks for a newer release just after launch, and again every half hour
   // once the user is not in the middle of an edit. See app_updates.dart.
   unawaited(appUpdater.start());
@@ -421,7 +425,12 @@ class _MainDashboardState extends State<MainDashboard> {
     final response = await _exitResponse();
     // Closing on purpose: the clean-exit marker keeps the next run from
     // reporting this session as a crash.
-    if (response == ui.AppExitResponse.exit) AppLogger.endSession();
+    if (response == ui.AppExitResponse.exit) {
+      await AppLogger.logInfo(
+        'Window closed${DisplayWatch.instance.lastKeyNote()}.',
+      );
+      AppLogger.endSession();
+    }
     return response;
   }
 
@@ -3788,6 +3797,21 @@ class AppSettingsView extends StatelessWidget {
           ),
           value: provider.chatPopUp,
           onChanged: provider.setChatPopUp,
+        ),
+        const SizedBox(height: 8),
+        // The chat's GIF search - see chat/gif_search.dart.
+        TextFormField(
+          key: const ValueKey('gif_search_key'),
+          initialValue: provider.gifSearchKey,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'GIF search key (KLIPY)',
+            helperText: 'Leave blank to use the key built into the app. With '
+                'no key at all, the GIF button sends a GIF from a link.',
+            isDense: true,
+          ),
+          onFieldSubmitted: provider.setGifSearchKey,
+          onChanged: provider.setGifSearchKey,
         ),
         const SizedBox(height: 20),
 

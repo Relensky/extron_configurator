@@ -61,7 +61,11 @@ enum _RuleSection {
       'Words on a connector label that mean "expansion bus".'),
   outletAliases('Outlet names', Icons.power,
       'Outlet labels that name a device outright, whatever else on the '
-          'drawing answers to the word.');
+          'drawing answers to the word.'),
+  screens('Projection screens', Icons.aspect_ratio,
+      'What a projection screen\'s motor control runs to, tried from the top: '
+          'the first one free in the room is used. Switch one off and it is '
+          'never used; a wall switch is placed beside the screen.');
 
   final String label;
   final IconData icon;
@@ -191,6 +195,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
         _RuleSection.usbSwitchers => r.usbSwitchers.length,
         _RuleSection.expansion => r.expansionKeywords.length,
         _RuleSection.outletAliases => r.outletAliases.length,
+        _RuleSection.screens => r.screenControl.length,
       };
 
   Widget _toolbar(AppStateProvider provider, FlowRules rules, ThemeData theme) {
@@ -275,6 +280,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
           for (final e in rules.outletAliases.entries)
             _aliasTile(rules, e.key, e.value),
         ],
+      _RuleSection.screens => _screenTiles(rules, theme),
     };
 
     return Column(
@@ -296,12 +302,13 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                 ),
               ),
               const SizedBox(width: 12),
-              FilledButton.icon(
-                key: const ValueKey('flow_rules_add'),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add'),
-                onPressed: () => _add(provider, rules),
-              ),
+              if (_section != _RuleSection.screens)
+                FilledButton.icon(
+                  key: const ValueKey('flow_rules_add'),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add'),
+                  onPressed: () => _add(provider, rules),
+                ),
             ],
           ),
         ),
@@ -325,6 +332,72 @@ class _FlowRulesViewState extends State<FlowRulesView> {
   }
 
   // --- the tiles ------------------------------------------------------------
+
+  /// The three ways to drive a screen: the ones in use in their order, then
+  /// the ones switched off.
+  List<Widget> _screenTiles(FlowRules rules, ThemeData theme) {
+    final order = rules.screenControl;
+    final off = [
+      for (final id in kScreenControlOptions.keys)
+        if (!order.contains(id)) id,
+    ];
+    void set(List<String> next) => _apply(rules.copyWith(screenControl: next));
+    Widget tile(String id, int at) {
+      final on = at >= 0;
+      return Card(
+        key: ValueKey('screen_control_$id'),
+        child: ListTile(
+          leading: on
+              ? CircleAvatar(radius: 13, child: Text('${at + 1}'))
+              : const Icon(Icons.block, size: 20),
+          title: Text(kScreenControlOptions[id]!),
+          subtitle: Text(switch (id) {
+            'controller' => 'A SCREEN MOTOR output on a Da-Lite controller, '
+                'an SCB-100 or any box with one.',
+            'processor' => 'A free RELAY output, on the switcher\'s own '
+                'processor first.',
+            _ => 'A switch placed on the wall beside the screen.',
+          }, style: theme.textTheme.bodySmall),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (on) ...[
+                IconButton(
+                  tooltip: 'Try sooner',
+                  icon: const Icon(Icons.arrow_upward, size: 18),
+                  onPressed: at == 0
+                      ? null
+                      : () => set([...order]
+                          ..removeAt(at)
+                          ..insert(at - 1, id)),
+                ),
+                IconButton(
+                  tooltip: 'Try later',
+                  icon: const Icon(Icons.arrow_downward, size: 18),
+                  onPressed: at == order.length - 1
+                      ? null
+                      : () => set([...order]
+                          ..removeAt(at)
+                          ..insert(at + 1, id)),
+                ),
+              ],
+              Switch(
+                key: ValueKey('screen_control_switch_$id'),
+                value: on,
+                onChanged: (v) =>
+                    set(v ? [...order, id] : [...order]..remove(id)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return [
+      for (var i = 0; i < order.length; i++) tile(order[i], i),
+      for (final id in off) tile(id, -1),
+    ];
+  }
 
   Widget _tile({
     required Key key,
@@ -521,6 +594,8 @@ class _FlowRulesViewState extends State<FlowRulesView> {
         _editKeyword(rules, null);
       case _RuleSection.outletAliases:
         _editAlias(rules, null, '');
+      case _RuleSection.screens:
+        break;
     }
   }
 

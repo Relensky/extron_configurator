@@ -185,7 +185,8 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Delete or Backspace'), findsOneWidget);
+    // Drawn as keycaps.
+    expect(find.text('Backspace'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('shortcut_sel.delete')));
     await tester.pumpAndSettle();

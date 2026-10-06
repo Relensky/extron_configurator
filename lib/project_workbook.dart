@@ -253,6 +253,175 @@ List<dynamic> _linkRow(
   return out;
 }
 
+/// A room's line sections on the project workbook, with the estimate's lines
+/// in the same order as their rows.
+List<(String, MasterPartKind, List<CostLine>)> roomLineSections(
+  CostEstimate e,
+) => [
+  ('Equipment', MasterPartKind.equipment, e.equipment),
+  ('Rack Hardware', MasterPartKind.hardware, e.hardware),
+  ('Cabling', MasterPartKind.cabling, e.cabling),
+  ('Other Items', MasterPartKind.other, e.extras),
+];
+
+/// The column a room tab's line carries its estimate line key in, so a pull
+/// of the online copy can tell which line a row is - see
+/// online_room_edits.dart.
+const String kRoomRowIdColumn = 'Row id';
+
+/// [sections] with a [kRoomRowIdColumn] on each line section.
+List<ReportSection> _withRoomRowIds(
+  List<ReportSection> sections,
+  CostEstimate estimate,
+) {
+  final byTitle = {
+    for (final (title, _, lines) in roomLineSections(estimate)) title: lines,
+  };
+  return [
+    for (final s in sections)
+      () {
+        final lines = byTitle[s.title];
+        if (lines == null || lines.length != s.rows.length) return s;
+        return (
+          title: s.title,
+          header: [...s.header, kRoomRowIdColumn],
+          rows: [
+            for (var i = 0; i < lines.length; i++)
+              [...s.rows[i], lines[i].key],
+          ],
+        );
+      }(),
+  ];
+}
+
+/// Line key -> the cell its Qty is in on its room's tab, per room id. What
+/// All Items, Parts by Room and Core Components read a room's count from, so
+/// a quantity typed on a room's tab moves every other figure with it.
+typedef RoomQtyCells = Map<String, Map<String, String>>;
+
+/// Makes every line's Extended on [sheet]'s [title] section its Qty times its
+/// Unit price, and returns the Qty cell of each row by position.
+List<int> _extendedFromQty(XlsxSheet sheet, String title) {
+  final s = _sectionRange(sheet, title, column: 'Qty');
+  if (s == null) return const [];
+  final header = sheet.rows[s.first - 1];
+  final unit = header.indexOf('Unit price');
+  final ext = header.indexOf('Extended');
+  final rows = <int>[];
+  for (var r = s.first; r <= s.last; r++) {
+    rows.add(r);
+    if (unit < 0 || ext < 0) continue;
+    final cells = sheet.rows[r];
+    if (ext >= cells.length || unit >= cells.length) continue;
+    final priced = cells[unit] is XlsxMoney || cells[unit] is XlsxFormula;
+    final qty = cells[s.col];
+    if (!priced || (qty is! num && qty is! XlsxNumberFormula)) continue;
+    _setFormula(sheet, r, ext, '${_cell(s.col, r)}*${_cell(unit, r)}');
+  }
+  return rows;
+}
+
+/// [_extendedFromQty] over a room tab's line sections, and where each line's
+/// Qty is.
+Map<String, String> _linkRoomQty(XlsxSheet sheet, CostEstimate e) {
+  final out = <String, String>{};
+  final tab = _sheetRef(sheet.name);
+  for (final (title, _, lines) in roomLineSections(e)) {
+    final s = _sectionRange(sheet, title, column: 'Qty');
+    final rows = _extendedFromQty(sheet, title);
+    if (s == null || rows.length != lines.length) continue;
+    for (var i = 0; i < lines.length; i++) {
+      out[lines[i].key] = '$tab!${_cell(s.col, rows[i])}';
+    }
+  }
+  return out;
+}
+
+/// Makes each Parts by Room row's Total add up its room columns.
+void _formulaPartsByRoomTotals(XlsxSheet sheet) {
+  var total = -1, first = -1;
+  for (var r = 0; r < sheet.rows.length; r++) {
+    final row = sheet.rows[r];
+    if (row.length > 2 && row[0] == 'Part' && row[1] == 'Model') {
+      total = row.indexOf('Total');
+      first = 2;
+      continue;
+    }
+    if (total <= first || total >= row.length) continue;
+    final cached = row[total];
+    if (cached is! num) continue;
+    row[total] = XlsxNumberFormula(
+      'SUM(${_cell(first, r)}:${_cell(total - 1, r)})',
+      cached.toDouble(),
+      trimNumber(cached.toDouble()),
+    );
+  }
+}
+
+/// A count read from another cell, or from several added up.
+XlsxNumberFormula _countFrom(List<String> refs, double cached) =>
+    XlsxNumberFormula(refs.join('+'), cached, trimNumber(cached));
+
+/// The master part each of a room's lines belongs to, by its key.
+Map<String, List<CostLine>> _roomLinesByPart(CostEstimate e) {
+  final out = <String, List<CostLine>>{};
+  for (final (_, kind, lines) in roomLineSections(e)) {
+    for (final line in lines) {
+      final key = masterPartKey(
+        kind: kind.name,
+        partNumber: line.partNumber,
+        model: line.model,
+        manufacturer: line.manufacturer,
+        description: line.description,
+      );
+      (out[key] ??= []).add(line);
+    }
+  }
+  return out;
+}
+
+/// Makes Core Components' Qty add up what each room's tab says, so a count
+/// typed in a room moves the job's figure and its Extended with it. What a
+/// room's tab does not account for - spares bought for the job - stays as a
+/// number on the end.
+void _linkMasterQty(
+  XlsxSheet sheet,
+  ProjectEstimate estimate,
+  RoomQtyCells roomQty,
+) {
+  final byRoom = {
+    for (final room in estimate.rooms)
+      if (room.ok) room.ref.id: _roomLinesByPart(room.estimate!),
+  };
+  final byId = {for (final l in estimate.master) masterRowId(l.key): l};
+  var qtyCol = -1, idCol = -1;
+  for (var r = 0; r < sheet.rows.length; r++) {
+    final row = sheet.rows[r];
+    if (row.contains('Unit price') && row.contains('Row id')) {
+      qtyCol = row.indexOf('Qty');
+      idCol = row.indexOf('Row id');
+      continue;
+    }
+    if (qtyCol < 0 || idCol < 0 || idCol >= row.length) continue;
+    final line = byId[row[idCol]?.toString() ?? ''];
+    if (line == null) continue;
+    final refs = <String>[];
+    var counted = 0.0;
+    for (final roomId in line.qtyByRoom.keys) {
+      for (final l in byRoom[roomId]?[line.key] ?? const <CostLine>[]) {
+        final ref = roomQty[roomId]?[l.key];
+        if (ref == null) continue;
+        refs.add(ref);
+        counted += l.qty;
+      }
+    }
+    if (refs.isEmpty) continue;
+    final rest = line.qty - counted;
+    if (rest.abs() > 0.0001) refs.add(trimNumber(rest));
+    row[qtyCol] = _countFrom(refs, line.qty);
+  }
+}
+
 /// [sections] from one room's cost sheet, with each line reading its name,
 /// model, part number and price from the master list where it can.
 List<ReportSection> _linkRoomSections(
@@ -734,6 +903,7 @@ List<ReportSection> allItemsSections(
   ProjectEstimate estimate, {
   Map<String, String> roomTabs = const {},
   MasterPriceCells masterCells = const {},
+  RoomQtyCells roomQty = const {},
 }) {
   final project = estimate.project;
   final currency = estimate.currency;
@@ -778,7 +948,10 @@ List<ReportSection> allItemsSections(
           section,
           line.model,
           line.partNumber,
-          line.qty,
+          // The room's own Qty cell, so a count typed there shows here.
+          roomQty[room.ref.id]?[line.key] == null
+              ? line.qty
+              : _countFrom([roomQty[room.ref.id]![line.key]!], line.qty),
           cash(line.unitPrice),
           cash(line.total),
           priceFromLabel(line),
@@ -1406,11 +1579,27 @@ const String kProjectPartsByRoomSheet = 'Parts by Room';
 /// per room with how many go there, and the total. Read down a column for
 /// what a room gets, across a row for where a part goes. Blank, not 0, where
 /// a room gets none.
-List<ReportSection> partsByRoomSections(ProjectEstimate estimate) {
+List<ReportSection> partsByRoomSections(
+  ProjectEstimate estimate, {
+  RoomQtyCells roomQty = const {},
+}) {
   final rooms = [
     for (final r in estimate.rooms)
       if (r.ref.included && r.ok) r,
   ];
+  final linesByPart = {
+    for (final r in rooms) r.ref.id: _roomLinesByPart(r.estimate!),
+  };
+  // A room's count, read off its own tab where it has one.
+  dynamic count(MasterPartLine l, ProjectRoomCost r) {
+    final qty = l.qtyByRoom[r.ref.id] ?? 0;
+    if (qty <= 0) return '';
+    final refs = [
+      for (final line in linesByPart[r.ref.id]?[l.key] ?? const <CostLine>[])
+        ?roomQty[r.ref.id]?[line.key],
+    ];
+    return refs.isEmpty ? qty : _countFrom(refs, qty);
+  }
   if (estimate.master.isEmpty || rooms.isEmpty) return const [];
   return [
     for (final kind in MasterPartKind.values)
@@ -1429,10 +1618,7 @@ List<ReportSection> partsByRoomSections(ProjectEstimate estimate) {
                 [
                   l.description,
                   l.model,
-                  for (final r in rooms)
-                    (l.qtyByRoom[r.ref.id] ?? 0) > 0
-                        ? l.qtyByRoom[r.ref.id]!
-                        : '',
+                  for (final r in rooms) count(l, r),
                   l.qty,
                 ],
           ],
@@ -2660,6 +2846,27 @@ Uint8List buildProjectWorkbookBytes({
 
 /// The project workbook's sheets, before they are a file - the live Google
 /// Sheet is written from these directly. See google_sheets_live.dart.
+/// Room id -> its tab, named through [tab] in room order. Shared with
+/// [projectRoomTabNames], so the pull reads the tab the publish wrote.
+Map<String, String> _nameRoomTabs(
+  ProjectEstimate estimate,
+  String Function(String) tab,
+) => {
+  for (final room in estimate.rooms)
+    if (room.ok && costReportSections(room.estimate!).isNotEmpty)
+      room.ref.id: tab(room.name),
+};
+
+/// The tab each room was published under: named after the two tabs ahead of
+/// them, exactly as [buildProjectWorkbookSheets] does.
+Map<String, String> projectRoomTabNames(ProjectEstimate estimate) {
+  final taken = <String>{};
+  String tab(String proposed) => uniqueXlsxSheetName(proposed, taken);
+  tab(kProjectWorkbookSheets[0]);
+  tab(kProjectAllItemsSheet);
+  return _nameRoomTabs(estimate, tab);
+}
+
 List<XlsxSheet> buildProjectWorkbookSheets({
   required ProjectEstimate estimate,
   DateTime? generated,
@@ -2708,11 +2915,7 @@ List<XlsxSheet> buildProjectWorkbookSheets({
   // THE ROOM TABS ARE NAMED NOW, so the master list can link to them. They
   // are still written last, after every other sheet.
   final allItemsTab = tab(kProjectAllItemsSheet);
-  final roomTabs = <String, String>{
-    for (final room in estimate.rooms)
-      if (room.ok && costReportSections(room.estimate!).isNotEmpty)
-        room.ref.id: tab(room.name),
-  };
+  final roomTabs = _nameRoomTabs(estimate, tab);
   // THE MASTER LIST IS LAID OUT FIRST, so every room's lines can read their
   // price off it: change a price there and it changes in every room. It is
   // still placed after All Items.
@@ -2735,6 +2938,7 @@ List<XlsxSheet> buildProjectWorkbookSheets({
   final summaryTab = sheets.first.name;
   final roomSheets = <XlsxSheet>[];
   final roomTotals = <String, RoomTotalRefs>{};
+  final RoomQtyCells roomQty = {};
   // Every room that priced, including the excluded ones: an alternate that is
   // out of the total is still work somebody did and still gets read.
   for (final room in estimate.rooms) {
@@ -2762,15 +2966,20 @@ List<XlsxSheet> buildProjectWorkbookSheets({
           ],
         ),
         ...withEstimateSections(
-          _linkRoomSections(priced, room.estimate!, estimate, masterCells),
+          _withRoomRowIds(
+            _linkRoomSections(priced, room.estimate!, estimate, masterCells),
+            room.estimate!,
+          ),
           room.room.settings,
         ),
       ],
       generated: stamp,
     );
+    roomQty[room.ref.id] = _linkRoomQty(sheet, room.estimate!);
     roomTotals[tabName] = _formulaRoomTotals(sheet, room.estimate!);
     roomSheets.add(sheet);
   }
+  if (masterSheet != null) _linkMasterQty(masterSheet, estimate, roomQty);
 
   if (roomTabs.isNotEmpty || estimate.project.manualRooms.isNotEmpty) {
     final allItems = buildStackedReportSheet(
@@ -2780,23 +2989,27 @@ List<XlsxSheet> buildProjectWorkbookSheets({
         estimate,
         roomTabs: roomTabs,
         masterCells: masterCells,
+        roomQty: roomQty,
       ),
       generated: stamp,
     );
+    _extendedFromQty(allItems, 'Every item, every room');
     _formulaAllItemsTotals(allItems, roomTotals);
     sheets.add(allItems);
   }
 
   if (masterSheet != null) {
     sheets.add(masterSheet);
-    final byRoom = partsByRoomSections(estimate);
+    final byRoom = partsByRoomSections(estimate, roomQty: roomQty);
     if (byRoom.isNotEmpty) {
-      sheets.add(buildStackedReportSheet(
+      final sheet = buildStackedReportSheet(
         sheetName: tab(kProjectPartsByRoomSheet),
         title: '$title - parts by room',
         sections: byRoom,
         generated: stamp,
-      ));
+      );
+      _formulaPartsByRoomTotals(sheet);
+      sheets.add(sheet);
     }
   }
 

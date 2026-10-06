@@ -4163,6 +4163,80 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     }
   }
 
+  /// Pairs [device] with [otherId], or back to the nearest with ''. Both
+  /// ends say so, and anything either was paired with before is let go.
+  void _pairDevice(
+    AppStateProvider provider,
+    FloorPlan plan,
+    PlanDevice device,
+    String otherId,
+  ) {
+    final ends = {device.id, if (otherId.isNotEmpty) otherId};
+    final next = [
+      for (final d in plan.devices)
+        if (d.id == device.id)
+          d.copyWith(pairedWith: otherId)
+        else if (d.id == otherId)
+          d.copyWith(pairedWith: device.id)
+        else if (ends.contains(d.pairedWith))
+          d.copyWith(pairedWith: '')
+        else
+          d,
+    ];
+    provider.updateAvFloorPlan(plan.copyWith(devices: next));
+  }
+
+  /// Which screen a projector is paired with, or which projector a screen.
+  Widget _pairMenu(
+    AppStateProvider provider,
+    FloorPlan plan,
+    PlanDevice device,
+  ) {
+    final want = partnerShape(device.shape);
+    final others = plan.devices.where((d) => d.shape == want).toList()
+      ..sort((a, b) => a.label.compareTo(b.label));
+    final partner = projectionPartner(_shownDevices(plan), device);
+    final set = device.pairedWith.isNotEmpty &&
+        others.any((d) => d.id == device.pairedWith);
+    return PopupMenuButton<String>(
+      key: const ValueKey('plan_pair_menu'),
+      tooltip: 'Which ${want == 'screen' ? 'screen' : 'projector'} this is '
+          'paired with',
+      onSelected: (id) => _pairDevice(provider, plan, device, id),
+      itemBuilder: (_) => [
+        CheckedPopupMenuItem(
+          value: '',
+          checked: !set,
+          child: const Text('Nearest'),
+        ),
+        for (final d in others)
+          CheckedPopupMenuItem(
+            key: ValueKey('plan_pair_${d.id}'),
+            value: d.id,
+            checked: set && device.pairedWith == d.id,
+            child: Text(d.label),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.link, size: 16),
+            const SizedBox(width: 4),
+            Text(
+              partner == null
+                  ? 'No ${want == 'screen' ? 'screen' : 'projector'}'
+                  : '${set ? 'Paired' : 'Nearest'}: ${partner.label}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const Icon(Icons.arrow_drop_down, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Turns or moves the selected half of a projector and screen pair so the
   /// projector hits the screen square on.
   List<Widget> _squareControls(
@@ -4373,6 +4447,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               onPressed: () =>
                   _openProjectionCalculator(provider, plan, device),
             ),
+          if (partnerShape(device.shape).isNotEmpty &&
+              plan.devices.any((d) => d.shape == partnerShape(device.shape)))
+            _pairMenu(provider, plan, device),
           ..._squareControls(provider, plan, device),
           TextButton.icon(
             icon: const Icon(Icons.edit_outlined, size: 16),

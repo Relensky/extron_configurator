@@ -216,15 +216,25 @@ class RoutingPlan {
   /// other saying "Not recorded" is a report that contradicts its own diagram.
   final List<String> powered;
 
+  /// Connectors to add to boxes already on the canvas before the cables are
+  /// drawn: a projection screen's motor control, on a screen whose catalog
+  /// entry only lists its power inlet.
+  final List<({String nodeId, AvPort port})> addedPorts;
+
   const RoutingPlan({
     this.newNodes = const [],
     this.cables = const [],
     this.unresolved = const [],
     this.alreadyDrawn = 0,
     this.powered = const [],
+    this.addedPorts = const [],
   });
 
-  bool get isEmpty => newNodes.isEmpty && cables.isEmpty && powered.isEmpty;
+  bool get isEmpty =>
+      newNodes.isEmpty &&
+      cables.isEmpty &&
+      powered.isEmpty &&
+      addedPorts.isEmpty;
 }
 
 // ---------------------------------------------------------------------------
@@ -2132,14 +2142,170 @@ RoutingPlan planRoutingFromConfig(
     powered.add(target.id);
   }
 
+  // PROJECTION SCREENS. A motorized screen's control runs to whatever this
+  // shop drives it from, tried in the order the rule book gives: a screen
+  // controller, a relay on the control processor, or a wall switch beside
+  // it. Nothing in the config states this; it is the way the rooms are wired.
+  final addedPorts = <({String nodeId, AvPort port})>[];
+  if (rules.screenControl.isNotEmpty) {
+    bool free(AvNode node, AvPort port) =>
+        feedsInto(node.id, port.id).isEmpty;
+    AvPort? freeOutput(AvNode node, bool Function(AvPort) kind) => node.ports
+        .where((p) => p.direction != PortDirection.input && kind(p))
+        .where((p) => free(node, p))
+        .firstOrNull;
+    bool isMotorOut(AvPort p) =>
+        p.signal == SignalType.other &&
+        RegExp(r'MOTOR', caseSensitive: false).hasMatch(p.label);
+    bool isRelay(AvPort p) =>
+        RegExp(r'RELAY|RLY', caseSensitive: false).hasMatch(p.label);
+
+    final everything = [...provider.avNodes, ...newNodes];
+    final screens = everything
+        .where((n) => isProjectionScreen(n, provider.avDeviceLibrary))
+        .toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    // Controllers first by their own number, then anything else on the
+    // canvas with a motor output; processors with the switcher first.
+    final controllers = everything
+        .where((n) => n.ports.any(isMotorOut))
+        .toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    final processors = everything
+        .where((n) => n.ports.any(isRelay))
+        .toList()
+      ..sort((a, b) {
+        final sa = a.id.startsWith('SWITCHERDEVICE_') ? 0 : 1;
+        final sb = b.id.startsWith('SWITCHERDEVICE_') ? 0 : 1;
+        return sa != sb ? sa - sb : a.id.compareTo(b.id);
+      });
+
+    for (final screen in screens) {
+      final control = screenControlPort(screen) ??
+          const AvPort(
+            id: kScreenMotorPortId,
+            label: 'MOTOR CONTROL',
+            signal: SignalType.other,
+            direction: PortDirection.input,
+            side: PortSide.left,
+          );
+      // Already wired, by hand or by an earlier pass: leave it.
+      if (screen.portById(control.id) != null && !free(screen, control)) {
+        continue;
+      }
+      AvNode? from;
+      AvPort? fromPort;
+      for (final option in rules.screenControl) {
+        switch (option) {
+          case 'controller':
+            for (final c in controllers) {
+              final port = freeOutput(c, isMotorOut);
+              if (port != null) {
+                (from, fromPort) = (c, port);
+                break;
+              }
+            }
+          case 'processor':
+            for (final c in processors) {
+              final port = freeOutput(c, isRelay);
+              if (port != null) {
+                (from, fromPort) = (c, port);
+                break;
+              }
+            }
+          case 'wallSwitch':
+            final key = 'screen_switch:${screen.id}';
+            if (dismissed(key)) break;
+            final id = avAutoNodeId(key);
+            final existing = nodesById[id] ??
+                newNodes.where((n) => n.id == id).firstOrNull;
+            final box = existing ??
+                AvNode(
+                  id: id,
+                  label: 'Screen switch',
+                  model: 'Screen Wall Switch',
+                  pos: screen.pos - const Offset(kAvAutoColumnPitch / 2, 0),
+                  ports: const [
+                    AvPort(
+                      id: 'out_motor',
+                      label: 'SCREEN MOTOR',
+                      signal: SignalType.other,
+                      direction: PortDirection.output,
+                      side: PortSide.right,
+                    ),
+                  ],
+                  fromConfig: true,
+                  locationId: wall,
+                );
+            if (existing == null) newNodes.add(box);
+            final port = box.ports.where(isMotorOut).firstOrNull;
+            if (port != null) (from, fromPort) = (box, port);
+        }
+        if (from != null) break;
+      }
+      if (from == null || fromPort == null) {
+        unresolved.add(UnroutedTie(
+          screen.id,
+          '',
+          '${screen.label} has nothing to drive its motor: no screen '
+              'controller or processor relay is free, and the rule book does '
+              'not allow a wall switch.',
+        ));
+        continue;
+      }
+      if (screen.portById(control.id) == null) {
+        addedPorts.add((nodeId: screen.id, port: control));
+      }
+      draw(
+        configKey: 'screen',
+        value: screen.label,
+        from: from,
+        fromPort: fromPort,
+        to: screen,
+        toPort: control,
+        signal: SignalType.other,
+      );
+    }
+  }
+
   return RoutingPlan(
     newNodes: newNodes,
     cables: cables,
     unresolved: unresolved,
     alreadyDrawn: alreadyDrawn,
     powered: powered,
+    addedPorts: addedPorts,
   );
 }
+
+/// The id given to a projection screen's motor control connector when the
+/// routing pass has to add one.
+const String kScreenMotorPortId = 'in_motor';
+
+/// True when [node] is a projection screen itself, rather than the box that
+/// drives one. A screen controller, a lift or a SCREENDEVICE block (which is
+/// the controller the config talks to) has an output; the screen does not.
+bool isProjectionScreen(AvNode node, AvDeviceLibrary library) {
+  if (node.id.startsWith('SCREENDEVICE_')) return false;
+  if (node.ports.any((p) => p.direction == PortDirection.output)) {
+    return false;
+  }
+  final category = library.templateForModel(node.model)?.category ?? '';
+  final words = '${node.model} ${node.label}'.toLowerCase();
+  if (RegExp(r'controller|lift|switch').hasMatch(words)) return false;
+  return category.toLowerCase() == 'screen' ||
+      RegExp(r'projection screen|motorized screen|\bscreen\b').hasMatch(words);
+}
+
+/// A screen's motor control input, if it has one.
+AvPort? screenControlPort(AvNode screen) => screen.ports
+    .where((p) =>
+        p.direction != PortDirection.output &&
+        (p.id == kScreenMotorPortId ||
+            ((p.signal == SignalType.other || p.signal == SignalType.serial) &&
+                RegExp(r'MOTOR|CONTROL|LOW VOLTAGE|LVC', caseSensitive: false)
+                    .hasMatch(p.label))))
+    .firstOrNull;
 
 // ---------------------------------------------------------------------------
 //  MATCHING AN OUTLET LABEL ONTO A DEVICE
@@ -2534,6 +2700,16 @@ String routingFingerprint(AppStateProvider provider) {
     parts.add('$key/${block['model']?.toString().trim() ?? ''}'
         '/${block['input']?.toString().trim() ?? ''}');
   }
+  // A projection screen placed on the canvas is a run to draw, though the
+  // config never mentions it.
+  final screens = [
+    for (final n in provider.avNodes)
+      if (isProjectionScreen(n, provider.avDeviceLibrary)) n.id,
+  ]..sort();
+  if (screens.isNotEmpty) {
+    parts.add('screens=${screens.join(',')}'
+        '/${provider.flowRules.screenControl.join(',')}');
+  }
   return parts.join(';');
 }
 
@@ -2577,6 +2753,16 @@ RoutingResult applyRoutingFromConfig(
     if (node == null || node.powerSource == PowerSource.controller) continue;
     provider.updateAvNode(
       node.copyWith(powerSource: PowerSource.controller),
+      recordUndo: false,
+    );
+  }
+
+  // Connectors the cables below land on, on boxes already drawn.
+  for (final added in plan.addedPorts) {
+    final node = provider.avNodeById(added.nodeId);
+    if (node == null || node.portById(added.port.id) != null) continue;
+    provider.updateAvNode(
+      node.copyWith(ports: [...node.ports, added.port]),
       recordUndo: false,
     );
   }

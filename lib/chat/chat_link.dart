@@ -41,6 +41,12 @@ abstract class ChatLink {
   /// Takes back one of this person's own messages.
   Future<String> deleteMessage(String id);
 
+  /// Rewrites one of this person's messages.
+  Future<String> editMessage(String id, String text);
+
+  /// Adds or takes back an emoji on a message.
+  Future<String> react(String id, String emoji);
+
   void select(String channel);
 
   /// Moves the chat to another container.
@@ -87,6 +93,14 @@ class LocalChatLink implements ChatLink {
 
   @override
   Future<String> deleteMessage(String id) => provider.chat.deleteMessage(id);
+
+  @override
+  Future<String> editMessage(String id, String text) =>
+      provider.chat.editMessage(id, text);
+
+  @override
+  Future<String> react(String id, String emoji) =>
+      provider.chat.react(id, emoji);
 
   @override
   void select(String channel) => provider.chat.selectChannel(channel);
@@ -249,6 +263,14 @@ class ChatWindowHost {
       case 'delete':
         final error = await p.chat.deleteMessage('${msg['id'] ?? ''}');
         if (error.isNotEmpty) _send({'cmd': 'error', 'text': error});
+      case 'edit':
+        final error = await p.chat
+            .editMessage('${msg['id'] ?? ''}', '${msg['text'] ?? ''}');
+        if (error.isNotEmpty) _send({'cmd': 'error', 'text': error});
+      case 'react':
+        final error = await p.chat
+            .react('${msg['id'] ?? ''}', '${msg['emoji'] ?? ''}');
+        if (error.isNotEmpty) _send({'cmd': 'error', 'text': error});
       case 'select':
         p.chat.selectChannel('${msg['channel'] ?? kChatGeneral}');
       case 'mode':
@@ -362,6 +384,18 @@ class SocketChatLink implements ChatLink {
   @override
   Future<String> deleteMessage(String id) async {
     _action('delete', {'id': id});
+    return '';
+  }
+
+  @override
+  Future<String> editMessage(String id, String text) async {
+    _action('edit', {'id': id, 'text': text});
+    return '';
+  }
+
+  @override
+  Future<String> react(String id, String emoji) async {
+    _action('react', {'id': id, 'emoji': emoji});
     return '';
   }
 

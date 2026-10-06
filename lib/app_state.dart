@@ -30,6 +30,8 @@ import 'google_sheets_live.dart';
 import 'project_workbook.dart' show buildProjectWorkbookSheets;
 import 'online_copy.dart';
 import 'online_index.dart';
+import 'chat/gif_search.dart' show gifSearchKeyOr;
+import 'online_room_edits.dart';
 import 'online_roundtrip.dart';
 import 'online_sheet_merge.dart';
 import 'room_workbook.dart';
@@ -1370,6 +1372,7 @@ class AppStateProvider extends ChangeNotifier {
       'chatRememberMode': chatRememberMode,
       'chatLastMode': chatLastMode.name,
       'chatPopUp': chatPopUp,
+      if (gifSearchKey.trim().isNotEmpty) 'gifSearchKey': gifSearchKey.trim(),
       'useBuiltInBrowser': useBuiltInBrowser,
       'googleClientId': googleClientId,
       'googleClientSecret': googleClientSecret,
@@ -8389,6 +8392,7 @@ class AppStateProvider extends ChangeNotifier {
     chat = ProjectChat(identity: collab.me)
       ..myName = (() => userDisplayName.trim())
       ..myEmail = (() => userEmail.trim())
+      ..gifKey = (() => gifSearchKeyOr(gifSearchKey))
       ..rooms = (() => {
             for (final r in project.rooms) r.id: projectRoomCode(r.id),
           })
@@ -8485,6 +8489,17 @@ class AppStateProvider extends ChangeNotifier {
 
   void setChatPopUp(bool value) {
     chatPopUp = value;
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
+  }
+
+  /// A KLIPY key for the chat's GIF search, over the one built into the app.
+  /// '' uses the built-in key; with neither, the GIF button takes a link.
+  String gifSearchKey = '';
+
+  void setGifSearchKey(String value) {
+    gifSearchKey = value.trim();
     // ignore: unawaited_futures
     _persistSettings();
     notifyListeners();
@@ -8734,6 +8749,7 @@ class AppStateProvider extends ChangeNotifier {
       chatMode = chatRememberMode ? chatLastMode : chatDefaultMode;
       chat.mode = chatMode;
       chatPopUp = saved['chatPopUp'] is bool ? saved['chatPopUp'] as bool : true;
+      gifSearchKey = saved['gifSearchKey']?.toString() ?? '';
       briefingOnProjectOpen = saved['briefingOnProjectOpen'] is bool
           ? saved['briefingOnProjectOpen'] as bool
           : true;
@@ -16077,7 +16093,103 @@ class AppStateProvider extends ChangeNotifier {
         readSheetBaseline(currentProjectPath);
     if (id.isEmpty || baseline == null) return const [];
     final now = await live.read(id, baseline.keys.toList(), entered: true);
-    return sheetEdits(baseline, now, skip: kLiveReadBackSheets.toSet());
+    return _roomAndSheetEdits(baseline, now);
+  }
+
+  /// Counts changed on rooms' tabs, found by the last review and brought in
+  /// when it is applied - see [applyPendingRoomEdits].
+  List<RoomLineEdit> pendingRoomEdits = const [];
+
+  /// The room tabs' quantities, which are brought in, and every other edit
+  /// in the tabs the app writes, which are listed - the rows the first
+  /// account for left out of the second.
+  List<OnlineChange> _roomAndSheetEdits(
+    Map<String, List<List<String>>> baseline,
+    Map<String, List<List<String>>> now,
+  ) {
+    final rooms = readRoomEdits(now, priceProject(), published: baseline);
+    pendingRoomEdits = rooms.edits;
+    bool ignore(String tab, List<String> row, String column) =>
+        (column == 'Qty' || column.isEmpty) &&
+        row.any((c) => rooms.handled.contains((tab, c.trim())));
+    return [
+      for (final e in rooms.edits) e.change,
+      for (final p in rooms.problems)
+        (kind: kSheetEditKind, id: '', name: 'Room quantities', what: p),
+      ...sheetEdits(
+        baseline,
+        now,
+        skip: kLiveReadBackSheets.toSet(),
+        ignore: ignore,
+      ),
+    ];
+  }
+
+  /// Writes [pendingRoomEdits] into the rooms: through the app for the room
+  /// open here, so it is an edit like any other and saves with it; straight
+  /// into the cost file for every other room. Returns how many lines changed.
+  Future<int> applyPendingRoomEdits() async {
+    final edits = pendingRoomEdits;
+    pendingRoomEdits = const [];
+    if (edits.isEmpty) return 0;
+    final byRoom = <String, List<RoomLineEdit>>{};
+    for (final e in edits) {
+      (byRoom[e.configPath] ??= []).add(e);
+    }
+    var changed = 0;
+    for (final entry in byRoom.entries) {
+      if (currentConfigPath.isNotEmpty &&
+          _samePath(entry.key, currentConfigPath)) {
+        changed += _applyRoomEditsHere(entry.value);
+      } else {
+        changed += await applyRoomEditsToFile(entry.key, entry.value);
+        _projectRooms.removeWhere(
+          (_, room) => _samePath(room.configPath, entry.key),
+        );
+      }
+    }
+    _projectEstimate = null;
+    AppLogger.logInfo(
+      'Brought in $changed room quantit${changed == 1 ? 'y' : 'ies'} from '
+      'the online copy.',
+    );
+    notifyListeners();
+    return changed;
+  }
+
+  /// [edits] to the room open in the app, as ordinary estimate edits.
+  int _applyRoomEditsHere(List<RoomLineEdit> edits) {
+    var changed = 0;
+    for (final e in edits) {
+      if (e.drawn) {
+        setAvEquipmentQty(e.lineKey, e.toBeforeSpares, drawn: e.onDrawing);
+        changed++;
+        continue;
+      }
+      CostLineItem? find(List<CostLineItem> list) =>
+          list.where((i) => i.id == e.lineKey).firstOrNull;
+      if (find(avCost.items) case final item?) {
+        e.takesLineOff
+            ? removeAvCostItem(item.id)
+            : updateAvCostItem(item.copyWith(qty: e.toBeforeSpares));
+      } else if (find(avCost.extraEquipment) case final item?) {
+        e.takesLineOff
+            ? removeAvCostExtraEquipment(item.id)
+            : updateAvCostExtraEquipment(item.copyWith(qty: e.toBeforeSpares));
+      } else if (find(avCost.extraHardware) case final item?) {
+        e.takesLineOff
+            ? removeAvCostExtraHardware(item.id)
+            : updateAvCostExtraHardware(item.copyWith(qty: e.toBeforeSpares));
+      } else if (find(avCost.extraCables) case final item?) {
+        e.takesLineOff
+            ? removeAvCostExtraCable(item.id)
+            : updateAvCostExtraCable(item.copyWith(qty: e.toBeforeSpares));
+      } else {
+        continue;
+      }
+      changed++;
+    }
+    return changed;
   }
 
   /// Everything a pull of the live Sheet finds: what [reviewOnlineSheets]
@@ -16119,11 +16231,7 @@ class AppStateProvider extends ChangeNotifier {
       read: review.read,
       changes: [
         ...review.changes,
-        ...sheetEdits(
-          baseline,
-          workbookGrids(bytes),
-          skip: kLiveReadBackSheets.toSet(),
-        ),
+        ..._roomAndSheetEdits(baseline, workbookGrids(bytes)),
       ],
     );
   }

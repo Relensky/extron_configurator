@@ -195,6 +195,35 @@ void main() {
     });
   });
 
+  test('a screen paired with a projector keeps it, wherever they stand', () {
+    PlanDevice dev(String id, String shape, double x, {String pair = ''}) =>
+        PlanDevice(
+          id: id,
+          deviceKey: shape,
+          label: id,
+          shape: shape,
+          pos: Offset(x, 0),
+          pairedWith: pair,
+        );
+    // P1 sits right by S2, but is paired with S1 across the room.
+    final devices = [
+      dev('P1', 'projector', 100, pair: 'S1'),
+      dev('P2', 'projector', 900),
+      dev('S1', 'screen', 1000, pair: 'P1'),
+      dev('S2', 'screen', 110),
+    ];
+    PlanDevice byId(String id) => devices.firstWhere((d) => d.id == id);
+    expect(projectionPartner(devices, byId('P1'))?.id, 'S1');
+    expect(projectionPartner(devices, byId('S1'))?.id, 'P1');
+    // The others pair by nearness, among the ones nobody has claimed.
+    expect(projectionPartner(devices, byId('P2'))?.id, 'S2');
+    expect(projectionPartner(devices, byId('S2'))?.id, 'P2');
+    // A pair to a device that has gone falls back to the nearest.
+    final gone = [dev('P1', 'projector', 100, pair: 'S9'), dev('S2', 'screen', 110)];
+    expect(projectionPartner(gone, gone.first)?.id, 'S2');
+    expect(PlanDevice.fromJson(byId('P1').toJson()).pairedWith, 'S1');
+  });
+
   group('specs off the catalog', () {
     test('reads the throw ratio and lumens from notes', () {
       expect(

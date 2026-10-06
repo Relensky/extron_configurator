@@ -172,14 +172,6 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
         onPressed: () => setState(() => _full = !_full),
       );
 
-  Widget _searchButton() => IconButton(
-        key: const ValueKey('chat_search'),
-        tooltip: 'Search every chat and project',
-        visualDensity: VisualDensity.compact,
-        icon: const Icon(Icons.manage_search, size: 18),
-        onPressed: () => showChatSearch(context),
-      );
-
   @override
   Widget build(BuildContext context) {
     final provider = context.read<AppStateProvider>();
@@ -242,7 +234,7 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
                           bottom: dockTop ? 6 : 0,
                           child: ChatView(
                             link: _link!,
-                            actions: [_searchButton()],
+                            onSearchAll: () => showChatSearch(context),
                           ),
                         ),
                         Positioned(
@@ -326,7 +318,8 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
                           child: slide && _link != null
                               ? ChatView(
                                   link: _link!,
-                                  actions: [_searchButton(), _fullButton()],
+                                  actions: [_fullButton()],
+                                  onSearchAll: () => showChatSearch(context),
                                 )
                               : const SizedBox.shrink(),
                         ),
@@ -384,6 +377,7 @@ class _ProjectChatLayerState extends State<ProjectChatLayer> {
                     color: theme.colorScheme.surface,
                     child: ChatView(
                       link: _link!,
+                      onSearchAll: () => showChatSearch(context),
                       wrapHeader: (title) => MouseRegion(
                         cursor: SystemMouseCursors.move,
                         child: GestureDetector(

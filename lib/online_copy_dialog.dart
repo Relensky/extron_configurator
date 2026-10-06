@@ -802,6 +802,8 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
     final offers = provider.catalogOffersFor(widget.read.master);
     var touched = provider.applyOnlineImport(widget.read);
     touched += await provider.applyMasterEdits(widget.read.master);
+    // Counts changed on rooms' tabs, into each room's estimate.
+    touched += await provider.applyPendingRoomEdits();
     // KEPT IN A FILE AS WELL. The list on screen is gone when this box
     // closes; the same lines go beside the project - see
     // online_pull_history.dart. The edits that could only be listed are the
@@ -957,8 +959,9 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
               Text(
                 // SAID PLAINLY, because the next publish writes over them.
                 '${count(listed, 'edit')} ${listed == 1 ? 'is' : 'are'} in '
-                'tabs the app writes but cannot read back, such as a room\'s '
-                'listing. ${listed == 1 ? 'It is' : 'They are'} not brought '
+                'tabs the app writes but cannot read back - anything on a '
+                'room\'s tab but its Qty, for one. '
+                '${listed == 1 ? 'It is' : 'They are'} not brought '
                 'in: make ${listed == 1 ? 'it' : 'them'} in the app. Apply '
                 'keeps the whole list in the history file beside the project'
                 '${widget.beforePublish ? ', and the copy is then written over' : ''}.',
@@ -970,8 +973,10 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
             ],
             const Divider(height: 20),
             Text(
-              'Nothing is ever deleted by an import: a row missing from the '
-              'sheet is one somebody filtered or never scrolled to.',
+              'Deliveries and purchase orders are never deleted by an '
+              'import: a row missing from those sheets is one somebody '
+              'filtered or never scrolled to. A line deleted from a room\'s '
+              'tab comes off that room\'s estimate.',
               style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
           ],
