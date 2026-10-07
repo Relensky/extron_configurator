@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
@@ -429,7 +430,38 @@ List<String> get kRoomCompanionSuffixes => [
   'control_schematic.json',
   'previous.json',
   'backup_log.txt',
+  kConvertedMarkerSuffix,
 ];
+
+/// Written beside a room each time the app saves its config: the file on disk
+/// is the converted one, so opening it again loads it as it is and leaves the
+/// conversion to the Convert button.
+const String kConvertedMarkerSuffix = 'converted.json';
+
+/// True when [configPath] has been saved by the app - its marker, or, for a
+/// room saved before the marker existed, an AV flow or save backup beside it.
+bool roomWasConverted(String configPath) {
+  if (configPath.isEmpty) return false;
+  for (final suffix in [
+    kConvertedMarkerSuffix,
+    '${kRoomSidecarSuffix[RoomSidecarPart.flow]}.json',
+    'avflow.json',
+    'previous.json',
+  ]) {
+    if (readableRoomFilePath(configPath, suffix).isNotEmpty) return true;
+  }
+  return false;
+}
+
+/// Marks [configPath] as converted - see [kConvertedMarkerSuffix].
+void markRoomConverted(String configPath) {
+  final marker = roomFilePath(configPath, kConvertedMarkerSuffix);
+  if (marker.isEmpty || File(marker).existsSync()) return;
+  ensureRoomFolder(configPath);
+  File(marker).writeAsStringSync(
+    jsonEncode({'converted': DateTime.now().toIso8601String()}),
+  );
+}
 
 /// Moves [file] into [folder] unless a file of that name is already there.
 /// Returns true when it moved.

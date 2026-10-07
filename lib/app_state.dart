@@ -2031,6 +2031,26 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// True when the open room was loaded as saved, without the conversion -
+  /// the app had saved it before, so it was converted then. Nothing is added
+  /// to it until Convert is pressed; see [convertOpenRoom].
+  bool conversionSkipped = false;
+
+  /// Runs the conversion on the room as it stands - Convert on a room that
+  /// opened as saved. Its changes can be reviewed and rejected like a first
+  /// load's; the original file's backup is left as it was.
+  Future<void> convertOpenRoom() async {
+    final contents = jsonEncode(roomConfig);
+    await _processLoadedConfig(
+      originalContents: contents,
+      parsedConfig: jsonDecode(contents) as Map<String, dynamic>,
+      backupDirectory: roomFolderPath(currentConfigPath),
+      sourceLabel: currentConfigPath,
+      changeLogBaseName: roomStem(currentConfigPath),
+      backup: false,
+    );
+  }
+
   // ---------------------------------------------------------------------
   //  CONVERSION PROVENANCE
   //  Filled at the end of every load: where each value in the working config
@@ -2252,6 +2272,7 @@ class AppStateProvider extends ChangeNotifier {
       lastLoadHadChanges = false;
       lastLoadHadNotes = false;
       conversionAcknowledged = false;
+      conversionSkipped = true;
       // Nothing was converted, so there is no provenance to color by
       _clearConversionProvenance();
       _bumpConfigRevision(); // Every field now shows the on-disk value
@@ -6299,6 +6320,45 @@ class AppStateProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Box id -> the name its box and its config block last agreed on. See
+  /// [_syncDeviceNames].
+  final Map<String, String> _agreedDeviceNames = {};
+  String _agreedNamesPath = ' never';
+
+  /// Keeps a config device's box on the AV Flow titled with the block's
+  /// `name`, both ways: a name changed in the config retitles the box, and a
+  /// box retitled on the flow renames the block. When both moved, or the room
+  /// was just opened, the config wins. Run from [notifyListeners], so every
+  /// write path - forms, raw JSON, undo, a model swap - is covered.
+  void _syncDeviceNames() {
+    // Only while the drawing on screen belongs to the config on screen.
+    if (_avFlowSyncedPath != currentConfigPath) return;
+    if (_agreedNamesPath != currentConfigPath) {
+      _agreedDeviceNames.clear();
+      _agreedNamesPath = currentConfigPath;
+    }
+    final seen = <String>{};
+    for (int i = 0; i < avNodes.length; i++) {
+      final node = avNodes[i];
+      final block = roomConfig[node.id];
+      if (block is! Map) continue;
+      seen.add(node.id);
+      final configName = block['name']?.toString() ?? '';
+      final agreed = _agreedDeviceNames[node.id];
+      var name = node.label;
+      if (agreed != null && configName == agreed && node.label != agreed) {
+        // Retitled on the flow.
+        block['name'] = node.label;
+        _forgetConversionOrigin(node.id, 'name');
+      } else if (configName.isNotEmpty && configName != node.label) {
+        avNodes[i] = node.copyWith(label: configName);
+        name = configName;
+      }
+      _agreedDeviceNames[node.id] = name;
+    }
+    _agreedDeviceNames.removeWhere((id, _) => !seen.contains(id));
+  }
+
   /// Adds a node, keeping ids unique. Returns the node actually stored (the
   /// caller may have passed an id that was already taken).
   /// [recordUndo] false is for a batch that has already taken its own snapshot
@@ -8963,6 +9023,8 @@ class AppStateProvider extends ChangeNotifier {
         sourceLabel: f.path,
         // Change log named after the opened file: <name>_backup_log.txt
         changeLogBaseName: roomStem(f.path),
+        // A room the app has saved is already converted; it opens as saved.
+        convert: !roomWasConverted(f.path),
       );
       // The room now matches the file it came from, so the unsaved-work
       // check has a baseline to compare against.
@@ -9207,6 +9269,10 @@ class AppStateProvider extends ChangeNotifier {
     required String sourceLabel,
     String? backupBaseName, // e.g. 'BSS103' from the Active Deployment Target
     String? changeLogBaseName, // base for the per-load change log file name
+    // False opens the file exactly as saved - see [conversionSkipped].
+    bool convert = true,
+    // False leaves the _old_config.json backup alone (a re-run of Convert).
+    bool backup = true,
   }) async {
     systemLogs.clear(); // Clear old logs on new load
     _prunedSystemKeys.clear(); // Belongs to the room being replaced
@@ -9214,6 +9280,17 @@ class AppStateProvider extends ChangeNotifier {
     _omittedConfigKeys.clear();
 
     roomConfig = parsedConfig;
+    conversionSkipped = !convert;
+    if (!convert) {
+      _clearConversionProvenance();
+      lastLoadHadChanges = false;
+      lastLoadHadNotes = false;
+      conversionAcknowledged = false;
+      _bumpConfigRevision();
+      _preloadModulesFromConfig();
+      notifyListeners();
+      return;
+    }
 
     // Snapshot the file EXACTLY as parsed, before any conversion step. Every
     // later stage mutates roomConfig in place, so this deep copy is the only
@@ -9256,39 +9333,45 @@ class AppStateProvider extends ChangeNotifier {
     // is now inside the config: gve_bldg abbreviation + gve_room, e.g.
     // 'BSS103_old_config.json' — even for legacy files that stored them as
     // SYSTEM.GVE_BLDG / GVE_ROOM. The CONTENT is still the untouched original.
-    try {
-      String backupFileName;
-      if (backupBaseName != null && backupBaseName.isNotEmpty) {
-        // Caller supplied a name (SFTP download: the processor dropdown's
-        // room name), e.g. BSS103_old_config.json
-        backupFileName = '${backupBaseName}_old_config.json';
-      } else {
-        String bldg = "UNKNOWN";
-        String room = "000";
-        final setup = roomConfig['SYSTEM_SETUP'];
-        if (setup is Map) {
-          bldg = setup['gve_bldg']?.toString() ?? "UNKNOWN";
-          room = setup['gve_room']?.toString() ?? "000";
+    if (backup) {
+      try {
+        String backupFileName;
+        if (backupBaseName != null && backupBaseName.isNotEmpty) {
+          // Caller supplied a name (SFTP download: the processor dropdown's
+          // room name), e.g. BSS103_old_config.json
+          backupFileName = '${backupBaseName}_old_config.json';
+        } else {
+          String bldg = "UNKNOWN";
+          String room = "000";
+          final setup = roomConfig['SYSTEM_SETUP'];
+          if (setup is Map) {
+            bldg = setup['gve_bldg']?.toString() ?? "UNKNOWN";
+            room = setup['gve_room']?.toString() ?? "000";
+          }
+          // Short abbreviation + room, sanitized for the filesystem: BSS103
+          final base = '${bldgAbbreviation(bldg)}$room'
+              .replaceAll(RegExp(r'[\\/:*?"<>|\s]+'), '');
+          backupFileName = '${base}_old_config.json';
         }
-        // Short abbreviation + room, sanitized for the filesystem: BSS103
-        final base = '${bldgAbbreviation(bldg)}$room'
-            .replaceAll(RegExp(r'[\\/:*?"<>|\s]+'), '');
-        backupFileName = '${base}_old_config.json';
+        final backupFilePath = path.join(backupDirectory, backupFileName);
+        _moveLooseBackup(backupFileName, backupDirectory);
+
+        // Write the exact original string to disk so no formatting is lost
+        await Directory(backupDirectory).create(recursive: true);
+        await File(backupFilePath).writeAsString(originalContents);
+
+        AppLogger.logInfo("Created backup of original config at $backupFilePath");
+        // Keep the backup notice at the TOP of the acknowledgement
+        systemLogs.insert(0, "BACKUP SAVED: Original file preserved as '$backupFileName'");
+        systemLogs.insert(1, "--------------------------------------------------");
+      } catch (backupError) {
+        AppLogger.logError("Failed to create backup file", backupError);
+        systemLogs.insert(0, "WARNING: Failed to generate local backup file.");
       }
-      final backupFilePath = path.join(backupDirectory, backupFileName);
-      _moveLooseBackup(backupFileName, backupDirectory);
-
-      // Write the exact original string to disk so no formatting is lost
-      await Directory(backupDirectory).create(recursive: true);
-      await File(backupFilePath).writeAsString(originalContents);
-
-      AppLogger.logInfo("Created backup of original config at $backupFilePath");
-      // Keep the backup notice at the TOP of the acknowledgement
-      systemLogs.insert(0, "BACKUP SAVED: Original file preserved as '$backupFileName'");
+    } else {
+      // Same two lines the backup notice takes, so the summary lands below.
+      systemLogs.insert(0, "CONVERT: Ran on the room as saved; the original file's backup was left as it was.");
       systemLogs.insert(1, "--------------------------------------------------");
-    } catch (backupError) {
-      AppLogger.logError("Failed to create backup file", backupError);
-      systemLogs.insert(0, "WARNING: Failed to generate local backup file.");
     }
     // ------------------------------
 
@@ -9683,6 +9766,7 @@ class AppStateProvider extends ChangeNotifier {
       lastLoadHadChanges = false;
       lastLoadHadNotes = false;
       conversionAcknowledged = false;
+      conversionSkipped = false;
 
       // Nothing carried over from the previous room can be restored into this
       // one — the stash is per-config.
@@ -9771,6 +9855,7 @@ class AppStateProvider extends ChangeNotifier {
     lastLoadHadChanges = false;
     lastLoadHadNotes = false;
     conversionAcknowledged = false;
+    conversionSkipped = false;
     _prunedSystemKeys.clear();
     _prunedSourceInputs.clear();
     _omittedConfigKeys.clear();
@@ -12081,6 +12166,7 @@ class AppStateProvider extends ChangeNotifier {
       await writeFileSafely(
           currentConfigPath, encoder.convert(_sortJson(roomConfig)));
       AppLogger.logInfo("Saved current config to working file $currentConfigPath");
+      _markConverted(currentConfigPath);
       // Saving the project saves the WHOLE project: the AV diagram and its
       // cost estimate, and the control schematic, both of which live in
       // sidecars beside this file. Leaving them to their own buttons meant a
@@ -12351,6 +12437,7 @@ class AppStateProvider extends ChangeNotifier {
       await writeFileSafely(
           targetFile.path, encoder.convert(_sortJson(exportData)));
       AppLogger.logInfo("Config successfully saved to ${targetFile.path}");
+      _markConverted(targetFile.path);
 
       // The recovery copy belongs to the file this room is about to stop
       // being; retired before the path moves, or it would be orphaned under a
@@ -12390,6 +12477,15 @@ class AppStateProvider extends ChangeNotifier {
     } catch (e, stack) {
       AppLogger.logError("Failed to export room configuration", e, stack);
       return false;
+    }
+  }
+
+  /// The saved file is the converted one - see [roomWasConverted].
+  void _markConverted(String configPath) {
+    try {
+      markRoomConverted(configPath);
+    } catch (e) {
+      AppLogger.logError('Could not mark $configPath as converted', e);
     }
   }
 
@@ -19767,6 +19863,8 @@ class AppStateProvider extends ChangeNotifier {
     // A room on the base tax rate follows it here, so every export of the
     // room reads the rate the Cost tab shows.
     avCost.followBaseTax(baseTaxPercent);
+    // Before the histories, so a name carried across is part of this edit.
+    _syncDeviceNames();
     // AND THE UNDO HISTORIES, for the third time and the same reason. These
     // only start a clock — the document is encoded once the typing stops, not
     // once per keystroke. See undo_history.dart.

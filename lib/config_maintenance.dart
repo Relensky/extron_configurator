@@ -134,12 +134,28 @@ Future<void> showCheckDefaultsDialog(BuildContext context,
                           : (e.value.toString().isEmpty
                               ? '""'
                               : e.value.toString());
+                      final desc = provider.uiSchema
+                          .descriptionFor(e.key, sectionKey: sectionKey);
                       return ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
-                        title: Text(e.key,
-                            style:
-                                const TextStyle(fontFamily: 'monospace')),
+                        title: Row(children: [
+                          Flexible(
+                            child: Text(e.key,
+                                style: const TextStyle(
+                                    fontFamily: 'monospace')),
+                          ),
+                          if (desc != null) ...[
+                            const SizedBox(width: 6),
+                            Tooltip(
+                              message: desc,
+                              waitDuration:
+                                  const Duration(milliseconds: 300),
+                              child: const Icon(Icons.info_outline,
+                                  size: 16, color: Colors.blueAccent),
+                            ),
+                          ],
+                        ]),
                         subtitle: Text('default: $valueText',
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                         trailing: OutlinedButton.icon(

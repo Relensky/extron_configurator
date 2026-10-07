@@ -826,19 +826,23 @@ class _MainDashboardState extends State<MainDashboard> {
           label: Text('${provider.conversionChanges.length}'),
           child: const Icon(Icons.compare_arrows),
         ),
-        tooltip: switch ((
-          provider.lastLoadHadChanges,
-          provider.conversionAcknowledged,
-        )) {
-          (false, _) => provider.lastLoadHadNotes
-              ? 'Nothing to convert - open the notes on this file'
-              : 'Nothing to convert in this file',
-          (true, false) => 'Convert - review the changes this file needs',
-          (true, true) => 'Conversion reviewed - open the log again',
-        },
-        onPressed: provider.lastLoadHadChanges || provider.lastLoadHadNotes
-            ? () => _showMigrationLogDialog(context, provider.systemLogs)
-            : null,
+        tooltip: provider.conversionSkipped
+            ? 'Opened as saved - press to run the conversion again'
+            : switch ((
+                provider.lastLoadHadChanges,
+                provider.conversionAcknowledged,
+              )) {
+                (false, _) => provider.lastLoadHadNotes
+                    ? 'Nothing to convert - open the notes on this file'
+                    : 'Nothing to convert in this file',
+                (true, false) => 'Convert - review the changes this file needs',
+                (true, true) => 'Conversion reviewed - open the log again',
+              },
+        onPressed: provider.conversionSkipped
+            ? () => _convertSavedRoom(context, provider)
+            : provider.lastLoadHadChanges || provider.lastLoadHadNotes
+                ? () => _showMigrationLogDialog(context, provider.systemLogs)
+                : null,
       ),
       // EXPORT, beside Convert: every way a document leaves the app.
       _ExportButton(selectedIndex: selectedIndex, hasConfig: hasConfig),
@@ -2156,6 +2160,22 @@ void _announceConversionAvailable(BuildContext context) {
         },
       ),
     ),
+  );
+}
+
+/// Convert on a room that opened as saved: runs the conversion now, then
+/// shows its log like a first load's.
+Future<void> _convertSavedRoom(
+    BuildContext context, AppStateProvider provider) async {
+  await provider.convertOpenRoom();
+  if (!context.mounted) return;
+  if (provider.lastLoadHadChanges || provider.lastLoadHadNotes) {
+    _showMigrationLogDialog(context, provider.systemLogs);
+    return;
+  }
+  showTimedSnackBar(
+    ScaffoldMessenger.of(context),
+    const SnackBar(content: Text('Nothing to convert in this file.')),
   );
 }
 

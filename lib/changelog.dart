@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.76+86';
+const String kAppVersion = '0.5.78+88';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,28 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.78',
+    date: 'October 7, 2026',
+    title: 'Descriptions in Check Defaults',
+    changes: [
+      'Check Defaults shows an (i) next to each key it can add back; hover '
+          'it to see what the key is for.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.77',
+    date: 'October 7, 2026',
+    title: 'Device names on the AV Flow, and saved rooms open as saved',
+    changes: [
+      'A device\'s box on the AV Flow is titled with the device\'s name from '
+          'its config, including in rooms saved with an older title. '
+          'Renaming the box on the AV Flow renames the device too.',
+      'A room the app has saved opens exactly as saved: no fields such as '
+          'keep_alive_qualifier are added back. Press Convert to run the '
+          'conversion on it again.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.76',
     date: 'October 6, 2026',
