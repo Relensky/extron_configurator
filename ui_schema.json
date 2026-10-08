@@ -416,7 +416,10 @@
     },
     "CAMERADEVICE_*": {
       "warm_up_time": null,
-      "cool_down_time": null
+      "cool_down_time": null,
+      "camera_pages": null,
+      "ptz_speeds": null,
+      "ptz_default_speed": null
     },
     "NBPDEVICE_*": {
       "volume_default": 30,
@@ -557,6 +560,41 @@
         "addIfMissing": true,
         "helperText": "Seconds. Blank/absent = ask this model's python module",
         "description": "How long THIS camera takes to go down, in seconds, overriding the CoolDownTime in its python module. The same rule as warm_up_time in every respect: config first, then the module, then 10s. 0 means 'no wait at all' rather than 'unset' - clear the key to get the module's figure back."
+      },
+      "camera_pages": {
+        "type": "dropdown",
+        "label": "Camera Pages (camera_pages)",
+        "addIfMissing": true,
+        "options": [
+          {
+            "value": "",
+            "label": "(ask this model's python module)"
+          },
+          {
+            "value": "presenter",
+            "label": "presenter (tracking: Menu_Inst_Cam_* pages)"
+          },
+          {
+            "value": "audience",
+            "label": "audience (plain PTZ: Menu_Audience_Cam / Menu_Aud_Cam_* pages)"
+          }
+        ],
+        "helperText": "Which set of touch panel camera pages controls THIS camera",
+        "description": "The panel has two complete sets of camera pages: the presenter set, built around a tracking camera (auto/manual tracking, tracking size, switch presenter), and the audience set, a plain PTZ page with focus, PIP and the Cam570 tracking modes. This picks which set controls this camera, whichever slot it is in - a PTZOptics on CAMERADEVICE_1 belongs on the audience pages, because the presenter pages would be a page of tracking buttons it cannot answer. The slot keeps its own nav button, power button, power prompts and connection label; only the camera control pages move. Picking a model writes the driver's own answer here. Left blank the processor asks the python module, then falls back to the slot (camera 1 presenter, camera 2 audience). There is one set of each, so two cameras cannot share one: if both ask for the same set, the explicit one wins and the other gets the remaining set, with an error in the processor log."
+      },
+      "ptz_speeds": {
+        "type": "text",
+        "label": "PTZ Speeds (ptz_speeds)",
+        "addIfMissing": true,
+        "helperText": "Seven pan/tilt speeds, slowest to fastest, e.g. 3,5,7,9,11,13,15. Blank = ask the python module",
+        "description": "The pan/tilt speed sent to the camera at each step of the speed button on its page - 1x through 7x, seven whole numbers separated by commas. The range is the CAMERA's, not the page's: a CAM570 accepts 0-15, a TR311 1-24, a PTZOptics 24 across but only 20 up and down. The same number goes out for pan and tilt, so keep the last one inside BOTH ranges or the fastest step is refused by the driver. Picking a model writes the driver's own scale here. Left blank the processor asks the python module, then falls back to the scale of the pages the camera is on. Anything that is not exactly seven numbers is logged on the processor and ignored."
+      },
+      "ptz_default_speed": {
+        "type": "int",
+        "label": "PTZ Default Speed (ptz_default_speed)",
+        "addIfMissing": true,
+        "helperText": "1-7. The speed step the button starts on and returns to on a camera reset. Blank = ask the python module",
+        "description": "Which step of ptz_speeds (1 = slowest, 7 = fastest) the camera's speed button starts on when the program loads, and goes back to whenever the camera is reset. Picking a model writes the driver's own choice here. Left blank the processor asks the python module, then falls back to the pages the camera is on (3 on the presenter pages, 7 on the audience pages). A value outside 1-7 is logged on the processor and ignored."
       }
     },
     "PROJECTORDEVICE_*": {

@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
+import 'movable_dialog.dart';
+
 /// ============================================================================
 ///  COLOR WHEEL PICKER
 /// ============================================================================
@@ -18,7 +20,7 @@ Future<Color?> showColorWheelDialog(
   required Color initial,
   String title = 'Custom color',
 }) {
-  return showDialog<Color>(
+  return showMovableDialog<Color>(
     context: context,
     builder: (ctx) => _ColorWheelDialog(initial: initial, title: title),
   );

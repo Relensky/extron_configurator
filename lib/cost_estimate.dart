@@ -950,19 +950,23 @@ class DeviceGroup {
   bool get anyUnmetered => nodes.any((n) => n.powerWatts <= 0);
 }
 
+/// The estimate line [node] is counted on.
+String deviceGroupKey(AvNode node) {
+  final base = node.model.trim().isEmpty
+      ? 'device:${node.id}'
+      : 'model:${node.model.trim().toLowerCase()}';
+  // Two of the same model where one is being bought and one is already in
+  // the room are two lines, not one of quantity two — merging them would
+  // put the existing unit on the quote or take the new one off it.
+  return node.excludeFromCost ? 'nocost:$base' : base;
+}
+
 /// The diagram's devices, grouped for ordering. Jack fields are included:
 /// a 12-port patch panel is a thing you buy.
 List<DeviceGroup> groupDevices(AvFlowModel model) {
   final grouped = <String, List<AvNode>>{};
   for (final node in model.nodes) {
-    final base = node.model.trim().isEmpty
-        ? 'device:${node.id}'
-        : 'model:${node.model.trim().toLowerCase()}';
-    // Two of the same model where one is being bought and one is already in
-    // the room are two lines, not one of quantity two — merging them would
-    // put the existing unit on the quote or take the new one off it.
-    final key = node.excludeFromCost ? 'nocost:$base' : base;
-    grouped.putIfAbsent(key, () => []).add(node);
+    grouped.putIfAbsent(deviceGroupKey(node), () => []).add(node);
   }
   return [
     for (final e in grouped.entries) DeviceGroup(key: e.key, nodes: e.value),

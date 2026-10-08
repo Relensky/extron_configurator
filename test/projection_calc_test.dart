@@ -306,6 +306,8 @@ void main() {
       tester.view.physicalSize = const Size(1400, 1200);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
+      resetProjectionUnits();
+      addTearDown(resetProjectionUnits);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -383,6 +385,62 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('projection_size')), '5');
       await tester.pump();
       expect(distance(), isNot(before));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('dragging the projector back grows the image', (tester) async {
+      await open(
+        tester,
+        specs: const [ProjectorSpecs(source: 'PJ', throwMin: 2, throwMax: 2)],
+      );
+      final view = find.byKey(const ValueKey('projection_perspective'));
+      await tester.ensureVisible(view);
+      await tester.pumpAndSettle();
+      String size() => tester
+          .widget<TextField>(find.byKey(const ValueKey('projection_size')))
+          .controller!
+          .text;
+      expect(size(), '120');
+      final box = tester.getRect(view);
+      // Far left is the longest throw in view; the 2:1 lens stays fixed.
+      await tester.tapAt(Offset(box.left + 90, box.center.dy));
+      await tester.pump();
+      expect(double.parse(size()), greaterThan(120));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the Units box changes how lengths and brightness read', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        specs: const [
+          ProjectorSpecs(source: 'PJ', throwMin: 2, throwMax: 2, lumens: 5000),
+        ],
+      );
+      String text(String key) =>
+          tester.widget<Text>(find.byKey(ValueKey(key))).data!;
+      expect(text('projection_result_distance'), '17\' 0"');
+
+      await tester.tap(find.byKey(const ValueKey('projection_units')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('units_distance_meters')));
+      await tester.tap(find.byKey(const ValueKey('units_size_centimeters')));
+      await tester.tap(find.byKey(const ValueKey('units_brightness_nits')));
+      await tester.tap(find.byKey(const ValueKey('units_ok')));
+      await tester.pumpAndSettle();
+
+      // 17 ft is 5.17 m; the 120 inch screen is retyped as 304.8 cm.
+      expect(text('projection_result_distance'), '5.17 m');
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('projection_size')))
+            .controller!
+            .text,
+        '304.8',
+      );
+      expect(text('projection_image'), contains('cm'));
+      expect(text('projection_brightness'), matches(RegExp(r'^\d+ nits')));
       expect(tester.takeException(), isNull);
     });
 

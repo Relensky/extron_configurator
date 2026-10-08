@@ -256,17 +256,28 @@ const List<String> kDefaultsKeys = [
   'manual_disconnect',
   'warm_up_time',
   'cool_down_time',
+  'camera_pages',
+  'ptz_speeds',
+  'ptz_default_speed',
   'user',
   'password',
 ];
 
 /// The [kDefaultsKeys] that only some families carry: the transition timers,
-/// which mean something on a screen or a camera and nothing on a DSP.
+/// which mean something on a screen or a camera and nothing on a DSP, and the
+/// camera's touch panel page set and pan/tilt speed scale, which mean
+/// something on a camera and nothing else.
 ///
 /// Which families is the SCHEMA's answer, not this list's - the editor offers
 /// one of these only where ui_schema.json scopes the key to the driver's
 /// family, so the two can never disagree about where a warm-up exists.
-const Set<String> kFamilyScopedDefaultsKeys = {'warm_up_time', 'cool_down_time'};
+const Set<String> kFamilyScopedDefaultsKeys = {
+  'warm_up_time',
+  'cool_down_time',
+  'camera_pages',
+  'ptz_speeds',
+  'ptz_default_speed',
+};
 
 /// The driver's own warm-up and cool-down in seconds, null for either it does
 /// not declare.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 
 import 'app_state.dart';
@@ -868,6 +870,31 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
   late final TextEditingController _controller;
   final FocusNode _focusNode = FocusNode();
 
+  /// [PERFORMANCE - DEVICE NAME]: a device's `name` is held while it is
+  /// typed and written when typing pauses (as LiveTextField.lazy). The name
+  /// retitles its box on the AV Flow, the floor plans and the estimate, so a
+  /// write per letter redrew all of them per letter and the typing lagged.
+  /// Enter, clicking away and the box going away still write it at once.
+  ///
+  /// [PERFORMANCE - EDITING]: every words box of the form now, not only the
+  /// name - each write tells the whole app, and all of it redraws. Numbers
+  /// and COM ports still go in per key: short, and read back at once.
+  bool get _lazy => !_isNumeric && !_isComPort;
+  Timer? _pause;
+  dynamic _held;
+  bool _holding = false;
+
+  void _write(dynamic value) => widget.provider
+      .updateDeviceValue(widget.sectionKey, widget.fieldKey, value);
+
+  void _flush() {
+    _pause?.cancel();
+    _pause = null;
+    if (!_holding) return;
+    _holding = false;
+    _write(_held);
+  }
+
   bool get _isNumeric =>
       widget.type == 'int' ||
       widget.type == 'double' ||
@@ -896,6 +923,9 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
   void initState() {
     super.initState();
     _controller = TextEditingController(text: _display(widget.value));
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) _flush();
+    });
   }
 
   @override
@@ -916,6 +946,14 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
 
   @override
   void dispose() {
+    // Typed and then gone inside the pause: still an edit, handed over after
+    // this frame because the tree is being torn down now.
+    _pause?.cancel();
+    if (_holding) {
+      final held = _held;
+      final write = _write;
+      scheduleMicrotask(() => write(held));
+    }
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -989,8 +1027,14 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
               .replaceAll('\r', '\n')
               .replaceAll('\n', r'\r');
         }
-        widget.provider
-            .updateDeviceValue(widget.sectionKey, widget.fieldKey, parsedVal);
+        if (_lazy) {
+          _held = parsedVal;
+          _holding = true;
+          _pause?.cancel();
+          _pause = Timer(const Duration(milliseconds: 400), _flush);
+          return;
+        }
+        _write(parsedVal);
         // The 'COM' comes and goes with what is in the box, and a provider
         // write that changes nothing repaints nothing - so ask for it here.
         if (_isComPort) setState(() {});

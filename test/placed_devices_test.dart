@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/cabling_schematic.dart';
 import 'package:extron_configurator/cost_estimate.dart';
 import 'package:extron_configurator/placed_devices.dart';
@@ -154,5 +155,76 @@ void main() {
     final back = CablingBox.fromJson(box.toJson());
     expect(back.deviceKey, 'projector');
     expect(back.rotation, 45);
+  });
+
+  group('units on the AV Flow', () {
+    AvNode unit(String id, String label, {String model = 'PJ-1'}) => AvNode(
+      id: id,
+      label: label,
+      model: model,
+      pos: Offset.zero,
+      ports: const [],
+    );
+
+    test('each unit is its own menu entry under its own name', () {
+      final choices = roomDeviceChoices(
+        [line('Projector A, Projector B', 3)],
+        units: {
+          'Projector A, Projector B': [
+            unit('P1', 'Projector A'),
+            unit('P2', 'Projector B'),
+          ],
+        },
+      );
+      expect([for (final c in choices) '${c.key} ${c.name} ${c.qty}'], [
+        'node:P1 Projector A 1',
+        // One more bought than drawn, offered by name.
+        'projector a, projector b Projector A, Projector B 1',
+        'node:P2 Projector B 1',
+      ]);
+    });
+
+    test('a device placed by name is tied to a unit, then follows renames',
+        () {
+      const placed = [
+        PlanDevice(id: 'DEV_1', deviceKey: 'projector', label: 'Projector',
+            shape: 'projector', pos: Offset.zero),
+        PlanDevice(id: 'DEV_2', deviceKey: 'projector', label: 'Projector',
+            shape: 'projector', pos: Offset.zero),
+      ];
+      final nodes = [unit('P1', 'Projector'), unit('P2', 'Projector')];
+      final linked = linkPlanDevices(placed, nodes)!;
+      expect([for (final d in linked) d.deviceKey], ['node:P1', 'node:P2']);
+      expect(linkPlanDevices(linked, nodes), isNull);
+
+      final renamed = linkPlanDevices(
+        linked,
+        [unit('P1', 'Projector 1', model: 'PJ-2'), unit('P2', 'Projector 2')],
+      )!;
+      expect([for (final d in renamed) d.label], ['Projector 1', 'Projector 2']);
+    });
+
+    test('a rename keeps the count, so a unit is placed once', () {
+      final p = room();
+      p.addAvNode(unit('PJ_A', 'Projector'));
+      final plan = p.addAvFloorPlan(const FloorPlan(id: '', name: 'L1'));
+      final choice = p.planDeviceChoices.single;
+      expect(choice.key, 'node:PJ_A');
+      PlanDevice place() => PlanDevice(
+        id: '',
+        deviceKey: choice.key,
+        label: choice.name,
+        shape: choice.shape,
+        pos: Offset.zero,
+      );
+      expect(p.addAvPlanDevice(plan.id, place()), isNotNull);
+
+      p.renameAvDevice('PJ_A', 'Projector 1');
+      final sheet = p.avFloorPlanById(plan.id)!;
+      expect(sheet.devices.single.label, 'Projector 1');
+      expect(p.roomCost.equipment.single.description, 'Projector 1');
+      // Still the one unit, and it is already on the sheet.
+      expect(p.addAvPlanDevice(plan.id, place()), isNull);
+    });
   });
 }

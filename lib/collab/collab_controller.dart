@@ -289,7 +289,17 @@ class CollabController extends ChangeNotifier {
       s.stamp = stamp;
       final disk = doc.readDisk();
       if (disk != null && !jsonEquals(disk, s.baseline)) {
-        if (jsonEquals(disk, doc.current())) {
+        // Nothing of theirs that this copy lacks: what they changed is what
+        // we changed too (or only what we changed differs). Said nothing -
+        // the notice used to go up, and the merge it offered then said
+        // "Nothing of theirs is new to this copy".
+        final nothingNew = !doc.mergesItself &&
+            s.baseline != null &&
+            () {
+              final preview = _merge3(s, doc, disk);
+              return preview.changes.isEmpty && preview.conflicts.isEmpty;
+            }();
+        if (jsonEquals(disk, doc.current()) || nothingNew) {
           // Somebody saved exactly what we have - nothing to bring in.
           s.baseline = disk;
           s.incoming = null;

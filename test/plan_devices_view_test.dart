@@ -246,4 +246,52 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a projector is paired from its device box', (tester) async {
+    final p = await pump(tester);
+    p.addAvCostExtraEquipment(description: 'Laser Projector');
+    p.addAvCostExtraEquipment(description: 'Screen 1');
+    p.addAvCostExtraEquipment(description: 'Screen 2');
+    final plan = p.activeFloorPlan!;
+    for (final (key, label, shape, pos) in [
+      ('screen 1', 'Screen 1', 'screen', const Offset(300, 500)),
+      ('screen 2', 'Screen 2', 'screen', const Offset(900, 500)),
+      ('laser projector', 'Laser Projector', 'projector', const Offset(320, 200)),
+    ]) {
+      p.addAvPlanDevice(
+        plan.id,
+        PlanDevice(id: '', deviceKey: key, label: label, shape: shape, pos: pos),
+      );
+    }
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byWidgetPredicate(
+        (w) =>
+            w is Tooltip && (w.message ?? '').startsWith('Laser Projector\n'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Edit'));
+    await tester.pumpAndSettle();
+
+    // The box has its own menu, beside the one above the sheet.
+    final menus = find.byKey(const ValueKey('plan_pair_menu'));
+    expect(menus, findsNWidgets(2));
+    await tester.tap(menus.last);
+    await tester.pumpAndSettle();
+    final far = p.activeFloorPlan!.devices
+        .firstWhere((d) => d.label == 'Screen 2')
+        .id;
+    await tester.tap(find.byKey(ValueKey('plan_pair_$far')).last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Paired: Screen 2'), findsWidgets);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final projector = p.activeFloorPlan!.devices
+        .firstWhere((d) => d.shape == 'projector');
+    expect(projector.pairedWith, far);
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -116,6 +116,46 @@ String formatFeetInches(double feet) {
   return inches == 0 ? "$ft'" : "$ft' $inches\"";
 }
 
+/// The units a length is shown and typed in.
+enum LengthUnit {
+  feet('feet', 'ft', 1),
+  inches('inches', 'in', 12),
+  centimeters('centimeters', 'cm', 30.48),
+  meters('meters', 'm', 0.3048);
+
+  final String label;
+  final String short;
+
+  /// How many of this unit make a foot.
+  final double perFoot;
+  const LengthUnit(this.label, this.short, this.perFoot);
+}
+
+/// [feet] in [unit]: 12' 6", 150", 381 cm or 3.81 m. '-' when not positive.
+String formatLength(double feet, LengthUnit unit) {
+  if (!feet.isFinite || feet <= 0) return '-';
+  final v = feet * unit.perFoot;
+  return switch (unit) {
+    LengthUnit.feet => formatFeetInches(feet),
+    LengthUnit.inches => '${v.round()}"',
+    LengthUnit.centimeters => '${v.round()} cm',
+    LengthUnit.meters => '${v.toStringAsFixed(2)} m',
+  };
+}
+
+/// Brightness on a screen, as foot-lamberts or nits.
+enum BrightnessUnit {
+  footLamberts('foot-lamberts', 'fL'),
+  nits('nits', 'nits');
+
+  final String label;
+  final String short;
+  const BrightnessUnit(this.label, this.short);
+
+  /// [fl] foot-lamberts in this unit.
+  double of(double fl) => this == nits ? nitsFromFootLamberts(fl) : fl;
+}
+
 /// A measured length: 12' 6", or 8" under a foot.
 String measureLabel(double feet) {
   if (!feet.isFinite || feet <= 0) return '0"';
@@ -221,6 +261,32 @@ final _nitsText = RegExp(r'([\d][\d,]*)\s*(?:nits|cd\s*/\s*m)', caseSensitive: f
 double parseNits(String text) {
   final m = _nitsText.firstMatch(text);
   return m == null ? 0 : double.tryParse(m.group(1)!.replaceAll(',', '')) ?? 0;
+}
+
+/// True when [t] is a camera, so its field of view matters.
+bool templateIsCamera(AvDeviceTemplate t) {
+  final s = ' ${t.category} ${t.model} '.toLowerCase();
+  return s.contains('camera') || s.contains('ptz') || s.contains(' cam ');
+}
+
+/// The cone a device of [shape] starts with on the floor plan, in degrees,
+/// off its catalog entry: a display's viewing angle, a camera's field of
+/// view, a projector's beam at the middle of its zoom. Null when the entry
+/// does not say.
+double? catalogConeAngle(String shape, AvDeviceTemplate? t) {
+  if (t == null) return null;
+  switch (shape) {
+    case 'display':
+      return t.viewingAngle > 0 ? t.viewingAngle : null;
+    case 'camera':
+      return t.fieldOfView > 0 ? t.fieldOfView : null;
+    case 'projector':
+      final s = projectorSpecsOf(t);
+      if (s == null || !s.hasThrow) return null;
+      final ratio = (s.throwMin + s.throwMax) / 2;
+      return 2 * math.atan(1 / (2 * ratio)) * 180 / math.pi;
+  }
+  return null;
 }
 
 /// A display's brightness: its own field, then its notes.

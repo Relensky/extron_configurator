@@ -77,6 +77,9 @@ DEVICE_INFO = {
         "keep_alive_interval": 10,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
+        "camera_pages": "audience",  # touch panel page set: presenter | audience
+        "ptz_speeds": "5,10,15,20,25,30,35",  # pan/tilt speed per 1x-7x step (driver: PanTilt Speed 1-49)
+        "ptz_default_speed": 4,  # speed step the button starts on
         "user": "admin",
         "password": "ATEC2008",
     },

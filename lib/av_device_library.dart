@@ -507,6 +507,13 @@ class AvDeviceTemplate {
   /// For a display: its rated brightness in nits. 0 when not recorded.
   final double nits;
 
+  /// For a display: its viewing angle, degrees across. 0 when not recorded.
+  final double viewingAngle;
+
+  /// For a camera: its widest horizontal field of view, in degrees. 0 when
+  /// not recorded.
+  final double fieldOfView;
+
   final String notes;
 
   final List<AvPort> ports;
@@ -556,6 +563,8 @@ class AvDeviceTemplate {
     this.throwRatioMax = 0,
     this.lumens = 0,
     this.nits = 0,
+    this.viewingAngle = 0,
+    this.fieldOfView = 0,
     this.notes = '',
     required this.ports,
     this.custom = false,
@@ -641,6 +650,8 @@ class AvDeviceTemplate {
     double? throwRatioMax,
     double? lumens,
     double? nits,
+    double? viewingAngle,
+    double? fieldOfView,
     String? notes,
     List<AvPort>? ports,
     bool? custom,
@@ -675,6 +686,8 @@ class AvDeviceTemplate {
     throwRatioMax: throwRatioMax ?? this.throwRatioMax,
     lumens: lumens ?? this.lumens,
     nits: nits ?? this.nits,
+    viewingAngle: viewingAngle ?? this.viewingAngle,
+    fieldOfView: fieldOfView ?? this.fieldOfView,
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
     custom: custom ?? this.custom,
@@ -712,6 +725,8 @@ class AvDeviceTemplate {
     if (throwRatioMax > 0) 'throwRatioMax': throwRatioMax,
     if (lumens > 0) 'lumens': lumens,
     if (nits > 0) 'nits': nits,
+    if (viewingAngle > 0) 'viewingAngle': viewingAngle,
+    if (fieldOfView > 0) 'fieldOfView': fieldOfView,
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
     if (addedBy.isNotEmpty) 'addedBy': addedBy,
@@ -809,6 +824,8 @@ class AvDeviceTemplate {
     throwRatioMax: _positive(json['throwRatioMax']),
     lumens: _positive(json['lumens']),
     nits: _positive(json['nits']),
+    viewingAngle: _positive(json['viewingAngle']),
+    fieldOfView: _positive(json['fieldOfView']),
     notes: json['notes']?.toString() ?? '',
     ports: [
       for (final p in (json['ports'] as List? ?? []))

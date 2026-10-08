@@ -30,7 +30,6 @@ import 'google_sheets_live.dart';
 import 'project_workbook.dart' show buildProjectWorkbookSheets;
 import 'online_copy.dart';
 import 'online_index.dart';
-import 'chat/gif_search.dart' show gifSearchKeyOr;
 import 'online_room_edits.dart';
 import 'online_roundtrip.dart';
 import 'online_sheet_merge.dart';
@@ -54,6 +53,7 @@ import 'keyboard_shortcuts.dart';
 import 'layout_tools.dart';
 import 'room_locations.dart';
 import 'placed_devices.dart';
+import 'unit_numbering.dart';
 import 'recent_files.dart';
 import 'room_presets.dart';
 import 'room_sidecar.dart';
@@ -68,7 +68,14 @@ import 'ui_schema.dart';
 import 'vendor_book.dart';
 import 'undo_history.dart';
 import 'safe_write.dart';
-import 'chat/project_chat.dart';
+import 'legacy_chat_import.dart';
+import 'project_search.dart' show ProjectSearch, projectThreadName;
+import 'changelog.dart' show kAppVersion;
+import 'team/team_chat.dart';
+import 'team/team_claims.dart';
+import 'team/team_host.dart';
+import 'team/team_presence.dart';
+import 'team/team_widgets.dart' show Team, TeamAvatars;
 import 'in_app_browser.dart';
 import 'shared_json.dart';
 import 'package:file_picker/file_picker.dart';
@@ -641,6 +648,113 @@ class AppStateProvider extends ChangeNotifier {
   /// machine opens on every other. Blank = `<root>/spec_sheets`. See
   /// spec_sheets.dart.
   String specSheetFolder = '';
+
+  // ==========================================================================
+  // [TEAM KIT]: presence, the team chat and "working on" tags, shared with
+  // the CTS Dashboard and Instructor Contact through one team folder - see
+  // lib/team/team_host.dart (that folder is byte-identical in all three apps;
+  // this app's adapter is lib/team_setup.dart).
+  // ==========================================================================
+
+  /// Team Folder setting; blank = [kDefaultTeamFolder], the dashboard's.
+  String teamFolderPath = '';
+
+  /// Shared Rooms Folder setting - where room edits are kept on the share
+  /// (Save Room As starts here, and each save leaves a copy here); blank =
+  /// `Rooms` in [kSharedProjectsFolder].
+  String sharedRoomsFolder = '';
+
+  /// Whether each room save also leaves a copy in the shared rooms folder.
+  bool copyRoomsToShare = true;
+
+  String get effectiveTeamFolder => teamFolderPath.trim().isNotEmpty
+      ? teamFolderPath.trim()
+      : kDefaultTeamFolder;
+
+  String get effectiveSharedRoomsFolder => sharedRoomsFolder.trim().isNotEmpty
+      ? sharedRoomsFolder.trim()
+      : path.join(kSharedProjectsFolder, 'Rooms');
+
+  late final TeamPresenceBoard teamPresence =
+      TeamPresenceBoard(version: kAppVersion);
+  late final TeamChat teamChat = TeamChat()..myName = () => profileName;
+  late final TeamClaims teamClaims = TeamClaims(myName: () => profileName);
+  Timer? _teamWhereTimer;
+
+  /// The open room as the dashboard names it - `ARTS 111` - so a "working
+  /// on" tag here is the same room there. '' with no room open.
+  String get teamRoomId {
+    if (roomConfig.isEmpty) return '';
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map) return '';
+    final b = setup['gve_bldg']?.toString().trim() ?? '';
+    final r = setup['gve_room']?.toString().trim() ?? '';
+    if (b.isEmpty || r.isEmpty) return '';
+    return '${bldgAbbreviation(b)} $r';
+  }
+
+  String get _teamTabLabel =>
+      selectedTabIndex >= 0 && selectedTabIndex < AppTab.values.length
+          ? navTabLabel(AppTab.values[selectedTabIndex])
+          : '';
+
+  /// Joins (or moves to) the team folder. Never under a test.
+  Future<void> startTeam() async {
+    if (runningUnderTest || !_persistenceEnabled) return;
+    // [TEAM KIT - OPTIONAL]: switched off, join nothing (leaves the folder).
+    final folder = teamFeaturesOn ? effectiveTeamFolder : '';
+    Team.presence = teamPresence;
+    Team.chat = teamChat;
+    Team.claims = teamClaims;
+    // [TEAM CHAT - PROJECTS]: the open project's thread, and every project
+    // the project search has found, for the chat's + .
+    Team.currentProject = () => teamProjectName;
+    Team.knownProjects = () => ProjectSearch.knownNames;
+    teamChat.whereAmI = () => (room: teamRoomId, tab: _teamTabLabel);
+    try {
+      await teamPresence.attach(folder);
+      await teamChat.attach(folder);
+      await teamClaims.attach(folder);
+      TeamAvatars.instance.setFolder(avatarFolder);
+    } catch (e) {
+      AppLogger.logError('Team folder $folder could not be joined', e);
+    }
+    // A project opened before the folder was joined: its old chat now.
+    _legacyChatsImported.clear();
+    // ignore: unawaited_futures
+    _importLegacyChats();
+    _teamWhereTimer?.cancel();
+    _teamWhereTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      teamPresence.setWhere(room: teamRoomId, tab: _teamTabLabel);
+    });
+    notifyListeners();
+  }
+
+  /// [SHARED ROOMS]: leaves a copy of the room just saved at [savedFile] in
+  /// the shared rooms folder - `<shared>\ARTS_111\` - so everyone finds the
+  /// latest edits of a room in one place. Skipped when the room is already
+  /// saved there, or the share cannot be reached. Never throws.
+  Future<void> copyRoomToShare(String savedFile) async {
+    if (!copyRoomsToShare || runningUnderTest || savedFile.isEmpty) return;
+    try {
+      final shared = effectiveSharedRoomsFolder;
+      if (!await Directory(shared).exists()) return;
+      if (path.isWithin(shared, savedFile)) return;
+      final source = File(savedFile).parent;
+      final target = Directory(path.join(shared, defaultRoomFolderName));
+      await target.create(recursive: true);
+      await for (final f in source.list()) {
+        if (f is! File) continue;
+        final name = path.basename(f.path);
+        if (name.endsWith('.tmp') || name.endsWith('.saving')) continue;
+        await f.copy(path.join(target.path, name));
+      }
+      AppLogger.logData(
+          'Room copied to the shared rooms folder: ${target.path}');
+    } catch (e) {
+      AppLogger.logError('Room not copied to the shared rooms folder', e);
+    }
+  }
 
   /// The Facilities class schedule export - FacilitiesLinkClassScheduleDaily.csv,
   /// the same file the CTS-Dashboard reads. Blank = that name in the Root
@@ -1365,14 +1479,12 @@ class AppStateProvider extends ChangeNotifier {
       'vendorListFilePath': vendorListFilePath,
       'documentationPath': documentationPath,
       'specSheetFolder': specSheetFolder,
+      'teamFolderPath': teamFolderPath,
+      'sharedRoomsFolder': sharedRoomsFolder,
+      'copyRoomsToShare': copyRoomsToShare,
       'classSchedulePath': classSchedulePath,
       'logFolderPath': logFolderPath,
       'collabEnabled': collabEnabled,
-      'chatDefaultMode': chatDefaultMode.name,
-      'chatRememberMode': chatRememberMode,
-      'chatLastMode': chatLastMode.name,
-      'chatPopUp': chatPopUp,
-      if (gifSearchKey.trim().isNotEmpty) 'gifSearchKey': gifSearchKey.trim(),
       'useBuiltInBrowser': useBuiltInBrowser,
       'googleClientId': googleClientId,
       'googleClientSecret': googleClientSecret,
@@ -4351,10 +4463,17 @@ class AppStateProvider extends ChangeNotifier {
     return stored;
   }
 
+  /// The estimate's equipment for placing on a floor plan, one entry per
+  /// unit on the AV Flow.
+  List<RoomDeviceChoice> get planDeviceChoices => roomDeviceChoices(
+    roomCost.equipment,
+    units: nodesByCostLine(avFlowModel),
+  );
+
   /// How many of [deviceKey] the estimate buys, or null when it is not on
   /// the estimate (nothing to hold it to).
   int? planDeviceLimit(String deviceKey) {
-    for (final c in roomDeviceChoices(roomCost.equipment)) {
+    for (final c in planDeviceChoices) {
       if (c.key == deviceKey) return c.qty;
     }
     return null;
@@ -6244,7 +6363,11 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Sets how many of a drawn line the quote buys, before spares. Null, or
   /// the diagram's own count, goes back to following the diagram.
+  ///
+  /// More than the diagram has adds the missing units to it, named on in
+  /// sequence, so each one can be placed on the floor plan and the racks.
   void setAvEquipmentQty(String lineKey, double? qty, {required double drawn}) {
+    if (qty != null && _addCostLineUnits(lineKey, qty)) return;
     final clear = qty == null || qty < 0 || (qty - drawn).abs() < 1e-9;
     if (clear && !avCost.qtyOverrides.containsKey(lineKey)) return;
     if (!clear && avCost.qtyOverrides[lineKey] == qty) return;
@@ -6259,6 +6382,137 @@ class AppStateProvider extends ChangeNotifier {
 
   double avEquipmentSpares(String lineKey) =>
       avCost.equipmentSpares[lineKey] ?? 0;
+
+  /// Most units one quantity edit adds, so a slip of the keyboard ("130"
+  /// for "13") doesn't fill the diagram.
+  static const int _kMostUnitsAdded = 50;
+
+  /// The AV Flow units on one estimate line, in drawing order.
+  List<AvNode> _costLineUnits(String lineKey) => [
+    for (final n in avNodes)
+      if (deviceGroupKey(n) == lineKey) n,
+  ];
+
+  /// Adds units to [lineKey] until it has [qty]. False when there is
+  /// nothing to copy, [qty] is not a whole number above the count, or it is
+  /// too many to add at once.
+  bool _addCostLineUnits(String lineKey, double qty) {
+    final units = _costLineUnits(lineKey);
+    if (units.isEmpty || qty != qty.roundToDouble()) return false;
+    final add = qty.round() - units.length;
+    if (add <= 0 || add > _kMostUnitsAdded) return false;
+    final last = units.last;
+    _pushAvUndo(
+      add == 1 ? 'Add one more ${last.label}' : 'Add $add more ${last.label}',
+      const {AvUndoScope.flow, AvUndoScope.cost},
+    );
+    final taken = {for (final n in avNodes) n.pos};
+    var pos = last.pos;
+    for (var i = 0; i < add; i++) {
+      do {
+        pos += const Offset(30, 30);
+      } while (taken.contains(pos));
+      taken.add(pos);
+      // A copy of the last unit with none of its history: not cabled, not
+      // racked, not in the config, no install date.
+      do {
+        _avNodeCounter++;
+      } while (avNodeById('AVNODE_$_avNodeCounter') != null);
+      avNodes.add(AvNode(
+        id: 'AVNODE_$_avNodeCounter',
+        label: last.label,
+        model: last.model,
+        pos: pos,
+        ports: last.ports,
+        rackUnits: last.rackUnits,
+        powerWatts: last.powerWatts,
+        btuPerHour: last.btuPerHour,
+        kind: last.kind,
+        powerSource: last.powerSource,
+        excludeFromCost: last.excludeFromCost,
+        excludeFromControl: last.excludeFromControl,
+        locationId: last.locationId,
+        lifeYears: last.lifeYears,
+      ));
+    }
+    avCost.qtyOverrides.remove(lineKey);
+    _numberCostLineUnits(lineKey);
+    notifyListeners();
+    return true;
+  }
+
+  /// One fewer on a drawn line. Takes the highest-numbered unit off the
+  /// diagram when one can go without losing anything - not cabled and not
+  /// in the config - else only the quote's count comes down.
+  void removeAvEquipmentUnit(String lineKey, {required double quoted}) {
+    final units = _costLineUnits(lineKey);
+    final free = [
+      for (final n in units)
+        if (!n.fromConfig &&
+            !avCables.any((c) => c.fromNodeId == n.id || c.toNodeId == n.id))
+          (id: n.id, label: n.label),
+    ];
+    final id = quoted <= units.length
+        ? lastNumberedUnit(free, lineName: avCost.lineNames[lineKey] ?? '')
+        : null;
+    if (id == null) {
+      setAvEquipmentQty(
+        lineKey,
+        quoted - 1 < 0 ? 0 : quoted - 1,
+        drawn: units.length.toDouble(),
+      );
+      return;
+    }
+    final node = avNodeById(id)!;
+    _pushAvUndo('Remove ${node.label}', const {
+      AvUndoScope.flow,
+      AvUndoScope.racks,
+      AvUndoScope.floorPlans,
+      AvUndoScope.cost,
+    });
+    avNodes.removeWhere((n) => n.id == id);
+    final vacated = avRackSlots.remove(id);
+    if (vacated != null) {
+      avRepackRow(vacated.rackId, vacated.face, vacated.startU);
+    }
+    final key = nodeDeviceKey(id);
+    for (var i = 0; i < avFloorPlans.length; i++) {
+      final plan = avFloorPlans[i];
+      if (!plan.devices.any((d) => d.deviceKey == key)) continue;
+      avFloorPlans[i] = plan.copyWith(
+        devices: [
+          for (final d in plan.devices)
+            if (d.deviceKey != key) d,
+        ],
+      );
+    }
+    final left = units.length - 1;
+    if ((avCost.qtyOverrides[lineKey] ?? left) == left) {
+      avCost.qtyOverrides.remove(lineKey);
+    }
+    _numberCostLineUnits(lineKey);
+    notifyListeners();
+  }
+
+  /// Names the units on [lineKey] in sequence - see [sequentialUnitNames].
+  /// A unit with a config block is renamed there too.
+  void _numberCostLineUnits(String lineKey) {
+    final names = sequentialUnitNames(
+      [for (final n in _costLineUnits(lineKey)) (id: n.id, label: n.label)],
+      lineName: avCost.lineNames[lineKey] ?? '',
+    );
+    for (final e in names.entries) {
+      final i = avNodes.indexWhere((n) => n.id == e.key);
+      if (i < 0) continue;
+      avNodes[i] = avNodes[i].copyWith(label: e.value);
+      final block = roomConfig[e.key];
+      if (block is Map) {
+        block['name'] = e.value;
+        _forgetConversionOrigin(e.key, 'name');
+        _agreedDeviceNames[e.key] = e.value;
+      }
+    }
+  }
 
   /// Says who is furnishing one estimate line instead of this job, or clears
   /// it back to "this quote is buying it" when [source] is null.
@@ -6359,6 +6613,20 @@ class AppStateProvider extends ChangeNotifier {
     _agreedDeviceNames.removeWhere((id, _) => !seen.contains(id));
   }
 
+  /// Keeps floor plan devices tied to their units on the AV Flow and titled
+  /// with the unit's name, so a rename here, on the config or on the
+  /// estimate carries onto every sheet. Run from [notifyListeners] beside
+  /// [_syncDeviceNames].
+  void _syncPlanDevices() {
+    if (_avFlowSyncedPath != currentConfigPath) return;
+    for (int i = 0; i < avFloorPlans.length; i++) {
+      final plan = avFloorPlans[i];
+      if (plan.devices.isEmpty) continue;
+      final linked = linkPlanDevices(plan.devices, avNodes);
+      if (linked != null) avFloorPlans[i] = plan.copyWith(devices: linked);
+    }
+  }
+
   /// Adds a node, keeping ids unique. Returns the node actually stored (the
   /// caller may have passed an id that was already taken).
   /// [recordUndo] false is for a batch that has already taken its own snapshot
@@ -6380,6 +6648,15 @@ class AppStateProvider extends ChangeNotifier {
     avDismissedDevices.remove(id);
     notifyListeners();
     return stored;
+  }
+
+  /// Renames one unit on the AV Flow. The config block, the estimate and
+  /// the floor plans follow it through [notifyListeners].
+  void renameAvDevice(String id, String name) {
+    final node = avNodeById(id);
+    final label = name.trim();
+    if (node == null || label.isEmpty || node.label == label) return;
+    updateAvNode(node.copyWith(label: label));
   }
 
   /// Replaces a node in place (drag, rename, port edit).
@@ -8449,28 +8726,6 @@ class AppStateProvider extends ChangeNotifier {
         return (room: room, tab: tab);
       };
     _collabReady = true;
-    chat = ProjectChat(identity: collab.me)
-      ..myName = (() => userDisplayName.trim())
-      ..myEmail = (() => userEmail.trim())
-      ..gifKey = (() => gifSearchKeyOr(gifSearchKey))
-      ..rooms = (() => {
-            for (final r in project.rooms) r.id: projectRoomCode(r.id),
-          })
-      ..historyLogins = (() => project.historyUsers)
-      ..avatarFor = avatarFileFor
-      ..whereAmI = () {
-        final ref = projectRefForConfig(currentConfigPath);
-        final tab = selectedTabIndex >= 0 &&
-                selectedTabIndex < AppTab.values.length
-            ? AppTab.values[selectedTabIndex]
-            : null;
-        return (
-          roomId: ref?.id ?? '',
-          roomLabel: ref == null ? '' : projectRoomCode(ref.id),
-          tabId: tab?.token ?? '',
-          tabLabel: tab == null ? '' : navTabLabel(tab),
-        );
-      };
     // Every history entry also says who that login is and where they were.
     ProjectEdit.context = () {
       final where = collab.whereAmI?.call();
@@ -8492,9 +8747,6 @@ class AppStateProvider extends ChangeNotifier {
   late final CollabController collab;
   bool _collabReady = false;
 
-  /// The open project's chat - see chat/project_chat.dart.
-  late final ProjectChat chat;
-
   /// Web pages (Google Sheets) open in a floating browser inside the app
   /// rather than the default browser - see in_app_browser.dart.
   bool useBuiltInBrowser = true;
@@ -8502,64 +8754,6 @@ class AppStateProvider extends ChangeNotifier {
   void setUseBuiltInBrowser(bool value) {
     useBuiltInBrowser = value;
     InAppBrowser.enabled = value;
-    // ignore: unawaited_futures
-    _persistSettings();
-    notifyListeners();
-  }
-
-  /// How the chat opens this session, and whether a new message pops it up.
-  ChatMode chatMode = ChatMode.slideOut;
-  bool chatPopUp = true;
-
-  /// How it opens when the app starts - App Config. The slide-out unless
-  /// somebody picks otherwise.
-  ChatMode chatDefaultMode = ChatMode.slideOut;
-
-  /// Start where it was last left instead of on [chatDefaultMode].
-  bool chatRememberMode = false;
-  ChatMode chatLastMode = ChatMode.slideOut;
-
-  /// Moves the chat for this session - the buttons in its title bar. Kept
-  /// for the next launch only when [chatRememberMode] is on.
-  void setChatMode(ChatMode mode) {
-    chatMode = mode;
-    chat.mode = mode;
-    chatLastMode = mode;
-    // ignore: unawaited_futures
-    if (chatRememberMode) _persistSettings();
-    notifyListeners();
-  }
-
-  void setChatDefaultMode(ChatMode mode) {
-    chatDefaultMode = mode;
-    chatMode = mode;
-    chat.mode = mode;
-    // ignore: unawaited_futures
-    _persistSettings();
-    notifyListeners();
-  }
-
-  void setChatRememberMode(bool value) {
-    chatRememberMode = value;
-    chatLastMode = chatMode;
-    // ignore: unawaited_futures
-    _persistSettings();
-    notifyListeners();
-  }
-
-  void setChatPopUp(bool value) {
-    chatPopUp = value;
-    // ignore: unawaited_futures
-    _persistSettings();
-    notifyListeners();
-  }
-
-  /// A KLIPY key for the chat's GIF search, over the one built into the app.
-  /// '' uses the built-in key; with neither, the GIF button takes a link.
-  String gifSearchKey = '';
-
-  void setGifSearchKey(String value) {
-    gifSearchKey = value.trim();
     // ignore: unawaited_futures
     _persistSettings();
     notifyListeners();
@@ -8601,15 +8795,50 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Follows the project file with the chat. The real app only: tests get no
-  /// chat folder written beside their fixtures.
+  /// [TEAM CHAT - PROJECTS]: the open project's thread in the team chat is
+  /// named by this - the project's name, else its file's. '' with none open.
+  String get teamProjectName => currentProjectPath.isEmpty
+      ? ''
+      : projectThreadName(project.name, currentProjectPath);
+
+  /// Old chats already copied in this session (see legacy_chat_import.dart),
+  /// so opening a project again does not re-read its old folder.
+  final Set<String> _legacyChatsImported = {};
+
+  /// Follows the open project with the team chat: the first time a project
+  /// (and the Root Folder) is seen, its old chat is copied into its thread.
+  /// The real app only: tests never read or write the share.
   void _syncChat() {
-    if (!_persistenceEnabled) return;
-    // The shared Everyone channel lives in the Root Folder's chat folder.
+    if (!_persistenceEnabled || runningUnderTest) return;
     // ignore: unawaited_futures
-    chat.attachEveryone(effectiveRootFolder);
-    // ignore: unawaited_futures
-    chat.attach(currentProjectPath);
+    _importLegacyChats();
+    notifyListeners();
+  }
+
+  Future<void> _importLegacyChats() async {
+    if (!teamChat.attached) return;
+    try {
+      final root = effectiveRootFolder;
+      if (root.isNotEmpty && _legacyChatsImported.add('root|$root')) {
+        final n = await importLegacyEveryoneChat(teamChat, root);
+        if (n > 0) {
+          AppLogger.logData('Copied $n messages from the old Everyone chat');
+        }
+      }
+      final file = currentProjectPath;
+      final name = teamProjectName;
+      if (file.isNotEmpty &&
+          name.isNotEmpty &&
+          _legacyChatsImported.add('project|$file')) {
+        final n = await importLegacyProjectChat(teamChat,
+            projectPath: file, projectName: name);
+        if (n > 0) {
+          AppLogger.logData('Copied $n messages from the old chat of $name');
+        }
+      }
+    } catch (e) {
+      AppLogger.logError('The old chat could not be copied in', e);
+    }
   }
 
   /// Turns the presence notes and the watcher on or off to match
@@ -8628,6 +8857,13 @@ class AppStateProvider extends ChangeNotifier {
       collab.withdrawAll();
       collab.enabled = false;
     }
+  }
+
+  void setCopyRoomsToShare(bool value) {
+    copyRoomsToShare = value;
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
   }
 
   void setCollabEnabled(bool value) {
@@ -8792,24 +9028,16 @@ class AppStateProvider extends ChangeNotifier {
       vendorListFilePath = str('vendorListFilePath', '');
       documentationPath = str('documentationPath', '');
       specSheetFolder = str('specSheetFolder', '');
+      teamFolderPath = str('teamFolderPath', '');
+      sharedRoomsFolder = str('sharedRoomsFolder', '');
+      copyRoomsToShare = saved['copyRoomsToShare'] != false;
       classSchedulePath = str('classSchedulePath', '');
       logFolderPath = str('logFolderPath', '');
       AppLogger.setLogFolder(logFolderPath);
       collabEnabled = saved['collabEnabled'] is bool
           ? saved['collabEnabled'] as bool
           : true;
-      ChatMode mode(String key) => ChatMode.values.firstWhere(
-            (m) => m.name == saved[key],
-            orElse: () => ChatMode.slideOut,
-          );
-      chatDefaultMode = mode('chatDefaultMode');
-      chatRememberMode = saved['chatRememberMode'] == true;
-      chatLastMode = mode('chatLastMode');
-      // Each launch starts on the default, or where it was left.
-      chatMode = chatRememberMode ? chatLastMode : chatDefaultMode;
-      chat.mode = chatMode;
-      chatPopUp = saved['chatPopUp'] is bool ? saved['chatPopUp'] as bool : true;
-      gifSearchKey = saved['gifSearchKey']?.toString() ?? '';
+      unawaited(startTeam());
       briefingOnProjectOpen = saved['briefingOnProjectOpen'] is bool
           ? saved['briefingOnProjectOpen'] as bool
           : true;
@@ -10049,6 +10277,13 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'specSheetFolder':
         specSheetFolder = value; // resolved on demand, like the manuals
+        break;
+      case 'teamFolderPath':
+        teamFolderPath = value.trim();
+        unawaited(startTeam());
+        break;
+      case 'sharedRoomsFolder':
+        sharedRoomsFolder = value.trim();
         break;
       case 'logFolderPath':
         logFolderPath = value.trim();
@@ -12183,6 +12418,7 @@ class AppStateProvider extends ChangeNotifier {
       // for the rest of the session.
       markRoomSaved();
       collab.noteInSync(CollabDocKind.room, saved: true);
+      unawaited(copyRoomToShare(currentConfigPath));
       // The work is in its file, so the recovery copy is a copy of nothing —
       // and a copy of nothing is what would be offered back on the next open.
       clearRoomRecovery();
@@ -12373,7 +12609,16 @@ class AppStateProvider extends ChangeNotifier {
       final defaultFileName = '${bldgAbbreviation(gveBldg.toString())}_${gveRoom}_config.json';
 
       // Prompt the user for a save location
+      // [SHARED ROOMS]: starts in the shared rooms folder when it is there.
+      String? startIn;
+      try {
+        if (!runningUnderTest &&
+            Directory(effectiveSharedRoomsFolder).existsSync()) {
+          startIn = effectiveSharedRoomsFolder;
+        }
+      } catch (_) {}
       String? outputFile = await saveFileCompat(
+        initialDirectory: startIn,
         dialogTitle: 'Save Room Configuration (saved as <room>\\config.json)',
         fileName: defaultFileName,
         type: FileType.custom,
@@ -19865,6 +20110,7 @@ class AppStateProvider extends ChangeNotifier {
     avCost.followBaseTax(baseTaxPercent);
     // Before the histories, so a name carried across is part of this edit.
     _syncDeviceNames();
+    _syncPlanDevices();
     // AND THE UNDO HISTORIES, for the third time and the same reason. These
     // only start a clock — the document is encoded once the typing stops, not
     // once per keystroke. See undo_history.dart.
@@ -20332,7 +20578,6 @@ class AppStateProvider extends ChangeNotifier {
     _autosaveTimer = null;
     _roomDirtyCheck?.cancel();
     collab.dispose();
-    chat.dispose();
     super.dispose();
   }
 

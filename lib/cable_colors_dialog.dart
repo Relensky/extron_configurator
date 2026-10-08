@@ -6,6 +6,7 @@ import 'app_state.dart';
 import 'av_flow_model.dart' show kCableSwatches;
 import 'cabling_schematic.dart';
 import 'color_wheel_picker.dart';
+import 'movable_dialog.dart';
 
 /// ============================================================================
 ///  WHAT COLOR EACH CABLE IS
@@ -70,7 +71,7 @@ Future<void> showCableColorsDialog(
   BuildContext context,
   AppStateProvider provider,
 ) async {
-  await showDialog<void>(
+  await showMovableDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) {

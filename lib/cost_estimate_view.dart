@@ -32,6 +32,8 @@ import 'labor_rates.dart';
 import 'labor_rates_dialog.dart';
 import 'legible_theme.dart';
 import 'live_text_field.dart';
+import 'movable_dialog.dart';
+import 'placed_devices.dart' show nodesByCostLine;
 import 'print_mode.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
@@ -899,7 +901,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     return PopupMenuButton<CostEquipmentSort>(
       tooltip: 'What order the equipment is listed in',
       initialValue: current,
-      onSelected: provider.setAvCostEquipmentSort,
+      // Picking a sort - even the one it is on - puts the rows in order
+      // again; see [_steadyEquipment].
+      onSelected: (sort) {
+        setState(() => _equipmentOrder = null);
+        provider.setAvCostEquipmentSort(sort);
+      },
       itemBuilder: (_) => [
         for (final sort in CostEquipmentSort.values)
           PopupMenuItem(
@@ -954,6 +961,31 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   }
 
   // --- equipment -----------------------------------------------------------
+
+  /// [UI - ESTIMATE ORDER]: the order the equipment rows were in when the
+  /// page opened (or the Sort menu was last used). The estimate is sorted by
+  /// device name, and renaming a device re-sorts it - so a row being typed
+  /// in jumped away mid-word. Rows keep their places until the page is left
+  /// and opened again, or a sort is picked; a new line goes at the end.
+  List<String>? _equipmentOrder;
+
+  List<CostLine> _steadyEquipment(List<CostLine> lines) {
+    final known = _equipmentOrder;
+    if (known == null) {
+      _equipmentOrder = [for (final l in lines) l.key];
+      return lines;
+    }
+    final byKey = {for (final l in lines) l.key: l};
+    final out = [
+      for (final k in known)
+        if (byKey[k] != null) byKey[k]!,
+    ];
+    final placed = {for (final l in out) l.key};
+    out.addAll(lines.where((l) => !placed.contains(l.key)));
+    _equipmentOrder = [for (final l in out) l.key];
+    return out;
+  }
+
   Widget _equipmentCard(
     BuildContext context,
     AppStateProvider provider,
@@ -962,6 +994,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   ) {
     final theme = Theme.of(context);
     final currency = estimate.currency;
+    final equipment = _steadyEquipment(estimate.equipment);
     final byMaker =
         provider.avCost.equipmentSort == CostEquipmentSort.manufacturer;
     final shipping = provider.avCost.showShipping;
@@ -1032,19 +1065,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   'something being quoted that nobody has drawn.',
                 ),
               ),
-            for (int i = 0; i < estimate.equipment.length; i++) ...[
+            for (int i = 0; i < equipment.length; i++) ...[
               // ONE HEADING PER MAKER, while the table is sorted by one. The
               // Model column names the product, never who makes it, so a list
               // silently grouped by vendor would look like a list in no order
               // at all.
               if (byMaker &&
                   (i == 0 ||
-                      _makerOf(estimate.equipment[i - 1]) !=
-                          _makerOf(estimate.equipment[i])))
-                _makerHeading(context, _makerOf(estimate.equipment[i])),
+                      _makerOf(equipment[i - 1]) !=
+                          _makerOf(equipment[i])))
+                _makerHeading(context, _makerOf(equipment[i])),
               Builder(
                 builder: (context) {
-                  final line = estimate.equipment[i];
+                  final line = equipment[i];
                   // Lines added here keep an editable name and quantity and a
                   // way out; a device on the diagram takes both from the
                   // drawing, which is the whole point of counting them there.
@@ -1113,6 +1146,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                   line.key,
                                   qty,
                                   drawn: line.onDiagram ?? line.drawnQty,
+                                ),
+                                onFewer: () => provider.removeAvEquipmentUnit(
+                                  line.key,
+                                  quoted: line.drawnQty,
                                 ),
                                 field: LiveTextField(
                                   key: ValueKey('eqpqty_drawn_${line.key}'),
@@ -5142,22 +5179,137 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   ///
   /// A name too long for the column hovers to the whole of it and its model -
   /// only then, so the page is not a tooltip under every cell.
-  Widget _lineNameField(AppStateProvider provider, CostLine line) =>
-      hoverWhenClipped(
-        // The box holds the text a field's inset in from each edge.
-        text: '${line.description}    ',
-        message: _rowIdentity(line),
-        style: const TextStyle(fontSize: 13),
-        child: LiveTextField(
-          key: ValueKey('linename_${line.key}'),
-          fieldId: 'linename_${line.key}',
-          lazy: true,
-          initial: provider.avCost.lineNames[line.key] ?? '',
-          hint: line.defaultName,
-          hintIsValue: true,
-          onChanged: (v) => provider.setAvCostLineName(line.key, v),
+  ///
+  /// A line of one unit on the diagram renames the unit itself, so the name
+  /// is the same on the flow, the config, the floor plan and here. A line of
+  /// several lists each unit's name under a menu beside it.
+  Widget _lineNameField(AppStateProvider provider, CostLine line) {
+    final units = nodesByCostLine(provider.avFlowModel)[line.key] ?? const [];
+    final field = hoverWhenClipped(
+      // The box holds the text a field's inset in from each edge.
+      text: '${line.description}    ',
+      message: _rowIdentity(line),
+      style: const TextStyle(fontSize: 13),
+      child: LiveTextField(
+        key: ValueKey('linename_${line.key}'),
+        fieldId: 'linename_${line.key}',
+        lazy: true,
+        initial: provider.avCost.lineNames[line.key] ?? '',
+        hint: line.defaultName,
+        hintIsValue: true,
+        onChanged: (v) {
+          if (units.length == 1 && v.trim().isNotEmpty) {
+            provider.renameAvDevice(units.single.id, v);
+            provider.setAvCostLineName(line.key, '');
+          } else {
+            provider.setAvCostLineName(line.key, v);
+          }
+        },
+      ),
+    );
+    if (units.length < 2) return field;
+    return Row(
+      children: [
+        Expanded(child: field),
+        PrintHide(child: _unitNamesMenu(provider, line, units)),
+      ],
+    );
+  }
+
+  /// The names of each unit on a line, and a way in to rename them.
+  Widget _unitNamesMenu(
+    AppStateProvider provider,
+    CostLine line,
+    List<AvNode> units,
+  ) => PopupMenuButton<String>(
+    key: ValueKey('unitnames_${line.key}'),
+    tooltip: 'The name of each of these',
+    onSelected: (id) => _editUnitNames(provider, line, units, focus: id),
+    itemBuilder: (_) => [
+      for (final n in units)
+        PopupMenuItem(
+          value: n.id,
+          child: Row(
+            children: [
+              Expanded(child: Text(n.label.isEmpty ? n.id : n.label)),
+              const SizedBox(width: 12),
+              const Icon(Icons.edit_outlined, size: 16),
+            ],
+          ),
         ),
-      );
+      const PopupMenuDivider(),
+      const PopupMenuItem(value: '', child: Text('Edit names...')),
+    ],
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('${units.length}', style: const TextStyle(fontSize: 12)),
+          const Icon(Icons.arrow_drop_down, size: 18),
+        ],
+      ),
+    ),
+  );
+
+  /// One name per unit on [line]. Each name carries to the flow, the
+  /// config and the floor plan.
+  Future<void> _editUnitNames(
+    AppStateProvider provider,
+    CostLine line,
+    List<AvNode> units, {
+    String focus = '',
+  }) async {
+    final fields = {
+      for (final n in units) n.id: TextEditingController(text: n.label),
+    };
+    final saved = await showMovableDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Device names - ${line.model.isEmpty ? line.description : line.model}'),
+        content: SizedBox(
+          width: 380,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final n in units)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: TextField(
+                      key: ValueKey('unitname_${n.id}'),
+                      controller: fields[n.id],
+                      autofocus: n.id == focus ||
+                          (focus.isEmpty && n == units.first),
+                      decoration: InputDecoration(
+                        labelText: n.id,
+                        isDense: true,
+                      ),
+                      onSubmitted: (_) => Navigator.of(ctx).pop(true),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('unitnames_save'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (saved != true) return;
+    for (final n in units) {
+      provider.renameAvDevice(n.id, fields[n.id]!.text);
+    }
+  }
 
   /// The Model column: maker, model and part number. A line typed by hand
   /// with no catalog part behind it has a box for its maker and one for its
@@ -6340,13 +6492,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     required double value,
     required String what,
     required ValueChanged<double> onChanged,
+    VoidCallback? onFewer,
   }) {
     return Row(
       children: [
         _stepButton(
           Icons.remove,
           'One fewer $what',
-          value <= 0 ? null : () => onChanged(value - 1 < 0 ? 0 : value - 1),
+          value <= 0
+              ? null
+              : onFewer ?? () => onChanged(value - 1 < 0 ? 0 : value - 1),
         ),
         Expanded(child: field),
         _stepButton(Icons.add, 'One more $what', () => onChanged(value + 1)),

@@ -1061,6 +1061,80 @@ class FloorPlan {
     imageSize.height + margins.vertical,
   );
 
+  // --- keeping what is placed on the sheet ---------------------------------
+  //
+  // [FLOOR PLANS - FIT]: everything on a sheet is in the image's pixels, so a
+  // sheet laid out on the blank 1200 x 900 paper and then given a smaller
+  // drawing kept its markers and devices where they were - past the edge of
+  // the new, smaller sheet, where nobody could reach them. The drawing is
+  // enlarged instead (evenly, so it keeps its shape) until it covers them.
+
+  /// Room left round the furthest thing placed, so it is not on the edge.
+  static const double kFitPadding = 60;
+
+  /// Everything placed on this sheet - location markers, gear, callouts,
+  /// annotations and cable bends - in sheet coordinates. Null when nothing is.
+  Rect? get contentBounds {
+    Rect? r;
+    void add(Rect x) => r = r == null ? x : r!.expandToInclude(x);
+    void point(Offset o) => add(Rect.fromPoints(o, o));
+    markers.values.forEach(point);
+    for (final d in devices) {
+      point(d.pos);
+    }
+    for (final c in callouts) {
+      point(c.pos);
+    }
+    for (final a in annotations) {
+      add(a.bounds);
+    }
+    for (final w in runWaypoints.values) {
+      w.forEach(point);
+    }
+    return r;
+  }
+
+  /// True when something placed on the sheet is past its right or bottom
+  /// edge - out of reach.
+  bool get hasContentOffSheet {
+    final b = contentBounds;
+    if (b == null) return false;
+    final s = sheetSize;
+    return b.right > s.width || b.bottom > s.height;
+  }
+
+  /// This sheet with its drawing drawn [factor] times as big - the same
+  /// shape, the same corner at the same place. Everything placed stays where
+  /// it is on the sheet; a calibrated scale follows the drawing, since a foot
+  /// on it is now [factor] times as many pixels.
+  FloorPlan withImageScaled(double factor) {
+    if (factor <= 0 || factor == 1) return this;
+    return copyWith(
+      imageSize: Size(
+        math.max(50, imageSize.width * factor),
+        math.max(50, imageSize.height * factor),
+      ),
+      pixelsPerFoot: pixelsPerFoot * factor,
+    );
+  }
+
+  /// How much the drawing has to grow for everything placed to be on the
+  /// sheet, with [kFitPadding] to spare: 1 when it already is.
+  double get scaleToFitContent {
+    final b = contentBounds;
+    if (b == null || imageSize.isEmpty) return 1;
+    final needW = b.right + kFitPadding - margins.horizontal;
+    final needH = b.bottom + kFitPadding - margins.vertical;
+    return math.max(
+      1,
+      math.max(needW / imageSize.width, needH / imageSize.height),
+    );
+  }
+
+  /// This sheet with its drawing enlarged just enough to cover everything
+  /// placed on it (unchanged when it already does).
+  FloorPlan fittedToContent() => withImageScaled(scaleToFitContent);
+
   /// True when [locationId] has been dropped on THIS sheet.
   bool hasMarker(String locationId) => markers.containsKey(locationId);
 

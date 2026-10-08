@@ -70,8 +70,8 @@ void main() {
     }
   });
 
-  testWidgets('the screenshot and the chat are on the title bar, and there '
-      'is no chat button floating in the corner', (tester) async {
+  testWidgets('the screenshot is on the title bar, and there is no chat '
+      'button floating in the corner', (tester) async {
     final p = AppStateProvider(autoLoadSettings: false)
       ..settingsLoaded = true
       ..firstRunSetupNeeded = false;
@@ -79,11 +79,9 @@ void main() {
     expect(exportMenu, findsNothing);
     expect(find.descendant(of: find.byType(AppBar), matching: screenshotMenu),
         findsOneWidget);
-    expect(
-        find.descendant(
-            of: find.byType(AppBar),
-            matching: find.byKey(const ValueKey('chat_button'))),
-        findsOneWidget);
+    // The project chat is a thread in the team chat now: its button shows
+    // only with a project open and the team folder joined.
+    expect(find.byKey(const ValueKey('chat_button')), findsNothing);
     expect(find.byKey(const ValueKey('chat_hover_button')), findsNothing);
   });
 

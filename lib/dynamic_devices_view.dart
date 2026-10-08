@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +15,28 @@ import 'pdf_viewer_dialog.dart';
 import 'schema_field_builder.dart';
 import 'search_match.dart';
 import 'responsive.dart';
+
+/// [PERFORMANCE - DEVICES PAGE]: the Input box writes what is typed once
+/// typing pauses, not on every key; the Model and Module boxes write when
+/// they are left. A model written to
+/// the room is looked up in the catalog and carried to the AV Flow, the
+/// floor plans and the estimate - per letter, typing (and backspacing) a
+/// model lagged badly. Picking one from the list writes at once and drops
+/// anything still waiting, so a pick is never overwritten by half a word.
+final Map<String, Timer> _typingPause = {};
+
+void _writeWhenTypingPauses(
+    AppStateProvider provider, String deviceKey, String property, String value) {
+  final key = '$deviceKey|$property';
+  _typingPause.remove(key)?.cancel();
+  _typingPause[key] = Timer(const Duration(milliseconds: 400), () {
+    _typingPause.remove(key);
+    provider.updateDeviceValue(deviceKey, property, value);
+  });
+}
+
+void _dropTypingPause(String deviceKey, String property) =>
+    _typingPause.remove('$deviceKey|$property')?.cancel();
 
 /// The config's live device blocks, in device-family order: for each dev_
 /// count key, the sections that actually exist up to that count.
@@ -764,11 +788,30 @@ class DeviceConfigurationForm extends StatelessWidget {
                 },
                 onSelected: (String selection) {
                   modelFieldFocus?.unfocus(); // Close the options overlay
+                  _dropTypingPause(deviceKey, 'model');
                   _applyModel(context, provider, selection, moduleFieldController);
                 },
                 fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
                   modelFieldFocus = focusNode;
-                  return TextFormField(
+                  // Typing only SEARCHES the list, as the module box does. A
+                  // model applies when one is picked, or - typed by hand -
+                  // when the box is left. Writing mid-word rebuilt the tab and
+                  // threw the cursor out of the box.
+                  return Focus(
+                    canRequestFocus: false,
+                    skipTraversal: true,
+                    onFocusChange: (has) {
+                      if (has) return;
+                      final stored =
+                          provider.roomConfig[deviceKey]?['model']?.toString() ?? '';
+                      if (controller.text.trim() != stored) {
+                        // After a moment: a click on a list entry also takes
+                        // the focus away, and its pick drops this.
+                        _writeWhenTypingPauses(
+                            provider, deviceKey, 'model', controller.text.trim());
+                      }
+                    },
+                    child: TextFormField(
                     controller: controller,
                     focusNode: focusNode,
                     decoration: InputDecoration(
@@ -785,14 +828,15 @@ class DeviceConfigurationForm extends StatelessWidget {
                           final selected = await _showModelPicker(context, provider);
                           if (selected != null && context.mounted) {
                             controller.text = selected; // Keep the visible field in sync
+                            _dropTypingPause(deviceKey, 'model');
                             _applyModel(context, provider, selected, moduleFieldController);
                           }
                         },
                       ),
                     ),
-                    // Manual fill-in still saves, without touching the module
-                    onChanged: (val) => provider.updateDeviceValue(deviceKey, 'model', val),
-                  );
+                    // Enter picks the top match, as the list does.
+                    onFieldSubmitted: (_) => onFieldSubmitted(),
+                  ));
                 },
               ),
             ),
@@ -835,12 +879,32 @@ class DeviceConfigurationForm extends StatelessWidget {
                 },
                 onSelected: (String selection) {
                   moduleFieldFocus?.unfocus(); // Close the options overlay
+                  _dropTypingPause(deviceKey, 'module');
                   provider.updateDeviceValue(deviceKey, 'module', selection);
                 },
                 fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
                   moduleFieldController = controller; // Expose to the picker button & dialog
                   moduleFieldFocus = focusNode;
-                  return TextFormField(
+                  // [PERFORMANCE - MODULE]: typing only SEARCHES the list. A
+                  // module applies when one is picked (list or Browse), or -
+                  // for a name typed by hand - when the box is left. Each
+                  // applied module re-reads its .py file and the defaults
+                  // that come with it, which is too much to do per letter.
+                  return Focus(
+                    canRequestFocus: false,
+                    skipTraversal: true,
+                    onFocusChange: (has) {
+                      if (has) return;
+                      final stored =
+                          provider.roomConfig[deviceKey]?['module']?.toString() ?? '';
+                      if (controller.text.trim() != stored) {
+                        // After a moment: a click on a list entry also takes
+                        // the focus away, and its pick drops this.
+                        _writeWhenTypingPauses(
+                            provider, deviceKey, 'module', controller.text.trim());
+                      }
+                    },
+                    child: TextFormField(
                     controller: controller,
                     focusNode: focusNode,
                     decoration: InputDecoration(
@@ -857,6 +921,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                           final selected = await _showModulePicker(
                               context, provider.availableModuleImports);
                           if (selected != null) {
+                            _dropTypingPause(deviceKey, 'module');
                             provider.updateDeviceValue(deviceKey, 'module', selected);
                             // Show whatever was actually stored, so the prefix
                             // the provider adds is visible in the field.
@@ -868,9 +933,9 @@ class DeviceConfigurationForm extends StatelessWidget {
                         },
                       ),
                     ),
-                    // Allows manual fill-in to be saved even if not selected from the list
-                    onChanged: (val) => provider.updateDeviceValue(deviceKey, 'module', val),
-                  );
+                    // Enter picks the top match, as the list does.
+                    onFieldSubmitted: (_) => onFieldSubmitted(),
+                  ));
                 },
               ),
             ),
@@ -994,6 +1059,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                 },
                 onSelected: (String selection) {
                   inputFieldFocus?.unfocus(); // Close the options overlay
+                  _dropTypingPause(deviceKey, 'input');
                   provider.updateDeviceValue(deviceKey, 'input', selection);
                 },
                 fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
@@ -1008,7 +1074,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                     ),
                     onChanged: (val) {
                       // Allows manual typing to be saved to state even if not selected from dropdown
-                      provider.updateDeviceValue(deviceKey, 'input', val);
+                      _writeWhenTypingPauses(provider, deviceKey, 'input', val);
                     },
                   );
                 },

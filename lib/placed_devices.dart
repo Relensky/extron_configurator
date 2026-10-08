@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:material_ui/material_ui.dart';
 
+import 'av_flow_model.dart';
 import 'cabling_schematic.dart';
 import 'cost_estimate.dart';
 import 'projection_calc.dart';
@@ -17,7 +18,8 @@ import 'projection_calc.dart';
 
 /// One entry in the add-device menu.
 class RoomDeviceChoice {
-  /// [name], lowercased and trimmed. What a placed device is filed under.
+  /// What a placed device is filed under: [nodeDeviceKey] for one unit on
+  /// the AV Flow, else [name] lowercased and trimmed.
   final String key;
   final String name;
 
@@ -38,20 +40,121 @@ class RoomDeviceChoice {
 /// The key a device name is filed under.
 String roomDeviceKey(String name) => name.trim().toLowerCase();
 
+/// The key one unit on the AV Flow is filed under. It follows the unit
+/// through renames and model swaps, where a name key would be left behind.
+String nodeDeviceKey(String nodeId) => 'node:$nodeId';
+
+/// The AV Flow unit behind [deviceKey], or null for a name key.
+String? nodeIdOfDeviceKey(String deviceKey) =>
+    deviceKey.startsWith('node:') ? deviceKey.substring(5) : null;
+
+/// The estimate line's key -> the AV Flow units on it.
+Map<String, List<AvNode>> nodesByCostLine(AvFlowModel model) => {
+  for (final g in groupDevices(model)) g.key: g.nodes,
+};
+
+/// Ties placed devices to units on the AV Flow, and keeps their labels on
+/// the unit's name. A device still filed under a name (placed before units
+/// were tracked) takes the first unclaimed unit going by that name, or by
+/// the estimate line it was named after. Returns null when nothing changed.
+List<PlanDevice>? linkPlanDevices(
+  List<PlanDevice> devices,
+  List<AvNode> nodes,
+) {
+  final byId = {for (final n in nodes) n.id: n};
+  final claimed = {
+    for (final d in devices) ?nodeIdOfDeviceKey(d.deviceKey),
+  };
+  Map<String, List<AvNode>>? byName;
+  var changed = false;
+  final out = <PlanDevice>[];
+  for (final d in devices) {
+    final id = nodeIdOfDeviceKey(d.deviceKey);
+    if (id != null) {
+      final n = byId[id];
+      if (n != null && n.label.trim().isNotEmpty && n.label != d.label) {
+        out.add(d.copyWith(label: n.label));
+        changed = true;
+      } else {
+        out.add(d);
+      }
+      continue;
+    }
+    byName ??= _unitsByName(nodes);
+    final n = byName[d.deviceKey]
+        ?.where((n) => !claimed.contains(n.id))
+        .firstOrNull;
+    if (n == null) {
+      out.add(d);
+      continue;
+    }
+    claimed.add(n.id);
+    out.add(
+      d.copyWith(
+        deviceKey: nodeDeviceKey(n.id),
+        label: n.label.trim().isEmpty ? d.label : n.label,
+      ),
+    );
+    changed = true;
+  }
+  return changed ? out : null;
+}
+
+/// Name key -> units, under each unit's own name and under the estimate
+/// line it shares with others of its model.
+Map<String, List<AvNode>> _unitsByName(List<AvNode> nodes) {
+  final out = <String, List<AvNode>>{};
+  final lines = <String, List<AvNode>>{};
+  for (final n in nodes) {
+    if (n.excludeFromCost) continue;
+    out.putIfAbsent(roomDeviceKey(n.label), () => []).add(n);
+    final line = n.model.trim().isEmpty
+        ? 'device:${n.id}'
+        : 'model:${n.model.trim().toLowerCase()}';
+    lines.putIfAbsent(line, () => []).add(n);
+  }
+  for (final units in lines.values) {
+    final key = roomDeviceKey({for (final n in units) n.label}.join(', '));
+    final list = out.putIfAbsent(key, () => []);
+    for (final n in units) {
+      if (!list.contains(n)) list.add(n);
+    }
+  }
+  return out;
+}
+
 /// The estimate's equipment, one entry per name, sorted by name.
 ///
 /// Lines sharing a name are merged and their quantities added, so two models
 /// both called "Display" are one menu entry for both.
-List<RoomDeviceChoice> roomDeviceChoices(Iterable<CostLine> equipment) {
+///
+/// With [units] (from [nodesByCostLine]), each unit on the AV Flow is its
+/// own entry under its own name, so it keeps its place through a rename.
+/// Any the line buys beyond the drawn units are offered by name as before.
+List<RoomDeviceChoice> roomDeviceChoices(
+  Iterable<CostLine> equipment, {
+  Map<String, List<AvNode>> units = const {},
+}) {
   final names = <String, String>{};
   final qty = <String, double>{};
   final hints = <String, String>{};
   for (final line in equipment) {
     final name = line.description.trim();
     if (name.isEmpty || line.spare || line.qty <= 0) continue;
+    var left = line.qty;
+    for (final n in units[line.key] ?? const <AvNode>[]) {
+      if (left <= 0) break;
+      left--;
+      final key = nodeDeviceKey(n.id);
+      final label = n.label.trim().isEmpty ? name : n.label.trim();
+      names[key] = label;
+      qty[key] = 1;
+      hints[key] = '$label ${line.model} ${line.category}';
+    }
+    if (left <= 0) continue;
     final key = roomDeviceKey(name);
     names.putIfAbsent(key, () => name);
-    qty[key] = (qty[key] ?? 0) + line.qty;
+    qty[key] = (qty[key] ?? 0) + left;
     hints[key] = '${hints[key] ?? ''} $name ${line.model} ${line.category}';
   }
   final out = [
@@ -267,6 +370,7 @@ class PlanDevice {
 
   PlanDevice copyWith({
     String? id,
+    String? deviceKey,
     String? label,
     String? shape,
     Offset? pos,
@@ -279,7 +383,7 @@ class PlanDevice {
     String? pairedWith,
   }) => PlanDevice(
     id: id ?? this.id,
-    deviceKey: deviceKey,
+    deviceKey: deviceKey ?? this.deviceKey,
     label: label ?? this.label,
     shape: shape ?? this.shape,
     pos: pos ?? this.pos,

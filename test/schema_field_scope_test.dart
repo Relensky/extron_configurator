@@ -230,6 +230,62 @@ void main() {
     });
   });
 
+  group('the camera pages and speed scale', () {
+    // Which set of panel pages drives a camera, and the pan/tilt speed at each
+    // step of its speed button. The processor reads config first, then the
+    // camera driver's DEVICE_INFO defaults, then the old per-slot behavior -
+    // so a new block carries them unset, and picking a model fills them in.
+    const keys = ['camera_pages', 'ptz_speeds', 'ptz_default_speed'];
+
+    test('are offered on a camera, and only on a camera', () {
+      for (final key in keys) {
+        expect(offeredOn('CAMERADEVICE_1'), contains(key), reason: key);
+        expect(offeredOn('CAMERADEVICE_2'), contains(key), reason: key);
+        for (final section in const [
+          'PROJECTORDEVICE_1',
+          'DSPDEVICE_1',
+          'SWITCHERDEVICE_1',
+          'RECORDERDEVICE_1',
+        ]) {
+          expect(offeredOn(section), isNot(contains(key)),
+              reason: '$section has no camera pages');
+        }
+      }
+    });
+
+    test('the page set is one of the two the panel has, or blank', () {
+      final spec = schema.specFor('camera_pages', sectionKey: 'CAMERADEVICE_1');
+      expect(spec, isNotNull);
+      expect(spec!.type, 'dropdown');
+      // Blank is 'ask the driver'; anything else would be a value the
+      // processor logs and ignores.
+      expect(spec.options.map((o) => o.value), ['', 'presenter', 'audience']);
+    });
+
+    test('the scale is typed, the start step is a number, both explained', () {
+      final speeds = schema.specFor('ptz_speeds', sectionKey: 'CAMERADEVICE_1');
+      expect(speeds, isNotNull);
+      expect(speeds!.type, 'text', reason: 'seven numbers, comma separated');
+      final start =
+          schema.specFor('ptz_default_speed', sectionKey: 'CAMERADEVICE_1');
+      expect(start, isNotNull);
+      expect(start!.type, 'int');
+      for (final key in keys) {
+        expect(schema.specFor(key, sectionKey: 'CAMERADEVICE_1')!.description,
+            isNotNull,
+            reason: key);
+      }
+    });
+
+    test('a new camera block carries them unset', () {
+      for (final key in keys) {
+        expect(schema.defaultsFor('CAMERADEVICE_1').containsKey(key), isTrue,
+            reason: key);
+        expect(schema.defaultsFor('CAMERADEVICE_1')[key], isNull, reason: key);
+      }
+    });
+  });
+
   group('the != condition', () {
     test('reads the key and the value off either side of it', () {
       final spec = FieldSpec(key: 'x', hideWhen: ['mode!=Conference']);

@@ -913,20 +913,33 @@ class _PeoplePane extends StatelessWidget {
     final muted = theme.colorScheme.onSurfaceVariant;
     final counts = <String, int>{};
     final latest = <String, ProjectEdit>{};
+    final first = <String, ProjectEdit>{};
     for (final e in provider.project.history) {
       final k = e.user.toLowerCase();
       if (k.isEmpty) continue;
       counts[k] = (counts[k] ?? 0) + 1;
       latest[k] = e;
+      first.putIfAbsent(k, () => e);
     }
-    final people = provider.chat.people;
+    // Everybody in the history, from the history itself (the project's old
+    // chat folder used to keep this list; the chat is the team's now).
+    final people = [
+      for (final e in latest.values)
+        (
+          login: e.user,
+          name: e.name,
+          email: e.email,
+          machine: e.machine,
+          firstSeen: first[e.user.toLowerCase()]?.at,
+          lastSeen: e.at,
+        ),
+    ]..sort((a, b) => b.lastSeen.compareTo(a.lastSeen));
     String when(DateTime t) => '${formatEditDay(t)} ${formatEditTime(t)}';
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       children: [
         Text(
-          'Everybody who has opened this job or is in its history. Opening '
-          'a saved project adds you here.',
+          "Everybody in this job's history, most recent first.",
           style: theme.textTheme.bodySmall?.copyWith(color: muted),
         ),
         const SizedBox(height: 8),
@@ -951,8 +964,7 @@ class _PeoplePane extends StatelessWidget {
                 'Windows login ${p.login}',
                 if (email.isNotEmpty) email,
                 if (machine.isNotEmpty) 'on $machine',
-                if (p.firstSeen != null) 'first opened ${when(p.firstSeen!)}',
-                if (p.lastSeen != null) 'last opened ${when(p.lastSeen!)}',
+                if (p.firstSeen != null) 'first change ${when(p.firstSeen!)}',
                 if (last != null) 'last change ${when(last.at)}',
               ].join('  ·  ')),
               trailing: Text(

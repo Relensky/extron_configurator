@@ -23,6 +23,7 @@ import 'export_tools.dart';
 import 'layout_tools.dart'
     show pushOutOfRects, rightAngleTurn, snapToRightAngle;
 import 'live_text_field.dart';
+import 'movable_dialog.dart';
 import 'keyboard_shortcuts.dart';
 import 'placed_devices.dart';
 import 'plan_annotations.dart';
@@ -425,6 +426,40 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// land on it.
   void _focusSheet() => _planFocus.requestFocus();
 
+  /// [FLOOR PLANS - FIT]: things placed past the edge of the drawing - it was
+  /// swapped for a smaller one - and the one-click way to reach them again.
+  Widget _offSheetBar(AppStateProvider provider, FloorPlan plan) {
+    final scheme = Theme.of(context).colorScheme;
+    final grow = plan.scaleToFitContent;
+    return Container(
+      key: const ValueKey('plan_off_sheet_bar'),
+      width: double.infinity,
+      color: scheme.tertiaryContainer,
+      padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+      child: Row(children: [
+        Icon(Icons.open_in_full, size: 18, color: scheme.onTertiaryContainer),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'Some of what is placed on this sheet is past the edge of the '
+            'drawing. Enlarge the drawing (to ${(grow * 100).round()}%, same '
+            'shape) to bring it all on.',
+            style: TextStyle(color: scheme.onTertiaryContainer),
+          ),
+        ),
+        FilledButton.tonalIcon(
+          key: const ValueKey('plan_fit_content'),
+          onPressed: () {
+            provider.updateAvFloorPlan(plan.fittedToContent());
+            _syncImage(provider);
+          },
+          icon: const Icon(Icons.fit_screen, size: 18),
+          label: const Text('Enlarge to fit'),
+        ),
+      ]),
+    );
+  }
+
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -442,13 +477,18 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final resolved = plan == null
         ? ''
         : provider.resolveFloorPlanImage(plan.imageFile);
-    if (resolved == _imagePath) return;
+    final size = plan?.imageSize ?? const Size(1200, 900);
+    // The size counts too: [FLOOR PLANS - FIT] resizes the drawing without
+    // changing its file, and undo can put the old size back.
+    if (resolved == _imagePath && size == _imageSize) return;
     setState(() {
-      _imagePath = resolved;
-      _image = resolved.isEmpty || !File(resolved).existsSync()
-          ? null
-          : FileImage(File(resolved));
-      _imageSize = plan?.imageSize ?? const Size(1200, 900);
+      if (resolved != _imagePath) {
+        _imagePath = resolved;
+        _image = resolved.isEmpty || !File(resolved).existsSync()
+            ? null
+            : FileImage(File(resolved));
+      }
+      _imageSize = size;
     });
   }
 
@@ -499,10 +539,21 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       // are in the plan's coordinates, so a revised drawing of the same room
       // at the same size lands them exactly where they were — which is the
       // whole reason to re-import rather than start again.
-      provider.updateAvFloorPlan(
-        existing.copyWith(imageFile: stored, imageSize: size),
-      );
-      if (size != existing.imageSize) {
+      // [FLOOR PLANS - FIT]: and when the new drawing is smaller than what is
+      // already placed - a sheet laid out on blank paper, say - it is drawn
+      // larger (same shape) until it covers all of it, so nothing ends up
+      // past the edge where it cannot be reached.
+      var next = existing.copyWith(imageFile: stored, imageSize: size);
+      final grow = next.scaleToFitContent;
+      if (grow > 1) next = next.withImageScaled(grow);
+      provider.updateAvFloorPlan(next);
+      if (grow > 1) {
+        _snack(
+          'The drawing was enlarged to ${(grow * 100).round()}% so everything '
+          'already on the sheet stays on it. Floor plan settings can change '
+          'its size.',
+        );
+      } else if (size != existing.imageSize) {
         _snack(
           'The new drawing is a different size, so the markers may need '
           'nudging.',
@@ -827,6 +878,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       children: [
         _toolbar(provider, plan),
         _sheetBar(provider, plan),
+        if (plan != null && plan.hasContentOffSheet) _offSheetBar(provider, plan),
         if (plan != null) _layerBar(provider, plan, drawing),
         if (plan != null && _selectedRunId.isNotEmpty)
           _runBar(provider, plan, drawing),
@@ -1227,7 +1279,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     required String title,
   }) async {
     final controller = TextEditingController(text: sheet.name);
-    final name = await showDialog<String>(
+    final name = await showMovableDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
@@ -1264,7 +1316,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     AppStateProvider provider,
     FloorPlan sheet,
   ) async {
-    final ok = await showDialog<bool>(
+    final ok = await showMovableDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Remove ${sheet.name}?'),
@@ -1313,7 +1365,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     AppStateProvider provider,
     FloorPlan plan,
   ) async {
-    await showDialog<void>(
+    await showMovableDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) {
@@ -2780,7 +2832,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     AppStateProvider provider,
     FloorPlan plan,
   ) async {
-    await showDialog<void>(
+    await showMovableDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) {
@@ -3300,7 +3352,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   Future<String?> _askForText(String initial) {
     final controller = TextEditingController(text: initial);
-    return showDialog<String>(
+    return showMovableDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Note text'),
@@ -3607,7 +3659,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       },
       itemBuilder: (ctx) => roomDeviceMenuItems(
         ctx,
-        roomDeviceChoices(provider.roomCost.equipment),
+        provider.planDeviceChoices,
         plan.devices.map((d) => d.deviceKey),
       ),
       child: IgnorePointer(
@@ -3632,6 +3684,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final plan = provider.activeFloorPlan;
     final choice = _pendingDevice;
     if (plan == null || choice == null) return;
+    // The cone and reach off the catalog where it says, so a placed device
+    // starts at its real coverage.
+    final template = _templatesFor(provider, choice.key).firstOrNull;
+    final ppf = plan.pixelsPerFoot;
+    final throwFt = provider.avThrowDistanceFt;
     final placed = provider.addAvPlanDevice(
       plan.id,
       PlanDevice(
@@ -3640,7 +3697,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         label: choice.name,
         shape: choice.shape,
         pos: at,
-        fov: defaultDeviceFov(choice.shape),
+        fov: (catalogConeAngle(choice.shape, template) ??
+                defaultDeviceFov(choice.shape))
+            .clamp(5.0, 180.0),
+        range: choice.shape == 'projector' && throwFt > 0 && ppf > 0
+            ? throwFt * ppf
+            : kDefaultDeviceRange,
         width: _startingWidth(provider, plan, choice),
       ),
     );
@@ -3810,6 +3872,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     String deviceKey,
   ) {
     final library = provider.avDeviceLibrary;
+    final nodeId = nodeIdOfDeviceKey(deviceKey);
+    if (nodeId != null) {
+      final node = provider.avNodeById(nodeId);
+      return [?library.templateForModel(node?.model ?? '')];
+    }
     return [
       for (final line in provider.roomCost.equipment)
         if (roomDeviceKey(line.description) == deviceKey)
@@ -3879,7 +3946,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           : '',
     );
     var contrast = provider.avContrastTarget;
-    final saved = await showDialog<bool>(
+    final saved = await showMovableDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
@@ -3992,13 +4059,19 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final own = <AvDeviceTemplate>[];
     final lenses = <AvDeviceTemplate>[];
     final seen = <String>{};
+    final nodeId = device == null ? null : nodeIdOfDeviceKey(device.deviceKey);
+    final ownModel = nodeId == null
+        ? null
+        : provider.avNodeById(nodeId)?.model.trim().toLowerCase();
     for (final line in provider.roomCost.equipment) {
       final t = library.templateForModel(line.model);
       if (t == null || !templateTakesProjection(t) || !seen.add(t.model)) {
         continue;
       }
-      final mine =
-          device != null && roomDeviceKey(line.description) == device.deviceKey;
+      final mine = device != null &&
+          (ownModel != null
+              ? line.model.trim().toLowerCase() == ownModel
+              : roomDeviceKey(line.description) == device.deviceKey);
       final isLens = RegExp(r'\blens\b', caseSensitive: false)
           .hasMatch('${t.model} ${line.description}');
       if (mine) {
@@ -4020,7 +4093,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final inches = TextEditingController(
       text: current > 0 ? trimFeetInches((current - whole) * 12) : '',
     );
-    final saved = await showDialog<bool>(
+    final saved = await showMovableDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Throw distance'),
@@ -4190,8 +4263,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   Widget _pairMenu(
     AppStateProvider provider,
     FloorPlan plan,
-    PlanDevice device,
-  ) {
+    PlanDevice device, {
+    ValueChanged<String>? onPaired,
+  }) {
     final want = partnerShape(device.shape);
     final others = plan.devices.where((d) => d.shape == want).toList()
       ..sort((a, b) => a.label.compareTo(b.label));
@@ -4202,7 +4276,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       key: const ValueKey('plan_pair_menu'),
       tooltip: 'Which ${want == 'screen' ? 'screen' : 'projector'} this is '
           'paired with',
-      onSelected: (id) => _pairDevice(provider, plan, device, id),
+      onSelected: (id) {
+        _pairDevice(provider, plan, device, id);
+        onPaired?.call(id);
+      },
       itemBuilder: (_) => [
         CheckedPopupMenuItem(
           value: '',
@@ -4488,6 +4565,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     var rotation = device.rotation.clamp(0.0, 355.0);
     var showFov = device.showFov;
     var fov = device.fov;
+    final catalogFov = catalogConeAngle(
+      device.shape,
+      _templatesFor(provider, device.deviceKey).firstOrNull,
+    )?.clamp(5.0, 180.0);
     final reachMin = feet ? 1.0 : 20.0;
     final reachMax = feet ? 150.0 : 3000.0;
     var reach = (feet ? device.range / ppf : device.range).clamp(
@@ -4502,10 +4583,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
 
     // Every change is drawn on the sheet behind the dialog as it is made.
+    // Pairing saves at once; kept here so the preview and Save carry it.
+    var paired = device.pairedWith;
+
     void live(void Function() change) {
       change();
       _previewDevice(
         device.copyWith(
+          pairedWith: paired,
           rotation: normalizeDegrees(rotation),
           showFov: showFov,
           fov: fov,
@@ -4515,7 +4600,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       );
     }
 
-    final saved = await showDialog<bool>(
+    final saved = await showMovableDialog<bool>(
       context: context,
       // Clear, and off to the side, so the sheet stays in view.
       barrierColor: Colors.transparent,
@@ -4540,6 +4625,28 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   controller: name,
                   decoration: const InputDecoration(labelText: 'Label'),
                 ),
+                if (partnerShape(device.shape).isNotEmpty &&
+                    plan.devices.any(
+                      (d) => d.shape == partnerShape(device.shape),
+                    )) ...[
+                  const SizedBox(height: 12),
+                  Builder(
+                    builder: (_) {
+                      // Read live, so the menu shows the pair just picked.
+                      final sheet = provider.avFloorPlanById(plan.id) ?? plan;
+                      final now = sheet.devices
+                              .where((d) => d.id == device.id)
+                              .firstOrNull ??
+                          device;
+                      return _pairMenu(
+                        provider,
+                        sheet,
+                        now.copyWith(pairedWith: paired),
+                        onPaired: (id) => setLocal(() => live(() => paired = id)),
+                      );
+                    },
+                  ),
+                ],
                 if (deviceShapeHasFov(device.shape)) ...[
                   const SizedBox(height: 16),
                   Text('Facing ${rotation.round()}°'),
@@ -4575,7 +4682,25 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                     value: showFov,
                     onChanged: (v) => setLocal(() => live(() => showFov = v)),
                   ),
-                  Text('${deviceFovLabel(device.shape)} ${fov.round()}°'),
+                  Row(
+                    children: [
+                      Text('${deviceFovLabel(device.shape)} ${fov.round()}°'),
+                      const Spacer(),
+                      if (catalogFov != null)
+                        TextButton(
+                          key: const ValueKey('plan_device_catalog_fov'),
+                          onPressed: (catalogFov - fov).abs() < 0.5
+                              ? null
+                              : () => setLocal(
+                                  () => live(() {
+                                    fov = catalogFov;
+                                    showFov = true;
+                                  }),
+                                ),
+                          child: Text('Catalog: ${catalogFov.round()}°'),
+                        ),
+                    ],
+                  ),
                   Slider(
                     key: const ValueKey('plan_device_fov_angle'),
                     value: fov,
@@ -4629,9 +4754,16 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final label = name.text.trim();
     if (mounted) setState(() => _devicePreview = null);
     if (saved != true) return;
+    // A unit on the AV Flow is renamed there, so the name carries to the
+    // config, the estimate and every other sheet.
+    final nodeId = nodeIdOfDeviceKey(device.deviceKey);
+    if (nodeId != null && label.isNotEmpty && label != device.label) {
+      provider.renameAvDevice(nodeId, label);
+    }
     provider.updateAvPlanDevice(
       plan.id,
       device.copyWith(
+        pairedWith: paired,
         label: label.isEmpty ? device.label : label,
         rotation: normalizeDegrees(rotation),
         showFov: showFov,
@@ -4668,7 +4800,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     }
     final feetField = TextEditingController();
     final inchField = TextEditingController();
-    final saved = await showDialog<bool>(
+    final saved = await showMovableDialog<bool>(
       context: context,
       barrierColor: Colors.transparent,
       builder: (ctx) => AlertDialog(
@@ -5079,7 +5211,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       provider.moveAvLocationMarker(plan.id, waiting.first.id, at);
       return;
     }
-    final picked = await showDialog<String>(
+    final picked = await showMovableDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
         title: Text('Which location goes here on ${plan.name}?'),
@@ -5325,8 +5457,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ? ''
           : plan.pixelsPerFoot.toStringAsFixed(2),
     );
+    // [FLOOR PLANS - FIT]: how much bigger (or smaller) to draw the drawing,
+    // applied on Save. Everything placed keeps its place on the sheet.
+    var imageScale = 1.0;
 
-    final result = await showDialog<String>(
+    final result = await showMovableDialog<String>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
@@ -5389,9 +5524,50 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 const SizedBox(height: 16),
                 Text(
                   'Image: ${plan.imageFile.isEmpty ? '(none)' : plan.imageFile}'
-                  '\n${plan.imageSize.width.round()} × '
-                  '${plan.imageSize.height.round()} px',
+                  '\n${(plan.imageSize.width * imageScale).round()} × '
+                  '${(plan.imageSize.height * imageScale).round()} px'
+                  '${imageScale == 1 ? '' : ' (${(imageScale * 100).round()}% of now)'}',
                   style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                // [FLOOR PLANS - FIT]: the drawing bigger or smaller, keeping
+                // its shape - for a drawing that does not reach everything
+                // placed on the sheet, or one drawn too big.
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text('Drawing size',
+                        style: Theme.of(ctx).textTheme.labelLarge),
+                    OutlinedButton(
+                      key: const ValueKey('plan_scale_down'),
+                      onPressed: imageScale <= 0.2
+                          ? null
+                          : () => setLocal(() => imageScale =
+                              ((imageScale - 0.1) * 100).round() / 100),
+                      child: const Text('- 10%'),
+                    ),
+                    OutlinedButton(
+                      key: const ValueKey('plan_scale_up'),
+                      onPressed: () => setLocal(() => imageScale =
+                          ((imageScale + 0.1) * 100).round() / 100),
+                      child: const Text('+ 10%'),
+                    ),
+                    FilledButton.tonal(
+                      key: const ValueKey('plan_scale_fit'),
+                      onPressed: plan.scaleToFitContent <= 1
+                          ? null
+                          : () => setLocal(
+                              () => imageScale = plan.scaleToFitContent),
+                      child: const Text('Enlarge to fit everything'),
+                    ),
+                    if (imageScale != 1)
+                      TextButton(
+                        onPressed: () => setLocal(() => imageScale = 1),
+                        child: const Text('Undo size'),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -5424,13 +5600,16 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       return;
     }
     provider.updateAvFloorPlan(
-      plan.copyWith(
+      plan.withImageScaled(imageScale).copyWith(
         name: nameController.text.trim().isEmpty
             ? plan.name
             : nameController.text.trim(),
-        pixelsPerFoot: double.tryParse(scaleController.text.trim()) ?? 0,
+        // A calibration follows the drawing when it is resized.
+        pixelsPerFoot:
+            (double.tryParse(scaleController.text.trim()) ?? 0) * imageScale,
       ),
     );
+    if (imageScale != 1) _syncImage(provider);
     // Through its own call: growing the left or top margin has to shift what
     // is already drawn by the same amount, which is not something copyWith
     // can do for itself.
@@ -5460,7 +5639,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     String targetId = callout.targetId;
     String sheet = callout.workbookSheet;
 
-    final result = await showDialog<String>(
+    final result = await showMovableDialog<String>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) {

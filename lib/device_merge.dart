@@ -112,6 +112,8 @@ class DeviceFieldDiff {
           throwRatioMax: theirs.throwRatioMax,
           lumens: theirs.lumens,
           nits: theirs.nits,
+          viewingAngle: theirs.viewingAngle,
+          fieldOfView: theirs.fieldOfView,
         );
       case DeviceField.notes:
         return base.copyWith(notes: theirs.notes);
@@ -292,19 +294,27 @@ List<DeviceFieldDiff> fieldDiffs(
     decimals: 2,
   );
   String projection(AvDeviceTemplate t) =>
-      t.throwRatioMin <= 0 && t.lumens <= 0 && t.nits <= 0
+      t.throwRatioMin <= 0 &&
+              t.lumens <= 0 &&
+              t.nits <= 0 &&
+              t.viewingAngle <= 0 &&
+              t.fieldOfView <= 0
           ? '-'
           : '${t.throwRatioMin}-${t.throwRatioMax}:1, ${t.lumens.round()} lm'
-              '${t.nits > 0 ? ', ${t.nits.round()} nits' : ''}';
-  final theirsProjects =
-      theirs.throwRatioMin > 0 || theirs.lumens > 0 || theirs.nits > 0;
+              '${t.nits > 0 ? ', ${t.nits.round()} nits' : ''}'
+              '${t.viewingAngle > 0 ? ', ${t.viewingAngle.round()}° view' : ''}'
+              '${t.fieldOfView > 0 ? ', ${t.fieldOfView.round()}° FOV' : ''}';
+  final theirsProjects = theirs.throwRatioMin > 0 ||
+      theirs.lumens > 0 ||
+      theirs.nits > 0 ||
+      theirs.viewingAngle > 0 ||
+      theirs.fieldOfView > 0;
   if (theirsProjects && projection(mine) != projection(theirs)) {
     out.add(DeviceFieldDiff(
       field: DeviceField.projection,
       mine: projection(mine),
       theirs: projection(theirs),
-      mineIsBlank:
-          mine.throwRatioMin <= 0 && mine.lumens <= 0 && mine.nits <= 0,
+      mineIsBlank: projection(mine) == '-',
     ));
   }
   text(DeviceField.notes, mine.notes, theirs.notes);

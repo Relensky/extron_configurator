@@ -519,6 +519,62 @@ const List<HelpTopic> kHelpTopics = [
         'reference only.',
   ),
   HelpTopic(
+    title: 'Which camera pages a camera gets, and how fast it moves',
+    section: 'The room',
+    where: 'Devices tab (per camera) and Edit module default settings (every '
+        'room that picks a model)',
+    plain:
+        'The touch panel has one set of camera pages for a tracking camera and '
+        'another for a plain pan-tilt-zoom camera. These settings choose which '
+        'set each camera uses, and how fast it moves at each step of its speed '
+        'button.',
+    keywords: [
+      'camera_pages',
+      'camera pages',
+      'presenter',
+      'audience',
+      'tracking',
+      'ptz',
+      'ptz_speeds',
+      'ptz_default_speed',
+      'pan',
+      'tilt',
+      'speed',
+      'ptzoptics',
+    ],
+    body:
+        'THE PAGES. The panel carries two complete sets of camera pages. The '
+        'presenter set is built around a tracking camera - auto and manual '
+        'tracking, tracking size, switch presenter. The audience set is a plain '
+        'PTZ page with focus, PIP and the Cam570 tracking modes. camera_pages '
+        'says which set controls a camera, presenter or audience, whichever slot '
+        'it is in. A PTZOptics on CAMERADEVICE_1 belongs on the audience pages: '
+        'the presenter pages would be a page of tracking buttons it cannot '
+        'answer. Only the control pages move - the slot keeps its own nav '
+        'button, power button, power prompts and connection label.\n\n'
+        'There is one set of each, so two cameras cannot share one. If both ask '
+        'for the same set the one that asked explicitly in the room keeps it, '
+        'the other is given the remaining set, and the processor logs an '
+        'error.\n\n'
+        'THE SPEED. ptz_speeds is seven pan/tilt speeds, slowest to fastest, '
+        'one per step of the speed button (1x to 7x), written as numbers '
+        'separated by commas - 3,5,7,9,11,13,15. The range belongs to the '
+        'camera: a CAM570 accepts 0-15, a TR311 1-24, a PTZOptics 24 across but '
+        'only 20 up and down. The same number is sent for pan and tilt, so the '
+        'fastest one has to fit inside both or the driver refuses it. '
+        'ptz_default_speed is the step (1-7) the button starts on and goes back '
+        'to when the camera is reset.\n\n'
+        'WHERE THE ANSWER COMES FROM. All three are in each camera driver\'s '
+        'own defaults, so picking a model writes them into the room - set them '
+        'there, in Edit module default settings, when a whole line of cameras '
+        'is wrong. Change them on the Devices tab for one room. Left blank the '
+        'processor asks the driver, and a driver with nothing to say falls back '
+        'to the old behavior: camera 1 on the presenter pages and camera 2 on '
+        'the audience pages, each with that page\'s speed scale (presenter '
+        'starting at 3x, audience at 7x). A value the processor cannot read is '
+        'logged and ignored rather than stopping the room.',
+  ),
+  HelpTopic(
     title: 'A driver that lists no models',
     section: 'The room',
     where: 'Devices tab, beside the module box, and App Config → Python '

@@ -21,7 +21,10 @@
         "service_port": 0,
         "user": "main",
         "warm_up_time": null,
-        "cool_down_time": null
+        "cool_down_time": null,
+        "camera_pages": null,
+        "ptz_speeds": null,
+        "ptz_default_speed": null
     },
     "CAMERADEVICE_2": {
         "btn_name": "Btn_Con_Cam2",
@@ -45,7 +48,10 @@
         "service_port": 0,
         "user": "averadmin",
         "warm_up_time": null,
-        "cool_down_time": null
+        "cool_down_time": null,
+        "camera_pages": null,
+        "ptz_speeds": null,
+        "ptz_default_speed": null
     },
     "DSPDEVICE_1": {
         "btn_name": "Btn_Con_DSP1",

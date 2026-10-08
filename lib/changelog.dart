@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.78+88';
+const String kAppVersion = '0.5.86+96';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,119 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.86',
+    date: 'October 8, 2026',
+    title: 'Model search waits for a pick',
+    changes: [
+      'Devices page: the Model box works like the Python Module box - typing only searches the list, and the model applies when one is picked (Enter picks the top match) or when you leave the box. Before, a pause in typing saved it and threw the cursor out of the box.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.85',
+    date: 'October 8, 2026',
+    title: 'Module search waits for a pick',
+    changes: [
+      'Emoji picker: the emoji under the mouse moves - in the full list and in search results - and is shown large with its name at the bottom of the picker, so you can see how it will look before picking it.',
+      'Team chat, with the style codes hidden (the eye): Backspace and Delete step over the hidden codes and take the letters you can see, and erasing a styled word takes its codes with it - no more half codes left behind.',
+      'Devices page: typing in the Python Module box only searches the list. A module applies when one is picked from the list or Browse (Enter picks the top match), or - for a name typed by hand - when you leave the box. Applying a module reads its .py file and defaults, which was too much to do on every letter.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.84',
+    date: 'October 8, 2026',
+    title: 'Typing a model no longer lags',
+    changes: [
+      'Devices page: the Model, Module and Input boxes write what is typed once typing pauses, instead of on every key - a model is looked up in the catalog and carried to the AV Flow, the floor plans and the estimate, so typing or erasing one lagged badly. Picking from the list still applies at once.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.83',
+    date: 'October 8, 2026',
+    title: 'The project chat joins the team chat',
+    changes: [
+      'Smoother editing: the words boxes of the config form (names, labels, notes) are written when typing pauses, or on clicking away, instead of on every letter - each letter used to redraw the whole app.',
+      'Estimate: the equipment rows stay where they are while a device is renamed. They are put in order again when you come back to the page, or pick from the Sort menu.',
+      'Editing together: "saved changes to this room" (and its merge button) only comes up when their save holds something your copy does not have.',
+      'The project chat is now the project\'s thread in the team chat - the same chat as the CTS Dashboard and Instructor Contact, saved in the team folder, so it can be read and answered from any of them. There is one chat button now, the team chat\'s: its sidebar lists every project\'s thread under Projects, and a button at the top of the chat goes to the project open here.',
+      'A project\'s older chat (its <project>_chat folder beside the project file) and the old Everyone chat are copied in the first time they are opened here, under the people who wrote them. The old folders are left as they were.',
+      'Search every project (the magnifier in the top right) lists every project on the share, each with a Chat button for its thread, and searches what was said in the project threads.',
+      'Settings > Working together has a switch for the team features - off for a copy used on its own, away from the file share: no chat, no project threads, nothing written to the share.',
+      'Renaming a device in the config form no longer lags: the name is written when typing pauses (or on clicking away) instead of on every letter, which redrew the AV Flow, the floor plans and the estimate each time.',
+      'Text effects: pick a different effect for the next word and each word keeps its own; the preview plays both, and half-deleted codes no longer show in it.',
+      'The team page is as wide as the window allows, so every app\'s full name fits.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.82',
+    date: 'October 8, 2026',
+    title: 'Team chat fits the window; every emoji; #word threads',
+    changes: [
+      'Emoji: the picker has every emoji (about 1,500), with a search box - type part of a name ("thumbs", "flamingo") and Enter picks the first one found. The common ones stay at the top.',
+      'Start a thread by typing #word at the start of a message: "#lunch anyone?" posts "anyone?" in #lunch, starting it if it is new, and every CTS app sees it. The box says where the message will go before you send.',
+      'With the codes hidden (the eye on the formatting bar), a message with a text effect is shown above the box as it will look, the effect playing.',
+      'A long phrase with a text effect wraps instead of running off the side of the chat.',
+      'The floating team chat shrinks to fit a smaller window and stays wholly on screen. It goes back to the size you left it when the window grows.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.81',
+    date: 'October 8, 2026',
+    title: 'Floor plans keep everything in reach; an All CTS apps chat',
+    changes: [
+      'Floor Plan: adding a drawing to a sheet that already has devices, '
+          'markers or notes on it enlarges the drawing (keeping its shape) '
+          'until it covers all of them, so nothing ends up past the edge '
+          'where it cannot be reached.',
+      'A sheet with things past the edge of its drawing says so, with an '
+          'Enlarge to fit button. Floor plan settings has a Drawing size: '
+          '- 10%, + 10% and Enlarge to fit everything. A calibrated scale '
+          'follows the drawing.',
+      'Team chat: a new "All CTS apps" conversation, seen in every app, sits first in the list. Under it is this app\'s own conversation (the dashboard\'s "Everyone" is now "CTS Dashboard", with all its history), and the other apps\' conversations can be opened from the list too.',
+      "Who is online shows the version of the app each person has open, on the team chart and in the chat's Online now list.",
+      'Animated emoji come from the team folder on the share (the whole set is kept there), then this PC, and the internet only when the share cannot be reached or the app runs on its own.',
+      'Floor Plan: the device, screen, projector, camera and settings boxes can be dragged out of the way of the sheet. So can the projection calculator, color pickers and cable colors.',
+      'Projection calculator: a picture of the throw from the side at an angle - the projector, its throw distance, and the screen with its width, height, diagonal and how far the bottom of the image is above or below the lens. Drag the projector closer or farther and the image grows or shrinks with it. Outlines mark the zoom\'s telephoto and wide ends. Drawn for light and dark mode.',
+      'Projection calculator: a Units button (as on ProjectorCentral): throw distance and image size each in feet, inches, centimeters or meters, and brightness in foot-lamberts or nits. The boxes, results, tables and picture all follow, and the choice is kept for the next calculator until the app is closed.',
+      'Projection calculator: a brightness gauge with what kind of room the image suits, and how far the lens shift can move the image up, down and to the sides.',
+      'Devices on the floor plan are tied to their box on the AV Flow, not to the name on the estimate. Renaming a device or swapping its model no longer frees it to be placed again; each unit is placed once, under its own name, and the name follows it everywhere. Devices placed before this are tied up the first time the room opens.',
+      'Renaming a device on the floor plan renames it on the AV Flow, the config and the estimate.',
+      'Floor Plan: a projector or screen box has the pairing menu too, to choose which projector goes with which screen.',
+      'Cost: the name on a line of one device renames that device everywhere. A line of several has a dropdown of each one\'s name and an Edit names box.',
+      'Catalog: displays have a viewing angle and cameras a field of view. A display, camera or projector placed on the floor plan starts with its cone from the catalog (a projector\'s from its throw ratio, reaching the room\'s throw distance), and the device box has a Catalog button to put it back.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.80',
+    date: 'October 7, 2026',
+    title: 'Team chat effects, moving emoji and a who-is-where chart',
+    changes: [
+      'Team chat style buttons switch: pressing a style that is on takes it off, and a new colour, font, size or effect replaces the old one - switching styles no longer leaves underline or strikethrough lines behind.',
+      'Effects (the sparkle button on the formatting bar): Big, Small, Shake, Nod, Ripple, Bloom, Jitter and Explode, like an iPhone. They play when the message appears; click the words to play them again.',
+      "Emoji move, like in Teams (Google's animated Noto Emoji, kept on this PC after the first time); a message of only emoji shows them large. Both can be switched off in the Effects menu.",
+      'Who is online: each app has its own colour (Dashboard blue, Room Config Builder purple, Instructor Contact teal) in light and dark mode. The team page is a chart - a row per person, a column per app, with the page and room in each. In the chat, someone with several apps open is one row with a dropdown of their apps.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.79',
+    date: 'October 7, 2026',
+    title: 'Team chat with the CTS Dashboard, and shared room edits',
+    changes: [
+      'The team chat from the CTS Dashboard is here too (the speech bubble '
+          'with people beside the project chat): direct messages, groups, '
+          'room threads, topics, formatting, pictures and GIFs. It is the '
+          'same chat as the dashboard and Instructor Contact, and each '
+          'message says which app it came from.',
+      'Who is online shows everyone in any CTS app, which app, and the room '
+          'they are looking at.',
+      'The open room has a "working on" button in the title bar: tag '
+          'yourself or a colleague (they get a message). The CTS Dashboard '
+          'shows the same tag on the room.',
+      'Settings: Team Folder (blank uses the dashboard\'s), and Shared Rooms '
+          'Folder - Save Room As starts there, and each save leaves a copy '
+          'of the room there (switch it off below).',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.78',
     date: 'October 7, 2026',

@@ -333,6 +333,47 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     );
   }
 
+  /// A camera's field of view, which the floor plan draws as its cone.
+  Widget _cameraRow(ThemeData theme, AvDeviceTemplate entry, String key) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: LiveTextField(
+              fieldId: 'fov_$key',
+              initial: entry.fieldOfView <= 0
+                  ? ''
+                  : trimNumber(entry.fieldOfView),
+              label: 'Field of view',
+              suffix: '°',
+              helper: 'widest, across',
+              numeric: true,
+              onChanged: (v) => setState(
+                () => _apply(
+                  entry.copyWith(fieldOfView: double.tryParse(v.trim()) ?? 0),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'The floor plan draws this as the camera cone when it is '
+                'placed.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// A display's brightness, which the floor plan uses to show where it can
   /// be read in the room's light.
   Widget _displayRow(ThemeData theme, AvDeviceTemplate entry, String key) {
@@ -354,6 +395,24 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               onChanged: (v) => setState(
                 () => _apply(
                   entry.copyWith(nits: double.tryParse(v.trim()) ?? 0),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 140,
+            child: LiveTextField(
+              fieldId: 'viewangle_$key',
+              initial: entry.viewingAngle <= 0
+                  ? ''
+                  : trimNumber(entry.viewingAngle),
+              label: 'Viewing angle',
+              suffix: '°',
+              numeric: true,
+              onChanged: (v) => setState(
+                () => _apply(
+                  entry.copyWith(viewingAngle: double.tryParse(v.trim()) ?? 0),
                 ),
               ),
             ),
@@ -1801,6 +1860,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         if (templateTakesProjection(entry)) _projectionRow(theme, entry, key),
         if (entry.category.toLowerCase().contains('display'))
           _displayRow(theme, entry, key),
+        if (templateIsCamera(entry)) _cameraRow(theme, entry, key),
         const SizedBox(height: 12),
         Row(
           children: [

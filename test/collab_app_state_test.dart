@@ -58,6 +58,35 @@ void main() {
     p.dispose();
   });
 
+  test('a save with nothing new for this copy raises no notice or button',
+      () async {
+    final file = path.join(dir.path, 'bss105_config.json');
+    File(file).writeAsStringSync(jsonEncode({
+      'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '105', 'notes': 'a'},
+    }));
+    final p = AppStateProvider(autoLoadSettings: false);
+    p.collab.enabled = true;
+    await p.openConfigAtPath(file);
+    await p.collab.tick();
+
+    // Mine: two edits, not saved.
+    p.updateDeviceValue('SYSTEM_SETUP', 'gve_room', '106');
+    p.updateDeviceValue('SYSTEM_SETUP', 'notes', 'b');
+
+    // Theirs: the same one of them - nothing I do not already have.
+    await later();
+    final disk = jsonDecode(File(file).readAsStringSync()) as Map;
+    (disk['SYSTEM_SETUP'] as Map)['notes'] = 'b';
+    File(file).writeAsStringSync(jsonEncode(disk));
+
+    await p.collab.tick();
+    expect(p.collab.incomingOn(CollabDocKind.room), isNull,
+        reason: 'no merge button for nothing');
+    expect(p.collab.previewMerge(CollabDocKind.room), isNull);
+    expect((p.roomConfig['SYSTEM_SETUP'] as Map)['gve_room'], '106');
+    p.dispose();
+  });
+
   test('a colleague\'s budget lines are merged into the job', () async {
     final p = AppStateProvider(autoLoadSettings: false);
     p.collab.enabled = true;

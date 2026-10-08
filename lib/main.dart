@@ -1,3 +1,7 @@
+import 'team/team_claims_widgets.dart';
+import 'team/team_notices.dart';
+import 'team/team_widgets.dart';
+import 'team_setup.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -51,11 +55,7 @@ import 'model_defaults_dialog.dart';
 import 'online_copy_dialog.dart';
 import 'in_app_browser.dart';
 import 'app_paths.dart' show userDataDirOrNull;
-import 'chat/chat_layer.dart';
-import 'chat/chat_link.dart' show kChatWindowFlag;
-import 'chat/project_chat.dart' show ChatMode;
-import 'chat/chat_window_app.dart';
-import 'chat/chat_search_view.dart';
+import 'project_search.dart';
 import 'google_sheets_export.dart' show kBuiltInGoogleClientId;
 import 'undo_bar.dart'
     show ToolbarUndoButtons, ToolbarUndoTarget, toolbarUndoTarget;
@@ -87,18 +87,14 @@ import 'tab_export.dart';
 import 'workbook_export.dart';
 
 void main(List<String> args) {
-  // A chat window is this .exe started again with a flag - it runs the chat
-  // and nothing else. See chat/chat_link.dart.
-  final chatAt = args.indexOf(kChatWindowFlag);
-  if (chatAt >= 0) {
-    runChatWindow(chatAt + 1 < args.length ? args[chatAt + 1] : '');
-    return;
-  }
   // FIRST, before anything that could throw. See error_reporting.dart: without
   // these, an unhandled error in a release build goes to a console that a
   // double-clicked .exe does not have, and the log this app asks people to send
   // in never hears about it.
   installGlobalErrorHandlers();
+  // [TEAM KIT]: lib/team/ (shared with the CTS Dashboard and Instructor
+  // Contact) plugged in - see team_setup.dart.
+  setUpTeamKit();
   // One log file per session, with a header, a heartbeat and an audit of the
   // last session. See app_logger.dart.
   AppLogger.startSession();
@@ -408,7 +404,7 @@ class _MainDashboardState extends State<MainDashboard> {
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
     // A project picked in the chat search opens the way the File menu opens
     // one, unsaved-work question and all.
-    chatSearchOpenProject = (file) async {
+    projectSearchOpenProject = (file) async {
       if (!mounted) return;
       await _openDocumentAtPath(
           context, context.read<AppStateProvider>(), file);
@@ -934,6 +930,17 @@ class _MainDashboardState extends State<MainDashboard> {
               SizedBox(width: 16),
             ],
             const Flexible(child: ProjectRoomPicker()),
+            // [TEAM KIT - WORKING ON]: who is working on the open room - the
+            // same tag the CTS Dashboard's Room Hub shows for it.
+            if (provider.teamRoomId.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              TeamWorkingOn(
+                kind: 'room',
+                id: provider.teamRoomId,
+                label: '${provider.teamRoomId} (room configuration)',
+                noun: 'this room',
+              ),
+            ],
           ],
         ),
         titleSpacing: 4,
@@ -947,9 +954,16 @@ class _MainDashboardState extends State<MainDashboard> {
             key: const ValueKey('global_search'),
             tooltip: 'Search every chat and project',
             icon: const Icon(Icons.manage_search),
-            onPressed: () => showChatSearch(context),
+            onPressed: () => showProjectSearch(context),
           ),
-          const ChatToolbarButton(),
+          // [TEAM KIT]: who is online in any CTS app, and the team chat
+          // shared with the CTS Dashboard and Instructor Contact - the ONE
+          // chat: each project is a thread in it (Projects in its sidebar,
+          // and a button in its header for the project open here).
+          TeamToolbarButtons(
+            onTeam: () => showTeamPage(context),
+            onChat: () => TeamChatPanel.instance.toggle(context),
+          ),
           // YOU, in the corner - and the way into Settings, Help and the
           // light/dark switch. See [ProfileButton].
           const ProfileButton(),
@@ -1025,10 +1039,6 @@ class _MainDashboardState extends State<MainDashboard> {
                     ),
                   ),
                 ),
-                // NOTICES OF NEW CHAT MESSAGES, in the page's lower left -
-                // beside the rail rather than over it, and out of
-                // screenshots.
-                const Positioned(left: 12, bottom: 12, child: ChatCorner()),
               ],
             ),
           )
@@ -1080,7 +1090,13 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
       },
       child: CollabNoticeListener(
-          child: ProjectChatLayer(child: InAppBrowserInset(child: page))),
+          // [TEAM KIT]: the team chat (shared with the other CTS apps) keeps
+          // its own room when docked, and its notices. The project chat is
+          // a thread in it.
+          child: TeamChatInset(
+              child: TeamNoticeListener(
+                  hereRoom: () => provider.teamRoomId,
+                  child: InAppBrowserInset(child: page)))),
     );
   }
 
@@ -3720,6 +3736,67 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        // [TEAM KIT]: the team folder - presence, the team chat and the
+        // "working on" tags, shared with the CTS Dashboard and Instructor
+        // Contact. Blank = the dashboard's own team folder on the share.
+        TextFormField(
+          key: ValueKey('teamFolderPath_${provider.teamFolderPath}'),
+          decoration: InputDecoration(
+            labelText: 'Team Folder (team chat, who is online, working-on tags)',
+            hintText: provider.effectiveTeamFolder,
+            helperText: 'Blank = the CTS Dashboard\'s team folder, so the chat '
+                'and who is online are the same in every CTS app.',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder_shared),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                final dir = await FilePicker.getDirectoryPath();
+                if (dir != null) provider.updateSetting('teamFolderPath', dir);
+              },
+            ),
+          ),
+          initialValue: provider.teamFolderPath,
+          onChanged: (val) => provider.updateSetting('teamFolderPath', val),
+        ),
+        const SizedBox(height: 20),
+
+        // [SHARED ROOMS]: where room edits are kept on the share - Save Room
+        // As starts here, and each save leaves a copy here.
+        TextFormField(
+          key: ValueKey('sharedRoomsFolder_${provider.sharedRoomsFolder}'),
+          decoration: InputDecoration(
+            labelText: 'Shared Rooms Folder (room edits on the share)',
+            hintText: provider.effectiveSharedRoomsFolder,
+            helperText: 'Blank = "Rooms" in the shared Projects folder. Save '
+                'Room As starts here; each save copies the room to '
+                '<folder>\\<BLDG_ROOM>.',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder_shared),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                final dir = await FilePicker.getDirectoryPath();
+                if (dir != null) {
+                  provider.updateSetting('sharedRoomsFolder', dir);
+                }
+              },
+            ),
+          ),
+          initialValue: provider.sharedRoomsFolder,
+          onChanged: (val) => provider.updateSetting('sharedRoomsFolder', val),
+        ),
+        SwitchListTile(
+          key: const ValueKey('copyRoomsToShare'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Copy each saved room to the Shared Rooms Folder'),
+          subtitle: const Text('So the latest edit of every room is in one '
+              'place on the share, wherever it was saved.'),
+          value: provider.copyRoomsToShare,
+          onChanged: provider.setCopyRoomsToShare,
+        ),
+        const SizedBox(height: 20),
+
         // THE CLASS SCHEDULE - where install windows are read from. See
         // class_schedule.dart.
         TextFormField(
@@ -3774,65 +3851,20 @@ class AppSettingsView extends StatelessWidget {
           onChanged: provider.setCollabEnabled,
         ),
         const SizedBox(height: 12),
-        // PROJECT CHAT - see chat/project_chat.dart.
-        Text('Project chat', style: Theme.of(context).textTheme.titleSmall),
+        // TEAM CHAT - shared with the CTS Dashboard and Instructor Contact.
+        Text('Team chat and project threads',
+            style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(
-          'Kept in a "<project>_chat" folder beside the project file, so '
-          'everybody who opens the job sees it. Open it from the chat button '
-          'in the top right or the lower left.',
+          "Each project's chat is a thread in the team chat, named by the "
+          'project and seen in every CTS app. Open the team chat (top '
+          "right) and pick it under Projects, or press the open project's "
+          'button at the top of the chat. A '
+          "project's older chat (its <project>_chat folder) is copied in the "
+          'first time the project opens.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
-        const SizedBox(height: 8),
-        Text('Opens as', style: Theme.of(context).textTheme.bodyMedium),
-        const SizedBox(height: 4),
-        SegmentedButton<ChatMode>(
-          key: const ValueKey('chat_mode_setting'),
-          segments: [
-            for (final m in ChatMode.values)
-              ButtonSegment(value: m, label: Text(m.label)),
-          ],
-          selected: {provider.chatDefaultMode},
-          onSelectionChanged: (v) => provider.setChatDefaultMode(v.first),
-        ),
-        SwitchListTile(
-          key: const ValueKey('chat_remember_mode'),
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Remember the last way it was opened'),
-          subtitle: const Text(
-            'Off: each time the app starts, the chat opens as chosen above, '
-            'whatever it was moved to last time. On: it opens the way it was '
-            'left.',
-          ),
-          value: provider.chatRememberMode,
-          onChanged: provider.setChatRememberMode,
-        ),
-        SwitchListTile(
-          key: const ValueKey('chat_popup_switch'),
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Open the chat when somebody asks a question'),
-          subtitle: const Text(
-            'A message with a question mark in it, or one that names you, '
-            'opens the chat. Anything else shows a notice in the lower left.',
-          ),
-          value: provider.chatPopUp,
-          onChanged: provider.setChatPopUp,
-        ),
-        const SizedBox(height: 8),
-        // The chat's GIF search - see chat/gif_search.dart.
-        TextFormField(
-          key: const ValueKey('gif_search_key'),
-          initialValue: provider.gifSearchKey,
-          obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'GIF search key (KLIPY)',
-            helperText: 'Leave blank to use the key built into the app. With '
-                'no key at all, the GIF button sends a GIF from a link.',
-            isDense: true,
-          ),
-          onFieldSubmitted: provider.setGifSearchKey,
-          onChanged: provider.setGifSearchKey,
-        ),
+        TeamFeaturesSwitch(onChanged: provider.startTeam),
         const SizedBox(height: 20),
 
         // GOOGLE SHEETS - see google_sheets_export.dart.

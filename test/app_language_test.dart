@@ -149,7 +149,11 @@ const e = 'with \${interpolation.here}';
   });
 
   test('the app calls them stakeholders, not customers', () {
-    final found = offenders((s) => s.toLowerCase().contains('customer'));
+    // 'customer_id' is KLIPY's own field name in the team kit's GIF search
+    // (lib/team/gif_search.dart, shared with the CTS Dashboard) - sent to the
+    // service, never shown.
+    final found = offenders((s) =>
+        s.toLowerCase().contains('customer') && s != 'customer_id');
     expect(found, isEmpty, reason: '"customer" in app text:\n${found.join('\n')}');
   });
 
