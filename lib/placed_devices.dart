@@ -293,6 +293,51 @@ PlanDevice? projectionPartner(List<PlanDevice> devices, PlanDevice device) {
   return best;
 }
 
+/// Width over height of a projection screen, as drawn and lit on the plan.
+const double kPlanScreenAspect = 16 / 10;
+
+/// How far out a screen [width] wide is watched from: six image heights.
+/// In the units of [width], so it works on a sheet without a scale too.
+double screenViewingReach(double width) =>
+    farthestViewer(imageHeightFromWidth(width, kPlanScreenAspect))
+        .clamp(20.0, 20000.0);
+
+/// [devices] with [after] in place of the one it replaces, and the other
+/// half of its projector and screen pair kept to the image between them.
+/// A projector's throw angle or reach sizes its screen to the image it
+/// lands; a screen made wider or narrower zooms its projector to fill it.
+/// A screen that changes width is watched from six image heights.
+List<PlanDevice> withProjectionLinked(
+  List<PlanDevice> devices,
+  PlanDevice after,
+) {
+  final at = devices.indexWhere((d) => d.id == after.id);
+  if (at < 0) return devices;
+  final before = devices[at];
+  final next = List<PlanDevice>.from(devices)..[at] = after;
+  final partner = projectionPartner(next, after);
+  if (partner == null) return next;
+  final p = next.indexWhere((d) => d.id == partner.id);
+  if (after.shape == 'projector' &&
+      (after.fov != before.fov || after.range != before.range)) {
+    final width = imageWidthForBeam(after.range, after.fov)
+        .clamp(4.0, 20000.0);
+    next[p] = partner.copyWith(
+      width: width,
+      range: screenViewingReach(width),
+    );
+  } else if (after.shape == 'screen' && after.width != before.width) {
+    next[at] = after.copyWith(range: screenViewingReach(after.width));
+    next[p] = partner.copyWith(
+      fov: beamAngleToFill(partner.range, after.width).clamp(5.0, 180.0),
+    );
+  }
+  return next;
+}
+
+/// The usual color of the working-area bands the content needs and above.
+const Color kPlanBandColor = Color(0xFF2E7D32);
+
 /// Reach of a new cone, in plan pixels.
 const double kDefaultDeviceRange = 260;
 
@@ -344,6 +389,13 @@ class PlanDevice {
   /// squaring up and brightness. '' pairs with the nearest.
   final String pairedWith;
 
+  /// The cone's color as ARGB; 0 uses its shape's, see [deviceFovColor].
+  final int coneColor;
+
+  /// For a screen or display: a color of its own for each contrast band of
+  /// its working area, as ARGB by the band's N in N:1 (7, 15, 50, 80).
+  final Map<int, int> rangeColors;
+
   const PlanDevice({
     required this.id,
     required this.deviceKey,
@@ -357,7 +409,13 @@ class PlanDevice {
     this.width = kDefaultScreenWidth,
     this.gain = 1.0,
     this.pairedWith = '',
+    this.coneColor = 0,
+    this.rangeColors = const {},
   });
+
+  /// The color its cone, throw or viewing angle is drawn in.
+  Color get fovColor =>
+      coneColor != 0 ? Color(coneColor) : deviceFovColor(shape);
 
   /// True when it is drawn as a flat face as wide as [width].
   bool get hasFace => shape == 'screen' || shape == 'display';
@@ -381,6 +439,8 @@ class PlanDevice {
     double? width,
     double? gain,
     String? pairedWith,
+    int? coneColor,
+    Map<int, int>? rangeColors,
   }) => PlanDevice(
     id: id ?? this.id,
     deviceKey: deviceKey ?? this.deviceKey,
@@ -394,6 +454,8 @@ class PlanDevice {
     width: width ?? this.width,
     gain: gain ?? this.gain,
     pairedWith: pairedWith ?? this.pairedWith,
+    coneColor: coneColor ?? this.coneColor,
+    rangeColors: rangeColors ?? this.rangeColors,
   );
 
   Map<String, dynamic> toJson() => {
@@ -410,6 +472,11 @@ class PlanDevice {
     if (hasFace) 'width': width,
     if (shape == 'screen' && gain != 1.0) 'gain': gain,
     if (pairedWith.isNotEmpty) 'pair': pairedWith,
+    if (coneColor != 0) 'coneColor': coneColor,
+    if (rangeColors.isNotEmpty)
+      'rangeColors': {
+        for (final e in rangeColors.entries) '${e.key}': e.value,
+      },
   };
 
   factory PlanDevice.fromJson(Map<String, dynamic> json) {
@@ -433,6 +500,13 @@ class PlanDevice {
           .clamp(4.0, 20000.0),
       gain: ((json['gain'] as num?)?.toDouble() ?? 1.0).clamp(0.1, 5.0),
       pairedWith: json['pair']?.toString() ?? '',
+      coneColor: (json['coneColor'] as num?)?.toInt() ?? 0,
+      rangeColors: {
+        if (json['rangeColors'] case final Map<String, dynamic> m)
+          for (final e in m.entries)
+            if (int.tryParse(e.key) case final k?)
+              if (e.value case final num v) k: v.toInt(),
+      },
     );
   }
 }
@@ -467,6 +541,10 @@ class PlanDeviceFovPainter extends CustomPainter {
   /// Rated lumens of each projector by id, for the brightness rings.
   final Map<String, double> lumens;
 
+  /// Shortest and longest throw ratio of each projector's lens by id, to
+  /// flag an image the lens cannot zoom to.
+  final Map<String, (double, double)> throwRanges;
+
   /// The sheet's scale; 0 leaves the rings unlabeled.
   final double pixelsPerFoot;
 
@@ -488,6 +566,7 @@ class PlanDeviceFovPainter extends CustomPainter {
     this.squareProjectorId = '',
     this.showCones = true,
     this.lumens = const {},
+    this.throwRanges = const {},
     this.pixelsPerFoot = 0,
     this.nits = const {},
     this.roomLightFc = 0,
@@ -569,7 +648,7 @@ class PlanDeviceFovPainter extends CustomPainter {
         continue;
       }
       final center = _at(d);
-      final color = deviceFovColor(d.shape);
+      final color = d.fovColor;
       // Rotation 0 is up the sheet; canvas angle 0 is to the right.
       final mid = (d.rotation - 90) * math.pi / 180;
       final half = d.fov / 2 * math.pi / 180;
@@ -597,7 +676,7 @@ class PlanDeviceFovPainter extends CustomPainter {
   /// A screen's viewing area, flaring from its edges out to where it looks
   /// half as bright. Nested bands make it brighter toward square on.
   void _paintScreenView(Canvas canvas, PlanDevice d) {
-    final color = deviceFovColor(d.shape);
+    final color = d.fovColor;
     final halfGain = d.fov / 2;
     if (_paintWorking(canvas, d, halfGain)) return;
     for (final k in const [1.0, 0.8, 0.6, 0.4, 0.2]) {
@@ -620,60 +699,90 @@ class PlanDeviceFovPainter extends CustomPainter {
 
   /// Where the image holds the contrast its content needs against the room
   /// light: out to the angle where it is still bright enough, and as far
-  /// back as six image heights. False when there is not enough to go on
-  /// (no room light set, or no brightness), so the plain viewing angle is
-  /// drawn instead.
+  /// back as its reach. Each AVIXA category the image reaches is a band,
+  /// narrower for the higher ones, so more room light shrinks the area a
+  /// step at a time. A band is drawn in its own color where one is set
+  /// ([PlanDevice.rangeColors]); otherwise the content's own and above are
+  /// in the device's color (green until one is picked) and the ones under
+  /// it amber. False when there is not enough to go on (no room light set,
+  /// or no brightness), so the plain viewing angle is drawn instead.
   bool _paintWorking(Canvas canvas, PlanDevice d, double halfGain) {
     final peak = nits[d.id] ?? 0;
     if (roomLightFc <= 0 || peak <= 0) return false;
-    final reflect = d.shape == 'screen' ? d.gain : kDisplayReflectance;
-    final need = neededNits(contrast, ambientNits(roomLightFc, reflect));
-    final angle = workingAngle(peak, need, halfGain);
+    final reflect = d.shape == 'screen'
+        ? screenReflectance(d.gain)
+        : kDisplayReflectance;
+    final ambient = ambientNits(roomLightFc, reflect);
+    double angleFor(double c) =>
+        workingAngle(peak, neededNits(c, ambient), halfGain);
+    final angle = angleFor(contrast);
     final (a, b) = _screenEnds(d);
     final mid = Offset.lerp(a, b, 0.5)!;
+    // The reach set on the device; six image heights is where it starts.
+    final reach = d.range;
+    final ok = d.coneColor != 0 ? d.fovColor : kPlanBandColor;
+    const under = Color(0xFFEF6C00);
+    Color colorOf(double c) {
+      final own = d.rangeColors[c.round()];
+      if (own != null) return Color(own);
+      return c >= contrast ? ok : under;
+    }
+
+    // Widest first, so the narrower, higher bands stack darker on top.
+    final steps = {
+      for (final (c, _) in kContrastTargets) c: angleFor(c),
+      contrast: angle,
+    }.entries.where((e) => e.value > 0).toList()
+      ..sort((x, y) => x.key.compareTo(y.key));
+    for (final e in steps) {
+      final band = _flare(d, e.value, reach);
+      final ink = colorOf(e.key);
+      canvas.drawPath(band, Paint()..color = ink.withValues(alpha: 0.08));
+      canvas.drawPath(
+        band,
+        Paint()
+          ..color = ink.withValues(alpha: e.key == contrast ? 0.9 : 0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = e.key == contrast ? 1.8 : 1,
+      );
+    }
+    final straightOn = contrastInRoom(peak, ambient);
+    final seen = straightOn.isFinite
+        ? '${straightOn.toStringAsFixed(straightOn < 10 ? 1 : 0)}:1'
+        : '';
     final contrastLabel = '${contrast.round()}:1';
-    if (angle <= 0) {
+    final feet = pixelsPerFoot > 0
+        ? ' · ${(reach / pixelsPerFoot).round()} ft'
+        : '';
+    if (angle > 0) {
+      final (_, ob) = _flareDirs(d, angle);
       _label(
         canvas,
-        'Too dim: ${peak.round()} of ${need.round()} nits for $contrastLabel',
-        mid + d.facing * 24,
-        const Color(0xFFC62828),
+        '$contrastLabel to ±${angle.round()}°$feet · '
+        '${peak.round()} nits · $seen straight on',
+        b + ob * reach,
+        colorOf(contrast),
       );
       return true;
     }
-    final heightFt = pixelsPerFoot > 0
-        ? imageHeightFromWidth(
-            d.width / pixelsPerFoot,
-            d.shape == 'screen' ? 16 / 10 : 16 / 9,
-          )
-        : 0.0;
-    final reach = heightFt > 0
-        ? farthestViewer(heightFt) * pixelsPerFoot
-        : d.range;
-    const ok = Color(0xFF2E7D32);
-    // Brighter toward square on, as with the plain viewing angle.
-    for (final k in const [1.0, 0.75, 0.5, 0.25]) {
-      canvas.drawPath(
-        _flare(d, angle * k, reach),
-        Paint()..color = ok.withValues(alpha: 0.08),
-      );
-    }
-    canvas.drawPath(
-      _flare(d, angle, reach),
-      Paint()
-        ..color = ok.withValues(alpha: 0.9)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.8,
-    );
-    final (_, ob) = _flareDirs(d, angle);
+    // Short of the content's own: say by how much, and what it does reach.
     _label(
       canvas,
-      'Works to ±${angle.round()}°'
-      '${heightFt > 0 ? ' · ${farthestViewer(heightFt).round()} ft' : ''}'
-      ' · ${peak.round()} nits',
-      b + ob * reach,
-      ok,
+      'Too dim for $contrastLabel: $seen straight on '
+      '(${peak.round()} of ${neededNits(contrast, ambient).round()} nits)',
+      mid + d.facing * 24,
+      const Color(0xFFC62828),
     );
+    final best = steps.lastOrNull;
+    if (best != null) {
+      final (_, ob) = _flareDirs(d, best.value);
+      _label(
+        canvas,
+        '${best.key.round()}:1 to ±${best.value.round()}°$feet',
+        b + ob * reach,
+        colorOf(best.key),
+      );
+    }
     return true;
   }
 
@@ -702,13 +811,15 @@ class PlanDeviceFovPainter extends CustomPainter {
         ..close();
       canvas.drawPath(band, Paint()..color = color.withValues(alpha: 0.07));
     }
+    _paintImage(canvas, d, center, mid, half, color);
     if (pixelsPerFoot <= 0) return;
     final lm = lumens[d.id] ?? 0;
     final ring = Paint()
       ..color = color.withValues(alpha: 0.6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
-    for (var i = 1; i <= steps; i++) {
+    // The last ring is the image, labeled by [_paintImage].
+    for (var i = 1; i < steps; i++) {
       final r = d.range * i / steps;
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: r),
@@ -730,6 +841,57 @@ class PlanDeviceFovPainter extends CustomPainter {
         color,
       );
     }
+  }
+
+  /// The image at the end of the throw: a bar as wide as the beam is there,
+  /// with its width, throw ratio and brightness. Red when the ratio is past
+  /// what the lens zooms to.
+  void _paintImage(
+    Canvas canvas,
+    PlanDevice d,
+    Offset center,
+    double mid,
+    double half,
+    Color color,
+  ) {
+    Offset at(double a) => center + Offset(math.cos(a), math.sin(a)) * d.range;
+    final a = at(mid - half);
+    final b = at(mid + half);
+    final ratio = throwRatioForBeam(d.fov);
+    final lens = throwRanges[d.id];
+    final past = lens != null &&
+        (ratio < lens.$1 * 0.995 || ratio > lens.$2 * 1.005);
+    final ink = past ? const Color(0xFFC62828) : color;
+    canvas.drawLine(
+      a,
+      b,
+      Paint()
+        ..color = ink
+        ..strokeWidth = 3,
+    );
+    final parts = <String>[];
+    if (pixelsPerFoot > 0) {
+      final w = (b - a).distance / pixelsPerFoot;
+      final diag = imageFromWidth(
+        w,
+        const ScreenAspect('16:10', 16, 10),
+      ).diagonal;
+      parts.add('Image ${formatFeetInches(w)} · ${(diag * 12).round()}" diag');
+    }
+    parts.add('${ratio.toStringAsFixed(2)}:1');
+    final lm = lumens[d.id] ?? 0;
+    if (pixelsPerFoot > 0 && lm > 0) {
+      final w = (b - a).distance / pixelsPerFoot;
+      final fl = footLamberts(lm, 1, w * w / kPlanScreenAspect);
+      parts.add('${fl.toStringAsFixed(1)} ft-L');
+    }
+    if (past) {
+      parts.add(
+        'lens ${lens.$1.toStringAsFixed(2)}-${lens.$2.toStringAsFixed(2)}',
+      );
+    }
+    final out = Offset(math.cos(mid), math.sin(mid)) * 14;
+    _label(canvas, parts.join(' · '), Offset.lerp(a, b, 0.5)! + out, ink);
   }
 
   void _label(Canvas canvas, String text, Offset at, Color color) {
@@ -839,6 +1001,7 @@ class PlanDeviceFovPainter extends CustomPainter {
       old.roomLightFc != roomLightFc ||
       old.contrast != contrast ||
       !mapEquals(old.lumens, lumens) ||
+      !mapEquals(old.throwRanges, throwRanges) ||
       !mapEquals(old.nits, nits);
 }
 

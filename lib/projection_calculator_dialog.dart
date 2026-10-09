@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'movable_dialog.dart';
+import 'number_dial.dart';
 import 'projection_calc.dart';
 import 'projection_diagram.dart';
 
@@ -55,6 +56,7 @@ Future<ProjectionResult?> showProjectionCalculator(
   String? distanceNote,
   String? applyLabel,
   ValueChanged<double>? onSaveDistance,
+  double roomLightFc = 0,
 }) => showMovableDialog<ProjectionResult>(
   context: context,
   builder: (_) => ProjectionCalculatorDialog(
@@ -64,6 +66,7 @@ Future<ProjectionResult?> showProjectionCalculator(
     distanceNote: distanceNote,
     applyLabel: applyLabel,
     onSaveDistance: onSaveDistance,
+    roomLightFc: roomLightFc,
   ),
 );
 
@@ -96,6 +99,9 @@ class ProjectionCalculatorDialog extends StatefulWidget {
   /// Saves the throw distance shown as the room's.
   final ValueChanged<double>? onSaveDistance;
 
+  /// The room's light on the screen in foot-candles; 0 starts at 5.
+  final double roomLightFc;
+
   const ProjectionCalculatorDialog({
     super.key,
     this.title = 'Projection calculator',
@@ -104,6 +110,7 @@ class ProjectionCalculatorDialog extends StatefulWidget {
     this.distanceNote,
     this.applyLabel,
     this.onSaveDistance,
+    this.roomLightFc = 0,
   });
 
   @override
@@ -146,6 +153,7 @@ class _ProjectionCalculatorDialogState
   @override
   void initState() {
     super.initState();
+    if (widget.roomLightFc > 0) _ambient.text = _fmt(widget.roomLightFc, 1);
     if (widget.specs.isNotEmpty) _useSpec(0);
     final d = widget.distanceFt;
     if (d != null && d > 0) {
@@ -304,6 +312,11 @@ class _ProjectionCalculatorDialogState
       _throwMax.text = s.throwMax > s.throwMin ? _fmt(s.throwMax, 2) : '';
     }
     if (s.hasLumens) _lumens.text = s.lumens.round().toString();
+    if (s.hasShift) {
+      _shiftUp.text = _fmt(s.shiftUp, 1);
+      _shiftDown.text = _fmt(s.shiftDown, 1);
+      _shiftSide.text = _fmt(s.shiftSide, 1);
+    }
   }
 
   double _num(TextEditingController c, [double fallback = 0]) =>
@@ -523,13 +536,21 @@ class _ProjectionCalculatorDialogState
         ),
         if (zoomed) ...[
           const SizedBox(height: 8),
-          Text(
-            'Zoom: ${_fmt(_ratio, 2)}:1',
-            style: theme.textTheme.bodySmall,
-          ),
-          Slider(
-            key: const ValueKey('projection_zoom'),
+          // The ratio is typed; the slider runs the lens from short to long.
+          NumberDial(
+            sliderKey: const ValueKey('projection_zoom'),
+            label: 'Zoom',
             value: _zoom,
+            min: 0,
+            max: 1,
+            format: (_) => '${_fmt(_ratio, 2)}:1',
+            editText: (_) => _fmt(_ratio, 2),
+            parse: (t) {
+              final r = firstNumber(t);
+              if (r == null || _maxRatio <= _minRatio) return null;
+              return (r - _minRatio) / (_maxRatio - _minRatio);
+            },
+            sliderWidth: null,
             onChanged: (v) => setState(() => _zoom = v),
           ),
         ],
@@ -977,7 +998,12 @@ class _ProjectionCalculatorDialogState
         ),
         if (lumens > 0) _brightnessGauge(theme, fl),
         if (lumens > 0 && ambient > 0)
-          row('Contrast in room light', '${_fmt(contrast, 1)}:1'),
+          row(
+            'Contrast in room light',
+            '${_fmt(contrast, 1)}:1 - '
+                '${contrastCategory(contrast) ?? 'too low for any use'}',
+            key: const ValueKey('projection_contrast'),
+          ),
         Text(
           'About 16 ft-L suits a dark room; 50 and up holds up with the '
           'lights on. Rated lumens drop as a lamp ages.',

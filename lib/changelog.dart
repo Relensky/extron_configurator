@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.86+96';
+const String kAppVersion = '0.5.91+101';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,65 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.91',
+    date: 'October 9, 2026',
+    title: 'Room to work on the floor plan',
+    changes: [
+      'Floor plan: zooms out as far as it takes to see a large sheet whole - the old limit stopped short once the sheet filled the window.',
+      'Floor plan: each group of the toolbar folds away to its name, and the button by the Floor Plan title folds the whole toolbar, for room to work on the sheet.',
+      'Floor plan: a screen or display\'s color now colors its working area, and Throws and angles sets a color for each of its contrast ranges (7:1, 15:1, 50:1, 80:1).',
+      'Floor plan: a screen or display\'s Reach sets how far back its working area is drawn. Six image heights is where it starts.',
+      'Floor plan: clicking a slider\'s number opens it as shown - 12\' 5" rather than 12.42 - and leaving it unchanged changes nothing.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.90',
+    date: 'October 9, 2026',
+    title: 'Room light that adds up',
+    changes: [
+      'Floor plan and projection calculator: room light on a screen is now worked out from how much light the screen sends back, not its gain. A gain screen used to bounce back more room light as well as more picture, so it never helped and its working area was always narrower. Now a higher-gain screen holds contrast better straight on, as it does in a real room.',
+      'Floor plan: a screen or display\'s working area shows a band for each content type it reaches - passive viewing, basic decisions, analytical decisions, full-motion video - so more room light narrows it a step at a time instead of it vanishing. Green is the content you picked and above, amber is what it falls back to.',
+      'Floor plan: when a screen is too dim for the content, it says what contrast it does reach straight on, and draws how far the next one down still works.',
+      'Projection calculator: starts from the room light set on the floor plan, and names the content type the contrast is good for.',
+      'Catalog: 82 classroom projectors added from projectorcentral.com - every Sharp/NEC, Panasonic, Epson and Sony classroom model still in production that the catalog did not have, and other makers\' classroom models released in 2026 - with list price, brightness, throw, lens shift, power and connectors.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.89',
+    date: 'October 8, 2026',
+    title: 'Throws matched to the screen',
+    changes: [
+      'Floor plan: a projector and its screen stay matched to one image. A longer or shorter reach, or a wider or narrower throw, resizes the screen to the image it lands, and the screen\'s brightness and viewing distance follow. A screen made wider zooms its projector to fill it.',
+      'Floor plan: the end of a projector\'s throw draws the image, labeled with its width, diagonal, throw ratio and brightness. It turns red when the lens can\'t zoom that far.',
+      'Floor plan: Throw to screen sets a projector\'s reach to its screen and zooms it to fill the screen.',
+      'Floor plan: click any number beside a slider - facing, angle, reach, width, line weight, and the calculator\'s zoom - to type it in. Lengths take feet and inches (12\' 6", 12 6 or 150"), and a typed reach or width can go past the slider\'s end.',
+      'Floor plan: each throw, cone and viewing angle can have its own color - click the dot beside it in the device bar - and the key shows it. Throws and angles lists every one on the sheet to show, hide or recolor each, or all at once.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.88',
+    date: 'October 8, 2026',
+    title: 'Projector specs in the catalog',
+    changes: [
+      'Catalog: projectors keep their resolution, aspect, contrast, light source and life, zoom, lens shift, weight and noise, from projectorcentral.com, and the Device Editor shows them. Picking a projector in the projection calculator fills in its lens shift.',
+      'Catalog: 209 projectors filled in from projectorcentral.com, with the power draw of 90 that had none.',
+      'Sequential names start at 1 with the first unit of a series, and devices added on the AV Flow carry on the numbering of those already in the room instead of starting again.',
+      'Numbers already on units are kept - "Screen 4" and "Screen 5" stay 4 and 5 rather than turning into a second Screen 1 and 2 - and a new unit goes on the end. Taking the other of a pair off leaves the one left without a lone "1".',
+      'Floor plan: while Measure or Set scale is on, clicks only measure - devices, places and labels on the sheet can\'t be picked up by accident.',
+      'Floor plan: a Viewing angles switch hides or shows the cones, throws and viewing angles on screen. The export still offers a copy with or without them.',
+      'Cost: the equipment table is sorted by manufacturer unless a room picks another order.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.87',
+    date: 'October 8, 2026',
+    title: 'Units numbered in sequence',
+    changes: [
+      'Cost: raising the quantity of a device on the AV Flow adds the extra units to the AV Flow, named on in sequence - 12 "Network PDU TV" and one more gives "Network PDU TV 13" - so each one can be placed on the floor plan and the racks. One fewer takes the highest-numbered unit off when nothing is cabled to it; otherwise only the quote\'s count comes down.',
+      'Cost: several units on one line are named in sequence after the line\'s name, or after the name they share - "Computer Monitor 1", "Computer Monitor 2". A unit given a name of its own keeps it.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.86',
     date: 'October 8, 2026',

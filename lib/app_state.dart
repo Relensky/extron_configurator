@@ -4489,9 +4489,10 @@ class AppStateProvider extends ChangeNotifier {
     final at = plan.devices.indexWhere((d) => d.id == device.id);
     if (at < 0) return;
     _pushAvUndo(what, _plansScope, coalesce: coalesce);
-    final next = List<PlanDevice>.from(plan.devices);
-    next[at] = device;
-    avFloorPlans[index] = plan.copyWith(devices: next);
+    // A projector and its screen move together: see withProjectionLinked.
+    avFloorPlans[index] = plan.copyWith(
+      devices: withProjectionLinked(plan.devices, device),
+    );
     notifyListeners();
   }
 
@@ -5873,11 +5874,17 @@ class AppStateProvider extends ChangeNotifier {
   void setAvCostLineName(String lineKey, String name) {
     final next = name.trim();
     if ((avCost.lineNames[lineKey] ?? '') == next) return;
-    _pushAvUndo('Line title', _costScope, coalesce: 'cost:name:$lineKey');
+    _pushAvUndo(
+      'Line title',
+      const {AvUndoScope.cost, AvUndoScope.flow},
+      coalesce: 'cost:name:$lineKey',
+    );
     if (next.isEmpty) {
       avCost.lineNames.remove(lineKey);
     } else {
       avCost.lineNames[lineKey] = next;
+      // Several units on the line take the name, numbered.
+      _numberCostLineUnits(lineKey);
     }
     notifyListeners();
   }
@@ -6490,6 +6497,25 @@ class AppStateProvider extends ChangeNotifier {
     if ((avCost.qtyOverrides[lineKey] ?? left) == left) {
       avCost.qtyOverrides.remove(lineKey);
     }
+    _numberCostLineUnits(lineKey);
+    // The other of a pair taken off: "Cam570 1" alone is "Cam570" again. A
+    // config block's name is the config's.
+    final rest = _costLineUnits(lineKey);
+    for (final n in rest) {
+      final plain = n.fromConfig ? null : soleUnitName(n.label, node.label);
+      if (plain == null) continue;
+      if (rest.where((o) => isNamedFrom(o.label.trim(), plain)).length != 1) {
+        continue;
+      }
+      final i = avNodes.indexWhere((o) => o.id == n.id);
+      avNodes[i] = n.copyWith(label: plain);
+    }
+    notifyListeners();
+  }
+
+  /// Numbers the units on one estimate line, for boxes just added on the
+  /// AV Flow.
+  void numberAvLineUnits(String lineKey) {
     _numberCostLineUnits(lineKey);
     notifyListeners();
   }

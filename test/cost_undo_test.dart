@@ -99,7 +99,7 @@ void main() {
       return p.removeAvCostExtraCable(item.id);
     },
     'sort the equipment table': (p) =>
-        p.setAvCostEquipmentSort(CostEquipmentSort.manufacturer),
+        p.setAvCostEquipmentSort(CostEquipmentSort.standard),
     'choose a cable': (p) =>
         p.setAvCableEntry(SignalType.hdmi, 25, 'Extron HDMI Pro 25'),
     'clear a cable choice': (p) {

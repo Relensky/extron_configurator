@@ -24,6 +24,7 @@ import 'layout_tools.dart'
     show pushOutOfRects, rightAngleTurn, snapToRightAngle;
 import 'live_text_field.dart';
 import 'movable_dialog.dart';
+import 'number_dial.dart';
 import 'keyboard_shortcuts.dart';
 import 'placed_devices.dart';
 import 'plan_annotations.dart';
@@ -113,6 +114,9 @@ const List<Color> kPaperSwatches = [
   Color(0xFFE7EEF6), // pale blue
 ];
 
+/// How far out the floor plan zooms: 2%, so a large sheet fits whole.
+const double kPlanMinScale = 0.02;
+
 class FloorPlanView extends StatefulWidget {
   const FloorPlanView({super.key});
 
@@ -177,6 +181,15 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   /// True while an export without the cones and angles is being drawn.
   bool _hideCones = false;
+
+  /// Toolbar groups folded to their names, and the whole toolbar folded
+  /// away. Kept while the app runs, so a tab switch does not undo them.
+  static final Set<String> _collapsedGroups = {};
+  static bool _toolbarCollapsed = false;
+
+  /// The Viewing angles switch: cones and angles off on screen. An export
+  /// still draws them or not as its menu says.
+  bool _conesOff = false;
 
   /// How far the key has been dragged since the pointer went down, or null
   /// while nobody is dragging it. Live, so the panel follows the cursor
@@ -246,9 +259,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   List<PlanDevice> _shownDevices(FloorPlan plan) {
     final preview = _devicePreview;
     if (preview == null) return plan.devices;
-    return [
-      for (final d in plan.devices) d.id == preview.id ? preview : d,
-    ];
+    // Its screen or projector follows live, as it will once saved.
+    return withProjectionLinked(plan.devices, preview);
   }
 
   void _previewDevice(PlanDevice device) {
@@ -613,12 +625,18 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     // back up after.
     final heldRun = _selectedRunId;
     final heldDevice = _selectedDeviceId;
-    if (heldRun.isNotEmpty || heldDevice.isNotEmpty || monochrome || !cones) {
+    final heldConesOff = _conesOff;
+    if (heldRun.isNotEmpty ||
+        heldDevice.isNotEmpty ||
+        monochrome ||
+        !cones ||
+        heldConesOff) {
       setState(() {
         _selectedRunId = '';
         _selectedDeviceId = '';
         if (monochrome) _printMode = true;
         _hideCones = !cones;
+        _conesOff = false;
       });
       await WidgetsBinding.instance.endOfFrame;
     }
@@ -678,6 +696,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           _selectedDeviceId = heldDevice;
           _printMode = false;
           _hideCones = false;
+          _conesOff = heldConesOff;
         });
         if (startingSheet.isNotEmpty) provider.selectFloorPlan(startingSheet);
       }
@@ -906,9 +925,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                           // sideways while the notation tool is on. Zoom still
                           // works — that is the scroll wheel, not a drag.
                           panEnabled: _tool != _PlanTool.notation,
-                          minScale: 0.08,
+                          minScale: kPlanMinScale,
                           maxScale: 4.0,
-                          boundaryMargin: const EdgeInsets.all(400),
+                          // Unbounded: a finite margin stops the zoom where
+                          // the sheet plus margin fills the window, so a
+                          // large sheet could never be seen whole.
+                          boundaryMargin: const EdgeInsets.all(
+                            double.infinity,
+                          ),
                           child: RepaintBoundary(
                             key: _planKey,
                             // Inside the boundary, so the black-and-white
@@ -1105,17 +1129,15 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 ),
               ),
             ),
-          SizedBox(
-            width: 130,
-            child: Slider(
-              value: (selected?.strokeWidth ?? _noteStroke).clamp(1, 10),
-              min: 1,
-              max: 10,
-              divisions: 9,
-              label: 'Weight '
-                  '${(selected?.strokeWidth ?? _noteStroke).round()}',
-              onChanged: (v) => apply(stroke: v),
-            ),
+          NumberDial(
+            label: 'Weight',
+            value: selected?.strokeWidth ?? _noteStroke,
+            min: 1,
+            max: 10,
+            divisions: 9,
+            format: (v) => '${v.round()}',
+            sliderWidth: 110,
+            onChanged: (v) => apply(stroke: v.roundToDouble()),
           ),
           if (selected == null)
             Text(
@@ -1475,10 +1497,41 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       height: 28,
       child: VerticalDivider(width: 12, color: theme.dividerColor),
     );
+    // Each group has a header that folds it away to its name, for room to
+    // work on the sheet.
+    Widget header(String name, bool open) => Tooltip(
+      message: open ? 'Collapse $name' : 'Expand $name',
+      child: InkWell(
+        key: ValueKey('plan_group_$name'),
+        borderRadius: BorderRadius.circular(4),
+        onTap: () => setState(() {
+          if (!_collapsedGroups.remove(name)) _collapsedGroups.add(name);
+        }),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                open ? Icons.expand_more : Icons.chevron_right,
+                size: 16,
+                color: theme.hintColor,
+              ),
+              Text(
+                name,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.hintColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
     // Groups wrap as a whole where they can, so related buttons stay
     // side by side.
-    Widget groups(List<List<Widget>> parts) {
-      final shown = parts.where((g) => g.isNotEmpty).toList();
+    Widget groups(List<(String, List<Widget>)> parts) {
+      final shown = parts.where((g) => g.$2.isNotEmpty).toList();
       return Wrap(
         spacing: 4,
         runSpacing: 8,
@@ -1490,7 +1543,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               spacing: 8,
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
-              children: shown[i],
+              children: [
+                header(shown[i].$1, !_collapsedGroups.contains(shown[i].$1)),
+                if (!_collapsedGroups.contains(shown[i].$1)) ...shown[i].$2,
+              ],
             ),
           ],
         ],
@@ -1604,6 +1660,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               controller: _transform,
               contentKey: _planKey,
               viewportKey: _viewportKey,
+              minScale: kPlanMinScale,
             );
             if (!fitted) _snack('The plan is still drawing - try again.');
           },
@@ -1730,6 +1787,23 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             });
             if (v) _snack('Click where to measure from, then where to.');
           },
+        ),
+      if (plan != null &&
+          plan.devices.any((d) => d.showFov && deviceShapeHasFov(d.shape)))
+        FilterChip(
+          key: const ValueKey('plan_viewing_angles'),
+          avatar: const Icon(Icons.change_history, size: 18),
+          label: const Text('Viewing angles'),
+          tooltip: 'Show or hide the cones, throws and viewing angles',
+          selected: !_conesOff,
+          onSelected: (v) => setState(() => _conesOff = !v),
+        ),
+      if (plan != null && plan.devices.any((d) => deviceShapeHasFov(d.shape)))
+        OutlinedButton.icon(
+          key: const ValueKey('plan_cone_list'),
+          icon: const Icon(Icons.tune, size: 18),
+          label: const Text('Throws and angles'),
+          onPressed: () => _showConeList(provider, plan.id),
         ),
       if (plan != null || provider.avThrowDistanceFt > 0)
         OutlinedButton.icon(
@@ -1864,16 +1938,38 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 4, right: 12),
+                padding: const EdgeInsets.only(top: 4),
                 child: Text('Floor Plan', style: theme.textTheme.titleLarge),
               ),
-              Expanded(child: groups([sheet, look])),
+              IconButton(
+                key: const ValueKey('plan_toolbar_toggle'),
+                tooltip: _toolbarCollapsed
+                    ? 'Show the toolbar'
+                    : 'Hide the toolbar for room to work',
+                icon: Icon(
+                  _toolbarCollapsed ? Icons.unfold_more : Icons.unfold_less,
+                ),
+                onPressed: () =>
+                    setState(() => _toolbarCollapsed = !_toolbarCollapsed),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _toolbarCollapsed
+                    ? const SizedBox.shrink()
+                    : groups([('Sheet', sheet), ('Look', look)]),
+              ),
               const SizedBox(width: 16),
               line(output),
             ],
           ),
-          const SizedBox(height: 8),
-          groups([drawing, lists, measuring]),
+          if (!_toolbarCollapsed) ...[
+            const SizedBox(height: 8),
+            groups([
+              ('Draw', drawing),
+              ('Lists', lists),
+              ('Measure and project', measuring),
+            ]),
+          ],
         ],
       ),
     );
@@ -2097,8 +2193,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                         drag: _deviceDrag,
                         squareScreenId: pair?.screen.id ?? '',
                         squareProjectorId: pair?.projector.id ?? '',
-                        showCones: !_hideCones,
+                        showCones: !_hideCones && !_conesOff,
                         lumens: _projectorLumens(provider, shown),
+                        throwRanges: _projectorThrows(provider, shown),
                         nits: _faceNits(provider, plan, shown),
                         roomLightFc: provider.avRoomLightFc,
                         contrast: provider.avContrastTarget,
@@ -2162,6 +2259,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               _keyPanel(context, provider, model, plan, runs),
             // The line being drawn to set the scale. Only while the tool is
             // on, so it never reaches an export.
+            // Measuring or setting the scale: a click is a point on the
+            // line, never a device, place or label under it. The taps still
+            // reach the sheet's own handler above.
+            if (_tool == _PlanTool.scale || _tool == _PlanTool.measure)
+              const Positioned.fill(
+                key: ValueKey('plan_measure_cover'),
+                child: AbsorbPointer(),
+              ),
             if ((_tool == _PlanTool.scale || _tool == _PlanTool.measure) &&
                 _scaleStart != null)
               Positioned.fill(
@@ -2242,10 +2347,21 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         count: (had?.count ?? 0) + 1,
       );
     }
-    final cones = {
-      for (final d in plan.devices)
-        if (d.showFov && deviceShapeHasFov(d.shape)) d.shape,
-    };
+    // One row per shape in its own color, and one for each device given a
+    // color of its own.
+    final cones = <String, (Color, String)>{};
+    for (final d in plan.devices) {
+      if (!d.showFov || !deviceShapeHasFov(d.shape)) continue;
+      final what = deviceFovLabel(d.shape);
+      if (d.coneColor == 0) {
+        cones['shape:${d.shape}'] = (
+          d.fovColor,
+          '$what - ${kCablingDeviceShapes[d.shape]?.label ?? d.shape}',
+        );
+      } else {
+        cones['device:${d.id}'] = (d.fovColor, '$what - ${d.label}');
+      }
+    }
 
     final bool empty = zones.isEmpty &&
         cables.isEmpty &&
@@ -2360,20 +2476,19 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                     ),
                   if (devices.length > _kPlanKeyMaxRows)
                     _keyMore(dark, devices.length - _kPlanKeyMaxRows),
-                  for (final shape in cones)
+                  for (final (color, text) in cones.values)
                     _keyRow(
                       dark,
                       leading: Container(
                         width: _kPlanKeySwatch,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: deviceFovColor(shape).withValues(alpha: 0.35),
-                          border: Border.all(color: deviceFovColor(shape)),
+                          color: color.withValues(alpha: 0.35),
+                          border: Border.all(color: color),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      text: '${deviceFovLabel(shape)} - '
-                          '${kCablingDeviceShapes[shape]?.label ?? shape}',
+                      text: text,
                     ),
                 ],
                 if (cables.isNotEmpty) ...[
@@ -3814,7 +3929,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                               size: 20,
                               color: selected
                                   ? Colors.yellow
-                                  : deviceFovColor(device.shape),
+                                  : device.fovColor,
                             ),
                           ),
                         ),
@@ -4036,6 +4151,18 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             0,
   };
 
+  /// The lens zoom range of each projector whose throw is showing.
+  Map<String, (double, double)> _projectorThrows(
+    AppStateProvider provider,
+    List<PlanDevice> shown,
+  ) => {
+    for (final d in shown)
+      if (d.shape == 'projector' && d.showFov)
+        if (_projectorSpecs(provider, d).where((s) => s.hasThrow).firstOrNull
+            case final s?)
+          d.id: (s.throwMin, s.throwMax),
+  };
+
   /// The selected projector or screen and the other half of its pair.
   ({PlanDevice screen, PlanDevice projector})? _squarePair(
     List<PlanDevice> shown,
@@ -4205,6 +4332,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       distanceFt: distance,
       distanceNote: note,
       onSaveDistance: provider.setAvThrowDistance,
+      roomLightFc: provider.avRoomLightFc,
       applyLabel: device == null
           ? null
           : device.shape == 'screen'
@@ -4365,6 +4493,21 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ),
         ),
         TextButton.icon(
+          key: const ValueKey('plan_throw_to_screen'),
+          icon: const Icon(Icons.fit_screen, size: 16),
+          label: const Text('Throw to screen'),
+          // Reaches the screen and zooms to fill it, so the image drawn at
+          // the end of the throw is the screen.
+          onPressed: () => save(
+            projector.copyWith(
+              range: dist.clamp(20.0, 20000.0),
+              fov: beamAngleToFill(dist, screen.width).clamp(5.0, 180.0),
+              showFov: true,
+            ),
+            'Throw ${projector.label} to ${screen.label}',
+          ),
+        ),
+        TextButton.icon(
           key: const ValueKey('plan_aim_projector'),
           icon: const Icon(Icons.center_focus_strong, size: 16),
           label: const Text('Aim at screen'),
@@ -4390,6 +4533,238 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     ];
   }
 
+  /// A dot in [device]'s cone color. Click to pick another.
+  Widget _coneColorDot(
+    AppStateProvider provider,
+    String planId,
+    PlanDevice device,
+  ) => Tooltip(
+    message: 'Color of the ${deviceFovLabel(device.shape).toLowerCase()}',
+    child: InkWell(
+      key: ValueKey('plan_cone_color_${device.id}'),
+      customBorder: const CircleBorder(),
+      onTap: () => _pickConeColor(provider, planId, device),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: device.fovColor,
+            shape: BoxShape.circle,
+            border: Border.all(color: Theme.of(context).dividerColor),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  /// One dot per contrast band of [device]'s working area, in the color it
+  /// is drawn. Click one to pick its own.
+  Widget _bandColorDots(
+    AppStateProvider provider,
+    String planId,
+    PlanDevice device,
+  ) {
+    final theme = Theme.of(context);
+    final target = provider.avContrastTarget;
+    Color shown(double c) {
+      final own = device.rangeColors[c.round()];
+      if (own != null) return Color(own);
+      if (c < target) return const Color(0xFFEF6C00);
+      return device.coneColor != 0 ? device.fovColor : kPlanBandColor;
+    }
+
+    return Wrap(
+      spacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text('Ranges', style: theme.textTheme.bodySmall),
+        for (final (c, what) in kContrastTargets)
+          Tooltip(
+            message: '$what (${c.round()}:1)',
+            child: InkWell(
+              key: ValueKey('plan_band_color_${device.id}_${c.round()}'),
+              borderRadius: BorderRadius.circular(4),
+              onTap: () async {
+                final picked = await showColorWheelDialog(
+                  context,
+                  initial: shown(c),
+                  title: '${device.label} - ${c.round()}:1',
+                );
+                if (picked == null || !mounted) return;
+                final now = provider.avFloorPlanById(planId)?.devices
+                    .where((d) => d.id == device.id)
+                    .firstOrNull;
+                if (now == null) return;
+                provider.updateAvPlanDevice(
+                  planId,
+                  now.copyWith(
+                    rangeColors: {
+                      ...now.rangeColors,
+                      c.round(): picked.toARGB32(),
+                    },
+                    showFov: true,
+                  ),
+                  what: 'Color ${device.label}',
+                );
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: shown(c),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: theme.dividerColor),
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  Text('${c.round()}:1', style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _pickConeColor(
+    AppStateProvider provider,
+    String planId,
+    PlanDevice device,
+  ) async {
+    final picked = await showColorWheelDialog(
+      context,
+      initial: device.fovColor,
+      title: 'Color for ${device.label}',
+    );
+    if (picked == null || !mounted) return;
+    final now = provider.avFloorPlanById(planId)?.devices
+        .where((d) => d.id == device.id)
+        .firstOrNull;
+    if (now == null) return;
+    provider.updateAvPlanDevice(
+      planId,
+      now.copyWith(coneColor: picked.toARGB32(), showFov: true),
+      what: 'Color ${device.label}',
+    );
+  }
+
+  /// Every cone, throw and viewing angle on the sheet, each shown or hidden
+  /// and colored on its own.
+  Future<void> _showConeList(AppStateProvider provider, String planId) async {
+    await showMovableDialog<void>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (ctx) => AlertDialog(
+        alignment: Alignment.topRight,
+        title: const Text('Throws and angles'),
+        content: SizedBox(
+          width: 380,
+          // Read live, so a switch or a color shows at once.
+          child: ListenableBuilder(
+            listenable: provider,
+            builder: (ctx, _) {
+              final plan = provider.avFloorPlanById(planId);
+              final devices = [
+                ...?plan?.devices.where((d) => deviceShapeHasFov(d.shape)),
+              ]..sort((a, b) => a.label.compareTo(b.label));
+              if (plan == null || devices.isEmpty) {
+                return const Text('Nothing on this sheet has a cone.');
+              }
+              void setAll(bool v) => provider.updateAvFloorPlan(
+                plan.copyWith(
+                  devices: [
+                    for (final d in plan.devices)
+                      deviceShapeHasFov(d.shape) ? d.copyWith(showFov: v) : d,
+                  ],
+                ),
+              );
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    key: const ValueKey('plan_cone_all'),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('All'),
+                    value: devices.every((d) => d.showFov),
+                    onChanged: setAll,
+                  ),
+                  const Divider(height: 1),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final d in devices) ...[
+                          Row(
+                            children: [
+                              _coneColorDot(provider, planId, d),
+                              Icon(cablingDeviceIcon(d.shape), size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${d.label} - '
+                                  '${deviceFovLabel(d.shape).toLowerCase()}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (d.coneColor != 0 || d.rangeColors.isNotEmpty)
+                                IconButton(
+                                  key: ValueKey('plan_cone_reset_${d.id}'),
+                                  tooltip: 'Back to the usual colors',
+                                  icon: const Icon(
+                                    Icons.format_color_reset,
+                                    size: 18,
+                                  ),
+                                  onPressed: () => provider.updateAvPlanDevice(
+                                    planId,
+                                    d.copyWith(coneColor: 0, rangeColors: {}),
+                                    what: 'Color ${d.label}',
+                                  ),
+                                ),
+                              Switch(
+                                key: ValueKey('plan_cone_show_${d.id}'),
+                                value: d.showFov,
+                                onChanged: (v) => provider.updateAvPlanDevice(
+                                  planId,
+                                  d.copyWith(showFov: v),
+                                  what: v ? 'Show the cone' : 'Hide the cone',
+                                ),
+                              ),
+                            ],
+                          ),
+                          // A screen's working area is a band per content
+                          // type, each colored on its own.
+                          if (d.hasFace)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 30,
+                                bottom: 6,
+                              ),
+                              child: _bandColorDots(provider, planId, d),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// The bar for the selected device: which way it faces and its cone.
   Widget _deviceBar(AppStateProvider provider, FloorPlan plan) {
     final theme = Theme.of(context);
@@ -4400,38 +4775,37 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final ppf = plan.pixelsPerFoot;
     final reachMin = ppf > 0 ? 1.0 : 20.0;
     final reachMax = ppf > 0 ? 150.0 : 3000.0;
-    final reach = (ppf > 0 ? device.range / ppf : device.range).clamp(
-      reachMin,
-      reachMax,
-    );
-    // Live while dragging, saved once on release.
+    final reach = ppf > 0 ? device.range / ppf : device.range;
+    // Live while dragging, saved once on release. Click the number to type.
     Widget slider({
-      required Key key,
+      required ValueKey<String> key,
       required String label,
       required double value,
       required double min,
       required double max,
       int? divisions,
+      required String Function(double) format,
+      double? Function(String)? parse,
+      double? typedMin,
+      double? typedMax,
       required PlanDevice Function(double) apply,
       required String what,
-    }) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: theme.textTheme.bodySmall),
-        SizedBox(
-          width: 150,
-          child: Slider(
-            key: key,
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: (v) => _previewDevice(apply(v)),
-            onChangeEnd: (_) => _commitPreview(provider, plan, what),
-          ),
-        ),
-      ],
+    }) => NumberDial(
+      sliderKey: key,
+      label: label,
+      value: value,
+      min: min,
+      max: max,
+      divisions: divisions,
+      format: format,
+      parse: parse,
+      typedMin: typedMin,
+      typedMax: typedMax,
+      onChanged: (v) => _previewDevice(apply(v)),
+      onChangeEnd: (_) => _commitPreview(provider, plan, what),
     );
+    String deg(double v) => '${v.round()}°';
+    String px(double v) => '${v.round()} px';
     void turn(double by) => provider.updateAvPlanDevice(
       plan.id,
       device.copyWith(rotation: normalizeDegrees(device.rotation + by)),
@@ -4450,19 +4824,18 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           if (deviceShapeHasFov(device.shape)) ...[
             const SizedBox(width: 8),
             avRowIcon(Icons.rotate_left, 'Turn 15° left', () => turn(-15)),
-            Text(
-              '${device.rotation.round()}°',
-              style: theme.textTheme.bodySmall,
-            ),
             avRowIcon(Icons.rotate_right, 'Turn 15° right', () => turn(15)),
             slider(
               key: const ValueKey('plan_device_bar_rotation'),
               label: 'Facing',
-              value: device.rotation.clamp(0.0, 355.0),
+              value: device.rotation,
               min: 0,
               max: 355,
               divisions: 71,
-              apply: (v) => device.copyWith(rotation: v),
+              format: deg,
+              typedMin: -3600,
+              typedMax: 3600,
+              apply: (v) => device.copyWith(rotation: normalizeDegrees(v)),
               what: 'Turn ${device.label}',
             ),
           ],
@@ -4480,23 +4853,29 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 what: v ? 'Show the cone' : 'Hide the cone',
               ),
             ),
+          if (deviceShapeHasFov(device.shape))
+            _coneColorDot(provider, plan.id, device),
           if (deviceShapeHasFov(device.shape) && device.showFov) ...[
             slider(
               key: const ValueKey('plan_device_bar_fov'),
               label: 'Angle',
-              value: device.fov.clamp(5.0, 180.0),
+              value: device.fov,
               min: 5,
               max: 180,
               divisions: 35,
+              format: deg,
               apply: (v) => device.copyWith(fov: v),
               what: 'Edit ${device.label}',
             ),
             slider(
               key: const ValueKey('plan_device_bar_reach'),
-              label: ppf > 0 ? 'Reach ${reach.round()} ft' : 'Reach',
+              label: 'Reach',
               value: reach,
               min: reachMin,
               max: reachMax,
+              format: ppf > 0 ? formatFeetInches : px,
+              parse: ppf > 0 ? parseFeetInches : null,
+              typedMax: ppf > 0 ? 20000 / ppf : 20000,
               apply: (v) => device.copyWith(range: ppf > 0 ? v * ppf : v),
               what: 'Edit ${device.label}',
             ),
@@ -4504,15 +4883,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           if (device.hasFace)
             slider(
               key: const ValueKey('plan_device_bar_width'),
-              label: ppf > 0
-                  ? 'Width ${formatFeetInches(device.width / ppf)}'
-                  : 'Width',
-              value: (ppf > 0 ? device.width / ppf : device.width).clamp(
-                ppf > 0 ? 2.0 : 20.0,
-                ppf > 0 ? 40.0 : 1000.0,
-              ),
+              label: 'Width',
+              value: ppf > 0 ? device.width / ppf : device.width,
               min: ppf > 0 ? 2 : 20,
               max: ppf > 0 ? 40 : 1000,
+              format: ppf > 0 ? formatFeetInches : px,
+              parse: ppf > 0 ? parseFeetInches : null,
+              typedMin: ppf > 0 ? 4 / ppf : 4,
+              typedMax: ppf > 0 ? 20000 / ppf : 20000,
               apply: (v) => device.copyWith(width: ppf > 0 ? v * ppf : v),
               what: 'Resize ${device.label}',
             ),
@@ -4562,7 +4940,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final name = TextEditingController(text: device.label);
     final ppf = plan.pixelsPerFoot;
     final feet = ppf > 0;
-    var rotation = device.rotation.clamp(0.0, 355.0);
+    var rotation = device.rotation;
     var showFov = device.showFov;
     var fov = device.fov;
     final catalogFov = catalogConeAngle(
@@ -4571,16 +4949,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     )?.clamp(5.0, 180.0);
     final reachMin = feet ? 1.0 : 20.0;
     final reachMax = feet ? 150.0 : 3000.0;
-    var reach = (feet ? device.range / ppf : device.range).clamp(
-      reachMin,
-      reachMax,
-    );
+    var reach = feet ? device.range / ppf : device.range;
     final widthMin = feet ? 2.0 : 20.0;
     final widthMax = feet ? 40.0 : 1000.0;
-    var width = (feet ? device.width / ppf : device.width).clamp(
-      widthMin,
-      widthMax,
-    );
+    var width = feet ? device.width / ppf : device.width;
+    String deg(double v) => '${v.round()}°';
+    String length(double v) => feet ? formatFeetInches(v) : '${v.round()} px';
+    final parseLength = feet ? parseFeetInches : null;
 
     // Every change is drawn on the sheet behind the dialog as it is made.
     // Pairing saves at once; kept here so the preview and Save carry it.
@@ -4649,31 +5024,36 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 ],
                 if (deviceShapeHasFov(device.shape)) ...[
                   const SizedBox(height: 16),
-                  Text('Facing ${rotation.round()}°'),
-                  Slider(
-                    key: const ValueKey('plan_device_rotation'),
+                  NumberDial(
+                    sliderKey: const ValueKey('plan_device_rotation'),
+                    label: 'Facing',
                     value: rotation,
                     min: 0,
                     max: 355,
                     divisions: 71,
-                    label: '${rotation.round()}°',
-                    onChanged: (v) => setLocal(() => live(() => rotation = v)),
+                    format: deg,
+                    typedMin: -3600,
+                    typedMax: 3600,
+                    sliderWidth: null,
+                    onChanged: (v) => setLocal(
+                      () => live(() => rotation = normalizeDegrees(v)),
+                    ),
                   ),
                 ],
-                if (device.hasFace) ...[
-                  Text(
-                    feet
-                        ? 'Width ${formatFeetInches(width)}'
-                        : 'Width ${width.round()} px',
-                  ),
-                  Slider(
-                    key: const ValueKey('plan_device_width'),
+                if (device.hasFace)
+                  NumberDial(
+                    sliderKey: const ValueKey('plan_device_width'),
+                    label: 'Width',
                     value: width,
                     min: widthMin,
                     max: widthMax,
+                    format: length,
+                    parse: parseLength,
+                    typedMin: feet ? 4 / ppf : 4,
+                    typedMax: feet ? 20000 / ppf : 20000,
+                    sliderWidth: null,
                     onChanged: (v) => setLocal(() => live(() => width = v)),
                   ),
-                ],
                 if (deviceShapeHasFov(device.shape)) ...[
                   SwitchListTile(
                     key: const ValueKey('plan_device_show_fov'),
@@ -4684,8 +5064,25 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   ),
                   Row(
                     children: [
-                      Text('${deviceFovLabel(device.shape)} ${fov.round()}°'),
-                      const Spacer(),
+                      Expanded(
+                        child: NumberDial(
+                          sliderKey: const ValueKey('plan_device_fov_angle'),
+                          label: deviceFovLabel(device.shape),
+                          value: fov,
+                          min: 5,
+                          max: 180,
+                          divisions: 35,
+                          format: deg,
+                          sliderWidth: null,
+                          // Moving the angle shows the cone it is moving.
+                          onChanged: (v) => setLocal(
+                            () => live(() {
+                              fov = v;
+                              showFov = true;
+                            }),
+                          ),
+                        ),
+                      ),
                       if (catalogFov != null)
                         TextButton(
                           key: const ValueKey('plan_device_catalog_fov'),
@@ -4701,32 +5098,16 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                         ),
                     ],
                   ),
-                  Slider(
-                    key: const ValueKey('plan_device_fov_angle'),
-                    value: fov,
-                    min: 5,
-                    max: 180,
-                    divisions: 35,
-                    label: '${fov.round()}°',
-                    // Moving the angle shows the cone it is moving.
-                    onChanged: (v) => setLocal(
-                      () => live(() {
-                        fov = v;
-                        showFov = true;
-                      }),
-                    ),
-                  ),
-                  Text(
-                    feet
-                        ? 'Reach ${reach.round()} ft'
-                        : 'Reach ${reach.round()} px (use Set scale '
-                              'to set this in feet)',
-                  ),
-                  Slider(
-                    key: const ValueKey('plan_device_reach'),
+                  NumberDial(
+                    sliderKey: const ValueKey('plan_device_reach'),
+                    label: 'Reach',
                     value: reach,
                     min: reachMin,
                     max: reachMax,
+                    format: length,
+                    parse: parseLength,
+                    typedMax: feet ? 20000 / ppf : 20000,
+                    sliderWidth: null,
                     onChanged: (v) => setLocal(
                       () => live(() {
                         reach = v;
@@ -4734,6 +5115,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                       }),
                     ),
                   ),
+                  if (!feet)
+                    Text(
+                      'Use Set scale to set lengths in feet.',
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
                 ],
               ],
             ),

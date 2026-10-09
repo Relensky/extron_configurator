@@ -31,6 +31,7 @@ enum DeviceField {
   educationPrice,
   lifeYears,
   projection,
+  projectorSpecs,
   notes,
   ports,
 }
@@ -47,6 +48,7 @@ const Map<DeviceField, String> kDeviceFieldLabels = {
   DeviceField.educationPrice: 'Unit price (education)',
   DeviceField.lifeYears: 'Average life (years)',
   DeviceField.projection: 'Throw ratio, lumens and nits',
+  DeviceField.projectorSpecs: 'Projector specs (resolution, contrast, lens)',
   DeviceField.notes: 'Notes',
   DeviceField.ports: 'Connectors',
 };
@@ -114,6 +116,20 @@ class DeviceFieldDiff {
           nits: theirs.nits,
           viewingAngle: theirs.viewingAngle,
           fieldOfView: theirs.fieldOfView,
+        );
+      case DeviceField.projectorSpecs:
+        return base.copyWith(
+          resolution: theirs.resolution,
+          aspectRatio: theirs.aspectRatio,
+          contrastRatio: theirs.contrastRatio,
+          lightSource: theirs.lightSource,
+          lightLifeHours: theirs.lightLifeHours,
+          zoomRatio: theirs.zoomRatio,
+          lensShiftUp: theirs.lensShiftUp,
+          lensShiftDown: theirs.lensShiftDown,
+          lensShiftSide: theirs.lensShiftSide,
+          weightLbs: theirs.weightLbs,
+          noiseDb: theirs.noiseDb,
         );
       case DeviceField.notes:
         return base.copyWith(notes: theirs.notes);
@@ -317,6 +333,16 @@ List<DeviceFieldDiff> fieldDiffs(
       mineIsBlank: projection(mine) == '-',
     ));
   }
+  final theirSpecs = projectorSpecsSummary(theirs);
+  final mySpecs = projectorSpecsSummary(mine);
+  if (theirSpecs.isNotEmpty && theirSpecs != mySpecs) {
+    out.add(DeviceFieldDiff(
+      field: DeviceField.projectorSpecs,
+      mine: mySpecs.isEmpty ? '-' : mySpecs,
+      theirs: theirSpecs,
+      mineIsBlank: mySpecs.isEmpty,
+    ));
+  }
   text(DeviceField.notes, mine.notes, theirs.notes);
 
   if (theirs.ports.isNotEmpty && !_samePorts(mine.ports, theirs.ports)) {
@@ -330,6 +356,28 @@ List<DeviceFieldDiff> fieldDiffs(
     );
   }
   return out;
+}
+
+/// A projector's published specs on one line, or '' when it has none.
+String projectorSpecsSummary(AvDeviceTemplate t) {
+  String n(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v';
+  final shift = [
+    if (t.lensShiftUp > 0 || t.lensShiftDown > 0)
+      'V +${n(t.lensShiftUp)}/-${n(t.lensShiftDown)}%',
+    if (t.lensShiftSide > 0) 'H ±${n(t.lensShiftSide)}%',
+  ];
+  return [
+    if (t.resolution.isNotEmpty) t.resolution,
+    if (t.aspectRatio.isNotEmpty) t.aspectRatio,
+    if (t.contrastRatio.isNotEmpty) t.contrastRatio,
+    if (t.lightSource.isNotEmpty) t.lightSource,
+    if (t.lightLifeHours > 0) '${n(t.lightLifeHours)} h',
+    if (t.zoomRatio > 0) '${n(t.zoomRatio)}x zoom',
+    if (shift.isNotEmpty) 'shift ${shift.join(' ')}',
+    if (t.weightLbs > 0) '${n(t.weightLbs)} lbs',
+    if (t.noiseDb > 0) '${n(t.noiseDb)} dB',
+  ].join(', ');
 }
 
 /// Connector sets match when the same ids carry the same label, signal,

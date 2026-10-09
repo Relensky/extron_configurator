@@ -110,6 +110,116 @@ def parse(html):
                       ("lens shift", "lensShift")):
         if key in specs:
             out[name] = specs[key]
+    out.update(projector_specs(specs))
+    out.update(listing(html))
+    out["specs"] = specs
+    return out
+
+
+# <h1>Epson PowerLite L630U Projector</h1>
+TITLE = re.compile(r"<h1>(.*?)</h1>", re.S)
+MSRP = re.compile(r"<dt>\s*MSRP\s*</dt>\s*<dd[^>]*>\s*\$([\d,]+)", re.I | re.S)
+USED_FOR = re.compile(
+    r"<dt>\s*Best Used For\s*</dt>\s*<dd[^>]*>(.*?)</dd>", re.I | re.S)
+GLOBAL = re.compile(r"<dt>\s*Global\s*</dt>\s*<dd[^>]*>(.*?)</dd>", re.I | re.S)
+PANEL = re.compile(
+    r"<dd>\s*Connection Panel\s*</dd>\s*<dt[^>]*>(.*?)</dt>", re.I | re.S)
+
+
+def listing(html):
+    """What a new catalog entry needs beyond the specs: the page's name for
+    the projector, what it is sold for, its list price, its name in other
+    markets and its connectors."""
+    out = {}
+    m = TITLE.search(html)
+    if m:
+        out["title"] = re.sub(r"\s+Projector$", "", text(m.group(1)))
+    m = MSRP.search(html)
+    if m:
+        out["msrp"] = float(m.group(1).replace(",", ""))
+    m = USED_FOR.search(html)
+    if m:
+        out["usedFor"] = [text(li) for li in
+                          re.findall(r"<li>(.*?)(?=<li>|</ul>)", m.group(1),
+                                     re.S) if text(li)]
+        # The site's own mark for a classroom projector.
+        out["education"] = "app-edu-icon" in m.group(1)
+    m = GLOBAL.search(html)
+    if m:
+        out["alsoSoldAs"] = text(m.group(1))
+    m = PANEL.search(html)
+    if m:
+        out["connections"] = [text(d) for d in
+                              re.findall(r"<div>(.*?)</div>", m.group(1),
+                                         re.S) if text(d)]
+    return out
+
+
+def first_number(s):
+    m = re.search(r"(\d[\d,]*(?:\.\d+)?)", s or "")
+    return float(m.group(1).replace(",", "")) if m else None
+
+
+def shift_of(axis_text):
+    """(up, down) percents off 'Vertical +/-50%' or '+60% / -0%'."""
+    m = re.search(r"(?:\+\s*/\s*-|±)\s*(\d+(?:\.\d+)?)\s*%", axis_text)
+    if m:
+        v = float(m.group(1))
+        return v, v
+    up = re.search(r"\+\s*(\d+(?:\.\d+)?)\s*%", axis_text)
+    down = re.search(r"-\s*(\d+(?:\.\d+)?)\s*%", axis_text)
+    if not up and not down:
+        return None
+    return (float(up.group(1)) if up else 0.0,
+            float(down.group(1)) if down else 0.0)
+
+
+def projector_specs(specs):
+    """The catalog's projector fields off the spec table."""
+    out = {}
+    m = re.search(r"(\d{3,5})\s*x\s*(\d{3,5})", specs.get("resolution", ""))
+    if m:
+        out["resolution"] = f"{m.group(1)}x{m.group(2)}"
+    m = re.search(r"(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)",
+                  specs.get("aspect ratio", ""))
+    if m:
+        out["aspectRatio"] = f"{m.group(1)}:{m.group(2)}"
+    for key, value in specs.items():
+        if "contrast" in key:
+            m = re.search(r"([\d,]+)\s*:\s*1", value)
+            if m:
+                out["contrastRatio"] = f"{m.group(1)}:1"
+                break
+    source = specs.get("light source", "").strip()
+    if source and source.lower() not in ("no", "n/a"):
+        out["lightSource"] = source
+    life = first_number(specs.get("light source life") or
+                        specs.get("lamp life", ""))
+    if life:
+        out["lightLifeHours"] = life
+    m = re.search(r"(\d+(?:\.\d+)?)\s*x\b", specs.get("included lens", ""))
+    if m and float(m.group(1)) > 1:
+        out["zoomRatio"] = float(m.group(1))
+    shift = specs.get("lens shift", "")
+    low = shift.lower()
+    if low and low not in ("no", "none"):
+        cut = {a: low.find(a) for a in ("vertical", "horizontal") if a in low}
+        for axis, at in cut.items():
+            ends = [p for p in cut.values() if p > at]
+            part = shift[at:min(ends) if ends else len(shift)]
+            got = shift_of(part)
+            if not got:
+                continue
+            if axis == "vertical":
+                out["lensShiftUp"], out["lensShiftDown"] = got
+            else:
+                out["lensShiftSide"] = max(got)
+    m = re.search(r"(\d+(?:\.\d+)?)\s*lbs", specs.get("weight", ""), re.I)
+    if m:
+        out["weightLbs"] = float(m.group(1))
+    m = re.search(r"(\d+(?:\.\d+)?)\s*dB", specs.get("audible noise", ""))
+    if m:
+        out["noiseDb"] = float(m.group(1))
     return out
 
 
@@ -119,7 +229,12 @@ SPEC_ROW = re.compile(r"<dl>\s*<dd>(.*?)</dd>\s*<dt[^>]*>(.*?)</dt>", re.S)
 
 def spec_rows(html):
     """Every label: value row in the spec table, labels lowercased."""
-    return {text(k).lower(): text(v) for k, v in SPEC_ROW.findall(html)}
+    rows = {}
+    for k, v in SPEC_ROW.findall(html):
+        key = text(k).lower()
+        if key:
+            rows[key] = text(v).replace("&nbsp;", " ")
+    return rows
 
 
 def main():

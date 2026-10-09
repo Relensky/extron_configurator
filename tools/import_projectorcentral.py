@@ -46,6 +46,11 @@ from collections import defaultdict
 PANASONIC_NO_LENS = re.compile(r"^PT-[A-Z]+\d+[A-Z]*?L[BW]?(U[78G]?)?$", re.I)
 
 
+SPEC_FIELDS = ("resolution", "aspectRatio", "contrastRatio", "lightSource",
+               "lightLifeHours", "zoomRatio", "lensShiftUp", "lensShiftDown",
+               "lensShiftSide", "weightLbs", "noiseDb")
+
+
 def lens_not_included(dev):
     text = f"{dev.get('model', '')} {dev.get('notes', '')}".lower()
     if re.search(r"lens (not included|sold separately)|without (a )?lens",
@@ -90,7 +95,9 @@ def main():
     ap.add_argument("--exact-only", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--projection-only", action="store_true",
-                    help="write throw ratio and lumens only")
+                    help="write throw ratio, lumens and specs only")
+    ap.add_argument("--web-wins", action="store_true",
+                    help="replace throw, lumens and specs the catalog has")
     a = ap.parse_args()
 
     crawl = read_crawl(a.crawl)
@@ -121,26 +128,55 @@ def main():
                 f"{dev['manufacturer']} {dev['model']}  ->  {row['url']}")
             continue
 
-        # Throw ratio and brightness, for the projection calculator. Only
-        # filled where the catalog has none, like the watts. A projector sold
-        # without a lens gets no throw ratio: the page's figure is for a lens
-        # that is not in the box, and the lens on the estimate supplies it.
+        # Throw ratio and brightness, for the projection calculator. Filled
+        # where the catalog has none; --web-wins also replaces what it has.
+        # A projector sold without a lens gets no throw ratio or zoom: the
+        # page's figures are for a lens that is not in the box, and the lens
+        # on the estimate supplies them.
+        no_lens = lens_not_included(dev)
         lo, hi = row.get("throwRatioMin"), row.get("throwRatioMax")
-        if lo and not dev.get("throwRatioMin"):
-            if lens_not_included(dev):
+        hi = hi if hi and lo and hi > lo else None
+        had = (dev.get("throwRatioMin"), dev.get("throwRatioMax"))
+        if lo and (a.web_wins or not had[0]):
+            if no_lens:
                 notes["sold without a lens, throw ratio left blank"].append(
-                    f"{dev['model']}  (page says {lo}-{hi}:1)")
-            else:
+                    f"{dev['model']}  (page says {lo}-{hi or lo}:1)")
+            elif had != (lo, hi):
+                if had[0]:
+                    notes["throw ratio replaced"].append(
+                        f"{dev['model']}  {had[0]}-{had[1] or had[0]} -> "
+                        f"{lo}-{hi or lo}")
                 put(dev, "throwRatioMin", lo)
-                if hi and hi > lo:
+                if hi:
                     put(dev, "throwRatioMax", hi)
+                else:
+                    dev.pop("throwRatioMax", None)
                 stats["throwWritten"] += 1
         elif not lo:
             notes["no throw ratio published"].append(dev["model"])
         lumens = row.get("lumens")
-        if lumens and not dev.get("lumens"):
+        if lumens and dev.get("lumens") != lumens and (
+                a.web_wins or not dev.get("lumens")):
+            if dev.get("lumens"):
+                notes["lumens replaced"].append(
+                    f"{dev['model']}  {dev['lumens']} -> {lumens}")
             put(dev, "lumens", lumens)
             stats["lumensWritten"] += 1
+
+        # Resolution, contrast, light life, lens shift, weight, noise.
+        wrote = False
+        for key in SPEC_FIELDS:
+            value = row.get(key)
+            if value in (None, "") or dev.get(key) == value:
+                continue
+            if key == "zoomRatio" and no_lens:
+                continue
+            if dev.get(key) and not a.web_wins:
+                continue
+            put(dev, key, value)
+            wrote = True
+        if wrote:
+            stats["specsWritten"] += 1
 
         # --projection-only fills those two and leaves everything else.
         if a.projection_only:
@@ -196,6 +232,7 @@ def main():
         f"  product page written:    {stats['urlWritten']}",
         f"  throw ratio written:     {stats['throwWritten']}",
         f"  lumens written:          {stats['lumensWritten']}",
+        f"  specs written:           {stats['specsWritten']}",
         "",
         f"  no page on the site:     {stats['noPage']}",
         f"  fetch failed:            {stats['fetchFailed']}",
@@ -222,15 +259,16 @@ def main():
             f.write(json.dumps(cat, indent=2, ensure_ascii=False))
         print(f"wrote {a.catalog}")
         return
+    # Everything else in the same shape the app writes too, so a diff of the
+    # file is only the figures that changed.
 
     cat.setdefault("__pricing", {})["projectorSpecs"] = {
         "source": "projectorcentral.com spec pages",
         "wattsWritten": stats["wattsWritten"],
         "retiredFromEndOfProduction": stats["retired"],
     }
-    with open(a.catalog, "w", encoding="utf-8") as f:
-        json.dump(cat, f, indent=1, ensure_ascii=False)
-        f.write("\n")
+    with open(a.catalog, "w", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps(cat, indent=2, ensure_ascii=False))
     print(f"wrote {a.catalog}")
 
 

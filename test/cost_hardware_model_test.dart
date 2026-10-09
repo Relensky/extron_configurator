@@ -184,7 +184,12 @@ void main() {
     await tester.pump(LiveTextField.lazyPause * 2);
     final titled = p.roomCost.equipment.single;
     expect(titled.description, 'Display surge protectors');
-    expect(titled.defaultName, 'PDU 1, PDU 2, PDU 3');
+    // The units take the title, numbered.
+    expect(
+      titled.defaultName,
+      'Display surge protectors 1, Display surge protectors 2, '
+      'Display surge protectors 3',
+    );
     // Kept with the room, and in the export.
     expect(
       (RoomCostSettings()..readJson(p.avCost.toJson())).lineNames[key],
@@ -199,10 +204,10 @@ void main() {
       'Display surge protectors',
     );
 
-    // Cleared, it goes back to the diagram's names.
+    // Cleared, it goes back to the diagram's names, which kept the title.
     await tester.enterText(box, '');
     await tester.pump(LiveTextField.lazyPause * 2);
-    expect(p.roomCost.equipment.single.description, 'PDU 1, PDU 2, PDU 3');
+    expect(p.roomCost.equipment.single.description, titled.defaultName);
   });
 
   testWidgets('a name is not committed until the typing pauses', (tester) async {

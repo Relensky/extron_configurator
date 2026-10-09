@@ -188,9 +188,25 @@ class _TeamUnreadIconState extends State<TeamUnreadIcon>
     _sync();
   }
 
+  int _seenUnread = 0;
+  int _seenMentions = 0;
+
+  /// The count pulses a few times when it appears or goes up, then holds
+  /// still. It used to pulse for as long as anything was unread - an app
+  /// left open overnight with one unread message drew 60 frames a second
+  /// all night for it.
   void _sync() {
+    final bool more = widget.unread > _seenUnread ||
+        widget.mentions > _seenMentions;
+    _seenUnread = widget.unread;
+    _seenMentions = widget.mentions;
     if (_active) {
-      if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
+      if (more) {
+        // 6 half-swings: out and back three times, ending at rest.
+        _pulse.repeat(reverse: true, count: 6).then((_) {
+          if (mounted) _pulse.value = 0;
+        });
+      }
     } else {
       _pulse
         ..stop()

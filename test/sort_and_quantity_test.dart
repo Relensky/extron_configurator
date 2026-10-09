@@ -72,17 +72,18 @@ void main() {
       final p = room();
       expect(
         priced(p).equipment.map((l) => l.description),
-        ['Amp', 'Display', 'Switcher'],
-        reason: 'the standard order is by device name',
+        // By maker unless the room says otherwise: Extron, then Sony, then
+        // the amp nobody has said who makes. An empty maker sorts above
+        // every letter, and this is the check that it does not open the
+        // quote.
+        ['Switcher', 'Display', 'Amp'],
       );
 
-      p.setAvCostEquipmentSort(CostEquipmentSort.manufacturer);
+      p.setAvCostEquipmentSort(CostEquipmentSort.standard);
       expect(
         priced(p).equipment.map((l) => l.description),
-        // Extron, then Sony, then the amp nobody has said who makes: an empty
-        // maker sorts above every letter, and this is the check that it does
-        // not open the quote.
-        ['Switcher', 'Display', 'Amp'],
+        ['Amp', 'Display', 'Switcher'],
+        reason: 'the standard order is by device name',
       );
     });
 
@@ -95,17 +96,18 @@ void main() {
     });
 
     test('it is a fact about the quote, so it is saved with it', () {
+      expect(RoomCostSettings().equipmentSort, CostEquipmentSort.manufacturer);
       final settings = RoomCostSettings()
-        ..equipmentSort = CostEquipmentSort.manufacturer;
+        ..equipmentSort = CostEquipmentSort.standard;
       expect(settings.isEmpty, isFalse, reason: 'this alone is worth saving');
 
       final back = RoomCostSettings()..readJson(settings.toJson());
-      expect(back.equipmentSort, CostEquipmentSort.manufacturer);
+      expect(back.equipmentSort, CostEquipmentSort.standard);
 
-      // A file written before any of this, or hand-edited into nonsense,
-      // reads as the order the estimate has always had.
+      // A file that never picked one, or hand-edited into nonsense, reads
+      // as the default: by maker.
       final old = RoomCostSettings()..readJson({'equipmentSort': 'by vibes'});
-      expect(old.equipmentSort, CostEquipmentSort.standard);
+      expect(old.equipmentSort, CostEquipmentSort.manufacturer);
     });
 
     testWidgets('the picker sets it and the table says whose line is whose', (
@@ -124,7 +126,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Sort: Device name'), findsOneWidget);
+      expect(find.text('Sort: Manufacturer'), findsOneWidget);
+      await tester.tap(find.text('Sort: Manufacturer'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Device name').last);
+      await tester.pumpAndSettle();
+      expect(p.avCost.equipmentSort, CostEquipmentSort.standard);
       await tester.tap(find.text('Sort: Device name'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Manufacturer').last);

@@ -603,7 +603,7 @@ class RoomCostSettings {
     // A rate given here is the room's own, as in an older file.
     bool? ownTaxRate,
     this.includeCabling = true,
-    this.equipmentSort = CostEquipmentSort.standard,
+    this.equipmentSort = CostEquipmentSort.manufacturer,
     List<CostFee>? fees,
     Map<String, double>? priceOverrides,
     List<CostLineItem>? items,
@@ -647,7 +647,7 @@ class RoomCostSettings {
       shippingEach.isEmpty &&
       !showShipping &&
       !ownTaxRate &&
-      equipmentSort == CostEquipmentSort.standard &&
+      equipmentSort == CostEquipmentSort.manufacturer &&
       fees.isEmpty &&
       priceOverrides.isEmpty &&
       items.isEmpty &&
@@ -669,7 +669,7 @@ class RoomCostSettings {
     taxPercent = 0;
     ownTaxRate = false;
     includeCabling = true;
-    equipmentSort = CostEquipmentSort.standard;
+    equipmentSort = CostEquipmentSort.manufacturer;
     scopeOfWork = '';
     notes = '';
     documentTitle = '';
@@ -709,7 +709,7 @@ class RoomCostSettings {
     'taxPercent': ownTaxRate ? taxPercent : 0,
     'taxOwn': ownTaxRate,
     'includeCabling': includeCabling,
-    if (equipmentSort != CostEquipmentSort.standard)
+    // By maker is the default, so only a room that picked another says so.
       'equipmentSort': equipmentSort.name,
     if (scopeOfWork.isNotEmpty) 'scopeOfWork': scopeOfWork,
     if (notes.isNotEmpty) 'notes': notes,
@@ -773,7 +773,7 @@ class RoomCostSettings {
     final sortName = json['equipmentSort']?.toString();
     equipmentSort = CostEquipmentSort.values.firstWhere(
       (s) => s.name == sortName,
-      orElse: () => CostEquipmentSort.standard,
+      orElse: () => CostEquipmentSort.manufacturer,
     );
     scopeOfWork = json['scopeOfWork']?.toString() ?? '';
     notes = json['notes']?.toString() ?? '';

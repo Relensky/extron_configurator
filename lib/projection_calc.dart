@@ -64,6 +64,25 @@ double imageWidthAt(double distance, double ratio) =>
 double throwRatioFor(double distance, double width) =>
     width <= 0 ? 0 : distance / width;
 
+/// Full width of a beam with throw [ratio], seen from above, in degrees.
+double beamAngleForRatio(double ratio) =>
+    ratio <= 0 ? 0 : 2 * math.atan(1 / (2 * ratio)) * 180 / math.pi;
+
+/// The throw ratio of a beam [angle] degrees wide.
+double throwRatioForBeam(double angle) {
+  final t = math.tan(angle.clamp(0.1, 179.9) / 2 * math.pi / 180);
+  return 1 / (2 * t);
+}
+
+/// Width of the image a beam [angle] degrees wide lands [distance] out, in
+/// the units of [distance].
+double imageWidthForBeam(double distance, double angle) =>
+    distance <= 0 ? 0 : distance / throwRatioForBeam(angle);
+
+/// The beam angle that fills [width] from [distance], in degrees.
+double beamAngleToFill(double distance, double width) =>
+    distance <= 0 ? 180 : beamAngleForRatio(throwRatioFor(distance, width));
+
 /// Brightness on the screen, straight on: lumens times gain over area.
 double footLamberts(double lumens, double gain, double areaSqFt) =>
     areaSqFt <= 0 ? 0 : lumens * gain / areaSqFt;
@@ -72,10 +91,21 @@ const double kNitsPerFootLambert = 3.426;
 
 double nitsFromFootLamberts(double fl) => fl * kNitsPerFootLambert;
 
+/// How much of the room light a white screen sends back, all directions
+/// together. Room light comes from everywhere, so a gain screen cannot
+/// aim it: gain only sends the projector's light toward the seats. A gray
+/// screen (gain under 1) sends back less of both.
+const double kWhiteScreenReflectance = 0.9;
+
+/// The share of the room light a screen of [gain] sends back.
+double screenReflectance(double gain) =>
+    math.min(gain, kWhiteScreenReflectance);
+
 /// Room light bounced back off the screen, in foot-lamberts. Foot-candles
-/// on the screen times its gain; a rough figure, good for comparing rooms.
+/// on the screen times what it reflects; a rough figure, good for
+/// comparing rooms.
 double ambientFootLamberts(double footCandles, double gain) =>
-    footCandles * gain;
+    footCandles * screenReflectance(gain);
 
 /// Contrast of the image against the room light on the screen, as N:1.
 double contrastInRoom(double imageFl, double ambientFl) =>
@@ -164,6 +194,26 @@ String measureLabel(double feet) {
   return f.contains('"') ? f : '$f 0"';
 }
 
+/// A length typed as 12, 12.5, 12', 12' 6", 12 6, 12ft 6in or 150", in
+/// feet. Null when it does not read as one.
+double? parseFeetInches(String text) {
+  final s = text.trim().toLowerCase();
+  if (s.isEmpty) return null;
+  final inchesOnly = RegExp(r'^([\d.]+)\s*(?:"|in|inch|inches)$').firstMatch(s);
+  if (inchesOnly != null) {
+    final v = double.tryParse(inchesOnly.group(1)!);
+    return v == null ? null : v / 12;
+  }
+  final m = RegExp(
+    r"""^([\d.]+)\s*(?:'|ft|feet|foot)?\s*(?:([\d.]+)\s*(?:"|in|inch|inches)?)?$""",
+  ).firstMatch(s);
+  if (m == null) return null;
+  final ft = double.tryParse(m.group(1)!);
+  if (ft == null) return null;
+  final inch = m.group(2) == null ? 0.0 : double.tryParse(m.group(2)!);
+  return inch == null ? null : ft + inch / 12;
+}
+
 /// Inches for a text field: 6, or 6.5, without trailing zeros.
 String trimFeetInches(double inches) {
   final s = inches.toStringAsFixed(2);
@@ -224,13 +274,23 @@ const List<(double, String)> kContrastTargets = [
   (80, 'Full-motion video'),
 ];
 
+/// The highest of [kContrastTargets] that [contrast]:1 holds, or null when
+/// it falls short of them all.
+String? contrastCategory(double contrast) {
+  String? met;
+  for (final (n, what) in kContrastTargets) {
+    if (contrast >= n) met = what;
+  }
+  return met;
+}
+
 /// How much of the room light a display face throws back. Matte panels sit
 /// around 2 to 4 percent.
 const double kDisplayReflectance = 0.03;
 
 /// Room light bounced off a surface toward the viewer, in nits: [fc]
-/// foot-candles on it, reflecting [reflectance] (a screen's gain for a
-/// screen).
+/// foot-candles on it, reflecting [reflectance] (see [screenReflectance]
+/// for a screen).
 double ambientNits(double fc, double reflectance) =>
     fc * 10.764 * reflectance / math.pi;
 
@@ -283,8 +343,7 @@ double? catalogConeAngle(String shape, AvDeviceTemplate? t) {
     case 'projector':
       final s = projectorSpecsOf(t);
       if (s == null || !s.hasThrow) return null;
-      final ratio = (s.throwMin + s.throwMax) / 2;
-      return 2 * math.atan(1 / (2 * ratio)) * 180 / math.pi;
+      return beamAngleForRatio((s.throwMin + s.throwMax) / 2);
   }
   return null;
 }
@@ -355,15 +414,24 @@ class ProjectorSpecs {
   final double throwMax;
   final double lumens;
 
+  /// Lens shift, percent of the image: up, down and to either side.
+  final double shiftUp;
+  final double shiftDown;
+  final double shiftSide;
+
   const ProjectorSpecs({
     required this.source,
     this.throwMin = 0,
     this.throwMax = 0,
     this.lumens = 0,
+    this.shiftUp = 0,
+    this.shiftDown = 0,
+    this.shiftSide = 0,
   });
 
   bool get hasThrow => throwMin > 0;
   bool get hasLumens => lumens > 0;
+  bool get hasShift => shiftUp > 0 || shiftDown > 0 || shiftSide > 0;
 
   /// "1.44 - 2.32:1", or "0.35:1" for a fixed lens.
   String get throwLabel => !hasThrow
@@ -439,6 +507,9 @@ ProjectorSpecs? projectorSpecsOf(AvDeviceTemplate t) {
     throwMin: min,
     throwMax: max,
     lumens: lumens,
+    shiftUp: t.lensShiftUp,
+    shiftDown: t.lensShiftDown,
+    shiftSide: t.lensShiftSide,
   );
 }
 
@@ -450,21 +521,28 @@ List<ProjectorSpecs> projectorSpecChoices(
 ) {
   final out = <ProjectorSpecs>[];
   var lumens = 0.0;
+  ProjectorSpecs? shift;
   for (final t in own) {
     final s = projectorSpecsOf(t);
     if (s == null) continue;
     if (s.hasLumens && lumens <= 0) lumens = s.lumens;
+    if (s.hasShift) shift ??= s;
     out.add(s);
   }
   for (final t in lenses) {
     final s = projectorSpecsOf(t);
     if (s == null || !s.hasThrow) continue;
+    // The shift is the projector's, whatever lens is on it.
+    final from = s.hasShift ? s : shift;
     out.add(
       ProjectorSpecs(
         source: t.model,
         throwMin: s.throwMin,
         throwMax: s.throwMax,
         lumens: s.hasLumens ? s.lumens : lumens,
+        shiftUp: from?.shiftUp ?? 0,
+        shiftDown: from?.shiftDown ?? 0,
+        shiftSide: from?.shiftSide ?? 0,
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/floor_plan_view.dart';
 import 'package:extron_configurator/placed_devices.dart';
+import 'package:extron_configurator/projection_calc.dart';
 
 /// Placing the estimate's devices on a floor plan sheet.
 void main() {
@@ -28,6 +29,39 @@ void main() {
     await tester.pumpAndSettle();
     return p;
   }
+
+  testWidgets('the sheet zooms out far enough to see it whole', (
+    tester,
+  ) async {
+    await pump(tester);
+    final viewer = tester.widget<InteractiveViewer>(
+      find.byType(InteractiveViewer),
+    );
+    // A finite margin would stop the zoom once the sheet filled the window.
+    expect(viewer.boundaryMargin.left, double.infinity);
+    expect(viewer.minScale, lessThanOrEqualTo(0.02));
+  });
+
+  testWidgets('toolbar groups fold away and come back', (tester) async {
+    await pump(tester);
+    expect(find.byKey(const ValueKey('plan_set_scale')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('plan_group_Measure and project')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('plan_set_scale')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('plan_group_Measure and project')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('plan_set_scale')), findsOneWidget);
+
+    // The whole toolbar folds to its title and the exports.
+    await tester.tap(find.byKey(const ValueKey('plan_toolbar_toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('plan_set_scale')), findsNothing);
+    expect(find.text('Location report'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('plan_toolbar_toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('plan_set_scale')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('a line of known length sets the scale', (tester) async {
     final p = await pump(tester);
@@ -151,6 +185,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('plan_measure')));
     await tester.pumpAndSettle();
+    // Nothing on the sheet can be picked up while measuring.
+    expect(find.byKey(const ValueKey('plan_measure_cover')), findsOneWidget);
     final sheet = tester.getTopLeft(find.byType(InteractiveViewer));
     await tester.tapAt(sheet + const Offset(100, 300));
     await tester.pump(const Duration(milliseconds: 400));
@@ -158,6 +194,9 @@ void main() {
     await tester.pumpAndSettle();
     // Measuring changes nothing on the sheet.
     expect(p.activeFloorPlan!.pixelsPerFoot, 20);
+    await tester.tap(find.byKey(const ValueKey('plan_measure')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('plan_measure_cover')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -227,12 +266,31 @@ void main() {
     // facing down, the same distance away.
     expect(projector.rotation, 180);
 
+    // Throw to screen: the reach ends at the screen and the image fills it.
+    await tester.tap(find.byKey(const ValueKey('plan_throw_to_screen')));
+    await tester.pumpAndSettle();
+    final thrown = p.activeFloorPlan!.devices.firstWhere(
+      (d) => d.shape == 'projector',
+    );
+    final lit = p.activeFloorPlan!.devices.firstWhere(
+      (d) => d.shape == 'screen',
+    );
+    expect(thrown.range, closeTo((thrown.pos - lit.pos).distance, 0.01));
+    expect(imageWidthForBeam(thrown.range, thrown.fov), closeTo(lit.width, 0.01));
+
     // With a cone showing, the export offers a copy without the angles.
     final screen = p.activeFloorPlan!.devices.firstWhere(
       (d) => d.shape == 'screen',
     );
     p.updateAvPlanDevice(plan.id, screen.copyWith(showFov: true));
     await tester.pumpAndSettle();
+    // The cones can be hidden on screen without touching the devices.
+    final angles = find.byKey(const ValueKey('plan_viewing_angles'));
+    expect(tester.widget<FilterChip>(angles).selected, isTrue);
+    await tester.tap(angles);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilterChip>(angles).selected, isFalse);
+    expect(p.activeFloorPlan!.devices.any((d) => d.showFov), isTrue);
     await tester.tap(find.byTooltip('Export the plan'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('plan_export_plain')), findsOneWidget);
@@ -244,6 +302,51 @@ void main() {
       (projector.pos - const Offset(300, 500)).distance,
       closeTo((const Offset(500, 200) - const Offset(300, 500)).distance, 0.01),
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('each throw is shown and colored on its own', (tester) async {
+    final p = await pump(tester);
+    p.addAvCostExtraEquipment(description: 'Laser Projector');
+    final plan = p.activeFloorPlan!;
+    for (final (key, label, shape, pos) in [
+      ('ptz camera', 'PTZ Camera', 'camera', const Offset(300, 300)),
+      ('laser projector', 'Laser Projector', 'projector', const Offset(600, 300)),
+    ]) {
+      p.addAvPlanDevice(
+        plan.id,
+        PlanDevice(id: '', deviceKey: key, label: label, shape: shape, pos: pos),
+      );
+    }
+    await tester.pumpAndSettle();
+    PlanDevice byShape(String s) =>
+        p.activeFloorPlan!.devices.firstWhere((d) => d.shape == s);
+
+    await tester.tap(find.byKey(const ValueKey('plan_cone_list')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(ValueKey('plan_cone_show_${byShape('projector').id}')),
+    );
+    await tester.pumpAndSettle();
+    expect(byShape('projector').showFov, isTrue);
+    expect(byShape('camera').showFov, isFalse);
+
+    // A color of its own is kept, saved and put back.
+    final projector = byShape('projector');
+    p.updateAvPlanDevice(plan.id, projector.copyWith(coneColor: 0xFF00838F));
+    await tester.pumpAndSettle();
+    expect(byShape('projector').fovColor, const Color(0xFF00838F));
+    expect(
+      PlanDevice.fromJson(byShape('projector').toJson()).coneColor,
+      0xFF00838F,
+    );
+    await tester.tap(find.byKey(ValueKey('plan_cone_reset_${projector.id}')));
+    await tester.pumpAndSettle();
+    expect(byShape('projector').coneColor, 0);
+
+    await tester.tap(find.byKey(const ValueKey('plan_cone_all')));
+    await tester.pumpAndSettle();
+    expect(p.activeFloorPlan!.devices.every((d) => d.showFov), isTrue);
     expect(tester.takeException(), isNull);
   });
 

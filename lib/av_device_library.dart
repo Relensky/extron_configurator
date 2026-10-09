@@ -514,6 +514,29 @@ class AvDeviceTemplate {
   /// not recorded.
   final double fieldOfView;
 
+  /// For a projector, as published (projectorcentral.com): native
+  /// resolution ('1920x1200'), aspect ('16:10'), contrast ('3,000,000:1')
+  /// and light source ('Laser Phosphor'). Blank when not recorded.
+  final String resolution;
+  final String aspectRatio;
+  final String contrastRatio;
+  final String lightSource;
+
+  /// For a projector: rated lamp or laser life in hours (normal mode), and
+  /// optical zoom ('1.6x' is 1.6). 0 when not recorded.
+  final double lightLifeHours;
+  final double zoomRatio;
+
+  /// For a projector: lens shift as a percent of the image, up, down and to
+  /// either side. Fills the projection calculator's lens shift boxes.
+  final double lensShiftUp;
+  final double lensShiftDown;
+  final double lensShiftSide;
+
+  /// Weight in lbs and fan noise in dB (normal mode). 0 when not recorded.
+  final double weightLbs;
+  final double noiseDb;
+
   final String notes;
 
   final List<AvPort> ports;
@@ -565,6 +588,17 @@ class AvDeviceTemplate {
     this.nits = 0,
     this.viewingAngle = 0,
     this.fieldOfView = 0,
+    this.resolution = '',
+    this.aspectRatio = '',
+    this.contrastRatio = '',
+    this.lightSource = '',
+    this.lightLifeHours = 0,
+    this.zoomRatio = 0,
+    this.lensShiftUp = 0,
+    this.lensShiftDown = 0,
+    this.lensShiftSide = 0,
+    this.weightLbs = 0,
+    this.noiseDb = 0,
     this.notes = '',
     required this.ports,
     this.custom = false,
@@ -652,6 +686,17 @@ class AvDeviceTemplate {
     double? nits,
     double? viewingAngle,
     double? fieldOfView,
+    String? resolution,
+    String? aspectRatio,
+    String? contrastRatio,
+    String? lightSource,
+    double? lightLifeHours,
+    double? zoomRatio,
+    double? lensShiftUp,
+    double? lensShiftDown,
+    double? lensShiftSide,
+    double? weightLbs,
+    double? noiseDb,
     String? notes,
     List<AvPort>? ports,
     bool? custom,
@@ -688,6 +733,17 @@ class AvDeviceTemplate {
     nits: nits ?? this.nits,
     viewingAngle: viewingAngle ?? this.viewingAngle,
     fieldOfView: fieldOfView ?? this.fieldOfView,
+    resolution: resolution ?? this.resolution,
+    aspectRatio: aspectRatio ?? this.aspectRatio,
+    contrastRatio: contrastRatio ?? this.contrastRatio,
+    lightSource: lightSource ?? this.lightSource,
+    lightLifeHours: lightLifeHours ?? this.lightLifeHours,
+    zoomRatio: zoomRatio ?? this.zoomRatio,
+    lensShiftUp: lensShiftUp ?? this.lensShiftUp,
+    lensShiftDown: lensShiftDown ?? this.lensShiftDown,
+    lensShiftSide: lensShiftSide ?? this.lensShiftSide,
+    weightLbs: weightLbs ?? this.weightLbs,
+    noiseDb: noiseDb ?? this.noiseDb,
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
     custom: custom ?? this.custom,
@@ -727,6 +783,17 @@ class AvDeviceTemplate {
     if (nits > 0) 'nits': nits,
     if (viewingAngle > 0) 'viewingAngle': viewingAngle,
     if (fieldOfView > 0) 'fieldOfView': fieldOfView,
+    if (resolution.isNotEmpty) 'resolution': resolution,
+    if (aspectRatio.isNotEmpty) 'aspectRatio': aspectRatio,
+    if (contrastRatio.isNotEmpty) 'contrastRatio': contrastRatio,
+    if (lightSource.isNotEmpty) 'lightSource': lightSource,
+    if (lightLifeHours > 0) 'lightLifeHours': lightLifeHours,
+    if (zoomRatio > 0) 'zoomRatio': zoomRatio,
+    if (lensShiftUp > 0) 'lensShiftUp': lensShiftUp,
+    if (lensShiftDown > 0) 'lensShiftDown': lensShiftDown,
+    if (lensShiftSide > 0) 'lensShiftSide': lensShiftSide,
+    if (weightLbs > 0) 'weightLbs': weightLbs,
+    if (noiseDb > 0) 'noiseDb': noiseDb,
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
     if (addedBy.isNotEmpty) 'addedBy': addedBy,
@@ -826,6 +893,17 @@ class AvDeviceTemplate {
     nits: _positive(json['nits']),
     viewingAngle: _positive(json['viewingAngle']),
     fieldOfView: _positive(json['fieldOfView']),
+    resolution: json['resolution']?.toString().trim() ?? '',
+    aspectRatio: json['aspectRatio']?.toString().trim() ?? '',
+    contrastRatio: json['contrastRatio']?.toString().trim() ?? '',
+    lightSource: json['lightSource']?.toString().trim() ?? '',
+    lightLifeHours: _positive(json['lightLifeHours']),
+    zoomRatio: _positive(json['zoomRatio']),
+    lensShiftUp: _positive(json['lensShiftUp']),
+    lensShiftDown: _positive(json['lensShiftDown']),
+    lensShiftSide: _positive(json['lensShiftSide']),
+    weightLbs: _positive(json['weightLbs']),
+    noiseDb: _positive(json['noiseDb']),
     notes: json['notes']?.toString() ?? '',
     ports: [
       for (final p in (json['ports'] as List? ?? []))

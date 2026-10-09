@@ -333,6 +333,70 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     );
   }
 
+  /// A projector's published specs. The lens shift fills the projection
+  /// calculator's shift boxes.
+  Widget _projectorSpecsRow(AvDeviceTemplate entry, String key) {
+    String num(double v) => v <= 0 ? '' : trimNumber(v);
+    double parse(String v) => double.tryParse(v.trim().replaceAll(',', '')) ?? 0;
+    Widget box(
+      String id,
+      String label,
+      String initial,
+      AvDeviceTemplate Function(String v) edit, {
+      String? suffix,
+      bool numeric = false,
+      double width = 130,
+    }) => SizedBox(
+      width: width,
+      child: LiveTextField(
+        fieldId: '${id}_$key',
+        initial: initial,
+        label: label,
+        suffix: suffix,
+        numeric: numeric,
+        onChanged: (v) => setState(() => _apply(edit(v))),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          box('res', 'Resolution', entry.resolution,
+              (v) => entry.copyWith(resolution: v.trim())),
+          box('aspect', 'Aspect', entry.aspectRatio,
+              (v) => entry.copyWith(aspectRatio: v.trim()), width: 90),
+          box('contrast', 'Contrast', entry.contrastRatio,
+              (v) => entry.copyWith(contrastRatio: v.trim())),
+          box('light', 'Light source', entry.lightSource,
+              (v) => entry.copyWith(lightSource: v.trim()), width: 150),
+          box('life', 'Light life', num(entry.lightLifeHours),
+              (v) => entry.copyWith(lightLifeHours: parse(v)),
+              suffix: 'h', numeric: true),
+          box('zoom', 'Zoom', num(entry.zoomRatio),
+              (v) => entry.copyWith(zoomRatio: parse(v)),
+              suffix: 'x', numeric: true, width: 90),
+          box('shiftup', 'Shift up', num(entry.lensShiftUp),
+              (v) => entry.copyWith(lensShiftUp: parse(v)),
+              suffix: '%', numeric: true, width: 100),
+          box('shiftdown', 'Shift down', num(entry.lensShiftDown),
+              (v) => entry.copyWith(lensShiftDown: parse(v)),
+              suffix: '%', numeric: true, width: 100),
+          box('shiftside', 'Shift side', num(entry.lensShiftSide),
+              (v) => entry.copyWith(lensShiftSide: parse(v)),
+              suffix: '%', numeric: true, width: 100),
+          box('weight', 'Weight', num(entry.weightLbs),
+              (v) => entry.copyWith(weightLbs: parse(v)),
+              suffix: 'lbs', numeric: true, width: 100),
+          box('noise', 'Noise', num(entry.noiseDb),
+              (v) => entry.copyWith(noiseDb: parse(v)),
+              suffix: 'dB', numeric: true, width: 90),
+        ],
+      ),
+    );
+  }
+
   /// A camera's field of view, which the floor plan draws as its cone.
   Widget _cameraRow(ThemeData theme, AvDeviceTemplate entry, String key) {
     return Padding(
@@ -1858,6 +1922,8 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         ],
         // Throw and brightness, for the projection calculator.
         if (templateTakesProjection(entry)) _projectionRow(theme, entry, key),
+        if (entry.category.toLowerCase().contains('projector'))
+          _projectorSpecsRow(entry, key),
         if (entry.category.toLowerCase().contains('display'))
           _displayRow(theme, entry, key),
         if (templateIsCamera(entry)) _cameraRow(theme, entry, key),

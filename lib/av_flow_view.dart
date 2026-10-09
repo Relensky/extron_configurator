@@ -2254,9 +2254,10 @@ class _AvFlowViewState extends State<AvFlowView>
       final stored = provider.addAvNode(
         AvNode(
           id: '', // provider assigns AVNODE_<n>
-          // Numbered only when there is more than one: "DTP HDMI 4K 233 1" on
-          // a room with a single transmitter is a number that means nothing.
-          label: count == 1 ? base : '$base $i',
+          // Numbered below, with any already in the room: "DTP HDMI 4K 233 1"
+          // on a room with a single transmitter is a number that means
+          // nothing, and a second batch must not start again at 1.
+          label: base,
           model: model,
           // Recomputed each time round, so the second box lands under the
           // first rather than on top of it.
@@ -2290,6 +2291,11 @@ class _AvFlowViewState extends State<AvFlowView>
         ),
       );
       placed.add(stored.id);
+    }
+    if (placed.isNotEmpty) {
+      provider.numberAvLineUnits(
+        deviceGroupKey(provider.avNodeById(placed.first)!),
+      );
     }
 
     _addPlacedDevicesToConfig(provider, placed);

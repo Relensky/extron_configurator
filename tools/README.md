@@ -79,6 +79,28 @@ python tools/scrape_projectorcentral.py --matched pc_matched.json --out pc_scrap
 python tools/import_projectorcentral.py pc_scraped.jsonl av_devices.json --report pc_report.txt
 ```
 
+The import also writes resolution, aspect, contrast, light source and life,
+zoom, lens shift (up / down / side, which fill the projection calculator),
+weight and noise. It fills blanks only; `--web-wins` replaces the throw ratio,
+lumens and specs the catalog already has, and lists what it replaced.
+
+**Adding projectors the catalog does not have.** `add_projectorcentral.py`
+makes new entries from a crawl: every classroom projector still in
+production from `--brands`, plus any other maker's released in `--year`.
+Classroom is the page's own education mark under "Best Used For", or a page
+off the site's Classroom filter. The crawl list is the sitemap's pages for
+those brands plus that filter's results; the site's paging is unreliable,
+so the filter is read a maker at a time.
+
+```bash
+python tools/scrape_projectorcentral.py --matched pc_candidates.json --out pc_new.jsonl
+python tools/add_projectorcentral.py pc_new.jsonl av_devices.json --classroom-list pc_classroom.json --report pc_added.txt
+```
+
+A page the catalog already has - by URL, by model, by market letter or by
+Epson's other names - is skipped. New entries get the list price as MSRP and
+ports off the connection panel, and no part number.
+
 Matching is the hard part and is deliberately its own step, written to a file
 somebody can read before it becomes wattages: one projector is sold as
 `PT-EW540` here, `pt-ew540u` in the US and `pt-ew540ul` without a lens, and
