@@ -2371,6 +2371,12 @@ class ProjectRoomRef {
   final String funding;
   final double targetPrice;
 
+  /// Quoted as a whole room, whatever its priority buys. Set once what the
+  /// priority bought for it is in, so a requote prices the complete room
+  /// rather than the projector it already has. See
+  /// [BuildingProject.priorityBuysOnly].
+  final bool wholeRoom;
+
   const ProjectRoomRef({
     required this.id,
     required this.configPath,
@@ -2380,6 +2386,7 @@ class ProjectRoomRef {
     this.priority = 0,
     this.funding = '',
     this.targetPrice = 0,
+    this.wholeRoom = false,
   });
 
   ProjectRoomRef copyWith({
@@ -2390,6 +2397,7 @@ class ProjectRoomRef {
     int? priority,
     String? funding,
     double? targetPrice,
+    bool? wholeRoom,
   }) => ProjectRoomRef(
     id: id,
     configPath: configPath ?? this.configPath,
@@ -2399,6 +2407,7 @@ class ProjectRoomRef {
     priority: priority ?? this.priority,
     funding: funding ?? this.funding,
     targetPrice: targetPrice ?? this.targetPrice,
+    wholeRoom: wholeRoom ?? this.wholeRoom,
   );
 
   /// The name to show before the room has been read off disk — the label if
@@ -2419,6 +2428,7 @@ class ProjectRoomRef {
     if (priority > 0) 'priority': priority,
     if (funding.trim().isNotEmpty) 'funding': funding.trim(),
     if (targetPrice > 0) 'targetPrice': targetPrice,
+    if (wholeRoom) 'wholeRoom': true,
   };
 
   factory ProjectRoomRef.fromJson(Map<String, dynamic> json) => ProjectRoomRef(
@@ -2430,6 +2440,7 @@ class ProjectRoomRef {
     priority: (json['priority'] as num?)?.toInt() ?? 0,
     funding: json['funding']?.toString() ?? '',
     targetPrice: (json['targetPrice'] as num?)?.toDouble() ?? 0,
+    wholeRoom: json['wholeRoom'] == true,
   );
 }
 

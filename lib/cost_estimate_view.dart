@@ -24,6 +24,7 @@ import 'control_prefill.dart';
 import 'ui_schema.dart' show DeviceTypeSpec;
 import 'control_prefill_dialog.dart';
 import 'av_only_notice.dart';
+import 'contrast.dart';
 import 'cost_estimate.dart';
 import 'estimate_pdf.dart';
 import 'estimate_settings_section.dart' show showEstimateNoticeDialog;
@@ -277,6 +278,32 @@ Color mutedInk(BuildContext context, ThemeData theme) => PrintMode.of(context)
     ? theme.colorScheme.onSurfaceVariant
     : theme.disabledColor;
 
+/// The project note on a room's Cost tab, in whatever theme and accent is
+/// set: the note's fill, its text, its text button, and its solid button
+/// with the text on it. Each foreground is measured against what it sits on
+/// ([readableOn]) rather than taken from the scheme on trust - Classic's
+/// accent is picked off a wheel, so a pairing that reads in one theme can be
+/// dark on dark in the next.
+({Color note, Color ink, Color link, Color button, Color onButton})
+projectNoteColors(ColorScheme scheme) {
+  final note = scheme.secondaryContainer;
+  final ink = readableOn(note, prefer: [scheme.onSecondaryContainer]);
+  final link = readableOn(note, prefer: [scheme.primary, ink]);
+  // The accent if it stands out from the note, its ink if not, so the
+  // button is always a shape of its own.
+  final button = contrastRatio(scheme.primary, note) >= kContrastLarge
+      ? scheme.primary
+      : ink;
+  final onButton = readableOn(button, prefer: [scheme.onPrimary, note]);
+  return (
+    note: note,
+    ink: ink,
+    link: link,
+    button: button,
+    onButton: onButton,
+  );
+}
+
 class CostEstimateView extends StatefulWidget {
   /// The diagram to price. Null means "read it from the provider", which is
   /// what the tab does; the parameter is kept so a caller that has already
@@ -313,6 +340,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// picture somebody has to apologize for. Hiding them rather than cropping
   /// keeps the numbers laid out exactly as they are on screen.
   bool _capturing = false;
+
+  /// For a room its project buys only part of: the whole room instead of
+  /// what the project buys. See [AppStateProvider.projectRoomCost].
+  bool _wholeRoom = false;
 
   /// Lent to the toolbar while this page is the Cost tab - see
   /// cost_estimate_actions.dart.
@@ -430,6 +461,124 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     );
   }
 
+  /// For a room of the open project whose priority buys only part of a
+  /// room: says it is priced as the project buys it, switches to the whole
+  /// room to look at, and sets the room to quote whole once its purchase is
+  /// in - or back. Nothing for any other room.
+  List<Widget> _projectScopeBanner(
+    BuildContext context,
+    AppStateProvider provider,
+    CostEstimate? projectCost,
+  ) {
+    final ref = provider.openProjectRoom;
+    if (ref == null) return const [];
+    final project = provider.project;
+    final buys = project.buysOnlyFor(ref.priority);
+    final addOns = project.addOnsFor(ref.priority);
+    if (buys.isEmpty && addOns.isEmpty) return const [];
+    final theme = Theme.of(context);
+    final what = [
+      if (buys.isNotEmpty) 'buys only ${buys.join(', ')}',
+      if (addOns.isNotEmpty)
+        'adds ${addOns.map((a) => a.description.trim().isNotEmpty ? a.description.trim() : a.model).join(', ')}',
+    ].join(' and ');
+    final projectName = project.name.trim().isEmpty
+        ? 'the project'
+        : project.name.trim();
+    final left = projectCost == null
+        ? 0
+        : projectCost.excludedLines - provider.roomCost.excludedLines;
+    final String text;
+    if (ref.wholeRoom) {
+      text = 'Quoted as the whole room. Priority ${ref.priority} in '
+          '$projectName $what, but this room has broken off from that.';
+    } else if (_wholeRoom) {
+      text = 'Showing the whole room. Priority ${ref.priority} in '
+          '$projectName $what.';
+    } else {
+      text = 'Priced as $projectName buys it: priority ${ref.priority} '
+          '$what.${left > 0 ? ' $left line${left == 1 ? '' : 's'} already '
+                'in the room ${left == 1 ? 'is' : 'are'} left off as '
+                'existing.' : ''}';
+    }
+    final colors = projectNoteColors(theme.colorScheme);
+    final ink = colors.ink;
+    return [
+      Card(
+        key: const ValueKey('cost_project_scope'),
+        color: colors.note,
+        // Painted exactly as [colors] measured it: no elevation tint.
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Icon(Icons.shopping_cart_outlined, color: ink),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: Text(
+                  text,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: ink),
+                ),
+              ),
+              if (!ref.wholeRoom)
+                TextButton(
+                  key: const ValueKey('cost_project_scope_toggle'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: colors.link,
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                  onPressed: () => setState(() => _wholeRoom = !_wholeRoom),
+                  child: Text(
+                    _wholeRoom
+                        ? 'Show what the project buys'
+                        : 'Show the whole room',
+                  ),
+                ),
+              Tooltip(
+                message: ref.wholeRoom
+                    ? 'Price this room as priority ${ref.priority} buys it '
+                          'again'
+                    : 'Once what priority ${ref.priority} buys is in: quote '
+                          'this room as a complete room from now on, on its '
+                          'Cost tab and the project\'s quote',
+                child: FilledButton.icon(
+                  key: const ValueKey('cost_project_whole_room'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors.button,
+                    foregroundColor: colors.onButton,
+                    textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  icon: Icon(
+                    ref.wholeRoom ? Icons.undo : Icons.check_circle_outline,
+                    size: 16,
+                  ),
+                  label: Text(
+                    ref.wholeRoom
+                        ? 'Back to what priority ${ref.priority} buys'
+                        : 'Purchased - quote the whole room',
+                  ),
+                  onPressed: () {
+                    setState(() => _wholeRoom = false);
+                    provider.setProjectRoomWhole(ref.id, !ref.wholeRoom);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
   /// True when this room has priced equipment that no control block backs.
   ///
   /// Restricted to rooms that have no control devices at all,
@@ -458,7 +607,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // own arithmetic. See [AppStateProvider.roomCost].
     final model = widget.model ?? provider.avFlowModel;
     final settings = provider.avCost;
-    final estimate = widget.model == null
+    // A room its project buys only part of shows what the project buys,
+    // unless the whole room is asked for.
+    final projectCost = widget.model == null ? provider.projectRoomCost : null;
+    final estimate = projectCost != null && !_wholeRoom
+        ? projectCost
+        : widget.model == null
         ? provider.roomCost
         : computeRoomCost(
             model: model,
@@ -475,6 +629,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // headings, black figures and the totals in a white box, because the
     // paper was the only thing that had heard about the brightness.
     List<Widget> cardsIn(BuildContext context) => <Widget>[
+      if (widget.model == null && !_capturing)
+        ..._projectScopeBanner(context, provider, projectCost),
       _header(context, provider, estimate, model),
       if (!_capturing || settings.scopeOfWork.trim().isNotEmpty) ...[
         const SizedBox(height: 12),

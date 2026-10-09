@@ -1384,6 +1384,50 @@ RoomCostSettings? scopeToCategories(
   return copyCostSettings(settings)..outOfScope.addAll(keys);
 }
 
+/// [settings] as [project] buys a room at [priority], given the room's
+/// full [estimate]: a priority that buys only some categories leaves the
+/// rest of the room off as existing equipment that stays, and its add-ons
+/// are quoted like lines typed on the room's Cost tab. Null when the
+/// priority buys everything and adds nothing.
+///
+/// The project's quote and the room's own Cost tab both price from this, so
+/// the two never disagree about what the job buys.
+RoomCostSettings? projectScopedSettings({
+  required BuildingProject project,
+  required int priority,
+  required CostEstimate estimate,
+  required RoomCostSettings settings,
+  required AvDeviceLibrary library,
+}) {
+  final buysOnly = project.buysOnlyFor(priority);
+  final addOns = project.addOnsFor(priority);
+  if (buysOnly.isEmpty && addOns.isEmpty) return null;
+  var scoped = buysOnly.isEmpty
+      ? null
+      : scopeToCategories(estimate, settings, buysOnly);
+  // After the scope is worked out, so an add-on is never taken back off as
+  // existing.
+  if (addOns.isNotEmpty) {
+    scoped ??= copyCostSettings(settings);
+    for (var i = 0; i < addOns.length; i++) {
+      final a = addOns[i];
+      final t = library.templateForModel(a.model);
+      scoped.extraEquipment.add(
+        CostLineItem(
+          id: 'addon:$priority:$i',
+          description: a.description.trim().isNotEmpty
+              ? a.description.trim()
+              : a.model,
+          category: t?.category ?? '',
+          qty: a.qty,
+          catalogModel: a.model,
+        ),
+      );
+    }
+  }
+  return scoped;
+}
+
 /// A copy of [settings] to change without touching the room's own.
 ///
 /// Through toJson, which writes no rate for a room on the job's rate - so the
@@ -1452,46 +1496,25 @@ ProjectEstimate computeProjectEstimate({
       baseCosts: baseCosts,
       tier: tier,
     );
-    // A priority that buys only some categories: the rest of the room is
-    // already there and stays. Priced again without those lines, so the job
-    // shows only what it replaces. The room's own file is not touched.
-    final buysOnly = project.buysOnlyFor(ref.priority);
-    final addOns = project.addOnsFor(ref.priority);
-    if (buysOnly.isNotEmpty || addOns.isNotEmpty) {
-      var scoped = buysOnly.isEmpty
-          ? null
-          : scopeToCategories(estimate, settings, buysOnly);
-      // The priority's add-ons, quoted for this room like a line typed on its
-      // Cost tab. After the scope is worked out, so an add-on is never taken
-      // back off as existing.
-      if (addOns.isNotEmpty) {
-        scoped ??= copyCostSettings(settings);
-        for (var i = 0; i < addOns.length; i++) {
-          final a = addOns[i];
-          final t = library.templateForModel(a.model);
-          scoped.extraEquipment.add(
-            CostLineItem(
-              id: 'addon:${ref.priority}:$i',
-              description: a.description.trim().isNotEmpty
-                  ? a.description.trim()
-                  : a.model,
-              category: t?.category ?? '',
-              qty: a.qty,
-              catalogModel: a.model,
-            ),
-          );
-        }
-      }
-      if (scoped != null) {
-        estimate = computeRoomCost(
-          model: room.model,
-          library: library,
-          settings: scoped,
-          rates: rates,
-          baseCosts: baseCosts,
-          tier: tier,
-        );
-      }
+    // A priority that buys only some categories, or adds items: priced
+    // again as the job buys it, unless the room has been set to quote whole.
+    // The room's own file is not touched.
+    final scoped = ref.wholeRoom ? null : projectScopedSettings(
+      project: project,
+      priority: ref.priority,
+      estimate: estimate,
+      settings: settings,
+      library: library,
+    );
+    if (scoped != null) {
+      estimate = computeRoomCost(
+        model: room.model,
+        library: library,
+        settings: scoped,
+        rates: rates,
+        baseCosts: baseCosts,
+        tier: tier,
+      );
     }
 
     // Only a room that actually counts can make the book mixed-currency: an

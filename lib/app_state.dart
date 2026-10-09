@@ -4640,6 +4640,8 @@ class AppStateProvider extends ChangeNotifier {
     _avFlowModel = null;
     _cablingDrawing = null;
     _roomCost = null;
+    _projectRoomCost = null;
+    _projectRoomCostKnown = false;
   }
 
   /// The AV diagram as the drawing tabs read it.
@@ -4658,6 +4660,36 @@ class AppStateProvider extends ChangeNotifier {
     baseCosts: baseCosts,
     tier: pricingTier,
   );
+
+  /// This room as the project it is part of buys it: only what its
+  /// priority buys, plus the priority's add-ons. Null when the room is not
+  /// in the open project, or its priority buys everything and adds nothing.
+  /// See [projectScopedSettings].
+  CostEstimate? get projectRoomCost {
+    if (_projectRoomCostKnown) return _projectRoomCost;
+    _projectRoomCostKnown = true;
+    final ref = openProjectRoom;
+    if (ref == null || ref.wholeRoom) return null;
+    final scoped = projectScopedSettings(
+      project: project,
+      priority: ref.priority,
+      estimate: roomCost,
+      settings: avCost,
+      library: avDeviceLibrary,
+    );
+    if (scoped == null) return null;
+    return _projectRoomCost = computeRoomCost(
+      model: avFlowModel,
+      library: avDeviceLibrary,
+      settings: scoped,
+      rates: laborRates,
+      baseCosts: baseCosts,
+      tier: pricingTier,
+    );
+  }
+
+  CostEstimate? _projectRoomCost;
+  bool _projectRoomCostKnown = false;
 
   /// Works out everything the room tabs derive, NOW, while the room is being
   /// opened rather than when somebody first looks at a page.
@@ -15529,6 +15561,23 @@ class AppStateProvider extends ChangeNotifier {
         coalesce: true,
       );
     }
+    _projectChanged();
+  }
+
+  /// Quotes [roomId] as a whole room, or back to what its priority buys.
+  /// See [ProjectRoomRef.wholeRoom].
+  void setProjectRoomWhole(String roomId, bool whole) {
+    final index = project.rooms.indexWhere((r) => r.id == roomId);
+    if (index < 0 || project.rooms[index].wholeRoom == whole) return;
+    project.rooms[index] = project.rooms[index].copyWith(wholeRoom: whole);
+    _logProjectEdit(
+      itemKey: 'room:$roomId',
+      itemName: projectRoomLogName(roomId),
+      field: 'Quote',
+      summary: whole
+          ? 'quoted as the whole room'
+          : 'back to what its priority buys',
+    );
     _projectChanged();
   }
 

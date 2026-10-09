@@ -187,6 +187,41 @@ void main() {
       provider.setPriorityBuysOnly(2, []);
       expect(room(price(), 'HOLT 171').total, full);
     });
+
+    test('a room set to quote whole breaks off from its priority', () {
+      final full = room(price(), 'HOLT 171').total;
+      provider.setPriorityBuysOnly(2, ['Projector']);
+      final ref = provider.project.rooms.firstWhere(
+        (r) => r.fallbackName.contains('HOLT'),
+      );
+      provider.setProjectRoomWhole(ref.id, true);
+      expect(room(price(), 'HOLT 171').total, full);
+      // Saved with the project, and the rest of the priority still scoped.
+      final back = BuildingProject.fromJson(provider.project.toJson());
+      expect(back.rooms.firstWhere((r) => r.id == ref.id).wholeRoom, isTrue);
+      expect(back.buysOnlyFor(2), ['Projector']);
+      provider.setProjectRoomWhole(ref.id, false);
+      expect(room(price(), 'HOLT 171').total, lessThan(full));
+    });
+
+    test('the open room prices as the project buys it', () async {
+      provider.setPriorityBuysOnly(2, ['Projector']);
+      final ref = provider.project.rooms.firstWhere(
+        (r) => r.fallbackName.contains('HOLT'),
+      );
+      expect(await provider.openProjectRoomRef(ref), isEmpty);
+      final scoped = provider.projectRoomCost!;
+      expect(scoped.equipment.map((l) => l.model).toSet(), {'PT-VMZ62BU8'});
+      expect(provider.roomCost.equipment.length, greaterThan(1));
+      // The same figure the project's quote has for it.
+      expect(
+        scoped.grandTotal,
+        closeTo(room(price(), 'HOLT 171').total, 0.01),
+      );
+
+      provider.setProjectRoomWhole(ref.id, true);
+      expect(provider.projectRoomCost, isNull);
+    });
   });
 
   group('the all-items sheet', () {

@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:extron_configurator/app_snack.dart';
 import 'package:extron_configurator/contrast.dart';
+import 'package:extron_configurator/cost_estimate_view.dart'
+    show projectNoteColors;
 import 'package:extron_configurator/main.dart';
 import 'package:extron_configurator/project_spares_view.dart'
     show spareSectionFill;
@@ -802,6 +804,21 @@ void main() {
         isTrue,
         reason: 'if the page ink were safe on every fill this rule could go',
       );
+    });
+  });
+
+  group('the project note on the Cost tab', () {
+    test('its text and both buttons read on every theme and accent', () {
+      for (final t in everyAccent()) {
+        final c = projectNoteColors(t.theme.colorScheme);
+        expectReadable('the note text', c.ink, c.note, t.name);
+        expectReadable('Show the whole room', c.link, c.note, t.name);
+        expectReadable('the purchase button text', c.onButton, c.button,
+            t.name);
+        // The button is a shape of its own, not a bar lost in the note.
+        expectReadable('the purchase button', c.button, c.note, t.name,
+            min: kContrastLarge);
+      }
     });
   });
 }

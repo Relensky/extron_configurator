@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.91+101';
+const String kAppVersion = '0.5.94+104';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,31 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.94',
+    date: 'October 9, 2026',
+    title: 'Project note readable in every theme',
+    changes: [
+      'Cost: the project note at the top of a room\'s Cost tab has its colors measured against the theme in use, so its text and buttons read in Classic and Auris, light and dark, whatever accent is picked. Purchased - quote the whole room is a solid button that stands out from the note.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.93',
+    date: 'October 9, 2026',
+    title: 'Easier to read project note',
+    changes: [
+      'Cost: the buttons on the project note at the top of a room\'s Cost tab - Show the whole room, and Purchased - quote the whole room - are drawn in the note\'s own dark ink, so they read clearly against it.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.92',
+    date: 'October 9, 2026',
+    title: 'Rooms priced the way the project buys them',
+    changes: [
+      'Cost: a room opened from a project whose priority buys only part of a room - "Replaces only Projector" - is priced the way the project buys it, with a note saying so and how many lines are left off as existing. Show the whole room switches to everything in the room and back.',
+      'Cost and projects: Purchased - quote the whole room breaks a room off from its priority, so a requote prices the complete room rather than only the projector it already has. Back to what the priority buys puts it back. The project\'s quote follows it too.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.91',
     date: 'October 9, 2026',
