@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../app_activity.dart';
+
 import 'team_host.dart';
 
 // ============================================================================
@@ -266,7 +268,9 @@ class TeamPresenceBoard extends ChangeNotifier {
     _timer = null;
     _stopWatching();
     if (f.isNotEmpty) {
-      _timer = Timer.periodic(kPresenceHeartbeat, (_) => beat());
+      // Away: the heartbeat goes on, but nobody is reading the others.
+      _timer = Timer.periodic(
+          kPresenceHeartbeat, (_) => beat(readOthers: !AppActivity.away));
       await beat();
       _startWatching();
     }

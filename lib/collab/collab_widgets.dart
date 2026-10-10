@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import 'collab_controller.dart';
+import 'combine_history.dart';
 import 'json_merge.dart';
 import 'merge_labels.dart';
 import 'presence.dart';
@@ -532,10 +533,12 @@ Future<bool> _mergeNow(
   final who = collab.incomingOn(kind)?.who ?? 'the other editor';
   final preview = collab.previewMerge(kind);
 
-  // ALWAYS SHOWN FIRST: what their save brings in, before anything moves.
+  // ALWAYS SHOWN FIRST: what their save brings in, before anything moves -
+  // each change ticked to be taken, or unticked to leave it out.
+  var declined = <String>{};
   if (preview != null) {
     if (!context.mounted) return false;
-    final go = await showMergeReviewDialog(
+    final picked = await showMergeReviewDialog(
       context,
       kind: kind,
       who: who,
@@ -543,7 +546,8 @@ Future<bool> _mergeNow(
       doc: collab.currentOf(kind),
       beforeSave: beforeSave,
     );
-    if (go != true) return false;
+    if (picked == null) return false;
+    declined = picked;
     if (!context.mounted) return false;
   }
 
@@ -559,14 +563,27 @@ Future<bool> _mergeNow(
     );
     if (choices == null) return false;
   }
+  // The file as it was before the combine, kept with a timestamp.
+  final backup = await provider.backupBeforeCombine(kind);
+  final doc = collab.currentOf(kind);
+  MergeSide side(MergeConflict c) =>
+      choices?[c.path] ?? (c.canKeepBoth ? MergeSide.both : MergeSide.mine);
   final outcome = await collab.mergeIncoming(
     kind,
     // Anything not asked about - the file moved again since the question was
     // put - keeps both where it can, so nobody's work goes unseen.
-    resolve: (c) =>
-        choices?[c.path] ??
-        (c.canKeepBoth ? MergeSide.both : MergeSide.mine),
+    resolve: side,
+    declined: declined,
   );
+  if (outcome.merged && preview != null) {
+    // Every line, approved or left out, on the combine history.
+    await provider.recordCombine(
+      kind: kind,
+      from: who,
+      backup: backup,
+      items: combineHistoryItems(preview, declined, side, doc),
+    );
+  }
   if (outcome.merged && messenger != null && messenger.mounted) {
     final n = outcome.takenFromTheirs;
     final parts = [
@@ -607,9 +624,43 @@ Future<bool> reconcileBeforeSave(
   return _mergeNow(context, provider, kind, beforeSave: true);
 }
 
-/// What combining would bring in from [who]'s save - every change, in words -
-/// and how many places you both changed. True to go ahead.
-Future<bool?> showMergeReviewDialog(
+/// The lines of one combine for the history: each change from their save,
+/// approved unless its key is in [declined], then each place both changed
+/// with what was kept.
+List<CombineHistoryItem> combineHistoryItems(
+  JsonMergeResult preview,
+  Set<String> declined,
+  MergeSide Function(MergeConflict) side,
+  Object? doc,
+) => [
+  for (final c in preview.changes)
+    CombineHistoryItem(
+      place: describeMergePlace(c.path, doc),
+      path: c.path,
+      before: c.before == null ? '' : describeMergeValue(c.before),
+      after: c.after == null ? '(removed)' : describeMergeValue(c.after),
+      approved: !declined.contains(c.key),
+    ),
+  for (final c in preview.conflicts)
+    CombineHistoryItem(
+      place: describeMergePlace(c.path, doc),
+      path: c.path,
+      before: c.mine == null ? '' : describeMergeValue(c.mine),
+      after: switch (side(c)) {
+        MergeSide.mine => 'kept yours',
+        MergeSide.theirs =>
+          c.theirs == null ? '(removed)' : describeMergeValue(c.theirs),
+        MergeSide.both => 'kept both',
+      },
+      conflict: true,
+    ),
+];
+
+/// What combining would bring in from [who]'s save - every change, in words,
+/// each with a box to approve it - and how many places you both changed.
+/// Returns the [MergeChange.key]s left unticked (empty: take them all), or
+/// null when canceled.
+Future<Set<String>?> showMergeReviewDialog(
   BuildContext context, {
   required CollabDocKind kind,
   required String who,
@@ -619,98 +670,136 @@ Future<bool?> showMergeReviewDialog(
 }) {
   final noun = collabDocNoun(kind);
   final changes = preview.changes;
-  return showDialog<bool>(
+  final approved = {for (final c in changes) c.key};
+  return showDialog<Set<String>>(
     context: context,
-    builder: (ctx) {
-      final theme = Theme.of(ctx);
-      final muted = theme.colorScheme.onSurfaceVariant;
-      String what(MergeChange c) {
-        if (c.added) return 'added: ${describeMergeValue(c.after)}';
-        if (c.removed) return 'removed (was ${describeMergeValue(c.before)})';
-        return 'was ${describeMergeValue(c.before)}, now '
-            '${describeMergeValue(c.after)}';
-      }
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) {
+        final theme = Theme.of(ctx);
+        final muted = theme.colorScheme.onSurfaceVariant;
+        String what(MergeChange c) {
+          if (c.added) return 'added: ${describeMergeValue(c.after)}';
+          if (c.removed) return 'removed (was ${describeMergeValue(c.before)})';
+          return 'was ${describeMergeValue(c.before)}, now '
+              '${describeMergeValue(c.after)}';
+        }
 
-      return AlertDialog(
-        key: const ValueKey('collab_review_dialog'),
-        title: Text('Combine the changes $who saved to this $noun?'),
-        content: SizedBox(
-          width: 680,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                changes.isEmpty
-                    ? 'Nothing of theirs is new to this copy.'
-                    : '${changes.length} change${changes.length == 1 ? '' : 's'} '
-                        'from $who will be added to your copy. Your own '
-                        'changes are kept.',
-                style: theme.textTheme.bodyMedium,
-              ),
-              if (preview.conflicts.isNotEmpty) ...[
-                const SizedBox(height: 6),
+        return AlertDialog(
+          key: const ValueKey('collab_review_dialog'),
+          title: Text('Combine the changes $who saved to this $noun?'),
+          content: SizedBox(
+            width: 680,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  '${preview.conflicts.length} '
-                  'place${preview.conflicts.length == 1 ? '' : 's'} you both '
-                  'changed will be shown next, for you to choose.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.tertiary),
+                  changes.isEmpty
+                      ? 'Nothing of theirs is new to this copy.'
+                      : '${changes.length} change'
+                          '${changes.length == 1 ? '' : 's'} from $who. Tick '
+                          'the ones to take - anything left unticked keeps '
+                          'what you have. Your own changes are kept.',
+                  style: theme.textTheme.bodyMedium,
                 ),
-              ],
-              if (changes.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Flexible(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(ctx).size.height * 0.5,
-                    ),
-                    child: ListView(
-                      key: const ValueKey('collab_review_list'),
-                      shrinkWrap: true,
-                      children: [
-                        for (final c in changes)
-                          ListTile(
-                            dense: true,
-                            leading: Icon(
-                              c.added
-                                  ? Icons.add_circle_outline
-                                  : c.removed
-                                      ? Icons.remove_circle_outline
-                                      : Icons.edit_outlined,
-                              size: 18,
-                              color: muted,
-                            ),
-                            title: Text(describeMergePlace(c.path, doc)),
-                            subtitle: Text(what(c),
+                if (preview.conflicts.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '${preview.conflicts.length} '
+                    'place${preview.conflicts.length == 1 ? '' : 's'} you '
+                    'both changed will be shown next, for you to choose.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.tertiary),
+                  ),
+                ],
+                if (changes.length > 1)
+                  Row(
+                    children: [
+                      Text(
+                        '${approved.length} of ${changes.length} approved',
+                        style:
+                            theme.textTheme.bodySmall?.copyWith(color: muted),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        key: const ValueKey('collab_review_all'),
+                        onPressed: () => setState(() => approved
+                          ..clear()
+                          ..addAll(changes.map((c) => c.key))),
+                        child: const Text('Approve all'),
+                      ),
+                      TextButton(
+                        key: const ValueKey('collab_review_none'),
+                        onPressed: () => setState(approved.clear),
+                        child: const Text('Approve none'),
+                      ),
+                    ],
+                  ),
+                if (changes.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Flexible(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(ctx).size.height * 0.5,
+                      ),
+                      child: ListView(
+                        key: const ValueKey('collab_review_list'),
+                        shrinkWrap: true,
+                        children: [
+                          for (final c in changes)
+                            CheckboxListTile(
+                              key: ValueKey('collab_review_item_${c.key}'),
+                              dense: true,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              value: approved.contains(c.key),
+                              onChanged: (v) => setState(() => v == true
+                                  ? approved.add(c.key)
+                                  : approved.remove(c.key)),
+                              secondary: Icon(
+                                c.added
+                                    ? Icons.add_circle_outline
+                                    : c.removed
+                                        ? Icons.remove_circle_outline
+                                        : Icons.edit_outlined,
+                                size: 18,
+                                color: muted,
+                              ),
+                              title: Text(describeMergePlace(c.path, doc)),
+                              subtitle: Text(
+                                what(c),
                                 style: theme.textTheme.bodySmall
-                                    ?.copyWith(color: muted)),
-                          ),
-                      ],
+                                    ?.copyWith(color: muted),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(beforeSave ? 'Cancel the save' : 'Not now'),
-          ),
-          FilledButton(
-            key: const ValueKey('collab_review_confirm'),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(preview.conflicts.isNotEmpty
-                ? 'Next'
-                : beforeSave
-                    ? 'Combine and save'
-                    : 'Combine'),
-          ),
-        ],
-      );
-    },
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(beforeSave ? 'Cancel the save' : 'Not now'),
+            ),
+            FilledButton(
+              key: const ValueKey('collab_review_confirm'),
+              onPressed: () => Navigator.pop(ctx, {
+                for (final c in changes)
+                  if (!approved.contains(c.key)) c.key,
+              }),
+              child: Text(preview.conflicts.isNotEmpty
+                  ? 'Next'
+                  : beforeSave
+                      ? 'Combine and save'
+                      : 'Combine'),
+            ),
+          ],
+        );
+      },
+    ),
   );
 }
 

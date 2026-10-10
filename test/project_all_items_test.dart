@@ -222,6 +222,36 @@ void main() {
       provider.setProjectRoomWhole(ref.id, true);
       expect(provider.projectRoomCost, isNull);
     });
+
+    test('a room can buy more of an add-on than the priority does', () async {
+      provider.setPriorityBuysOnly(2, ['Projector']);
+      provider.setPriorityAddOns(2, [
+        (model: 'Speakers', description: 'Projector mount', qty: 1),
+      ]);
+      final ref = provider.project.rooms.firstWhere(
+        (r) => r.fallbackName.contains('HOLT'),
+      );
+      expect(await provider.openProjectRoomRef(ref), isEmpty);
+      CostLine mount() => provider.projectRoomCost!.equipment.singleWhere(
+        (l) => l.description == 'Projector mount',
+      );
+      expect(mount().qty, 1);
+
+      // The Qty box's plus.
+      provider.setAvEquipmentQty(mount().key, 2, drawn: mount().drawnQty);
+      expect(mount().qty, 2);
+      // A number typed in it.
+      provider.setAvEquipmentQty(mount().key, 3, drawn: mount().drawnQty);
+      expect(mount().qty, 3);
+      // Nothing drawn for it.
+      expect(
+        provider.avNodes.where((n) => n.label.contains('Projector mount')),
+        isEmpty,
+      );
+      // Cleared, it follows the priority again.
+      provider.setAvEquipmentQty(mount().key, null, drawn: mount().drawnQty);
+      expect(mount().qty, 1);
+    });
   });
 
   group('the all-items sheet', () {

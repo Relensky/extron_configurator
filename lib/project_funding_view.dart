@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'building_project.dart' show ProjectRoomRef;
 import 'cost_estimate.dart' show formatMoney, trimNumber;
 import 'live_text_field.dart';
 import 'manual_room_lines.dart' show pasteRoomList, removeManualRoomLine;
 import 'project_estimate.dart' show ProjectEstimate;
+import 'project_view.dart' show openProjectRoomOn;
 
 /// ============================================================================
 ///  PRIORITIES AND FUNDING
@@ -29,7 +31,23 @@ typedef _FundedRoom = ({
   int priority,
   String funding,
   double target,
+  // What the room comes to: a drawn room's priced total, a line item's
+  // typed cost. Null when there is no figure.
+  double? total,
+  // The room to open from its name; null for a line item.
+  ProjectRoomRef? ref,
 });
+
+/// How the rooms under each priority are ordered.
+enum _RoomSort {
+  added('As added'),
+  name('Name'),
+  budget('Budget'),
+  total('Room total');
+
+  final String label;
+  const _RoomSort(this.label);
+}
 
 /// Whether the card has anything to say - see [ProjectFundingCard].
 bool projectHasFunding(AppStateProvider provider) {
@@ -54,12 +72,50 @@ class ProjectFundingCard extends StatefulWidget {
 class _ProjectFundingCardState extends State<ProjectFundingCard> {
   bool _expanded = true;
 
+  /// The Maximum / Set aside / Free figures.
+  bool _showFigures = true;
+
+  /// Priorities whose rooms are folded away.
+  final Set<int> _collapsed = {};
+
+  _RoomSort _sort = _RoomSort.added;
+
   /// Bumped when a target is refused, so its box goes back to the figure the
   /// job actually holds.
   int _revision = 0;
 
   double _parse(String v) =>
       double.tryParse(v.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+
+  /// Labels over the room rows, sized to their cells.
+  Widget _columnHeads(ThemeData theme) {
+    Widget head(String text, double width, {bool right = false}) => SizedBox(
+      width: width,
+      child: Text(
+        text,
+        textAlign: right ? TextAlign.right : TextAlign.left,
+        style: theme.textTheme.labelSmall,
+      ),
+    );
+    return Row(
+      children: [
+        const SizedBox(width: 24),
+        Expanded(flex: 3, child: Text('Room', style: theme.textTheme.labelSmall)),
+        head('Priority', 110),
+        const SizedBox(width: 8),
+        head('Funding', 110),
+        const SizedBox(width: 8),
+        head('Budget', 130),
+        const SizedBox(width: 8),
+        head('Room total', 110, right: true),
+        const SizedBox(width: 48),
+      ],
+    );
+  }
+
+  /// The room comes to more than was set aside for it.
+  bool _overTarget(_FundedRoom room) =>
+      room.target > 0 && (room.total ?? 0) > room.target + 0.005;
 
   void _set(
     AppStateProvider provider,
@@ -428,6 +484,10 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
     final cur = project.currency;
     String money(double v) => formatMoney(v, cur);
 
+    final priced = {
+      for (final r in widget.estimate?.rooms ?? const [])
+        if (r.ok) r.ref.id: r.total,
+    };
     final rooms = <_FundedRoom>[
       for (final r in project.manualRooms)
         (
@@ -438,6 +498,8 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
           priority: r.priority,
           funding: r.funding,
           target: r.targetPrice,
+          total: r.replacementCost > 0 ? r.replacementCost : null,
+          ref: null,
         ),
       for (final r in project.includedRooms)
         (
@@ -448,8 +510,21 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
           priority: r.priority,
           funding: r.funding,
           target: r.targetPrice,
+          total: priced[r.id],
+          ref: r,
         ),
     ];
+    switch (_sort) {
+      case _RoomSort.added:
+        break;
+      case _RoomSort.name:
+        rooms.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      // Biggest first; rooms with no figure last.
+      case _RoomSort.budget:
+        rooms.sort((a, b) => b.target.compareTo(a.target));
+      case _RoomSort.total:
+        rooms.sort((a, b) => (b.total ?? -1).compareTo(a.total ?? -1));
+    }
     final priorities = {for (final r in rooms) r.priority}.toList()
       ..sort((a, b) => a == 0 ? 1 : (b == 0 ? -1 : a.compareTo(b)));
     final highest = priorities.fold(0, (a, b) => a > b ? a : b);
@@ -490,10 +565,35 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
           const SizedBox(width: 8),
           Expanded(
             flex: 3,
-            child: Tooltip(
-              message: room.isLine ? 'Line item' : 'Room config',
-              child: Text(room.name, style: theme.textTheme.bodyMedium),
-            ),
+            child: room.ref == null
+                ? Tooltip(
+                    message: 'Line item',
+                    child: Text(room.name, style: theme.textTheme.bodyMedium),
+                  )
+                : Align(
+                    alignment: Alignment.centerLeft,
+                    child: Tooltip(
+                      message: 'Open ${room.name} on its Cost tab',
+                      child: InkWell(
+                        key: ValueKey('funding_open_${room.roomId}'),
+                        onTap: () => openProjectRoomOn(
+                          context,
+                          room.ref!,
+                          AppTab.cost,
+                          'its cost',
+                          roomName: room.name,
+                        ),
+                        child: Text(
+                          room.name,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                            decoration: TextDecoration.underline,
+                            decorationColor: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
           ),
           SizedBox(
             width: 110,
@@ -533,6 +633,26 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
               numeric: true,
               onChanged: (_) {},
               onSubmitted: (v) => _set(provider, room, target: _parse(v)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 110,
+            child: Tooltip(
+              message: room.total == null
+                  ? 'No figure for this room yet'
+                  : room.isLine
+                  ? 'The line item\'s cost'
+                  : 'The room\'s total as the job buys it',
+              child: Text(
+                room.total == null ? '-' : money(room.total!),
+                key: ValueKey('funding_total_${room.manualId}${room.roomId}'),
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: _overTarget(room) ? theme.colorScheme.error : null,
+                  fontWeight: _overTarget(room) ? FontWeight.bold : null,
+                ),
+              ),
             ),
           ),
           IconButton(
@@ -604,18 +724,61 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
               ],
             ),
             const SizedBox(height: 8),
-            Wrap(
+            Row(
               children: [
-                figure('Maximum', money(project.budget)),
-                figure('Set aside for rooms', money(allocated)),
-                figure(
-                  over ? 'Over by' : 'Free',
-                  money(free.abs()),
-                  key: 'funding_free',
-                  color: over ? theme.colorScheme.error : null,
+                TextButton.icon(
+                  key: const ValueKey('funding_figures_toggle'),
+                  onPressed: () => setState(() => _showFigures = !_showFigures),
+                  icon: Icon(
+                    _showFigures ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                  ),
+                  label: const Text('Budget'),
                 ),
+                // Folded, the figure that matters most stays in sight.
+                if (!_showFigures)
+                  Text(
+                    '${over ? 'Over by' : 'Free'} ${money(free.abs())}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: over ? theme.colorScheme.error : null,
+                    ),
+                  ),
+                const Spacer(),
+                if (_expanded) ...[
+                  Text('Sort rooms', style: theme.textTheme.labelMedium),
+                  const SizedBox(width: 8),
+                  DropdownButton<_RoomSort>(
+                    key: const ValueKey('funding_sort'),
+                    value: _sort,
+                    isDense: true,
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      for (final s in _RoomSort.values)
+                        DropdownMenuItem(value: s, child: Text(s.label)),
+                    ],
+                    onChanged: (v) => setState(() => _sort = v ?? _sort),
+                  ),
+                ],
               ],
             ),
+            if (_showFigures)
+              Wrap(
+                children: [
+                  figure('Maximum', money(project.budget)),
+                  figure('Set aside for rooms', money(allocated)),
+                  figure(
+                    over ? 'Over by' : 'Free',
+                    money(free.abs()),
+                    key: 'funding_free',
+                    color: over ? theme.colorScheme.error : null,
+                  ),
+                  figure(
+                    'Rooms come to',
+                    money(rooms.fold(0.0, (a, r) => a + (r.total ?? 0))),
+                    key: 'funding_rooms_total',
+                  ),
+                ],
+              ),
             if (_expanded)
               for (final p in priorities) ...[
                 const Divider(height: 20),
@@ -628,11 +791,31 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                         spacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Text(
-                        p == 0 ? 'Not prioritized' : 'Priority $p',
-                        style: theme.textTheme.titleSmall,
+                    InkWell(
+                      key: ValueKey('funding_fold_$p'),
+                      onTap: () => setState(
+                        () => _collapsed.contains(p)
+                            ? _collapsed.remove(p)
+                            : _collapsed.add(p),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _collapsed.contains(p)
+                                  ? Icons.chevron_right
+                                  : Icons.expand_more,
+                              size: 20,
+                            ),
+                            Text(
+                              '${p == 0 ? 'Not prioritized' : 'Priority $p'}'
+                              ' (${rooms.where((r) => r.priority == p).length})',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     TextButton.icon(
@@ -670,19 +853,41 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Text(
-                      money(
-                        rooms
-                            .where((r) => r.priority == p)
-                            .fold(0.0, (a, r) => a + r.target),
-                      ),
-                      key: ValueKey('funding_subtotal_$p'),
-                      style: theme.textTheme.titleSmall,
+                    Builder(
+                      builder: (context) {
+                        final mine = rooms.where((r) => r.priority == p);
+                        final budget = mine.fold(0.0, (a, r) => a + r.target);
+                        final total = mine.fold(
+                          0.0,
+                          (a, r) => a + (r.total ?? 0),
+                        );
+                        final short = budget > 0 && total > budget + 0.005;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              money(budget),
+                              key: ValueKey('funding_subtotal_$p'),
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            Text(
+                              'rooms ${money(total)}',
+                              key: ValueKey('funding_room_subtotal_$p'),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: short ? theme.colorScheme.error : null,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                for (final r in rooms.where((r) => r.priority == p)) row(r),
+                if (!_collapsed.contains(p)) ...[
+                  const SizedBox(height: 4),
+                  _columnHeads(theme),
+                  for (final r in rooms.where((r) => r.priority == p)) row(r),
+                ],
               ],
             if (_expanded) ...[
               const Divider(height: 20),

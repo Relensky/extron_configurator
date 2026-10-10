@@ -26,7 +26,10 @@ import 'recent_files.dart' show RecentKind;
 import 'recent_files_menu.dart';
 import 'campus_lifecycle_view.dart'
     show showCampusLifecycle, showCampusLifecycleFile, showNewCampus;
+import 'app_activity.dart';
+import 'page_cache.dart';
 import 'responsive.dart';
+import 'room_review.dart' show RoomReviewMenu;
 import 'app_state.dart';
 import 'avatar_settings.dart';
 import 'cost_estimate.dart' show trimNumber;
@@ -118,6 +121,9 @@ void main(List<String> args) {
   // Notes stalls, slow frames, screen changes and the key before a close -
   // a screen that froze or went black left nothing in the log otherwise.
   DisplayWatch.instance.start();
+  // Minimized, hidden or locked: background polling pauses - see
+  // app_activity.dart.
+  AppActivity.instance.start();
   // Looks for a newer release just after launch, and again every half hour
   // once the user is not in the middle of an edit. See app_updates.dart.
   unawaited(appUpdater.start());
@@ -291,8 +297,14 @@ class RoomConfigApp extends StatelessWidget {
           // moves to material_ui.
           child: _helpShortcuts(
             context.select((AppStateProvider p) => p.shortcuts),
-            // ignore: deprecated_member_use
-            MaterialUiCompatibilityBridge(child: child!),
+            // Away (locked or minimized): every animation stops.
+            ListenableBuilder(
+              listenable: AppActivity.instance,
+              builder: (context, child) =>
+                  TickerMode(enabled: !AppActivity.away, child: child!),
+              // ignore: deprecated_member_use
+              child: MaterialUiCompatibilityBridge(child: child!),
+            ),
           ),
         ),
       ),
@@ -940,6 +952,8 @@ class _MainDashboardState extends State<MainDashboard> {
                 label: '${provider.teamRoomId} (room configuration)',
                 noun: 'this room',
               ),
+              // Ready for review / review complete.
+              RoomReviewMenu(roomId: provider.teamRoomId),
             ],
           ],
         ),
@@ -1018,25 +1032,37 @@ class _MainDashboardState extends State<MainDashboard> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  // A new tab fades in; outside the capture boundary so a
-                  // screenshot never catches it half drawn.
-                  child: FadeInPage(
-                    key: ValueKey('page_${selectedIndex}_$hasConfig'),
-                    child: RepaintBoundary(
+                  child: RepaintBoundary(
               key: _captureKey,
-              // A floor under every page: narrower than this and the page
-              // scrolls sideways with a scrollbar instead of being cut off.
-              child: MinWidthScroll(
-                minWidth: 640,
-                child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
-                    ? _buildLandingScreen(context, provider)
-                    : _buildMainContent(
-                        selectedIndex,
-                        provider.configRevision,
-                        provider.isEstimateRoom,
-                      ),
+              // THE LAST FEW PAGES STAY MOUNTED, hidden and frozen, so
+              // going back to one is instant - see [PageCache]. Each fades
+              // in as it is shown.
+              child: PageCache(
+                page: _cachedPageFor(selectedIndex, hasConfig),
+                epoch: provider.configRevision,
+                cacheable: (hasConfig ||
+                        _tabWorksWithoutConfig(selectedIndex)) &&
+                    selectedIndex >= 0 &&
+                    selectedIndex < AppTab.values.length &&
+                    kCachedTabs.contains(AppTab.values[selectedIndex]),
+                stamp: selectedIndex >= 0 &&
+                        selectedIndex < AppTab.values.length &&
+                        kRefreshedTabs.contains(AppTab.values[selectedIndex])
+                    ? () => provider.roomConfigStamp
+                    : null,
+                // A floor under every page: narrower than this and the page
+                // scrolls sideways with a scrollbar instead of being cut off.
+                builder: (context) => MinWidthScroll(
+                  minWidth: 640,
+                  child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
+                      ? _buildLandingScreen(context, provider)
+                      : _buildMainContent(
+                          selectedIndex,
+                          provider.configRevision,
+                          provider.isEstimateRoom,
+                        ),
+                ),
               ),
-                    ),
                   ),
                 ),
               ],
@@ -1464,6 +1490,21 @@ class _MainDashboardState extends State<MainDashboard> {
   /// without this the previous room's name and number stayed on screen until
   /// the user switched tabs and came back. App Config is left unkeyed — its
   /// fields are application settings and have nothing to do with the room.
+  /// The [PageCache] slot for a tab: the landing screen is its own page,
+  /// and a room's tabs belong to the room that is open.
+  CachedPage _cachedPageFor(int selectedIndex, bool hasConfig) {
+    if (!hasConfig && !_tabWorksWithoutConfig(selectedIndex)) {
+      return (key: 'landing', keepAcrossEpochs: true);
+    }
+    final tab = selectedIndex >= 0 && selectedIndex < AppTab.values.length
+        ? AppTab.values[selectedIndex]
+        : null;
+    return (
+      key: 'tab_${tab?.name ?? selectedIndex}',
+      keepAcrossEpochs: tab == AppTab.project,
+    );
+  }
+
   Widget _buildMainContent(
       int selectedIndex, int configRevision, bool estimateOnly) {
     final key = ValueKey('tab_${selectedIndex}_cfg_$configRevision');

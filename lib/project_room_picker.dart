@@ -5,6 +5,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'pinned_grid.dart' show gridMetric;
+import 'room_review.dart';
 import 'save_actions.dart' show closeRoomFile, createProjectRoom;
 
 /// ============================================================================
@@ -160,6 +161,7 @@ Future<bool> saveOpenRoom(
   AppStateProvider provider,
 ) async {
   final messenger = ScaffoldMessenger.of(context);
+  if (!await confirmRoomUnlocked(context, provider)) return false;
   final result = await provider.saveRoomInPlace();
   final failed = result.startsWith('Error');
   showTimedSnackBar(
@@ -315,6 +317,12 @@ class _RoomMenu extends StatelessWidget {
               subtitle: names.subtitleFor(ref) == null
                   ? null
                   : Text(names.subtitleFor(ref)!),
+              // Working on, ready for review, review complete.
+              trailing: RoomStatusIcons(
+                roomId: ref.id == open?.id && provider.teamRoomId.isNotEmpty
+                    ? provider.teamRoomId
+                    : names.teamIds[ref.id] ?? '',
+              ),
             ),
           ),
         const PopupMenuDivider(),
@@ -370,6 +378,12 @@ class _RoomMenu extends StatelessWidget {
                 ),
               ),
             ),
+            if (open != null)
+              RoomStatusIcons(
+                roomId: provider.teamRoomId,
+                size: 14,
+                color: onBar,
+              ),
             const SizedBox(width: 2),
             Icon(Icons.arrow_drop_down, size: 18, color: onBar),
           ],
@@ -387,6 +401,10 @@ class _RoomMenu extends StatelessWidget {
     return _RoomNames(
       full: {for (final room in estimate.rooms) room.ref.id: room.name},
       codes: estimate.roomCodeNames,
+      teamIds: {
+        for (final room in estimate.rooms)
+          if (room.ok) room.ref.id: provider.teamRoomIdFor(room.room.config),
+      },
     );
   }
 }
@@ -404,7 +422,14 @@ class _RoomNames {
   /// Room id -> the code on its door, which is often the same string.
   final Map<String, String> codes;
 
-  const _RoomNames({required this.full, required this.codes});
+  /// Room id -> the id "working on" and review marks use, `ARTS 111`.
+  final Map<String, String> teamIds;
+
+  const _RoomNames({
+    required this.full,
+    required this.codes,
+    this.teamIds = const {},
+  });
 
   /// A room's full name: the label somebody typed, else what the job calls it,
   /// else the file it lives in.

@@ -1412,14 +1412,17 @@ RoomCostSettings? projectScopedSettings({
     for (var i = 0; i < addOns.length; i++) {
       final a = addOns[i];
       final t = library.templateForModel(a.model);
+      final id = 'addon:$priority:$i';
       scoped.extraEquipment.add(
         CostLineItem(
-          id: 'addon:$priority:$i',
+          id: id,
           description: a.description.trim().isNotEmpty
               ? a.description.trim()
               : a.model,
           category: t?.category ?? '',
-          qty: a.qty,
+          // A count typed on the room's Cost tab - two mounts for a room
+          // with two projectors - stands in for the project's.
+          qty: settings.qtyOverrides[id] ?? a.qty,
           catalogModel: a.model,
         ),
       );

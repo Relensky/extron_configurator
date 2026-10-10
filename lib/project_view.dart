@@ -39,6 +39,7 @@ import 'project_procurement_view.dart'
     show ProcurementDateField, procurementSlivers;
 import 'project_responsibility_view.dart';
 import 'project_room_picker.dart';
+import 'room_review.dart';
 import 'project_schedule.dart';
 import 'project_spares_view.dart';
 import 'project_swap.dart';
@@ -1985,6 +1986,12 @@ class _RoomRowState extends State<_RoomRow> {
     final dimmed = !room.ref.included;
     final isOpen = provider.openProjectRoom?.id == room.ref.id;
     final unsaved = isOpen && provider.roomShowsUnsaved;
+    // The id "working on" and review marks use: the open room's from memory.
+    final teamId = isOpen && provider.teamRoomId.isNotEmpty
+        ? provider.teamRoomId
+        : room.ok
+            ? provider.teamRoomIdFor(room.room.config)
+            : '';
 
     // The card's fill changes with the row's state — primaryContainer when it
     // is the open room, errorContainer when it could not be read — so the ink
@@ -2028,7 +2035,9 @@ class _RoomRowState extends State<_RoomRow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          Row(
+            children: [
+              Flexible(child: Text(
             room.name,
             style: theme.textTheme.titleSmall?.copyWith(
               color: ink,
@@ -2042,6 +2051,9 @@ class _RoomRowState extends State<_RoomRow> {
                         : null),
               decorationColor: ink,
             ),
+          )),
+              RoomStatusIcons(roomId: teamId, color: ink),
+            ],
           ),
           Text(
             room.ok ? room.ref.configPath : room.room.error,
@@ -2204,6 +2216,8 @@ class _RoomRowState extends State<_RoomRow> {
         // The flag's place, kept: a row with nothing flagged is as wide as
         // one with, so the columns beside it line up down the page.
         const SizedBox(width: 40, height: 40),
+      // Ready for review / review complete.
+      RoomReviewMenu(roomId: teamId, size: 18),
       IconButton(
         tooltip: 'Move up',
         icon: const Icon(Icons.arrow_upward, size: 18),

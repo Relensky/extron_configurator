@@ -61,7 +61,13 @@ class MergeChange {
   final String path;
   final Object? before;
   final Object? after;
-  const MergeChange(this.path, this.before, this.after);
+
+  /// Names this change for [mergeJson3]'s `declined`: the path, or the path
+  /// and a row number for each row appended to one log.
+  final String key;
+
+  const MergeChange(this.path, this.before, this.after, [String? key])
+      : key = key ?? path;
 
   bool get added => before == null;
   bool get removed => after == null;
@@ -118,6 +124,9 @@ JsonMergeResult mergeJson3(
   /// those are not this person's edits: where mine still matches it, their
   /// save wins without a question.
   Object? loaded = _unknown,
+
+  /// [MergeChange.key]s of their changes left out: mine is kept there.
+  Set<String> declined = const {},
 }) {
   // TWO NEW ROWS, ONE NUMBER. Ids are handed out from a counter, so two
   // people adding a note at once both make `todo7`. Merged as one row, one
@@ -126,7 +135,7 @@ JsonMergeResult mergeJson3(
   final renames = <String, String>{};
   _findCollisions(base, mine, theirs, renames, _allStrings([base, mine, theirs]));
   final theirsKept = renames.isEmpty ? theirs : _renameAll(theirs, renames);
-  final m = _Merger(resolve);
+  final m = _Merger(resolve, declined);
   final merged = m.merge(base, mine, theirsKept, '', loaded);
   return JsonMergeResult(
       merged, m.conflicts, m.taken, renames.length, m.changes);
@@ -265,12 +274,16 @@ String describeJsonValue(Object? v, {int max = 80}) {
 /// The sentinel for "this key or row is absent", distinct from a JSON null.
 const Object _absent = _Absent();
 
+/// "Not a map or list" for [_Merger._takeInParts].
+const Object _noParts = _Absent();
+
 class _Absent {
   const _Absent();
 }
 
 class _Merger {
   final MergeSide Function(MergeConflict)? resolve;
+  final Set<String> declined;
   final conflicts = <MergeConflict>[];
   final changes = <MergeChange>[];
   int taken = 0;
@@ -281,7 +294,39 @@ class _Merger {
         at.isEmpty ? '(whole document)' : at, _out(before), _out(after)));
   }
 
-  _Merger(this.resolve);
+  _Merger(this.resolve, [this.declined = const {}]);
+
+  /// How many declined changes were kept out so far.
+  int _declinedHits = 0;
+
+  bool _declined(String at) {
+    final hit = declined.contains(at.isEmpty ? '(whole document)' : at);
+    if (hit) _declinedHits++;
+    return hit;
+  }
+
+  /// Their change to a map or list this copy did not edit, taken part by
+  /// part so each line can be approved on its own. Their value as it is
+  /// when nothing in it was declined; [_noParts] for a plain value.
+  Object? _takeInParts(
+    Object? base,
+    Object? mine,
+    Object? theirs,
+    String at,
+    Object? loaded,
+  ) {
+    final hits = _declinedHits;
+    Object? out = _noParts;
+    if (mine is Map && theirs is Map) {
+      out = _mergeMaps(base is Map ? base : const {}, mine, theirs, at, loaded);
+    } else if (mine is List && theirs is List) {
+      out = _mergeLists(base is List ? base : const [], mine, theirs, at,
+              loaded) ??
+          _noParts;
+    }
+    if (identical(out, _noParts)) return out;
+    return _declinedHits == hits ? theirs : out;
+  }
 
   Object? _out(Object? v) => identical(v, _absent) ? null : v;
 
@@ -294,6 +339,9 @@ class _Merger {
   ]) {
     if (jsonEquals(mine, theirs)) return mine;
     if (jsonEquals(base, mine)) {
+      if (_declined(at)) return mine;
+      final parts = _takeInParts(mine, mine, theirs, at, loaded);
+      if (!identical(parts, _noParts)) return parts;
       _took(at, mine, theirs);
       return theirs;
     }
@@ -303,6 +351,9 @@ class _Merger {
     if (!identical(loaded, _unknown) &&
         !identical(theirs, _absent) &&
         jsonEquals(mine, loaded)) {
+      if (_declined(at)) return mine;
+      final parts = _takeInParts(base, mine, theirs, at, loaded);
+      if (!identical(parts, _noParts)) return parts;
       _took(at, mine, theirs);
       return theirs;
     }
@@ -435,7 +486,9 @@ class _Merger {
         for (final v in theirs)
           if (!baseSet.contains(v) && !mine.contains(v)) v,
       ];
-      if (!jsonEquals(out, mine)) _took(at, mine, out);
+      if (jsonEquals(out, mine)) return out;
+      if (_declined(at)) return mine;
+      _took(at, mine, out);
       return out;
     }
     return null;
@@ -453,14 +506,19 @@ class _Merger {
     }
 
     if (!startsWithBase(mine) || !startsWithBase(theirs)) return null;
-    final out = [
-      ...mine,
-      ...theirs.sublist(base.length),
-    ];
-    taken++;
-    for (final row in theirs.sublist(base.length)) {
-      changes.add(MergeChange(at.isEmpty ? '(whole document)' : at, null, row));
+    final place = at.isEmpty ? '(whole document)' : at;
+    final added = theirs.sublist(base.length);
+    final out = [...mine];
+    for (var i = 0; i < added.length; i++) {
+      final key = '$place#${i + 1}';
+      if (declined.contains(key)) {
+        _declinedHits++;
+        continue;
+      }
+      out.add(added[i]);
+      changes.add(MergeChange(place, null, added[i], key));
     }
+    if (out.length > mine.length) taken++;
     return out;
   }
 

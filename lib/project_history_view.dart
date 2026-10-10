@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'building_project.dart';
+import 'collab/combine_history_view.dart';
 import 'project_estimate.dart';
 
 /// ============================================================================
@@ -852,27 +853,33 @@ class _HistoryDialogState extends State<_HistoryDialog> {
         height: 560,
         // FINISHED TASKS, ON A TAB OF THEIR OWN: the job list's completed and
         // deleted notes, by who finished them - see [FinishedTasksPane].
-        child: !hasProject
-            ? changes
-            : DefaultTabController(
-                length: 3,
+        // COMBINES: every time another person's save was combined in, by
+        // room, project or campus - see [CombineHistoryPane].
+        child: DefaultTabController(
+                length: hasProject ? 4 : 2,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const TabBar(
+                    TabBar(
                       tabs: [
-                        Tab(
+                        const Tab(
                           key: ValueKey('history_tab_changes'),
                           text: 'Changes',
                         ),
-                        Tab(
-                          key: ValueKey('history_tab_finished'),
-                          text: 'Finished tasks',
+                        const Tab(
+                          key: ValueKey('history_tab_combines'),
+                          text: 'Combines',
                         ),
-                        Tab(
-                          key: ValueKey('history_tab_people'),
-                          text: 'People',
-                        ),
+                        if (hasProject) ...const [
+                          Tab(
+                            key: ValueKey('history_tab_finished'),
+                            text: 'Finished tasks',
+                          ),
+                          Tab(
+                            key: ValueKey('history_tab_people'),
+                            text: 'People',
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -880,8 +887,11 @@ class _HistoryDialogState extends State<_HistoryDialog> {
                       child: TabBarView(
                         children: [
                           changes,
-                          FinishedTasksPane(project: provider.project),
-                          _PeoplePane(provider: provider),
+                          CombineHistoryPane(store: provider.combineHistory),
+                          if (hasProject) ...[
+                            FinishedTasksPane(project: provider.project),
+                            _PeoplePane(provider: provider),
+                          ],
                         ],
                       ),
                     ),

@@ -5,6 +5,8 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import '../app_activity.dart';
+
 import 'team_fx.dart' show TeamEmojiStore;
 import 'team_host.dart';
 import 'team_presence.dart';
@@ -742,7 +744,9 @@ class TeamChat extends ChangeNotifier {
     }
     final store = ChatStore(f);
     _store = store;
-    _timer = Timer.periodic(kChatPoll, (_) => poll());
+    _timer = Timer.periodic(kChatPoll, (_) {
+      if (!AppActivity.away) poll();
+    });
     await store.announce(ChatPerson(
         login: me.user, name: myName(), machine: me.machine));
     if (_store != store) return;

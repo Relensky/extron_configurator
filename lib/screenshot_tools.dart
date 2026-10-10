@@ -62,6 +62,14 @@ Future<Uint8List?> captureBoundary(GlobalKey boundaryKey,
     final ctx = boundaryKey.currentContext;
     // The frame we waited for could have taken the tab off screen.
     if (ctx == null || !ctx.mounted) return null;
+    // A tab kept mounted but hidden draws nothing to photograph.
+    var hidden = false;
+    ctx.visitAncestorElements((e) {
+      final w = e.widget;
+      if (w is Offstage && w.offstage) hidden = true;
+      return !hidden;
+    });
+    if (hidden) return null;
     final boundary = ctx.findRenderObject();
     if (boundary is! RenderRepaintBoundary) return null;
 

@@ -27,6 +27,7 @@ import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'project_briefing_dialog.dart';
 import 'project_setup_dialog.dart';
+import 'room_review.dart' show confirmRoomUnlocked;
 import 'room_sidecar.dart' show roomConfigDisplayName, roomConfigPathIn;
 
 /// ============================================================================
@@ -172,6 +173,15 @@ Future<bool> runSave(
   bool saveAs = false,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
+
+  // A room someone else is working on is locked until they are taken off.
+  if (scope == SaveScope.room &&
+      !saveAs &&
+      provider.currentConfigPath.isNotEmpty &&
+      !await confirmRoomUnlocked(context, provider)) {
+    return false;
+  }
+  if (!context.mounted) return false;
 
   // A SAVE IS A BOUNDARY. Whatever has been typed since the last step becomes
   // its own step here, so "back to how it was when I saved" is one press

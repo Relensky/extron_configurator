@@ -58,7 +58,10 @@ import 'recent_files.dart';
 import 'room_presets.dart';
 import 'room_sidecar.dart';
 import 'nav_rail.dart' show navTabLabel;
+import 'campus_file.dart' show kCampusFileSuffix;
+import 'app_activity.dart';
 import 'collab/collab_controller.dart';
+import 'collab/combine_history.dart';
 import 'collab/json_merge.dart' show cloneJson;
 import 'collab/presence.dart' show CollabIdentity;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -679,18 +682,172 @@ class AppStateProvider extends ChangeNotifier {
       TeamPresenceBoard(version: kAppVersion);
   late final TeamChat teamChat = TeamChat()..myName = () => profileName;
   late final TeamClaims teamClaims = TeamClaims(myName: () => profileName);
+
+  /// Rooms marked ready for review, or reviewed - kept apart from "working
+  /// on" in `<team folder>\room_reviews`. See room_review.dart.
+  late final TeamClaims teamReviews =
+      TeamClaims(myName: () => profileName, subfolder: 'room_reviews');
   Timer? _teamWhereTimer;
 
   /// The open room as the dashboard names it - `ARTS 111` - so a "working
   /// on" tag here is the same room there. '' with no room open.
-  String get teamRoomId {
-    if (roomConfig.isEmpty) return '';
-    final setup = roomConfig['SYSTEM_SETUP'];
+  String get teamRoomId => teamRoomIdFor(roomConfig);
+
+  /// [teamRoomId] for any room's config.
+  String teamRoomIdFor(Map<String, dynamic> config) {
+    if (config.isEmpty) return '';
+    final setup = config['SYSTEM_SETUP'];
     if (setup is! Map) return '';
     final b = setup['gve_bldg']?.toString().trim() ?? '';
     final r = setup['gve_room']?.toString().trim() ?? '';
     if (b.isEmpty || r.isEmpty) return '';
     return '${bldgAbbreviation(b)} $r';
+  }
+
+  /// The people working on the open room when this person is not one of
+  /// them. Non-empty means the room is locked: it cannot be saved over until
+  /// they are taken off it (or this person joins them).
+  List<TeamClaim> get roomLockHolders => roomLockHoldersFor(teamRoomId);
+
+  List<TeamClaim> roomLockHoldersFor(String roomId) {
+    if (roomId.isEmpty || !teamClaims.active) return const [];
+    final on = teamClaims.on('room', roomId);
+    final me = teamClaims.me.user.toLowerCase();
+    if (on.any((c) => c.who.toLowerCase() == me)) return const [];
+    return on;
+  }
+
+  /// Why the open room cannot be saved over, or ''.
+  String get roomLockMessage {
+    final holders = roomLockHolders;
+    if (holders.isEmpty) return '';
+    final names = holders.map((c) => c.whoLabel).join(', ');
+    return 'Error: $teamRoomId is locked - $names '
+        '${holders.length == 1 ? 'is' : 'are'} working on it. Take them off '
+        'the room (or tag yourself) to save.';
+  }
+
+  // --- combine history ------------------------------------------------------
+  //
+  //  Each combine of somebody else's save is logged with the room, project and
+  //  campus it touched and every line approved or left out. See
+  //  collab/combine_history.dart.
+
+  /// Set by tests; otherwise nothing is written under test.
+  String combineHistoryFolderOverride = '';
+
+  /// `<root>\History\Combines`, or '' when combines are not logged here.
+  String get combineHistoryFolder {
+    if (combineHistoryFolderOverride.isNotEmpty) {
+      return combineHistoryFolderOverride;
+    }
+    if (runningUnderTest || !_persistenceEnabled) return '';
+    return path.join(effectiveRootFolder, 'History', 'Combines');
+  }
+
+  CombineHistoryStore? get combineHistory => combineHistoryFolder.isEmpty
+      ? null
+      : CombineHistoryStore(combineHistoryFolder);
+
+  /// The campus sheet the open job is on, by name; '' for none.
+  String get campusDisplayName {
+    if (!hasOpenProject || currentProjectPath.isEmpty) return '';
+    final file = project.resolvedCampusFile(currentProjectPath);
+    if (file.isEmpty) return '';
+    try {
+      final doc = jsonDecode(File(file).readAsStringSync());
+      final name = doc is Map ? doc['name']?.toString().trim() ?? '' : '';
+      if (name.isNotEmpty) return name;
+    } catch (_) {}
+    final stem = path.basename(file);
+    return stem.toLowerCase().endsWith(kCampusFileSuffix)
+        ? stem.substring(0, stem.length - kCampusFileSuffix.length)
+        : path.basenameWithoutExtension(file);
+  }
+
+  String _combineFile(CollabDocKind kind) => switch (kind) {
+        CollabDocKind.room => currentConfigPath,
+        CollabDocKind.project => currentProjectPath,
+        CollabDocKind.catalog => '',
+      };
+
+  /// A timestamped copy of [kind]'s file as it is on disk, taken before a
+  /// combine. '' when there is nowhere to put it.
+  Future<String> backupBeforeCombine(CollabDocKind kind) async {
+    final store = combineHistory;
+    final file = _combineFile(kind);
+    if (store == null || file.isEmpty) return '';
+    return store.backupDocument(file);
+  }
+
+  /// Logs one combine. Returns '' or what went wrong.
+  Future<String> recordCombine({
+    required CollabDocKind kind,
+    required String from,
+    required List<CombineHistoryItem> items,
+    String backup = '',
+    DateTime? at,
+  }) async {
+    if (items.isEmpty) return '';
+    final when = at ?? DateTime.now();
+    final roomName = kind == CollabDocKind.room
+        ? (teamRoomId.isNotEmpty
+            ? teamRoomId
+            : roomCodeFromConfig(roomConfig).trim().isNotEmpty
+                ? roomCodeFromConfig(roomConfig).trim()
+                : path.basenameWithoutExtension(currentConfigPath))
+        : '';
+    final approved = items.where((i) => i.approved).length;
+    final declined = items.length - approved;
+    // On the room's own history too, line by line.
+    if (kind == CollabDocKind.room) {
+      for (final i in items) {
+        logRoomEdit(
+          itemKey: 'combine:${i.path}',
+          itemName: i.place,
+          field: i.approved ? 'Combined' : 'Left out',
+          summary: '${from.isEmpty ? 'another save' : from}: '
+              '${i.before.isEmpty ? '' : '${i.before} -> '}${i.after}',
+          at: when,
+        );
+      }
+    }
+    final ref = kind == CollabDocKind.room
+        ? projectRefForConfig(currentConfigPath)
+        : null;
+    if (hasOpenProject) {
+      _logProjectEdit(
+        itemKey: ref == null ? 'project:combine' : 'room:${ref.id}',
+        itemName: ref == null
+            ? projectDisplayName
+            : projectRoomLogName(ref.id, file: 'Config'),
+        field: 'Combined',
+        summary: '$approved change${approved == 1 ? '' : 's'} from '
+            '${from.isEmpty ? 'another save' : from}'
+            '${declined > 0 ? ', $declined left out' : ''}',
+      );
+    }
+    final store = combineHistory;
+    if (store == null) return '';
+    final entry = CombineHistoryEntry(
+      id: '${collab.me.user}@${collab.me.machine}@'
+          '${when.microsecondsSinceEpoch}',
+      at: when,
+      user: collab.me.user,
+      name: profileName,
+      machine: collab.me.machine,
+      from: from,
+      document: kind == CollabDocKind.project ? 'project' : 'room',
+      room: roomName,
+      project: hasOpenProject ? projectDisplayName : '',
+      campus: campusDisplayName,
+      file: _combineFile(kind),
+      backup: backup,
+      items: items,
+    );
+    final error = await store.append(entry);
+    if (error.isNotEmpty) AppLogger.logError(error);
+    return error;
   }
 
   String get _teamTabLabel =>
@@ -715,6 +872,7 @@ class AppStateProvider extends ChangeNotifier {
       await teamPresence.attach(folder);
       await teamChat.attach(folder);
       await teamClaims.attach(folder);
+      await teamReviews.attach(folder);
       TeamAvatars.instance.setFolder(avatarFolder);
     } catch (e) {
       AppLogger.logError('Team folder $folder could not be joined', e);
@@ -725,9 +883,23 @@ class AppStateProvider extends ChangeNotifier {
     _importLegacyChats();
     _teamWhereTimer?.cancel();
     _teamWhereTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (AppActivity.away) return;
       teamPresence.setWhere(room: teamRoomId, tab: _teamTabLabel);
     });
+    AppActivity.instance
+      ..removeListener(_backFromAway)
+      ..addListener(_backFromAway);
     notifyListeners();
+  }
+
+  /// Back at the PC: everything polled is read again at once.
+  void _backFromAway() {
+    if (AppActivity.away) return;
+    unawaited(collab.tick());
+    unawaited(teamPresence.beat());
+    unawaited(teamChat.poll());
+    unawaited(teamClaims.refresh());
+    unawaited(teamReviews.refresh());
   }
 
   /// [SHARED ROOMS]: leaves a copy of the room just saved at [savedFile] in
@@ -1787,6 +1959,17 @@ class AppStateProvider extends ChangeNotifier {
   /// changing key the previous room's name/number sat on the Wizard until the
   /// tab was switched away and back.
   int configRevision = 0;
+
+  /// The room's config summed up, to tell whether it changed between two
+  /// moments - see [PageCache.stamp].
+  String get roomConfigStamp {
+    try {
+      final text = jsonEncode(roomConfig);
+      return '${text.length}:${text.hashCode}';
+    } catch (_) {
+      return '$configRevision';
+    }
+  }
 
   /// Call after any wholesale replacement of [roomConfig]. Callers still
   /// notifyListeners() themselves — this only moves the identity forward.
@@ -12699,6 +12882,11 @@ class AppStateProvider extends ChangeNotifier {
         AppLogger.logError('Not saved: $outputFile already exists.');
         return false;
       }
+      if (path.equals(outputFile, currentConfigPath) &&
+          roomLockMessage.isNotEmpty) {
+        lastRoomSaveError = roomLockMessage.replaceFirst('Error: ', '');
+        return false;
+      }
       return await saveRoomConfigTo(outputFile);
     } catch (e, stack) {
       AppLogger.logError("Failed to export room configuration", e, stack);
@@ -19952,6 +20140,8 @@ class AppStateProvider extends ChangeNotifier {
           'save it back to. Use Save Room As once to give it one.';
     }
     if (roomConfig.isEmpty) return 'Error: there is nothing to save.';
+    final locked = roomLockMessage;
+    if (locked.isNotEmpty) return locked;
     try {
       final written = await saveCurrentConfigToFile();
       if (written == null) {

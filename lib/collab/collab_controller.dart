@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import 'json_merge.dart';
 import 'presence.dart';
 import '../app_logger.dart';
+import '../app_activity.dart';
 
 /// ============================================================================
 ///  SEVERAL PEOPLE, ONE SHARED FOLDER
@@ -23,6 +24,10 @@ import '../app_logger.dart';
 ///      wrote it - which is what makes a three-way merge possible, on demand
 ///      or on Save, instead of the last person to save erasing the first.
 /// ============================================================================
+
+/// How often the shared folder is checked while [AppActivity.away]: well
+/// inside the presence notes' staleness, so this copy still shows as open.
+const Duration kAwayTick = Duration(seconds: 45);
 
 /// The documents that can be edited together.
 enum CollabDocKind { room, project, catalog }
@@ -114,11 +119,15 @@ class CollabMergeOutcome {
   /// Their new rows given a new number so both people's were kept.
   final int renumbered;
 
+  /// Each change taken from their save.
+  final List<MergeChange> changes;
+
   const CollabMergeOutcome({
     required this.merged,
     this.takenFromTheirs = 0,
     this.conflicts = const [],
     this.renumbered = 0,
+    this.changes = const [],
   });
 
   static const none = CollabMergeOutcome(merged: false);
@@ -166,7 +175,18 @@ class CollabController extends ChangeNotifier {
   /// Starts the heartbeat. Idempotent.
   void start({Duration every = const Duration(seconds: 2)}) {
     if (!enabled || _timer != null) return;
-    _timer = Timer.periodic(every, (_) => tick());
+    _timer = Timer.periodic(every, (_) => _timedTick());
+    tick();
+  }
+
+  DateTime _lastTick = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// While nobody is at the PC, only often enough to keep this copy's
+  /// presence note fresh for colleagues.
+  void _timedTick() {
+    final now = DateTime.now();
+    if (AppActivity.away && now.difference(_lastTick) < kAwayTick) return;
+    _lastTick = now;
     tick();
   }
 
@@ -431,10 +451,12 @@ class CollabController extends ChangeNotifier {
     CollabDocument doc,
     Object? disk, {
     MergeSide Function(MergeConflict)? resolve,
+    Set<String> declined = const {},
   }) => s.hasLoaded
       ? mergeJson3(s.baseline, doc.current(), disk,
-          resolve: resolve, loaded: s.loaded)
-      : mergeJson3(s.baseline, doc.current(), disk, resolve: resolve);
+          resolve: resolve, loaded: s.loaded, declined: declined)
+      : mergeJson3(s.baseline, doc.current(), disk,
+          resolve: resolve, declined: declined);
 
   /// The document as this copy holds it, for naming things in a conflict.
   Object? currentOf(CollabDocKind kind) => _docs[kind]?.current();
@@ -457,10 +479,12 @@ class CollabController extends ChangeNotifier {
   ///
   /// A copy with nothing unsaved simply takes the file. One with its own
   /// edits is merged three ways against the base; [resolve] settles anything
-  /// both sides changed (default: keep mine).
+  /// both sides changed (default: keep mine). [declined] names their changes
+  /// (by [MergeChange.key]) that were not approved; mine stays there.
   Future<CollabMergeOutcome> mergeIncoming(
     CollabDocKind kind, {
     MergeSide Function(MergeConflict)? resolve,
+    Set<String> declined = const {},
   }) async {
     final doc = _docs[kind];
     if (doc == null || doc.filePath.isEmpty) return CollabMergeOutcome.none;
@@ -477,7 +501,7 @@ class CollabController extends ChangeNotifier {
     final disk = doc.readDisk();
     if (disk == null) return CollabMergeOutcome.none;
 
-    if (!doc.isDirty || s.baseline == null) {
+    if (s.baseline == null || (!doc.isDirty && declined.isEmpty)) {
       doc.apply(cloneJson(disk), clean: true);
       s
         ..baseline = cloneJson(disk)
@@ -489,7 +513,7 @@ class CollabController extends ChangeNotifier {
       return const CollabMergeOutcome(merged: true);
     }
 
-    final result = _merge3(s, doc, disk, resolve: resolve);
+    final result = _merge3(s, doc, disk, resolve: resolve, declined: declined);
     doc.apply(cloneJson(result.merged), clean: jsonEquals(result.merged, disk));
     s
       ..baseline = cloneJson(disk)
@@ -505,6 +529,7 @@ class CollabController extends ChangeNotifier {
       takenFromTheirs: result.takenFromTheirs,
       conflicts: result.conflicts,
       renumbered: result.renumbered,
+      changes: result.changes,
     );
   }
 

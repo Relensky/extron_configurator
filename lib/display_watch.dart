@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'app_logger.dart';
+import 'app_activity.dart';
 
 /// Writes down what the screen was doing, for the hangs nothing else catches.
 ///
@@ -72,6 +73,10 @@ class DisplayWatch with WidgetsBindingObserver {
   /// nothing has been drawn. Only while a frame is actually wanted — a still
   /// screen draws nothing and is not stalled.
   void _check() {
+    if (AppActivity.away) {
+      _lastFrame = DateTime.now();
+      return;
+    }
     final scheduler = SchedulerBinding.instance;
     final waiting =
         scheduler.hasScheduledFrame ||

@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../app_activity.dart';
+
 import 'team_host.dart';
 import 'team_presence.dart';
 
@@ -112,12 +114,20 @@ class TeamClaim {
 
 /// Everyone's "working on" tags, kept current from the team folder.
 class TeamClaims extends ChangeNotifier {
-  TeamClaims({TeamIdentity? identity, String Function()? myName, bool? watch})
-      : me = identity ?? TeamIdentity.current(),
+  TeamClaims({
+    TeamIdentity? identity,
+    String Function()? myName,
+    bool? watch,
+    this.subfolder = 'claims',
+  })  : me = identity ?? TeamIdentity.current(),
         myName = myName ?? (() => ''),
         watch = watch ?? !Platform.environment.containsKey('FLUTTER_TEST');
 
   final TeamIdentity me;
+
+  /// The folder under the team folder the files go in. Another name keeps a
+  /// second set of tags (room reviews) apart from "working on".
+  final String subfolder;
   String Function() myName;
   final bool watch;
 
@@ -144,7 +154,7 @@ class TeamClaims extends ChangeNotifier {
   /// Joins [teamFolder] ('' leaves). Cheap when it has not moved.
   Future<void> attach(String teamFolder) async {
     final folder =
-        teamFolder.trim().isEmpty ? '' : '${teamFolder.trim()}${_sep}claims';
+        teamFolder.trim().isEmpty ? '' : '${teamFolder.trim()}$_sep$subfolder';
     if (folder == _folder) return;
     _timer?.cancel();
     await _watcher?.cancel();
@@ -160,7 +170,9 @@ class TeamClaims extends ChangeNotifier {
       await Directory(folder).create(recursive: true);
     } catch (_) {}
     await refresh();
-    _timer = Timer.periodic(kClaimsPoll, (_) => refresh());
+    _timer = Timer.periodic(kClaimsPoll, (_) {
+      if (!AppActivity.away) refresh();
+    });
     if (watch) {
       try {
         _watcher = Directory(folder).watch().listen((_) {

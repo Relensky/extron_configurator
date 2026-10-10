@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.94+104';
+const String kAppVersion = '0.5.98+108';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,46 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.98',
+    date: 'October 9, 2026',
+    title: 'Wizard, Devices and System stay ready too',
+    changes: [
+      'Tabs: the Wizard, Devices and System pages now stay ready once visited, like the drawing and cost pages. If the room was changed on another tab while you were away from one, it is rebuilt when you come back, so its fields always show the room as it is.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.97',
+    date: 'October 9, 2026',
+    title: 'Faster tab switching, and quiet while away',
+    changes: [
+      'Tabs: the AV Flow, Floor Plan, Cabling, Racks, Schematic, Cost, Lifecycle and Project pages stay ready once visited, so going back to one is instant and keeps its scroll and selection. They are rebuilt fresh when another room is opened.',
+      'Tabs: each page fades in as it is shown.',
+      'While the PC is locked or the window is minimized, the app stops checking the shared folder for chat, "working on" tags and other people\'s saves, and stops all animations. It still shows as open to colleagues, and catches up the moment you are back.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.96',
+    date: 'October 9, 2026',
+    title: 'Room locks, reviews, and choosing what to combine',
+    changes: [
+      'Rooms: while someone else is tagged as working on a room, it is locked - Save asks whether to take them off the room first, and saves only once they are off. Tag yourself on the room to save alongside them.',
+      'Rooms: mark a room Ready for review, then Review complete once it has been checked, from the review button beside "working on" in the title bar or on the room\'s row on the Project page. Marking it ready again starts a new review.',
+      'Rooms: the room menu in the title bar and the Rooms list on the Project page show an icon for someone working on a room (a lock when it is locked for you), ready for review, and review complete. Hover an icon for who and when.',
+      'Combining saves: each change from the other person\'s save has its own box. Untick any you do not want - your copy keeps what it had there. Approve all and Approve none tick or clear the lot.',
+      'History: a new Combines tab lists every combine per room, per project or per campus, with the time, who combined whose save, and each line approved or left out when expanded. A copy of the file is kept, timestamped, before each combine.',
+      'History: the combine log is saved with a backup and timestamped copies. The Combines tab says whether the backup matches the log, and Combine them merges the two when they differ.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.95',
+    date: 'October 9, 2026',
+    title: 'Add-on counts per room, and a tidier funding card',
+    changes: [
+      'Cost: a priority add-on, like a projector mount, takes the quantity set on a room\'s Cost tab - the plus or a number typed in the box - so a room with two projectors can buy two mounts. Clear the box to go back to the priority\'s count. The project total follows.',
+      'Project: on Priorities and funding, the budget figures and each priority\'s rooms fold away, and the rooms sort by name, budget or room total. Each room shows its total beside its budget, red when it comes to more, and each priority shows the rooms\' total under its budget. A room\'s name opens it on its Cost tab.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.94',
     date: 'October 9, 2026',
