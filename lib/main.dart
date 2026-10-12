@@ -20,6 +20,9 @@ import 'app_snack.dart';
 import 'app_updates.dart';
 import 'log_viewer/log_viewer.dart';
 import 'log_viewer/log_viewer_platform.dart' show describeOperatingSystem;
+import 'settings_kit/settings_kit.dart';
+// The settings page's cards, for code and tests that reached them here.
+export 'settings_kit/settings_kit.dart' show SettingsSection;
 import 'updater/update_widgets.dart';
 import 'campus_file.dart';
 import 'recent_files.dart' show RecentKind;
@@ -27,7 +30,6 @@ import 'recent_files_menu.dart';
 import 'campus_lifecycle_view.dart'
     show showCampusLifecycle, showCampusLifecycleFile, showNewCampus;
 import 'app_activity.dart';
-import 'page_cache.dart';
 import 'responsive.dart';
 import 'room_review.dart' show RoomReviewMenu;
 import 'app_state.dart';
@@ -789,6 +791,10 @@ class _MainDashboardState extends State<MainDashboard> {
       _setupDialogShown = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        // A first launch starts on the desktop's light or dark; the dialog
+        // asks, and changing it there applies at once.
+        final bool desktopDark = desktopThemeMode() == ThemeMode.dark;
+        if (provider.isDarkMode != desktopDark) provider.toggleTheme();
         showDialog(
           context: context,
           barrierDismissible: false,
@@ -1032,37 +1038,25 @@ class _MainDashboardState extends State<MainDashboard> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: RepaintBoundary(
+                  // A new tab zooms and fades in; outside the capture
+                  // boundary so a screenshot never catches it half drawn.
+                  child: FadeInPage(
+                    key: ValueKey('page_${selectedIndex}_$hasConfig'),
+                    child: RepaintBoundary(
               key: _captureKey,
-              // THE LAST FEW PAGES STAY MOUNTED, hidden and frozen, so
-              // going back to one is instant - see [PageCache]. Each fades
-              // in as it is shown.
-              child: PageCache(
-                page: _cachedPageFor(selectedIndex, hasConfig),
-                epoch: provider.configRevision,
-                cacheable: (hasConfig ||
-                        _tabWorksWithoutConfig(selectedIndex)) &&
-                    selectedIndex >= 0 &&
-                    selectedIndex < AppTab.values.length &&
-                    kCachedTabs.contains(AppTab.values[selectedIndex]),
-                stamp: selectedIndex >= 0 &&
-                        selectedIndex < AppTab.values.length &&
-                        kRefreshedTabs.contains(AppTab.values[selectedIndex])
-                    ? () => provider.roomConfigStamp
-                    : null,
-                // A floor under every page: narrower than this and the page
-                // scrolls sideways with a scrollbar instead of being cut off.
-                builder: (context) => MinWidthScroll(
-                  minWidth: 640,
-                  child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
-                      ? _buildLandingScreen(context, provider)
-                      : _buildMainContent(
-                          selectedIndex,
-                          provider.configRevision,
-                          provider.isEstimateRoom,
-                        ),
-                ),
+              // A floor under every page: narrower than this and the page
+              // scrolls sideways with a scrollbar instead of being cut off.
+              child: MinWidthScroll(
+                minWidth: 640,
+                child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
+                    ? _buildLandingScreen(context, provider)
+                    : _buildMainContent(
+                        selectedIndex,
+                        provider.configRevision,
+                        provider.isEstimateRoom,
+                      ),
               ),
+                    ),
                   ),
                 ),
               ],
@@ -1490,21 +1484,6 @@ class _MainDashboardState extends State<MainDashboard> {
   /// without this the previous room's name and number stayed on screen until
   /// the user switched tabs and came back. App Config is left unkeyed — its
   /// fields are application settings and have nothing to do with the room.
-  /// The [PageCache] slot for a tab: the landing screen is its own page,
-  /// and a room's tabs belong to the room that is open.
-  CachedPage _cachedPageFor(int selectedIndex, bool hasConfig) {
-    if (!hasConfig && !_tabWorksWithoutConfig(selectedIndex)) {
-      return (key: 'landing', keepAcrossEpochs: true);
-    }
-    final tab = selectedIndex >= 0 && selectedIndex < AppTab.values.length
-        ? AppTab.values[selectedIndex]
-        : null;
-    return (
-      key: 'tab_${tab?.name ?? selectedIndex}',
-      keepAcrossEpochs: tab == AppTab.project,
-    );
-  }
-
   Widget _buildMainContent(
       int selectedIndex, int configRevision, bool estimateOnly) {
     final key = ValueKey('tab_${selectedIndex}_cfg_$configRevision');
@@ -2726,71 +2705,6 @@ Widget _settingsAction(BuildContext context, Widget button) => SizedBox(
       child: button,
     );
 
-/// One collapsible area of the settings page: a heading that opens and closes
-/// it, with a line saying what is inside. Whether each is open is remembered
-/// for the session.
-class SettingsSection extends StatefulWidget {
-  final String id;
-  final String title;
-  final String summary;
-  final IconData icon;
-  final bool initiallyOpen;
-  final List<Widget> children;
-
-  /// Opens every section from the start - for tests that look for a field.
-  @visibleForTesting
-  static bool startOpen = false;
-
-  static final Map<String, bool> _open = {};
-
-  /// Forgets which sections were opened - for tests, which share a run.
-  @visibleForTesting
-  static void forgetOpenForTest() => _open.clear();
-
-  const SettingsSection({
-    super.key,
-    required this.id,
-    required this.title,
-    required this.summary,
-    required this.icon,
-    required this.children,
-    this.initiallyOpen = false,
-  });
-
-  @override
-  State<SettingsSection> createState() => _SettingsSectionState();
-}
-
-class _SettingsSectionState extends State<SettingsSection> {
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final open = SettingsSection.startOpen ||
-        (SettingsSection._open[widget.id] ?? widget.initiallyOpen);
-    return Card(
-      key: ValueKey('settings_section_${widget.id}'),
-      margin: const EdgeInsets.only(bottom: 12),
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        // NOT a PageStorageKey. The tile keeps open-or-shut in page storage
-        // under its key, and every text box inside it keeps its scroll
-        // position under the same key - so a box read "true" where it wanted
-        // a number and failed to build. Open-or-shut is kept in [_open].
-        key: ValueKey('settings_section_tile_${widget.id}'),
-        initiallyExpanded: open,
-        maintainState: true,
-        leading: Icon(widget.icon),
-        title: Text(widget.title, style: theme.textTheme.titleMedium),
-        subtitle: Text(widget.summary, style: theme.textTheme.bodySmall),
-        childrenPadding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-        onExpansionChanged: (v) => SettingsSection._open[widget.id] = v,
-        children: widget.children,
-      ),
-    );
-  }
-}
-
 /// YOU, IN THE CORNER: your avatar. Pressed, it shows your name and email,
 /// opens your profile, and is the way into Application Configuration - the
 /// same menu the debugger app has.
@@ -3207,246 +3121,55 @@ class AppSettingsView extends StatelessWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 22),
-
-        // The deployment target is on the File menu - see
-        // [showDeploymentTargetDialog].
-
-        // --- PRICING ---
-        // Currency and which of a catalog entry's two prices the estimates
-        // cost from. Both are app-wide: a shop bills in one currency, and
-        // whether a job is quoted at list or at education pricing is a
-        // decision about the job, not about each device.
-        SettingsSection(
-          id: 'pricing',
-          title: 'Pricing and estimates',
-          summary: 'Currency, default tax rate, and price tier',
-          icon: Icons.request_quote_outlined,
-          children: [
-        // Wrap, not Row: three controls plus their explanation is more than a
-        // narrow window has room for on one line, and this tab is read at
-        // whatever width the app happens to be open at.
-        Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          crossAxisAlignment: WrapCrossAlignment.start,
-          children: [
-            SizedBox(
-              width: 240,
-              child: DropdownButtonFormField<String>(
-                initialValue: kCurrencySymbols.contains(provider.currencySymbol)
-                    ? provider.currencySymbol
-                    : null,
-                // A dropdown sizes itself to its WIDEST item, not the selected
-                // one, so without this the box wants the width of "New Zealand
-                // dollar" and overflows whatever it is put in.
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Currency symbol',
-                  helperText: 'Shown in front of every figure',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final c in kCurrencySymbols)
-                    DropdownMenuItem(
-                      value: c,
-                      child: Text('$c   ${kCurrencyNames[c] ?? ''}'),
-                    ),
-                ],
-                onChanged: (val) {
-                  if (val != null) provider.updateSetting('currencySymbol', val);
-                },
-              ),
-            ),
-            // Anything not on the list — a currency code, a local symbol.
-            SizedBox(
-              width: 200,
-              child: TextFormField(
-                key: ValueKey('currencySymbol_${provider.currencySymbol}'),
-                decoration: const InputDecoration(
-                  labelText: 'Or type one',
-                  helperText: 'Blank resets to \$',
-                  border: OutlineInputBorder(),
-                ),
-                initialValue: provider.currencySymbol,
-                onChanged: (val) =>
-                    provider.updateSetting('currencySymbol', val),
-              ),
-            ),
-            SizedBox(
-              width: 200,
-              child: TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Default tax rate',
-                  helperText: 'New projects start with it',
-                  suffixText: '%',
-                  border: OutlineInputBorder(),
-                ),
-                initialValue: provider.defaultTaxPercent == 0
-                    ? ''
-                    : trimNumber(provider.defaultTaxPercent),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (val) =>
-                    provider.updateSetting('defaultTaxPercent', val),
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Estimate prices',
-                    style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 6),
-                // Short labels: two full names side by side is wider than a
-                // narrow window, and a SegmentedButton does not wrap.
-                SegmentedButton<PricingTier>(
-                  segments: [
-                    for (final t in PricingTier.values)
-                      ButtonSegment(
-                        value: t,
-                        label: Text(kPricingTierShort[t] ?? t.name),
-                        tooltip: kPricingTierLabels[t],
-                      ),
-                  ],
-                  selected: {provider.pricingTier},
-                  onSelectionChanged: (s) => provider.setPricingTier(s.first),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Every catalog entry carries both prices. A price typed on a room '
-          'still wins over either; a line the catalog can only price at the '
-          'other tier is flagged on the estimate rather than quietly costed.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-          ],
-        ),
-
-        // Appearance and the estimate PDF are in the profile - see
-        // [_ProfileDialog].
-        SettingsSection(
-          id: 'behavior',
-          title: 'Editing behavior',
-          summary: 'Device defaults on load, delete confirmation, and finding '
-              'rooms in a folder',
-          icon: Icons.tune,
-          children: [
-        // --- DEVICE DEFAULTS ON LOAD ---
-        // Load-time counterpart of ui_schema.json "device_defaults": also
-        // fill missing baseline properties when opening an existing config.
-        SwitchListTile(
-          title: const Text('Fill missing device defaults when loading'),
-          subtitle: const Text(
-              'Adds properties from ui_schema.json "device_defaults" that a '
-              'loaded config\'s devices are missing (e.g. DSP audio groups). '
-              'Additions are listed in the load acknowledgement - nothing is '
-              'saved until you export or apply.'),
-          value: provider.fillDeviceDefaultsOnLoad,
-          onChanged: (val) => provider.setFillDeviceDefaultsOnLoad(val),
-        ),
-        const SizedBox(height: 8),
-
-        // --- DELETE CONFIRMATION ---
-        // Gate for the trash buttons on the Devices/System tabs: off =
-        // one-click removal with no dialog (Check Defaults restores mistakes).
-        SwitchListTile(
-          title: const Text('Confirm before deleting settings'),
-          subtitle: const Text(
-              'Ask before a trash button removes a property from the config '
-              '(Devices & System tabs), and before the Delete key removes a '
-              'device from the signal flow. Turn off for one-click deletes - '
-              '"Check Defaults" can re-add anything removed by mistake.'),
-          value: provider.confirmBeforeDelete,
-          onChanged: (val) => provider.setConfirmBeforeDelete(val),
-        ),
-
-        SwitchListTile(
-          key: const ValueKey('briefing_on_open_switch'),
-          title: const Text('Show where a project stands when it opens'),
-          subtitle: const Text(
-              'Pops up when something is late or due soon. The "Where it '
-              'stands" button on the Project tab shows it any time.'),
-          value: provider.briefingOnProjectOpen,
-          onChanged: provider.setBriefingOnProjectOpen,
-        ),
-        const SizedBox(height: 20),
-
-        // --- HOW DEEP A ROOM SCAN LOOKS ---
-        // "Find rooms in a folder…" on the new-project screen walks down from
-        // the folder it is pointed at. Two levels is what this app writes; a
-        // site whose configs come off the processor keeps them further down
-        // (BSS 101/code/upload_to_root/config.json is four), and there is no
-        // depth that is right for both — too shallow finds nothing, too deep
-        // starts returning archived copies as if they were rooms.
-        Text('Finding rooms in a folder',
-            style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: 320,
-          child: DropdownButtonFormField<int>(
-            key: const ValueKey('room_scan_depth'),
-            initialValue: AppStateProvider.kRoomScanDepths
-                    .contains(provider.roomScanDepth)
-                ? provider.roomScanDepth
-                : null,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'How deep to look for room configs',
-              helperText:
-                  'Sub-folders under the folder you point at. Raise it if '
-                  'each room keeps its config further down (e.g. '
-                  '101/code/upload_to_root); lower it if a scan comes back '
-                  'with backup copies.',
-              helperMaxLines: 4,
-              border: OutlineInputBorder(),
-            ),
-            items: [
-              for (final d in AppStateProvider.kRoomScanDepths)
-                DropdownMenuItem(
-                  value: d,
-                  child: Text(d == 1
-                      ? 'The folder itself only'
-                      : '$d folders down'),
-                ),
-            ],
-            onChanged: (val) {
-              if (val != null) provider.setRoomScanDepth(val);
-            },
-          ),
-        ),
-          ],
-        ),
-
-        // --- KEYBOARD SHORTCUTS ---
-        // Every shortcut in the app, documented, and changeable. See
-        // keyboard_shortcuts.dart.
-        const SettingsSection(
-          id: 'shortcuts',
-          title: 'Keyboard shortcuts',
-          summary: 'Save, undo, and the keys that delete, move and turn what '
-              'is selected on a drawing',
-          icon: Icons.keyboard_outlined,
-          children: [KeyboardShortcutsSettings()],
-        ),
-
-        // --- APP UPDATES ---
-        // New versions come from the release folder on the file share. See
-        // app_updates.dart; nothing installs until the user presses Update.
-        SettingsSection(
-          id: 'updates',
-          title: 'App updates',
-          summary: 'Where new versions come from, and installing them',
-          icon: Icons.system_update_alt,
-          children: [
-        UpdateSettingsSection(
+        // --- APPLICATION UPDATES ---
+        // [SETTINGS KIT]: first in every CTS app. New versions come from the
+        // release folder on the file share; see app_updates.dart.
+        AppUpdatesSettingsSection(
           updater: appUpdater,
           pickFolder: () => FilePicker.getDirectoryPath(
             dialogTitle: 'Select the release folder',
           ),
         ),
-          ],
+        // --- APPLICATION LOGS ---
+        // [SETTINGS KIT]: second in every CTS app: View logs, the time zone
+        // and Open log folder, then where this app writes them.
+        AppLogsSettingsSection(
+          config: configuratorLogViewerConfig(),
+          logLocation: AppLogger.logFolder,
+          children: [
+        const SizedBox(height: 10),
+        Text(
+          'A log is written for each session and kept 30 days, in '
+          '${AppLogger.logFolder}.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        // Where the session logs go. Blank is the per-user default, which is
+        // also where native crashes are always logged.
+        TextFormField(
+          key: ValueKey('logFolderPath_${provider.logFolderPath}'),
+          initialValue: provider.logFolderPath,
+          decoration: InputDecoration(
+            labelText: 'Log Folder',
+            hintText: AppLogger.defaultLogFolder,
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder_open),
+              tooltip: 'Choose the log folder',
+              onPressed: () async {
+                final picked = await FilePicker.getDirectoryPath(
+                  dialogTitle: 'Choose where the logs are written',
+                  initialDirectory: AppLogger.logFolder,
+                );
+                if (picked != null) {
+                  provider.updateSetting('logFolderPath', picked);
+                }
+              },
+            ),
+          ),
+          onFieldSubmitted: (v) => provider.updateSetting('logFolderPath', v),
+        ),
+          ]
         ),
 
         // --- AUTOSAVE ---
@@ -3556,460 +3279,6 @@ class AppSettingsView extends StatelessWidget {
           'Recovery copies live in ${provider.autosaveFolder}, one folder '
           'per file, and each is deleted as soon as its document is saved.',
           style: Theme.of(context).textTheme.bodySmall,
-        ),
-          ],
-        ),
-
-        // --- LOGGING ---
-        // Its own area: a log somebody is asked to send in and cannot find is
-        // not a log.
-        SettingsSection(
-          id: 'logging',
-          title: 'Logging',
-          summary: 'Session logs: where they are written, and reading or '
-              'sending them',
-          icon: Icons.article_outlined,
-          children: [
-        Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            OutlinedButton.icon(
-              key: const ValueKey('open_log_folder'),
-              icon: const Icon(Icons.folder_open),
-              label: const Text('Open log folder'),
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                final error = await provider.openInDesktop(AppLogger.logFolder);
-                if (error != null) {
-                  showTimedSnackBar(
-                    messenger,
-                    SnackBar(content: Text(error)),
-                  );
-                }
-              },
-            ),
-            // Reading them without leaving the app, and getting them to
-            // whoever asked: search, Copy and Export. Crash dumps are binary
-            // and are sent as they are, from the folder.
-            LogViewerButton(config: configuratorLogViewerConfig()),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'A log is written for each session and kept 30 days, in '
-          '${AppLogger.logFolder}.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 12),
-        // Where the session logs go. Blank is the per-user default, which is
-        // also where native crashes are always logged.
-        TextFormField(
-          key: ValueKey('logFolderPath_${provider.logFolderPath}'),
-          initialValue: provider.logFolderPath,
-          decoration: InputDecoration(
-            labelText: 'Log Folder',
-            hintText: AppLogger.defaultLogFolder,
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.folder_open),
-              tooltip: 'Choose the log folder',
-              onPressed: () async {
-                final picked = await FilePicker.getDirectoryPath(
-                  dialogTitle: 'Choose where the logs are written',
-                  initialDirectory: AppLogger.logFolder,
-                );
-                if (picked != null) {
-                  provider.updateSetting('logFolderPath', picked);
-                }
-              },
-            ),
-          ),
-          onFieldSubmitted: (v) => provider.updateSetting('logFolderPath', v),
-        ),
-          ],
-        ),
-
-        // --- FILES AND FOLDERS ---
-        // Where everything is read from. The Root Folder first: every blank
-        // path below falls back to it.
-        SettingsSection(
-          id: 'files',
-          title: 'Files and folders',
-          summary: 'The Root Folder, modules, manuals, and the data files the '
-              'app reads',
-          icon: Icons.folder_outlined,
-          children: [
-        _rootFolderField(context, provider),
-        const SizedBox(height: 20),
-
-        // Python Modules Path
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: TextFormField(
-                // Value in the key forces a refresh when the path is picked
-                // via the dialog. The field-name prefix keeps the key unique
-                // among this ListView's children: on a fresh install every
-                // path is blank, so the bare value alone made four siblings
-                // share a ValueKey('').
-                key: ValueKey('modulesPath_${provider.modulesPath}'),
-                decoration: InputDecoration(
-                  labelText: 'Python Modules Path',
-                  // Blank = the "devices" sub-folder of the Root Folder
-                  hintText: provider.effectiveModulesPath,
-                  helperText:
-                      'Blank = "devices" sub-folder of the Root Folder. '
-                      '${provider.availableModules.length} module'
-                      '${provider.availableModules.length == 1 ? '' : 's'} '
-                      'read. Drivers are parsed once, so re-read them after '
-                      'editing one.',
-                  helperMaxLines: 3,
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.folder),
-                    tooltip: 'Select Directory',
-                    onPressed: () async {
-                      String? selectedDirectory =
-                          await FilePicker.getDirectoryPath();
-                      if (selectedDirectory != null) {
-                        provider.updateSetting(
-                            'modulesPath', selectedDirectory);
-                      }
-                    },
-                  ),
-                ),
-                initialValue: provider.modulesPath,
-                onChanged: (val) =>
-                    provider.updateSetting('modulesPath', val),
-              ),
-            ),
-            const SizedBox(width: 16),
-            // A DRIVER EDITED WHILE THE APP IS OPEN is a driver the app does
-            // not know about: every .py is parsed once and the answer kept.
-            // This re-reads the folder and then puts the open config back to
-            // the drivers as they are NOW - see [offerModuleRecheck].
-            _settingsAction(
-              context,
-              ElevatedButton.icon(
-                key: const ValueKey('reload_python_modules'),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Re-read Modules'),
-                onPressed: () => offerModuleRecheck(context, provider),
-              ),
-            ),
-          ],
-        ),
-        // A DRIVER WITH NO DEVICE_INFO IS SILENT, NOT BROKEN: it loads, it
-        // answers, and its models simply never reach the Model dropdown -
-        // which reads as the app not supporting the product. This is where
-        // that is seen and fixed; see device_info_editor.dart.
-        //
-        // ON ITS OWN LINE, not on the row above. Every path row on this tab
-        // is one field and one button of one fixed width, so the fields all
-        // end on the same edge - see settings_path_rows_test.dart. A second
-        // button in that row pushes one field short of the column.
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            key: const ValueKey('edit_device_info'),
-            icon: const Icon(Icons.description),
-            label: const Text('What each driver declares…'),
-            onPressed: () => showDeviceInfoEditor(context),
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Documentation Path (per-module PDF manuals)
-        TextFormField(
-          key: ValueKey('documentationPath_${provider.documentationPath}'),
-          decoration: InputDecoration(
-            labelText: 'Documentation Path (PDF manuals)',
-            // Blank = the "documentation" sub-folder of the Root Folder
-            hintText: provider.effectiveDocumentationPath,
-            helperText: 'Blank = "documentation" sub-folder of the '
-                'Root Folder. Each manual is '
-                'named after its python module, e.g. '
-                'extr_dsp_DMP_64_Plus_Series.pdf',
-            helperMaxLines: 3,
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.folder),
-              tooltip: 'Select Directory',
-              onPressed: () async {
-                String? selectedDirectory = await FilePicker.getDirectoryPath();
-                if (selectedDirectory != null) {
-                  provider.updateSetting('documentationPath', selectedDirectory);
-                }
-              },
-            ),
-          ),
-          initialValue: provider.documentationPath,
-          onChanged: (val) => provider.updateSetting('documentationPath', val),
-        ),
-        const SizedBox(height: 20),
-
-        // SPEC SHEETS - one shared folder, so a sheet attached to a catalog
-        // entry on one machine opens on every other. See spec_sheets.dart.
-        TextFormField(
-          key: ValueKey('specSheetFolder_${provider.specSheetFolder}'),
-          decoration: InputDecoration(
-            labelText: 'Spec Sheet Folder (shared)',
-            hintText: provider.effectiveSpecSheetFolder,
-            helperText: 'Blank = "spec_sheets" sub-folder of the Root Folder. '
-                'Point it at a shared folder: the Catalog tab files each sheet '
-                'as <maker>/<model>.pdf and stores the name relative to here.',
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.folder_shared),
-              tooltip: 'Select Directory',
-              onPressed: () async {
-                final dir = await FilePicker.getDirectoryPath();
-                if (dir != null) provider.updateSetting('specSheetFolder', dir);
-              },
-            ),
-          ),
-          initialValue: provider.specSheetFolder,
-          onChanged: (val) => provider.updateSetting('specSheetFolder', val),
-        ),
-        const SizedBox(height: 20),
-
-        // [TEAM KIT]: the team folder - presence, the team chat and the
-        // "working on" tags, shared with the CTS Dashboard and Instructor
-        // Contact. Blank = the dashboard's own team folder on the share.
-        TextFormField(
-          key: ValueKey('teamFolderPath_${provider.teamFolderPath}'),
-          decoration: InputDecoration(
-            labelText: 'Team Folder (team chat, who is online, working-on tags)',
-            hintText: provider.effectiveTeamFolder,
-            helperText: 'Blank = the CTS Dashboard\'s team folder, so the chat '
-                'and who is online are the same in every CTS app.',
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.folder_shared),
-              tooltip: 'Select Directory',
-              onPressed: () async {
-                final dir = await FilePicker.getDirectoryPath();
-                if (dir != null) provider.updateSetting('teamFolderPath', dir);
-              },
-            ),
-          ),
-          initialValue: provider.teamFolderPath,
-          onChanged: (val) => provider.updateSetting('teamFolderPath', val),
-        ),
-        const SizedBox(height: 20),
-
-        // [SHARED ROOMS]: where room edits are kept on the share - Save Room
-        // As starts here, and each save leaves a copy here.
-        TextFormField(
-          key: ValueKey('sharedRoomsFolder_${provider.sharedRoomsFolder}'),
-          decoration: InputDecoration(
-            labelText: 'Shared Rooms Folder (room edits on the share)',
-            hintText: provider.effectiveSharedRoomsFolder,
-            helperText: 'Blank = "Rooms" in the shared Projects folder. Save '
-                'Room As starts here; each save copies the room to '
-                '<folder>\\<BLDG_ROOM>.',
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.folder_shared),
-              tooltip: 'Select Directory',
-              onPressed: () async {
-                final dir = await FilePicker.getDirectoryPath();
-                if (dir != null) {
-                  provider.updateSetting('sharedRoomsFolder', dir);
-                }
-              },
-            ),
-          ),
-          initialValue: provider.sharedRoomsFolder,
-          onChanged: (val) => provider.updateSetting('sharedRoomsFolder', val),
-        ),
-        SwitchListTile(
-          key: const ValueKey('copyRoomsToShare'),
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Copy each saved room to the Shared Rooms Folder'),
-          subtitle: const Text('So the latest edit of every room is in one '
-              'place on the share, wherever it was saved.'),
-          value: provider.copyRoomsToShare,
-          onChanged: provider.setCopyRoomsToShare,
-        ),
-        const SizedBox(height: 20),
-
-        // THE CLASS SCHEDULE - where install windows are read from. See
-        // class_schedule.dart.
-        TextFormField(
-          key: ValueKey('classSchedulePath_${provider.classSchedulePath}'),
-          decoration: InputDecoration(
-            labelText: 'Class Schedule (Facilities export .csv)',
-            hintText: provider.effectiveClassSchedulePath,
-            helperText: 'FacilitiesLinkClassScheduleDaily.csv - the same file '
-                'the CTS-Dashboard reads. Used by Project > Timeline > Find '
-                'maintenance windows. Blank = that name in the Root Folder.',
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.upload_file),
-              tooltip: 'Select File',
-              onPressed: () async {
-                final picked = await pickFilesCompat(
-                  type: FileType.custom,
-                  allowedExtensions: const ['csv'],
-                );
-                final file = picked?.files.single.path;
-                if (file != null) {
-                  provider.updateSetting('classSchedulePath', file);
-                }
-              },
-            ),
-          ),
-          initialValue: provider.classSchedulePath,
-          onChanged: (val) => provider.updateSetting('classSchedulePath', val),
-        ),
-          ],
-        ),
-
-        // EDITING TOGETHER - see collab/collab_controller.dart.
-        SettingsSection(
-          id: 'together',
-          title: 'Working together',
-          summary: 'Seeing who else has a file open, and Google Sheets',
-          icon: Icons.groups_outlined,
-          children: [
-        SwitchListTile(
-          key: const ValueKey('collab_enabled_switch'),
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Show who else is editing a shared file'),
-          subtitle: Text(
-            'While a room, project or the catalog is open, a small note in a '
-            '".editing" folder beside it tells other copies of the app you '
-            'have it open (as ${provider.collab.me.user}). Their names appear '
-            'on the banner, and when one of them saves you are offered their '
-            'changes to merge - Save merges them too.',
-          ),
-          value: provider.collabEnabled,
-          onChanged: provider.setCollabEnabled,
-        ),
-        const SizedBox(height: 12),
-        // TEAM CHAT - shared with the CTS Dashboard and Instructor Contact.
-        Text('Team chat and project threads',
-            style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 4),
-        Text(
-          "Each project's chat is a thread in the team chat, named by the "
-          'project and seen in every CTS app. Open the team chat (top '
-          "right) and pick it under Projects, or press the open project's "
-          'button at the top of the chat. A '
-          "project's older chat (its <project>_chat folder) is copied in the "
-          'first time the project opens.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        TeamFeaturesSwitch(onChanged: provider.startTeam),
-        const SizedBox(height: 20),
-
-        // GOOGLE SHEETS - see google_sheets_export.dart.
-        Text('Google Sheets', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 4),
-        Text(
-          'Sign in with your Google account to upload workbooks to Google '
-          'Sheets and to publish a project to its live Google Sheet and read '
-          'changes back. Only Sheets this app makes, or that are shared with '
-          'you, are touched.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
-        const _GoogleSignInRow(),
-        SwitchListTile(
-          key: const ValueKey('use_built_in_browser'),
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Open Google Sheets in the built-in browser'),
-          subtitle: const Text(
-            'A floating window inside the app you can drag, resize and fill '
-            'the screen with. Off opens them in your default browser.',
-          ),
-          value: provider.useBuiltInBrowser,
-          onChanged: provider.setUseBuiltInBrowser,
-        ),
-        const SizedBox(height: 4),
-        ExpansionTile(
-          key: const ValueKey('googleClient_advanced'),
-          tilePadding: EdgeInsets.zero,
-          childrenPadding: const EdgeInsets.only(bottom: 8),
-          title: Text(
-            'Advanced: your own Google Cloud client',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          subtitle: Text(
-            provider.googleClientId.trim().isNotEmpty
-                ? 'In use instead of the built-in sign-in'
-                : kBuiltInGoogleClientId.isNotEmpty
-                    ? 'Not needed - leave blank to use the built-in sign-in'
-                    : 'Needed - this copy has no built-in sign-in',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          children: [
-        Text(
-          'A Google Cloud OAuth client of type "Desktop app", with the Google '
-          'Drive and Google Sheets APIs enabled on its project. Blank uses '
-          'the sign-in built into the app.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            key: const ValueKey('googleClient_load'),
-            icon: const Icon(Icons.file_open_outlined, size: 18),
-            label: const Text('Load from Google\'s JSON file'),
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              final picked = await pickFilesCompat(
-                dialogTitle: 'The client_secret JSON downloaded from Google '
-                    'Cloud',
-                type: FileType.custom,
-                allowedExtensions: const ['json'],
-              );
-              final file = picked?.files.singleOrNull?.path;
-              if (file == null) return;
-              final problem = await provider.loadGoogleClientFile(file);
-              showTimedSnackBar(
-                messenger,
-                SnackBar(
-                  duration: const Duration(seconds: 6),
-                  content: Text(
-                    problem.isEmpty ? 'Google client loaded.' : problem,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          key: ValueKey('googleClientId_field_${provider.googleClientRevision}'),
-          decoration: const InputDecoration(
-            labelText: 'Google OAuth client ID',
-            border: OutlineInputBorder(),
-          ),
-          initialValue: provider.googleClientId,
-          onChanged: (val) => provider.updateSetting('googleClientId', val),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          key: ValueKey(
-            'googleClientSecret_field_${provider.googleClientRevision}',
-          ),
-          decoration: const InputDecoration(
-            labelText: 'Google OAuth client secret',
-            helperText: 'Desktop-app clients are issued one; it is not a '
-                'password and is stored with the other settings.',
-            border: OutlineInputBorder(),
-          ),
-          initialValue: provider.googleClientSecret,
-          onChanged: (val) => provider.updateSetting('googleClientSecret', val),
-        ),
-          ],
         ),
           ],
         ),
@@ -4395,6 +3664,544 @@ class AppSettingsView extends StatelessWidget {
           ],
         ),
 
+        // Appearance and the estimate PDF are in the profile - see
+        // [_ProfileDialog].
+        SettingsSection(
+          id: 'behavior',
+          title: 'Editing behavior',
+          summary: 'Device defaults on load, delete confirmation, and finding '
+              'rooms in a folder',
+          icon: Icons.tune,
+          children: [
+        // --- DEVICE DEFAULTS ON LOAD ---
+        // Load-time counterpart of ui_schema.json "device_defaults": also
+        // fill missing baseline properties when opening an existing config.
+        SwitchListTile(
+          title: const Text('Fill missing device defaults when loading'),
+          subtitle: const Text(
+              'Adds properties from ui_schema.json "device_defaults" that a '
+              'loaded config\'s devices are missing (e.g. DSP audio groups). '
+              'Additions are listed in the load acknowledgement - nothing is '
+              'saved until you export or apply.'),
+          value: provider.fillDeviceDefaultsOnLoad,
+          onChanged: (val) => provider.setFillDeviceDefaultsOnLoad(val),
+        ),
+        const SizedBox(height: 8),
+
+        // --- DELETE CONFIRMATION ---
+        // Gate for the trash buttons on the Devices/System tabs: off =
+        // one-click removal with no dialog (Check Defaults restores mistakes).
+        SwitchListTile(
+          title: const Text('Confirm before deleting settings'),
+          subtitle: const Text(
+              'Ask before a trash button removes a property from the config '
+              '(Devices & System tabs), and before the Delete key removes a '
+              'device from the signal flow. Turn off for one-click deletes - '
+              '"Check Defaults" can re-add anything removed by mistake.'),
+          value: provider.confirmBeforeDelete,
+          onChanged: (val) => provider.setConfirmBeforeDelete(val),
+        ),
+
+        SwitchListTile(
+          key: const ValueKey('briefing_on_open_switch'),
+          title: const Text('Show where a project stands when it opens'),
+          subtitle: const Text(
+              'Pops up when something is late or due soon. The "Where it '
+              'stands" button on the Project tab shows it any time.'),
+          value: provider.briefingOnProjectOpen,
+          onChanged: provider.setBriefingOnProjectOpen,
+        ),
+        const SizedBox(height: 20),
+
+        // --- HOW DEEP A ROOM SCAN LOOKS ---
+        // "Find rooms in a folder…" on the new-project screen walks down from
+        // the folder it is pointed at. Two levels is what this app writes; a
+        // site whose configs come off the processor keeps them further down
+        // (BSS 101/code/upload_to_root/config.json is four), and there is no
+        // depth that is right for both — too shallow finds nothing, too deep
+        // starts returning archived copies as if they were rooms.
+        Text('Finding rooms in a folder',
+            style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: 320,
+          child: DropdownButtonFormField<int>(
+            key: const ValueKey('room_scan_depth'),
+            initialValue: AppStateProvider.kRoomScanDepths
+                    .contains(provider.roomScanDepth)
+                ? provider.roomScanDepth
+                : null,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'How deep to look for room configs',
+              helperText:
+                  'Sub-folders under the folder you point at. Raise it if '
+                  'each room keeps its config further down (e.g. '
+                  '101/code/upload_to_root); lower it if a scan comes back '
+                  'with backup copies.',
+              helperMaxLines: 4,
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              for (final d in AppStateProvider.kRoomScanDepths)
+                DropdownMenuItem(
+                  value: d,
+                  child: Text(d == 1
+                      ? 'The folder itself only'
+                      : '$d folders down'),
+                ),
+            ],
+            onChanged: (val) {
+              if (val != null) provider.setRoomScanDepth(val);
+            },
+          ),
+        ),
+          ],
+        ),
+
+        // --- FILES AND FOLDERS ---
+        // Where everything is read from. The Root Folder first: every blank
+        // path below falls back to it.
+        SettingsSection(
+          id: 'files',
+          title: 'Files and folders',
+          summary: 'The Root Folder, modules, manuals, and the data files the '
+              'app reads',
+          icon: Icons.folder_outlined,
+          children: [
+        _rootFolderField(context, provider),
+        const SizedBox(height: 20),
+
+        // Python Modules Path
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                // Value in the key forces a refresh when the path is picked
+                // via the dialog. The field-name prefix keeps the key unique
+                // among this ListView's children: on a fresh install every
+                // path is blank, so the bare value alone made four siblings
+                // share a ValueKey('').
+                key: ValueKey('modulesPath_${provider.modulesPath}'),
+                decoration: InputDecoration(
+                  labelText: 'Python Modules Path',
+                  // Blank = the "devices" sub-folder of the Root Folder
+                  hintText: provider.effectiveModulesPath,
+                  helperText:
+                      'Blank = "devices" sub-folder of the Root Folder. '
+                      '${provider.availableModules.length} module'
+                      '${provider.availableModules.length == 1 ? '' : 's'} '
+                      'read. Drivers are parsed once, so re-read them after '
+                      'editing one.',
+                  helperMaxLines: 3,
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.folder),
+                    tooltip: 'Select Directory',
+                    onPressed: () async {
+                      String? selectedDirectory =
+                          await FilePicker.getDirectoryPath();
+                      if (selectedDirectory != null) {
+                        provider.updateSetting(
+                            'modulesPath', selectedDirectory);
+                      }
+                    },
+                  ),
+                ),
+                initialValue: provider.modulesPath,
+                onChanged: (val) =>
+                    provider.updateSetting('modulesPath', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // A DRIVER EDITED WHILE THE APP IS OPEN is a driver the app does
+            // not know about: every .py is parsed once and the answer kept.
+            // This re-reads the folder and then puts the open config back to
+            // the drivers as they are NOW - see [offerModuleRecheck].
+            _settingsAction(
+              context,
+              ElevatedButton.icon(
+                key: const ValueKey('reload_python_modules'),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Re-read Modules'),
+                onPressed: () => offerModuleRecheck(context, provider),
+              ),
+            ),
+          ],
+        ),
+        // A DRIVER WITH NO DEVICE_INFO IS SILENT, NOT BROKEN: it loads, it
+        // answers, and its models simply never reach the Model dropdown -
+        // which reads as the app not supporting the product. This is where
+        // that is seen and fixed; see device_info_editor.dart.
+        //
+        // ON ITS OWN LINE, not on the row above. Every path row on this tab
+        // is one field and one button of one fixed width, so the fields all
+        // end on the same edge - see settings_path_rows_test.dart. A second
+        // button in that row pushes one field short of the column.
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('edit_device_info'),
+            icon: const Icon(Icons.description),
+            label: const Text('What each driver declares…'),
+            onPressed: () => showDeviceInfoEditor(context),
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Documentation Path (per-module PDF manuals)
+        TextFormField(
+          key: ValueKey('documentationPath_${provider.documentationPath}'),
+          decoration: InputDecoration(
+            labelText: 'Documentation Path (PDF manuals)',
+            // Blank = the "documentation" sub-folder of the Root Folder
+            hintText: provider.effectiveDocumentationPath,
+            helperText: 'Blank = "documentation" sub-folder of the '
+                'Root Folder. Each manual is '
+                'named after its python module, e.g. '
+                'extr_dsp_DMP_64_Plus_Series.pdf',
+            helperMaxLines: 3,
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                String? selectedDirectory = await FilePicker.getDirectoryPath();
+                if (selectedDirectory != null) {
+                  provider.updateSetting('documentationPath', selectedDirectory);
+                }
+              },
+            ),
+          ),
+          initialValue: provider.documentationPath,
+          onChanged: (val) => provider.updateSetting('documentationPath', val),
+        ),
+        const SizedBox(height: 20),
+
+        // SPEC SHEETS - one shared folder, so a sheet attached to a catalog
+        // entry on one machine opens on every other. See spec_sheets.dart.
+        TextFormField(
+          key: ValueKey('specSheetFolder_${provider.specSheetFolder}'),
+          decoration: InputDecoration(
+            labelText: 'Spec Sheet Folder (shared)',
+            hintText: provider.effectiveSpecSheetFolder,
+            helperText: 'Blank = "spec_sheets" sub-folder of the Root Folder. '
+                'Point it at a shared folder: the Catalog tab files each sheet '
+                'as <maker>/<model>.pdf and stores the name relative to here.',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder_shared),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                final dir = await FilePicker.getDirectoryPath();
+                if (dir != null) provider.updateSetting('specSheetFolder', dir);
+              },
+            ),
+          ),
+          initialValue: provider.specSheetFolder,
+          onChanged: (val) => provider.updateSetting('specSheetFolder', val),
+        ),
+        const SizedBox(height: 20),
+
+        // [TEAM KIT]: the team folder - presence, the team chat and the
+        // "working on" tags, shared with the CTS Dashboard and Instructor
+        // Contact. Blank = the dashboard's own team folder on the share.
+        TextFormField(
+          key: ValueKey('teamFolderPath_${provider.teamFolderPath}'),
+          decoration: InputDecoration(
+            labelText: 'Team Folder (team chat, who is online, working-on tags)',
+            hintText: provider.effectiveTeamFolder,
+            helperText: 'Blank = the CTS Dashboard\'s team folder, so the chat '
+                'and who is online are the same in every CTS app.',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder_shared),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                final dir = await FilePicker.getDirectoryPath();
+                if (dir != null) provider.updateSetting('teamFolderPath', dir);
+              },
+            ),
+          ),
+          initialValue: provider.teamFolderPath,
+          onChanged: (val) => provider.updateSetting('teamFolderPath', val),
+        ),
+        const SizedBox(height: 20),
+
+        // [SHARED ROOMS]: where room edits are kept on the share - Save Room
+        // As starts here, and each save leaves a copy here.
+        TextFormField(
+          key: ValueKey('sharedRoomsFolder_${provider.sharedRoomsFolder}'),
+          decoration: InputDecoration(
+            labelText: 'Shared Rooms Folder (room edits on the share)',
+            hintText: provider.effectiveSharedRoomsFolder,
+            helperText: 'Blank = "Rooms" in the shared Projects folder. Save '
+                'Room As starts here; each save copies the room to '
+                '<folder>\\<BLDG_ROOM>.',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder_shared),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                final dir = await FilePicker.getDirectoryPath();
+                if (dir != null) {
+                  provider.updateSetting('sharedRoomsFolder', dir);
+                }
+              },
+            ),
+          ),
+          initialValue: provider.sharedRoomsFolder,
+          onChanged: (val) => provider.updateSetting('sharedRoomsFolder', val),
+        ),
+        SwitchListTile(
+          key: const ValueKey('copyRoomsToShare'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Copy each saved room to the Shared Rooms Folder'),
+          subtitle: const Text('So the latest edit of every room is in one '
+              'place on the share, wherever it was saved.'),
+          value: provider.copyRoomsToShare,
+          onChanged: provider.setCopyRoomsToShare,
+        ),
+        const SizedBox(height: 20),
+
+        // THE CLASS SCHEDULE - where install windows are read from. See
+        // class_schedule.dart.
+        TextFormField(
+          key: ValueKey('classSchedulePath_${provider.classSchedulePath}'),
+          decoration: InputDecoration(
+            labelText: 'Class Schedule (Facilities export .csv)',
+            hintText: provider.effectiveClassSchedulePath,
+            helperText: 'FacilitiesLinkClassScheduleDaily.csv - the same file '
+                'the CTS-Dashboard reads. Used by Project > Timeline > Find '
+                'maintenance windows. Blank = that name in the Root Folder.',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.upload_file),
+              tooltip: 'Select File',
+              onPressed: () async {
+                final picked = await pickFilesCompat(
+                  type: FileType.custom,
+                  allowedExtensions: const ['csv'],
+                );
+                final file = picked?.files.single.path;
+                if (file != null) {
+                  provider.updateSetting('classSchedulePath', file);
+                }
+              },
+            ),
+          ),
+          initialValue: provider.classSchedulePath,
+          onChanged: (val) => provider.updateSetting('classSchedulePath', val),
+        ),
+          ],
+        ),
+
+        // --- KEYBOARD SHORTCUTS ---
+        // Every shortcut in the app, documented, and changeable. See
+        // keyboard_shortcuts.dart.
+        const SettingsSection(
+          id: 'shortcuts',
+          title: 'Keyboard shortcuts',
+          summary: 'Save, undo, and the keys that delete, move and turn what '
+              'is selected on a drawing',
+          icon: Icons.keyboard_outlined,
+          children: [KeyboardShortcutsSettings()],
+        ),
+
+        // The deployment target is on the File menu - see
+        // [showDeploymentTargetDialog].
+
+        // --- PRICING ---
+        // Currency and which of a catalog entry's two prices the estimates
+        // cost from. Both are app-wide: a shop bills in one currency, and
+        // whether a job is quoted at list or at education pricing is a
+        // decision about the job, not about each device.
+        SettingsSection(
+          id: 'pricing',
+          title: 'Pricing and estimates',
+          summary: 'Currency, default tax rate, and price tier',
+          icon: Icons.request_quote_outlined,
+          children: [
+        // Wrap, not Row: three controls plus their explanation is more than a
+        // narrow window has room for on one line, and this tab is read at
+        // whatever width the app happens to be open at.
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          crossAxisAlignment: WrapCrossAlignment.start,
+          children: [
+            SizedBox(
+              width: 240,
+              child: DropdownButtonFormField<String>(
+                initialValue: kCurrencySymbols.contains(provider.currencySymbol)
+                    ? provider.currencySymbol
+                    : null,
+                // A dropdown sizes itself to its WIDEST item, not the selected
+                // one, so without this the box wants the width of "New Zealand
+                // dollar" and overflows whatever it is put in.
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Currency symbol',
+                  helperText: 'Shown in front of every figure',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final c in kCurrencySymbols)
+                    DropdownMenuItem(
+                      value: c,
+                      child: Text('$c   ${kCurrencyNames[c] ?? ''}'),
+                    ),
+                ],
+                onChanged: (val) {
+                  if (val != null) provider.updateSetting('currencySymbol', val);
+                },
+              ),
+            ),
+            // Anything not on the list — a currency code, a local symbol.
+            SizedBox(
+              width: 200,
+              child: TextFormField(
+                key: ValueKey('currencySymbol_${provider.currencySymbol}'),
+                decoration: const InputDecoration(
+                  labelText: 'Or type one',
+                  helperText: 'Blank resets to \$',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.currencySymbol,
+                onChanged: (val) =>
+                    provider.updateSetting('currencySymbol', val),
+              ),
+            ),
+            SizedBox(
+              width: 200,
+              child: TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Default tax rate',
+                  helperText: 'New projects start with it',
+                  suffixText: '%',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.defaultTaxPercent == 0
+                    ? ''
+                    : trimNumber(provider.defaultTaxPercent),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (val) =>
+                    provider.updateSetting('defaultTaxPercent', val),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Estimate prices',
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 6),
+                // Short labels: two full names side by side is wider than a
+                // narrow window, and a SegmentedButton does not wrap.
+                SegmentedButton<PricingTier>(
+                  segments: [
+                    for (final t in PricingTier.values)
+                      ButtonSegment(
+                        value: t,
+                        label: Text(kPricingTierShort[t] ?? t.name),
+                        tooltip: kPricingTierLabels[t],
+                      ),
+                  ],
+                  selected: {provider.pricingTier},
+                  onSelectionChanged: (s) => provider.setPricingTier(s.first),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Every catalog entry carries both prices. A price typed on a room '
+          'still wins over either; a line the catalog can only price at the '
+          'other tier is flagged on the estimate rather than quietly costed.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+          ],
+        ),
+
+        SettingsSection(
+          id: 'processor',
+          title: 'Processor connection',
+          summary: 'SFTP settings and the saved processor password',
+          icon: Icons.lan_outlined,
+          children: [
+        const Text(
+            'SFTP settings used for every processor transfer. The defaults are '
+            'the Extron standards - only change them for nonstandard hardware.'),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'SFTP Username',
+                  helperText: 'Default: admin',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.sftpUsername,
+                onChanged: (val) => provider.updateSetting('sftpUsername', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'SFTP Port',
+                  helperText: 'Default: 22022 (Extron secure file transfer)',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.sftpPort,
+                keyboardType: TextInputType.number,
+                onChanged: (val) => provider.updateSetting('sftpPort', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Remote config path',
+                  helperText: 'Default: /config.json',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.sftpRemoteConfigPath,
+                onChanged: (val) =>
+                    provider.updateSetting('sftpRemoteConfigPath', val),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // --- DEFAULT PROCESSOR PASSWORD (opt-in) ---
+        // Rooms are typically all on one standard admin credential, so the
+        // password is the only thing retyped on every transfer. Unlike every
+        // other value on this tab it never reaches app_config.json — it goes to
+        // the OS keystore (DPAPI on Windows), encrypted for the logged-in
+        // account. Still opt-in: storing a credential at all is the user's call.
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: provider.useDefaultProcessorPassword,
+          onChanged: (val) => provider.setUseDefaultProcessorPassword(val),
+          title: const Text('Autofill the processor password'),
+          subtitle: const Text(
+              'Pre-fills the password in the SFTP upload/download dialogs. '
+              'Kept in the Windows credential store, not in app_config.json - '
+              'turning this off deletes it again.'),
+        ),
+        if (provider.useDefaultProcessorPassword) ...[
+          const SizedBox(height: 8),
+          _DefaultPasswordField(provider: provider),
+        ],
+          ],
+        ),
+
         SettingsSection(
           id: 'lists',
           title: 'Shared lists',
@@ -4592,83 +4399,150 @@ class AppSettingsView extends StatelessWidget {
           ],
         ),
 
+        // EDITING TOGETHER - see collab/collab_controller.dart.
         SettingsSection(
-          id: 'processor',
-          title: 'Processor connection',
-          summary: 'SFTP settings and the saved processor password',
-          icon: Icons.lan_outlined,
+          id: 'together',
+          title: 'Working together',
+          summary: 'Seeing who else has a file open, and Google Sheets',
+          icon: Icons.groups_outlined,
           children: [
-        const Text(
-            'SFTP settings used for every processor transfer. The defaults are '
-            'the Extron standards - only change them for nonstandard hardware.'),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'SFTP Username',
-                  helperText: 'Default: admin',
-                  border: OutlineInputBorder(),
-                ),
-                initialValue: provider.sftpUsername,
-                onChanged: (val) => provider.updateSetting('sftpUsername', val),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'SFTP Port',
-                  helperText: 'Default: 22022 (Extron secure file transfer)',
-                  border: OutlineInputBorder(),
-                ),
-                initialValue: provider.sftpPort,
-                keyboardType: TextInputType.number,
-                onChanged: (val) => provider.updateSetting('sftpPort', val),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Remote config path',
-                  helperText: 'Default: /config.json',
-                  border: OutlineInputBorder(),
-                ),
-                initialValue: provider.sftpRemoteConfigPath,
-                onChanged: (val) =>
-                    provider.updateSetting('sftpRemoteConfigPath', val),
-              ),
-            ),
-          ],
+        SwitchListTile(
+          key: const ValueKey('collab_enabled_switch'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Show who else is editing a shared file'),
+          subtitle: Text(
+            'While a room, project or the catalog is open, a small note in a '
+            '".editing" folder beside it tells other copies of the app you '
+            'have it open (as ${provider.collab.me.user}). Their names appear '
+            'on the banner, and when one of them saves you are offered their '
+            'changes to merge - Save merges them too.',
+          ),
+          value: provider.collabEnabled,
+          onChanged: provider.setCollabEnabled,
         ),
+        const SizedBox(height: 12),
+        // TEAM CHAT - shared with the CTS Dashboard and Instructor Contact.
+        Text('Team chat and project threads',
+            style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          "Each project's chat is a thread in the team chat, named by the "
+          'project and seen in every CTS app. Open the team chat (top '
+          "right) and pick it under Projects, or press the open project's "
+          'button at the top of the chat. A '
+          "project's older chat (its <project>_chat folder) is copied in the "
+          'first time the project opens.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        TeamFeaturesSwitch(onChanged: provider.startTeam),
         const SizedBox(height: 20),
 
-        // --- DEFAULT PROCESSOR PASSWORD (opt-in) ---
-        // Rooms are typically all on one standard admin credential, so the
-        // password is the only thing retyped on every transfer. Unlike every
-        // other value on this tab it never reaches app_config.json — it goes to
-        // the OS keystore (DPAPI on Windows), encrypted for the logged-in
-        // account. Still opt-in: storing a credential at all is the user's call.
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          value: provider.useDefaultProcessorPassword,
-          onChanged: (val) => provider.setUseDefaultProcessorPassword(val),
-          title: const Text('Autofill the processor password'),
-          subtitle: const Text(
-              'Pre-fills the password in the SFTP upload/download dialogs. '
-              'Kept in the Windows credential store, not in app_config.json - '
-              'turning this off deletes it again.'),
+        // GOOGLE SHEETS - see google_sheets_export.dart.
+        Text('Google Sheets', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Sign in with your Google account to upload workbooks to Google '
+          'Sheets and to publish a project to its live Google Sheet and read '
+          'changes back. Only Sheets this app makes, or that are shared with '
+          'you, are touched.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
-        if (provider.useDefaultProcessorPassword) ...[
-          const SizedBox(height: 8),
-          _DefaultPasswordField(provider: provider),
-        ],
+        const SizedBox(height: 8),
+        const _GoogleSignInRow(),
+        SwitchListTile(
+          key: const ValueKey('use_built_in_browser'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Open Google Sheets in the built-in browser'),
+          subtitle: const Text(
+            'A floating window inside the app you can drag, resize and fill '
+            'the screen with. Off opens them in your default browser.',
+          ),
+          value: provider.useBuiltInBrowser,
+          onChanged: provider.setUseBuiltInBrowser,
+        ),
+        const SizedBox(height: 4),
+        ExpansionTile(
+          key: const ValueKey('googleClient_advanced'),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 8),
+          title: Text(
+            'Advanced: your own Google Cloud client',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          subtitle: Text(
+            provider.googleClientId.trim().isNotEmpty
+                ? 'In use instead of the built-in sign-in'
+                : kBuiltInGoogleClientId.isNotEmpty
+                    ? 'Not needed - leave blank to use the built-in sign-in'
+                    : 'Needed - this copy has no built-in sign-in',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          children: [
+        Text(
+          'A Google Cloud OAuth client of type "Desktop app", with the Google '
+          'Drive and Google Sheets APIs enabled on its project. Blank uses '
+          'the sign-in built into the app.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('googleClient_load'),
+            icon: const Icon(Icons.file_open_outlined, size: 18),
+            label: const Text('Load from Google\'s JSON file'),
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final picked = await pickFilesCompat(
+                dialogTitle: 'The client_secret JSON downloaded from Google '
+                    'Cloud',
+                type: FileType.custom,
+                allowedExtensions: const ['json'],
+              );
+              final file = picked?.files.singleOrNull?.path;
+              if (file == null) return;
+              final problem = await provider.loadGoogleClientFile(file);
+              showTimedSnackBar(
+                messenger,
+                SnackBar(
+                  duration: const Duration(seconds: 6),
+                  content: Text(
+                    problem.isEmpty ? 'Google client loaded.' : problem,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          key: ValueKey('googleClientId_field_${provider.googleClientRevision}'),
+          decoration: const InputDecoration(
+            labelText: 'Google OAuth client ID',
+            border: OutlineInputBorder(),
+          ),
+          initialValue: provider.googleClientId,
+          onChanged: (val) => provider.updateSetting('googleClientId', val),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          key: ValueKey(
+            'googleClientSecret_field_${provider.googleClientRevision}',
+          ),
+          decoration: const InputDecoration(
+            labelText: 'Google OAuth client secret',
+            helperText: 'Desktop-app clients are issued one; it is not a '
+                'password and is stored with the other settings.',
+            border: OutlineInputBorder(),
+          ),
+          initialValue: provider.googleClientSecret,
+          onChanged: (val) => provider.updateSetting('googleClientSecret', val),
+        ),
+          ],
+        ),
           ],
         ),
         const SizedBox(height: 30),
-
       ],
     );
   }
@@ -5176,6 +5050,27 @@ class FirstRunSetupDialog extends StatelessWidget {
                   : const AccentColorPicker(
                       settingKey: 'classicColor',
                       swatches: RoomConfigApp.classicSwatches),
+              const SizedBox(height: 18),
+              // --- LIGHT OR DARK ---
+              // [SETTINGS KIT]: the same question every CTS app asks on a
+              // first start. Opens on the desktop's own setting.
+              const Text('Theme',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 4),
+              Text(
+                'Light or dark. You can change it later from your profile '
+                'menu.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              ThemeModeChoice(
+                value: provider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+                onChanged: (m) {
+                  if ((m == ThemeMode.dark) != provider.isDarkMode) {
+                    provider.toggleTheme();
+                  }
+                },
+              ),
               const Divider(height: 24),
               _pathRow(context, provider,
                   label: 'Root Folder (default base for everything below)',

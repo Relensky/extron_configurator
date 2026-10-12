@@ -249,6 +249,31 @@ void main() {
     });
   });
 
+  test('a big combine does not flood the room history', () async {
+    final dir2 = Directory.systemTemp.createTempSync('combine_big_');
+    addTearDown(() => dir2.deleteSync(recursive: true));
+    final file = path.join(dir2.path, 'bss103_config.json');
+    File(file).writeAsStringSync(jsonEncode({
+      'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '103'},
+    }));
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..combineHistoryFolderOverride = path.join(dir2.path, 'history');
+    await p.openConfigAtPath(file);
+    final before = p.roomHistory.length;
+    expect(await p.recordCombine(
+      kind: CollabDocKind.room,
+      from: 'jsmith',
+      items: [
+        for (var i = 0; i < 100; i++)
+          CombineHistoryItem(place: 'Line $i', path: 'l$i', after: 'x'),
+      ],
+    ), '');
+    expect(p.roomHistory.length - before, kCombineLinesInRoomHistory + 1);
+    expect(p.roomHistory.last.summary, contains('75 more'));
+    expect((await p.combineHistory!.load()).single.items, hasLength(100));
+    p.dispose();
+  });
+
   group('room status', () {
     TeamClaims claimsAs(String user, String sub) => TeamClaims(
           identity: TeamIdentity(user: user, machine: 'pc'),

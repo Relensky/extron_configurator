@@ -276,4 +276,93 @@ void main() {
       expect(find.text('Furnished by stock'), findsOneWidget);
     });
   });
+
+  group('only some of a line furnished', () {
+    AppStateProvider threeDisplays() {
+      final p = room();
+      for (final id in ['D1', 'D2', 'D3']) {
+        p.addAvNode(device(id, 'Display', 'Display X'));
+      }
+      return p;
+    }
+
+    test('only the bought ones are in the total', () {
+      final p = threeDisplays();
+      p.setAvCostFurnishedSome('model:display x', 'stock', 2);
+      final line = estimateOf(p).equipment.single;
+      expect(line.qty, 3);
+      expect(line.furnished, isFalse);
+      expect(line.partlyFurnished, isTrue);
+      expect(line.boughtQty, 1);
+      expect(line.total, 1000);
+      expect(line.listTotal, 3000);
+      expect(furnishedNote(line), '2 of 3 furnished by stock');
+      expect(estimateOf(p).grandTotal, 1000);
+    });
+
+    test('an unpriced line partly bought is still a hole', () {
+      final p = room();
+      for (final id in ['N1', 'N2']) {
+        p.addAvNode(device(id, 'Mystery', 'Nothing Known'));
+      }
+      p.setAvCostFurnishedSome('model:nothing known', 'stock', 1);
+      expect(estimateOf(p).unpricedLines, 1);
+      p.setAvCostFurnishedSome('model:nothing known', 'stock', null);
+      expect(estimateOf(p).unpricedLines, 0);
+    });
+
+    test('more than the line has is all of it, and clearing drops the count',
+        () {
+      final p = threeDisplays();
+      p.setAvCostFurnishedSome('model:display x', 'stock', 5);
+      expect(estimateOf(p).equipment.single.furnished, isTrue);
+      expect(estimateOf(p).grandTotal, 0);
+      p.setAvCostFurnished('model:display x', null);
+      expect(p.avCost.furnishedQty, isEmpty);
+      expect(estimateOf(p).grandTotal, 3000);
+    });
+
+    test('survives being written out and read back', () {
+      final p = threeDisplays();
+      p.setAvCostFurnishedSome('model:display x', 'stock', 2);
+      final back = RoomCostSettings()
+        ..readJson(
+          jsonDecode(jsonEncode(p.avCost.toJson())) as Map<String, dynamic>,
+        );
+      expect(back.furnishedLines['model:display x'], 'stock');
+      expect(back.furnishedQty['model:display x'], 2);
+    });
+
+    testWidgets('picked on the row button', (tester) async {
+      tester.view.physicalSize = const Size(1700, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final p = threeDisplays()..avDeviceLibrary = catalog();
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(home: Scaffold(body: CostEstimateView())),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('furnished_model:display x')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Only some of them...'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('furnished_some_count')),
+        '2',
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(p.avCostFurnishedBy('model:display x'), 'stock');
+      expect(p.avCostFurnishedQty('model:display x'), 2);
+      expect(find.text(r'$1,000.00'), findsWidgets);
+    });
+  });
 }

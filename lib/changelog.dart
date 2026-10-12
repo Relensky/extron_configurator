@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.98+108';
+const String kAppVersion = '0.5.110+120';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,117 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.110',
+    date: 'October 12, 2026',
+    title: 'Cost estimate readable in portrait',
+    changes: [
+      'Cost estimate: on a narrow or portrait window the page now scrolls sideways (scroll bar along the bottom) instead of squeezing the Device and Model columns until they cannot be read.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.109',
+    date: 'October 11, 2026',
+    title: 'Chat opens on the newest message; favorite threads; who is working on what',
+    changes: [
+      'Team chat: every channel and thread now opens on its newest message - the chat used to stop partway up a long thread.',
+      'Team chat: star a channel, room thread, project or direct message (the star beside its name at the top, or Add to favorites in its ... menu) and it moves to a new Favorites section at the top of the list. Star it again to put it back.',
+      'Team page: a Working on list shows what everyone is tagged on - tickets and rooms - and which app each tag was made in (Dashboard, Builder or Instructor). Tags you placed have an x, and Clear the tags I placed takes them all off at once.',
+      'Team: an app whose online note could not be replaced on the share (another PC had it open) no longer looks offline to everyone else; it writes the note in place instead.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.108',
+    date: 'October 11, 2026',
+    title: 'Typed quantities that go down, and part of a line from stock',
+    changes: [
+      'Cost estimate: typing a lower Qty on a drawn line now takes the extra units off the diagram, like the minus button, once you press Enter or click away. Cabled units and units in the room config stay, and the quote keeps the number you typed.',
+      'Cost estimate: part of a line can come from stock (or anyone else) and the rest be bought. On the furnished button of a line pick "Only some of them..." and type how many - only the bought ones are added to the total, and the quote notes how many are furnished.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.107',
+    date: 'October 10, 2026',
+    title: 'Crop on the screenshot tool',
+    changes: [
+      'Screenshots: the annotation editor has a Crop tool (beside the hand). Draw a box round the part to keep and press Apply crop - Copy and Save PNG then take only that part. The box shows its size in pixels while it is drawn, the marks stay editable, and Reset crop brings the whole picture back.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.106',
+    date: 'October 10, 2026',
+    title: 'Settings the same in every CTS app, and light or dark at first start',
+    changes: [
+      'Application Configuration: Application updates (shortcuts, checking for a new version, the release folder) is now always the first card and Application logs the second, as in every CTS app; the rest follow in alphabetical order.',
+      'Application logs: View logs, Open log folder and "Show log times in" - read the logs in this computer\'s time zone, UTC or a fixed offset - with the log folder setting under them.',
+      'First-Time Setup asks light or dark as well as the accent color, starting on whatever Windows is set to.',
+      'Log viewer: opens at the newest line straight away, even on a very long log.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.105',
+    date: 'October 10, 2026',
+    title: 'Team chat sections fold, and room threads reopen in a click',
+    changes: [
+      'Team chat: each section of the chat list (Channels, Room threads, Projects, Direct messages, Online now) folds to its heading with a click. The Room Config Builder remembers its own folds, apart from the other CTS apps. A folded section still shows the thread you have open, and its heading counts what is unread in it.',
+      'Team chat: under Room threads, "Reopen a room thread" lists every room thread that is closed or was never opened here - click one to bring it back. With more than six there is a box to find a room.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.104',
+    date: 'October 10, 2026',
+    title: 'No more save prompts for untouched rooms, and faster job loading',
+    changes: [
+      'Rooms: opening a room no longer marks it as changed when nothing was. A box on the AV Flow titled differently from its device in the config takes the config name as the room opens, and that used to count as an unsaved edit - so switching away asked to save. It happened on 14 of the 30 rooms on the 600k refresh job.',
+      'Projects: opening a job reads six rooms at a time instead of one after another, so a big job on the shared folder loads several times faster.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.103',
+    date: 'October 10, 2026',
+    title: 'Tabs back to how they were, and quicker room switching',
+    changes: [
+      'Tabs: pages are no longer kept loaded after you leave them. It used about twice the memory and did not speed up switching rooms, so each tab is built fresh when you open it again, as before. A new tab now zooms in slightly as it fades in.',
+      'Rooms: switching rooms shows the new room as soon as it is loaded. Checking the job for rooms changed on other computers carries on in the background instead of holding up the switch.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.102',
+    date: 'October 9, 2026',
+    title: 'No more freezing when opening a room',
+    changes: [
+      'Opening a room on a project no longer freezes the window while the shared folder is slow. Checking the job\'s other rooms for changes used to happen one file at a time with the window stopped - half a minute on a 30-room job tonight. It now checks them all at once in the background, and the window keeps drawing.',
+      'Typing no longer waits on the shared folder: the title bar and banner checked it on every keystroke (whether there was a save to undo, whether the campus sheet was there).',
+      'Combining saves no longer holds up the save after it - the combine history is written in the background - and a big combine puts at most 25 lines on the room\'s own history, with the rest under History > Combines, so it cannot push out older entries.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.101',
+    date: 'October 9, 2026',
+    title: 'Raw JSON header on narrow windows',
+    changes: [
+      'Raw JSON: on a narrow window the "Applied" status moves under the page title instead of running off the edge.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.100',
+    date: 'October 9, 2026',
+    title: 'Who is on each room, and zooming tabs',
+    changes: [
+      'Project: each room on the Rooms list shows who is on it, as their picture with a small badge - editing it now, working on it (a lock when it is locked for you), ready to approve, or approved and ready to order - with the words beside it. The room menu in the title bar shows the same pictures.',
+      'Rooms: the review marks are now called Ready to approve and Approved - ready to order.',
+      'Tabs: changing tabs zooms - the new page grows in over the old one, which grows on and fades away.',
+      'Tabs: the Schema editor stays ready once visited too, and measures the new template if the template setting was changed while you were away from it.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.99',
+    date: 'October 9, 2026',
+    title: 'Raw JSON and the catalog stay ready too',
+    changes: [
+      'Tabs: Raw JSON and the device catalog now stay ready once visited. Anything typed in Raw JSON is still applied the moment you switch tabs, and catalog edits still reach the rest of the app straight away. The catalog stays ready when another room is opened.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.98',
     date: 'October 9, 2026',

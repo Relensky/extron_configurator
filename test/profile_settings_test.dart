@@ -31,12 +31,12 @@ void main() {
     for (final id in ['deployment', 'appearance', 'estimate_pdf']) {
       expect(find.byKey(ValueKey('settings_section_$id')), findsNothing);
     }
-    expect(find.text('Logging'), findsOneWidget);
-    expect(find.byKey(const ValueKey('open_log_folder')), findsNothing);
+    expect(find.text('Application logs'), findsOneWidget);
+    expect(find.byKey(const ValueKey('kit_open_log_folder')), findsNothing);
 
-    await tester.tap(find.text('Logging'));
+    await tester.tap(find.text('Application logs'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('open_log_folder')), findsOneWidget);
+    expect(find.byKey(const ValueKey('kit_open_log_folder')), findsOneWidget);
     // The recovery copies are a different section.
     expect(find.text('Open recovery folder'), findsNothing);
   });
@@ -74,18 +74,18 @@ void main() {
     await tester.pumpAndSettle();
 
     for (var i = 0; i < 3; i++) {
-      await reveal('Logging');
-      await tester.tap(find.text('Logging'));
+      await reveal('Application logs');
+      await tester.tap(find.text('Application logs'));
       await tester.pumpAndSettle();
     }
     // Scrolled away and back, so the sections are built afresh - which is
     // when their text boxes read their scroll position back.
     scroll.jumpTo(scroll.maxScrollExtent);
     await tester.pumpAndSettle();
-    await reveal('Logging');
+    await reveal('Application logs');
     await reveal('Files and folders');
     expect(tester.takeException(), isNull);
-    await reveal('Logging');
+    await reveal('Application logs');
     final field = find.byKey(
       ValueKey('logFolderPath_${p.logFolderPath}'),
     );

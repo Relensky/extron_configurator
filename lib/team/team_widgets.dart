@@ -17,6 +17,7 @@ import 'team_host.dart';
 import 'gif_search.dart';
 import 'team_chat.dart';
 import 'team_claims.dart';
+import 'team_claims_widgets.dart';
 import 'team_presence.dart';
 
 // ============================================================================
@@ -364,7 +365,7 @@ class _TeamPage extends StatelessWidget {
       );
     }
     final Widget page = ListenableBuilder(
-          listenable: presence,
+          listenable: Listenable.merge([presence, Team.claims]),
           builder: (context, _) {
             final others = presence.others;
             return Padding(
@@ -396,8 +397,8 @@ class _TeamPage extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     'Everyone online in any CTS app (and which one), the '
-                    'room they are looking at, and what they have open to '
-                    'change. '
+                    'room they are looking at, what they have open to '
+                    'change, and what they are tagged as working on. '
                     'Updates as soon as anyone moves.',
                     style: theme.textTheme.bodySmall,
                   ),
@@ -406,7 +407,10 @@ class _TeamPage extends StatelessWidget {
                   // person, a column an app, the page and room in each.
                   Expanded(
                     child: SingleChildScrollView(
-                      child: TeamPresenceChart(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                      TeamPresenceChart(
                         meUser: presence.me.user,
                         people: [
                           [presence.mineHere, ...presence.mineElsewhere],
@@ -426,6 +430,18 @@ class _TeamPage extends StatelessWidget {
                                 _close(context);
                                 Team.openRoom!(room);
                               },
+                      ),
+                      // [TEAM KIT - WORKING ON]: everyone's tags, in every
+                      // app; this person can clear the ones they placed.
+                      TeamWorkingOnList(
+                        onOpenRoom: Team.openRoom == null
+                            ? null
+                            : (room) {
+                                _close(context);
+                                Team.openRoom!(room);
+                              },
+                      ),
+                        ],
                       ),
                     ),
                   ),
@@ -1298,7 +1314,8 @@ const List<String> _kQuickReactions = ['👍', '❤️', '😂', '🎉', '✅', 
 class _ChatBodyState extends State<_ChatBody> {
   final _text = ChatFormatController();
   final _focus = FocusNode();
-  final _scroll = ScrollController();
+  // Not kept per thread: a thread always opens on its newest message.
+  final _scroll = ScrollController(keepScrollOffset: false);
   String _error = '';
   bool _sending = false;
 
@@ -1352,7 +1369,9 @@ class _ChatBodyState extends State<_ChatBody> {
     widget.draft.addListener(_takeDraft);
     TeamChatPanel.instance.showingMembers.addListener(_changed);
     TeamChatPanel.instance.contextRoom.addListener(_changed);
+    TeamChatPanel.instance.showing.addListener(_shown);
     Team.presence?.addListener(_changed);
+    _shownChannel = chat.channel;
     ChatFormatController.hideMarkers.value =
         TeamHost.readSetting('chatHideMarkers') == true;
     ChatFormatController.hideMarkers.addListener(_changed);
@@ -1365,6 +1384,7 @@ class _ChatBodyState extends State<_ChatBody> {
     widget.draft.removeListener(_takeDraft);
     TeamChatPanel.instance.showingMembers.removeListener(_changed);
     TeamChatPanel.instance.contextRoom.removeListener(_changed);
+    TeamChatPanel.instance.showing.removeListener(_shown);
     Team.presence?.removeListener(_changed);
     ChatFormatController.hideMarkers.removeListener(_changed);
     _text.dispose();
@@ -1375,6 +1395,7 @@ class _ChatBodyState extends State<_ChatBody> {
     _edit.dispose();
     _editFocus.dispose();
     _newSearch.dispose();
+    _reopenFilter.dispose();
     _groupName.dispose();
     super.dispose();
   }
@@ -1388,18 +1409,28 @@ class _ChatBodyState extends State<_ChatBody> {
     _focus.requestFocus();
   }
 
+  /// The thread last drawn, so a switch to another one starts at its newest.
+  String _shownChannel = '';
+
   void _changed() {
     if (!mounted) return;
-    final atEnd = !_scroll.hasClients ||
-        _scroll.position.pixels >= _scroll.position.maxScrollExtent - 40;
+    // The list runs bottom-up: offset 0 is the newest message.
+    final atEnd = !_scroll.hasClients || _scroll.position.pixels <= 40;
+    final switched = chat.channel != _shownChannel;
+    _shownChannel = chat.channel;
     setState(() {});
-    if (atEnd && !_searchOpen) _toEnd();
+    if ((atEnd || switched) && !_searchOpen) _toEnd();
+  }
+
+  /// Opened (or brought back while sliding away): the newest message.
+  void _shown() {
+    if (TeamChatPanel.instance.showing.value) _toEnd();
   }
 
   void _toEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      if (_scroll.hasClients && _scroll.position.pixels != 0) {
+        _scroll.jumpTo(0);
       }
     });
   }
@@ -1635,7 +1666,7 @@ class _ChatBodyState extends State<_ChatBody> {
   /// messages in it.
   Widget _channelMenu(ChatChannel c) {
     final mine = chat.myMessageCount(c.id);
-    if (!c.isRoom && mine == 0) return const SizedBox(width: 4);
+    final favorite = _isFavorite(c.id);
     // A MenuAnchor, not a PopupMenuButton: its menu is drawn on the chat's
     // own layer. A pop-up menu is a route, and routes sit under the chat.
     return MenuAnchor(
@@ -1649,6 +1680,12 @@ class _ChatBodyState extends State<_ChatBody> {
             controller.isOpen ? controller.close() : controller.open(),
       ),
       menuChildren: [
+        MenuItemButton(
+          key: ValueKey('team_chat_favorite_${c.id}'),
+          leadingIcon: Icon(favorite ? Icons.star : Icons.star_border, size: 18),
+          onPressed: () => _toggleFavorite(c.id),
+          child: Text(favorite ? 'Remove from favorites' : 'Add to favorites'),
+        ),
         if (c.isRoom)
           MenuItemButton(
             key: ValueKey('team_chat_close_${c.id}'),
@@ -1846,13 +1883,13 @@ class _ChatBodyState extends State<_ChatBody> {
   Widget _sidebar(ThemeData theme) {
     final scheme = theme.colorScheme;
     final channels = chat.channels;
-    final rooms = channels.where((c) => c.isRoom).toList();
-    final general = channels
+    var rooms = channels.where((c) => c.isRoom).toList();
+    var general = channels
         .where((c) => !c.isRoom && !c.isProject && !c.isPrivate)
         .toList();
     // [TEAM CHAT - PROJECTS]: every project with a thread, in every app -
     // closed or never opened here too - plus the one on screen.
-    final projects = [
+    var projects = [
       for (final p in chat.projectThreads())
         channels.firstWhere((c) => c.id == p.id, orElse: () => p),
     ];
@@ -1864,19 +1901,29 @@ class _ChatBodyState extends State<_ChatBody> {
           ChatChannel(
               id: projectChannel(hereProject), label: hereProject));
     }
-    final private = channels.where((c) => c.isPrivate).toList();
+    var private = channels.where((c) => c.isPrivate).toList();
+    // [TEAM CHAT - FAVORITES]: starred threads sit at the top, taken out of
+    // their own sections - a closed room thread or project too.
+    final openRooms = rooms;
+    final favorites = <ChatChannel>[];
+    if (_favorites.isNotEmpty) {
+      final known = {
+        for (final c in [...chat.roomThreads(), ...projects, ...channels])
+          c.id: c,
+      };
+      for (final id in _favorites) {
+        favorites.add(known[id] ?? ChatChannel(id: id, label: chat.labelOf(id)));
+      }
+      bool notFavorite(ChatChannel c) => !_favorites.contains(c.id);
+      rooms = rooms.where(notFavorite).toList();
+      general = general.where(notFavorite).toList();
+      projects = projects.where(notFavorite).toList();
+      private = private.where(notFavorite).toList();
+    }
     final presence = Team.presence;
     final online = presence == null || !presence.active
         ? const <TeamPresence>[]
         : presence.others;
-    Widget label(String text) => Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 4),
-          child: Text(text,
-              style: theme.textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  letterSpacing: 0.8,
-                  fontWeight: FontWeight.w600)),
-        );
     return SizedBox(
       width: 220,
       child: Material(
@@ -1888,35 +1935,43 @@ class _ChatBodyState extends State<_ChatBody> {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 8),
                 children: [
-                  Row(children: [
-                    Expanded(child: label('CHANNELS')),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8, right: 8),
-                      child: IconButton(
-                        key: const ValueKey('team_chat_new'),
-                        tooltip: 'Add a thread, message someone, or start a '
-                            'group',
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 18,
-                        icon: const Icon(Icons.add),
-                        onPressed: _openNew,
-                      ),
-                    ),
-                  ]),
-                  for (final c in general) _channelTile(c, theme),
-                  label('ROOM THREADS'),
-                  if (rooms.isEmpty)
+                  if (favorites.isNotEmpty) ...[
+                    _sectionHeading('favorites', 'FAVORITES', theme,
+                        channels: favorites),
+                    ..._sectionTiles('favorites', favorites, theme),
+                  ],
+                  _sectionHeading('channels', 'CHANNELS', theme,
+                      channels: general,
+                      trailing: Padding(
+                        padding: const EdgeInsets.only(top: 8, right: 8),
+                        child: IconButton(
+                          key: const ValueKey('team_chat_new'),
+                          tooltip: 'Add a thread, message someone, or start '
+                              'a group',
+                          visualDensity: VisualDensity.compact,
+                          iconSize: 18,
+                          icon: const Icon(Icons.add),
+                          onPressed: _openNew,
+                        ),
+                      )),
+                  ..._sectionTiles('channels', general, theme),
+                  _sectionHeading('rooms', 'ROOM THREADS', theme,
+                      channels: rooms),
+                  if (!_folded.contains('rooms') && rooms.isEmpty)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 2, 12, 4),
                       child: Text(
-                          'None open. Start one from a room, or search to '
-                          'find every thread.',
+                          'None open. Start one from a room, or reopen one '
+                          'below.',
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: scheme.onSurfaceVariant)),
                     ),
-                  for (final c in rooms) _channelTile(c, theme),
-                  label('PROJECTS'),
-                  if (projects.isEmpty)
+                  ..._sectionTiles('rooms', rooms, theme),
+                  if (!_folded.contains('rooms'))
+                    _reopenRooms(openRooms, theme),
+                  _sectionHeading('projects', 'PROJECTS', theme,
+                      channels: projects),
+                  if (!_folded.contains('projects') && projects.isEmpty)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 2, 12, 4),
                       child: Text(
@@ -1925,9 +1980,10 @@ class _ChatBodyState extends State<_ChatBody> {
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: scheme.onSurfaceVariant)),
                     ),
-                  for (final c in projects) _channelTile(c, theme),
-                  label('DIRECT MESSAGES'),
-                  if (private.isEmpty)
+                  ..._sectionTiles('projects', projects, theme),
+                  _sectionHeading('direct', 'DIRECT MESSAGES', theme,
+                      channels: private),
+                  if (!_folded.contains('direct') && private.isEmpty)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 2, 12, 4),
                       child: Text(
@@ -1936,14 +1992,16 @@ class _ChatBodyState extends State<_ChatBody> {
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: scheme.onSurfaceVariant)),
                     ),
-                  for (final c in private) _channelTile(c, theme),
+                  ..._sectionTiles('direct', private, theme),
                 ],
               ),
             ),
             // [TEAM]: who is on and where, kept live as their notes change.
             if (presence != null && presence.active) ...[
               Divider(height: 1, color: scheme.outlineVariant),
-              label('ONLINE NOW · ${online.length}'),
+              _sectionHeading(
+                  'online', 'ONLINE NOW · ${online.length}', theme),
+              if (!_folded.contains('online'))
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 180),
                 child: online.isEmpty
@@ -1966,6 +2024,213 @@ class _ChatBodyState extends State<_ChatBody> {
           ],
         ),
       ),
+    );
+  }
+
+  /// [TEAM CHAT - FOLDING SECTIONS]: the sidebar's sections (Channels, Room
+  /// threads, Projects, Direct messages, Online now) fold to their heading.
+  /// Kept with the app's own settings, so each app folds its chat on its own.
+  /// A folded section still shows the thread that is open, and its heading
+  /// adds up what is unread in it.
+  static const String _foldedKey = 'teamChatFolded';
+  late final Set<String> _folded = {
+    for (final s in (TeamHost.readSetting(_foldedKey) as List?) ?? const [])
+      '$s',
+  };
+
+  /// [TEAM CHAT - FAVORITES]: the starred threads' ids, in the order they
+  /// were starred. Kept with the app's own settings, like the folds.
+  static const String _favoritesKey = 'teamChatFavorites';
+  late final List<String> _favorites = [
+    for (final s in (TeamHost.readSetting(_favoritesKey) as List?) ?? const [])
+      '$s',
+  ];
+
+  bool _isFavorite(String id) => _favorites.contains(id);
+
+  void _toggleFavorite(String id) {
+    setState(() {
+      if (!_favorites.remove(id)) _favorites.add(id);
+    });
+    TeamHost.writeSetting(_favoritesKey, List<String>.of(_favorites));
+  }
+
+  void _toggleFold(String section) {
+    setState(() {
+      if (!_folded.remove(section)) _folded.add(section);
+    });
+    TeamHost.writeSetting(_foldedKey, _folded.toList()..sort());
+  }
+
+  /// A sidebar section's heading - click it to fold or unfold the section.
+  Widget _sectionHeading(String section, String text, ThemeData theme,
+      {Iterable<ChatChannel> channels = const [], Widget? trailing}) {
+    final scheme = theme.colorScheme;
+    final folded = _folded.contains(section);
+    int unread = 0, mentions = 0;
+    if (folded) {
+      for (final c in channels) {
+        unread += c.unread;
+        mentions += c.mentions;
+      }
+    }
+    return Row(children: [
+      Expanded(
+        child: InkWell(
+          key: ValueKey('team_chat_fold_$section'),
+          onTap: () => _toggleFold(section),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 4),
+            child: Row(children: [
+              Icon(folded ? Icons.chevron_right : Icons.expand_more,
+                  size: 16, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 2),
+              Flexible(
+                child: Text(text,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        letterSpacing: 0.8,
+                        fontWeight: FontWeight.w600)),
+              ),
+              if (mentions > 0) ...[
+                const SizedBox(width: 6),
+                Badge(
+                    backgroundColor: scheme.error, label: Text('@$mentions')),
+              ] else if (unread > 0) ...[
+                const SizedBox(width: 6),
+                Badge(label: Text('$unread')),
+              ],
+            ]),
+          ),
+        ),
+      ),
+      if (trailing != null) trailing,
+    ]);
+  }
+
+  /// The tiles a section shows: all of them, or folded, only the open one.
+  Iterable<Widget> _sectionTiles(
+      String section, List<ChatChannel> channels, ThemeData theme) {
+    final folded = _folded.contains(section);
+    return [
+      for (final c in channels)
+        if (!folded || (!_searchOpen && c.id == chat.channel))
+          _channelTile(c, theme),
+    ];
+  }
+
+  /// [TEAM CHAT - REOPEN ROOM THREADS]: every room thread not in the list
+  /// (closed, or never opened on this PC), behind one row under Room threads,
+  /// so pulling one back is a click and does not clutter the list.
+  bool _reopenOpen = false;
+  final _reopenFilter = TextEditingController();
+
+  Widget _reopenRooms(List<ChatChannel> openRooms, ThemeData theme) {
+    final scheme = theme.colorScheme;
+    final openIds = {for (final c in openRooms) c.id};
+    final all = chat
+        .roomThreads()
+        .where((c) => !openIds.contains(c.id))
+        .toList();
+    if (all.isEmpty) return const SizedBox.shrink();
+    final shown = _reopenFilter.text.trim().isEmpty
+        ? all
+        : chat
+            .roomThreads(query: _reopenFilter.text.trim())
+            .where((c) => !openIds.contains(c.id))
+            .toList();
+    final hint = theme.textTheme.bodySmall
+        ?.copyWith(color: scheme.onSurfaceVariant);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+          child: InkWell(
+            key: const ValueKey('team_chat_reopen_rooms'),
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => setState(() => _reopenOpen = !_reopenOpen),
+            child: SizedBox(
+              height: 32,
+              child: Row(children: [
+                const SizedBox(width: 10),
+                Icon(Icons.history, size: 17, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Reopen a room thread (${all.length})',
+                      overflow: TextOverflow.ellipsis, style: hint),
+                ),
+                Icon(_reopenOpen ? Icons.expand_less : Icons.expand_more,
+                    size: 16, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+              ]),
+            ),
+          ),
+        ),
+        if (_reopenOpen) ...[
+          if (all.length > 6)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
+              child: TextField(
+                key: const ValueKey('team_chat_reopen_filter'),
+                controller: _reopenFilter,
+                onChanged: (_) => setState(() {}),
+                style: const TextStyle(fontSize: 13),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  prefixIcon: Icon(Icons.search, size: 16),
+                  prefixIconConstraints:
+                      BoxConstraints(minWidth: 28, minHeight: 28),
+                  hintText: 'Find a room',
+                  border: OutlineInputBorder(),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                ),
+              ),
+            ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 240),
+            child: shown.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 12, 6),
+                    child: Text('No room thread matches.', style: hint),
+                  )
+                : ListView(
+                    shrinkWrap: true,
+                    primary: false,
+                    children: [
+                      for (final c in shown)
+                        InkWell(
+                          key: ValueKey('team_chat_reopen_${c.id}'),
+                          onTap: () {
+                            setState(() {
+                              _reopenOpen = false;
+                              _reopenFilter.clear();
+                            });
+                            _openThread(c.id);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(36, 5, 12, 5),
+                            child: Row(children: [
+                              Expanded(
+                                child: Text(c.label,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: c.unread > 0
+                                            ? FontWeight.bold
+                                            : null)),
+                              ),
+                              Text('${c.count}', style: hint),
+                            ]),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -2283,6 +2548,20 @@ class _ChatBodyState extends State<_ChatBody> {
               ],
             ),
           ),
+          // [TEAM CHAT - FAVORITES]: star the thread to keep it at the top.
+          IconButton(
+            key: const ValueKey('team_chat_favorite'),
+            tooltip: _isFavorite(chat.channel)
+                ? 'Remove from favorites'
+                : 'Add to favorites - kept at the top of the list',
+            icon: Icon(
+                _isFavorite(chat.channel)
+                    ? Icons.star
+                    : Icons.star_border,
+                size: 20,
+                color: _isFavorite(chat.channel) ? Colors.amber.shade700 : null),
+            onPressed: () => _toggleFavorite(chat.channel),
+          ),
           // [TEAM CHAT - PROJECTS]: the open project's thread, the same way.
           if (projectId.isNotEmpty && projectId != chat.channel)
             Padding(
@@ -2502,12 +2781,18 @@ class _ChatBodyState extends State<_ChatBody> {
       rows.add((m, !grouped));
       prev = m;
     }
+    // [TEAM CHAT - NEWEST FIRST]: laid out from the bottom up, so the chat
+    // opens on the newest message in every thread. Scrolling to the end of
+    // a top-down list stopped short: rows not built yet were only guessed
+    // at, and pictures grew after the jump.
     return ListView.builder(
+      key: ValueKey('team_chat_messages_${chat.channel}'),
       controller: _scroll,
+      reverse: true,
       padding: const EdgeInsets.only(bottom: 8),
       itemCount: rows.length,
       itemBuilder: (_, i) {
-        final row = rows[i];
+        final row = rows[rows.length - 1 - i];
         if (row is DateTime) return _dayDivider(row, theme);
         final (m, head) = row as (TeamMessage, bool);
         return _message(m, head, theme);
@@ -4872,6 +5157,7 @@ class TeamPresenceChart extends StatelessWidget {
     TableRow personRow(List<TeamPresence> sessions) {
       final first = sessions.first;
       final me = first.user.toLowerCase() == meUser.toLowerCase();
+      final working = Team.claims?.forPerson(first.user).length ?? 0;
       TeamPresence? inApp(String a) {
         for (final p in sessions) {
           if (TeamAppStyle.key(p.app) == a) return p;
@@ -4900,7 +5186,8 @@ class TeamPresenceChart extends StatelessWidget {
                             ?.copyWith(fontWeight: FontWeight.w600)),
                     Text(
                         '${sessions.length} '
-                        '${sessions.length == 1 ? 'app' : 'apps'} open',
+                        '${sessions.length == 1 ? 'app' : 'apps'} open'
+                        '${working == 0 ? '' : ' · working on $working'}',
                         style: theme.textTheme.labelSmall
                             ?.copyWith(color: scheme.onSurfaceVariant)),
                   ],

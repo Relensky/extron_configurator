@@ -140,9 +140,11 @@ void main() {
     await settle(tester, 'settings');
 
     const titles = [
-      'Pricing and estimates', 'Editing behavior',
-      'App updates', 'Autosave and recovery', 'Logging', 'Files and folders',
-      'Working together', 'Data files', 'Shared lists', 'Processor connection',
+      // Updates and logs first, as in every CTS app; then A to Z.
+      'Application updates', 'Application logs', 'Autosave and recovery',
+      'Data files', 'Editing behavior', 'Files and folders',
+      'Keyboard shortcuts', 'Pricing and estimates', 'Processor connection',
+      'Shared lists', 'Working together',
     ];
     final scroll = tester
         .state<ScrollableState>(

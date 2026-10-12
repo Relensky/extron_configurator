@@ -239,25 +239,6 @@ Future<DateTime?> roomFilesModified(String configPath) async {
   return newest;
 }
 
-/// [roomFilesModified] without waiting: a stat per file, on this thread.
-DateTime? roomFilesModifiedSync(String configPath) {
-  if (configPath.isEmpty) return null;
-  DateTime? newest;
-  for (final f in [
-    configPath,
-    for (final c in _roomPartCandidates(configPath).values) ...c,
-  ]) {
-    try {
-      final s = FileStat.statSync(f);
-      if (s.type == FileSystemEntityType.notFound) continue;
-      if (newest == null || s.modified.isAfter(newest)) newest = s.modified;
-    } catch (_) {
-      continue;
-    }
-  }
-  return newest;
-}
-
 /// Where a room's [part] may be, first choice first.
 List<String> roomPartCandidates(String configPath, RoomSidecarPart part) =>
     _roomPartCandidates(configPath)[part] ?? const [];

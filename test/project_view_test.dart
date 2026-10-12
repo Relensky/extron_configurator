@@ -430,6 +430,11 @@ void main() {
       expect(p.selectedTabIndex, AppTab.cost.index);
       expect(p.openProjectRoom, isNotNull);
 
+      // Opening checks the job's other rooms on disk; real reads finish in
+      // real time, before the folder is cleaned up.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 300)),
+      );
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
     });

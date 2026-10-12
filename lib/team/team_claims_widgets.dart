@@ -77,6 +77,234 @@ class TeamWorkingOn extends StatelessWidget {
   }
 }
 
+/// Takes off every tag this person placed - on themselves and on others.
+/// Returns what went wrong, or ''.
+Future<String> teamClearMyTags() async {
+  final claims = Team.claims;
+  if (claims == null) return '';
+  final me = claims.me.user.toLowerCase();
+  for (final c in [
+    for (final c in claims.current)
+      if (c.by.toLowerCase() == me) c,
+  ]) {
+    final error = await claims.set(
+        kind: c.kind,
+        id: c.id,
+        label: c.label,
+        who: c.who,
+        whoName: c.whoName,
+        on: false);
+    if (error.isNotEmpty) return error;
+  }
+  return '';
+}
+
+/// [TEAM KIT - WORKING ON]: for the team page - what each person is tagged
+/// on, in every app, and the app each tag was made in. Tags this person
+/// placed get an x, and the heading can clear them all at once.
+class TeamWorkingOnList extends StatefulWidget {
+  const TeamWorkingOnList({super.key, this.onOpenRoom});
+
+  /// Opens a room tag's room (null: room tags are plain text).
+  final void Function(String room)? onOpenRoom;
+
+  @override
+  State<TeamWorkingOnList> createState() => _TeamWorkingOnListState();
+}
+
+class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
+  /// The "clear all" button asks again in place - a dialog would open
+  /// behind the chat when this page is inside it.
+  bool _confirming = false;
+  bool _busy = false;
+  String _error = '';
+
+  Future<void> _run(Future<String> Function() job) async {
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    final error = await job();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _confirming = false;
+      _error = error;
+    });
+  }
+
+  static IconData _kindIcon(String kind) => switch (kind.toLowerCase()) {
+        'ticket' => Icons.confirmation_number_outlined,
+        'room' => Icons.meeting_room_outlined,
+        _ => Icons.label_outline,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final claims = Team.claims;
+    if (claims == null || !claims.active) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: claims,
+      builder: (context, _) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final me = claims.me.user.toLowerCase();
+        final all = claims.current;
+        final placed = all.where((c) => c.by.toLowerCase() == me).length;
+        // A group a person, this person first, then by name.
+        final by = <String, List<TeamClaim>>{};
+        for (final c in all) {
+          by.putIfAbsent(c.who.toLowerCase(), () => []).add(c);
+        }
+        final people = by.values.toList()
+          ..sort((a, b) {
+            final am = a.first.who.toLowerCase() == me ? 0 : 1;
+            final bm = b.first.who.toLowerCase() == me ? 0 : 1;
+            if (am != bm) return am - bm;
+            return a.first.whoLabel
+                .toLowerCase()
+                .compareTo(b.first.whoLabel.toLowerCase());
+          });
+
+        Widget tag(TeamClaim c) {
+          final mine = c.by.toLowerCase() == me;
+          final room = c.kind.toLowerCase() == 'room' &&
+              widget.onOpenRoom != null;
+          final name = Text(c.label.isEmpty ? c.id : c.label,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: room ? scheme.primary : scheme.onSurface,
+                  fontWeight: FontWeight.w600));
+          return Padding(
+            key: ValueKey('working_on_tag_${c.key}'),
+            padding: const EdgeInsets.only(left: 38, top: 2, bottom: 2),
+            child: Row(children: [
+              Icon(_kindIcon(c.kind), size: 15, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Flexible(
+                child: room
+                    ? InkWell(
+                        onTap: () => widget.onOpenRoom!(c.id),
+                        child: Tooltip(
+                            message: 'Open ${c.id} in the Room Hub',
+                            child: name),
+                      )
+                    : name,
+              ),
+              const SizedBox(width: 8),
+              TeamAppTag(c.app, short: true),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                    'since ${teamAgo(c.at)}'
+                    '${c.self ? '' : ' - tagged by ${mine ? 'you' : c.byLabel}'}',
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: scheme.onSurfaceVariant)),
+              ),
+              if (mine)
+                IconButton(
+                  key: ValueKey('working_on_clear_${c.key}'),
+                  tooltip: c.self
+                      ? 'Take this tag off'
+                      : 'Take ${c.whoLabel} off this',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 16,
+                  icon: const Icon(Icons.close),
+                  onPressed: _busy
+                      ? null
+                      : () => _run(() => claims.set(
+                          kind: c.kind,
+                          id: c.id,
+                          label: c.label,
+                          who: c.who,
+                          whoName: c.whoName,
+                          on: false)),
+                ),
+            ]),
+          );
+        }
+
+        return Column(
+          key: const ValueKey('team_working_on_list'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 16, 4, 4),
+              child: Row(children: [
+                const Icon(Icons.assignment_ind_outlined, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text('Working on',
+                        style: theme.textTheme.titleMedium)),
+                if (placed > 0 && !_confirming)
+                  TextButton.icon(
+                    key: const ValueKey('working_on_clear_mine'),
+                    icon: const Icon(Icons.clear_all, size: 18),
+                    label: Text('Clear the $placed '
+                        'tag${placed == 1 ? '' : 's'} I placed'),
+                    onPressed:
+                        _busy ? null : () => setState(() => _confirming = true),
+                  ),
+                if (placed > 0 && _confirming) ...[
+                  Text('Take off all $placed?',
+                      style: theme.textTheme.bodySmall),
+                  const SizedBox(width: 4),
+                  TextButton(
+                    key: const ValueKey('working_on_clear_mine_yes'),
+                    onPressed: _busy ? null : () => _run(teamClearMyTags),
+                    child: const Text('Clear them'),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _confirming = false),
+                    child: const Text('Keep'),
+                  ),
+                ],
+              ]),
+            ),
+            if (_error.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(_error,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: scheme.error)),
+              ),
+            if (people.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(4),
+                child: Text(
+                    'Nobody is tagged as working on anything. Use the '
+                    'person button on a ticket or room to tag yourself.',
+                    style: theme.textTheme.bodySmall),
+              ),
+            for (final tags in people) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 8, 4, 2),
+                child: Row(children: [
+                  TeamAvatar(tags.first.who, size: 26),
+                  const SizedBox(width: 12),
+                  Text(
+                      tags.first.who.toLowerCase() == me
+                          ? '${tags.first.whoLabel} (you)'
+                          : tags.first.whoLabel,
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 8),
+                  Text('${tags.length} '
+                      '${tags.length == 1 ? 'thing' : 'things'}',
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: scheme.onSurfaceVariant)),
+                ]),
+              ),
+              for (final c in tags) tag(c),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _WorkingOnMenu extends StatelessWidget {
   const _WorkingOnMenu(this.owner, this.on);
   final TeamWorkingOn owner;

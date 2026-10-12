@@ -332,7 +332,7 @@ Future<Uint8List> buildEstimatePdf(
   String lineNote(CostLine line) {
     final note = [
       if (line.spareQty > 0) 'Includes ${trimNumber(line.spareQty)} spare',
-      if (line.furnished) furnishedNote(line),
+      if (line.furnishedBy != null) furnishedNote(line),
     ].join(' - ');
     return note.isEmpty ? '' : note[0].toUpperCase() + note.substring(1);
   }

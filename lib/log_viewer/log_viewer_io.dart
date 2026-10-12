@@ -175,8 +175,13 @@ Future<void> revealInFileManager(String path) async {
   try {
     final File file = File(path);
     if (Platform.isWindows) {
+      // A folder opens as itself; a file opens its folder with it selected.
       await Process.start('explorer.exe', [
-        file.existsSync() ? '/select,${file.absolute.path}' : file.parent.path,
+        Directory(path).existsSync()
+            ? Directory(path).absolute.path
+            : file.existsSync()
+                ? '/select,${file.absolute.path}'
+                : file.parent.path,
       ]);
     } else if (Platform.isMacOS) {
       await Process.start('open', ['-R', path]);

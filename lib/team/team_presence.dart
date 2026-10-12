@@ -370,9 +370,21 @@ class TeamPresenceBoard extends ChangeNotifier {
     if (!readOnly) {
       try {
         await Directory(_folder).create(recursive: true);
+        final text = jsonEncode(_mine.toJson());
         final tmp = File('$_file.$pid.tmp');
-        await tmp.writeAsString(jsonEncode(_mine.toJson()), flush: true);
-        await tmp.rename(_file);
+        await tmp.writeAsString(text, flush: true);
+        try {
+          await tmp.rename(_file);
+        } catch (_) {
+          // [TEAM]: a reader elsewhere can hold the note open without
+          // delete-sharing, and then no rename can replace it - the note
+          // went stale and this app looked offline to everyone. Write it in
+          // place instead (readers already skip a half-written note).
+          await File(_file).writeAsString(text, flush: true);
+          try {
+            await tmp.delete();
+          } catch (_) {}
+        }
       } catch (_) {}
     }
     if (!readOthers) return;

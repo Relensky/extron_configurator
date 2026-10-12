@@ -465,8 +465,28 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToEnd());
   }
 
+  // [OPENING AT THE END]: the list is built reversed, newest line at scroll
+  // offset 0. A lazy list only knows a line's height once it has laid that
+  // line out, so jumping to the far end of a forward list meant laying out
+  // every line in the file in one frame - 1.3 s of frozen UI on an
+  // 18-hour log. Reversed, the end is where the list starts, and only the
+  // screenful being looked at is ever built. Going to the START is now the
+  // long trip, and only when someone asks for it.
   void _jumpToEnd() {
-    if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
+  /// The far end's extent is an estimate until the lines on the way are laid
+  /// out, so one jump can land short; follow it up for a few frames.
+  void _jumpToStart([int tries = 4]) {
+    if (!_scroll.hasClients) return;
+    final ScrollPosition p = _scroll.position;
+    if (p.pixels >= p.maxScrollExtent) return;
+    _scroll.jumpTo(p.maxScrollExtent);
+    if (tries > 0) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _jumpToStart(tries - 1));
+    }
   }
 
   void _refilter() {
@@ -811,9 +831,7 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
               IconButton(
                 icon: const Icon(Icons.vertical_align_top),
                 tooltip: 'Go to the start',
-                onPressed: () {
-                  if (_scroll.hasClients) _scroll.jumpTo(0);
-                },
+                onPressed: _jumpToStart,
               ),
               IconButton(
                 icon: const Icon(Icons.vertical_align_bottom),
@@ -863,10 +881,12 @@ class _LogViewerDialogState extends State<LogViewerDialog> {
                     child: SelectionArea(
                       child: ListView.builder(
                         controller: _scroll,
+                        reverse: true, // see _jumpToEnd
                         padding: const EdgeInsets.all(10),
                         itemCount: _shown.length,
                         itemBuilder: (context, i) {
-                          final String line = _lines[_shown[i]];
+                          final String line =
+                              _lines[_shown[_shown.length - 1 - i]];
                           return Text(logLineForDisplay(line, _zone),
                               style: logLineIsProblem(line) ? problem : mono);
                         },

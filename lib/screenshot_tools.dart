@@ -175,7 +175,10 @@ Future<void> showAnnotationEditor(BuildContext context, Uint8List pngBytes,
 ///     into pixels; until then a mark can be picked up, moved, recolored,
 ///     retyped or thrown away, however many other marks have been made since.
 ///     See [_AnnotationEditorState._selected].
-enum AnnotationTool { pen, highlighter, arrow, rect, text, pan, select }
+///   * [crop] marks the part of the picture to keep. Nothing is cut until
+///     Apply crop, and even then only Copy and Save use the box: the marks
+///     stay editable and Reset crop brings the whole picture back.
+enum AnnotationTool { pen, highlighter, arrow, rect, text, pan, select, crop }
 
 /// One mark on the picture.
 ///
@@ -275,6 +278,7 @@ bool _annotationHit(_Annotation a, Offset point, double tolerance) {
   switch (a.tool) {
     case AnnotationTool.pan:
     case AnnotationTool.select:
+    case AnnotationTool.crop:
       return false;
     case AnnotationTool.text:
       return _annotationBounds(a).inflate(tolerance).contains(point);
@@ -416,19 +420,66 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
     super.dispose();
   }
 
-  /// The scale that puts the whole picture inside a [viewW] x [viewH] window.
-  ///
-  /// Never above 1: a small capture is left at its own size rather than blown
-  /// up into a poster of six pixels.
-  double _fitScale(ui.Image image, double viewW, double viewH) {
-    if (image.width <= 0 || image.height <= 0) return 1;
-    final double fit = [
-      viewW / image.width,
-      viewH / image.height,
-      1.0,
-    ].reduce((a, b) => a < b ? a : b);
-    return fit.clamp(_minZoom, 1.0);
+  // --------------------------------------------------------------------------
+  // CROP
+  // --------------------------------------------------------------------------
+  //  [_crop] is the part of the picture kept, in image pixels, or null for
+  //  all of it. It is a window, not a cut: the marks stay where they are in
+  //  image space, the canvas shows only the window, and [_flatten] writes only
+  //  the window - so a crop can be redrawn or reset right up to Save.
+
+  /// The applied crop, or null for the whole picture.
+  Rect? _crop;
+
+  /// The box being drawn with the crop tool, before Apply.
+  Rect? _cropDraft;
+
+  /// Where the crop drag started.
+  Offset? _cropFrom;
+
+  /// The tool to go back to once a crop is applied.
+  AnnotationTool _toolBeforeCrop = AnnotationTool.pen;
+
+  /// The part of the picture on the canvas: all of it while choosing a crop,
+  /// so there is somewhere to draw the box, otherwise the applied crop.
+  Rect _viewRect(ui.Image image) {
+    final full =
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    if (_tool == AnnotationTool.crop) return full;
+    return _crop ?? full;
   }
+
+  void _chooseTool(AnnotationTool tool) => setState(() {
+        if (tool == AnnotationTool.crop && _tool != AnnotationTool.crop) {
+          _toolBeforeCrop = _tool;
+          // Start from the crop already applied, so it can be adjusted.
+          _cropDraft = _crop;
+          _selected = null;
+        }
+        if (tool != AnnotationTool.crop) _cropDraft = null;
+        _tool = tool;
+      });
+
+  /// Keeps the box drawn, and goes back to the tool in use before.
+  void _applyCrop() {
+    final draft = _cropDraft;
+    if (draft == null || draft.width < 4 || draft.height < 4) return;
+    setState(() {
+      _crop = draft;
+      _cropDraft = null;
+      _tool = _toolBeforeCrop;
+      _zoom = null;
+    });
+    if (_across.hasClients) _across.jumpTo(0);
+    if (_down.hasClients) _down.jumpTo(0);
+  }
+
+  /// The whole picture again.
+  void _resetCrop() => setState(() {
+        _crop = null;
+        _cropDraft = null;
+        _zoom = null;
+      });
 
   // --------------------------------------------------------------------------
   // Gestures — local positions are divided by the display scale so every
@@ -449,10 +500,24 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
     );
   }
 
-  /// True while the selected tool is one that makes marks. The pointer and the
-  /// hand are the two that do not.
+  /// The scale that puts the part of the picture shown - the crop, or all
+  /// of it - inside a [viewW] x [viewH] window.
+  ///
+  /// Never above 1: a small capture is left at its own size rather than blown
+  /// up into a poster of six pixels.
+  double _fitScaleFor(Rect view, double viewW, double viewH) {
+    if (view.width <= 0 || view.height <= 0) return 1;
+    final double fit = [viewW / view.width, viewH / view.height, 1.0]
+        .reduce((a, b) => a < b ? a : b);
+    return fit.clamp(_minZoom, 1.0);
+  }
+
+  /// True while the selected tool is one that makes marks. The pointer, the
+  /// hand and the crop are the ones that do not.
   bool get _drawing =>
-      _tool != AnnotationTool.pan && _tool != AnnotationTool.select;
+      _tool != AnnotationTool.pan &&
+      _tool != AnnotationTool.select &&
+      _tool != AnnotationTool.crop;
 
   void _onPanStart(Offset imagePos) {
     if (_tool == AnnotationTool.text || !_drawing) return;
@@ -644,12 +709,19 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
     if (image == null) return null;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
+    // Only the crop goes in the file. The marks are in image space, so the
+    // canvas is shifted to put the crop's corner at the file's.
+    final Rect crop = _crop ??
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    canvas.translate(-crop.left, -crop.top);
     canvas.drawImage(image, Offset.zero, Paint());
     // Image space, at full resolution: this is the file, and a mark is stored
     // in image pixels, so there is nothing to convert.
     _paintAnnotationsOnCanvas(canvas, _annotations);
     final picture = recorder.endRecording();
-    final ui.Image outImage = await picture.toImage(image.width, image.height);
+    final ui.Image outImage = await picture.toImage(
+        crop.width.round().clamp(1, image.width),
+        crop.height.round().clamp(1, image.height));
     final byteData = await outImage.toByteData(format: ui.ImageByteFormat.png);
     outImage.dispose();
     return byteData?.buffer.asUint8List();
@@ -727,7 +799,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
         message: tooltip,
         child: InkWell(
           borderRadius: BorderRadius.circular(6),
-          onTap: () => setState(() => _tool = tool),
+          onTap: () => _chooseTool(tool),
           child: Container(
             padding: const EdgeInsets.all(8.0),
             decoration: BoxDecoration(
@@ -896,10 +968,39 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                     children: [
                       _toolButton(AnnotationTool.select, Icons.near_me_outlined,
                           'Select - move, recolor or retype a mark'),
+                      _toolButton(AnnotationTool.crop, Icons.crop,
+                          'Crop - draw the part to keep, then Apply crop'),
                       _toolButton(AnnotationTool.pan, Icons.pan_tool_outlined,
                           'Move the picture'),
                     ],
                   ),
+                  // While cropping: keep the box, or go back to the whole
+                  // picture.
+                  if (_tool == AnnotationTool.crop || _crop != null)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_tool == AnnotationTool.crop)
+                          FilledButton.icon(
+                            key: const ValueKey('annotation_apply_crop'),
+                            onPressed: (_cropDraft?.width ?? 0) >= 4 &&
+                                    (_cropDraft?.height ?? 0) >= 4
+                                ? _applyCrop
+                                : null,
+                            icon: const Icon(Icons.check, size: 16),
+                            label: const Text('Apply crop'),
+                          ),
+                        const SizedBox(width: 4),
+                        TextButton.icon(
+                          key: const ValueKey('annotation_reset_crop'),
+                          onPressed: _crop == null && _cropDraft == null
+                              ? null
+                              : _resetCrop,
+                          icon: const Icon(Icons.crop_free, size: 16),
+                          label: const Text('Reset crop'),
+                        ),
+                      ],
+                    ),
                   // One group, so the eight colors never split across two lines
                   // and read as two palettes.
                   Row(
@@ -1001,9 +1102,10 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                     final double viewH =
                         (constraints.maxHeight - _kBarRoom).clamp(0.0, 1 / 0);
                     final double scale =
-                        _zoom ?? _fitScale(image, viewW, viewH);
-                    final double dispW = image.width * scale;
-                    final double dispH = image.height * scale;
+                        _zoom ?? _fitScaleFor(_viewRect(image), viewW, viewH);
+                    final Rect view = _viewRect(image);
+                    final double dispW = view.width * scale;
+                    final double dispH = view.height * scale;
 
                     // A MARK IS STORED IN IMAGE PIXELS, always. The canvas is
                     // whatever size the zoom says; dividing by that scale is
@@ -1011,8 +1113,10 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                     // it was actually put, and survive being drawn again at a
                     // different zoom.
                     Offset toImage(Offset local) => Offset(
-                        (local.dx / scale).clamp(0, image.width.toDouble()),
-                        (local.dy / scale).clamp(0, image.height.toDouble()));
+                        (view.left + local.dx / scale)
+                            .clamp(view.left, view.right),
+                        (view.top + local.dy / scale)
+                            .clamp(view.top, view.bottom));
 
                     // WHO GETS THE DRAG. There is only one, and the pen, the
                     // pointer, the hand and the scroll views all want it.
@@ -1033,6 +1137,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                               ? SystemMouseCursors.grab
                               : SystemMouseCursors.grabbing,
                           AnnotationTool.select => SystemMouseCursors.click,
+                          AnnotationTool.crop => SystemMouseCursors.precise,
                           AnnotationTool.text => SystemMouseCursors.text,
                           _ => SystemMouseCursors.precise,
                         },
@@ -1041,6 +1146,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                             AnnotationTool.select => (d) =>
                                 _selectAt(toImage(d.localPosition), scale),
                             AnnotationTool.pan => null,
+                            AnnotationTool.crop => null,
                             _ => (d) => _onTapForText(toImage(d.localPosition)),
                           },
                           // RETYPING A LABEL, which is the whole of "still
@@ -1059,6 +1165,11 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                           onPanStart: (d) {
                             final at = toImage(d.localPosition);
                             switch (_tool) {
+                              case AnnotationTool.crop:
+                                setState(() {
+                                  _cropFrom = at;
+                                  _cropDraft = Rect.fromPoints(at, at);
+                                });
                               case AnnotationTool.pan:
                                 // Only so the cursor can say it is holding on.
                                 setState(() => _dragFrom = at);
@@ -1071,6 +1182,12 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                           },
                           onPanUpdate: (d) {
                             switch (_tool) {
+                              case AnnotationTool.crop:
+                                final from = _cropFrom;
+                                if (from != null) {
+                                  setState(() => _cropDraft = Rect.fromPoints(
+                                      from, toImage(d.localPosition)));
+                                }
                               case AnnotationTool.pan:
                                 _dragPicture(d.delta);
                               case AnnotationTool.select:
@@ -1081,6 +1198,8 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                           },
                           onPanEnd: (_) {
                             switch (_tool) {
+                              case AnnotationTool.crop:
+                                _cropFrom = null;
                               case AnnotationTool.pan:
                               case AnnotationTool.select:
                                 setState(() => _dragFrom = null);
@@ -1090,6 +1209,10 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                           },
                           child: CustomPaint(
                             painter: _AnnotationPainter(
+                              view: view,
+                              cropDraft: _tool == AnnotationTool.crop
+                                  ? _cropDraft
+                                  : null,
                               image: image,
                               annotations: _annotations,
                               active: _active,
@@ -1246,6 +1369,7 @@ void _paintAnnotationsOnCanvas(Canvas canvas, List<_Annotation> annotations) {
       // instead of a silent no-op.
       case AnnotationTool.pan:
       case AnnotationTool.select:
+      case AnnotationTool.crop:
         break;
 
       case AnnotationTool.pen:
@@ -1303,6 +1427,12 @@ void _paintAnnotationsOnCanvas(Canvas canvas, List<_Annotation> annotations) {
 }
 
 class _AnnotationPainter extends CustomPainter {
+  /// The part of the picture on the canvas, in image pixels.
+  final Rect view;
+
+  /// The crop being chosen, drawn with everything outside it dimmed.
+  final Rect? cropDraft;
+
   final ui.Image image;
   final List<_Annotation> annotations;
   final _Annotation? active;
@@ -1316,6 +1446,8 @@ class _AnnotationPainter extends CustomPainter {
   final double scale;
 
   _AnnotationPainter({
+    required this.view,
+    this.cropDraft,
     required this.image,
     required this.annotations,
     required this.active,
@@ -1328,7 +1460,7 @@ class _AnnotationPainter extends CustomPainter {
     // Draw the screenshot scaled to the display size.
     canvas.drawImageRect(
       image,
-      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      view,
       Rect.fromLTWH(0, 0, size.width, size.height),
       Paint()..filterQuality = FilterQuality.medium,
     );
@@ -1337,8 +1469,11 @@ class _AnnotationPainter extends CustomPainter {
     // [_paintAnnotationsOnCanvas], which no longer does this for itself.
     canvas.save();
     canvas.scale(scale);
+    canvas.translate(-view.left, -view.top);
     _paintAnnotationsOnCanvas(canvas, [...annotations, ?active]);
     canvas.restore();
+
+    _paintCropDraft(canvas, size);
 
     final held = selected;
     if (held == null) return;
@@ -1348,10 +1483,10 @@ class _AnnotationPainter extends CustomPainter {
     final box = _annotationBounds(held);
     if (box.isEmpty) return;
     final rect = Rect.fromLTRB(
-      box.left * scale,
-      box.top * scale,
-      box.right * scale,
-      box.bottom * scale,
+      (box.left - view.left) * scale,
+      (box.top - view.top) * scale,
+      (box.right - view.left) * scale,
+      (box.bottom - view.top) * scale,
     ).inflate(4);
     // Two strokes, light over dark, so the halo is visible on a screenshot of
     // anything - a white dialog or a black diagram.
@@ -1369,6 +1504,56 @@ class _AnnotationPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
+  }
+
+  /// The crop being chosen: the outside dimmed, the box outlined, and its
+  /// size in pixels, so "just the dialog" can be cut to the dialog.
+  void _paintCropDraft(Canvas canvas, Size size) {
+    final draft = cropDraft;
+    if (draft == null) return;
+    final box = Rect.fromLTRB(
+      (draft.left - view.left) * scale,
+      (draft.top - view.top) * scale,
+      (draft.right - view.left) * scale,
+      (draft.bottom - view.top) * scale,
+    );
+    canvas.drawPath(
+      Path.combine(
+        PathOperation.difference,
+        Path()..addRect(Offset.zero & size),
+        Path()..addRect(box),
+      ),
+      Paint()..color = Colors.black.withValues(alpha: 0.55),
+    );
+    canvas.drawRect(
+        box,
+        Paint()
+          ..color = Colors.black
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3);
+    canvas.drawRect(
+        box,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5);
+    final label = TextPainter(
+      text: TextSpan(
+        text: '${draft.width.round()} x ${draft.height.round()}',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          shadows: [Shadow(blurRadius: 3, color: Colors.black)],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final double y = box.top - label.height - 4 < 0
+        ? box.top + 4
+        : box.top - label.height - 4;
+    label.paint(canvas, Offset(box.left + 4, y));
+    label.dispose();
   }
 
   @override

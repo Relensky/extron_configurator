@@ -223,8 +223,13 @@ class _JsonEditorViewState extends State<JsonEditorView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // Wraps rather than overflows: on a narrow window the status drops
+          // under the title.
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 4,
             children: [
               Text('Raw Config.json Editor', style: Theme.of(context).textTheme.headlineSmall),
               // Where the text stands relative to the config, since there is

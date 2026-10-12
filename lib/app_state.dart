@@ -750,12 +750,12 @@ class AppStateProvider extends ChangeNotifier {
       : CombineHistoryStore(combineHistoryFolder);
 
   /// The campus sheet the open job is on, by name; '' for none.
-  String get campusDisplayName {
+  Future<String> campusDisplayName() async {
     if (!hasOpenProject || currentProjectPath.isEmpty) return '';
     final file = project.resolvedCampusFile(currentProjectPath);
     if (file.isEmpty) return '';
     try {
-      final doc = jsonDecode(File(file).readAsStringSync());
+      final doc = jsonDecode(await File(file).readAsString());
       final name = doc is Map ? doc['name']?.toString().trim() ?? '' : '';
       if (name.isNotEmpty) return name;
     } catch (_) {}
@@ -780,7 +780,13 @@ class AppStateProvider extends ChangeNotifier {
     return store.backupDocument(file);
   }
 
-  /// Logs one combine. Returns '' or what went wrong.
+  /// Combine-history writes, one after another: each re-reads the log, so
+  /// two at once could each miss the other's entry.
+  Future<String> _combineWrites = Future.value('');
+
+  /// Logs one combine. Returns '' or what went wrong. The room's history is
+  /// written at once; the shared log is written in turn behind any other
+  /// combine still being written - a caller that is saving need not wait.
   Future<String> recordCombine({
     required CollabDocKind kind,
     required String from,
@@ -799,15 +805,28 @@ class AppStateProvider extends ChangeNotifier {
         : '';
     final approved = items.where((i) => i.approved).length;
     final declined = items.length - approved;
-    // On the room's own history too, line by line.
+    // On the room's own history too, line by line - but only so many: the
+    // history keeps a few hundred entries, and one big combine must not push
+    // out everything older. Every line is in the combine history.
     if (kind == CollabDocKind.room) {
-      for (final i in items) {
+      for (final i in items.take(kCombineLinesInRoomHistory)) {
         logRoomEdit(
           itemKey: 'combine:${i.path}',
           itemName: i.place,
           field: i.approved ? 'Combined' : 'Left out',
           summary: '${from.isEmpty ? 'another save' : from}: '
               '${i.before.isEmpty ? '' : '${i.before} -> '}${i.after}',
+          at: when,
+        );
+      }
+      final more = items.length - kCombineLinesInRoomHistory;
+      if (more > 0) {
+        logRoomEdit(
+          itemKey: 'combine:more',
+          itemName: 'Combine',
+          field: 'Combined',
+          summary: 'and $more more line${more == 1 ? '' : 's'} - see '
+              'History > Combines',
           at: when,
         );
       }
@@ -829,6 +848,7 @@ class AppStateProvider extends ChangeNotifier {
     }
     final store = combineHistory;
     if (store == null) return '';
+    final campus = await campusDisplayName();
     final entry = CombineHistoryEntry(
       id: '${collab.me.user}@${collab.me.machine}@'
           '${when.microsecondsSinceEpoch}',
@@ -840,14 +860,18 @@ class AppStateProvider extends ChangeNotifier {
       document: kind == CollabDocKind.project ? 'project' : 'room',
       room: roomName,
       project: hasOpenProject ? projectDisplayName : '',
-      campus: campusDisplayName,
+      campus: campus,
       file: _combineFile(kind),
       backup: backup,
       items: items,
     );
-    final error = await store.append(entry);
-    if (error.isNotEmpty) AppLogger.logError(error);
-    return error;
+    final write = _combineWrites.then((_) async {
+      final error = await store.append(entry);
+      if (error.isNotEmpty) AppLogger.logError(error);
+      return error;
+    });
+    _combineWrites = write;
+    return write;
   }
 
   String get _teamTabLabel =>
@@ -1959,17 +1983,6 @@ class AppStateProvider extends ChangeNotifier {
   /// changing key the previous room's name/number sat on the Wizard until the
   /// tab was switched away and back.
   int configRevision = 0;
-
-  /// The room's config summed up, to tell whether it changed between two
-  /// moments - see [PageCache.stamp].
-  String get roomConfigStamp {
-    try {
-      final text = jsonEncode(roomConfig);
-      return '${text.length}:${text.hashCode}';
-    } catch (_) {
-      return '$configRevision';
-    }
-  }
 
   /// Call after any wholesale replacement of [roomConfig]. Callers still
   /// notifyListeners() themselves — this only moves the identity forward.
@@ -6668,15 +6681,7 @@ class AppStateProvider extends ChangeNotifier {
   /// in the config - else only the quote's count comes down.
   void removeAvEquipmentUnit(String lineKey, {required double quoted}) {
     final units = _costLineUnits(lineKey);
-    final free = [
-      for (final n in units)
-        if (!n.fromConfig &&
-            !avCables.any((c) => c.fromNodeId == n.id || c.toNodeId == n.id))
-          (id: n.id, label: n.label),
-    ];
-    final id = quoted <= units.length
-        ? lastNumberedUnit(free, lineName: avCost.lineNames[lineKey] ?? '')
-        : null;
+    final id = quoted <= units.length ? _nextUnitToTakeOff(lineKey) : null;
     if (id == null) {
       setAvEquipmentQty(
         lineKey,
@@ -6686,12 +6691,70 @@ class AppStateProvider extends ChangeNotifier {
       return;
     }
     final node = avNodeById(id)!;
-    _pushAvUndo('Remove ${node.label}', const {
-      AvUndoScope.flow,
-      AvUndoScope.racks,
-      AvUndoScope.floorPlans,
-      AvUndoScope.cost,
-    });
+    _pushAvUndo('Remove ${node.label}', _unitOffScopes);
+    _takeUnitOff(id);
+    final left = units.length - 1;
+    if ((avCost.qtyOverrides[lineKey] ?? left) == left) {
+      avCost.qtyOverrides.remove(lineKey);
+    }
+    _renameAfterUnitsOff(lineKey, node.label);
+    notifyListeners();
+  }
+
+  /// A typed quantity below the drawn count, once the typing is done: takes
+  /// units off the diagram the way the minus button does, down to the typed
+  /// count. Units that can't go (cabled, in the config) stay, and the quote
+  /// keeps the typed figure.
+  ///
+  /// Not done per keystroke: typing "20" over "13" passes through "2".
+  void settleAvEquipmentQty(String lineKey) {
+    final quoted = avCost.qtyOverrides[lineKey];
+    if (quoted == null || quoted != quoted.roundToDouble()) return;
+    final want = quoted.round();
+    final units = _costLineUnits(lineKey);
+    if (want >= units.length || _nextUnitToTakeOff(lineKey) == null) return;
+    final remove = units.length - want;
+    _pushAvUndo(
+      remove == 1
+          ? 'Remove one ${units.last.label}'
+          : 'Remove $remove ${units.last.label}',
+      _unitOffScopes,
+    );
+    var label = units.last.label;
+    var left = units.length;
+    while (left > want) {
+      final id = _nextUnitToTakeOff(lineKey);
+      if (id == null) break;
+      label = avNodeById(id)!.label;
+      _takeUnitOff(id);
+      left--;
+    }
+    if (left == want) avCost.qtyOverrides.remove(lineKey);
+    _renameAfterUnitsOff(lineKey, label);
+    notifyListeners();
+  }
+
+  static const _unitOffScopes = {
+    AvUndoScope.flow,
+    AvUndoScope.racks,
+    AvUndoScope.floorPlans,
+    AvUndoScope.cost,
+  };
+
+  /// The highest-numbered unit on [lineKey] that can go without losing
+  /// anything - not cabled and not in the config - or null.
+  String? _nextUnitToTakeOff(String lineKey) => lastNumberedUnit(
+    [
+      for (final n in _costLineUnits(lineKey))
+        if (!n.fromConfig &&
+            !avCables.any((c) => c.fromNodeId == n.id || c.toNodeId == n.id))
+          (id: n.id, label: n.label),
+    ],
+    lineName: avCost.lineNames[lineKey] ?? '',
+  );
+
+  /// Takes one unit off the diagram, its rack slot and the floor plans.
+  void _takeUnitOff(String id) {
     avNodes.removeWhere((n) => n.id == id);
     final vacated = avRackSlots.remove(id);
     if (vacated != null) {
@@ -6708,16 +6771,17 @@ class AppStateProvider extends ChangeNotifier {
         ],
       );
     }
-    final left = units.length - 1;
-    if ((avCost.qtyOverrides[lineKey] ?? left) == left) {
-      avCost.qtyOverrides.remove(lineKey);
-    }
+  }
+
+  /// Renumbers what is left on [lineKey] after units named like [removed]
+  /// came off.
+  void _renameAfterUnitsOff(String lineKey, String removed) {
     _numberCostLineUnits(lineKey);
     // The other of a pair taken off: "Cam570 1" alone is "Cam570" again. A
     // config block's name is the config's.
     final rest = _costLineUnits(lineKey);
     for (final n in rest) {
-      final plain = n.fromConfig ? null : soleUnitName(n.label, node.label);
+      final plain = n.fromConfig ? null : soleUnitName(n.label, removed);
       if (plain == null) continue;
       if (rest.where((o) => isNamedFrom(o.label.trim(), plain)).length != 1) {
         continue;
@@ -6725,7 +6789,6 @@ class AppStateProvider extends ChangeNotifier {
       final i = avNodes.indexWhere((o) => o.id == n.id);
       avNodes[i] = n.copyWith(label: plain);
     }
-    notifyListeners();
   }
 
   /// Numbers the units on one estimate line, for boxes just added on the
@@ -6765,6 +6828,7 @@ class AppStateProvider extends ChangeNotifier {
       if (!avCost.furnishedLines.containsKey(lineKey)) return;
       _pushAvUndo('This job buys it again', _costScope);
       avCost.furnishedLines.remove(lineKey);
+      avCost.furnishedQty.remove(lineKey);
     } else {
       final trimmed = source.trim();
       if (avCost.furnishedLines[lineKey] == trimmed) return;
@@ -6779,6 +6843,35 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Who is furnishing [lineKey], or null when this job is buying it.
   String? avCostFurnishedBy(String lineKey) => avCost.furnishedLines[lineKey];
+
+  /// Says [qty] of [lineKey] come from [source] and the rest are bought on
+  /// this job. Null, or 0 and below, is all of them. See
+  /// [RoomCostSettings.furnishedQty].
+  void setAvCostFurnishedSome(String lineKey, String source, double? qty) {
+    final trimmed = source.trim();
+    final some = qty == null || qty <= 0 ? null : qty;
+    if (avCost.furnishedLines[lineKey] == trimmed &&
+        avCost.furnishedQty[lineKey] == some) {
+      return;
+    }
+    final who = trimmed.isEmpty ? 'others' : trimmed;
+    _pushAvUndo(
+      some == null
+          ? 'Furnished by $who'
+          : '${trimNumber(some)} furnished by $who',
+      _costScope,
+    );
+    avCost.furnishedLines[lineKey] = trimmed;
+    if (some == null) {
+      avCost.furnishedQty.remove(lineKey);
+    } else {
+      avCost.furnishedQty[lineKey] = some;
+    }
+    notifyListeners();
+  }
+
+  /// How many of [lineKey] are furnished, or null for all of them.
+  double? avCostFurnishedQty(String lineKey) => avCost.furnishedQty[lineKey];
 
   /// The color a signal type is drawn in for this room.
   Color avSignalColor(SignalType s) => signalColor(s, avSignalColors);
@@ -12591,10 +12684,13 @@ class AppStateProvider extends ChangeNotifier {
   /// True when the last save's backup is still the one belonging to the
   /// working file — what enables the Undo button. Says nothing about whether
   /// the two files actually differ; [undoDeltas] answers that.
+  ///
+  /// No disk check: the title bar asks on every redraw, and on a slow share
+  /// that was a stall per keystroke. [_lastSaveBackupPath] is only set once
+  /// the copy is written, and Undo reads the file inside a try anyway.
   bool get canUndoLastSave =>
       _lastSaveBackupPath.isNotEmpty &&
-      _lastSaveBackupPath == saveBackupPath &&
-      File(_lastSaveBackupPath).existsSync();
+      _lastSaveBackupPath == saveBackupPath;
 
   /// Copies the working file to `<name>_previous.json` before it is
   /// overwritten. Best-effort: a backup that cannot be written (read-only
@@ -15038,14 +15134,23 @@ class AppStateProvider extends ChangeNotifier {
       final read = <String, LoadedRoom>{};
       final stamps = <String, DateTime?>{};
       projectOpenProgress.value = (0, loaded.rooms.length);
-      for (final ref in loaded.rooms) {
-        final absolute = BuildingProject.resolvePath(ref.configPath, file);
-        // Taken before the read, so a save landing during it reads as a
-        // change next time rather than being missed.
-        stamps[ref.id] = await roomFilesModified(absolute);
-        read[ref.id] = await readRoomFromDiskAsync(absolute);
-        projectOpenProgress.value = (read.length, loaded.rooms.length);
+      // A few rooms at a time: on a share each file waits its turn for the
+      // server, and reading the rooms one after another left it idle in
+      // between - a 30-room job took twice as long to open.
+      final queue = [...loaded.rooms];
+      Future<void> worker() async {
+        while (queue.isNotEmpty) {
+          final ref = queue.removeAt(0);
+          final absolute = BuildingProject.resolvePath(ref.configPath, file);
+          // Taken before the read, so a save landing during it reads as a
+          // change next time rather than being missed.
+          stamps[ref.id] = await roomFilesModified(absolute);
+          read[ref.id] = await readRoomFromDiskAsync(absolute);
+          projectOpenProgress.value = (read.length, loaded.rooms.length);
+        }
       }
+
+      await Future.wait([for (var i = 0; i < kRoomReadsAtOnce; i++) worker()]);
       project = loaded;
       currentProjectPath = file;
       // Saving writes the rooms' new folders into the job.
@@ -16110,14 +16215,28 @@ class AppStateProvider extends ChangeNotifier {
   String get projectCampusFile {
     final resolved = project.resolvedCampusFile(currentProjectPath);
     if (resolved.isEmpty) return '';
-    return File(resolved).existsSync() ? resolved : '';
+    // Asked on every redraw of the banner, so the answer is kept a while
+    // rather than asking the share each time.
+    final now = DateTime.now();
+    final had = _campusCheck;
+    if (had != null &&
+        had.path == resolved &&
+        now.difference(had.at) < const Duration(seconds: 15)) {
+      return had.exists ? resolved : '';
+    }
+    final exists = File(resolved).existsSync();
+    _campusCheck = (path: resolved, exists: exists, at: now);
+    return exists ? resolved : '';
   }
+
+  ({String path, bool exists, DateTime at})? _campusCheck;
 
   /// Remembers [absolute] as the campus this job is on. '' forgets it.
   ///
   /// Not repricing: a pointer to another document cannot move a figure on this
   /// one.
   void setProjectCampusFile(String absolute) {
+    _campusCheck = null;
     final next = absolute.trim().isEmpty
         ? ''
         : BuildingProject.storeCampusPath(
@@ -20086,6 +20205,11 @@ class AppStateProvider extends ChangeNotifier {
   /// a hundred times a second, so it pays for itself rather than trusting a
   /// cache it did not fill.
   void markRoomSaved() {
+    // A box titled differently from its config block takes the block's name
+    // on the next notify - which, after a load, read as an unsaved change
+    // nobody made. So the two are put in step first, the same as the routing
+    // pass: not an edit; the next save writes it.
+    _syncDeviceNames();
     _forgetRoomFingerprint();
     _savedRoomFingerprint = _roomFingerprint();
     // The files and the room agree, so they are the base of the next merge.
@@ -20232,8 +20356,17 @@ class AppStateProvider extends ChangeNotifier {
     // a moment that had nothing to do with it. The room being left was priced
     // from memory and is not cached, so it is read fresh either way; the one
     // being opened is priced from memory now.
-    _rereadChangedRooms();
     _projectEstimate = null;
+    // The job's other rooms are checked for changes in the background: the
+    // room is already open, and on a slow share the check takes seconds.
+    // (It once ran on the window's own thread and froze it for half a
+    // minute.) Tests wait for it so their folders can be cleaned up.
+    final reread = _rereadChangedRooms();
+    if (runningUnderTest) {
+      await reread;
+    } else {
+      unawaited(reread);
+    }
 
     AppLogger.logInfo(
       'Project room "${ref.fallbackName}" opened into the editor from '
@@ -20517,24 +20650,51 @@ class AppStateProvider extends ChangeNotifier {
   /// saved from another window or computer is picked up, and one nobody
   /// touched keeps the figure it had. On this thread, like the full re-read
   /// it replaces - a stat per file is far less than reading every room.
-  int _rereadChangedRooms() {
+  /// How many rooms are read from disk at once when a job opens.
+  static const int kRoomReadsAtOnce = 6;
+
+  /// Bumped per run of [_rereadChangedRooms], so an older run still reading
+  /// gives way to the newer one.
+  int _rereadRun = 0;
+
+  /// Reads again the rooms on the job whose files changed since they were
+  /// cached, without holding up the window: every room is checked at once,
+  /// and the job is repriced once at the end if any changed. Returns how many
+  /// were read.
+  Future<int> _rereadChangedRooms() async {
+    final run = ++_rereadRun;
+    final projectPath = currentProjectPath;
     final open = currentConfigPath;
+    final refs = [
+      for (final ref in project.rooms)
+        (
+          ref: ref,
+          absolute: BuildingProject.resolvePath(ref.configPath, projectPath),
+        ),
+    ]..removeWhere(
+        // The room in the editor is priced from memory anyway.
+        (r) => open.isNotEmpty && _samePath(r.absolute, open));
+    final stamps =
+        await Future.wait([for (final r in refs) roomFilesModified(r.absolute)]);
+    bool stale() => run != _rereadRun || currentProjectPath != projectPath;
+    if (stale()) return 0;
     var reread = 0;
-    for (final ref in project.rooms) {
-      final absolute = BuildingProject.resolvePath(
-        ref.configPath,
-        currentProjectPath,
-      );
-      // The room in the editor is priced from memory anyway.
-      if (open.isNotEmpty && _samePath(absolute, open)) continue;
-      final stamp = roomFilesModifiedSync(absolute);
-      final cached = _projectRooms.containsKey(ref.id) &&
-          _projectRoomStamps.containsKey(ref.id) &&
-          _projectRoomStamps[ref.id] == stamp;
+    for (var i = 0; i < refs.length; i++) {
+      final id = refs[i].ref.id;
+      final cached = _projectRooms.containsKey(id) &&
+          _projectRoomStamps.containsKey(id) &&
+          _projectRoomStamps[id] == stamps[i];
       if (cached) continue;
-      _projectRooms[ref.id] = readRoomFromDisk(absolute);
-      _projectRoomStamps[ref.id] = stamp;
+      final room = await readRoomFromDiskAsync(refs[i].absolute);
+      if (stale()) return reread;
+      if (!project.rooms.any((r) => r.id == id)) continue;
+      _projectRooms[id] = room;
+      _projectRoomStamps[id] = stamps[i];
       reread++;
+    }
+    if (reread > 0) {
+      _projectEstimate = null;
+      notifyListeners();
     }
     return reread;
   }

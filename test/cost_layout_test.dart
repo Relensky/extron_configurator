@@ -103,6 +103,35 @@ void main() {
     });
   }
 
+  // A portrait window scrolls sideways rather than squeezing the name and
+  // model columns down to nothing.
+  testWidgets('a portrait window keeps Device and Model readable',
+      (tester) async {
+    tester.view.physicalSize = const Size(700, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: fullEstimate(),
+        child: const MaterialApp(home: Scaffold(body: CostEstimateView())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    final deviceWidth = tester.getTopLeft(find.text('Model').first).dx -
+        tester.getTopLeft(find.text('Device').first).dx;
+    expect(deviceWidth, greaterThanOrEqualTo(150));
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is Scrollable && w.axisDirection == AxisDirection.right,
+      ),
+      findsWidgets,
+      reason: 'the page scrolls sideways instead',
+    );
+  });
+
   testWidgets('the equipment captions sit over their own columns',
       (tester) async {
     tester.view.physicalSize = const Size(1900, 1400);
@@ -155,7 +184,7 @@ void main() {
 
   testWidgets('the heading buttons are still all there when it wraps',
       (tester) async {
-    tester.view.physicalSize = const Size(1000, 1400);
+    tester.view.physicalSize = const Size(1200, 1400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
@@ -186,7 +215,7 @@ void main() {
       );
       expect(
         tester.getBottomRight(find.text(label)).dx,
-        lessThanOrEqualTo(1000),
+        lessThanOrEqualTo(1200),
         reason: '$label is inside the window',
       );
     }

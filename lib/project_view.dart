@@ -2035,9 +2035,7 @@ class _RoomRowState extends State<_RoomRow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Flexible(child: Text(
+          Text(
             room.name,
             style: theme.textTheme.titleSmall?.copyWith(
               color: ink,
@@ -2051,10 +2049,9 @@ class _RoomRowState extends State<_RoomRow> {
                         : null),
               decorationColor: ink,
             ),
-          )),
-              RoomStatusIcons(roomId: teamId, color: ink),
-            ],
           ),
+          // Editing now, working on, ready to approve, approved.
+          RoomStatusIcons(roomId: teamId, color: ink, labels: true),
           Text(
             room.ok ? room.ref.configPath : room.room.error,
             style: theme.textTheme.bodySmall?.copyWith(

@@ -159,4 +159,52 @@ void main() {
     expect(labels(p), hasLength(2));
     expect(p.avCost.qtyOverrides[key], 200);
   });
+
+  test('fewer typed takes units off once the typing is done', () {
+    final p = room();
+    final key = estimateOf(p).equipment.single.key;
+    p.setAvEquipmentQty(key, 6, drawn: 2);
+    // Per keystroke it is only the quote's figure.
+    p.setAvEquipmentQty(key, 3, drawn: 6);
+    expect(labels(p), hasLength(6));
+    p.settleAvEquipmentQty(key);
+    expect(labels(p), ['Display 1', 'Display 2', 'Display 3']);
+    expect(p.avCost.qtyOverrides, isEmpty);
+    // Settled twice, nothing more goes.
+    p.settleAvEquipmentQty(key);
+    expect(labels(p), hasLength(3));
+  });
+
+  test('typing more passes through fewer without losing units', () {
+    final p = room();
+    final key = estimateOf(p).equipment.single.key;
+    p.setAvEquipmentQty(key, 13, drawn: 2);
+    // "20" typed over "13": "2", then "20", then done.
+    p.setAvEquipmentQty(key, 2, drawn: 13);
+    p.setAvEquipmentQty(key, 20, drawn: 13);
+    p.settleAvEquipmentQty(key);
+    expect(labels(p), hasLength(20));
+    expect(labels(p).last, 'Display 20');
+  });
+
+  test('settled fewer leaves cabled units and keeps the typed figure', () {
+    final p = room();
+    final key = estimateOf(p).equipment.single.key;
+    p.setAvEquipmentQty(key, 4, drawn: 2);
+    p.avCables.add(
+      const AvCable(
+        id: 'C1',
+        fromNodeId: 'D1',
+        fromPortId: 'out',
+        toNodeId: 'X',
+        toPortId: 'in',
+        signal: SignalType.hdmi,
+      ),
+    );
+    p.setAvEquipmentQty(key, 0, drawn: 4);
+    p.settleAvEquipmentQty(key);
+    // The cabled one stays, and alone it loses its number.
+    expect(labels(p), ['Display']);
+    expect(p.avCost.qtyOverrides[key], 0);
+  });
 }

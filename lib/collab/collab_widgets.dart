@@ -576,13 +576,14 @@ Future<bool> _mergeNow(
     declined: declined,
   );
   if (outcome.merged && preview != null) {
-    // Every line, approved or left out, on the combine history.
-    await provider.recordCombine(
+    // Every line, approved or left out, on the combine history - written in
+    // the background, so a save waiting on this combine is not held up.
+    unawaited(provider.recordCombine(
       kind: kind,
       from: who,
       backup: backup,
       items: combineHistoryItems(preview, declined, side, doc),
-    );
+    ));
   }
   if (outcome.merged && messenger != null && messenger.mounted) {
     final n = outcome.takenFromTheirs;

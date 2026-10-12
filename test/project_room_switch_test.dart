@@ -109,6 +109,56 @@ void main() {
       expect(p.avNodes.single.model, 'Display X');
     });
 
+    test('a room changed on disk is read again on a switch', () async {
+      final p = withProject();
+      double roomB$() => p
+          .priceProject()
+          .rooms
+          .firstWhere((r) => r.ref.id == p.project.rooms.last.id)
+          .estimate!
+          .equipmentTotal;
+      expect(roomB$(), 2000);
+
+      // Room B saved from another computer: a display added.
+      final flow = File(path.join(dir.path, 'b_config_av_flow.json'));
+      flow.writeAsStringSync(jsonEncode({
+        'nodes': [
+          device('n1', 'Camera', 'Camera Y').toJson(),
+          device('n2', 'Display', 'Display X').toJson(),
+        ],
+      }));
+      flow.setLastModifiedSync(DateTime.now().add(const Duration(minutes: 1)));
+
+      expect(await p.openProjectRoomRef(p.project.rooms.first), isEmpty);
+      expect(roomB$(), 3000);
+    });
+
+    test('a box named differently from its config block does not make '
+        'the room read as unsaved', () async {
+      // The config calls the projector "Projector 1"; the saved drawing
+      // still says "Projector". Opening puts the config's name on the box -
+      // not an edit, so no save prompt.
+      final configPath = path.join(dir.path, 'c_config.json');
+      File(configPath).writeAsStringSync(jsonEncode({
+        'SYSTEM_SETUP': {'gui_full_room_name': 'Room C'},
+        'PROJECTORDEVICE_1': {'name': 'Projector 1', 'model': 'Display X'},
+      }));
+      File(path.join(dir.path, 'c_config_av_flow.json'))
+          .writeAsStringSync(jsonEncode({
+        'nodes': [
+          device('PROJECTORDEVICE_1', 'Projector', 'Display X').toJson(),
+        ],
+      }));
+      final p = withProject();
+      p.addRoomToProject(configPath);
+      expect(await p.openProjectRoomRef(p.project.rooms.last), isEmpty);
+      expect(p.avNodeById('PROJECTORDEVICE_1')?.label, 'Projector 1');
+      expect(p.roomHasUnsavedChanges, isFalse);
+      // ...and still not after the app's next refresh.
+      p.notifyListeners();
+      expect(p.roomHasUnsavedChanges, isFalse);
+    });
+
     test('the next room replaces the last one entirely', () async {
       final p = withProject();
       await p.openProjectRoomRef(p.project.rooms.first);
@@ -417,8 +467,13 @@ void main() {
       // stopped at the path could look at the room in the middle of opening -
       // config in, diagram not yet - and report an empty drawing as a failure
       // to load one.
+      // And for the open to finish: it checks the job's other rooms last,
+      // then says so.
       for (var i = 0;
-          i < 40 && (p.currentConfigPath.isEmpty || p.avNodes.isEmpty);
+          i < 80 &&
+              (p.currentConfigPath.isEmpty ||
+                  p.avNodes.isEmpty ||
+                  find.textContaining('is now the open room').evaluate().isEmpty);
           i++) {
         await tester.pump();
         await tester.runAsync(

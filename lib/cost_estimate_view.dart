@@ -195,8 +195,32 @@ List<_Col> _withShipping(List<_Col> columns, bool shipping) => !shipping
         ],
       ];
 
-/// How wide the page has to be before it scrolls sideways instead.
-double _costPageMinWidth(bool shipping) => shipping ? 1000 : 880;
+/// The least each unit of flex gets before the page scrolls sideways, so
+/// the name and model columns stay readable on a narrow window.
+const double _kMinFlexWidth = 60;
+
+/// The list padding, card margin and card padding around every table.
+const double _kTableChrome = 2 * 16 + 2 * 4 + 2 * 12;
+
+/// The narrowest [columns] can lay out with their flex columns still
+/// readable.
+double _tableMinWidth(List<_Col> columns) => columns.fold(
+  0.0,
+  (w, c) => w + c.gap + (c.flex > 0 ? c.flex * _kMinFlexWidth : c.width),
+);
+
+/// How wide the page has to be before it scrolls sideways instead. Measured
+/// off the widest table, so a narrow window scrolls rather than squeezing
+/// Device and Model down to nothing.
+double _costPageMinWidth(bool shipping) =>
+    _kTableChrome +
+    [
+      _withShipping(_kEquipmentCols, shipping),
+      _withShipping(_kHardwareCols, shipping),
+      _withShipping(_kCablingCols, shipping),
+      _kLaborCols,
+      _withShipping(_kItemsCols, shipping),
+    ].map(_tableMinWidth).reduce(math.max);
 
 /// The rack-hardware table's columns — see [_kEquipmentCols].
 const List<_Col> _kHardwareCols = [
@@ -1324,6 +1348,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                     v.trim().isEmpty ? null : double.tryParse(v),
                                     drawn: line.onDiagram ?? line.drawnQty,
                                   ),
+                                  // Fewer typed takes units off the diagram,
+                                  // once the typing is done.
+                                  onDone: () =>
+                                      provider.settleAvEquipmentQty(line.key),
                                 ),
                               ),
                             )
@@ -2940,9 +2968,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       child: Tooltip(
         message: by == null
             ? 'Bought on this job. Press to say it comes from somewhere else.'
-            : by.isEmpty
-                ? 'Furnished by others - listed here, priced at nothing'
-                : 'Furnished by $by - listed here, priced at nothing',
+            : line.partlyFurnished
+                ? '${furnishedNote(line)} - the other '
+                      '${trimNumber(line.boughtQty)} are bought on this job'
+                : by.isEmpty
+                    ? 'Furnished by others - listed here, priced at nothing'
+                    : 'Furnished by $by - listed here, priced at nothing',
         child: PopupMenuButton<String>(
           icon: Icon(
             by == null ? Icons.sell_outlined : Icons.handshake,
@@ -2981,6 +3012,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ),
             ),
             PopupMenuItem(
+              value: 'some',
+              enabled: line.qty > 1,
+              child: const ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.call_split, size: 18),
+                title: Text('Only some of them...'),
+                subtitle: Text(
+                  'Say how many come from stock or elsewhere. The rest are '
+                  'bought on this job.',
+                ),
+              ),
+            ),
+            PopupMenuItem(
               value: 'clear',
               enabled: by != null,
               child: const ListTile(
@@ -3004,11 +3049,108 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               );
               return;
             }
+            if (choice == 'some') {
+              final some = await _askFurnishedSome(context, line, by, what);
+              if (some == null) return;
+              provider.setAvCostFurnishedSome(
+                line.key,
+                some.source,
+                some.qty,
+              );
+              return;
+            }
             final typed = await _askFurnishedSource(context, by ?? '', what);
             if (typed == null) return;
             provider.setAvCostFurnished(line.key, typed);
           },
         ),
+      ),
+    );
+  }
+
+  /// How many of [line] come from another source, and which. Null when the
+  /// dialog was canceled. A count of the whole line or more is all of them.
+  Future<({String source, double? qty})?> _askFurnishedSome(
+    BuildContext context,
+    CostLine line,
+    String? by,
+    String what,
+  ) async {
+    final count = TextEditingController(
+      text: line.partlyFurnished ? trimNumber(line.furnishedCount) : '',
+    );
+    final source = TextEditingController(text: by ?? 'stock');
+    String? error;
+    return showDialog<({String source, double? qty})>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          void save() {
+            final n = double.tryParse(count.text.trim());
+            if (n == null || n <= 0) {
+              setLocal(() => error = 'Type how many, 1 or more.');
+              return;
+            }
+            Navigator.of(ctx).pop((
+              source: source.text.trim(),
+              qty: n >= line.qty ? null : n,
+            ));
+          }
+
+          return AlertDialog(
+            title: const Text('Only some from another source'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$what has ${trimNumber(line.qty)}. The ones that come '
+                    'from elsewhere add nothing to the total; the rest are '
+                    'priced as usual.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('furnished_some_count'),
+                    controller: count,
+                    autofocus: true,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                    ],
+                    decoration: InputDecoration(
+                      labelText: 'How many',
+                      hintText: 'of ${trimNumber(line.qty)}',
+                      errorText: error,
+                    ),
+                    onSubmitted: (_) => save(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('furnished_some_source'),
+                    controller: source,
+                    decoration: const InputDecoration(
+                      labelText: 'Furnished by',
+                      hintText: 'e.g. stock, Campus IT, the owner',
+                    ),
+                    onSubmitted: (_) => save(),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(onPressed: save, child: const Text('Save')),
+            ],
+          );
+        },
       ),
     );
   }
@@ -3089,11 +3231,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         ),
       );
     }
-    return Text(
+    final money = Text(
       formatMoney(total ?? line.total, currency),
       textAlign: TextAlign.right,
       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
     );
+    // Only the bought ones are in the money; say why it is short.
+    if (line.partlyFurnished) {
+      return Tooltip(message: priceFromLabel(line), child: money);
+    }
+    return money;
   }
 
   Widget _configFlag(

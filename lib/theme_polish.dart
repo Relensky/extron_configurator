@@ -126,7 +126,7 @@ ThemeData polishAuris(ThemeData theme) {
   );
 }
 
-/// Fades and lifts its child in once, when it is first built. Keyed by the
+/// Fades and zooms its child in once, when it is first built. Keyed by the
 /// caller so a new page plays it and a rebuild of the same page does not.
 class FadeInPage extends StatefulWidget {
   final Widget child;
@@ -143,10 +143,8 @@ class _FadeInPageState extends State<FadeInPage>
       AnimationController(vsync: this, duration: kMotionMedium);
   late final Animation<double> _fade =
       CurvedAnimation(parent: _c, curve: kMotionCurve);
-  late final Animation<Offset> _lift = Tween(
-    begin: const Offset(0, 0.012),
-    end: Offset.zero,
-  ).animate(_fade);
+  late final Animation<double> _zoom =
+      Tween<double>(begin: 0.97, end: 1).animate(_fade);
 
   @override
   void didChangeDependencies() {
@@ -170,6 +168,6 @@ class _FadeInPageState extends State<FadeInPage>
   @override
   Widget build(BuildContext context) => FadeTransition(
         opacity: _fade,
-        child: SlideTransition(position: _lift, child: widget.child),
+        child: ScaleTransition(scale: _zoom, child: widget.child),
       );
 }

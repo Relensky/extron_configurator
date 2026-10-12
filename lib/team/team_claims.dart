@@ -266,6 +266,12 @@ class TeamClaims extends ChangeNotifier {
     ]..sort((a, b) => b.at.compareTo(a.at));
   }
 
+  /// Every tag that is on now, anyone's, newest first.
+  List<TeamClaim> get current => [
+        for (final c in _latest.values)
+          if (c.on) c,
+      ]..sort((a, b) => b.at.compareTo(a.at));
+
   bool isOn(String kind, String id, String login) =>
       on(kind, id).any((c) => c.who.toLowerCase() == login.toLowerCase());
 

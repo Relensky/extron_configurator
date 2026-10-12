@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'team/team_claims.dart';
-import 'team/team_widgets.dart' show teamAgo;
+import 'team/team_host.dart';
+import 'team/team_presence.dart';
+import 'team/team_widgets.dart' show TeamAvatar, teamAgo;
 
 /// ============================================================================
 ///  ROOM STATUS: WORKING ON, READY FOR REVIEW, REVIEW COMPLETE
@@ -14,10 +16,12 @@ import 'team/team_widgets.dart' show teamAgo;
 ///  Review marks are kept the same way, in their own folder so the other team
 ///  apps do not read them as "working on":
 ///
-///    * READY FOR REVIEW - the room is done and wants checking before
+///    * READY TO APPROVE - the room is done and wants checking before
 ///      anything is bought for it.
-///    * REVIEW COMPLETE - it was checked. Marking it clears ready; marking it
-///      ready again clears complete, for the next round.
+///    * APPROVED - READY TO ORDER - it was checked. Marking it clears ready;
+///      marking it ready again clears approved, for the next round.
+///
+///  Who has a room open right now comes from the team presence notes.
 /// ============================================================================
 
 const String kRoomReadyKind = 'room-ready';
@@ -25,17 +29,21 @@ const String kRoomReviewedKind = 'room-reviewed';
 
 /// Everything known about one room's status.
 class RoomTeamStatus {
+  /// People with the room open right now, in this app.
+  final List<TeamPresence> editing;
   final List<TeamClaim> working;
   final TeamClaim? ready;
   final TeamClaim? reviewed;
 
   const RoomTeamStatus({
+    this.editing = const [],
     this.working = const [],
     this.ready,
     this.reviewed,
   });
 
-  bool get isEmpty => working.isEmpty && ready == null && reviewed == null;
+  bool get isEmpty =>
+      editing.isEmpty && working.isEmpty && ready == null && reviewed == null;
 }
 
 TeamClaim? _newest(List<TeamClaim> list) =>
@@ -44,10 +52,16 @@ TeamClaim? _newest(List<TeamClaim> list) =>
 RoomTeamStatus roomTeamStatus(
   TeamClaims claims,
   TeamClaims reviews,
-  String roomId,
-) {
+  String roomId, {
+  TeamPresenceBoard? presence,
+}) {
   if (roomId.isEmpty) return const RoomTeamStatus();
+  final id = roomId.toLowerCase();
   return RoomTeamStatus(
+    editing: [
+      for (final p in presence?.others ?? const <TeamPresence>[])
+        if (p.app == TeamHost.appId && p.room.toLowerCase() == id) p,
+    ],
     working: claims.active ? claims.on('room', roomId) : const [],
     ready: reviews.active ? _newest(reviews.on(kRoomReadyKind, roomId)) : null,
     reviewed:
@@ -81,7 +95,7 @@ Future<String> setRoomReady(
   final error = await reviews.set(
     kind: kRoomReadyKind,
     id: roomId,
-    label: '$roomId - ready for review',
+    label: '$roomId - ready to approve',
     who: reviews.me.user,
     whoName: reviews.myName(),
     on: true,
@@ -101,7 +115,7 @@ Future<String> setRoomReviewed(
   final error = await reviews.set(
     kind: kRoomReviewedKind,
     id: roomId,
-    label: '$roomId - review complete',
+    label: '$roomId - approved, ready to order',
     who: reviews.me.user,
     whoName: reviews.myName(),
     on: true,
@@ -110,77 +124,181 @@ Future<String> setRoomReviewed(
   return _clear(reviews, kRoomReadyKind, roomId);
 }
 
-/// The icons for a room: someone working on it, ready for review, review
-/// complete. Nothing when there is nothing to say.
+/// The status of a room, each with the person behind it: who is editing it
+/// now, who is tagged as working on it, who marked it ready to approve, who
+/// approved it. Each person is their avatar with a small badge for what they
+/// are doing. Nothing when there is nothing to say. [labels] adds a word or
+/// two beside each, for the Project page's rows.
 class RoomStatusIcons extends StatelessWidget {
   const RoomStatusIcons({
     super.key,
     required this.roomId,
-    this.size = 16,
+    this.size = 18,
     this.color,
+    this.labels = false,
   });
 
   final String roomId;
   final double size;
   final Color? color;
+  final bool labels;
 
   @override
   Widget build(BuildContext context) {
     final provider = context.read<AppStateProvider>();
     final claims = provider.teamClaims;
     final reviews = provider.teamReviews;
+    final presence = provider.teamPresence;
     if (roomId.isEmpty) return const SizedBox.shrink();
     return ListenableBuilder(
-      listenable: Listenable.merge([claims, reviews]),
+      listenable: Listenable.merge([claims, reviews, presence]),
       builder: (context, _) {
-        final status = roomTeamStatus(claims, reviews, roomId);
+        final status =
+            roomTeamStatus(claims, reviews, roomId, presence: presence);
         if (status.isEmpty) return const SizedBox.shrink();
-        final scheme = Theme.of(context).colorScheme;
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
         final locked = provider.roomLockHoldersFor(roomId).isNotEmpty;
-        Widget icon(String key, IconData data, Color? tint, String tip) =>
+
+        Widget item({
+          required String key,
+          required List<String> logins,
+          required IconData badge,
+          required Color tint,
+          required String tip,
+          required String word,
+        }) =>
             Padding(
-              padding: const EdgeInsets.only(left: 4),
+              padding: EdgeInsets.only(left: labels ? 8 : 4),
               child: Tooltip(
                 message: tip,
-                child: Icon(data,
-                    key: ValueKey('${key}_$roomId'),
-                    size: size,
-                    color: tint ?? color),
+                child: Row(
+                  key: ValueKey('${key}_$roomId'),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final login in logins)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 2),
+                        child: _BadgedAvatar(
+                          login: login,
+                          badge: badge,
+                          tint: tint,
+                          size: size,
+                        ),
+                      ),
+                    if (labels) ...[
+                      const SizedBox(width: 2),
+                      Text(
+                        word,
+                        key: ValueKey('${key}_label_$roomId'),
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: color ?? tint),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             );
-        return Row(
-          mainAxisSize: MainAxisSize.min,
+        String names(Iterable<String> list) => list.join(', ');
+        return Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: 2,
           children: [
+            if (status.editing.isNotEmpty)
+              item(
+                key: 'room_status_editing',
+                logins: [for (final p in status.editing) p.user],
+                badge: Icons.edit,
+                tint: scheme.tertiary,
+                tip: [
+                  for (final p in status.editing)
+                    '${p.label} has this room open in ${p.appName}',
+                ].join('\n'),
+                word: 'Editing: ${names(status.editing.map((p) => p.label))}',
+              ),
             if (status.working.isNotEmpty)
-              icon(
-                'room_status_claimed',
-                locked ? Icons.lock_person : Icons.person_pin_circle,
-                locked ? scheme.tertiary : null,
-                '${status.working.map((c) => c.whoLabel).join(', ')} '
-                '${status.working.length == 1 ? 'is' : 'are'} working on '
-                'this room'
-                '${locked ? '\nLocked: it cannot be saved over until they '
-                    'are taken off it' : ''}',
+              item(
+                key: 'room_status_claimed',
+                logins: [for (final c in status.working) c.who],
+                badge: locked ? Icons.lock : Icons.push_pin,
+                tint: locked ? scheme.error : scheme.secondary,
+                tip: '${names(status.working.map((c) => c.whoLabel))} '
+                    '${status.working.length == 1 ? 'is' : 'are'} working on '
+                    'this room'
+                    '${locked ? '\nLocked: it cannot be saved over until they '
+                        'are taken off it' : ''}',
+                word: '${locked ? 'Locked' : 'Working on'}: '
+                    '${names(status.working.map((c) => c.whoLabel))}',
               ),
             if (status.ready != null)
-              icon(
-                'room_status_ready',
-                Icons.rate_review,
-                scheme.secondary,
-                'Ready for review - marked by ${status.ready!.whoLabel} '
-                '${teamAgo(status.ready!.at)}',
+              item(
+                key: 'room_status_ready',
+                logins: [status.ready!.who],
+                badge: Icons.rate_review,
+                tint: scheme.secondary,
+                tip: 'Ready to approve - marked by ${status.ready!.whoLabel} '
+                    '${teamAgo(status.ready!.at)}',
+                word: 'Ready to approve',
               ),
             if (status.reviewed != null)
-              icon(
-                'room_status_reviewed',
-                Icons.verified,
-                scheme.primary,
-                'Review complete - ${status.reviewed!.whoLabel} '
-                '${teamAgo(status.reviewed!.at)}',
+              item(
+                key: 'room_status_reviewed',
+                logins: [status.reviewed!.who],
+                badge: Icons.verified,
+                tint: scheme.primary,
+                tip: 'Approved - ready to order. Approved by '
+                    '${status.reviewed!.whoLabel} '
+                    '${teamAgo(status.reviewed!.at)}',
+                word: 'Approved - ready to order',
               ),
           ],
         );
       },
+    );
+  }
+}
+
+/// A person's avatar with a small round badge at its lower right.
+class _BadgedAvatar extends StatelessWidget {
+  const _BadgedAvatar({
+    required this.login,
+    required this.badge,
+    required this.tint,
+    required this.size,
+  });
+
+  final String login;
+  final IconData badge;
+  final Color tint;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = Theme.of(context).colorScheme.surface;
+    final dot = size * 0.6;
+    return SizedBox(
+      width: size + dot * 0.35,
+      height: size + dot * 0.35,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          TeamAvatar(login, size: size),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: dot,
+              height: dot,
+              decoration: BoxDecoration(
+                color: tint,
+                shape: BoxShape.circle,
+                border: Border.all(color: surface, width: 1.2),
+              ),
+              child: Icon(badge, size: dot * 0.7, color: surface),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -225,23 +343,23 @@ class RoomReviewMenu extends StatelessWidget {
               value: ready,
               onChanged: (v) => run(
                   () => setRoomReady(reviews, roomId, on: v == true)),
-              child: const Text('Ready for review'),
+              child: const Text('Ready to approve'),
             ),
             CheckboxMenuButton(
               key: ValueKey('room_review_done_$roomId'),
               value: reviewed,
               onChanged: (v) => run(
                   () => setRoomReviewed(reviews, roomId, on: v == true)),
-              child: const Text('Review complete'),
+              child: const Text('Approved - ready to order'),
             ),
           ],
           builder: (context, controller, _) => IconButton(
             key: ValueKey('room_review_button_$roomId'),
             tooltip: reviewed
-                ? 'Review complete - change the review status'
+                ? 'Approved - ready to order. Change the approval'
                 : ready
-                    ? 'Ready for review - change the review status'
-                    : 'Mark this room ready for review, or reviewed',
+                    ? 'Ready to approve - change the approval'
+                    : 'Mark this room ready to approve, or approved',
             visualDensity: VisualDensity.compact,
             iconSize: size,
             color: color,

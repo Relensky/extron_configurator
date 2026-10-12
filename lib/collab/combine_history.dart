@@ -24,6 +24,10 @@ import '../safe_write.dart';
 const String kCombineHistoryFile = 'combine_history.json';
 const String kCombineHistoryBackupFile = 'combine_history.backup.json';
 
+/// How many lines of one combine go on the room's own history; the rest
+/// are summed up there, and all of them are in the combine history.
+const int kCombineLinesInRoomHistory = 25;
+
 /// How many timestamped copies of the log are kept.
 const int kCombineHistorySnapshots = 30;
 
@@ -291,7 +295,7 @@ class CombineHistoryStore {
         path.join(snapshotFolder, 'combine_history_$stamp.json'),
         text,
       );
-      _pruneSnapshots();
+      await _pruneSnapshots();
       // The backup has to say what the log says.
       var check = await this.check();
       if (!check.matches) {
@@ -310,18 +314,18 @@ class CombineHistoryStore {
     }
   }
 
-  void _pruneSnapshots() {
+  Future<void> _pruneSnapshots() async {
     try {
-      final copies = Directory(snapshotFolder)
-          .listSync()
-          .whereType<File>()
+      final copies = await Directory(snapshotFolder)
+          .list()
           .where((f) =>
+              f is File &&
               path.basename(f.path).startsWith('combine_history_') &&
               f.path.endsWith('.json'))
           .toList()
         ..sort((a, b) => b.path.compareTo(a.path));
       for (final old in copies.skip(kCombineHistorySnapshots)) {
-        old.deleteSync();
+        await old.delete();
       }
     } catch (_) {}
   }

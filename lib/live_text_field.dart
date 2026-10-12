@@ -24,6 +24,11 @@ class LiveTextField extends StatefulWidget {
   /// keystroke (renaming a catalog entry).
   final ValueChanged<String>? onSubmitted;
 
+  /// Called when an edit is over - Enter or focus loss - after [onChanged]
+  /// has had the last of it. For a step that must not run per keystroke.
+  /// May be called twice for one edit, so it should be idempotent.
+  final VoidCallback? onDone;
+
   final String? label;
   final String? hint;
 
@@ -81,6 +86,7 @@ class LiveTextField extends StatefulWidget {
     required this.initial,
     required this.onChanged,
     this.onSubmitted,
+    this.onDone,
     this.label,
     this.hint,
     this.hintIsValue = false,
@@ -117,7 +123,9 @@ class _LiveTextFieldState extends State<LiveTextField> {
     super.initState();
     // Clicking or tabbing away commits what was typed.
     _focus.addListener(() {
-      if (!_focus.hasFocus) _flush();
+      if (_focus.hasFocus) return;
+      _flush();
+      widget.onDone?.call();
     });
   }
 
@@ -246,6 +254,7 @@ class _LiveTextFieldState extends State<LiveTextField> {
     onSubmitted: (text) {
       _flush();
       widget.onSubmitted?.call(text);
+      widget.onDone?.call();
     },
     onTapOutside: (_) {
       _flush();
