@@ -62,6 +62,7 @@ bool tabCanExport(AppTab tab) => switch (tab) {
   // button producing a flattened text version of a building would be a
   // document nobody asked for and nobody could use.
   AppTab.project => false,
+  AppTab.photos => false,
   _ => true,
 };
 
@@ -82,6 +83,7 @@ String tabExportLabel(AppTab tab) => switch (tab) {
   AppTab.appConfig ||
   AppTab.schemaEditor ||
   AppTab.project ||
+  AppTab.photos ||
   AppTab.flowRules =>
     'This tab',
 };
@@ -103,6 +105,7 @@ String _stem(AppTab tab) => switch (tab) {
   AppTab.appConfig ||
   AppTab.schemaEditor ||
   AppTab.project ||
+  AppTab.photos ||
   AppTab.flowRules =>
     'room',
 };
@@ -185,6 +188,8 @@ List<ReportSection> tabReportSections(
     // room-scoped export to render. Its own tab writes the project workbook
     // and the per-vendor quote requests.
     case AppTab.project:
+    // Pictures, not a table.
+    case AppTab.photos:
       return const [];
   }
 }

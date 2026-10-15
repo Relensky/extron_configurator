@@ -1463,14 +1463,19 @@ ProjectEstimate computeProjectEstimate({
       costed.add(ProjectRoomCost(ref: ref, room: room));
       continue;
     }
+    // No rate on the job and none on this PC: the rate the room was last
+    // saved at, so the job reads the same here as for whoever set one.
+    final roomBase = project.taxPercent == null && defaultTaxPercent <= 0
+        ? room.settings.fileBaseTax
+        : baseTax;
     // The room may be cached or live, so it is not touched: the job's rate
     // goes on a copy.
     final settings =
-        room.settings.ownTaxRate || room.settings.taxPercent == baseTax
+        room.settings.ownTaxRate || room.settings.taxPercent == roomBase
             ? room.settings
             : (RoomCostSettings()
                 ..readJson(room.settings.toJson())
-                ..taxPercent = baseTax);
+                ..taxPercent = roomBase);
 
     var estimate = computeRoomCost(
       model: room.model,

@@ -66,6 +66,37 @@ void main() {
       expect(library.rackHardware, isEmpty);
     });
 
+    test('an AV/Misc box with connectors is equipment, not a cost item', () {
+      final library = AvDeviceLibrary.empty();
+      library.upsert(
+        const AvDeviceTemplate(
+          model: 'DTP HDMI 4K 330 Tx',
+          partNumber: '60-1331-12',
+          category: kCategoryMisc,
+          price: 760,
+          ports: [
+            AvPort(
+              id: 'hdmi',
+              label: 'HDMI',
+              signal: SignalType.hdmi,
+              direction: PortDirection.input,
+              side: PortSide.left,
+            ),
+          ],
+        ),
+      );
+      expect(library.miscItems, isEmpty);
+      expect(
+        searchCatalog(library.equipment, '60-1331-12').map((t) => t.model),
+        ['DTP HDMI 4K 330 Tx'],
+      );
+      expect(
+        searchCatalog(library.equipment, 'DTP HDMI 4K 330 Tx')
+            .map((t) => t.model),
+        ['DTP HDMI 4K 330 Tx'],
+      );
+    });
+
     test('a retired item drops out of the list but keeps resolving', () {
       final library = AvDeviceLibrary.empty();
       library.upsert(

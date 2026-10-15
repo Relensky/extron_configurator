@@ -456,7 +456,10 @@ ControlPrefillResult applyControlSide(
     );
 
     block['name'] = entry.name;
-    if (entry.model.trim().isNotEmpty) block['model'] = entry.model.trim();
+    // The driver's own spelling: a kit on the drawing ('ShareLink Pro 2000
+    // Miracast & ShareNext US') is the model the driver lists on the block.
+    final model = driverModelName(provider, entry.model);
+    if (model.isNotEmpty) block['model'] = model;
     if (entry.module.isNotEmpty) {
       block['module'] = entry.module;
     } else {
@@ -480,8 +483,8 @@ ControlPrefillResult applyControlSide(
     // this model on Serial has to have said so before the baud rate is offered
     // — the other order fills in the network keys and then changes the
     // connection out from under them.
-    if (entry.module.isNotEmpty && entry.model.trim().isNotEmpty) {
-      provider.applyModuleDefaults(entry.sectionKey, entry.model.trim());
+    if (entry.module.isNotEmpty && model.isNotEmpty) {
+      provider.applyModuleDefaults(entry.sectionKey, model);
     }
     provider.applyDeviceBlockDefaults(entry.sectionKey);
     created.add(entry.sectionKey);
@@ -560,6 +563,12 @@ PresetControlResult buildControlSideForPreset(
     settings: settings,
   );
 }
+
+/// [model] as the driver that claims it spells it, or [model] trimmed when no
+/// driver does. A kit or a trim comes back as the driver's product - see
+/// [AppStateProvider.declaredModelFor].
+String driverModelName(AppStateProvider provider, String model) =>
+    provider.modelEntryFor(model)?.model.trim() ?? model.trim();
 
 /// The device family a MODEL belongs in, or null when nothing claims it.
 ///
@@ -651,11 +660,12 @@ String moveControlBlockToFamily(
   if (provider.roomConfig[toKey] != null) return '';
 
   final module = provider.moduleForModel(model);
+  model = driverModelName(provider, model);
   final block = Map<String, dynamic>.from(
     jsonDecode(jsonEncode(provider.getDefaultDeviceBlock(target.prefix))),
   );
   block['name'] = sequentialName(target, index);
-  if (model.trim().isNotEmpty) block['model'] = model.trim();
+  if (model.isNotEmpty) block['model'] = model;
   // Blank rather than the old family's driver. A block naming the DSP's driver
   // under a switcher's name reads as configured and commissions the room as
   // the wrong device; an empty module reads as the open question it is, and

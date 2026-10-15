@@ -75,6 +75,7 @@ const List<NavTab> kNavTabs = [
   NavTab(AppTab.floorPlan, Icons.map, 'Floor Plan'),
   NavTab(AppTab.cabling, Icons.account_tree_outlined, 'Cabling'),
   NavTab(AppTab.racks, Icons.view_day, 'Racks'),
+  NavTab(AppTab.photos, Icons.photo_library, 'Photos'),
   NavTab(AppTab.deviceEditor, Icons.inventory_2, 'Catalog'),
   NavTab(AppTab.schemaEditor, Icons.schema, 'Schema'),
   NavTab(AppTab.flowRules, Icons.rule_folder, 'Flow Rules'),
@@ -94,6 +95,7 @@ const Set<AppTab> kRoomTabs = {
   AppTab.floorPlan,
   AppTab.cabling,
   AppTab.racks,
+  AppTab.photos,
 };
 
 /// The rail's first row while no room is open: the start page - a new file,

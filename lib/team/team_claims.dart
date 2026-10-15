@@ -140,6 +140,10 @@ class TeamClaims extends ChangeNotifier {
   /// Newest line per (kind, id, who).
   final Map<String, TeamClaim> _latest = {};
 
+  /// Every line in every file, newest first: the history of who put whom on
+  /// what, and who took them off.
+  final List<TeamClaim> _history = [];
+
   /// Called for each change that arrives from someone else and puts THIS
   /// person on something - the app shows a notice.
   void Function(TeamClaim claim)? onTaggedByOthers;
@@ -161,6 +165,7 @@ class TeamClaims extends ChangeNotifier {
     _watcher = null;
     _folder = folder;
     _latest.clear();
+    _history.clear();
     _firstRead = true;
     if (folder.isEmpty) {
       notifyListeners();
@@ -189,6 +194,7 @@ class TeamClaims extends ChangeNotifier {
     _reading = true;
     try {
       final next = <String, TeamClaim>{};
+      final all = <TeamClaim>[];
       final dir = Directory(_folder);
       if (await dir.exists()) {
         await for (final f in dir.list()) {
@@ -206,6 +212,7 @@ class TeamClaims extends ChangeNotifier {
               c = TeamClaim.fromJson(jsonDecode(line));
             } catch (_) {}
             if (c == null) continue;
+            all.add(c);
             final had = next[c.key];
             if (had == null || c.at.isAfter(had.at)) next[c.key] = c;
           }
@@ -218,7 +225,12 @@ class TeamClaims extends ChangeNotifier {
       _latest
         ..clear()
         ..addAll(next);
-      if (changed) notifyListeners();
+      all.sort((a, b) => b.at.compareTo(a.at));
+      final grew = all.length != _history.length;
+      _history
+        ..clear()
+        ..addAll(all);
+      if (changed || grew) notifyListeners();
     } catch (_) {
     } finally {
       _reading = false;
@@ -272,6 +284,16 @@ class TeamClaims extends ChangeNotifier {
           if (c.on) c,
       ]..sort((a, b) => b.at.compareTo(a.at));
 
+  /// Every change to [login]'s tags (this person, by default) - put on or
+  /// taken off, by them or by someone else - newest first.
+  List<TeamClaim> historyFor([String? login, int limit = 100]) {
+    final who = (login ?? me.user).toLowerCase();
+    return [
+      for (final c in _history)
+        if (c.who.toLowerCase() == who) c,
+    ].take(limit).toList();
+  }
+
   bool isOn(String kind, String id, String login) =>
       on(kind, id).any((c) => c.who.toLowerCase() == login.toLowerCase());
 
@@ -307,6 +329,7 @@ class TeamClaims extends ChangeNotifier {
     }
     final had = _latest[c.key];
     if (had == null || c.at.isAfter(had.at)) _latest[c.key] = c;
+    _history.insert(0, c);
     notifyListeners();
     return '';
   }

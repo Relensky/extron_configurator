@@ -179,7 +179,7 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
     setState(() {
       _imageView.value = Matrix4.identity()
         ..translateByDouble(center.dx, center.dy, 0, 1)
-        ..scaleByDouble(factor, factor, 1, 1)
+        ..scaleByDouble(factor, factor, factor, 1)
         ..translateByDouble(-center.dx, -center.dy, 0, 1)
         ..multiply(_imageView.value);
     });

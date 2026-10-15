@@ -155,4 +155,17 @@ void main() {
       expect(shortNodeLabel('Room PC'), 'Room PC');
     });
   });
+
+  test('a device added where another sits moves down clear of it', () {
+    final p = AppStateProvider(autoLoadSettings: false);
+    final first = p.addAvNode(
+      const AvNode(id: '', label: 'Switcher', model: '', pos: Offset(40, 60), ports: []),
+    );
+    final second = p.addAvNode(
+      const AvNode(id: '', label: 'Projector', model: '', pos: Offset(60, 80), ports: []),
+    );
+    expect(second.pos.dx, 60);
+    expect(second.rect.overlaps(first.rect), isFalse);
+    expect(second.pos.dy, greaterThanOrEqualTo(first.rect.bottom));
+  });
 }

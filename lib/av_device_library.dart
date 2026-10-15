@@ -318,6 +318,47 @@ const List<String> kWellKnownCategories = [
   kCategoryMisc,
 ];
 
+/// What filing an entry under [category] limits it to - which pickers offer
+/// it and how it is priced. Shown beside the category picker and in the
+/// missing-category prompt.
+String categoryLimits(String category, {bool hasPorts = true}) {
+  final c = category.trim();
+  final lower = c.toLowerCase();
+  if (c.isEmpty) {
+    return 'No category: offered as equipment, but never budgeted from a '
+        'base cost when it has no price, and left out of category totals '
+        'and tidy-ups.';
+  }
+  if (lower == kCategoryCable.toLowerCase()) {
+    return 'Cable: priced against the diagram\'s cable runs of its signal '
+        'type and offered in Add cable. Kept out of Add equipment and the '
+        'new-device wizard.';
+  }
+  if (lower == kCategoryConsumable.toLowerCase()) {
+    return 'Consumable: kept out of Add equipment, the rack parts list and '
+        'the new-device wizard.';
+  }
+  if (lower == kCategoryMisc.toLowerCase()) {
+    return hasPorts
+        ? 'AV / Misc with connectors: treated as equipment. With no '
+              'connectors it becomes a billed line offered only in Other '
+              'items.'
+        : 'AV / Misc with no connectors: a billed line (license, mount, '
+              'trip charge) offered only in Other items, never in Add '
+              'equipment.';
+  }
+  if (kRackItemCategories.any((r) => r.toLowerCase() == lower)) {
+    return 'Rack part: offered on the rack editor\'s parts list and in Add '
+        'rack hardware. Kept out of Add equipment and the new-device wizard.';
+  }
+  if (kTrackedCategories.any((t) => t.toLowerCase() == lower)) {
+    return 'Equipment: offered in Add equipment and the new-device wizard, '
+        'and budgeted at the $c base cost when it has no price of its own.';
+  }
+  return 'Not a category the app tracks: offered as equipment, but never '
+      'budgeted from a base cost when it has no price.';
+}
+
 /// A model's connector set, and everything else about the box that the room
 /// config never records: how tall it is, what it draws, and what it costs.
 ///
@@ -615,7 +656,11 @@ class AvDeviceTemplate {
   /// True when this entry is a billable line rather than a piece of equipment
   /// — a license, a mount, a trip charge. It has a price and no connectors,
   /// and never appears in a picker that puts something on a diagram.
-  bool get isMiscItem => category.trim() == kCategoryMisc;
+  ///
+  /// Connectors are part of the test: hundreds of real boxes (speakers, DTP
+  /// extenders, switches) are also filed under "AV / Misc", and they are
+  /// equipment.
+  bool get isMiscItem => category.trim() == kCategoryMisc && ports.isEmpty;
 
   /// True when this belongs on the rack editor's parts list — a vent plate, a
   /// blank, a shelf, a drawer, anything in [kRackItemCategories].
@@ -1654,6 +1699,21 @@ class AvDeviceLibrary {
     // Held for the whole read-merge-write, so two people saving at once
     // take turns instead of each writing over the other's merge.
     return withFileLock(target, () => _save(target, rebind));
+  }
+
+  /// Entries this copy added or changed since it last read the file - what a
+  /// save is about to write as somebody's edit.
+  List<AvDeviceTemplate> editedSinceRead() {
+    Map<String, dynamic> content(AvDeviceTemplate t) =>
+        t.toJson()..removeWhere((k, _) => kStampKeys.contains(k));
+    return [
+      for (final e in _byModel.entries)
+        if (e.value.custom &&
+            (_baseline[e.key] == null ||
+                jsonEncode(content(e.value)) !=
+                    jsonEncode(content(_baseline[e.key]!))))
+          e.value,
+    ];
   }
 
   /// Stamps entries this copy added or changed since it last read the file,

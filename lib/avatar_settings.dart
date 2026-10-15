@@ -6,6 +6,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'collab/collab_widgets.dart' show CollabAvatarCircle;
 import 'file_dialogs.dart';
+import 'hover_fade.dart' show HoverGrow;
 
 /// App Config: a picture in place of your initials where other people see
 /// you have a file open. Kept in the Root Folder's assets\avatars.
@@ -48,7 +49,12 @@ class AvatarSettingsSection extends StatelessWidget {
         const SizedBox(height: 10),
         Row(
           children: [
-            CollabAvatarCircle(user: me, picture: picture, radius: 28),
+            // Big enough to see what the picture is; bigger on hover.
+            HoverGrow(
+              scale: 1.3,
+              anchor: Alignment.centerLeft,
+              child: CollabAvatarCircle(user: me, picture: picture, radius: 56),
+            ),
             const SizedBox(width: 14),
             FilledButton.tonalIcon(
               key: const ValueKey('avatar_choose'),

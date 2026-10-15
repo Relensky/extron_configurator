@@ -2,6 +2,7 @@ import 'team/team_claims_widgets.dart';
 import 'team/team_notices.dart';
 import 'team/team_widgets.dart';
 import 'team_setup.dart';
+import 'hover_fade.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -33,6 +34,8 @@ import 'app_activity.dart';
 import 'responsive.dart';
 import 'room_review.dart' show RoomReviewMenu;
 import 'app_state.dart';
+import 'preset_library_panel.dart';
+import 'room_preset_save_dialog.dart';
 import 'avatar_settings.dart';
 import 'cost_estimate.dart' show trimNumber;
 import 'changelog.dart';
@@ -75,6 +78,8 @@ import 'keyboard_shortcuts_settings.dart';
 import 'project_view.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
+import 'room_photos_view.dart';
+import 'settings_path_field.dart';
 import 'recovery_dialog.dart';
 import 'save_actions.dart';
 import 'dynamic_devices_view.dart';
@@ -334,14 +339,20 @@ class RoomConfigApp extends StatelessWidget {
   ///  MaterialApp's builder inserts above the Navigator, so the key event
   ///  bubbling up out of that scope passes through here. The dialog still has
   ///  to open INSIDE the navigator, which is what [navigatorKey] is for.
+  ///
+  /// The text-box keys (App Config > Keyboard shortcuts > In a text box) are
+  /// bound here too. Below WidgetsApp's own text keys, so these win; with no
+  /// text box focused nothing answers them and the key carries on up.
   static Widget _helpShortcuts(KeyboardShortcuts keys, Widget child) =>
       Shortcuts(
     shortcuts: {
+      ...textBoxShortcuts(keys),
       for (final k in keys.bindingsFor(Shortcut.help))
         k.activator: const _OpenHelpIntent(),
     },
     child: Actions(
       actions: {
+        ...textBoxActions,
         _OpenHelpIntent: CallbackAction<_OpenHelpIntent>(
           onInvoke: (_) {
             final context = navigatorKey.currentContext;
@@ -980,9 +991,11 @@ class _MainDashboardState extends State<MainDashboard> {
           // shared with the CTS Dashboard and Instructor Contact - the ONE
           // chat: each project is a thread in it (Projects in its sidebar,
           // and a button in its header for the project open here).
+          // The chat itself hovers in the page's corner (TeamChatHoverButton).
           TeamToolbarButtons(
             onTeam: () => showTeamPage(context),
             onChat: () => TeamChatPanel.instance.toggle(context),
+            showChat: false,
           ),
           // YOU, in the corner - and the way into Settings, Help and the
           // light/dark switch. See [ProfileButton].
@@ -1048,17 +1061,23 @@ class _MainDashboardState extends State<MainDashboard> {
               // scrolls sideways with a scrollbar instead of being cut off.
               child: MinWidthScroll(
                 minWidth: 640,
-                child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
-                    ? _buildLandingScreen(context, provider)
-                    : _buildMainContent(
-                        selectedIndex,
-                        provider.configRevision,
-                        provider.isEstimateRoom,
-                      ),
+                // Lists scroll clear of the hovering chat button.
+                child: ChatButtonClearance(
+                  child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
+                      ? _buildLandingScreen(context, provider)
+                      : _buildMainContent(
+                          selectedIndex,
+                          provider.configRevision,
+                          provider.isEstimateRoom,
+                        ),
+                ),
               ),
                     ),
                   ),
                 ),
+                // [TEAM KIT]: the team chat, hovering bottom-right as in the
+                // CTS Dashboard.
+                const TeamChatHoverButton(),
               ],
             ),
           )
@@ -1515,6 +1534,8 @@ class _MainDashboardState extends State<MainDashboard> {
         return CablingView(key: key);
       case AppTab.racks:
         return RackTabView(key: key);
+      case AppTab.photos:
+        return RoomPhotosView(key: key);
       case AppTab.cost:
         return CostEstimateView(key: key);
       case AppTab.lifecycle:
@@ -2737,7 +2758,7 @@ class ProfileButton extends StatelessWidget {
             leading: CollabAvatarCircle(
               user: user,
               picture: picture,
-              radius: 22,
+              radius: 32,
             ),
             title: Text(provider.profileName),
             subtitle: Text(email.isEmpty ? 'No email set' : email),
@@ -2788,7 +2809,10 @@ class ProfileButton extends StatelessWidget {
       ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6),
-        child: CollabAvatarCircle(user: user, picture: picture, radius: 15),
+        // Grows while the pointer is on it.
+        child: HoverGrow(
+          child: CollabAvatarCircle(user: user, picture: picture, radius: 15),
+        ),
       ),
     );
   }
@@ -3197,6 +3221,24 @@ class AppSettingsView extends StatelessWidget {
           value: provider.autosaveEnabled,
           onChanged: (val) => provider.setAutosaveEnabled(val),
         ),
+        // The catalog saves for real - see AppStateProvider.autosaveCatalog.
+        SwitchListTile(
+          key: const ValueKey('catalog_autosave'),
+          title: const Text('Save the catalog automatically'),
+          subtitle: Text([
+            'Saves the device catalog itself on the same clock when it has '
+                'changes - no Save press needed. It merges with whatever '
+                'others have saved, the same as Save. It waits while a '
+                'changed entry has no category, so Save can ask for one.',
+            if (provider.catalogAutosaveNote.isNotEmpty)
+              provider.catalogAutosaveNote
+            else if (provider.lastCatalogAutosaveAt != null)
+              'Last saved automatically at '
+                  '${TimeOfDay.fromDateTime(provider.lastCatalogAutosaveAt!).format(context)}.',
+          ].join('\n')),
+          value: provider.catalogAutosave,
+          onChanged: (val) => provider.setCatalogAutosave(val),
+        ),
         const SizedBox(height: 12),
         Wrap(
           spacing: 16,
@@ -3215,7 +3257,8 @@ class AppSettingsView extends StatelessWidget {
                 isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'How often',
-                  helperText: 'Only writes when there is unsaved work',
+                  helperText: 'Recovery copies and catalog saves; only '
+                      'when there is unsaved work',
                   border: OutlineInputBorder(),
                 ),
                 items: [
@@ -3225,7 +3268,7 @@ class AppSettingsView extends StatelessWidget {
                       child: Text('Every $m minute${m == 1 ? '' : 's'}'),
                     ),
                 ],
-                onChanged: provider.autosaveEnabled
+                onChanged: provider.autosaveEnabled || provider.catalogAutosave
                     ? (val) {
                         if (val != null) provider.setAutosaveMinutes(val);
                       }
@@ -3291,8 +3334,10 @@ class AppSettingsView extends StatelessWidget {
           icon: Icons.description_outlined,
           children: [
         // Buildings JSON Path
-        TextFormField(
-          key: ValueKey('buildingsFilePath_${provider.buildingsFilePath}'),
+        SettingsPathField(
+          provider: provider,
+          settingKey: 'buildingsFilePath',
+          value: provider.buildingsFilePath,
           decoration: InputDecoration(
             labelText: 'Buildings JSON File Path',
             // Blank = buildings.json in the Root Folder
@@ -3314,9 +3359,6 @@ class AppSettingsView extends StatelessWidget {
               },
             ),
           ),
-          initialValue: provider.buildingsFilePath,
-          // updateSetting reloads the buildings list itself
-          onChanged: (val) => provider.updateSetting('buildingsFilePath', val),
         ),
         const SizedBox(height: 20),
 
@@ -3325,8 +3367,10 @@ class AppSettingsView extends StatelessWidget {
           children: [
             // Default config.json Template Path
             Expanded(
-              child: TextFormField(
-                key: ValueKey('templateFilePath_${provider.templateFilePath}'),
+              child: SettingsPathField(
+                provider: provider,
+                settingKey: 'templateFilePath',
+                value: provider.templateFilePath,
                 decoration: InputDecoration(
                   labelText: 'Default config.json Template Path',
                   // Blank = config.json in the Root Folder
@@ -3347,8 +3391,6 @@ class AppSettingsView extends StatelessWidget {
                     },
                   ),
                 ),
-                initialValue: provider.templateFilePath,
-                onChanged: (val) => provider.updateSetting('templateFilePath', val),
               ),
             ),
             const SizedBox(width: 16),
@@ -3388,8 +3430,10 @@ class AppSettingsView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextFormField(
-                key: ValueKey('uiSchemaPath_${provider.uiSchemaPath}'),
+              child: SettingsPathField(
+                provider: provider,
+                settingKey: 'uiSchemaPath',
+                value: provider.uiSchemaPath,
                 decoration: InputDecoration(
                   labelText: 'UI Schema File Path (ui_schema.json)',
                   hintText: 'Blank = ui_schema.json in the Root Folder / next to the app',
@@ -3409,8 +3453,6 @@ class AppSettingsView extends StatelessWidget {
                     },
                   ),
                 ),
-                initialValue: provider.uiSchemaPath,
-                onChanged: (val) => provider.updateSetting('uiSchemaPath', val),
               ),
             ),
             const SizedBox(width: 16),
@@ -3444,7 +3486,10 @@ class AppSettingsView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextFormField(
+              child: SettingsPathField(
+                provider: provider,
+                settingKey: 'avDevicesFilePath',
+                value: provider.avDevicesFilePath,
                 key: ValueKey(
                     'avDevicesFilePath_${provider.avDevicesFilePath}'),
                 decoration: InputDecoration(
@@ -3472,9 +3517,6 @@ class AppSettingsView extends StatelessWidget {
                     },
                   ),
                 ),
-                initialValue: provider.avDevicesFilePath,
-                onChanged: (val) =>
-                    provider.updateSetting('avDevicesFilePath', val),
               ),
             ),
             const SizedBox(width: 16),
@@ -3514,7 +3556,10 @@ class AppSettingsView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextFormField(
+              child: SettingsPathField(
+                provider: provider,
+                settingKey: 'flowRulesFilePath',
+                value: provider.flowRulesFilePath,
                 key: ValueKey(
                     'flowRulesFilePath_${provider.flowRulesFilePath}'),
                 decoration: InputDecoration(
@@ -3542,9 +3587,6 @@ class AppSettingsView extends StatelessWidget {
                     },
                   ),
                 ),
-                initialValue: provider.flowRulesFilePath,
-                onChanged: (val) =>
-                    provider.updateSetting('flowRulesFilePath', val),
               ),
             ),
             const SizedBox(width: 16),
@@ -3573,8 +3615,10 @@ class AppSettingsView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextFormField(
-                key: ValueKey('keyMapPath_${provider.keyMapPath}'),
+              child: SettingsPathField(
+                provider: provider,
+                settingKey: 'keyMapPath',
+                value: provider.keyMapPath,
                 decoration: InputDecoration(
                   labelText: 'Legacy Key Map File Path (key_map.json)',
                   hintText: 'Blank = key_map.json in the Root Folder / next to the app',
@@ -3595,8 +3639,6 @@ class AppSettingsView extends StatelessWidget {
                     },
                   ),
                 ),
-                initialValue: provider.keyMapPath,
-                onChanged: (val) => provider.updateSetting('keyMapPath', val),
               ),
             ),
             const SizedBox(width: 16),
@@ -3622,8 +3664,10 @@ class AppSettingsView extends StatelessWidget {
         const SizedBox(height: 20),
 
         // Processors JSON Path
-        TextFormField(
-          key: ValueKey('processorsFilePath_${provider.processorsFilePath}'),
+        SettingsPathField(
+          provider: provider,
+          settingKey: 'processorsFilePath',
+          value: provider.processorsFilePath,
           decoration: InputDecoration(
             labelText: 'Processors JSON File Path',
             // Blank = processors.json in the Root Folder; read automatically on boot
@@ -3645,9 +3689,6 @@ class AppSettingsView extends StatelessWidget {
               },
             ),
           ),
-          initialValue: provider.processorsFilePath,
-          // updateSetting reloads the processors list itself
-          onChanged: (val) => provider.updateSetting('processorsFilePath', val),
         ),
         const SizedBox(height: 20),
         
@@ -3777,13 +3818,10 @@ class AppSettingsView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextFormField(
-                // Value in the key forces a refresh when the path is picked
-                // via the dialog. The field-name prefix keeps the key unique
-                // among this ListView's children: on a fresh install every
-                // path is blank, so the bare value alone made four siblings
-                // share a ValueKey('').
-                key: ValueKey('modulesPath_${provider.modulesPath}'),
+              child: SettingsPathField(
+                provider: provider,
+                settingKey: 'modulesPath',
+                value: provider.modulesPath,
                 decoration: InputDecoration(
                   labelText: 'Python Modules Path',
                   // Blank = the "devices" sub-folder of the Root Folder
@@ -3809,9 +3847,6 @@ class AppSettingsView extends StatelessWidget {
                     },
                   ),
                 ),
-                initialValue: provider.modulesPath,
-                onChanged: (val) =>
-                    provider.updateSetting('modulesPath', val),
               ),
             ),
             const SizedBox(width: 16),
@@ -3852,8 +3887,10 @@ class AppSettingsView extends StatelessWidget {
         const SizedBox(height: 20),
 
         // Documentation Path (per-module PDF manuals)
-        TextFormField(
-          key: ValueKey('documentationPath_${provider.documentationPath}'),
+        SettingsPathField(
+          provider: provider,
+          settingKey: 'documentationPath',
+          value: provider.documentationPath,
           decoration: InputDecoration(
             labelText: 'Documentation Path (PDF manuals)',
             // Blank = the "documentation" sub-folder of the Root Folder
@@ -3875,15 +3912,15 @@ class AppSettingsView extends StatelessWidget {
               },
             ),
           ),
-          initialValue: provider.documentationPath,
-          onChanged: (val) => provider.updateSetting('documentationPath', val),
         ),
         const SizedBox(height: 20),
 
         // SPEC SHEETS - one shared folder, so a sheet attached to a catalog
         // entry on one machine opens on every other. See spec_sheets.dart.
-        TextFormField(
-          key: ValueKey('specSheetFolder_${provider.specSheetFolder}'),
+        SettingsPathField(
+          provider: provider,
+          settingKey: 'specSheetFolder',
+          value: provider.specSheetFolder,
           decoration: InputDecoration(
             labelText: 'Spec Sheet Folder (shared)',
             hintText: provider.effectiveSpecSheetFolder,
@@ -3900,16 +3937,16 @@ class AppSettingsView extends StatelessWidget {
               },
             ),
           ),
-          initialValue: provider.specSheetFolder,
-          onChanged: (val) => provider.updateSetting('specSheetFolder', val),
         ),
         const SizedBox(height: 20),
 
         // [TEAM KIT]: the team folder - presence, the team chat and the
         // "working on" tags, shared with the CTS Dashboard and Instructor
         // Contact. Blank = the dashboard's own team folder on the share.
-        TextFormField(
-          key: ValueKey('teamFolderPath_${provider.teamFolderPath}'),
+        SettingsPathField(
+          provider: provider,
+          settingKey: 'teamFolderPath',
+          value: provider.teamFolderPath,
           decoration: InputDecoration(
             labelText: 'Team Folder (team chat, who is online, working-on tags)',
             hintText: provider.effectiveTeamFolder,
@@ -3925,15 +3962,15 @@ class AppSettingsView extends StatelessWidget {
               },
             ),
           ),
-          initialValue: provider.teamFolderPath,
-          onChanged: (val) => provider.updateSetting('teamFolderPath', val),
         ),
         const SizedBox(height: 20),
 
         // [SHARED ROOMS]: where room edits are kept on the share - Save Room
         // As starts here, and each save leaves a copy here.
-        TextFormField(
-          key: ValueKey('sharedRoomsFolder_${provider.sharedRoomsFolder}'),
+        SettingsPathField(
+          provider: provider,
+          settingKey: 'sharedRoomsFolder',
+          value: provider.sharedRoomsFolder,
           decoration: InputDecoration(
             labelText: 'Shared Rooms Folder (room edits on the share)',
             hintText: provider.effectiveSharedRoomsFolder,
@@ -3952,8 +3989,6 @@ class AppSettingsView extends StatelessWidget {
               },
             ),
           ),
-          initialValue: provider.sharedRoomsFolder,
-          onChanged: (val) => provider.updateSetting('sharedRoomsFolder', val),
         ),
         SwitchListTile(
           key: const ValueKey('copyRoomsToShare'),
@@ -3968,14 +4003,17 @@ class AppSettingsView extends StatelessWidget {
 
         // THE CLASS SCHEDULE - where install windows are read from. See
         // class_schedule.dart.
-        TextFormField(
-          key: ValueKey('classSchedulePath_${provider.classSchedulePath}'),
+        SettingsPathField(
+          provider: provider,
+          settingKey: 'classSchedulePath',
+          value: provider.classSchedulePath,
           decoration: InputDecoration(
             labelText: 'Class Schedule (Facilities export .csv)',
             hintText: provider.effectiveClassSchedulePath,
             helperText: 'FacilitiesLinkClassScheduleDaily.csv - the same file '
                 'the CTS-Dashboard reads. Used by Project > Timeline > Find '
-                'maintenance windows. Blank = that name in the Root Folder.',
+                'maintenance windows. Blank = the Calendar folder on the file '
+                'server, else that name in the Root Folder.',
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.upload_file),
@@ -3992,8 +4030,6 @@ class AppSettingsView extends StatelessWidget {
               },
             ),
           ),
-          initialValue: provider.classSchedulePath,
-          onChanged: (val) => provider.updateSetting('classSchedulePath', val),
         ),
           ],
         ),
@@ -4077,11 +4113,17 @@ class AppSettingsView extends StatelessWidget {
             SizedBox(
               width: 200,
               child: TextFormField(
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Default tax rate',
                   helperText: 'New projects start with it',
                   suffixText: '%',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  enabledBorder: provider.defaultTaxPercent == 0
+                      ? OutlineInputBorder(
+                          borderSide: BorderSide(
+                              color: Theme.of(context).colorScheme.error,
+                              width: 2))
+                      : null,
                 ),
                 initialValue: provider.defaultTaxPercent == 0
                     ? ''
@@ -4205,7 +4247,8 @@ class AppSettingsView extends StatelessWidget {
         SettingsSection(
           id: 'lists',
           title: 'Shared lists',
-          summary: 'Delivery locations and default vendors',
+          summary: 'Delivery locations, default vendors, room and cost '
+              'presets',
           icon: Icons.list_alt,
           children: [
         // Delivery Locations (delivery_locations.json) Path
@@ -4230,7 +4273,10 @@ class AppSettingsView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextFormField(
+              child: SettingsPathField(
+                provider: provider,
+                settingKey: 'deliveryLocationsFilePath',
+                value: provider.deliveryLocationsFilePath,
                 key: ValueKey(
                     'deliveryLocationsFilePath_${provider.deliveryLocationsFilePath}'),
                 decoration: InputDecoration(
@@ -4288,9 +4334,6 @@ class AppSettingsView extends StatelessWidget {
                     ],
                   ),
                 ),
-                initialValue: provider.deliveryLocationsFilePath,
-                onChanged: (val) =>
-                    provider.updateSetting('deliveryLocationsFilePath', val),
               ),
             ),
             const SizedBox(width: 16),
@@ -4325,7 +4368,10 @@ class AppSettingsView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextFormField(
+              child: SettingsPathField(
+                provider: provider,
+                settingKey: 'vendorListFilePath',
+                value: provider.vendorListFilePath,
                 key: ValueKey(
                     'vendorListFilePath_${provider.vendorListFilePath}'),
                 decoration: InputDecoration(
@@ -4379,9 +4425,6 @@ class AppSettingsView extends StatelessWidget {
                     ],
                   ),
                 ),
-                initialValue: provider.vendorListFilePath,
-                onChanged: (val) =>
-                    provider.updateSetting('vendorListFilePath', val),
               ),
             ),
             const SizedBox(width: 16),
@@ -4395,6 +4438,13 @@ class AppSettingsView extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 24),
+        // The room and cost presets on the share - see
+        // preset_library_panel.dart.
+        PresetLibraryPanel(
+          key: ValueKey('presets_${provider.effectiveRootFolder}'),
+          provider: provider,
         ),
           ],
         ),
@@ -4551,8 +4601,10 @@ class AppSettingsView extends StatelessWidget {
   static Widget _rootFolderField(
     BuildContext context,
     AppStateProvider provider,
-  ) => TextFormField(
-    key: ValueKey('rootFolderPath_${provider.rootFolderPath}'),
+  ) => SettingsPathField(
+    provider: provider,
+    settingKey: 'rootFolderPath',
+    value: provider.rootFolderPath,
     decoration: InputDecoration(
       labelText: 'Root Folder Path (default base for every blank path below)',
       hintText: provider.effectiveRootFolder,
@@ -4573,8 +4625,6 @@ class AppSettingsView extends StatelessWidget {
         },
       ),
     ),
-    initialValue: provider.rootFolderPath,
-    onChanged: (val) => provider.updateSetting('rootFolderPath', val),
   );
 }
 
@@ -5015,8 +5065,10 @@ class FirstRunSetupDialog extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'The Root Folder starts as the app\'s own folder. Press Set to file '
-                'server to use the shared files everybody edits, or pick another Root '
+                'The Root Folder starts as the shared Configurator_Files folder on '
+                'the file server when it can be reached, else the app\'s own folder. '
+                'Press Set to file server to use the shared files everybody edits, '
+                'or pick another Root '
                 'Folder - every file found inside it is detected automatically. Use '
                 'Browse on any row where a file lives somewhere else. '
                 'Green = found at the shown location, red = not found (you can still '
@@ -5508,6 +5560,16 @@ class _FileMenu extends StatelessWidget {
                 ]
               : recentItems,
           child: const _MenuLabel('Open Recent'),
+        ),
+        const Divider(height: 8),
+        // The whole room as a room type - see room_preset_save_dialog.dart.
+        MenuItemButton(
+          key: const ValueKey('file_save_room_preset'),
+          leadingIcon: const Icon(Icons.bookmark_add_outlined, size: 20),
+          onPressed: provider.roomConfig.isEmpty
+              ? null
+              : () => showSaveRoomPresetDialog(context, provider),
+          child: const _MenuLabel('Save Room as Preset...'),
         ),
         const Divider(height: 8),
         item('file_download', Icons.cloud_download, 'Download Config',

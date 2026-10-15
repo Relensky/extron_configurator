@@ -10,6 +10,7 @@ import 'package:extron_configurator/collab/collab_controller.dart';
 import 'package:extron_configurator/collab/collab_widgets.dart';
 import 'package:extron_configurator/collab/combine_history.dart';
 import 'package:extron_configurator/collab/json_merge.dart';
+import 'package:extron_configurator/contrast.dart';
 import 'package:extron_configurator/room_review.dart';
 import 'package:extron_configurator/team/team_claims.dart';
 import 'package:extron_configurator/team/team_presence.dart';
@@ -134,6 +135,42 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('collab_review_confirm')));
     await tester.pumpAndSettle();
     expect(declined, {'b'});
+  });
+
+  testWidgets('the tax rate is a choice of its own, and says it overwrites',
+      (tester) async {
+    final preview = mergeJson3(
+      {'name': 'Job', 'taxPercent': 0},
+      {'name': 'Job', 'taxPercent': 0},
+      {'name': 'Job 2', 'taxPercent': 9.25},
+    );
+    Set<String>? declined;
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (context) => TextButton(
+          onPressed: () async => declined = await showMergeReviewDialog(
+            context,
+            kind: CollabDocKind.project,
+            who: 'jsmith',
+            preview: preview,
+          ),
+          child: const Text('open'),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    // Out of the tick list, into its own panel.
+    expect(find.byType(CheckboxListTile), findsOneWidget);
+    expect(find.byKey(const ValueKey('collab_review_tax')), findsOneWidget);
+    expect(find.textContaining('Overwrites your tax rate of 0%'),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('collab_tax_mine')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('collab_review_confirm')));
+    await tester.pumpAndSettle();
+    expect(declined, {'taxPercent'});
   });
 
   group('combine history', () {
@@ -362,5 +399,109 @@ void main() {
       p.teamClaims.dispose();
       p.dispose();
     });
+
+    test("a room's color: locked by someone else, by me, approved, ready",
+        () async {
+      final file = path.join(dir.path, 'bss103_config.json');
+      File(file).writeAsStringSync(jsonEncode({
+        'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '103'},
+      }));
+      final p = AppStateProvider(autoLoadSettings: false);
+      await p.openConfigAtPath(file);
+      await p.teamClaims.attach(dir.path);
+      await p.teamReviews.attach(dir.path);
+      final room = p.teamRoomId;
+      expect(roomToneFor(p, room), isNull);
+
+      expect(await setRoomReady(p.teamReviews, room, on: true), '');
+      expect(roomToneFor(p, room), RoomTone.ready);
+      expect(await setRoomReviewed(p.teamReviews, room, on: true), '');
+      expect(roomToneFor(p, room), RoomTone.approved);
+
+      // Tagged by me: locked for me, over the review mark.
+      await p.teamClaims.set(
+          kind: 'room',
+          id: room,
+          label: room,
+          who: p.teamClaims.me.user,
+          on: true);
+      expect(roomToneFor(p, room), RoomTone.mine);
+      await p.teamClaims.set(
+          kind: 'room',
+          id: room,
+          label: room,
+          who: p.teamClaims.me.user,
+          on: false);
+
+      // Someone else's lock wins.
+      final jsmith = claimsAs('jsmith', 'claims');
+      await jsmith.attach(dir.path);
+      await jsmith.set(
+          kind: 'room', id: room, label: room, who: 'jsmith', on: true);
+      await p.teamClaims.refresh();
+      expect(roomToneFor(p, room), RoomTone.theirs);
+
+      // Four different colors.
+      final scheme = ThemeData.light().colorScheme;
+      expect(
+        {for (final t in RoomTone.values) roomToneColor(t, scheme)},
+        hasLength(4),
+      );
+
+      jsmith.dispose();
+      p.teamClaims.dispose();
+      p.teamReviews.dispose();
+      p.dispose();
+    });
+  });
+  test('room colors stand out on light and dark themes in any accent', () {
+    const accents = [
+      Colors.blue, Colors.red, Colors.green, Colors.amber, Colors.purple,
+      Colors.teal, Colors.orange, Colors.grey, Color(0xFFF0A500),
+    ];
+    for (final brightness in Brightness.values) {
+      for (final accent in accents) {
+        final scheme = ColorScheme.fromSeed(
+            seedColor: accent, brightness: brightness);
+        for (final ground in [
+          scheme.surface,
+          scheme.surfaceContainer,
+          scheme.primary,
+        ]) {
+          for (final tone in RoomTone.values) {
+            final c = roomToneColor(tone, scheme, on: ground);
+            expect(contrastRatio(c, ground), greaterThanOrEqualTo(4.5),
+                reason: '$tone on $ground ($brightness, $accent)');
+          }
+        }
+      }
+    }
+  });
+
+  test("a room's outline is quiet but visible, and follows the accent", () {
+    for (final brightness in Brightness.values) {
+      for (final accent in const [
+        Colors.blue, Colors.red, Colors.green, Colors.purple, Colors.amber,
+      ]) {
+        final scheme =
+            ColorScheme.fromSeed(seedColor: accent, brightness: brightness);
+        final outlines = {
+          for (final t in RoomTone.values)
+            roomToneColor(t, scheme, minRatio: kContrastLarge),
+        };
+        for (final c in outlines) {
+          expect(contrastRatio(c, scheme.surface),
+              greaterThanOrEqualTo(kContrastLarge),
+              reason: '$c ($brightness, $accent)');
+        }
+        // Four different colors.
+        expect(outlines, hasLength(4));
+      }
+    }
+    // A different accent moves the colors with it.
+    final blue = ColorScheme.fromSeed(seedColor: Colors.blue);
+    final red = ColorScheme.fromSeed(seedColor: Colors.red);
+    expect(roomToneColor(RoomTone.mine, blue),
+        isNot(roomToneColor(RoomTone.mine, red)));
   });
 }

@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.110+120';
+const String kAppVersion = '0.5.129+139';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,216 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.129',
+    date: 'October 15, 2026',
+    title: 'Working-on tags: clear your own, a warning for others\', messages and history',
+    changes: [
+      'Working on tags: a tag someone else put on you, you can take off yourself - every tag on the team page has an x, and the person button in the title bar unticks you.',
+      'Working on tags: anyone can take anyone\'s tag off, but taking someone else off warns first. They get a direct message from you, and it is kept in their tag history.',
+      'Working on tags: putting someone on a room, or taking them off it, sends them a direct message from you.',
+      'Team page, Working on: History lists every change to your tags - who put you on what, and who took you off. Clear my tags now takes off the tags on you as well as the ones you placed (anyone you placed is told).',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.128',
+    date: 'October 15, 2026',
+    title: 'Sideways scrolling from the keyboard',
+    changes: [
+      'Save Room as Preset: the estate sheet name and jack prefix boxes line up.',
+      'History, People: lists everybody who changed the job, its rooms or the campus. It counted the job\'s own log only, so people who worked in the rooms - like ngeiger and zpearse on the 600k refresh - were missing. Press a name to see their changes on the Changes tab, from every log. People is there when only a room is open too.',
+      'Procurement log: the sideways scrollbar sits on the bottom edge of the window at all times. Before, it sat under the last row, or partway up the page. The last rows still scroll clear of the Screenshot and Export buttons.',
+      'Scrolling sideways: Left and Right scroll a table or page that is wider than the window when nothing is selected - the one under the pointer. In a text box they still move the cursor, and on a drawing with something selected they still move it. They are under Nothing selected in App Config, Keyboard shortcuts.',
+      'Scrolling sideways: Shift and the mouse wheel scroll pages and tables sideways, and now have a test to keep it that way.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.127',
+    date: 'October 15, 2026',
+    title: 'Save a whole room as a preset',
+    changes: [
+      'File menu: Save Room as Preset saves the whole room as a room type - the AV flow, racks, floor plan sheets, cabling sheet layout, cost page, control schematic layout and the switcher inputs and outputs. The window sets its name, description, estate sheet name and jack prefix, and a tick for each part says what goes in.',
+      'Room presets: a room made from one gets all of it. The cost page comes in whole when the room has none, keeping the room\'s own tax rate; a room with its own cost page gets only the preset\'s lines. Floor plan sheets come without their drawing images, which stay with the room they came from.',
+      'App Config, Shared lists: the room and cost presets on the shared folder are listed, with what each holds and who saved it, a button to open each folder, and a delete button.',
+      'Cost, Other items: a line off the catalog shows the catalog\'s price behind its unit price box and in Extended, the same as the equipment rows. It read blank and \$0.00 before while the total still charged it. A price typed is this room\'s price for the line.',
+      'Catalog: an entry can have no connectors. Deleting its POWER connector sets Power to None, so saving no longer puts it back; a part added to the catalog from Other items starts with none.',
+      'Add equipment, cable, rack hardware and other items: All catalog items searches the whole catalog, says where each part goes, and files what you pick by its category - Equipment, Rack hardware, Cabling or Other items.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.126',
+    date: 'October 15, 2026',
+    title: 'Pick what to copy between rooms, and catalog autosave',
+    changes: [
+      'App Config, Autosave and recovery: Save the catalog automatically saves the device catalog on the same clock when it has changes. It merges with what others have saved, the same as Save, and waits while a changed entry has no category. Off until turned on.',
+      'Text boxes: Up and Down move a line in boxes on the Cost page, such as Scope of Work and Estimate Notes. They did nothing there before.',
+      'Compare: tick the parts to copy, and copy either way - into this room, or into the other room, which is written to its cost file. A part the other room already has cannot be ticked, and Tick all picks every missing part.',
+      'Compare: devices drawn on a room\'s diagram - projectors, switchers, speakers - and its counted cable runs can now be copied. They go onto the other room\'s quote as added lines, under the same catalog model, quantity and room price.',
+      'Cost items: Copy from another room opens the comparison ready to tick. Copying and applying a cost preset now list what is being added by category, add without replacing anything, skip what the room already has, and Undo removes them.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.125',
+    date: 'October 15, 2026',
+    title: 'Compare room costs, cost presets and text-box keys',
+    changes: [
+      'Catalog: saving a catalog entry that has no category asks for one, and says what each category limits the entry to - which lists offer it and how it is priced. Save without keeps it blank; Cancel stops the save.',
+      'Catalog: the Category box says under it what the chosen category limits the entry to, and each category in the picker says the same when you hover over it.',
+      'Keyboard shortcuts: a new In a text box section in App Config - Tab and Shift+Tab move between boxes, Up and Down move a line, and Home and End jump to the top and bottom of the box. Each can be changed like the other shortcuts.',
+      'Narrow windows: the sideways scrollbar on the Cost page, and on any page wider than the window, now sits on the bottom edge instead of partway up the page.',
+      'Add equipment: devices filed under AV / Misc that have connectors - DTP extenders, speakers, network switches and the like - now show up in the search. Only AV / Misc entries with no connectors are treated as Other items.',
+      'Cost: equipment added while the table is sorted by manufacturer goes into its manufacturer\'s group in alphabetical order, not at the bottom of the table.',
+      'Cost image and PDF: prices print as money - the currency sign, commas and cents - so 11948 prints as \$11,948.00. Labor rates now show the currency sign too.',
+      'Cost: Compare puts this room beside another room from this project or any other - parts matched by part number, with what only one room has, quantities and prices that differ, and the section and grand totals side by side. "Differences only" hides the parts that match.',
+      'Cost: Cost items copies another room\'s added equipment, rack hardware, cable, other items, labor and fees into this room, with the prices typed on them. They can also be saved as a cost preset in the cost_presets folder under the Root Folder and applied to any room. Applying adds to what the room has - a fee it already has by name is skipped - and Undo takes it all back off.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.124',
+    date: 'October 14, 2026',
+    title: 'Team chat\'s X stays on top',
+    changes: [
+      'Team chat: the X that closes the chat now stays above other pop-ups, the way the chat window does - a dialog opened while the chat was up used to cover it.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.123',
+    date: 'October 14, 2026',
+    title: 'Shared folders by default, and a 0% tax warning',
+    changes: [
+      'App Config: a blank Root Folder now means the shared Configurator_Files folder on the file server when it can be reached, else the app\'s own folder.',
+      'App Config: a blank Class Schedule now reads the file from the Calendar folder on the file server when it can be reached, else from the Root Folder.',
+      'Find maintenance windows: At least has Other length... for any length to the minute, and Day from and to have Other time... for any clock time, not just the whole hours on the list.',
+      'Tax rate: the box is outlined in red when the rate is 0%, on the Project tab, the room\'s cost page and the default in App Config.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.122',
+    date: 'October 14, 2026',
+    title: 'The chat count stands out',
+    changes: [
+      'Team chat: the unread count on the chat button is the color opposite your accent color, with black or white numbers, whichever reads. Before it was a solid white pill that never changed, and hard to see on a light accent.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.121',
+    date: 'October 14, 2026',
+    title: 'Paths wait for you to finish typing',
+    changes: [
+      'App Config, Files and folders and Data files: a path is used once you stop typing for a moment, or press Enter, or click out of the box - not on every letter typed or deleted. Before, each keystroke went off to read a half-typed folder on the share, and the box was rebuilt under the cursor. A spinner shows in the box until the folder has been read.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.120',
+    date: 'October 14, 2026',
+    title: 'One tax rate for everyone on a job',
+    changes: [
+      'The tax rate is shared through the files. A job with no tax rate of its own takes the default of whoever opens or saves it with one, so the same job prices the same on every PC. Before, each person\'s own default was used, the totals came out different on each PC, and the job kept reporting its rooms as changed and asking to combine. A job set to 0% on purpose keeps 0%.',
+      'A room that follows the base rate keeps the rate it was last saved at. Somebody with no default tax rate set prices it at that rate instead of 0.',
+      'A new project made on a PC with no default tax rate is left unset rather than set to 0%, so a colleague\'s rate can fill it in.',
+      'Combine: a tax rate in somebody else\'s save is its own choice at the top of the window - use theirs or keep yours - and says plainly that using theirs overwrites your tax rate. Where you both changed it, the choice says the same.',
+      'Cost page, Edit in catalog: the List price and Education price boxes line up, and so do Category and Rack U. A helper line under one box used to push the other out of line.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.119',
+    date: 'October 14, 2026',
+    title: 'Room photos, and a pull before every publish',
+    changes: [
+      'New Photos tab for a room. Add photos and they are copied into a photos folder in the room\'s own folder, so they go wherever the room goes. They show as a grid; click one to see it large, zoom in, and use the Left and Right arrow keys to step through. Photos copied into the folder by hand show up too. HEIC photos from a phone are listed and open in the Windows viewer.',
+      'Online copy: Publish pulls the Google Sheet first and always asks before writing over it. If anything was typed into it, you see the changes first. If it could not be read (signed out, offline), it says so and asks before overwriting anyway. Before, a Sheet that could not be read was published over without a word.',
+      'Online copy on save: if the Google Sheet cannot be read first, the save leaves it alone and reports it as not updated, instead of writing over edits it could not check.',
+      'Lists on every page leave room at the bottom for the floating chat button, so you can scroll past the last row and click it - the line lists in the Schematic and AV Flow edit panels included.',
+      'AV Flow: the moving arrows on a clicked line show in the magnifier too, at the magnifier\'s zoom.',
+      'Schematic: zooms out much further. It used to stop once the drawing and a fixed margin around it filled the window, so a small schematic could barely be zoomed out at all.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.118',
+    date: 'October 14, 2026',
+    title: 'Bundles find their module',
+    changes: [
+      'Bundles and kits find their python module. A catalog model that is a driver\'s model with words added on the end - "ShareLink Pro 2000 Miracast & ShareNext US", "IN1808 IPCP SA LL", "SMP 351 - 80 GB SSD" - now counts as that model. Adding one to the room config from the Cost page puts it in the right device family with the module filled in, instead of saying no device family fits.',
+      'Cost page: a new "Tie to a Python module..." choice on an equipment line. Pick the driver that talks to the product and the model is added to that driver\'s list of models, then the line is added to the room config. Every room after that finds the module for it. The "no device family fits" message offers the same thing.',
+      'Combine: the window names who saved and on which PC ("jsmith on PC-9") instead of "Someone else". Opening a job saves the room check straight away, and that save never said whose it was.',
+      'Combine: a job\'s rooms are shown by their name and id - "BSS 103" (room10) - instead of Room1, Room10.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.117',
+    date: 'October 14, 2026',
+    title: 'The magnifier works',
+    changes: [
+      'AV Flow: the magnifier works. Turning it on used to shrink the drawing area to nothing, the lens never heard where the pointer was, and in the installed app the picture it draws from was never taken. Now the square lens follows the pointer over the drawing, full size and sharp, with its minimap in the corner.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.116',
+    date: 'October 14, 2026',
+    title: 'Calmer highlights, a zoom bar, a magnifier that works, tidy schematic',
+    changes: [
+      'AV Flow: a zoom bar over the drawing - zoom out, the zoom percentage, zoom in, fit the whole drawing on screen and actual size - like the screenshot tool. The mouse wheel now zooms all the way out too, and zooming after Fit to view behaves.',
+      'AV Flow: the magnifier is a square that follows the pointer and shows that part of the drawing full size and sharp, with a minimap in its corner showing where in the room you are. It no longer turns the screen black.',
+      'Schematic: Tidy layout spaces everything out evenly - the processor in the middle and the devices round it in a full circle, grouped by how they connect. With more than 16 devices they are laid out as a table under the processor instead. One Undo puts it back.',
+      'Cost: the device names editor for a line of config devices says what kind each one is - Switcher device 1, Power device 2 - instead of SWITCHERDEVICE_1.',
+      'Project: Refresh re-reads the rooms in the background, keeping the figures on screen until the new ones are in, instead of freezing the window while thirty rooms are read off the share.',
+      'Rooms: locked, ready-to-approve and approved rooms are outlined again, in muted colors with a faint wash, instead of a solid fill. The outline eases in over a moment when the state changes and then stays still - no pulsing or glow. The colors still lean toward your accent color and read on light and dark themes.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.115',
+    date: 'October 14, 2026',
+    title: 'Tidy layout, zoom out with a magnifier, cables not drawn',
+    changes: [
+      'Rooms: locked, ready-to-approve and approved rooms are now a solid tinted row with a colored stripe down the left - no outline, no pulsing. The colors lean toward your accent color while staying four different colors, and the room button at the top becomes a solid pill in the color.',
+      'AV Flow: Tidy layout (always on the toolbar) lays the drawing out again so nothing overlaps - sources on the left, switching and processing in the middle, displays and projectors on the right. With more than six displays or projectors they are drawn as a table instead of one tall column. One press of Undo puts it back.',
+      'AV Flow: zoom out as far as you like, and Fit to view now fits any room however small that makes it. Turn on Magnifier and a lens follows the pointer showing that part of the drawing full size.',
+      'Cost: the cabling table has a Not drawn column for cable the job needs that is not a run on the diagram. Add cable puts its count there, and Spares are now their own count on top of it.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.114',
+    date: 'October 13, 2026',
+    title: 'Room colors you can see, smoother syncing',
+    changes: [
+      'Rooms: the lock and review colors are checked against what they sit on - the page, the menu or the title bar - and darkened or lightened until they stand out, in light and dark mode and with any accent color. Once a room\'s outline has pulsed it settles to a quiet line and a light wash instead of glowing.',
+      'Speed: when someone else saves the room or project you have open, the copy on the share is now read in the background instead of holding up the window, and History reads the other rooms\' and jobs\' logs in the background too.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.113',
+    date: 'October 13, 2026',
+    title: 'Locked rooms stand out',
+    changes: [
+      'Rooms: a room you are working on shows the same lock as one someone else has, in green instead of red, and says "Locked by you". The lock and editing badges are larger.',
+      'Rooms: the room list on the Project page, the room drop-down, the room button at the top and the Priorities list outline each room in its state - red when someone else has it locked, green when you do, amber when it is ready to approve, blue when it is approved and ready to order. The outline pulses a few times when the state changes, then stays lit.',
+      'Save: when someone else has the open room locked, a red lock and the word Locked sit beside the Save button. Pressing it asks whether to take them off the room, as Save does.',
+      'Profile: your picture is much larger in Your profile, and your avatar in the top-right corner grows while the pointer is on it.',
+      'Team chat: the hovering chat button is now your accent color, and its unread count is shown in the inverse colors.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.112',
+    date: 'October 13, 2026',
+    title: 'Hovering chat button shows up',
+    changes: [
+      'Team chat: the hovering chat button in the bottom-right corner now appears once the team chat has connected. In 0.5.111 it never showed.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.111',
+    date: 'October 13, 2026',
+    title: 'Hovering chat, combine details, typed cable lengths',
+    changes: [
+      'Team chat: the chat button now hovers in the bottom-right corner of the page, as in the CTS Dashboard, and fades back when the pointer is away. The chat icon at the top right is gone.',
+      'Rooms: the editing and locked badges on a person\'s picture are larger, and the Priorities list on the Project page shows who is working on each room.',
+      'Working together: a save made while another copy was checking the file (still being written, or held by the share) no longer loses its "saved the room - Combine" message. The check tries the file again for a few seconds instead of skipping that save.',
+      'AV Flow and Cost: a cable length can be typed in feet as well as picked from the list - on the cable dialog, the Cable lengths list and the cost sheet\'s Add cable.',
+      'AV Flow: a newly added device no longer lands on top of another; it moves down until it is clear.',
+      'Combine: the message, the button and the review window now name the room, project and campus (for example "jsmith saved BSS 103 on Bessey Hall"), and the window lists the file and when the save was noticed. Changes are grouped under what they belong to; open any line for its file, its place in the file and the whole value before and after. Rooms on a job are named by their folder rather than "room10".',
+      'History: What has been changed now also shows other people\'s changes to every other room on the job (Other rooms) and, for a job on a campus, every other job there and its rooms (Campus). Each line says the job and room it was made in, and opening it shows the file it is kept in.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.110',
     date: 'October 12, 2026',

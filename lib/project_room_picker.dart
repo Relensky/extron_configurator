@@ -240,6 +240,12 @@ class _RoomMenu extends StatelessWidget {
     final provider = context.read<AppStateProvider>();
     final onBar =
         theme.appBarTheme.foregroundColor ?? theme.colorScheme.onPrimary;
+    // What the room colors are measured against: the title bar under the
+    // button, and the menu's own fill.
+    final bar =
+        theme.appBarTheme.backgroundColor ?? theme.colorScheme.primary;
+    final menuFill =
+        theme.popupMenuTheme.color ?? theme.colorScheme.surfaceContainer;
 
     // EVERY NAME ON THIS MENU, WORKED OUT IN ONE PASS.
     //
@@ -296,9 +302,16 @@ class _RoomMenu extends StatelessWidget {
           ..sort((a, b) => compareRoomNames(names.codeFor(a), names.codeFor(b))))
           PopupMenuItem(
             value: ref.id,
-            child: ListTile(
+            // Lit in the room's state: locked by you or someone else, ready
+            // to approve, approved.
+            child: RoomToneHighlight(
+              background: menuFill,
+              roomId: ref.id == open?.id && provider.teamRoomId.isNotEmpty
+                  ? provider.teamRoomId
+                  : names.teamIds[ref.id] ?? '',
+              child: ListTile(
               dense: true,
-              contentPadding: EdgeInsets.zero,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 6),
               leading: Icon(
                 ref.id == open?.id
                     ? Icons.radio_button_checked
@@ -319,10 +332,12 @@ class _RoomMenu extends StatelessWidget {
                   : Text(names.subtitleFor(ref)!),
               // Working on, ready for review, review complete.
               trailing: RoomStatusIcons(
+                background: menuFill,
                 roomId: ref.id == open?.id && provider.teamRoomId.isNotEmpty
                     ? provider.teamRoomId
                     : names.teamIds[ref.id] ?? '',
               ),
+            ),
             ),
           ),
         const PopupMenuDivider(),
@@ -349,7 +364,13 @@ class _RoomMenu extends StatelessWidget {
           ),
         ),
       ],
-      child: Padding(
+      // Outlined in the room's lock or review color.
+      child: RoomToneHighlight(
+        roomId: open != null ? provider.teamRoomId : '',
+        tint: false,
+        background: bar,
+        radius: 16,
+        child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -383,11 +404,13 @@ class _RoomMenu extends StatelessWidget {
                 roomId: provider.teamRoomId,
                 size: 14,
                 color: onBar,
+                background: bar,
               ),
             const SizedBox(width: 2),
             Icon(Icons.arrow_drop_down, size: 18, color: onBar),
           ],
         ),
+      ),
       ),
     );
   }

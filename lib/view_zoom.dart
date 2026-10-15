@@ -70,7 +70,10 @@ bool fitToViewport({
 
   controller.value = Matrix4.identity()
     ..translateByDouble(dx, dy, 0, 1)
-    ..scaleByDouble(scale, scale, 1, 1);
+    // All three axes: InteractiveViewer reads the zoom as the largest of
+    // them, and a depth left at 1 read every fit below 100% as 100% - which
+    // then threw out the wheel's zoom limits.
+    ..scaleByDouble(scale, scale, scale, 1);
   return true;
 }
 

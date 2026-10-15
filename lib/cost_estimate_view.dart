@@ -11,6 +11,7 @@ import 'package:path/path.dart' as path;
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'catalog_category_prompt.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart' show driverGapSections;
@@ -25,6 +26,8 @@ import 'ui_schema.dart' show DeviceTypeSpec;
 import 'control_prefill_dialog.dart';
 import 'av_only_notice.dart';
 import 'contrast.dart';
+import 'cable_length_field.dart';
+import 'cost_compare_view.dart';
 import 'cost_estimate.dart';
 import 'estimate_pdf.dart';
 import 'estimate_settings_section.dart' show showEstimateNoticeDialog;
@@ -39,6 +42,7 @@ import 'print_mode.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
 import 'search_match.dart';
+import 'tie_module_dialog.dart';
 import 'xlsx_writer.dart';
 import 'responsive.dart';
 
@@ -62,6 +66,25 @@ import 'responsive.dart';
 /// The four differ in which slice of the catalog they offer and which list on
 /// the estimate the result lands on, and nothing else.
 enum _ExtraPart { equipment, cable, hardware, misc }
+
+/// The card each kind lands on, for "Goes in ..." and "added to ...".
+const Map<_ExtraPart, String> _kPartKindNames = {
+  _ExtraPart.equipment: 'Equipment',
+  _ExtraPart.cable: 'Cabling',
+  _ExtraPart.hardware: 'Rack hardware',
+  _ExtraPart.misc: 'Other items',
+};
+
+/// Where a catalog entry is filed on the estimate, by its category: a cable
+/// in Cabling, a rack part in Rack hardware, a cost item or a consumable in
+/// Other items, and everything else in Equipment.
+_ExtraPart _partKindFor(AvDeviceTemplate t) => t.isCable
+    ? _ExtraPart.cable
+    : t.isRackHardware
+    ? _ExtraPart.hardware
+    : t.isMiscItem || t.isConsumable
+    ? _ExtraPart.misc
+    : _ExtraPart.equipment;
 
 /// What a swap does to the control block behind a drawn box, once the module
 /// under it changes: keep what this room has set (a conversion — the IP
@@ -104,6 +127,30 @@ bool quotedModelIsControllable(AppStateProvider provider, String model) {
     ports: const [],
   );
   return familyForNode(provider, probe) != null;
+}
+
+/// [known] kept as it was, minus keys gone from [fresh]; each key new in
+/// [fresh] goes ahead of the next key after it in [fresh] that is already
+/// placed, or at the end when none is. So a line added under a sort lands in
+/// its sorted spot without moving the rows already on screen.
+List<String> steadyOrder(List<String> known, List<String> fresh) {
+  final present = fresh.toSet();
+  final out = [for (final k in known) if (present.contains(k)) k];
+  final placed = out.toSet();
+  for (var i = 0; i < fresh.length; i++) {
+    final key = fresh[i];
+    if (placed.contains(key)) continue;
+    var at = out.length;
+    for (var j = i + 1; j < fresh.length; j++) {
+      if (placed.contains(fresh[j])) {
+        at = out.indexOf(fresh[j]);
+        break;
+      }
+    }
+    out.insert(at, key);
+    placed.add(key);
+  }
+  return out;
 }
 
 /// The equipment table's columns. Declared once and read by both the caption
@@ -248,6 +295,8 @@ const List<_Col> _kCablingCols = [
   _Col('Cable type', flex: 3),
   _Col('Model', flex: 2, inset: kModelCellInset),
   _Col('Drawn', width: 66, align: TextAlign.right),
+  // Cable the job needs that is not a run on the diagram - and not a spare.
+  _Col.field('Not drawn', gap: 12, width: 80, numeric: true),
   _Col.field('Spares', gap: 12, width: 80, numeric: true),
   _Col('Total', gap: 12, width: 54, align: TextAlign.right),
   _Col.field('Unit price', gap: 12, width: 130, numeric: true),
@@ -839,6 +888,64 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     label: const Text('Base costs'),
                     onPressed: () => showBaseCostsDialog(context, provider),
                   ),
+                  // Only the open room's own page; a caller pricing another
+                  // model has no room to compare or copy into.
+                  if (widget.model == null) ...[
+                    OutlinedButton.icon(
+                      key: const ValueKey('cost_compare'),
+                      icon: const Icon(Icons.compare_arrows, size: 18),
+                      label: const Text('Compare'),
+                      onPressed: () => showCompareRoomCosts(context, provider),
+                    ),
+                    PopupMenuButton<String>(
+                      key: const ValueKey('cost_items_menu'),
+                      tooltip: 'Copy, save or apply cost items',
+                      onSelected: (v) => switch (v) {
+                        'copy' => copyCostItemsFromRoom(context, provider),
+                        'save' => saveCostPresetFromRoom(context, provider),
+                        _ => applyCostPresetToRoom(context, provider),
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'copy',
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.content_copy, size: 18),
+                            title: Text('Copy from another room...'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'save',
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.save_outlined, size: 18),
+                            title: Text('Save as cost preset...'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'apply',
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.playlist_add, size: 18),
+                            title: Text('Apply cost preset...'),
+                          ),
+                        ),
+                      ],
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.request_quote_outlined, size: 18),
+                            SizedBox(width: 6),
+                            Text('Cost items'),
+                            Icon(Icons.arrow_drop_down, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   // The picture, Save AV Setup and the exports moved to
                   // the toolbar's Screenshot, Save and Export menus, which
                   // offer the estimate's own versions while this tab is on
@@ -978,6 +1085,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             : '',
                         label: 'Tax rate',
                         hint: trimNumber(provider.baseTaxPercent),
+                        warn: (settings.ownTaxRate
+                                ? settings.taxPercent
+                                : provider.baseTaxPercent) ==
+                            0,
                         hintIsValue: true,
                         suffix: '%',
                         numeric: true,
@@ -1146,7 +1257,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// page opened (or the Sort menu was last used). The estimate is sorted by
   /// device name, and renaming a device re-sorts it - so a row being typed
   /// in jumped away mid-word. Rows keep their places until the page is left
-  /// and opened again, or a sort is picked; a new line goes at the end.
+  /// and opened again, or a sort is picked. A new line goes where the sort
+  /// puts it: ahead of the row that follows it in the estimate.
   List<String>? _equipmentOrder;
 
   List<CostLine> _steadyEquipment(List<CostLine> lines) {
@@ -1155,15 +1267,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       _equipmentOrder = [for (final l in lines) l.key];
       return lines;
     }
+    _equipmentOrder = steadyOrder(known, [for (final l in lines) l.key]);
     final byKey = {for (final l in lines) l.key: l};
-    final out = [
-      for (final k in known)
-        if (byKey[k] != null) byKey[k]!,
-    ];
-    final placed = {for (final l in out) l.key};
-    out.addAll(lines.where((l) => !placed.contains(l.key)));
-    _equipmentOrder = [for (final l in out) l.key];
-    return out;
+    return [for (final k in _equipmentOrder!) byKey[k]!];
   }
 
   Widget _equipmentCard(
@@ -1433,6 +1539,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         fieldId: 'price_${line.key}',
                         initial: _roomPriceText(provider, line),
                         prefix: currency,
+                        money: true,
                         numeric: true,
                         hint: _resolvedPriceHint(line),
                         hintIsValue: true,
@@ -1782,6 +1889,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         fieldId: 'price_${line.key}',
                         initial: _roomPriceText(provider, line),
                         prefix: currency,
+                        money: true,
                         numeric: true,
                         hint: _resolvedPriceHint(line),
                         hintIsValue: true,
@@ -2091,6 +2199,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             textAlign: TextAlign.right,
                             style: const TextStyle(fontSize: 13),
                           ),
+                          // Not drawn - none: these are the diagram's runs.
+                          Text(
+                            '-',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: mutedInk(context, theme),
+                            ),
+                          ),
                           // Spares
                           LiveTextField(
                             fieldId: 'spare_${line.key}',
@@ -2117,6 +2234,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             fieldId: 'cableprice_${line.key}',
                             initial: _roomPriceText(provider, line),
                             prefix: currency,
+                            money: true,
                             numeric: true,
                             hint: _resolvedPriceHint(line),
                             hintIsValue: true,
@@ -2284,18 +2402,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             typed: item,
                             onEdit: provider.updateAvCostExtraCable,
                           ),
-                          // Drawn — none of it is, which is the point.
+                          // Drawn - none of it is, which is the point.
                           Text(
-                            'misc',
+                            '-',
                             textAlign: TextAlign.right,
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 13,
                               color: mutedInk(context, theme),
                             ),
                           ),
-                          // Spares column: for a quoted line this IS the
-                          // quantity, and it is the only box on the row that
-                          // can hold one.
+                          // Not drawn: what the job needs of it.
                           LiveTextField(
                             fieldId: 'cblqty_${item.id}',
                             initial: trimNumber(item.qty),
@@ -2304,9 +2420,25 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               item.copyWith(qty: double.tryParse(v) ?? 0),
                             ),
                           ),
+                          // Spares, their own thing, on top of it.
+                          LiveTextField(
+                            fieldId: 'cblspare_${item.id}',
+                            initial: provider.avEquipmentSpares(item.id) == 0
+                                ? ''
+                                : trimNumber(
+                                    provider.avEquipmentSpares(item.id)),
+                            numeric: true,
+                            hint: '0',
+                            hintIsValue: true,
+                            onChanged: (v) => provider.setAvEquipmentSpares(
+                              item.id,
+                              double.tryParse(v) ?? 0,
+                            ),
+                          ),
                           // Total
                           Text(
-                            trimNumber(item.qty),
+                            trimNumber(item.qty +
+                                provider.avEquipmentSpares(item.id)),
                             textAlign: TextAlign.right,
                             style: const TextStyle(
                               fontSize: 13,
@@ -2319,6 +2451,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             initial:
                                 line == null ? '' : _roomPriceText(provider, line),
                             prefix: currency,
+                            money: true,
                             numeric: true,
                             hint: line == null || line.unitPrice <= 0
                                 ? 'unpriced'
@@ -2469,13 +2602,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final partController = TextEditingController();
     String? selectedModel;
     var placement = EquipmentPlacement.estimateOnly;
+    // A cable's length in feet; 0 is not given.
+    var lengthFt = 0.0;
+    // Every catalog entry, not only this card's kind. A pick is filed where
+    // its category puts it - see [_partKindFor].
+    var showAll = false;
 
     final added = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) {
+          final pool = showAll ? library.active : parts;
           final matches =
-              searchCatalog(parts, searchController.text, limit: parts.length);
+              searchCatalog(pool, searchController.text, limit: pool.length);
+          // Where the pick goes: its own kind, or this card's when nothing
+          // from the catalog is picked.
+          final pickedEntry = library.templateForModel(selectedModel ?? '');
+          final into =
+              pickedEntry == null ? kind : _partKindFor(pickedEntry);
           return AlertDialog(
             title: Text(switch (kind) {
               _ExtraPart.equipment => 'Add equipment',
@@ -2485,7 +2629,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             }),
             content: SizedBox(
               width: 560,
-              height: kind == _ExtraPart.equipment ? 660 : 520,
+              // Never taller than the window, title and buttons included.
+              height: math.max(
+                320.0,
+                math.min(
+                  into == _ExtraPart.equipment ? 800.0 : 640.0,
+                  MediaQuery.sizeOf(ctx).height - 200,
+                ),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2546,7 +2697,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     ),
                     onChanged: (_) => setLocal(() {}),
                   ),
-                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    key: const ValueKey('add_show_all'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'All catalog items - each goes where its category '
+                      'files it',
+                    ),
+                    value: showAll,
+                    onChanged: (v) => setLocal(() => showAll = v),
+                  ),
                   Expanded(
                     child: matches.isEmpty
                         ? Center(
@@ -2584,6 +2745,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 subtitle: Text(
                                   [
                                     if (t.category.isNotEmpty) t.category,
+                                    if (showAll)
+                                      'Goes in ${_kPartKindNames[_partKindFor(t)]}',
                                     if (t.rackUnits > 0) '${t.rackUnits}U',
                                     price.price > 0
                                         ? formatMoney(price.price,
@@ -2598,6 +2761,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                   nameController.text = t.model;
                                   placement =
                                       defaultPlacementFor(provider, t.model);
+                                  if (t.cableLengthFt > 0) {
+                                    lengthFt = t.cableLengthFt;
+                                  }
                                 }),
                               );
                             },
@@ -2641,6 +2807,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       ),
                     ],
                   ),
+                  // How long it is: typed in feet, or a stocked lead off the
+                  // menu. Goes on the line's name.
+                  if (into == _ExtraPart.cable) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: 160,
+                      child: CableLengthField(
+                        key: const ValueKey('add_cable_length'),
+                        initial: lengthFt,
+                        onChanged: (v) => lengthFt = v,
+                      ),
+                    ),
+                  ],
                   if (selectedModel == null) ...[
                     const SizedBox(height: 8),
                     Row(
@@ -2678,7 +2857,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         : 'Priced from the catalog: $selectedModel',
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
-                  if (kind == _ExtraPart.equipment)
+                  if (into == _ExtraPart.equipment)
                     _PlacementChoice(
                       value: placement,
                       // Drawing needs a catalog entry to build the box from.
@@ -2710,15 +2889,30 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (added != true) return;
     final typed = double.tryParse(qtyController.text.trim()) ?? 1;
     final qty = typed <= 0 ? 1.0 : typed;
-    final name = nameController.text.trim().isEmpty
+    var name = nameController.text.trim().isEmpty
         ? (selectedModel ?? '')
         : nameController.text.trim();
     final template = library.templateForModel(selectedModel ?? '');
+    // Filed by what was picked, which with All catalog items on can be
+    // another card's kind.
+    final into = template == null ? kind : _partKindFor(template);
+    // The length on the name, unless it already says it.
+    final length = formatCableLength(lengthFt);
+    if (into == _ExtraPart.cable &&
+        length.isNotEmpty &&
+        !name.toLowerCase().replaceAll(' ', '').contains(length)) {
+      name = '$name - $length';
+    }
     // Only a part the catalog does not have keeps what was typed for these.
     final maker = selectedModel == null ? makerController.text.trim() : '';
     final partNo = selectedModel == null ? partController.text.trim() : '';
+    if (into != kind && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('$name added to ${_kPartKindNames[into]}.'),
+      ));
+    }
 
-    switch (kind) {
+    switch (into) {
       case _ExtraPart.equipment:
         final line = provider.addAvCostExtraEquipment(
           catalogModel: selectedModel ?? '',
@@ -3399,6 +3593,23 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
           ),
           PopupMenuItem(
+            value: 'tiemodule',
+            enabled: catalogModel.trim().isNotEmpty,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.description, size: 18),
+              title: const Text('Tie to a Python module...'),
+              subtitle: Text(
+                catalogModel.trim().isEmpty
+                    ? 'Only a line with a catalog model can be tied - add it '
+                          'to the catalog first.'
+                    : 'Adds $catalogModel to the models a driver lists, '
+                          'then adds it to the room config.',
+              ),
+            ),
+          ),
+          PopupMenuItem(
             value: 'nocontrol',
             enabled: extra != null || nodes.isNotEmpty,
             child: ListTile(
@@ -3517,6 +3728,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             }
             return;
           }
+          if (choice == 'tiemodule') {
+            final tied = await showTieToModuleDialog(
+              context,
+              provider,
+              catalogModel,
+            );
+            if (!tied || !context.mounted) return;
+          }
+          if (!context.mounted) return;
           _addLineToConfig(context, provider, line, model, extra: extra);
         },
       ),
@@ -3656,16 +3876,45 @@ class _CostEstimateViewState extends State<CostEstimateView> {
 
     final plan = planControlSide(provider, nodeIds: nodeIds);
     if (plan.creatable.isEmpty) {
+      final tieModel = (extra?.catalogModel ?? line.model).trim();
       messenger.showSnackBar(
         SnackBar(
           content: Text(
             plan.unplaceable.isEmpty
                 ? '$label is already in the room config.'
                 : 'No device family fits $label, so there is nowhere to put a '
-                      'block for it. The Wizard tab is where families are '
-                      'turned on.',
+                      'block for it. Tie it to the python module that drives '
+                      'it, or turn its family on in the Wizard tab.',
           ),
-          duration: const Duration(seconds: 7),
+          duration: const Duration(seconds: 10),
+          action: plan.unplaceable.isEmpty || tieModel.isEmpty
+              ? null
+              : SnackBarAction(
+                  label: 'Tie to a module',
+                  onPressed: () async {
+                    final tied = await showTieToModuleDialog(
+                      context,
+                      provider,
+                      tieModel,
+                    );
+                    if (!tied) return;
+                    // The boxes are drawn already; only the block was missing.
+                    final retry = planControlSide(provider, nodeIds: nodeIds);
+                    if (retry.creatable.isEmpty) return;
+                    final done = applyControlSide(provider, retry);
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '${done.created} device block'
+                          '${done.created == 1 ? '' : 's'} created '
+                          '(${done.sectionKeys.join(', ')}). Fill in the '
+                          'address on the Devices tab.',
+                        ),
+                        duration: const Duration(seconds: 7),
+                      ),
+                    );
+                  },
+                ),
         ),
       );
       return;
@@ -5005,16 +5254,27 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       ],
                     ),
                     const SizedBox(height: 12),
+                    // Top-aligned, so a helper under one box does not push
+                    // its neighbor's line out of step with its own.
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             initialValue:
                                 categories.contains(category) ? category : null,
                             isExpanded: true,
-                            decoration: const InputDecoration(
+                            // What the category limits the entry to.
+                            decoration: InputDecoration(
                               labelText: 'Category',
                               isDense: true,
+                              helperText: categoryLimits(
+                                category,
+                                hasPorts: existing?.ports.isNotEmpty ??
+                                    current?.ports.isNotEmpty ??
+                                    false,
+                              ),
+                              helperMaxLines: 4,
                             ),
                             items: [
                               for (final c in categories)
@@ -5071,7 +5331,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       ),
                     ],
                     const SizedBox(height: 12),
+                    // Both with a helper and top-aligned, so the two boxes
+                    // and their lines sit level - the education price's
+                    // helper alone used to drop the list price out of line.
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: TextField(
@@ -5079,6 +5343,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             decoration: InputDecoration(
                               labelText:
                                   'List price (${provider.currencySymbol})',
+                              helperText: 'MSRP',
                               isDense: true,
                             ),
                             keyboardType:
@@ -5199,6 +5464,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         // knows about money, not about ports, and dropping a port list it
         // never showed would be a silent edit.
         ports: keepFrom?.ports ?? const [],
+        // A billed line (a mount, a license) has no power inlet. Left at the
+        // default, the save gave it one, and a connector makes an AV / Misc
+        // entry equipment rather than an Other item.
+        powerInput: keepFrom?.powerInput ??
+            (linkKind == _ExtraPart.misc ? PowerInput.none : PowerInput.mains),
       ),
       previousModel: renamedFrom.isNotEmpty
           ? renamedFrom
@@ -5247,6 +5517,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (partKey != null) provider.clearAvCostLinePart(partKey);
     if (key != null) provider.setAvCostPrice(key, null);
 
+    if (context.mounted) await confirmCatalogCategories(context, provider);
     final file = await provider.saveAvDeviceLibrary();
     // The catalog is a plain object rather than a listenable, so the page it
     // is being edited from has to be told. Without this an edited price sat
@@ -5488,10 +5759,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// several lists each unit's name under a menu beside it.
   Widget _lineNameField(AppStateProvider provider, CostLine line) {
     final units = nodesByCostLine(provider.avFlowModel)[line.key] ?? const [];
+    // A config device says what kind it is - Switcher device 1.
+    final type =
+        units.length == 1 ? configDeviceTypeLabel(units.single.id) : '';
     final field = hoverWhenClipped(
       // The box holds the text a field's inset in from each edge.
       text: '${line.description}    ',
-      message: _rowIdentity(line),
+      message: [
+        if (type.isNotEmpty) type,
+        _rowIdentity(line),
+      ].join('\n'),
       style: const TextStyle(fontSize: 13),
       child: LiveTextField(
         key: ValueKey('linename_${line.key}'),
@@ -5534,7 +5811,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           value: n.id,
           child: Row(
             children: [
-              Expanded(child: Text(n.label.isEmpty ? n.id : n.label)),
+              Expanded(
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(n.label.isEmpty ? n.id : n.label),
+                  // What kind of device it is, for a config device.
+                  subtitle: configDeviceTypeLabel(n.id).isEmpty
+                      ? null
+                      : Text(configDeviceTypeLabel(n.id)),
+                ),
+              ),
               const SizedBox(width: 12),
               const Icon(Icons.edit_outlined, size: 16),
             ],
@@ -5585,7 +5872,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       autofocus: n.id == focus ||
                           (focus.isEmpty && n == units.first),
                       decoration: InputDecoration(
-                        labelText: n.id,
+                        // Switcher device 1, not SWITCHERDEVICE_1.
+                        labelText: configDeviceTypeLabel(n.id).isEmpty
+                            ? n.id
+                            : configDeviceTypeLabel(n.id),
+                        helperText: configDeviceTypeLabel(n.id).isEmpty
+                            ? null
+                            : n.id,
                         isDense: true,
                       ),
                       onSubmitted: (_) => Navigator.of(ctx).pop(true),
@@ -5951,6 +6244,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       fieldId: 'ship_$lineKey',
       initial: each == 0 ? '' : trimNumber(each),
       prefix: currency,
+      money: true,
       numeric: true,
       hint: '0',
       onChanged: (v) =>
@@ -6255,6 +6549,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             ? 'set'
                             : trimNumber(costed.hourlyRate),
                         hintIsValue: !costed.unrated,
+                        prefix: currency,
+                        money: true,
                         numeric: true,
                         onChanged: (v) => provider.updateAvCostLabor(
                           line.copyWith(
@@ -6386,23 +6682,51 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         item.copyWith(qty: double.tryParse(v) ?? 0),
                       ),
                     ),
-                    // Unit price
-                    LiveTextField(
-                      fieldId: 'unit_${item.id}',
-                      initial: item.unitPrice == 0
-                          ? ''
-                          : trimNumber(item.unitPrice),
-                      prefix: currency,
-                      numeric: true,
-                      onChanged: (v) => provider.updateAvCostItem(
-                        item.copyWith(unitPrice: double.tryParse(v) ?? 0),
+                    // Unit price. A catalog item shows the price the estimate
+                    // uses - the catalog's - behind the box, and a figure
+                    // typed is this room's price, like the equipment rows. It
+                    // used to show only the typed price, so a catalog item
+                    // read blank and $0.00 while the total charged it.
+                    if (item.catalogModel.isNotEmpty &&
+                        _extraLineOf(estimate, item) != null)
+                      LiveTextField(
+                        fieldId: 'itemprice_${item.id}',
+                        initial: _roomPriceText(
+                            provider, _extraLineOf(estimate, item)!),
+                        prefix: currency,
+                        money: true,
+                        numeric: true,
+                        hint: _resolvedPriceHint(_extraLineOf(estimate, item)!),
+                        hintIsValue: true,
+                        onChanged: (v) {
+                          final parsed = double.tryParse(v);
+                          provider.setAvCostPrice(
+                            item.id,
+                            v.trim().isEmpty ? null : (parsed ?? 0),
+                          );
+                        },
+                      )
+                    else
+                      LiveTextField(
+                        fieldId: 'unit_${item.id}',
+                        initial: item.unitPrice == 0
+                            ? ''
+                            : trimNumber(item.unitPrice),
+                        prefix: currency,
+                        money: true,
+                        numeric: true,
+                        onChanged: (v) => provider.updateAvCostItem(
+                          item.copyWith(unitPrice: double.tryParse(v) ?? 0),
+                        ),
                       ),
-                    ),
                     if (provider.avCost.showShipping)
                       _shippingCell(provider, item.id, currency),
-                    // Extended
+                    // Extended, as the estimate charges it.
                     Text(
-                      formatMoney(item.total, currency),
+                      formatMoney(
+                        _extraLineOf(estimate, item)?.total ?? item.total,
+                        currency,
+                      ),
                       textAlign: TextAlign.right,
                       style: const TextStyle(
                         fontSize: 13,

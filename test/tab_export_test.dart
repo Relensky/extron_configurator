@@ -50,6 +50,8 @@ void main() {
       AppTab.schemaEditor,
       AppTab.flowRules,
       AppTab.project,
+      // Pictures, not a table.
+      AppTab.photos,
     };
     for (final tab in noTabExport) {
       expect(tabCanExport(tab), isFalse, reason: '${tab.name} exports');

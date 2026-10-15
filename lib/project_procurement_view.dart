@@ -395,13 +395,10 @@ class _LogGridState extends State<_LogGrid> {
     final bodyWidth = _cols.fold<double>(0, (s, c) => s + w(c.width));
 
     return Padding(
-      // Clear of the floating Screenshot and Export buttons.
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        4,
-        16,
-        kFloatingButtonClearance,
-      ),
+      // The grid runs to the window's bottom edge, so its sideways bar is
+      // always there; the space for the floating Screenshot and Export
+      // buttons is after its last row instead - see trailingSpace.
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -456,6 +453,8 @@ class _LogGridState extends State<_LogGrid> {
             key: const ValueKey('procurement_grid'),
             dragging: _columnDrag,
             maxHeight: frame.maxHeight,
+            fillHeight: true,
+            trailingSpace: kFloatingButtonClearance,
             frozenWidth: w(frozenBase),
             headerHeight: w(_kHead),
             bodyWidth: bodyWidth,

@@ -98,13 +98,31 @@ void main() {
       );
     });
 
-    /// The pass that earns its keep: this entry labels the 84's two DTP
+    /// The pass that earns its keep: an entry that labels the 84's two DTP
     /// sockets "DTP OUT 1" and "DTP OUT 2" — a per-connector counter — so
     /// neither carries the number 3. The model number says the box has four
     /// outputs and Extron puts the DTP sockets on the last of them, which
     /// makes DTP OUT 1 output 3.
+    ///
+    /// The catalog has since been corrected to "DTP OUT 3" and "DTP OUT 4"
+    /// (below), so the old spelling is put back by hand here: an entry typed
+    /// the old way still has to land on the right socket.
     test('when the catalog counts connectors instead of outputs', () async {
-      final node = await switcherNode('DTP CrossPoint 84 4K');
+      final real = await switcherNode('DTP CrossPoint 84 4K');
+      final node = AvNode(
+        id: real.id,
+        label: real.label,
+        model: real.model,
+        pos: Offset.zero,
+        ports: [
+          for (final p in real.ports)
+            p.label == 'DTP OUT 3'
+                ? p.copyWith(label: 'DTP OUT 1')
+                : p.label == 'DTP OUT 4'
+                ? p.copyWith(label: 'DTP OUT 2')
+                : p,
+        ],
+      );
       expect(
         portForIoValue(node, '3B', wantOutput: true, declaredOutputs: 4)?.label,
         'DTP OUT 1',
@@ -119,6 +137,18 @@ void main() {
         portForIoValue(node, '3B', wantOutput: true, declaredOutputs: 0),
         isNull,
         reason: 'without the output count there is nothing to infer from',
+      );
+    });
+
+    test('the catalog numbers the 84\'s DTP sockets by output', () async {
+      final node = await switcherNode('DTP CrossPoint 84 4K');
+      expect(
+        portForIoValue(node, '3B', wantOutput: true, declaredOutputs: 4)?.label,
+        'DTP OUT 3',
+      );
+      expect(
+        portForIoValue(node, '4B', wantOutput: true, declaredOutputs: 4)?.label,
+        'DTP OUT 4',
       );
     });
 
@@ -380,7 +410,7 @@ void main() {
     expect(tie(plan, 'output_proj_2'), isNull);
   });
 
-  test('BSS 122 - the catalog counts connectors on this one', () async {
+  test('BSS 122 - the DTP outputs by their output numbers', () async {
     final p = await roomFrom('$template/BSS122/code/upload_to_root/config.json');
     if (p == null) return;
     final plan = planRoutingFromConfig(p);
@@ -399,9 +429,9 @@ void main() {
     // PowerLites have an HDBaseT socket, so the pair goes into that and no
     // receiver is bought: the declared input records which connector somebody
     // plugged into, and a room wired like this already has the answer. The
-    // matrix outputs are the inferred ones: DTP OUT 1 is output 3.
-    expect(ties(plan, 'output_proj_1'), ['DTP OUT 1 -> HDBaseT']);
-    expect(ties(plan, 'output_proj_2'), ['DTP OUT 2 -> HDBaseT']);
+    // catalog numbers the 84's DTP sockets by output, so 3B is DTP OUT 3.
+    expect(ties(plan, 'output_proj_1'), ['DTP OUT 3 -> HDBaseT']);
+    expect(ties(plan, 'output_proj_2'), ['DTP OUT 4 -> HDBaseT']);
 
     // And nothing was invented to get there.
     expect(plan.newNodes.where((n) => n.model == 'DTP HDMI 4K 230 Rx'),

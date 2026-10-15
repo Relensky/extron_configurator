@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'collab/combine_history_view.dart';
+import 'history_sources.dart';
+import 'room_sidecar.dart' show RoomSidecarPart, roomSidecarPath;
 import 'project_estimate.dart';
 
 /// ============================================================================
@@ -102,11 +104,24 @@ class _EditRow extends StatefulWidget {
   final ProjectEdit edit;
   final bool showDay;
 
-  /// Which log this came out of, or null when only one is on screen and
-  /// saying so on every row would be noise.
+  /// Which log this came out of, or null for the job's own pane.
   final HistoryScope? source;
 
-  const _EditRow({required this.edit, required this.showDay, this.source});
+  /// The job and room it was made in, and the file it is kept in.
+  final String where;
+  final String file;
+
+  /// Say which log on the row itself - while several are on screen.
+  final bool badge;
+
+  const _EditRow({
+    required this.edit,
+    required this.showDay,
+    this.source,
+    this.where = '',
+    this.file = '',
+    this.badge = false,
+  });
 
   @override
   State<_EditRow> createState() => _EditRowState();
@@ -119,7 +134,7 @@ class _EditRowState extends State<_EditRow> {
   Widget build(BuildContext context) {
     final edit = widget.edit;
     final showDay = widget.showDay;
-    final source = widget.source;
+    final source = widget.badge ? widget.source : null;
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
 
@@ -155,7 +170,14 @@ class _EditRowState extends State<_EditRow> {
               const SizedBox(width: 6),
               if (source != null) ...[
                 Text(
-                  source == HistoryScope.room ? 'ROOM' : 'JOB',
+                  switch (source) {
+                    HistoryScope.room => 'ROOM',
+                    HistoryScope.otherRooms =>
+                      widget.where.split(' > ').last.toUpperCase(),
+                    HistoryScope.campus =>
+                      widget.where.split(' > ').first.toUpperCase(),
+                    _ => 'JOB',
+                  },
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: muted,
                     fontWeight: FontWeight.bold,
@@ -198,7 +220,13 @@ class _EditRowState extends State<_EditRow> {
           ),
           ),
         ),
-        if (_open) _EditDetails(edit: edit, source: source),
+        if (_open)
+          _EditDetails(
+            edit: edit,
+            source: widget.source,
+            where: widget.where,
+            file: widget.file,
+          ),
       ],
     );
   }
@@ -208,8 +236,15 @@ class _EditRowState extends State<_EditRow> {
 class _EditDetails extends StatelessWidget {
   final ProjectEdit edit;
   final HistoryScope? source;
+  final String where;
+  final String file;
 
-  const _EditDetails({required this.edit, this.source});
+  const _EditDetails({
+    required this.edit,
+    this.source,
+    this.where = '',
+    this.file = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -233,11 +268,17 @@ class _EditDetails extends StatelessWidget {
             if (edit.itemName.isNotEmpty) edit.itemName,
           ].join(' - ')),
       ('Change', '${edit.field} ${edit.summary}'),
+      if (where.isNotEmpty) ('Made in', where),
       if (source != null)
-        ('Kept in',
-            source == HistoryScope.room
-                ? "the room's history file"
-                : 'the project file'),
+        ('Kept in', switch (source!) {
+          HistoryScope.room || HistoryScope.otherRooms =>
+            "the room's history file",
+          HistoryScope.campus => where.contains(' > ')
+              ? "the room's history file"
+              : "the job's project file",
+          _ => 'the project file',
+        }),
+      if (file.isNotEmpty) ('File', file),
     ];
     return Container(
       margin: const EdgeInsets.fromLTRB(46, 0, 0, 8),
@@ -644,13 +685,23 @@ class _FinishedRow extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 /// Which log is on screen.
-enum HistoryScope { both, project, room }
+enum HistoryScope { both, project, room, otherRooms, campus }
 
 const Map<HistoryScope, String> kHistoryScopeLabels = {
   HistoryScope.both: 'Everything',
   HistoryScope.project: 'The job',
   HistoryScope.room: 'This room',
+  HistoryScope.otherRooms: 'Other rooms',
+  HistoryScope.campus: 'Campus',
 };
+
+/// One line of the log, with where it was made and the file it is kept in.
+typedef _HistoryRow = ({
+  ProjectEdit edit,
+  HistoryScope from,
+  String where,
+  String file,
+});
 
 /// The history, off the toolbar.
 ///
@@ -688,6 +739,23 @@ class _HistoryDialogState extends State<_HistoryDialog> {
   /// thumb ends up tracking nothing.
   final ScrollController _scroll = ScrollController();
 
+  /// The other rooms' logs and the campus's, read off disk once the dialog
+  /// opens. Null while still being read.
+  List<OutsideEdit>? _otherRooms;
+  List<OutsideEdit>? _campus;
+
+  @override
+  void initState() {
+    super.initState();
+    final provider = context.read<AppStateProvider>();
+    readOtherRoomEdits(provider).then((v) {
+      if (mounted) setState(() => _otherRooms = v);
+    });
+    readCampusEdits(provider).then((v) {
+      if (mounted) setState(() => _campus = v);
+    });
+  }
+
   @override
   void dispose() {
     _scroll.dispose();
@@ -701,18 +769,67 @@ class _HistoryDialogState extends State<_HistoryDialog> {
 
     final hasProject = provider.hasOpenProject;
     final hasRoom = provider.roomConfig.isNotEmpty;
+    final project = provider.projectDisplayName;
+    final openRoom = provider.openProjectRoom;
+    final roomName = openRoom != null
+        ? provider.projectRoomLogName(openRoom.id)
+        : roomNameForConfig(provider.currentConfigPath);
+    final reading = _otherRooms == null || _campus == null;
+    // The scopes worth offering: the open job and room, then the rooms and
+    // jobs read off disk once they have something in them.
+    final scopes = [
+      HistoryScope.both,
+      if (hasProject) HistoryScope.project,
+      if (hasRoom) HistoryScope.room,
+      if (_otherRooms?.isNotEmpty ?? false) HistoryScope.otherRooms,
+      if (_campus?.isNotEmpty ?? false) HistoryScope.campus,
+    ];
+    if (!scopes.contains(_scope)) _scope = HistoryScope.both;
+    bool shows(HistoryScope s) => _scope == HistoryScope.both || _scope == s;
 
     // Tagged as they are merged, so a combined list can still say which
     // document each line came out of — otherwise "Deadline set to 14 Jun" and
     // "Baud rate was 9600, now 115200" read as entries in the same file.
-    final all = <({ProjectEdit edit, HistoryScope from})>[
-      if (_scope != HistoryScope.room)
+    //
+    // Every log, whatever the scope picked: the People tab counts all of
+    // them. It used to count the job's own log only, so somebody who
+    // worked in the rooms showed few changes or none.
+    final everyone = <_HistoryRow>[
+      if (hasProject)
         for (final e in provider.project.history)
-          (edit: e, from: HistoryScope.project),
-      if (_scope != HistoryScope.project)
+          (
+            edit: e,
+            from: HistoryScope.project,
+            where: project,
+            file: provider.currentProjectPath,
+          ),
+      if (hasRoom)
         for (final e in provider.roomHistory)
-          (edit: e, from: HistoryScope.room),
+          (
+            edit: e,
+            from: HistoryScope.room,
+            where: hasProject ? '$project > $roomName' : roomName,
+            file: provider.currentConfigPath.isEmpty
+                ? ''
+                : roomSidecarPath(
+                    provider.currentConfigPath, RoomSidecarPart.history),
+          ),
+      for (final o in _otherRooms ?? const <OutsideEdit>[])
+          (
+            edit: o.edit,
+            from: HistoryScope.otherRooms,
+            where: '${o.project} > ${o.room}',
+            file: o.file,
+          ),
+      for (final o in _campus ?? const <OutsideEdit>[])
+          (
+            edit: o.edit,
+            from: HistoryScope.campus,
+            where: o.room.isEmpty ? o.project : '${o.project} > ${o.room}',
+            file: o.file,
+          ),
     ]..sort((a, b) => b.edit.at.compareTo(a.edit.at));
+    final all = [for (final r in everyone) if (shows(r.from)) r];
     // Each login once, under the newest name it was recorded with.
     final people = <String, String>{};
     for (final r in all) {
@@ -724,7 +841,8 @@ class _HistoryDialogState extends State<_HistoryDialog> {
     final rows = [
       for (final r in all)
         if ((_person == null || r.edit.user.toLowerCase() == _person) &&
-            _matches(r.edit, _query))
+            (_matches(r.edit, _query) ||
+                r.where.toLowerCase().contains(_query.toLowerCase())))
           r,
     ];
 
@@ -734,14 +852,14 @@ class _HistoryDialogState extends State<_HistoryDialog> {
             // Only offered when there are two logs to choose between. On a
             // session with just a room open, a switcher whose other two
             // options are both empty is a control that can only disappoint.
-            if (hasProject && hasRoom)
+            if (scopes.length > 1)
               Padding(
                 padding: _headerPad,
                 child: Align(
                 alignment: Alignment.centerLeft,
                 child: SegmentedButton<HistoryScope>(
                   segments: [
-                    for (final scope in HistoryScope.values)
+                    for (final scope in scopes)
                       ButtonSegment(
                         value: scope,
                         label: Text(
@@ -802,7 +920,8 @@ class _HistoryDialogState extends State<_HistoryDialog> {
                   : '${rows.length} change${rows.length == 1 ? '' : 's'}, '
                       'newest first, each stamped with the Windows login, '
                       'name and computer it was made under. Click one for '
-                      'everything recorded about it.',
+                      'everything recorded about it.'
+                      '${reading ? ' Reading the other rooms and jobs...' : ''}',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -826,11 +945,12 @@ class _HistoryDialogState extends State<_HistoryDialog> {
                         edit: rows[i].edit,
                         showDay: i == 0 ||
                             !_sameDay(rows[i].edit.at, rows[i - 1].edit.at),
-                        // The badge earns its place only while both logs are
-                        // on screen at once.
-                        source: _scope == HistoryScope.both
-                            ? rows[i].from
-                            : null,
+                        source: rows[i].from,
+                        where: rows[i].where,
+                        file: rows[i].file,
+                        // The badge earns its place only while more than one
+                        // log is on screen at once.
+                        badge: _scope == HistoryScope.both,
                       ),
                       ),
                     ),
@@ -856,7 +976,7 @@ class _HistoryDialogState extends State<_HistoryDialog> {
         // COMBINES: every time another person's save was combined in, by
         // room, project or campus - see [CombineHistoryPane].
         child: DefaultTabController(
-                length: hasProject ? 4 : 2,
+                length: hasProject ? 4 : 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -870,16 +990,15 @@ class _HistoryDialogState extends State<_HistoryDialog> {
                           key: ValueKey('history_tab_combines'),
                           text: 'Combines',
                         ),
-                        if (hasProject) ...const [
-                          Tab(
+                        if (hasProject)
+                          const Tab(
                             key: ValueKey('history_tab_finished'),
                             text: 'Finished tasks',
                           ),
-                          Tab(
-                            key: ValueKey('history_tab_people'),
-                            text: 'People',
-                          ),
-                        ],
+                        const Tab(
+                          key: ValueKey('history_tab_people'),
+                          text: 'People',
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -888,10 +1007,19 @@ class _HistoryDialogState extends State<_HistoryDialog> {
                         children: [
                           changes,
                           CombineHistoryPane(store: provider.combineHistory),
-                          if (hasProject) ...[
+                          if (hasProject)
                             FinishedTasksPane(project: provider.project),
-                            _PeoplePane(provider: provider),
-                          ],
+                          _PeoplePane(
+                            rows: everyone,
+                            reading: reading,
+                            // Their history: the Changes tab, every log,
+                            // their changes only.
+                            onPick: (login) => setState(() {
+                              _person = login.toLowerCase();
+                              _scope = HistoryScope.both;
+                              _query = '';
+                            }),
+                          ),
                         ],
                       ),
                     ),
@@ -910,12 +1038,21 @@ class _HistoryDialogState extends State<_HistoryDialog> {
   }
 }
 
-/// Everybody who has opened the job or changed it: login, name, email,
-/// computer, when they were last in, and how many changes are theirs.
+/// Everybody who has changed anything the history reads - the job, the open
+/// room, the job's other rooms and the campus: login, name, email, computer,
+/// first and last change, and how many. Pressing one opens their history.
 class _PeoplePane extends StatelessWidget {
-  final AppStateProvider provider;
+  final List<_HistoryRow> rows;
 
-  const _PeoplePane({required this.provider});
+  /// Still reading the other rooms' and the campus's logs off disk.
+  final bool reading;
+  final ValueChanged<String> onPick;
+
+  const _PeoplePane({
+    required this.rows,
+    required this.reading,
+    required this.onPick,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -924,15 +1061,18 @@ class _PeoplePane extends StatelessWidget {
     final counts = <String, int>{};
     final latest = <String, ProjectEdit>{};
     final first = <String, ProjectEdit>{};
-    for (final e in provider.project.history) {
+    final places = <String, Set<String>>{};
+    for (final r in rows) {
+      final e = r.edit;
       final k = e.user.toLowerCase();
       if (k.isEmpty) continue;
       counts[k] = (counts[k] ?? 0) + 1;
-      latest[k] = e;
-      first.putIfAbsent(k, () => e);
+      final newest = latest[k];
+      if (newest == null || e.at.isAfter(newest.at)) latest[k] = e;
+      final oldest = first[k];
+      if (oldest == null || e.at.isBefore(oldest.at)) first[k] = e;
+      (places[k] ??= {}).add(r.where);
     }
-    // Everybody in the history, from the history itself (the project's old
-    // chat folder used to keep this list; the chat is the team's now).
     final people = [
       for (final e in latest.values)
         (
@@ -949,7 +1089,9 @@ class _PeoplePane extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       children: [
         Text(
-          "Everybody in this job's history, most recent first.",
+          'Everybody who has changed the job, its rooms or the campus, '
+          'most recent first. Press a name to see their changes.'
+          '${reading ? ' Still reading the other rooms...' : ''}',
           style: theme.textTheme.bodySmall?.copyWith(color: muted),
         ),
         const SizedBox(height: 8),
@@ -962,10 +1104,15 @@ class _PeoplePane extends StatelessWidget {
             final machine =
                 p.machine.isNotEmpty ? p.machine : (last?.machine ?? '');
             final n = counts[k] ?? 0;
+            final where = places[k] ?? const <String>{};
             return ListTile(
               key: ValueKey('history_person_${p.login}'),
               dense: true,
               contentPadding: EdgeInsets.zero,
+              onTap: () {
+                onPick(p.login);
+                DefaultTabController.of(context).animateTo(0);
+              },
               leading: const Icon(Icons.person_outline),
               title: Text(name.isEmpty || name.toLowerCase() == k
                   ? p.login
@@ -976,6 +1123,10 @@ class _PeoplePane extends StatelessWidget {
                 if (machine.isNotEmpty) 'on $machine',
                 if (p.firstSeen != null) 'first change ${when(p.firstSeen!)}',
                 if (last != null) 'last change ${when(last.at)}',
+                if (where.isNotEmpty)
+                  where.length == 1
+                      ? 'in ${where.first}'
+                      : 'in ${where.length} places',
               ].join('  ·  ')),
               trailing: Text(
                 '$n change${n == 1 ? '' : 's'}',

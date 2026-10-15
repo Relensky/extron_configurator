@@ -21,6 +21,9 @@ class _FakeGoogle {
   final written = <String, int>{};
   bool down = false;
 
+  /// Reads fail while writes still go - a Sheet that cannot be pulled.
+  bool readsDown = false;
+
   GoogleLiveSheet get client => GoogleLiveSheet(_send);
 
   String _text(Map cell) {
@@ -88,6 +91,9 @@ class _FakeGoogle {
         }
       }
       return {};
+    }
+    if (readsDown && uri.path.endsWith('values:batchGet')) {
+      throw const GoogleSheetsException('The Sheet could not be read');
     }
     if (uri.path.endsWith('values:batchGet')) {
       final names = [
@@ -325,6 +331,23 @@ void main() {
 
       expect(p.onlineHold, isNull);
       expect(google.batches, greaterThan(before));
+    });
+
+    test('a Sheet that cannot be pulled first is not written over on save',
+        () async {
+      final (:p, :google) = job();
+      p.setProjectOnlineAutoPublish(true);
+      await p.saveProject(to: path.join(dir.path, 'bessey.json'));
+      google.readsDown = true;
+      final before = google.batches;
+
+      expect(await p.saveProject(), '');
+
+      expect(google.batches, before);
+      expect(p.lastOnlinePublishFailed, contains(kOnlineSheetLabel));
+      final check = await p.checkSheetForEdits();
+      expect(check.held, isNull);
+      expect(check.error, contains('could not be read'));
     });
 
     test('a quantity typed in the Sheet holds the publish and comes back',

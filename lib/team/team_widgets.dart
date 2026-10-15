@@ -605,10 +605,11 @@ class RoomTeamStrip extends StatelessWidget {
                 label: Text('${unread > 0 ? unread : count}'),
                 child: const Icon(Icons.chat_outlined, size: 20),
               ),
-              // [TEAM CHAT]: the chat opens where it was; its header offers
-              // this room's thread (or to start one).
-              onPressed: () =>
-                  TeamChatPanel.instance.open(context, room: room),
+              // [TEAM CHAT]: a room with a thread opens on it (and an open
+              // chat switches to it); without one the chat opens where it
+              // was, its header offering to start the thread.
+              onPressed: () => TeamChatPanel.instance.open(context,
+                  room: room, thread: count > 0 ? roomChannel(room) : null),
             ),
           ],
         );
@@ -802,6 +803,11 @@ class TeamChatPanel {
   /// go to it, or start it. '' for the room on screen.
   final ValueNotifier<String> contextRoom = ValueNotifier('');
 
+  /// A thread for the chat to switch to, set by [open]'s `thread:` and
+  /// cleared once the chat has gone to it - whether the chat was just
+  /// opened or was already up on another thread.
+  final ValueNotifier<String?> threadRequest = ValueNotifier(null);
+
   /// Opens the chat on the team members.
   void openMembers(BuildContext context) {
     showingMembers.value = true;
@@ -817,12 +823,18 @@ class TeamChatPanel {
 
   /// Opens it on [channel], with [draft] typed in, when given. [room]: the
   /// room it was opened from, offered as a button rather than shown.
+  /// [thread]: a thread to go straight to, the way clicking it in the chat
+  /// does (reopened if it was closed, scrolled to the newest message).
   void open(BuildContext context,
-      {String? channel, String? draft, String? room}) {
+      {String? channel, String? draft, String? room, String? thread}) {
     final chat = Team.chat;
     if (chat == null) return;
     contextRoom.value = room ?? '';
     if (channel != null) chat.selectChannel(channel);
+    if (thread != null) {
+      showingMembers.value = false;
+      threadRequest.value = thread;
+    }
     if (draft != null) _draft.value = draft;
     // Opened again while sliding away: it turns round instead of a second
     // one starting.
@@ -1370,12 +1382,25 @@ class _ChatBodyState extends State<_ChatBody> {
     TeamChatPanel.instance.showingMembers.addListener(_changed);
     TeamChatPanel.instance.contextRoom.addListener(_changed);
     TeamChatPanel.instance.showing.addListener(_shown);
+    TeamChatPanel.instance.threadRequest.addListener(_takeThread);
     Team.presence?.addListener(_changed);
     _shownChannel = chat.channel;
     ChatFormatController.hideMarkers.value =
         TeamHost.readSetting('chatHideMarkers') == true;
     ChatFormatController.hideMarkers.addListener(_changed);
     _takeDraft();
+    // Opened by a room's chat button: go to its thread once laid out.
+    if (TeamChatPanel.instance.threadRequest.value != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _takeThread());
+    }
+  }
+
+  /// [TeamChatPanel.threadRequest]: goes to the thread asked for.
+  void _takeThread() {
+    final id = TeamChatPanel.instance.threadRequest.value;
+    if (id == null || !mounted) return;
+    TeamChatPanel.instance.threadRequest.value = null;
+    _openThread(id);
   }
 
   @override
@@ -1385,6 +1410,7 @@ class _ChatBodyState extends State<_ChatBody> {
     TeamChatPanel.instance.showingMembers.removeListener(_changed);
     TeamChatPanel.instance.contextRoom.removeListener(_changed);
     TeamChatPanel.instance.showing.removeListener(_shown);
+    TeamChatPanel.instance.threadRequest.removeListener(_takeThread);
     Team.presence?.removeListener(_changed);
     ChatFormatController.hideMarkers.removeListener(_changed);
     _text.dispose();
@@ -4818,12 +4844,114 @@ class _GifPickerState extends State<_GifPicker> {
 /// The team chat's floating button (bottom right, where the CTS Assistant's
 /// used to be): the unread count, or a red @ with how many messages name
 /// you. Hidden until the team folder is joined.
-class TeamChatFab extends StatelessWidget {
+///
+/// [TEAM CHAT - X ON TOP]: the chat is an entry put in the overlay by hand,
+/// which the Navigator keeps above every dialog and menu it pushes later; this
+/// button sat on the page, so a pop-up opened over the chat covered its X.
+/// While the chat is open the button is drawn in an entry of its own just
+/// above the chat, pinned to where it sits on the page (a LayerLink, so it
+/// still slides and scales with it), and the page's copy only holds its place.
+class TeamChatFab extends StatefulWidget {
   final VoidCallback onPressed;
-  const TeamChatFab({super.key, required this.onPressed});
+
+  /// The button's fill and ink - a host's accent color. The count on it
+  /// takes the color opposite the accent - see [teamComplementOf]. Null
+  /// keeps green, or red for a mention.
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+
+  const TeamChatFab({
+    super.key,
+    required this.onPressed,
+    this.backgroundColor,
+    this.foregroundColor,
+  });
+
+  @override
+  State<TeamChatFab> createState() => _TeamChatFabState();
+}
+
+class _TeamChatFabState extends State<TeamChatFab> {
+  final LayerLink _link = LayerLink();
+  OverlayEntry? _lift;
+
+  @override
+  void initState() {
+    super.initState();
+    TeamChatPanel.instance.showing.addListener(_sync);
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(covariant TeamChatFab old) {
+    super.didUpdateWidget(old);
+    _lift?.markNeedsBuild();
+  }
+
+  @override
+  void dispose() {
+    TeamChatPanel.instance.showing.removeListener(_sync);
+    _drop();
+    super.dispose();
+  }
+
+  /// After the frame: the chat's own entry is in by then, so this one goes
+  /// above it, and the overlay cannot change in the middle of a build.
+  void _sync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final open = TeamChatPanel.instance.isOpen;
+      if (open && _lift == null) {
+        final overlay = Overlay.maybeOf(context, rootOverlay: true);
+        if (overlay == null) return;
+        final entry = OverlayEntry(
+          builder: (_) => Positioned(
+            left: 0,
+            top: 0,
+            child: CompositedTransformFollower(
+              link: _link,
+              showWhenUnlinked: false,
+              child: _button(lifted: true),
+            ),
+          ),
+        );
+        _lift = entry;
+        overlay.insert(entry);
+        setState(() {});
+      } else if (!open && _lift != null) {
+        _drop();
+        setState(() {});
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void _drop() {
+    final entry = _lift;
+    _lift = null;
+    try {
+      entry?.remove();
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
+    final lifted = _lift != null;
+    return CompositedTransformTarget(
+      link: _link,
+      child: Visibility(
+        visible: !lifted,
+        maintainSize: true,
+        maintainAnimation: true,
+        maintainState: true,
+        child: _button(lifted: false),
+      ),
+    );
+  }
+
+  Widget _button({required bool lifted}) {
+    final backgroundColor = widget.backgroundColor;
+    final foregroundColor = widget.foregroundColor;
     final chat = Team.chat;
     final presence = Team.presence;
     if (chat == null || presence == null) return const SizedBox.shrink();
@@ -4836,9 +4964,14 @@ class TeamChatFab extends StatelessWidget {
         final mentions = chat.mentionCount;
         final unread = chat.unreadCount;
         final open = TeamChatPanel.instance.isOpen;
+        final accent = backgroundColor;
+        final pill = accent == null ? null : teamComplementOf(accent);
         return FloatingActionButton(
-          key: const ValueKey('fab_team_chat'),
-          heroTag: 'fab_team_chat',
+          // The key on whichever copy is showing.
+          key: lifted == (_lift != null)
+              ? const ValueKey('fab_team_chat')
+              : null,
+          heroTag: lifted ? null : 'fab_team_chat',
           tooltip: open
               ? 'Close team chat'
               : mentions > 0
@@ -4847,9 +4980,10 @@ class TeamChatFab extends StatelessWidget {
                   : unread > 0
                       ? 'Team chat: $unread unread'
                       : 'Team chat',
-          backgroundColor: mentions > 0 ? scheme.error : Colors.green[700],
-          foregroundColor: Colors.white,
-          onPressed: onPressed,
+          backgroundColor: backgroundColor ??
+              (mentions > 0 ? scheme.error : Colors.green[700]),
+          foregroundColor: foregroundColor ?? Colors.white,
+          onPressed: () => widget.onPressed(),
           child: TeamUnreadIcon(
             key: ValueKey(mentions > 0
                 ? 'fab_team_chat_mention'
@@ -4857,7 +4991,9 @@ class TeamChatFab extends StatelessWidget {
             unread: unread,
             mentions: mentions,
             open: open,
-            color: Colors.white,
+            color: foregroundColor ?? Colors.white,
+            pillColor: pill,
+            onPillColor: pill == null ? null : teamInkOn(pill),
           ),
         );
       },

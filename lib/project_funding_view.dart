@@ -9,6 +9,7 @@ import 'live_text_field.dart';
 import 'manual_room_lines.dart' show pasteRoomList, removeManualRoomLine;
 import 'project_estimate.dart' show ProjectEstimate;
 import 'project_view.dart' show openProjectRoomOn;
+import 'room_review.dart' show RoomStatusIcons, RoomToneHighlight;
 
 /// ============================================================================
 ///  PRIORITIES AND FUNDING
@@ -488,6 +489,15 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
       for (final r in widget.estimate?.rooms ?? const [])
         if (r.ok) r.ref.id: r.total,
     };
+    // The id "working on" and review marks use: the open room's from memory.
+    final openId = provider.openProjectRoom?.id;
+    final teamIds = {
+      for (final r in widget.estimate?.rooms ?? const [])
+        if (r.ok)
+          r.ref.id: r.ref.id == openId && provider.teamRoomId.isNotEmpty
+              ? provider.teamRoomId
+              : provider.teamRoomIdFor(r.room.config),
+    };
     final rooms = <_FundedRoom>[
       for (final r in project.manualRooms)
         (
@@ -555,7 +565,9 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
     Widget row(_FundedRoom room) => Padding(
       key: ValueKey('funding_row_${room.manualId}${room.roomId}'),
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
+      child: RoomToneHighlight(
+        roomId: room.ref == null ? '' : teamIds[room.roomId] ?? '',
+        child: Row(
         children: [
           Icon(
             room.isLine ? Icons.playlist_add_check : Icons.meeting_room_outlined,
@@ -595,6 +607,9 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                     ),
                   ),
           ),
+          // Who is editing or working on it, and its review marks.
+          if (room.ref != null)
+            RoomStatusIcons(roomId: teamIds[room.roomId] ?? ''),
           SizedBox(
             width: 110,
             child: DropdownButton<int>(
@@ -664,6 +679,7 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
             onPressed: () => _remove(provider, room),
           ),
         ],
+      ),
       ),
     );
 

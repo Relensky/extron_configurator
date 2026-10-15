@@ -270,12 +270,33 @@ void main() {
       await File(file).writeAsString(jsonEncode({'name': 'Job', 'n': 2}));
       await me.tick();
       expect(me.incomingOn(CollabDocKind.project), isNotNull);
+      // Nobody's last-save note, but they are the only one with it open.
+      expect(me.incomingOn(CollabDocKind.project)!.who, 'jsmith on PC-9');
 
       // Nothing unsaved here, so merging simply takes their file.
       final outcome = await me.mergeIncoming(CollabDocKind.project);
       expect(outcome.merged, isTrue);
       expect(doc.memory['n'], 2);
       expect(me.incomingOn(CollabDocKind.project), isNull);
+      me.dispose();
+      them.dispose();
+    });
+
+    test('a save made before the watcher follows the file still says who',
+        () async {
+      final me = controllerFor('me');
+      await me.tick();
+      // They save straight after opening, before any tick of theirs - what
+      // opening a job does when it records the room check.
+      final them = CollabController(
+        identity: const CollabIdentity(user: 'jsmith', machine: 'PC-9'),
+        enabled: true,
+      )..register(_MapDoc(file));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await File(file).writeAsString(jsonEncode({'name': 'Job', 'n': 3}));
+      them.noteInSync(CollabDocKind.project, saved: true);
+      await me.tick();
+      expect(me.incomingOn(CollabDocKind.project)!.who, 'jsmith on PC-9');
       me.dispose();
       them.dispose();
     });
@@ -364,6 +385,22 @@ void main() {
       expect(me.incomingOn(CollabDocKind.project), isNull);
       me.dispose();
     });
+
+    test('a save that cannot be read yet is read on a later tick', () async {
+      final me = controllerFor('me');
+      await me.tick();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await File(file).writeAsString(jsonEncode({'name': 'Job', 'n': 2}));
+      // Still being written, or held by the saver over the share.
+      doc.unreadable = true;
+      await me.tick();
+      expect(me.incomingOn(CollabDocKind.project), isNull);
+      // Readable now, with the file's stamp unchanged since the last tick.
+      doc.unreadable = false;
+      await me.tick();
+      expect(me.incomingOn(CollabDocKind.project), isNotNull);
+      me.dispose();
+    });
   });
 }
 
@@ -386,8 +423,12 @@ class _MapDoc extends CollabDocument {
   @override
   bool get isDirty => dirty;
 
+  /// Stands in for a file mid-write or locked: readDisk gives null.
+  bool unreadable = false;
+
   @override
-  Object? readDisk() => jsonDecode(File(file).readAsStringSync());
+  Object? readDisk() =>
+      unreadable ? null : jsonDecode(File(file).readAsStringSync());
 
   @override
   Object? current() => memory;

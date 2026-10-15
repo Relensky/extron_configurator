@@ -786,9 +786,13 @@ class _ProjectViewState extends State<ProjectView> {
                     buttonKey: const ValueKey('project_refresh'),
                     icon: Icons.refresh,
                     label: 'Refresh',
-                    onPressed: () {
-                      provider.refreshProjectRooms();
-                      _snack('Re-read every room from disk.');
+                    onPressed: () async {
+                      _snack('Reading every room again...');
+                      // In the background: the window keeps working.
+                      final n =
+                          await provider.refreshProjectRoomsInBackground();
+                      if (!mounted) return;
+                      _snack('Re-read $n room${n == 1 ? '' : 's'} from disk.');
                     },
                   ),
                   // The same summary a project shows on the way in. Reachable
@@ -1163,6 +1167,7 @@ class _ProjectViewState extends State<ProjectView> {
       initial: taxRate == null ? '' : trimNumber(taxRate),
       label: 'Tax rate',
       hint: trimNumber(provider.defaultTaxPercent),
+      warn: (taxRate ?? provider.defaultTaxPercent) == 0,
       hintIsValue: true,
       suffix: '%',
       numeric: true,
@@ -2236,7 +2241,13 @@ class _RoomRowState extends State<_RoomRow> {
       ),
     ];
 
-    return Card(
+    // Outlined in the room's state: locked by you or someone else, ready to
+    // approve, approved.
+    return RoomToneHighlight(
+      roomId: teamId,
+      radius: 12,
+      tint: false,
+      child: Card(
       margin: EdgeInsets.zero,
       color: fill,
       child: Padding(
@@ -2303,6 +2314,7 @@ class _RoomRowState extends State<_RoomRow> {
             );
           },
         ),
+      ),
       ),
     );
   }

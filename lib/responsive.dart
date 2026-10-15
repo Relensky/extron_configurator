@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 
+import 'sideways_scroll.dart';
+
 /// Lays [child] out at least [minWidth] wide, scrolling sideways with a
 /// visible scrollbar when the window is narrower than that.
 ///
@@ -33,31 +35,48 @@ class _MinWidthScrollState extends State<MinWidthScroll> {
   @override
   Widget build(BuildContext context) {
     final behavior = ScrollConfiguration.of(context);
+    final media = MediaQuery.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth.isFinite
             ? math.max(widget.minWidth, constraints.maxWidth)
             : widget.minWidth;
-        return Scrollbar(
-          controller: _controller,
-          thumbVisibility: true,
-          child: ScrollConfiguration(
-            // Our own scrollbar only; the page below gets its usual ones back.
-            behavior: behavior.copyWith(scrollbars: false),
-            child: SingleChildScrollView(
-              controller: _controller,
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: width,
-                height: constraints.maxHeight.isFinite
-                    ? constraints.maxHeight
-                    : null,
-                child: ScrollConfiguration(
-                  behavior: behavior,
-                  child: widget.child,
+        // The bar sits on the bottom edge. A scrollbar keeps clear of the
+        // MediaQuery padding, and the chat-button clearance is padding, so
+        // it floated up the page; the page inside gets its padding back.
+        return MediaQuery.removePadding(
+          context: context,
+          removeTop: true,
+          removeBottom: true,
+          // Left and Right move it when nothing is selected.
+          child: SidewaysScrollTarget(
+            controller: _controller,
+            child: Scrollbar(
+            controller: _controller,
+            thumbVisibility: true,
+            child: ScrollConfiguration(
+              // Our own scrollbar only; the page below gets its usual ones
+              // back.
+              behavior: behavior.copyWith(scrollbars: false),
+              child: SingleChildScrollView(
+                controller: _controller,
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: width,
+                  height: constraints.maxHeight.isFinite
+                      ? constraints.maxHeight
+                      : null,
+                  child: MediaQuery(
+                    data: media,
+                    child: ScrollConfiguration(
+                      behavior: behavior,
+                      child: widget.child,
+                    ),
+                  ),
                 ),
               ),
             ),
+          ),
           ),
         );
       },

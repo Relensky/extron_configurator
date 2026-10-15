@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'sideways_scroll.dart';
+
 /// ============================================================================
 ///  KEYBOARD SHORTCUTS
 /// ============================================================================
@@ -124,10 +126,12 @@ String keyName(LogicalKeyboardKey key) {
 }
 
 /// Where a shortcut works.
-enum ShortcutArea { app, selection, cone }
+enum ShortcutArea { app, text, page, selection, cone }
 
 const Map<ShortcutArea, String> kShortcutAreaLabels = {
   ShortcutArea.app: 'Anywhere',
+  ShortcutArea.text: 'In a text box',
+  ShortcutArea.page: 'Nothing selected',
   ShortcutArea.selection: 'Selected item on a drawing',
   ShortcutArea.cone: 'Selected device with a cone (floor plan)',
 };
@@ -159,6 +163,16 @@ abstract final class Shortcut {
   static const undo = 'app.undo';
   static const redo = 'app.redo';
   static const help = 'app.help';
+
+  static const nextBox = 'text.nextBox';
+  static const previousBox = 'text.previousBox';
+  static const lineUp = 'text.lineUp';
+  static const lineDown = 'text.lineDown';
+  static const textTop = 'text.top';
+  static const textBottom = 'text.bottom';
+
+  static const scrollLeft = 'page.scrollLeft';
+  static const scrollRight = 'page.scrollRight';
 
   static const delete = 'sel.delete';
   static const deselect = 'sel.deselect';
@@ -233,6 +247,65 @@ const List<ShortcutAction> kShortcutActions = [
     label: 'Help',
     area: ShortcutArea.app,
     defaults: [KeyBinding(_K.f1)],
+  ),
+  ShortcutAction(
+    id: Shortcut.nextBox,
+    label: 'Next box',
+    area: ShortcutArea.text,
+    help: 'Moves to the next box, button or list on the page.',
+    defaults: [KeyBinding(_K.tab)],
+  ),
+  ShortcutAction(
+    id: Shortcut.previousBox,
+    label: 'Previous box',
+    area: ShortcutArea.text,
+    defaults: [KeyBinding(_K.tab, shift: true)],
+  ),
+  ShortcutAction(
+    id: Shortcut.lineUp,
+    label: 'Up a line',
+    area: ShortcutArea.text,
+    help: 'In a box of more than one line. In a one-line box, goes to the '
+        'start.',
+    defaults: [KeyBinding(_K.arrowUp)],
+  ),
+  ShortcutAction(
+    id: Shortcut.lineDown,
+    label: 'Down a line',
+    area: ShortcutArea.text,
+    help: 'In a box of more than one line. In a one-line box, goes to the '
+        'end.',
+    defaults: [KeyBinding(_K.arrowDown)],
+  ),
+  ShortcutAction(
+    id: Shortcut.textTop,
+    label: 'Top of the box',
+    area: ShortcutArea.text,
+    help: 'Jumps to the start of the text. Shift+Home still selects to the '
+        'start of the line.',
+    defaults: [KeyBinding(_K.home)],
+  ),
+  ShortcutAction(
+    id: Shortcut.textBottom,
+    label: 'Bottom of the box',
+    area: ShortcutArea.text,
+    help: 'Jumps to the end of the text. Shift+End still selects to the end '
+        'of the line.',
+    defaults: [KeyBinding(_K.end)],
+  ),
+  ShortcutAction(
+    id: Shortcut.scrollLeft,
+    label: 'Scroll left',
+    area: ShortcutArea.page,
+    help: 'A table or page wider than the window: the one under the pointer. '
+        'Shift and the mouse wheel do the same.',
+    defaults: [KeyBinding(_K.arrowLeft)],
+  ),
+  ShortcutAction(
+    id: Shortcut.scrollRight,
+    label: 'Scroll right',
+    area: ShortcutArea.page,
+    defaults: [KeyBinding(_K.arrowRight)],
   ),
   ShortcutAction(
     id: Shortcut.delete,
@@ -385,10 +458,24 @@ class KeyboardShortcuts {
 
   /// Another action already on [binding], where the two could both be live.
   /// App shortcuts work everywhere, so they clash with anything; selection
-  /// and cone shortcuts are both live on a selected floor plan device.
+  /// and cone shortcuts are both live on a selected floor plan device. A text
+  /// box has the keys while it is being typed in, so its shortcuts never meet
+  /// the drawings'.
   ShortcutAction? clashWith(String id, KeyBinding binding) {
+    final area = shortcutAction(id)?.area;
+    // Typing, nothing selected and something selected never overlap; a
+    // selected floor plan device has both its move and its cone keys.
+    int group(ShortcutArea a) => switch (a) {
+      ShortcutArea.text => 1,
+      ShortcutArea.page => 2,
+      ShortcutArea.selection || ShortcutArea.cone => 3,
+      ShortcutArea.app => 0,
+    };
+    bool bothLive(ShortcutArea a, ShortcutArea b) =>
+        group(a) == 0 || group(b) == 0 || group(a) == group(b);
     for (final a in kShortcutActions) {
       if (a.id == id) continue;
+      if (area != null && !bothLive(area, a.area)) continue;
       if (bindingsFor(a.id).contains(binding)) return a;
     }
     return null;
@@ -425,5 +512,102 @@ class KeyboardShortcuts {
       ]);
     });
     return KeyboardShortcuts(Map.unmodifiable(out));
+  }
+}
+
+/// The text-box shortcuts and what each does.
+const List<(String, Intent)> _textIntents = [
+  (Shortcut.nextBox, NextFocusIntent()),
+  (Shortcut.previousBox, PreviousFocusIntent()),
+  (Shortcut.lineUp, TextLineIntent(forward: false)),
+  (Shortcut.lineDown, TextLineIntent(forward: true)),
+  (
+    Shortcut.textTop,
+    ExtendSelectionToDocumentBoundaryIntent(
+      forward: false,
+      collapseSelection: true,
+    ),
+  ),
+  (
+    Shortcut.textBottom,
+    ExtendSelectionToDocumentBoundaryIntent(
+      forward: true,
+      collapseSelection: true,
+    ),
+  ),
+];
+
+/// The "In a text box" keys as a [Shortcuts] map. Placed below WidgetsApp's
+/// own text keys so these win; with no text box focused nothing answers them
+/// and the key carries on up.
+Map<ShortcutActivator, Intent> textBoxShortcuts(KeyboardShortcuts keys) => {
+  for (final (id, intent) in _textIntents)
+    for (final k in keys.bindingsFor(id)) k.activator: intent,
+  for (final k in keys.bindingsFor(Shortcut.scrollLeft))
+    k.activator: const ScrollSidewaysIntent(right: false),
+  for (final k in keys.bindingsFor(Shortcut.scrollRight))
+    k.activator: const ScrollSidewaysIntent(right: true),
+};
+
+/// The actions behind [textBoxShortcuts] that Flutter does not supply.
+final Map<Type, Action<Intent>> textBoxActions = {
+  TextLineIntent: TextLineAction(),
+  ScrollSidewaysIntent: ScrollSidewaysAction(),
+};
+
+/// Up or down a line in the focused text box.
+class TextLineIntent extends Intent {
+  final bool forward;
+  const TextLineIntent({required this.forward});
+}
+
+/// Moves the caret a line in the focused text box.
+///
+/// Flutter's own line action breaks inside a SelectionArea (the Cost page
+/// has one): the area overrides it and the override throws, so Up and Down
+/// did nothing in Scope of Work. This moves the caret itself instead.
+class TextLineAction extends Action<TextLineIntent> {
+  static EditableTextState? _focused() {
+    final context = primaryFocus?.context;
+    if (context == null) return null;
+    if (context is StatefulElement && context.state is EditableTextState) {
+      return context.state as EditableTextState;
+    }
+    return context.findAncestorStateOfType<EditableTextState>();
+  }
+
+  @override
+  bool isEnabled(TextLineIntent intent) {
+    final state = _focused();
+    return state != null && state.textEditingValue.selection.isValid;
+  }
+
+  @override
+  Object? invoke(TextLineIntent intent) {
+    final state = _focused();
+    if (state == null) return null;
+    final value = state.textEditingValue;
+    final selection = value.selection;
+    if (!selection.isValid) return null;
+    final from = TextPosition(
+      offset: intent.forward ? selection.end : selection.start,
+      affinity: selection.affinity,
+    );
+    final render = state.renderEditable;
+    var to = intent.forward
+        ? render.getTextPositionBelow(from)
+        : render.getTextPositionAbove(from);
+    // No line there: to the start or end, as Flutter does.
+    if (to.offset == from.offset) {
+      to = TextPosition(offset: intent.forward ? value.text.length : 0);
+    }
+    state.userUpdateTextEditingValue(
+      value.copyWith(
+        selection: TextSelection.fromPosition(to),
+      ),
+      SelectionChangedCause.keyboard,
+    );
+    state.bringIntoView(to);
+    return null;
   }
 }

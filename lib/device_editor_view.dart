@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'catalog_category_prompt.dart';
 import 'contrast.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
@@ -761,6 +762,21 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   }
 
   void _apply(AvDeviceTemplate updated, {String previousModel = ''}) {
+    // Deleting the power inlet means it has none. Left on Mains, the save
+    // put the inlet straight back (see normalizePowerInlets), so a mount
+    // could never be saved with no connectors.
+    bool inlet(AvDeviceTemplate t) => t.ports.any(
+          (p) => p.id == kPowerPortId || (p.signal == SignalType.power && p.isInput),
+        );
+    final before = _provider.avDeviceLibrary.templateForModel(
+      previousModel.isNotEmpty ? previousModel : updated.model,
+    );
+    if (before != null &&
+        inlet(before) &&
+        !inlet(updated) &&
+        updated.powerInput != PowerInput.none) {
+      updated = updated.copyWith(powerInput: PowerInput.none);
+    }
     _provider.avDeviceLibrary.upsert(updated, previousModel: previousModel);
     _selectedKey = AvDeviceLibrary.normalizeModel(updated.model);
     _dirty = true;
@@ -772,6 +788,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   Future<void> _save() async {
     _flushNotify();
     final provider = context.read<AppStateProvider>();
+    if (!await confirmCatalogCategories(context, provider)) return;
     final saved = await provider.saveAvDeviceLibrary();
     if (saved.isEmpty) {
       final why = provider.avDeviceLibrary.lastSaveError;
@@ -1107,7 +1124,11 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  if (_dirty) ...[unsaved, const SizedBox(width: 8)],
+                  // Cleared by an automatic save too, not only by Save.
+                  if (_dirty && library.differsFromBaseline) ...[
+                    unsaved,
+                    const SizedBox(width: 8),
+                  ],
                   if (inline) Expanded(child: buttons) else const Spacer(),
                   const SizedBox(width: 12),
                   ElevatedButton.icon(
@@ -1532,6 +1553,11 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 initial: entry.category,
                 label: 'Category',
                 hint: 'Switcher, Camera, Display...',
+                // What the category limits the entry to, as it is chosen.
+                helper: categoryLimits(
+                  entry.category,
+                  hasPorts: entry.ports.isNotEmpty,
+                ),
                 onChanged: (v) =>
                     setState(() => _apply(entry.copyWith(category: v))),
               ),
@@ -1567,21 +1593,42 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 ),
               ),
               itemBuilder: (ctx) => [
-                _categoryHeading(ctx, 'Tracked to a config section'),
+                _categoryHeading(ctx, 'Tracked to a config section',
+                    note: 'Equipment, budgeted at its base cost'),
                 for (final c in kTrackedCategories)
-                  PopupMenuItem(value: c, child: Text(c)),
+                  PopupMenuItem(
+                    value: c,
+                    child: Tooltip(
+                      message: categoryLimits(c, hasPorts: entry.ports.isNotEmpty),
+                      child: Text(c),
+                    ),
+                  ),
                 const PopupMenuDivider(),
-                _categoryHeading(ctx, 'Rack parts'),
+                _categoryHeading(ctx, 'Rack parts',
+                    note: 'Rack parts list and Add rack hardware only'),
                 for (final c in kRackItemCategories)
-                  PopupMenuItem(value: c, child: Text(c)),
+                  PopupMenuItem(
+                    value: c,
+                    child: Tooltip(
+                      message: categoryLimits(c, hasPorts: entry.ports.isNotEmpty),
+                      child: Text(c),
+                    ),
+                  ),
                 const PopupMenuDivider(),
-                _categoryHeading(ctx, 'Billed, not drawn'),
+                _categoryHeading(ctx, 'Billed, not drawn',
+                    note: 'Kept out of Add equipment - see each below'),
                 for (final c in const [
                   kCategoryConsumable,
                   kCategoryCable,
                   kCategoryMisc,
                 ])
-                  PopupMenuItem(value: c, child: Text(c)),
+                  PopupMenuItem(
+                    value: c,
+                    child: Tooltip(
+                      message: categoryLimits(c, hasPorts: entry.ports.isNotEmpty),
+                      child: Text(c),
+                    ),
+                  ),
               ],
             ),
                 ],
@@ -2788,17 +2835,34 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 /// either group IS, which on a menu whose three halves mean genuinely
 /// different things - a config section, a rack part, a billing bucket - is
 /// the only thing worth saying.
-PopupMenuItem<String> _categoryHeading(BuildContext context, String text) {
+PopupMenuItem<String> _categoryHeading(
+  BuildContext context,
+  String text, {
+  String note = '',
+}) {
   final theme = Theme.of(context);
   return PopupMenuItem<String>(
     enabled: false,
     height: 30,
-    child: Text(
-      text.toUpperCase(),
-      style: theme.textTheme.labelSmall?.copyWith(
-        fontWeight: FontWeight.bold,
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          text.toUpperCase(),
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        if (note.isNotEmpty)
+          Text(
+            note,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+      ],
     ),
   );
 }

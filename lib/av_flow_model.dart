@@ -210,12 +210,10 @@ String cableSignalSubLabel(SignalType s) {
 //  CABLE LENGTHS
 // ---------------------------------------------------------------------------
 
-/// The made-up lead lengths this shop stocks, in feet.
-///
-/// A closed list rather than a free number on purpose: a cable schedule is an
-/// ORDER, and "17 ft" is not a thing anybody can put on one. Runs pulled to
-/// length in conduit simply leave the length unset, which the counts report as
-/// its own column rather than quietly rounding into the shortest lead.
+/// The made-up lead lengths this shop stocks, in feet - the picks offered
+/// beside a typed length (see cable_length_field.dart). Runs pulled to length
+/// in conduit leave the length unset, which the counts report as its own
+/// column.
 const List<double> kCableLengthsFt = [1, 3, 6, 7, 15, 20, 25];
 
 /// "6ft", or '' when the length was never set.
@@ -695,6 +693,32 @@ const double kAvAutoColumnPitch = 500;
 /// run crossing the column has somewhere to pass BETWEEN them — at 30px it
 /// had to go through one or squeeze against the ports.
 const double kAvAutoRowGap = 70;
+
+/// What kind of device a config key names, in words: SWITCHERDEVICE_1 ->
+/// "Switcher device 1", POWERDEVICE_2 -> "Power device 2". '' for a key
+/// that is not a config device's.
+String configDeviceTypeLabel(String key) {
+  final m = RegExp(r'^([A-Z]+)DEVICE_(\d+)$').firstMatch(key.toUpperCase());
+  if (m != null) {
+    final family = m.group(1)!.toLowerCase();
+    return '${family[0].toUpperCase()}${family.substring(1)} device '
+        '${m.group(2)}';
+  }
+  final source = RegExp(r'^AVSOURCE_(INPUT|OUTPUT)_(\d+)$')
+      .firstMatch(key.toUpperCase());
+  if (source != null) {
+    return '${source.group(1) == 'INPUT' ? 'Source input' : 'Display output'} '
+        '${source.group(2)}';
+  }
+  return '';
+}
+
+/// How far the AV Flow zooms out: far enough that any room fits the
+/// window, however small. The magnifier reads it from there.
+const double kAvMinZoom = 0.005;
+
+/// How far it zooms in.
+const double kAvMaxZoom = 3.0;
 
 /// Where the top-left box of an automatic layout goes.
 const double kAvAutoOriginX = 40;
@@ -1300,7 +1324,7 @@ class AvCable {
   /// cabling-schematic run label are moved.
   final Offset labelOffset;
 
-  /// How long the lead is, in feet — one of [kCableLengthsFt], or 0 when
+  /// How long the lead is, in feet — typed or one of [kCableLengthsFt], or 0 when
   /// nobody has said. Zero rather than null so a room saved before lengths
   /// existed reads back as "not set" rather than as a one-foot patch lead.
   final double lengthFt;

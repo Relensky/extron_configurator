@@ -235,6 +235,65 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
     });
   }
 
+  /// Any clock time for the day's start or end, to the minute.
+  Future<int?> _pickClock(int initial) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: initial ~/ 60, minute: initial % 60),
+    );
+    return picked == null ? null : picked.hour * 60 + picked.minute;
+  }
+
+  /// Any length for "At least", in hours and minutes.
+  Future<int?> _pickLength() async {
+    var h = _minMinutes ~/ 60, m = _minMinutes % 60;
+    return showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setInner) => AlertDialog(
+          title: const Text('Window length'),
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButton<int>(
+                key: const ValueKey('install_length_hours'),
+                value: h,
+                items: [
+                  for (var i = 0; i <= 16; i++)
+                    DropdownMenuItem(value: i, child: Text('$i h')),
+                ],
+                onChanged: (v) => setInner(() => h = v ?? h),
+              ),
+              const SizedBox(width: 16),
+              DropdownButton<int>(
+                key: const ValueKey('install_length_minutes'),
+                value: m,
+                items: [
+                  for (var i = 0; i < 60; i += 5)
+                    DropdownMenuItem(value: i, child: Text('$i m')),
+                ],
+                onChanged: (v) => setInner(() => m = v ?? m),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('install_length_ok'),
+              onPressed: h * 60 + m < 5
+                  ? null
+                  : () => Navigator.pop(ctx, h * 60 + m),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _chooseFile(AppStateProvider provider) async {
     final picked = await pickFilesCompat(
       dialogTitle: 'Choose the class schedule export',
@@ -291,7 +350,7 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
         added[_slotKey(r.id, g.day, g.startMinutes, g.endMinutes)];
 
     Widget dropdown<T>(String label, T value, Map<T, String> options,
-            ValueChanged<T> onChanged) =>
+            Future<void> Function(T) onChanged) =>
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -303,15 +362,63 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
                   DropdownMenuItem(value: e.key, child: Text(e.value)),
               ],
               onChanged: (v) {
-                if (v != null) setState(() => onChanged(v));
+                if (v != null) onChanged(v);
               },
             ),
           ],
         );
 
-    final hours = {
-      for (var h = 5; h <= 23; h++) h * 60: formatScheduleMinutes(h * 60),
+    // -1 opens a picker for a value off the list.
+    const other = -1;
+    Map<int, String> clockOptions(int current) => {
+          for (var h = 5; h <= 23; h++) h * 60: formatScheduleMinutes(h * 60),
+          if (current % 60 != 0 || current < 5 * 60 || current > 23 * 60)
+            current: formatScheduleMinutes(current),
+          other: 'Other time...',
+        };
+    final lengths = <int, String>{
+      60: '1 hour',
+      120: '2 hours',
+      180: '3 hours',
+      240: '4 hours',
+      360: '6 hours',
     };
+    if (!lengths.containsKey(_minMinutes)) {
+      lengths[_minMinutes] = _hm(_minMinutes);
+    }
+    lengths[other] = 'Other length...';
+    Future<void> setDayStart(int v) async {
+      if (v == other) {
+        final picked = await _pickClock(_dayStart);
+        if (picked == null) return;
+        v = picked;
+      }
+      if (!mounted) return;
+      setState(() {
+        _dayStart = v.clamp(0, 23 * 60);
+        if (_dayEnd <= _dayStart) _dayEnd = _dayStart + 60;
+      });
+    }
+
+    Future<void> setDayEnd(int v) async {
+      if (v == other) {
+        final picked = await _pickClock(_dayEnd);
+        if (picked == null) return;
+        v = picked;
+      }
+      if (!mounted) return;
+      setState(() => _dayEnd = v <= _dayStart ? _dayStart + 60 : v);
+    }
+
+    Future<void> setLength(int v) async {
+      if (v == other) {
+        final picked = await _pickLength();
+        if (picked == null) return;
+        v = picked;
+      }
+      if (!mounted) return;
+      setState(() => _minMinutes = v);
+    }
 
     final items = _items(rooms, schedule);
 
@@ -427,20 +534,10 @@ class _InstallWindowFinderState extends State<_InstallWindowFinder> {
                   label: Text('To ${formatScheduleDate(_to)}'),
                   onPressed: () => _pickDate(false),
                 ),
-                dropdown<int>('At least', _minMinutes, const {
-                  60: '1 hour',
-                  120: '2 hours',
-                  180: '3 hours',
-                  240: '4 hours',
-                  360: '6 hours',
-                }, (v) => _minMinutes = v),
-                dropdown<int>('Day from', _dayStart, hours, (v) {
-                  _dayStart = v;
-                  if (_dayEnd <= _dayStart) _dayEnd = _dayStart + 60;
-                }),
-                dropdown<int>('to', _dayEnd, hours, (v) {
-                  _dayEnd = v <= _dayStart ? _dayStart + 60 : v;
-                }),
+                dropdown<int>('At least', _minMinutes, lengths, setLength),
+                dropdown<int>(
+                    'Day from', _dayStart, clockOptions(_dayStart), setDayStart),
+                dropdown<int>('to', _dayEnd, clockOptions(_dayEnd), setDayEnd),
                 FilterChip(
                   label: const Text('Whole free days only'),
                   selected: _wholeDaysOnly,

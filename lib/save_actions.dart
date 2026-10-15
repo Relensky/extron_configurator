@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'app_logger.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'catalog_category_prompt.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_flow_swap_dialogs.dart' show applyModelSwap;
 import 'contrast.dart';
@@ -355,6 +356,8 @@ Future<bool> _runSave(
       return true;
 
     case SaveScope.catalog:
+      if (!await confirmCatalogCategories(context, provider)) return false;
+      if (!context.mounted) return false;
       final written = await provider.saveAvDeviceLibrary();
       if (!context.mounted) return written.isNotEmpty;
       return _reportAppDataSave(context, provider, 'The catalog', written);
@@ -1628,6 +1631,30 @@ class SaveToolbar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // LOCKED BY SOMEONE ELSE: the room's save says so, with a lock, until
+        // they are taken off it. Pressing it still asks to take them off.
+        if (scope == SaveScope.room)
+          ListenableBuilder(
+            listenable: provider.teamClaims,
+            builder: (context, _) {
+              final holders = provider.roomLockHolders;
+              if (holders.isEmpty) return const SizedBox.shrink();
+              final error = Theme.of(context).colorScheme.error;
+              final names = holders.map((c) => c.whoLabel).join(', ');
+              return Tooltip(
+                message: '${provider.teamRoomId} is locked - $names '
+                    '${holders.length == 1 ? 'is' : 'are'} working on it. '
+                    'Saving asks to take them off it first.',
+                child: TextButton.icon(
+                  key: const ValueKey('save_locked'),
+                  style: TextButton.styleFrom(foregroundColor: error),
+                  icon: const Icon(Icons.lock),
+                  label: const Text('Locked'),
+                  onPressed: () => runSave(context, provider, scope),
+                ),
+              );
+            },
+          ),
         IconButton(
           key: const ValueKey('save_context'),
           icon: Badge(

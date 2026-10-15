@@ -160,6 +160,17 @@ void main() {
       expect(p.priceProject().rooms[1].name, 'Bessey 103 Annex');
     });
 
+    test('Refresh reads every room again in the background', () async {
+      final p = withProject();
+      expect(p.priceProject().rooms.first.name, 'Bessey 101');
+      writeRoom('a', 'Bessey 101 West');
+      // The old figures stay until the new ones are in.
+      final reading = p.refreshProjectRoomsInBackground();
+      expect(p.priceProject().rooms.first.name, 'Bessey 101');
+      expect(await reading, greaterThan(0));
+      expect(p.priceProject().rooms.first.name, 'Bessey 101 West');
+    });
+
     test('the rooms being re-read off disk', () {
       final p = withProject();
       expect(p.priceProject().rooms.first.name, 'Bessey 101');

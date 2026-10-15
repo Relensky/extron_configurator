@@ -13,7 +13,11 @@ import 'file_dialogs.dart';
 import 'contrast.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'catalog_category_prompt.dart';
 import 'av_device_library.dart';
+import 'cable_length_field.dart';
+import 'av_flow_overview.dart';
+import 'av_flow_layout.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
 import 'av_flow_routing.dart';
@@ -35,7 +39,7 @@ import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'room_locations.dart';
 import 'room_locations_view.dart';
-import 'room_presets.dart';
+import 'room_preset_save_dialog.dart';
 import 'screenshot_tools.dart';
 import 'side_pane.dart';
 import 'stepped_date_picker.dart';
@@ -283,12 +287,148 @@ class _AvFlowViewState extends State<AvFlowView>
       controller: _transform,
       contentKey: _diagramKey,
       viewportKey: _viewportKey,
+      // However big the room, all of it - tiny if need be. The magnifier is
+      // for reading it from there.
+      minScale: kAvMinZoom,
     );
     if (!fitted) _snack('The diagram is still drawing - try again.');
   }
 
+  /// Zoom by [factor] about the middle of the view.
+  void _zoomBy(double factor) {
+    final viewport = renderedSize(_viewportKey);
+    if (viewport == null) return;
+    zoomAboutCenter(_transform, viewport, factor,
+        minScale: kAvMinZoom, maxScale: kAvMaxZoom);
+  }
+
+  /// 100%, about the middle of the view.
+  void _actualSize() {
+    final viewport = renderedSize(_viewportKey);
+    if (viewport == null) return;
+    setZoomAboutCenter(_transform, viewport, 1.0);
+  }
+
+  /// The magnifier's picture of the drawing, and the revision it shows.
+  ({ui.Image image, double ratio})? _snapshot;
+  int _snapshotRevision = -1;
+  bool _snapping = false;
+
+  /// Takes a new picture for the magnifier when the drawing has changed
+  /// since the last one. After the frame, so it is of what is on the page.
+  void _refreshSnapshot(int revision, {int attempt = 0}) {
+    if (!_magnifier || _snapping || revision == _snapshotRevision) return;
+    _snapping = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      ({ui.Image image, double ratio})? shot;
+      try {
+        // The chevrons stay out of the still: the lens draws them live, and a
+        // frozen set under the moving ones would read as double.
+        if (_selectedCableId != null) {
+          _hideFlowForSnapshot.value = true;
+          await WidgetsBinding.instance.endOfFrame;
+        }
+        if (mounted) shot = await snapshotDrawing(_diagramKey);
+      } finally {
+        // Always cleared: left set, no picture was ever taken again.
+        _snapping = false;
+        _hideFlowForSnapshot.value = false;
+      }
+      if (!mounted) {
+        shot?.image.dispose();
+        return;
+      }
+      if (shot == null) {
+        // Not painted yet - try again shortly, a few times.
+        if (attempt < 8) {
+          Future<void>.delayed(const Duration(milliseconds: 250), () {
+            if (mounted) _refreshSnapshot(revision, attempt: attempt + 1);
+          });
+        }
+        return;
+      }
+      final old = _snapshot;
+      setState(() {
+        _snapshot = shot;
+        _snapshotRevision = revision;
+      });
+      old?.image.dispose();
+    });
+  }
+
+  void _setMagnifier(bool on) {
+    setState(() => _magnifier = on);
+    if (!on) {
+      _lensAt.value = null;
+      _snapshot?.image.dispose();
+      _snapshot = null;
+      _snapshotRevision = -1;
+    }
+  }
+
+  /// The magnifier's square at the pointer.
+  Widget _buildLens() {
+    const side = 280.0;
+    return ValueListenableBuilder<Offset?>(
+      valueListenable: _lensAt,
+      builder: (context, at, _) {
+        final shot = _snapshot;
+        // Positioned even when hidden - see the Stack it goes in.
+        if (at == null || shot == null) {
+          return const Positioned(left: 0, top: 0, child: SizedBox.shrink());
+        }
+        final pageScale = _transform.value.getMaxScaleOnAxis();
+        final route =
+            _selectedCableId == null ? null : _paths[_selectedCableId];
+        final provider = context.read<AppStateProvider>();
+        var color = Colors.transparent;
+        for (final cable in provider.avCables) {
+          if (cable.id == _selectedCableId) {
+            color = cable.colorFor(provider.avSignalColors);
+          }
+        }
+        return Positioned(
+          left: at.dx + 16,
+          top: at.dy + 16,
+          width: side,
+          height: side,
+          child: IgnorePointer(
+            child: AvMagnifierLens(
+              image: shot.image,
+              ratio: shot.ratio,
+              scene: _transform.toScene(at),
+              // Full size, or twice the page's zoom when that is more.
+              zoom: math.max(1.0, pageScale * 2),
+              // The selected run's chevrons, moving in the lens too.
+              repaint: route == null ? null : _signalFlow,
+              paintLive: route == null || route.length < 2
+                  ? null
+                  : (canvas) => _SignalFlowPainter(
+                        points: route,
+                        color: color,
+                        phase: _signalFlow.value,
+                      ).paint(canvas, Size.infinite),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   bool _editMode = false;
   bool _showPalette = true;
+
+  /// The magnifier: a lens following the pointer that shows the drawing at
+  /// full size while the page is zoomed out to see the whole of it.
+  bool _magnifier = false;
+
+  /// Where the lens is, in the viewport; null with the pointer off the page.
+  /// A notifier so moving it rebuilds the lens and nothing else.
+  final ValueNotifier<Offset?> _lensAt = ValueNotifier(null);
+
+  /// True for the frame the magnifier's still is taken in - see
+  /// [_refreshSnapshot].
+  final ValueNotifier<bool> _hideFlowForSnapshot = ValueNotifier(false);
 
   /// Cable-drawing mode, the AV twin of the Schematic tab's "Draw Line".
   /// Dragging and connecting are separate modes on purpose: when both were
@@ -368,6 +508,9 @@ class _AvFlowViewState extends State<AvFlowView>
     unregisterDiagramCanvas(AppTab.avFlow, _diagramKey);
     capturingDiagram.removeListener(_captureChanged);
     _transform.dispose();
+    _lensAt.dispose();
+    _hideFlowForSnapshot.dispose();
+    _snapshot?.image.dispose();
     _signalFlow.dispose();
     _canvasFocus.dispose();
     super.dispose();
@@ -707,19 +850,17 @@ class _AvFlowViewState extends State<AvFlowView>
     );
   }
 
-  /// Re-runs the column layout over everything currently placed, so a diagram
-  /// that has been dragged into a mess can be put back in reading order.
+  /// Lays the whole drawing out again so nothing overlaps - sources left,
+  /// displays right, a table of displays when there are many. See
+  /// av_flow_layout.dart. One press of Undo puts it back.
   void _autoArrange(AppStateProvider provider) {
-    final columnY = <int, double>{};
-    for (final node in List<AvNode>.from(provider.avNodes)) {
-      final col = node.fromConfig ? _columnForDevice(node.id) : 0;
-      final y = columnY[col] ?? kAvAutoOriginY;
-      provider.updateAvNode(node.copyWith(
-        pos: Offset(kAvAutoOriginX + col * kAvAutoColumnPitch, y),
-      ));
-      columnY[col] = y + node.height + kAvAutoRowGap;
-    }
-    _snack('Devices re-arranged into signal-flow columns.');
+    final moved = provider.arrangeAvNodes(
+      tidyAvLayout(provider.avNodes, provider.avDeviceLibrary),
+    );
+    _snack(moved == 0
+        ? 'Already tidy - nothing needed to move.'
+        : 'Laid out again: $moved box${moved == 1 ? '' : 'es'} moved so '
+            'nothing overlaps. Undo puts them back.');
   }
 
   // -------------------------------------------------------------------------
@@ -1019,18 +1160,63 @@ class _AvFlowViewState extends State<AvFlowView>
                 child: Focus(
                   focusNode: _canvasFocus,
                   onKeyEvent: (_, event) => _onCanvasKey(provider, event),
-                  child: InteractiveViewer(
-                    transformationController: _transform,
-                    constrained: false,
-                    // Low enough that a twenty-device room fits the window.
-                    minScale: 0.08,
-                    maxScale: 3.0,
-                    boundaryMargin: const EdgeInsets.all(400),
-                    child: RepaintBoundary(
-                      key: _diagramKey,
-                      child: _buildCanvas(provider, model, theme),
-                    ),
-                  ),
+                  child: Builder(builder: (context) {
+                    _refreshSnapshot(provider.revision);
+                    // Expand: the page is always the whole of this space. A
+                    // hidden lens left the Stack to size itself off nothing,
+                    // and the drawing went to zero height - the black screen.
+                    return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Positioned.fill(
+                            child: InteractiveViewer(
+                              transformationController: _transform,
+                              constrained: false,
+                              minScale: kAvMinZoom,
+                              maxScale: kAvMaxZoom,
+                              // Unbounded: a fixed margin stopped the wheel
+                              // zooming out once the drawing and its margin
+                              // filled the window.
+                              boundaryMargin:
+                                  const EdgeInsets.all(double.infinity),
+                              child: RepaintBoundary(
+                                key: _diagramKey,
+                                child: _buildCanvas(provider, model, theme),
+                              ),
+                            ),
+                          ),
+                          if (_magnifier) _buildLens(),
+                          // Zoom, over the drawing's corner.
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: AvZoomBar(
+                              controller: _transform,
+                              onOut: () => _zoomBy(1 / 1.25),
+                              onIn: () => _zoomBy(1.25),
+                              onFit: _fitToView,
+                              onActual: _actualSize,
+                              magnifier: _magnifier,
+                              onMagnifier: _setMagnifier,
+                            ),
+                          ),
+                          // Where the pointer is, for the magnifier. On top
+                          // and see-through: a region round the drawing never
+                          // heard the pointer, because the drawing's own
+                          // regions sit over it and take it. This one lets
+                          // clicks and cursors through to everything below.
+                          if (_magnifier)
+                            Positioned.fill(
+                              child: MouseRegion(
+                                key: const ValueKey('av_magnifier_tracker'),
+                                opaque: false,
+                                onHover: (e) => _lensAt.value = e.localPosition,
+                                onExit: (_) => _lensAt.value = null,
+                              ),
+                            ),
+                        ],
+                    );
+                  }),
                 ),
               ),
               // The toolbar's switch still says whether the palette is on the
@@ -1102,12 +1288,21 @@ class _AvFlowViewState extends State<AvFlowView>
               selected: _showPalette,
               onSelected: (v) => setState(() => _showPalette = v),
             ),
-          if (_editMode)
-            OutlinedButton.icon(
+          // Always there: after adding or editing boxes, one press lays the
+          // drawing out again with nothing on top of anything.
+          Tooltip(
+            message: 'Lay the drawing out again so nothing overlaps - '
+                'sources on the left, displays and projectors on the right '
+                '(as a table when there are many). Undo puts it back.',
+            child: OutlinedButton.icon(
+              key: const ValueKey('av_tidy_layout'),
               icon: const Icon(Icons.auto_fix_high, size: 18),
-              label: const Text('Auto-arrange'),
-              onPressed: () => _autoArrange(provider),
+              label: const Text('Tidy layout'),
+              onPressed: provider.avNodes.isEmpty
+                  ? null
+                  : () => _autoArrange(provider),
             ),
+          ),
           // Shared with the Schematic and Cabling drawings — see
           // [AppStateProvider.snapDiagramsToGrid].
           if (_editMode)
@@ -1127,11 +1322,6 @@ class _AvFlowViewState extends State<AvFlowView>
             label: const Text('Grid'),
             selected: provider.showDiagramGrid,
             onSelected: (v) => provider.setShowDiagramGrid(v),
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.fit_screen, size: 18),
-            label: const Text('Fit to view'),
-            onPressed: _fitToView,
           ),
           OutlinedButton.icon(
             icon: const Icon(Icons.palette_outlined, size: 18),
@@ -1551,6 +1741,7 @@ class _AvFlowViewState extends State<AvFlowView>
               child: RepaintBoundary(
                 child: _SelectedSignalFlow(
                   progress: _signalFlow,
+                  hidden: _hideFlowForSnapshot,
                   points: _selectedCableId == null
                       ? null
                       : _paths[_selectedCableId],
@@ -2635,104 +2826,9 @@ class _AvFlowViewState extends State<AvFlowView>
       return;
     }
 
-    final nameController = TextEditingController();
-    final descriptionController = TextEditingController();
-    final existing = provider.availableRoomPresets();
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          final name = nameController.text.trim();
-          final clash = existing.any(
-            (p) => p.name.trim().toLowerCase() == name.toLowerCase(),
-          );
-          return AlertDialog(
-            title: const Text('Save as a room type'),
-            content: SizedBox(
-              width: 520,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'The equipment, the cabling, the locations, the racks, the '
-                    'screen runs and this room\'s switcher input and output '
-                    'numbers are saved. The cost estimate, the floor plan, the '
-                    'addresses and this room\'s name and number are not - a '
-                    'price belongs to a job and a drawing belongs to a '
-                    'building.',
-                    style: Theme.of(ctx).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: nameController,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      labelText: 'Name',
-                      hintText: 'e.g. Standard lecture hall',
-                      // A name that already exists overwrites that file. Said
-                      // here rather than found out afterwards.
-                      errorText: clash
-                          ? 'A room type called "$name" already exists - '
-                                'saving replaces it'
-                          : null,
-                      errorStyle: TextStyle(
-                        color: Theme.of(ctx).colorScheme.tertiary,
-                      ),
-                    ),
-                    onChanged: (_) => setLocal(() {}),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: descriptionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Description',
-                      hintText: 'What this room type is for',
-                    ),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Saved to ${provider.roomPresetFolder}',
-                    style: Theme.of(ctx).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: name.isEmpty
-                    ? null
-                    : () => Navigator.of(ctx).pop(true),
-                child: Text(clash ? 'Replace' : 'Save'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    if (saved != true) return;
-
-    final written = saveRoomPreset(
-      provider.effectiveRootFolder,
-      provider.currentRoomAsPreset(
-        name: nameController.text.trim(),
-        description: descriptionController.text.trim(),
-      ),
-    );
-    if (written.isEmpty) {
-      _snack('Could not write the room type - see the log.', error: true);
-      return;
-    }
-    _snack(
-      'Room type saved. It is offered the next time a room is created.',
-    );
+    // The same window as File > Save Room as Preset: the whole room, named
+    // and detailed there.
+    await showSaveRoomPresetDialog(context, provider);
   }
 
   /// The jack prefix a new box starts with: this room's number, falling back
@@ -3570,6 +3666,10 @@ class _AvFlowViewState extends State<AvFlowView>
                   ports: entry.ports,
                 ),
         );
+        if (!mounted ||
+            !await confirmCatalogCategories(context, provider)) {
+          return;
+        }
         final saved = await provider.saveAvDeviceLibrary();
         _snack(
           saved.isEmpty
@@ -3814,21 +3914,14 @@ class _AvFlowViewState extends State<AvFlowView>
                     children: [
                       const Text('Set every run to'),
                       const SizedBox(width: 10),
-                      DropdownButton<double>(
-                        key: const ValueKey('av_lengths_bulk'),
-                        value: bulk,
-                        items: [
-                          const DropdownMenuItem(
-                            value: 0.0,
-                            child: Text('Not set'),
-                          ),
-                          for (final ft in kCableLengthsFt)
-                            DropdownMenuItem(
-                              value: ft,
-                              child: Text(formatCableLength(ft)),
-                            ),
-                        ],
-                        onChanged: (v) => setLocal(() => bulk = v ?? 0),
+                      SizedBox(
+                        width: 110,
+                        child: CableLengthField(
+                          key: const ValueKey('av_lengths_bulk'),
+                          initial: bulk,
+                          label: null,
+                          onChanged: (v) => setLocal(() => bulk = v),
+                        ),
                       ),
                       const SizedBox(width: 10),
                       FilledButton(
@@ -3905,25 +3998,14 @@ class _AvFlowViewState extends State<AvFlowView>
                                 const SizedBox(width: 8),
                                 SizedBox(
                                   width: 96,
-                                  child: DropdownButton<double>(
+                                  child: CableLengthField(
                                     key: ValueKey('av_length_${c.id}'),
-                                    isExpanded: true,
-                                    value: kCableLengthsFt.contains(c.lengthFt)
-                                        ? c.lengthFt
-                                        : 0,
-                                    items: [
-                                      const DropdownMenuItem(
-                                        value: 0.0,
-                                        child: Text('-'),
-                                      ),
-                                      for (final ft in kCableLengthsFt)
-                                        DropdownMenuItem(
-                                          value: ft,
-                                          child: Text(formatCableLength(ft)),
-                                        ),
-                                    ],
+                                    initial: c.lengthFt,
+                                    label: null,
+                                    hint: '-',
+                                    dense: true,
                                     onChanged: (v) {
-                                      provider.setAvCableLength(c.id, v ?? 0);
+                                      provider.setAvCableLength(c.id, v);
                                       setLocal(() {});
                                     },
                                   ),
@@ -4044,25 +4126,14 @@ class _AvFlowViewState extends State<AvFlowView>
                   onChanged: (v) => setLocal(() => signal = v ?? signal),
                 ),
                 const SizedBox(height: 12),
-                // The lead length, off a fixed list: a cable schedule is an
-                // order, and a made-up lead comes in the lengths the shop
-                // stocks. A run pulled to length in conduit stays unset, which
-                // the counts report as its own column.
-                DropdownButtonFormField<double>(
+                // The lead length: typed in feet, or picked from the lengths
+                // the shop stocks. A run pulled to length in conduit stays
+                // unset, which the counts report as its own column.
+                CableLengthField(
                   key: const ValueKey('cable_length'),
-                  initialValue:
-                      kCableLengthsFt.contains(lengthFt) ? lengthFt : 0,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Length'),
-                  items: [
-                    const DropdownMenuItem(value: 0.0, child: Text('Not set')),
-                    for (final ft in kCableLengthsFt)
-                      DropdownMenuItem(
-                        value: ft,
-                        child: Text(formatCableLength(ft)),
-                      ),
-                  ],
-                  onChanged: (v) => setLocal(() => lengthFt = v ?? 0),
+                  initial: lengthFt,
+                  label: 'Length (ft)',
+                  onChanged: (v) => setLocal(() => lengthFt = v),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -5083,10 +5154,14 @@ class _SelectedSignalFlow extends StatelessWidget {
 
   final Color color;
 
+  /// Off the page while the magnifier's still is taken.
+  final ValueNotifier<bool> hidden;
+
   const _SelectedSignalFlow({
     required this.progress,
     required this.points,
     required this.color,
+    required this.hidden,
   });
 
   @override
@@ -5094,9 +5169,9 @@ class _SelectedSignalFlow extends StatelessWidget {
     final route = points;
     if (route == null || route.length < 2) return const SizedBox.shrink();
 
-    return ValueListenableBuilder<bool>(
-      valueListenable: capturingDiagram,
-      builder: (context, capturing, _) => capturing
+    return ListenableBuilder(
+      listenable: Listenable.merge([capturingDiagram, hidden]),
+      builder: (context, _) => capturingDiagram.value || hidden.value
           ? const SizedBox.shrink()
           : AnimatedBuilder(
               animation: progress,

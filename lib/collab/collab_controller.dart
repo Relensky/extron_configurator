@@ -29,6 +29,10 @@ import '../app_activity.dart';
 /// inside the presence notes' staleness, so this copy still shows as open.
 const Duration kAwayTick = Duration(seconds: 45);
 
+/// Ticks a changed but unreadable file is tried again before it is taken as
+/// read - about ten seconds at the usual heartbeat.
+const int kUnreadableRetries = 5;
+
 /// The documents that can be edited together.
 enum CollabDocKind { room, project, catalog }
 
@@ -47,6 +51,10 @@ abstract class CollabDocument {
   /// file yet - an unsaved room is nobody else's to be editing.
   String get filePath;
 
+  /// What the document is called where a person reads it - "BSS 103 on
+  /// Bessey Hall". '' says only "this room".
+  String get displayName => '';
+
   /// Every file whose change means the document changed (a room is its
   /// config plus the sidecars beside it).
   List<String> get watchedFiles => [filePath];
@@ -56,6 +64,10 @@ abstract class CollabDocument {
 
   /// The document as it is on disk now, decoded. Null when it cannot be read.
   Object? readDisk();
+
+  /// [readDisk] for the watcher, which runs every couple of seconds: off
+  /// the window's thread where the document can manage it.
+  Future<Object?> readDiskAsync() async => readDisk();
 
   /// The document as it is in memory, in the same shape as [readDisk].
   Object? current();
@@ -107,6 +119,9 @@ class CollabDocState {
   DateTime? lastAnnounced;
   bool lastAnnouncedDirty = false;
   String lastAnnouncedWhere = '';
+
+  /// Ticks in a row the changed file could not be read.
+  int unreadable = 0;
 }
 
 /// The outcome of bringing another person's saved changes into memory.
@@ -297,17 +312,35 @@ class CollabController extends ChangeNotifier {
         catalog
             ? '${o.user} (${o.machine}) is editing the catalog too. Their '
                 'saves will be merged with yours.'
-            : '${o.user} (${o.machine}) has opened this '
-                '${collabDocNoun(doc.kind)} too. Their saves will be merged '
-                'with yours.',
+            : '${o.user} (${o.machine}) has opened ${_named(doc)} too. '
+                'Their saves will be merged with yours.',
       ));
     }
 
     // Did the file move without us moving it?
     final stamp = await _stampOfAsync(doc.watchedFiles);
     if (stamp != s.stamp) {
-      s.stamp = stamp;
-      final disk = doc.readDisk();
+      final disk = await doc.readDiskAsync();
+      // Moved to another file while it was being read: the next tick
+      // starts over there.
+      if (!_samePath(doc.filePath, file)) return changed;
+      // Unreadable - still being written, or held by the saver over the
+      // share. The stamp is left alone so the next tick reads it again;
+      // taking it here lost that save's combine notice for good. A file
+      // that stays unreadable is given up on after a few tries.
+      if (disk == null && ++s.unreadable < kUnreadableRetries) {
+        if (s.unreadable == 1) {
+          AppLogger.logAction(
+            '${collabDocNoun(doc.kind)} changed on disk but could not be '
+            'read yet; retrying',
+            category: 'COLLAB',
+          );
+        }
+        return changed;
+      }
+      s
+        ..stamp = stamp
+        ..unreadable = 0;
       if (disk != null && !jsonEquals(disk, s.baseline)) {
         // Nothing of theirs that this copy lacks: what they changed is what
         // we changed too (or only what we changed differs). Said nothing -
@@ -325,6 +358,11 @@ class CollabController extends ChangeNotifier {
           s.incoming = null;
         } else {
           final by = _latestSaver(others, file);
+          AppLogger.logAction(
+            '${collabDocNoun(doc.kind)} saved by '
+            '${by.isEmpty ? 'someone else' : by}; offering to combine',
+            category: 'COLLAB',
+          );
           // Said once when changes start waiting; their next saves - an
           // autosave every few minutes - only update the merge chip.
           final news = s.incoming == null;
@@ -332,9 +370,8 @@ class CollabController extends ChangeNotifier {
           if (news) {
             _notices.add(CollabNotice(
               doc.kind,
-              '${s.incoming!.who} saved changes to this '
-              '${collabDocNoun(doc.kind)}. The merge button at the top brings '
-              'them in.',
+              '${s.incoming!.who} saved changes to ${_named(doc)}. The '
+              'Combine button at the top brings them in.',
             ));
           }
         }
@@ -342,6 +379,13 @@ class CollabController extends ChangeNotifier {
       }
     }
     return changed;
+  }
+
+  /// "room BSS 103 on Bessey Hall", or "this room" with no name to give.
+  static String _named(CollabDocument doc) {
+    final name = doc.displayName.trim();
+    final noun = collabDocNoun(doc.kind);
+    return name.isEmpty ? 'this $noun' : '$noun $name';
   }
 
   /// Which room file this copy has open and which tab it is on, for the
@@ -421,6 +465,10 @@ class CollabController extends ChangeNotifier {
     final doc = _docs[kind];
     if (doc == null) return;
     final s = _state[kind]!;
+    // Before the path check: opening a job saves it straight away (the room
+    // check) before the tick has followed it, and a save with no note left
+    // everyone else's copy saying "Someone else".
+    if (saved && doc.filePath.isNotEmpty) _writeLastSave(doc.filePath);
     if (!_samePath(doc.filePath, s.path)) {
       // The tick will follow it to the new file; the base is taken there.
       return;
@@ -429,7 +477,6 @@ class CollabController extends ChangeNotifier {
     s.incoming = null;
     if (saved) {
       s.savedAt = DateTime.now();
-      _writeLastSave(doc.filePath);
       // Straight away rather than on the next heartbeat, so a colleague's
       // copy can say whose save it was.
       unawaited(PresenceBoard(doc.filePath)
@@ -631,9 +678,12 @@ class CollabController extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Who most likely wrote the file: the last-save note beside it, else the
-  /// present editor with the latest save.
+  /// Who most likely wrote the file, as "user on PC": the last-save note
+  /// beside it, else the present editor with the latest save, else the only
+  /// other person who has it open.
   String _latestSaver(List<EditorPresence> others, String documentPath) {
+    String named(String user, String machine) =>
+        machine.trim().isEmpty ? user : '$user on $machine';
     try {
       final f = File(_lastSaveFile(documentPath));
       if (f.existsSync()) {
@@ -643,7 +693,9 @@ class CollabController extends ChangeNotifier {
             user: '${j['user'] ?? ''}',
             machine: '${j['machine'] ?? ''}',
           );
-          if (who != me && who.user.isNotEmpty) return who.user;
+          if (who != me && who.user.isNotEmpty) {
+            return named(who.user, who.machine);
+          }
         }
       }
     } catch (_) {}
@@ -652,6 +704,7 @@ class CollabController extends ChangeNotifier {
       if (o.savedAt == null) continue;
       if (best == null || o.savedAt!.isAfter(best.savedAt!)) best = o;
     }
-    return best?.user ?? '';
+    if (best == null && others.length == 1) best = others.single;
+    return best == null ? '' : named(best.user, best.machine);
   }
 }

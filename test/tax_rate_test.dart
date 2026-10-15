@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 
+import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/building_project.dart';
@@ -49,6 +50,18 @@ void main() {
       // A room's own rate is still saved.
       final own = RoomCostSettings(taxPercent: 5);
       expect(own.toJson()['taxPercent'], 5);
+    });
+
+    test('the base rate it was saved at travels with the room', () {
+      final saved = RoomCostSettings()
+        ..followBaseTax(9)
+        ..fileBaseTax = 9;
+      final s = read(saved.toJson());
+      expect(s.ownTaxRate, isFalse);
+      expect(s.fileBaseTax, 9);
+      // A room with its own rate needs no base.
+      final own = RoomCostSettings(taxPercent: 5)..fileBaseTax = 9;
+      expect(own.toJson().containsKey('taxBase'), isFalse);
     });
 
     test('a following room saved at the base still follows it', () {
@@ -133,6 +146,49 @@ void main() {
     test('a project without a rate falls back to the app\'s', () {
       final e = price(BuildingProject(), appRate: 6);
       expect(ratesOf(e), {'follows': 6, 'own': 5, 'exempt': 0});
+    });
+
+    test('no rate on the job or this PC: the rate the room was saved at', () {
+      final project = BuildingProject();
+      final projectPath = path.join(dir.path, 'job_project.json');
+      final saved = RoomCostSettings()..fileBaseTax = 7;
+      project.rooms.add(ProjectRoomRef(
+        id: 'shared',
+        configPath: BuildingProject.storePath(
+          writeRoom('shared', saved),
+          projectPath,
+        ),
+      ));
+      final e = computeProjectEstimate(
+        project: project,
+        projectPath: projectPath,
+        library: AvDeviceLibrary.empty(),
+      );
+      expect(e.rooms.single.estimate!.taxPercent, 7);
+    });
+
+    test('a job with no rate takes the default of whoever has one', () async {
+      // Made on a PC with no default: unset, not 0 on purpose.
+      final p = AppStateProvider(autoLoadSettings: false)
+        ..defaultTaxPercent = 0;
+      p.newProject(name: 'Job');
+      expect(p.project.taxPercent, isNull);
+      final file = path.join(dir.path, 'job_project.json');
+      expect(await p.saveProject(to: file), '');
+      expect(p.project.taxPercent, isNull);
+
+      // Saved on a PC with one: written into the job for everybody.
+      p.defaultTaxPercent = 9.25;
+      expect(await p.saveProject(), '');
+      expect(BuildingProject.fromJson(
+        jsonDecode(File(file).readAsStringSync()) as Map<String, dynamic>,
+      ).taxPercent, 9.25);
+
+      // A job set to 0 on purpose keeps it.
+      p.setProjectTaxPercent(0);
+      p.defaultTaxPercent = 6;
+      await p.saveProject();
+      expect(p.project.taxPercent, 0);
     });
 
     test('the project\'s rate is saved with it', () {

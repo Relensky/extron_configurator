@@ -77,31 +77,102 @@ class TeamWorkingOn extends StatelessWidget {
   }
 }
 
-/// Takes off every tag this person placed - on themselves and on others.
+/// Puts [who] on (or takes them off) [kind] [id], as this person, and tells
+/// whoever it touches: someone else put on or taken off gets a direct
+/// message from you; joining something others are on tells them too.
+/// Every change also stays in the tag history (TeamClaims.historyFor).
 /// Returns what went wrong, or ''.
+Future<String> teamSetTag({
+  required String kind,
+  required String id,
+  required String label,
+  required String who,
+  String whoName = '',
+  required bool on,
+}) async {
+  final claims = Team.claims;
+  if (claims == null) return 'The team folder cannot be reached.';
+  final me = claims.me.user;
+  final others = [
+    for (final c in claims.on(kind, id))
+      if (c.who.toLowerCase() != me.toLowerCase()) c,
+  ];
+  final error = await claims.set(
+      kind: kind, id: id, label: label, who: who, whoName: whoName, on: on);
+  if (error.isNotEmpty) return error;
+  final chat = Team.chat;
+  if (chat == null) return '';
+  final name = label.isEmpty ? id : label;
+  if (who.toLowerCase() != me.toLowerCase()) {
+    // Someone else: they hear about it from you, either way.
+    await chat.post(
+        on
+            ? 'I tagged you as working on **$name**.'
+            : 'I took you off **$name** - you are no longer tagged as '
+                'working on it.',
+        to: dmChannel(me, who));
+  } else if (on) {
+    // Joining: the people already on it hear that you are too.
+    for (final c in others) {
+      await chat.post('I am working on **$name** with you too.',
+          to: dmChannel(me, c.who));
+    }
+  }
+  return '';
+}
+
+/// Takes [c] off, as this person - see [teamSetTag].
+Future<String> teamTakeOff(TeamClaim c) => teamSetTag(
+    kind: c.kind,
+    id: c.id,
+    label: c.label,
+    who: c.who,
+    whoName: c.whoName,
+    on: false);
+
+/// Taking someone else off asks first: anyone may, but they are told and it
+/// stays in their history. Your own tags - whoever put them there - and the
+/// ones you placed on yourself come off without asking.
+bool teamTakeOffNeedsWarning(TeamClaim c) {
+  final me = Team.claims?.me.user.toLowerCase() ?? '';
+  return c.who.toLowerCase() != me;
+}
+
+/// The warning [teamTakeOffNeedsWarning] asks for, in words.
+String teamTakeOffWarning(TeamClaim c) {
+  final me = Team.claims?.me.user.toLowerCase() ?? '';
+  final placed = c.by.toLowerCase() == me
+      ? 'you tagged them'
+      : c.self
+          ? 'they tagged themselves'
+          : '${c.byLabel} tagged them';
+  return 'Take ${c.whoLabel} off ${c.label.isEmpty ? c.id : c.label}? '
+      '($placed ${teamAgo(c.at)}.) They get a message from you, and it is '
+      'kept in their tag history.';
+}
+
+/// Takes off every tag on this person (whoever placed it) and every tag
+/// they placed on others - who are each told. Returns what went wrong, or ''.
 Future<String> teamClearMyTags() async {
   final claims = Team.claims;
   if (claims == null) return '';
   final me = claims.me.user.toLowerCase();
   for (final c in [
     for (final c in claims.current)
-      if (c.by.toLowerCase() == me) c,
+      if (c.by.toLowerCase() == me || c.who.toLowerCase() == me) c,
   ]) {
-    final error = await claims.set(
-        kind: c.kind,
-        id: c.id,
-        label: c.label,
-        who: c.who,
-        whoName: c.whoName,
-        on: false);
+    final error = await teamTakeOff(c);
     if (error.isNotEmpty) return error;
   }
   return '';
 }
 
 /// [TEAM KIT - WORKING ON]: for the team page - what each person is tagged
-/// on, in every app, and the app each tag was made in. Tags this person
-/// placed get an x, and the heading can clear them all at once.
+/// on, in every app, and the app each tag was made in. Every tag has an x:
+/// your own (whoever put them there) and the ones you placed come off
+/// straight away; anyone else's asks first, in place. The heading clears
+/// all of yours at once, and History lists every change to your tags -
+/// including who took you off what.
 class TeamWorkingOnList extends StatefulWidget {
   const TeamWorkingOnList({super.key, this.onOpenRoom});
 
@@ -119,6 +190,12 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
   bool _busy = false;
   String _error = '';
 
+  /// The tag (TeamClaim.key) whose take-off is waiting on a yes.
+  String? _confirmKey;
+
+  /// History open under the heading.
+  bool _history = false;
+
   Future<void> _run(Future<String> Function() job) async {
     setState(() {
       _busy = true;
@@ -129,8 +206,19 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
     setState(() {
       _busy = false;
       _confirming = false;
+      _confirmKey = null;
       _error = error;
     });
+  }
+
+  /// One line of [TeamClaims.historyFor], said from this person's side.
+  static String _historyLine(TeamClaim c, String me) {
+    final byMe = c.by.toLowerCase() == me;
+    final what = c.label.isEmpty ? c.id : c.label;
+    if (c.on) {
+      return byMe ? 'You tagged yourself on $what' : '${c.byLabel} tagged you on $what';
+    }
+    return byMe ? 'You took yourself off $what' : '${c.byLabel} took you off $what';
   }
 
   static IconData _kindIcon(String kind) => switch (kind.toLowerCase()) {
@@ -150,7 +238,11 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
         final scheme = theme.colorScheme;
         final me = claims.me.user.toLowerCase();
         final all = claims.current;
-        final placed = all.where((c) => c.by.toLowerCase() == me).length;
+        final placed = all
+            .where((c) =>
+                c.by.toLowerCase() == me || c.who.toLowerCase() == me)
+            .length;
+        final history = claims.historyFor();
         // A group a person, this person first, then by name.
         final by = <String, List<TeamClaim>>{};
         for (final c in all) {
@@ -202,28 +294,57 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
                     style: theme.textTheme.labelSmall
                         ?.copyWith(color: scheme.onSurfaceVariant)),
               ),
-              if (mine)
-                IconButton(
-                  key: ValueKey('working_on_clear_${c.key}'),
-                  tooltip: c.self
-                      ? 'Take this tag off'
-                      : 'Take ${c.whoLabel} off this',
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 16,
-                  icon: const Icon(Icons.close),
-                  onPressed: _busy
-                      ? null
-                      : () => _run(() => claims.set(
-                          kind: c.kind,
-                          id: c.id,
-                          label: c.label,
-                          who: c.who,
-                          whoName: c.whoName,
-                          on: false)),
-                ),
+              IconButton(
+                key: ValueKey('working_on_clear_${c.key}'),
+                tooltip: c.who.toLowerCase() == me
+                    ? 'Take this tag off'
+                    : 'Take ${c.whoLabel} off this'
+                        '${mine ? '' : ' (asks first - they are told)'}',
+                visualDensity: VisualDensity.compact,
+                iconSize: 16,
+                icon: const Icon(Icons.close),
+                onPressed: _busy
+                    ? null
+                    : teamTakeOffNeedsWarning(c)
+                        ? () => setState(() => _confirmKey = c.key)
+                        : () => _run(() => teamTakeOff(c)),
+              ),
             ]),
           );
         }
+
+        // Asked in place, under the tag - a dialog would open behind the
+        // chat when this page is inside it.
+        Widget confirm(TeamClaim c) => Padding(
+              key: ValueKey('working_on_confirm_${c.key}'),
+              padding: const EdgeInsets.fromLTRB(38, 2, 4, 6),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+                decoration: BoxDecoration(
+                  color: scheme.errorContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(children: [
+                  Icon(Icons.warning_amber_rounded,
+                      size: 18, color: scheme.onErrorContainer),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(teamTakeOffWarning(c),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: scheme.onErrorContainer)),
+                  ),
+                  TextButton(
+                    key: ValueKey('working_on_confirm_yes_${c.key}'),
+                    onPressed: _busy ? null : () => _run(() => teamTakeOff(c)),
+                    child: const Text('Take off'),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _confirmKey = null),
+                    child: const Text('Keep'),
+                  ),
+                ]),
+              ),
+            );
 
         return Column(
           key: const ValueKey('team_working_on_list'),
@@ -237,12 +358,20 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
                 Expanded(
                     child: Text('Working on',
                         style: theme.textTheme.titleMedium)),
+                if (history.isNotEmpty && !_confirming)
+                  TextButton.icon(
+                    key: const ValueKey('working_on_history'),
+                    icon: Icon(_history ? Icons.expand_less : Icons.history,
+                        size: 18),
+                    label: const Text('History'),
+                    onPressed: () => setState(() => _history = !_history),
+                  ),
                 if (placed > 0 && !_confirming)
                   TextButton.icon(
                     key: const ValueKey('working_on_clear_mine'),
                     icon: const Icon(Icons.clear_all, size: 18),
-                    label: Text('Clear the $placed '
-                        'tag${placed == 1 ? '' : 's'} I placed'),
+                    label: Text('Clear my $placed '
+                        'tag${placed == 1 ? '' : 's'}'),
                     onPressed:
                         _busy ? null : () => setState(() => _confirming = true),
                   ),
@@ -262,12 +391,64 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
                 ],
               ]),
             ),
+            if (_confirming)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                    'Your own tags and the ones you placed on others come '
+                    'off; anyone you placed is sent a message.',
+                    style: theme.textTheme.bodySmall),
+              ),
             if (_error.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(_error,
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: scheme.error)),
+              ),
+            if (_history)
+              Container(
+                key: const ValueKey('working_on_history_list'),
+                margin: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('Your tag history',
+                        style: theme.textTheme.labelLarge),
+                    const SizedBox(height: 4),
+                    for (final c in history.take(30))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(children: [
+                          Icon(
+                              c.on
+                                  ? Icons.person_add_alt_1_outlined
+                                  : Icons.person_remove_outlined,
+                              size: 15,
+                              color: c.on || c.by.toLowerCase() == me
+                                  ? scheme.onSurfaceVariant
+                                  : scheme.error),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(_historyLine(c, me),
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall),
+                          ),
+                          const SizedBox(width: 6),
+                          TeamAppTag(c.app, short: true),
+                          const SizedBox(width: 6),
+                          Text(teamAgo(c.at),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.onSurfaceVariant)),
+                        ]),
+                      ),
+                  ],
+                ),
               ),
             if (people.isEmpty)
               Padding(
@@ -296,7 +477,10 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
                           ?.copyWith(color: scheme.onSurfaceVariant)),
                 ]),
               ),
-              for (final c in tags) tag(c),
+              for (final c in tags) ...[
+                tag(c),
+                if (_confirmKey == c.key) confirm(c),
+              ],
             ],
           ],
         );
@@ -376,13 +560,35 @@ class _WorkingOnMenu extends StatelessWidget {
 
   Future<void> _set(BuildContext context, String who, String whoName, bool v,
       {bool self = false}) async {
-    final claims = Team.claims!;
     final messenger = ScaffoldMessenger.maybeOf(context);
-    final others = [
-      for (final c in on)
-        if (c.who.toLowerCase() != claims.me.user.toLowerCase()) c,
-    ];
-    final error = await claims.set(
+    if (!v) {
+      // Taking someone else off: anyone may, after a warning.
+      final had = on.where((c) => c.who.toLowerCase() == who.toLowerCase());
+      if (had.isNotEmpty && teamTakeOffNeedsWarning(had.first)) {
+        final yes = await showDialog<bool>(
+          context: context,
+          useRootNavigator: true,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(Icons.warning_amber_rounded),
+            title: Text('Take ${had.first.whoLabel} off?'),
+            content: Text(teamTakeOffWarning(had.first)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Keep'),
+              ),
+              FilledButton(
+                key: const ValueKey('working_on_take_off_yes'),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Take off'),
+              ),
+            ],
+          ),
+        );
+        if (yes != true) return;
+      }
+    }
+    final error = await teamSetTag(
       kind: owner.kind,
       id: owner.id,
       label: owner.label,
@@ -392,21 +598,6 @@ class _WorkingOnMenu extends StatelessWidget {
     );
     if (error.isNotEmpty) {
       messenger?.showSnackBar(SnackBar(content: Text(error)));
-      return;
-    }
-    final chat = Team.chat;
-    if (!v || chat == null) return;
-    if (!self) {
-      // Tagged by someone else: they hear about it from you.
-      await chat.post(
-          'I tagged you as working on **${owner.label}**.',
-          to: dmChannel(claims.me.user, who));
-    } else {
-      // Joining: the people already on it hear that you are too.
-      for (final c in others) {
-        await chat.post('I am working on **${owner.label}** with you too.',
-            to: dmChannel(claims.me.user, c.who));
-      }
     }
   }
 }

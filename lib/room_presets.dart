@@ -39,6 +39,19 @@ const String kRoomPresetFolder = 'room_presets';
 /// The extension that marks one.
 const String kRoomPresetExtension = '.roompreset.json';
 
+/// The parts of a room "Save Room as Preset" can carry.
+enum RoomPresetPart { flow, racks, floorPlans, cabling, cost, schematic, setup }
+
+const Map<RoomPresetPart, String> kRoomPresetPartLabels = {
+  RoomPresetPart.flow: 'AV flow - devices, jacks, cables and locations',
+  RoomPresetPart.racks: 'Racks and what is in them',
+  RoomPresetPart.floorPlans: 'Floor plan sheets (without the drawing images)',
+  RoomPresetPart.cabling: 'Cabling sheet layout',
+  RoomPresetPart.cost: 'Cost page - prices, added lines, labor, fees, text',
+  RoomPresetPart.schematic: 'Control schematic layout',
+  RoomPresetPart.setup: 'Switcher inputs and outputs, source layout',
+};
+
 /// One saved room type.
 ///
 /// Holds the same shapes the AV sidecar does, minus everything room-specific:
@@ -115,6 +128,23 @@ class RoomPreset {
   /// these fields and a number nobody chose is worse than an empty box.
   final Map<String, String> systemSetup;
 
+  /// The rest of a whole room, saved by "Save Room as Preset": the cost page,
+  /// the cabling sheet's layout, the control schematic's layout, and the
+  /// room's own look and light (signal colors, room mode, room light, throw
+  /// distance). Each is the JSON that part of a room saves as; empty when the
+  /// preset does not carry it. See [AppStateProvider.applyRoomPreset].
+  final Map<String, dynamic> cost;
+  final Map<String, dynamic> cabling;
+  final Map<String, dynamic> schematic;
+  final Map<String, dynamic> roomSettings;
+
+  /// Who saved it and when, for the lists that show presets.
+  final String savedBy;
+  final String savedAt;
+
+  /// The file it was read from; '' for one not read off disk.
+  final String file;
+
   const RoomPreset({
     required this.name,
     this.description = '',
@@ -130,7 +160,29 @@ class RoomPreset {
     this.jackPrefix = '',
     this.sourceName = '',
     this.systemSetup = const {},
+    this.cost = const {},
+    this.cabling = const {},
+    this.schematic = const {},
+    this.roomSettings = const {},
+    this.savedBy = '',
+    this.savedAt = '',
+    this.file = '',
   });
+
+  /// What it holds, for a list: "6 devices, 4 jacks, 2 racks, 3 sheets,
+  /// cost page, cabling sheet, control schematic".
+  String get summary => [
+    '$deviceCount device${deviceCount == 1 ? '' : 's'}',
+    if (jackCount > 0) '$jackCount jack${jackCount == 1 ? '' : 's'}',
+    if (cables.isNotEmpty)
+      '${cables.length} cable${cables.length == 1 ? '' : 's'}',
+    if (racks.isNotEmpty) '${racks.length} rack${racks.length == 1 ? '' : 's'}',
+    if (floorPlans.isNotEmpty)
+      '${floorPlans.length} sheet${floorPlans.length == 1 ? '' : 's'}',
+    if (cost.isNotEmpty) 'cost page',
+    if (cabling.isNotEmpty) 'cabling sheet',
+    if (schematic.isNotEmpty) 'control schematic',
+  ].join(', ');
 
   /// How many jacks this room type lays in, for the picker's summary.
   int get jackCount =>
@@ -163,9 +215,18 @@ class RoomPreset {
     'screenSwitches': [for (final s in screenSwitches) s.toJson()],
     if (floorPlans.isNotEmpty)
       'floorPlans': [for (final f in floorPlans) f.toJson()],
+    if (cost.isNotEmpty) 'cost': cost,
+    if (cabling.isNotEmpty) 'cabling': cabling,
+    if (schematic.isNotEmpty) 'schematic': schematic,
+    if (roomSettings.isNotEmpty) 'roomSettings': roomSettings,
+    if (savedBy.isNotEmpty) 'savedBy': savedBy,
+    if (savedAt.isNotEmpty) 'savedAt': savedAt,
   };
 
-  factory RoomPreset.fromJson(Map<String, dynamic> json) {
+  factory RoomPreset.fromJson(Map<String, dynamic> json, {String file = ''}) {
+    Map<String, dynamic> part(String key) => json[key] is Map
+        ? Map<String, dynamic>.from(json[key] as Map)
+        : const {};
     final slots = <String, RackSlot>{};
     final raw = json['rackSlots'];
     if (raw is Map) {
@@ -195,6 +256,13 @@ class RoomPreset {
       jackPrefix: json['jackPrefix']?.toString() ?? '',
       sourceName: json['sourceName']?.toString() ?? '',
       systemSetup: settings,
+      cost: part('cost'),
+      cabling: part('cabling'),
+      schematic: part('schematic'),
+      roomSettings: part('roomSettings'),
+      savedBy: json['savedBy']?.toString() ?? '',
+      savedAt: json['savedAt']?.toString() ?? '',
+      file: file,
       locations: [
         for (final l in (json['locations'] as List? ?? []))
           if (l is Map) RoomLocation.fromJson(Map<String, dynamic>.from(l)),
@@ -293,7 +361,10 @@ List<RoomPreset> loadRoomPresets(String rootFolder) {
       try {
         final doc = jsonDecode(entity.readAsStringSync());
         if (doc is! Map) continue;
-        out.add(RoomPreset.fromJson(Map<String, dynamic>.from(doc)));
+        out.add(RoomPreset.fromJson(
+          Map<String, dynamic>.from(doc),
+          file: entity.path,
+        ));
       } catch (e) {
         AppLogger.logError('Could not read the preset ${entity.path}', e);
       }
@@ -322,6 +393,19 @@ String saveRoomPreset(String rootFolder, RoomPreset preset) {
   } catch (e, stack) {
     AppLogger.logError('Could not save the room preset', e, stack);
     return '';
+  }
+}
+
+/// Deletes the preset file at [file]. Returns false when it could not be.
+bool deletePresetFile(String file) {
+  try {
+    final f = File(file);
+    if (f.existsSync()) f.deleteSync();
+    AppLogger.logInfo('Preset deleted: $file');
+    return true;
+  } catch (e, stack) {
+    AppLogger.logError('Could not delete the preset $file', e, stack);
+    return false;
   }
 }
 

@@ -144,6 +144,28 @@ void showTeamMessageNotice(
   TeamHost.log('[TEAM] notice: ${m.who}${teamWhereText(chat, m)}');
 }
 
+/// The color opposite [accent] on the color wheel, for the unread count on
+/// a button filled with [accent]: it stands out from the button whatever
+/// accent a host picks, where white on a light accent all but vanished. A
+/// gray accent has no hue to turn, so it gets the opposite lightness.
+Color teamComplementOf(Color accent) {
+  final hsl = HSLColor.fromColor(accent);
+  if (hsl.saturation < 0.15) {
+    return hsl.withLightness(hsl.lightness > 0.5 ? 0.25 : 0.8).toColor();
+  }
+  return hsl
+      .withHue((hsl.hue + 180) % 360)
+      .withSaturation(hsl.saturation < 0.6 ? 0.6 : hsl.saturation)
+      .withLightness(hsl.lightness.clamp(0.45, 0.6))
+      .toColor();
+}
+
+/// Black or white, whichever reads on [fill].
+Color teamInkOn(Color fill) =>
+    ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+
 /// The chat's icon: a bubble; with unread messages a filled bubble and a
 /// count that pulses gently; with a mention a red @ and its count.
 class TeamUnreadIcon extends StatefulWidget {
@@ -154,6 +176,8 @@ class TeamUnreadIcon extends StatefulWidget {
     this.open = false,
     this.color,
     this.size = 24,
+    this.pillColor,
+    this.onPillColor,
   });
 
   final int unread;
@@ -163,6 +187,11 @@ class TeamUnreadIcon extends StatefulWidget {
   final bool open;
   final Color? color;
   final double size;
+
+  /// The count's fill and ink, for a host that colors the button
+  /// itself; null keeps amber, or red for a mention.
+  final Color? pillColor;
+  final Color? onPillColor;
 
   @override
   State<TeamUnreadIcon> createState() => _TeamUnreadIconState();
@@ -232,8 +261,9 @@ class _TeamUnreadIconState extends State<TeamUnreadIcon>
                 ? Icons.mark_unread_chat_alt
                 : Icons.chat_bubble_outline;
     final count = mention ? widget.mentions : widget.unread;
-    final pill = mention ? scheme.error : const Color(0xFFFFB300);
-    final onPill = mention ? scheme.onError : Colors.black;
+    final pill =
+        widget.pillColor ?? (mention ? scheme.error : const Color(0xFFFFB300));
+    final onPill = widget.onPillColor ?? (mention ? scheme.onError : Colors.black);
     return SizedBox(
       width: widget.size + 12,
       height: widget.size + 8,
@@ -256,7 +286,9 @@ class _TeamUnreadIconState extends State<TeamUnreadIcon>
                   decoration: BoxDecoration(
                     color: pill,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white, width: 1.5),
+                    border: Border.all(
+                        color: widget.onPillColor ?? Colors.white,
+                        width: 1.5),
                     boxShadow: [
                       BoxShadow(
                           color: pill.withValues(alpha: 0.5),

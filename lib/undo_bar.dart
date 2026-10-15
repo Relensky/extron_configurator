@@ -59,8 +59,8 @@ ToolbarUndoTarget? toolbarUndoTarget(AppTab tab) => switch (tab) {
       AppTab.deviceEditor => ToolbarUndoTarget.catalog,
       AppTab.schemaEditor => ToolbarUndoTarget.schema,
       AppTab.flowRules => ToolbarUndoTarget.flowRules,
-      // App Config is settings rather than a document.
-      AppTab.appConfig => null,
+      // App Config is settings rather than a document; photos are files.
+      AppTab.appConfig || AppTab.photos => null,
     };
 
 /// The document the title bar's Undo would act on.

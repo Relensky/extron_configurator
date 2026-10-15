@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
@@ -11,6 +12,8 @@ import 'app_logger.dart';
 import 'app_paths.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
+import 'device_info_source.dart'
+    show DeviceInfoDraft, applyDeviceInfoBlock, formatDeviceInfo;
 import 'equipment_lifecycle.dart'
     show equipmentIsTracked, equipmentNeverReplaced;
 import 'responsibility_matrix.dart';
@@ -34,6 +37,7 @@ import 'online_room_edits.dart';
 import 'online_roundtrip.dart';
 import 'online_sheet_merge.dart';
 import 'room_workbook.dart';
+import 'cost_compare.dart';
 import 'cost_estimate.dart';
 import 'xlsx_reader.dart' show readXlsxSheets;
 import 'xlsx_writer.dart' show XlsxTheme;
@@ -61,6 +65,7 @@ import 'nav_rail.dart' show navTabLabel;
 import 'campus_file.dart' show kCampusFileSuffix;
 import 'app_activity.dart';
 import 'collab/collab_controller.dart';
+import 'collab/combine_details.dart' show collabDocName;
 import 'collab/combine_history.dart';
 import 'collab/json_merge.dart' show cloneJson;
 import 'collab/presence.dart' show CollabIdentity;
@@ -122,6 +127,8 @@ enum AppTab {
   floorPlan('floor_plan'),
   cabling('cabling'),
   racks('racks'),
+  // Pictures of the room as it is, kept in the room's own folder.
+  photos('photos'),
   deviceEditor('device_editor'),
   // The two documents that describe how the app itself behaves, next to the
   // catalog for the same reason it is there: they are about every room rather
@@ -533,8 +540,8 @@ class AppStateProvider extends ChangeNotifier {
   ///   * A MODULE THAT DECLARES NO MODELS. Plenty of drivers list none, and
   ///     the modules path may not even have been read yet; "this module says
   ///     nothing about models" is not evidence against the model.
-  ///   * A MODEL THE MODULE DOES LIST, however it is capitalized — the same
-  ///     forgiveness [modelEntryFor] gives, because people type 'tr311hw'.
+  ///   * A MODEL THE MODULE DOES LIST, however it is capitalized, or a kit of
+  ///     one — the same forgiveness [modelEntryFor] gives.
   ///
   /// So a red banner here always means something a person can act on.
   ModelModuleMismatch? deviceModelModuleFault(String deviceKey) {
@@ -558,10 +565,8 @@ class AppStateProvider extends ChangeNotifier {
     }
     final declared = moduleModels[moduleStem(module)];
     if (declared == null || declared.isEmpty) return null;
-    final wanted = model.toLowerCase();
-    for (final m in declared) {
-      if (m.trim().toLowerCase() == wanted) return null;
-    }
+    // A kit of a listed model is that model - see [declaredModelFor].
+    if (declaredModelFor(model, declared) != null) return null;
     return (
       fault: ModelModuleFault.unclaimedModel,
       model: model,
@@ -1173,10 +1178,25 @@ class AppStateProvider extends ChangeNotifier {
         }
       }();
 
-  /// Root Folder setting, else the app's own folder. A new install starts on
-  /// its own folder; the file server is one press away on First-Time Setup.
-  String get effectiveRootFolder =>
-      rootFolderPath.isNotEmpty ? rootFolderPath : _appBaseDir();
+  /// Where the Facilities class schedule export is kept on the file server.
+  static const String kSharedCalendarFolder =
+      r'\\doit-files\ATEC\CTS\StaffFiles\Classroom Technology\Calendar';
+
+  static bool? _sharedCalendarReachable;
+  static bool get _sharedCalendarAvailable => _sharedCalendarReachable ??= () {
+        if (runningUnderTest) return false;
+        try {
+          return Directory(kSharedCalendarFolder).existsSync();
+        } catch (_) {
+          return false;
+        }
+      }();
+
+  /// Root Folder setting, else the file server's Configurator_Files when it
+  /// can be reached, else the app's own folder.
+  String get effectiveRootFolder => rootFolderPath.isNotEmpty
+      ? rootFolderPath
+      : (_sharedRootAvailable ? kSharedRootFolder : _appBaseDir());
 
   // --- avatars ---------------------------------------------------------------
   //
@@ -1721,6 +1741,7 @@ class AppStateProvider extends ChangeNotifier {
       'showDiagramGrid': showDiagramGrid,
       'autosaveEnabled': autosaveEnabled,
       'autosaveMinutes': autosaveMinutes,
+      'catalogAutosave': catalogAutosave,
       'roomScanDepth': roomScanDepth,
       // The three lists of documents this copy has opened or written — see
       // recent_files.dart. Settings is where they belong: they are a
@@ -2031,10 +2052,14 @@ class AppStateProvider extends ChangeNotifier {
   double defaultTaxPercent = 0;
 
   /// The rate a room without its own is taxed at: the open project's when
-  /// the room is on it, the app's otherwise.
-  double get baseTaxPercent => openProjectRoom != null
-      ? project.taxPercent ?? defaultTaxPercent
-      : defaultTaxPercent;
+  /// the room is on it, the app's otherwise - and with neither set on this
+  /// PC, the rate the room was last saved at by somebody who had one.
+  double get baseTaxPercent {
+    final job = openProjectRoom != null ? project.taxPercent : null;
+    if (job != null) return job;
+    if (defaultTaxPercent > 0) return defaultTaxPercent;
+    return avCost.fileBaseTax;
+  }
 
   /// Which of a catalog entry's two prices the estimates use. See
   /// [PricingTier]; app-wide for the same reason as the symbol, and switchable
@@ -2275,6 +2300,56 @@ class AppStateProvider extends ChangeNotifier {
     _restartAutosaveTimer();
     notifyListeners();
     await _persistSettings();
+  }
+
+  /// Whether the catalog saves itself on the autosave clock when it has
+  /// edits. Unlike the recovery copies this writes the real file - the shared
+  /// av_devices.json - so it is off until somebody turns it on. A save merges
+  /// with whatever others have saved, the same as pressing Save.
+  bool catalogAutosave = false;
+
+  /// When the catalog last saved itself, and why it last did not.
+  DateTime? lastCatalogAutosaveAt;
+  String catalogAutosaveNote = '';
+
+  Future<void> setCatalogAutosave(bool value) async {
+    catalogAutosave = value;
+    catalogAutosaveNote = '';
+    _restartAutosaveTimer();
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  /// One tick of the catalog's autosave. Saves when [catalogAutosave] is on
+  /// and there are unsaved edits. Holds off while a changed entry has no
+  /// category, so pressing Save can still ask for one. Returns the file
+  /// written, or ''.
+  Future<String> autosaveCatalog() async {
+    if (!catalogAutosave) return '';
+    final library = avDeviceLibrary;
+    if (!library.differsFromBaseline) return '';
+    final missing = library
+        .editedSinceRead()
+        .where((t) => t.category.trim().isEmpty)
+        .length;
+    if (missing > 0) {
+      catalogAutosaveNote = 'Waiting: $missing changed '
+          '${missing == 1 ? 'entry has' : 'entries have'} no category. '
+          'Save the catalog to pick one.';
+      notifyListeners();
+      return '';
+    }
+    final saved = await saveAvDeviceLibrary();
+    if (saved.isEmpty) {
+      catalogAutosaveNote = 'The last automatic save failed: '
+          '${library.lastSaveError}';
+    } else {
+      lastCatalogAutosaveAt = DateTime.now();
+      catalogAutosaveNote = '';
+      AppLogger.logInfo('Catalog saved automatically to $saved.');
+    }
+    notifyListeners();
+    return saved;
   }
 
   Future<void> setAutosaveMinutes(int value) async {
@@ -2873,6 +2948,20 @@ class AppStateProvider extends ChangeNotifier {
     AppLogger.logInfo('Redid: ${entry.label}');
     notifyListeners();
     return entry.label;
+  }
+
+  /// Moves many schematic boxes at once - a tidy - as ONE undo step.
+  /// Returns how many moved.
+  int arrangeSchematic(Map<String, Offset> positions) {
+    final moving = {
+      for (final e in positions.entries)
+        if (schematicPositions[e.key] != e.value) e.key: e.value,
+    };
+    if (moving.isEmpty) return 0;
+    _pushSchematicUndo('Tidy layout');
+    schematicPositions.addAll(moving);
+    notifyListeners();
+    return moving.length;
   }
 
   void setSchematicPosition(String nodeId, Offset pos) {
@@ -5492,6 +5581,92 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  // --- room photos ----------------------------------------------------------
+
+  /// Extensions the Photos tab lists. HEIC is listed so a phone's photo shows
+  /// up, but it opens in the system viewer - Flutter cannot decode it.
+  static const Set<String> kPhotoExtensions = {
+    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.heic',
+  };
+
+  /// `<room folder>\photos`, or '' for a room that has not been saved. Beside
+  /// config.json for a folder-layout room, so it is the room's own folder that
+  /// holds them; inside the companion folder for an older room.
+  String get roomPhotosFolder {
+    if (currentConfigPath.isEmpty) return '';
+    final base = isFolderLayoutConfig(currentConfigPath)
+        ? path.dirname(currentConfigPath)
+        : roomFolderPath(currentConfigPath);
+    return path.join(base, 'photos');
+  }
+
+  /// The room's photos, newest first. Empty when there is no folder yet.
+  Future<List<File>> listRoomPhotos() async {
+    final folder = roomPhotosFolder;
+    if (folder.isEmpty) return const [];
+    final dir = Directory(folder);
+    try {
+      if (!await dir.exists()) return const [];
+      final files = <File, DateTime>{};
+      await for (final e in dir.list(followLinks: false)) {
+        if (e is! File) continue;
+        if (!kPhotoExtensions.contains(path.extension(e.path).toLowerCase())) {
+          continue;
+        }
+        files[e] = (await e.stat()).modified;
+      }
+      return files.keys.toList()
+        ..sort((a, b) => files[b]!.compareTo(files[a]!));
+    } catch (e, stack) {
+      AppLogger.logError('Could not list the photos in $folder', e, stack);
+      return const [];
+    }
+  }
+
+  /// Copies [sources] into the room's photos folder under their own names,
+  /// numbered where a name is taken. Returns how many were copied.
+  Future<int> addRoomPhotos(List<String> sources) async {
+    final folder = roomPhotosFolder;
+    if (folder.isEmpty) return 0;
+    var copied = 0;
+    try {
+      await Directory(folder).create(recursive: true);
+    } catch (e, stack) {
+      AppLogger.logError('Could not create $folder', e, stack);
+      return 0;
+    }
+    for (final source in sources) {
+      final stem = path.basenameWithoutExtension(source);
+      final ext = path.extension(source);
+      var name = '$stem$ext';
+      for (var n = 2; File(path.join(folder, name)).existsSync(); n++) {
+        name = '${stem}_$n$ext';
+      }
+      try {
+        await File(source).copy(path.join(folder, name));
+        copied++;
+      } catch (e, stack) {
+        AppLogger.logError('Could not copy $source into $folder', e, stack);
+      }
+    }
+    AppLogger.logInfo('$copied photo(s) added to $folder.');
+    return copied;
+  }
+
+  /// Deletes one of the room's photos. False when it could not be removed.
+  Future<bool> deleteRoomPhoto(String filePath) async {
+    // Only ever a file in this room's photos folder.
+    if (!path.equals(path.dirname(filePath), roomPhotosFolder)) return false;
+    try {
+      await File(filePath).delete();
+      AppLogger.logInfo('Photo deleted: $filePath');
+      return true;
+    } catch (e, stack) {
+      AppLogger.logError('Could not delete $filePath', e, stack);
+      return false;
+    }
+  }
+
   // --- room type presets ----------------------------------------------------
 
   /// The folder presets are read from and written to.
@@ -5565,6 +5740,7 @@ class AppStateProvider extends ChangeNotifier {
       AvUndoScope.racks,
       AvUndoScope.floorPlans,
       AvUndoScope.cabling,
+      AvUndoScope.cost,
     });
 
     // --- locations first: the nodes reference them ---------------------------
@@ -5695,6 +5871,9 @@ class AppStateProvider extends ChangeNotifier {
       );
     }
 
+    // --- the rest of a whole room ---------------------------------------
+    _applyPresetRoomParts(preset, nodeMap);
+
     notifyListeners();
 
     return (
@@ -5793,25 +5972,177 @@ class AppStateProvider extends ChangeNotifier {
   RoomPreset currentRoomAsPreset({
     required String name,
     String description = '',
+    String sourceName = '',
+    String? jackPrefix,
+    Set<RoomPresetPart> include = const {
+      RoomPresetPart.flow,
+      RoomPresetPart.racks,
+      RoomPresetPart.setup,
+    },
   }) {
-    final jackPrefix = _dominantJackPrefix();
     final setup = roomConfig['SYSTEM_SETUP'];
+    final doc = avFlowAsJson();
+    bool has(RoomPresetPart p) => include.contains(p);
     return RoomPreset(
       name: name,
       description: description,
-      jackPrefix: jackPrefix,
-      systemSetup: setup is Map ? presetSystemSetupFrom(setup) : const {},
-      locations: List<RoomLocation>.from(avLocations),
-      // The markers go: they are positions on a plan this preset does not
-      // carry, and a location that claims to be placed with no plan behind it
-      // reads as a bug on the Floor Plan tab.
-      nodes: [for (final n in avNodes) n],
-      cables: List<AvCable>.from(avCables),
-      racks: List<RackFrame>.from(avRacks),
-      rackItems: List<RackItem>.from(avRackItems),
-      rackSlots: Map<String, RackSlot>.from(avRackSlots),
-      screenSwitches: List<ScreenSwitch>.from(avScreenSwitches),
+      sourceName: sourceName,
+      jackPrefix: jackPrefix ?? _dominantJackPrefix(),
+      savedBy: Platform.environment['USERNAME'] ?? '',
+      savedAt: DateTime.now().toIso8601String(),
+      systemSetup: has(RoomPresetPart.setup) && setup is Map
+          ? presetSystemSetupFrom(setup)
+          : const {},
+      locations: has(RoomPresetPart.flow) || has(RoomPresetPart.floorPlans)
+          ? List<RoomLocation>.from(avLocations)
+          : const [],
+      nodes: has(RoomPresetPart.flow) ? [for (final n in avNodes) n] : const [],
+      cables: has(RoomPresetPart.flow)
+          ? List<AvCable>.from(avCables)
+          : const [],
+      screenSwitches: has(RoomPresetPart.flow)
+          ? List<ScreenSwitch>.from(avScreenSwitches)
+          : const [],
+      racks: has(RoomPresetPart.racks)
+          ? List<RackFrame>.from(avRacks)
+          : const [],
+      rackItems: has(RoomPresetPart.racks)
+          ? List<RackItem>.from(avRackItems)
+          : const [],
+      rackSlots: has(RoomPresetPart.racks)
+          ? Map<String, RackSlot>.from(avRackSlots)
+          : const {},
+      // The sheets and what is placed on them. The drawing behind a sheet
+      // is an image in this room's own folder, so it stays with the room.
+      floorPlans: has(RoomPresetPart.floorPlans)
+          ? [for (final f in avFloorPlans) f.copyWith(imageFile: '')]
+          : const [],
+      cabling: has(RoomPresetPart.cabling) && !avCabling.isEmpty
+          ? Map<String, dynamic>.from(cloneJson(avCabling.toJson()) as Map)
+          : const {},
+      cost: has(RoomPresetPart.cost)
+          ? Map<String, dynamic>.from(cloneJson(avCost.toJson()) as Map)
+          : const {},
+      schematic: has(RoomPresetPart.schematic) && schematicPositions.isNotEmpty
+          ? Map<String, dynamic>.from(
+              cloneJson(schematicLayoutAsJson()) as Map)
+          : const {},
+      roomSettings: has(RoomPresetPart.flow)
+          ? {
+              for (final k in const [
+                'signalColors',
+                'roomMode',
+                'roomLight',
+                'throwDistanceFt',
+              ])
+                if (doc[k] != null) k: cloneJson(doc[k]),
+            }
+          : const {},
     );
+  }
+
+  /// The jack prefix a preset saved from this room would carry - see
+  /// [_dominantJackPrefix].
+  String get roomJackPrefix => _dominantJackPrefix();
+
+  /// The parts of a whole room a preset can carry, applied where the room
+  /// does not already have its own: the cabling sheet, the control
+  /// schematic, the room's colors and light. The cost page is taken whole
+  /// into a room with none, and otherwise only its lines are added. [nodeMap]
+  /// is the preset's device ids to the ids they were stored under.
+  void _applyPresetRoomParts(RoomPreset preset, Map<String, String> nodeMap) {
+    Object? remap(Object? json) {
+      if (json is String) return nodeMap[json] ?? json;
+      if (json is List) return [for (final e in json) remap(e)];
+      if (json is Map) {
+        return {
+          for (final e in json.entries)
+            (nodeMap[e.key.toString()] ?? e.key.toString()): remap(e.value),
+        };
+      }
+      return json;
+    }
+
+    if (preset.cabling.isNotEmpty && avCabling.isEmpty) {
+      avCabling.readJson(Map<String, dynamic>.from(remap(preset.cabling) as Map));
+      for (final b in avCabling.extraBoxes) {
+        final m = RegExp(r'^box:(\d+)$').firstMatch(b.id);
+        if (m != null) {
+          _avCablingBoxCounter =
+              math.max(_avCablingBoxCounter, int.parse(m.group(1)!));
+        }
+      }
+    }
+
+    if (preset.cost.isNotEmpty) {
+      final json = Map<String, dynamic>.from(remap(preset.cost) as Map);
+      // Empty in what it says and buys. The room's own tax rate does not
+      // count: that belongs to the job, and it stays.
+      if (avCost.scopeOfWork.trim().isEmpty &&
+          avCost.notes.trim().isEmpty &&
+          avCost.documentTitle.trim().isEmpty &&
+          avCost.documentSubtitle.trim().isEmpty &&
+          avCost.sections.isEmpty &&
+          avCost.fees.isEmpty &&
+          avCost.items.isEmpty &&
+          avCost.labor.isEmpty &&
+          avCost.extraEquipment.isEmpty &&
+          avCost.extraHardware.isEmpty &&
+          avCost.extraCables.isEmpty &&
+          avCost.priceOverrides.isEmpty) {
+        // The room's own tax and currency stay: they belong to the job.
+        final tax = avCost.taxPercent;
+        final own = avCost.ownTaxRate;
+        final label = avCost.taxLabel;
+        avCost.readJson(json);
+        avCost
+          ..taxPercent = tax
+          ..ownTaxRate = own
+          ..taxLabel = label
+          ..currency = currencySymbol;
+      } else {
+        addCostItems(
+          avCost,
+          CostItemSet.fromSettings(RoomCostSettings()..readJson(json)),
+          _nextCostId,
+        );
+      }
+      _avCostCounter = math.max(_avCostCounter, highestCostId(avCost));
+    }
+
+    if (preset.schematic.isNotEmpty &&
+        schematicPositions.isEmpty &&
+        schematicLinks.isEmpty) {
+      _readSchematicJson(Map<String, dynamic>.from(preset.schematic));
+    }
+
+    final room = preset.roomSettings;
+    final palette = room['signalColors'];
+    if (palette is Map) {
+      palette.forEach((name, hex) {
+        final value = int.tryParse(hex.toString(), radix: 16);
+        if (value == null) return;
+        for (final sig in SignalType.values) {
+          if (sig.name == name.toString()) {
+            avSignalColors[sig] = Color(0xFF000000 | value);
+          }
+        }
+      });
+    }
+    if (room['roomMode'] != null) {
+      roomMode = roomModeFromName(room['roomMode']?.toString());
+    }
+    final light = room['roomLight'];
+    if (light is Map && avRoomLightFc <= 0) {
+      final fc = (light['fc'] as num?)?.toDouble() ?? 0;
+      final contrast = (light['contrast'] as num?)?.toDouble() ?? 15;
+      avRoomLightFc = fc.isFinite && fc > 0 ? fc : 0;
+      avContrastTarget = contrast.isFinite && contrast > 1 ? contrast : 15;
+    }
+    final throwFt = (room['throwDistanceFt'] as num?)?.toDouble() ?? 0;
+    if (avThrowDistanceFt <= 0 && throwFt.isFinite && throwFt > 0) {
+      avThrowDistanceFt = throwFt;
+    }
   }
 
   /// The prefix this room's jacks share, so a preset saved from it can be
@@ -6207,6 +6538,47 @@ class AppStateProvider extends ChangeNotifier {
     return item;
   }
 
+  /// Adds the cost items copied from another room or a cost preset, as one
+  /// undo step. Returns how many lines went on.
+  int applyAvCostItems(CostItemSet set, {String from = 'cost items'}) {
+    if (set.isEmpty) return 0;
+    _pushAvUndo('Add $from', _costScope);
+    final added = addCostItems(avCost, set, _nextCostId);
+    notifyListeners();
+    return added;
+  }
+
+  /// Adds [set] to the room at [configPath] by writing its cost file - for
+  /// copying out of the open room into another. The open room itself takes
+  /// them live, with Undo. Returns how many lines went on, or -1 when the
+  /// file could not be written.
+  Future<int> addCostItemsToRoomFile(String configPath, CostItemSet set) async {
+    if (set.isEmpty) return 0;
+    if (_samePath(configPath, currentConfigPath)) {
+      return applyAvCostItems(set);
+    }
+    // Written, so filed where the room is written now.
+    moveRoomFilesIntoFolder(configPath);
+    var added = 0;
+    final ok = await _editRoomFile(
+      roomSidecarPaths(configPath)[RoomSidecarPart.cost] ?? '',
+      (doc) {
+        final old = Map<String, dynamic>.from((doc['cost'] as Map?) ?? const {});
+        final settings = RoomCostSettings()..readJson(old);
+        var n = highestCostId(settings);
+        added = addCostItems(settings, set, (prefix) => '$prefix${++n}');
+        // Over the old map, so nothing this build does not write is lost.
+        doc['cost'] = {...old, ...settings.toJson()};
+      },
+    );
+    if (!ok) return -1;
+    AppLogger.logInfo('Copied $added cost line(s) into $configPath.');
+    _projectRooms.clear();
+    _projectEstimate = null;
+    notifyListeners();
+    return added;
+  }
+
   void updateAvCostItem(CostLineItem item) {
     final index = avCost.items.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
@@ -6496,6 +6868,8 @@ class AppStateProvider extends ChangeNotifier {
     if (recordUndo) _pushAvUndo('Remove ${_costLineName(was)}', _costScope);
     avCost.extraCables.removeWhere((i) => i.id == itemId);
     avCost.priceOverrides.remove(itemId);
+    // Its spares go with it.
+    avCost.equipmentSpares.remove(itemId);
     notifyListeners();
   }
 
@@ -6977,11 +7351,48 @@ class AppStateProvider extends ChangeNotifier {
     }
     // withId rather than a rebuild here: the field list belongs next to the
     // fields, so a new one can't be quietly lost on the way in.
-    final stored = node.withId(id);
+    final stored = _clearOfOtherNodes(node).withId(id);
     avNodes.add(stored);
     avDismissedDevices.remove(id);
     notifyListeners();
     return stored;
+  }
+
+  /// [node] moved straight down until it is clear of every box already on
+  /// the AV Flow, so a new device never lands on top of another.
+  AvNode _clearOfOtherNodes(AvNode node) {
+    var placed = node;
+    for (var tries = 0; tries < 500; tries++) {
+      final r = placed.rect.inflate(5);
+      double? below;
+      for (final n in avNodes) {
+        if (n.rect.inflate(5).overlaps(r)) {
+          below = math.max(below ?? 0, n.pos.dy + n.height + 30);
+        }
+      }
+      if (below == null) return placed;
+      placed = placed.copyWith(pos: Offset(placed.pos.dx, below));
+    }
+    return placed;
+  }
+
+  /// Moves many boxes at once - a tidy of the whole drawing - as ONE undo
+  /// step. Returns how many moved.
+  int arrangeAvNodes(Map<String, Offset> positions,
+      {String label = 'Tidy layout'}) {
+    final moving = [
+      for (var i = 0; i < avNodes.length; i++)
+        if (positions[avNodes[i].id] case final to?
+            when to != avNodes[i].pos)
+          i,
+    ];
+    if (moving.isEmpty) return 0;
+    _pushAvUndo(label, _flowScope);
+    for (final i in moving) {
+      avNodes[i] = avNodes[i].copyWith(pos: positions[avNodes[i].id]);
+    }
+    notifyListeners();
+    return moving.length;
   }
 
   /// Renames one unit on the AV Flow. The config block, the estimate and
@@ -8230,6 +8641,14 @@ class AppStateProvider extends ChangeNotifier {
     try {
       ensureRoomFolder(currentConfigPath);
       const encoder = JsonEncoder.withIndent('  ');
+      // The base rate this PC prices the room at, kept in the file for a
+      // colleague with none set - see [RoomCostSettings.fileBaseTax]. Only
+      // a rate set here: one read back from the file is already in it.
+      final job = openProjectRoom != null ? project.taxPercent : null;
+      final localBase = job ?? defaultTaxPercent;
+      if (!avCost.ownTaxRate && localBase > 0) {
+        avCost.fileBaseTax = localBase;
+      }
 
       // One file per part. The flow file is written LAST: it is the one the
       // loader always reads and the one an older room holds everything in, so
@@ -8366,16 +8785,48 @@ class AppStateProvider extends ChangeNotifier {
   /// ('DMP128 Plus' for 'DMP 128 Plus') is still a miss: that is a different
   /// string rather than the same one shouted, and guessing across it is how
   /// the wrong driver gets picked.
+  ///
+  /// One more match, for kits and trims: a catalog name that EXTENDS a driver's
+  /// model by whole words - 'ShareLink Pro 2000 Miracast & ShareNext US',
+  /// 'IN1808 IPCP SA LL' - is that model. See [declaredModelFor].
   ModelEntry? modelEntryFor(String model) {
     final name = model.trim();
     if (name.isEmpty) return null;
     final exact = modelRegistry[name];
     if (exact != null) return exact;
-    final wanted = name.toLowerCase();
-    for (final entry in modelRegistry.values) {
-      if (entry.model.toLowerCase().trim() == wanted) return entry;
+    final match = declaredModelFor(name, modelRegistry.keys);
+    return match == null ? null : modelRegistry[match];
+  }
+
+  /// The model in [declared] that [model] names, or null.
+  ///
+  /// The same name however it is capitalized, else the LONGEST declared name
+  /// that [model] starts with and continues past at a word break. A bundle or
+  /// a trim is the driver's product with words added on the end; the longest
+  /// wins so 'SMP 351 3G-SDI - 80 GB SSD' is the 3G-SDI and not the plain 351.
+  /// Mid-word is never a match: 'IN1608' does not claim 'IN16080'.
+  static String? declaredModelFor(String model, Iterable<String> declared) {
+    final wanted = model.trim().toLowerCase();
+    if (wanted.isEmpty) return null;
+    String? best;
+    var bestLength = 0;
+    for (final name in declared) {
+      final candidate = name.trim().toLowerCase();
+      if (candidate.isEmpty) continue;
+      if (candidate == wanted) return name;
+      if (candidate.length <= bestLength ||
+          candidate.length >= wanted.length ||
+          !wanted.startsWith(candidate)) {
+        continue;
+      }
+      final next = wanted.codeUnitAt(candidate.length);
+      final isWordChar = (next >= 0x30 && next <= 0x39) ||
+          (next >= 0x61 && next <= 0x7a);
+      if (isWordChar) continue;
+      best = name;
+      bestLength = candidate.length;
     }
-    return null;
+    return best;
   }
 
   /// The modules-folder-relative stem of a config `module` value — the inverse
@@ -9221,7 +9672,20 @@ class AppStateProvider extends ChangeNotifier {
       };
 
   /// The same document read off disk, or null when the config cannot be read.
-  Map<String, dynamic>? readRoomDocumentFromDisk() {
+  Map<String, dynamic>? readRoomDocumentFromDisk() =>
+      readRoomDocumentAt(currentConfigPath);
+
+  /// [readRoomDocumentFromDisk] on a background isolate: the files are on a
+  /// share, and reading seven of them on the window's thread held it up.
+  Future<Map<String, dynamic>?> readRoomDocumentFromDiskAsync() {
+    final config = currentConfigPath;
+    return Isolate.run(() => readRoomDocumentAt(config));
+  }
+
+  /// The room at [configPath] as one document for a merge: its config and
+  /// every sidecar, in the shape they take on disk. Touches nothing but the
+  /// files, so it can run on any isolate.
+  static Map<String, dynamic>? readRoomDocumentAt(String currentConfigPath) {
     if (currentConfigPath.isEmpty) return null;
     try {
       final file = File(currentConfigPath);
@@ -9238,8 +9702,12 @@ class AppStateProvider extends ChangeNotifier {
         }
       }
 
+      final flow =
+          readableRoomSidecarPath(currentConfigPath, RoomSidecarPart.flow);
       final parts = <RoomSidecarPart, Map<String, dynamic>?>{
-        RoomSidecarPart.flow: part(_readableAvFlowSidecar),
+        RoomSidecarPart.flow: part(flow.isNotEmpty
+            ? flow
+            : readableRoomFilePath(currentConfigPath, 'avflow.json')),
       };
       for (final p in RoomSidecarPart.values) {
         if (p == RoomSidecarPart.flow) continue;
@@ -9345,13 +9813,9 @@ class AppStateProvider extends ChangeNotifier {
 
       modulesPath = str('modulesPath', '');
       processorsFilePath = str('processorsFilePath', '');
-      // Blank means the shared folder (Settings shows it as the hint). 0.5.17
-      // saved the app's own folder here; that is read as blank too.
+      // Blank means the shared folder when it can be reached (Settings shows
+      // it as the hint), else the app's own folder.
       rootFolderPath = str('rootFolderPath', '');
-      if (rootFolderPath.isNotEmpty &&
-          path.equals(rootFolderPath, _appBaseDir())) {
-        rootFolderPath = '';
-      }
       buildingsFilePath = str('buildingsFilePath', '');
       templateFilePath = str('templateFilePath', '');
       uiSchemaPath = str('uiSchemaPath', '');
@@ -9435,6 +9899,7 @@ class AppStateProvider extends ChangeNotifier {
       autosaveEnabled =
           saved['autosaveEnabled'] is bool ? saved['autosaveEnabled'] : true;
       autosaveMinutes = _sanitizeAutosaveMinutes(saved['autosaveMinutes']);
+      catalogAutosave = saved['catalogAutosave'] == true;
       roomScanDepth = _sanitizeRoomScanDepth(saved['roomScanDepth']);
       recentFiles = RecentFiles.fromJson(saved['recentFiles']);
 
@@ -10500,8 +10965,15 @@ class AppStateProvider extends ChangeNotifier {
     AppLogger.logInfo('All settings pointed at $kSharedRootFolder.');
   }
 
+  /// Completes when the reading the last [updateSetting] started - a folder of
+  /// drivers, the catalog, the team - is done. The path fields on App Config
+  /// show a spinner until it does.
+  Future<void> settingWork = Future.value();
+
   /// Updates a setting in memory and saves app_config.json simultaneously
   Future<void> updateSetting(String key, String value) async {
+    // What the change set reading, for [settingWork].
+    final work = <Future<Object?>>[];
     switch (key) {
       case 'modulesPath':
         modulesPath = value;
@@ -10510,13 +10982,11 @@ class AppStateProvider extends ChangeNotifier {
         _moduleInputsCache.clear();
         _moduleStatesCache.clear();
         availableModules = [];
-        // ignore: unawaited_futures
-        preloadAllModules();
+        work.add(preloadAllModules());
         break;
       case 'processorsFilePath': 
         processorsFilePath = value; 
-        // ignore: unawaited_futures
-        loadProcessorsList(); // Re-read from the new (or newly-defaulted) location
+        work.add(loadProcessorsList()); // Re-read from the new (or newly-defaulted) location
         break;
       case 'rootFolderPath':
         rootFolderPath = value;
@@ -10527,84 +10997,66 @@ class AppStateProvider extends ChangeNotifier {
         await ensureRootDefaults();
         // The root folder is the default base for every other path, so
         // re-resolve everything that may be running on a default:
-        // ignore: unawaited_futures
-        loadUiSchema();
-        // ignore: unawaited_futures
-        loadKeyMap();
-        // ignore: unawaited_futures
-        loadAvDeviceLibrary();
-        // ignore: unawaited_futures
-        loadFlowRules();
+        work.add(loadUiSchema());
+        work.add(loadKeyMap());
+        work.add(loadAvDeviceLibrary());
+        work.add(loadFlowRules());
         // These four remember the file they were read from, so they are
         // pointed at the new root rather than re-read from the old one.
-        // ignore: unawaited_futures
-        loadLaborRates(
-            explicitPath: path.join(effectiveRootFolder, 'labor_rates.json'));
-        // ignore: unawaited_futures
-        loadBaseCosts(
-            explicitPath: path.join(effectiveRootFolder, 'base_costs.json'));
+        work.add(loadLaborRates(
+            explicitPath: path.join(effectiveRootFolder, 'labor_rates.json')));
+        work.add(loadBaseCosts(
+            explicitPath: path.join(effectiveRootFolder, 'base_costs.json')));
         if (deliveryLocationsFilePath.isEmpty) {
-          // ignore: unawaited_futures
-          loadDeliveryLocations(
+          work.add(loadDeliveryLocations(
               explicitPath:
-                  path.join(effectiveRootFolder, 'delivery_locations.json'));
+                  path.join(effectiveRootFolder, 'delivery_locations.json')));
         }
         if (vendorListFilePath.isEmpty) {
-          // ignore: unawaited_futures
-          loadVendorBook(
-              explicitPath: path.join(effectiveRootFolder, 'vendor_list.json'));
+          work.add(loadVendorBook(
+              explicitPath: path.join(effectiveRootFolder, 'vendor_list.json')));
         }
-        // ignore: unawaited_futures
-        loadBuildingsList();
-        // ignore: unawaited_futures
-        loadProcessorsList();
+        work.add(loadBuildingsList());
+        work.add(loadProcessorsList());
         if (modulesPath.isEmpty) {
           // Default modules folder (<root>/devices) moved with the root
           _moduleCommandsCache.clear();
           _moduleInputsCache.clear();
           _moduleStatesCache.clear();
           availableModules = [];
-          // ignore: unawaited_futures
-          preloadAllModules();
+          work.add(preloadAllModules());
         }
         break;
       case 'buildingsFilePath': 
         buildingsFilePath = value; 
-        // ignore: unawaited_futures
-        loadBuildingsList(); // Re-read from the new (or newly-defaulted) location
+        work.add(loadBuildingsList()); // Re-read from the new (or newly-defaulted) location
         break;
       case 'templateFilePath': 
         templateFilePath = value; 
         break;
       case 'uiSchemaPath':
         uiSchemaPath = value;
-        // ignore: unawaited_futures
-        loadUiSchema(); // Re-resolve the GUI field definitions from the new path
+        work.add(loadUiSchema()); // Re-resolve the GUI field definitions from the new path
         break;
       case 'keyMapPath':
         keyMapPath = value;
-        // ignore: unawaited_futures
-        loadKeyMap(); // Re-resolve the legacy key translation rules
+        work.add(loadKeyMap()); // Re-resolve the legacy key translation rules
         break;
       case 'avDevicesFilePath':
         avDevicesFilePath = value;
-        // ignore: unawaited_futures
-        loadAvDeviceLibrary(); // Re-read the catalog from the new location
+        work.add(loadAvDeviceLibrary()); // Re-read the catalog from the new location
         break;
       case 'flowRulesFilePath':
         flowRulesFilePath = value;
-        // ignore: unawaited_futures
-        loadFlowRules(); // Re-read the rule book from the new location
+        work.add(loadFlowRules()); // Re-read the rule book from the new location
         break;
       case 'deliveryLocationsFilePath':
         deliveryLocationsFilePath = value;
-        // ignore: unawaited_futures
-        loadDeliveryLocations(); // Re-read the places from the new location
+        work.add(loadDeliveryLocations()); // Re-read the places from the new location
         break;
       case 'vendorListFilePath':
         vendorListFilePath = value;
-        // ignore: unawaited_futures
-        loadVendorBook(); // Re-read the directory from the new location
+        work.add(loadVendorBook()); // Re-read the directory from the new location
         break;
       case 'documentationPath':
         documentationPath = value; // PDFs are resolved on demand — no reload
@@ -10614,7 +11066,7 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'teamFolderPath':
         teamFolderPath = value.trim();
-        unawaited(startTeam());
+        work.add(startTeam());
         break;
       case 'sharedRoomsFolder':
         sharedRoomsFolder = value.trim();
@@ -10704,6 +11156,8 @@ class AppStateProvider extends ChangeNotifier {
         break;
     }
     notifyListeners();
+    settingWork = Future.wait(work.map((f) => f.catchError((_) => null)))
+        .then((_) {});
     await _persistSettings();
   }
 
@@ -11219,6 +11673,63 @@ class AppStateProvider extends ChangeNotifier {
   String moduleForModel(String model) {
     final entry = modelEntryFor(model);
     return entry == null ? '' : normalizeModuleName(entry.module);
+  }
+
+  /// Adds [model] to the "models" list in [module]'s DEVICE_INFO, then re-reads
+  /// the modules so the registry has it.
+  ///
+  /// A driver with no DEVICE_INFO gets one, seeded with the models it already
+  /// answered to (its self.Models), so writing one name does not drop the rest.
+  /// [deviceType] is written only where the block names no family yet.
+  /// Everything else in the file is left as it is - see [applyDeviceInfoBlock].
+  Future<({bool ok, String message})> addModelToModule(
+    String module,
+    String model, {
+    String deviceType = '',
+  }) async {
+    final name = model.trim();
+    final stem = moduleStem(module);
+    if (name.isEmpty || stem.isEmpty) {
+      return (ok: false, message: 'Pick a module and a model first.');
+    }
+    final path = modulePyPath(stem);
+    try {
+      final file = File(path);
+      if (!await file.exists()) {
+        return (ok: false, message: 'No driver file at $path.');
+      }
+      final content = await file.readAsString();
+      final info = parseDeviceInfo(path, content);
+      final draft = info == null
+          ? DeviceInfoDraft(models: parseSelfModels(content))
+          : DeviceInfoDraft.fromInfo(info);
+
+      final listed =
+          draft.models.any((m) => m.trim().toLowerCase() == name.toLowerCase());
+      if (!listed) draft.models.add(name);
+      if (draft.deviceTypes.isEmpty && deviceType.trim().isNotEmpty) {
+        draft.deviceTypes = [deviceType.trim()];
+      }
+      if (listed && info != null && deviceType.trim().isEmpty) {
+        return (ok: true, message: '$stem already lists $name.');
+      }
+      await file.writeAsString(
+        applyDeviceInfoBlock(content, formatDeviceInfo(draft)),
+      );
+    } catch (e, stack) {
+      AppLogger.logError('Could not add $name to $path', e, stack);
+      return (
+        ok: false,
+        // The bundled drivers live under Program Files, which is read-only.
+        message: e is FileSystemException && e.osError?.errorCode == 5
+            ? 'Could not write $path - that folder is read-only. Set Modules '
+                'Path in App Config to a folder you can edit.'
+            : 'Could not write $path - $e',
+      );
+    }
+    AppLogger.logInfo("Added model '$name' to DEVICE_INFO in $path");
+    await reloadModules();
+    return (ok: true, message: '$name added to the models $stem drives.');
   }
 
   /// Validates the template file and registers it as the default WITHOUT
@@ -15105,7 +15616,10 @@ class AppStateProvider extends ChangeNotifier {
       name: name,
       building: building,
       currency: currencySymbol,
-      taxPercent: defaultTaxPercent,
+      // No default on this PC leaves the job unset rather than 0 on purpose,
+      // so a colleague who has one fills it in - see
+      // [_adoptDefaultTaxIntoProject].
+      taxPercent: defaultTaxPercent > 0 ? defaultTaxPercent : null,
     );
     seedStarterPackages(project);
     // And the companies the shop buys from, off the shared list, so the first
@@ -15170,13 +15684,16 @@ class AppStateProvider extends ChangeNotifier {
         'Project "${project.name}" opened from $file '
         '(${project.rooms.length} rooms, ${project.vendors.length} vendors).',
       );
+      // Before the room check, so the totals it records are at that rate.
+      final adoptedTax = _adoptDefaultTaxIntoProject();
       final check = _updateRoomSnapshots(read, stamps);
       roomsChangedOnOpen = check.changed;
       // WRITTEN TO ITSELF, so the file says what the rooms say now. Only on a
       // job with nothing else unsaved: a save here must not take somebody's
       // other edits with it unasked. Those go with their next save.
       var saved = false;
-      if (check.recorded && !projectDirty) {
+      final record = check.recorded || adoptedTax;
+      if (record && !projectDirty) {
         try {
           await project.save(file);
           saved = true;
@@ -15185,7 +15702,7 @@ class AppStateProvider extends ChangeNotifier {
           AppLogger.logError('Could not record the room check in $file', e);
           projectDirty = true;
         }
-      } else if (check.recorded) {
+      } else if (record) {
         projectDirty = true;
       }
       // Anything a crash left behind for THIS project, offered back the same
@@ -15230,6 +15747,23 @@ class AppStateProvider extends ChangeNotifier {
     _projectDocumentReplaced();
   }
 
+  /// Writes this PC's default tax rate into a job that has none of its own.
+  ///
+  /// A job with no rate was priced at each person's own default, so the same
+  /// job came to different totals on different PCs - and every open recorded
+  /// the rooms as changed. Written in, the rate travels with the file and
+  /// everyone prices the job alike. A job set to 0 on purpose is left alone.
+  /// True when the job was changed.
+  bool _adoptDefaultTaxIntoProject() {
+    if (project.taxPercent != null || defaultTaxPercent <= 0) return false;
+    project.taxPercent = defaultTaxPercent;
+    AppLogger.logInfo(
+      'Project "${project.name}" had no tax rate; set to this PC\'s default '
+      '${defaultTaxPercent.toStringAsFixed(3)}% so everyone prices it alike.',
+    );
+    return true;
+  }
+
   /// The online copy's files the last [saveProject] could not write - open in
   /// Excel, or held by the sync client. Empty when they all went.
   List<String> lastOnlinePublishFailed = const [];
@@ -15251,6 +15785,7 @@ class AppStateProvider extends ChangeNotifier {
     final target = to.isNotEmpty ? to : currentProjectPath;
     if (target.isEmpty) return 'The project has no file to save to yet.';
     lastOnlinePublishFailed = const [];
+    _adoptDefaultTaxIntoProject();
 
     if (to.isNotEmpty && to != currentProjectPath) {
       // The campus pointer is stored relative to the project file too, so it
@@ -15301,7 +15836,21 @@ class AppStateProvider extends ChangeNotifier {
       // goes ahead regardless: the two are different documents, and holding a
       // save hostage to a spreadsheet in a sync folder would be the wrong
       // trade every time.
-      final held = overwriteOnlineCopy ? null : await findHeldOnlineEdits();
+      // The Sheet is pulled first; one that cannot be read is left alone
+      // rather than written over unseen.
+      var sheetBlocked = '';
+      OnlineHold? held;
+      if (!overwriteOnlineCopy) {
+        held = await findHeldOnlineEdits(sheetCopy: false);
+        if (held == null) {
+          final sheet = await checkSheetForEdits();
+          held = sheet.held;
+          if (sheet.error.isNotEmpty) {
+            sheetBlocked = 'not updated: it could not be read first to check '
+                'for edits (${sheet.error})';
+          }
+        }
+      }
       if (held != null) {
         _onlineHold = held;
         AppLogger.logInfo(
@@ -15312,7 +15861,7 @@ class AppStateProvider extends ChangeNotifier {
           'would have been written over.',
         );
       } else {
-        final published = await publishOnlineCopy();
+        final published = await publishOnlineCopy(sheetBlocked: sheetBlocked);
         lastOnlinePublishFailed = [
           for (final f in published.failed) f.split(' - ').first,
         ];
@@ -15424,9 +15973,13 @@ class AppStateProvider extends ChangeNotifier {
   ClassScheduleIndex classSchedule = ClassScheduleIndex.empty;
 
   /// Where the schedule is read from.
+  /// Blank = the file in the file server's Calendar folder when it can be
+  /// reached, else in the Root Folder.
   String get effectiveClassSchedulePath => classSchedulePath.trim().isNotEmpty
       ? classSchedulePath.trim()
-      : path.join(effectiveRootFolder, 'FacilitiesLinkClassScheduleDaily.csv');
+      : path.join(
+          _sharedCalendarAvailable ? kSharedCalendarFolder : effectiveRootFolder,
+          'FacilitiesLinkClassScheduleDaily.csv');
 
   /// Reads the schedule (again). Returns the error to show, or ''.
   Future<String> loadClassSchedule() async {
@@ -16511,11 +17064,22 @@ class AppStateProvider extends ChangeNotifier {
   /// The fingerprint is the cheap gate here: the read-back tabs are fetched,
   /// and only when they no longer say what the last publish left are they
   /// compared with the job.
-  Future<OnlineHold?> _heldInSheet() async {
+  Future<OnlineHold?> _heldInSheet() async =>
+      (await checkSheetForEdits()).held;
+
+  /// Pulls the live Google Sheet and says what a publish would write over.
+  ///
+  /// [error] is set when the Sheet could not be read at all - not signed in,
+  /// offline, the Sheet gone. That is NOT "nothing to protect": the caller
+  /// must not publish over a Sheet it could not look at without asking.
+  /// [interactive] lets the Google sign-in open the browser.
+  Future<({OnlineHold? held, String error})> checkSheetForEdits({
+    bool interactive = false,
+  }) async {
     final id = project.onlineSheetId.trim();
-    if (!project.publishesToSheet || id.isEmpty) return null;
+    if (!project.publishesToSheet || id.isEmpty) return (held: null, error: '');
     try {
-      final live = _liveSheet(interactive: false);
+      final live = _liveSheet(interactive: interactive);
       final grids = await live.read(id, kLiveReadBackSheets);
       // The three tabs that are read back, when they have moved...
       OnlineImport read = (
@@ -16536,13 +17100,16 @@ class AppStateProvider extends ChangeNotifier {
       // ...and every other tab, where typing cannot be brought in but must
       // not be written over unseen.
       changes = [...changes, ...await _liveSheetEdits(live)];
-      if (changes.isEmpty) return null;
+      if (changes.isEmpty) return (held: null, error: '');
       return (
-        file: liveSheetUrl(id),
-        modified: DateTime.now(),
-        sheet: true,
-        read: read,
-        changes: changes,
+        held: (
+          file: liveSheetUrl(id),
+          modified: DateTime.now(),
+          sheet: true,
+          read: read,
+          changes: changes,
+        ),
+        error: '',
       );
     } catch (e, stack) {
       AppLogger.logError(
@@ -16550,7 +17117,7 @@ class AppStateProvider extends ChangeNotifier {
         e,
         stack,
       );
-      return null;
+      return (held: null, error: '$e');
     }
   }
 
@@ -16613,13 +17180,25 @@ class AppStateProvider extends ChangeNotifier {
 
     /// Let the Google sign-in open a browser. Off on a save.
     bool interactive = false,
+
+    /// Why the Sheet must not be written this time - it could not be pulled
+    /// first. Reported as a failure; the folder still goes.
+    String sheetBlocked = '',
   }) async {
     final target = (folder ?? project.onlineFolder).trim();
     // A folder handed in is a folder asked for, whatever the switch says.
     final toFolder =
         target.isNotEmpty && (folder != null || !project.onlineFolderOff);
-    final toSheet = project.publishesToSheet;
+    final toSheet = project.publishesToSheet && sheetBlocked.isEmpty;
     final stamp = at ?? DateTime.now();
+    if (!toFolder && !toSheet && sheetBlocked.isNotEmpty) {
+      return (
+        folder: '',
+        written: const <String>[],
+        failed: ['$kOnlineSheetLabel - $sheetBlocked'],
+        at: stamp,
+      );
+    }
     if (!toFolder && !toSheet) {
       return (
         folder: '',
@@ -16688,6 +17267,7 @@ class AppStateProvider extends ChangeNotifier {
       failed: [
         ...files.failed,
         if (sheetError != null) '$kOnlineSheetLabel - $sheetError',
+        if (sheetBlocked.isNotEmpty) '$kOnlineSheetLabel - $sheetBlocked',
       ],
       at: files.at,
     );
@@ -20661,7 +21241,14 @@ class AppStateProvider extends ChangeNotifier {
   /// cached, without holding up the window: every room is checked at once,
   /// and the job is repriced once at the end if any changed. Returns how many
   /// were read.
-  Future<int> _rereadChangedRooms() async {
+  /// The Refresh button: every room on the job read again off disk in the
+  /// background, the old figures kept on screen until the new ones are in.
+  /// Clearing the cache instead had the next draw read thirty rooms off the
+  /// share while the window waited. Returns how many were read.
+  Future<int> refreshProjectRoomsInBackground() =>
+      _rereadChangedRooms(all: true);
+
+  Future<int> _rereadChangedRooms({bool all = false}) async {
     final run = ++_rereadRun;
     final projectPath = currentProjectPath;
     final open = currentConfigPath;
@@ -20681,7 +21268,8 @@ class AppStateProvider extends ChangeNotifier {
     var reread = 0;
     for (var i = 0; i < refs.length; i++) {
       final id = refs[i].ref.id;
-      final cached = _projectRooms.containsKey(id) &&
+      final cached = !all &&
+          _projectRooms.containsKey(id) &&
           _projectRoomStamps.containsKey(id) &&
           _projectRoomStamps[id] == stamps[i];
       if (cached) continue;
@@ -20988,19 +21576,33 @@ class AppStateProvider extends ChangeNotifier {
   void _restartAutosaveTimer() {
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
+    _catalogAutosaveTimer?.cancel();
+    _catalogAutosaveTimer = null;
     // Test-constructed providers never touch the filesystem, and a timer left
     // running past the end of a test fails it.
-    if (!_persistenceEnabled || !autosaveEnabled) return;
-    _autosaveTimer = Timer.periodic(
-      Duration(minutes: autosaveMinutes),
-      (_) => writeAutosaveSnapshot(),
-    );
+    if (!_persistenceEnabled) return;
+    if (autosaveEnabled) {
+      _autosaveTimer = Timer.periodic(
+        Duration(minutes: autosaveMinutes),
+        (_) => writeAutosaveSnapshot(),
+      );
+    }
+    if (catalogAutosave) {
+      _catalogAutosaveTimer = Timer.periodic(
+        Duration(minutes: autosaveMinutes),
+        (_) => autosaveCatalog(),
+      );
+    }
   }
+
+  Timer? _catalogAutosaveTimer;
 
   @override
   void dispose() {
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
+    _catalogAutosaveTimer?.cancel();
+    _catalogAutosaveTimer = null;
     _roomDirtyCheck?.cancel();
     collab.dispose();
     super.dispose();
@@ -21778,6 +22380,9 @@ class _RoomCollabDoc extends CollabDocument {
   String get filePath => p.currentConfigPath;
 
   @override
+  String get displayName => collabDocName(p, kind);
+
+  @override
   List<String> get watchedFiles => [
         p.currentConfigPath,
         if (p.currentConfigPath.isNotEmpty) ...p.avSidecarPaths.values,
@@ -21788,6 +22393,9 @@ class _RoomCollabDoc extends CollabDocument {
 
   @override
   Object? readDisk() => p.readRoomDocumentFromDisk();
+
+  @override
+  Future<Object?> readDiskAsync() => p.readRoomDocumentFromDiskAsync();
 
   @override
   Object? current() => p.roomDocumentJson();
@@ -21808,6 +22416,9 @@ class _ProjectCollabDoc extends CollabDocument {
   String get filePath => p.currentProjectPath;
 
   @override
+  String get displayName => collabDocName(p, kind);
+
+  @override
   bool get isDirty => p.projectDirty;
 
   @override
@@ -21822,6 +22433,22 @@ class _ProjectCollabDoc extends CollabDocument {
     } catch (_) {
       return null;
     }
+  }
+
+  @override
+  Future<Object?> readDiskAsync() {
+    final f = p.currentProjectPath;
+    if (f.isEmpty) return Future.value(null);
+    return Isolate.run(() {
+      try {
+        final file = File(f);
+        if (!file.existsSync()) return null;
+        final doc = jsonDecode(file.readAsStringSync());
+        return doc is Map ? cloneJson(doc) : null;
+      } catch (_) {
+        return null;
+      }
+    });
   }
 
   @override

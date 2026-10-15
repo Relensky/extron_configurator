@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -345,8 +346,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('av_cable_edit_C1')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Not set'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('cable_length')));
+      await tester.tap(find.descendant(
+        of: find.byKey(const ValueKey('cable_length')),
+        matching: find.byIcon(Icons.arrow_drop_down),
+      ));
       await tester.pumpAndSettle();
       await tester.tap(find.text('15ft').last);
       await tester.pumpAndSettle();
@@ -355,6 +358,30 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(provider.avCables.single.lengthFt, 15);
+    });
+
+    testWidgets('the cable dialog takes a typed length', (tester) async {
+      final provider = cabled();
+      await pumpTab(tester, provider);
+
+      await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('av_cable_edit_C1')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('cable_length')),
+          matching: find.byType(EditableText),
+        ),
+        '12',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(provider.avCables.single.lengthFt, 12);
     });
 
     testWidgets('the bulk dialog sets every run at once', (tester) async {
@@ -375,7 +402,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Cable lengths'), findsWidgets);
 
-      await tester.tap(find.byKey(const ValueKey('av_lengths_bulk')));
+      await tester.tap(find.descendant(
+        of: find.byKey(const ValueKey('av_lengths_bulk')),
+        matching: find.byIcon(Icons.arrow_drop_down),
+      ));
       await tester.pumpAndSettle();
       await tester.tap(find.text('25ft').last);
       await tester.pumpAndSettle();
@@ -387,6 +417,47 @@ void main() {
       expect(provider.avCables.every((c) => c.lengthFt == 25), isTrue);
       // One undo entry for the lot, not one per run.
       expect(provider.avUndoLabel(AvUndoScope.flow), 'Set cable lengths');
+    });
+
+    testWidgets('the zoom bar zooms, fits and turns the magnifier on', (
+      tester,
+    ) async {
+      final provider = seeded();
+      await pumpTab(tester, provider);
+      String level() =>
+          tester.widget<Text>(find.byKey(const ValueKey('av_zoom_level'))).data!;
+      final start = level();
+      await tester.tap(find.byKey(const ValueKey('av_zoom_out')));
+      await tester.pumpAndSettle();
+      expect(level(), isNot(start));
+      await tester.tap(find.byKey(const ValueKey('av_zoom_actual')));
+      await tester.pumpAndSettle();
+      expect(level(), '100%');
+      await tester.tap(find.byKey(const ValueKey('av_zoom_fit')));
+      await tester.pumpAndSettle();
+      final pageHeight =
+          tester.getSize(find.byType(InteractiveViewer)).height;
+      await tester.tap(find.byKey(const ValueKey('av_zoom_magnifier')));
+      // The snapshot is taken for real, which needs real time.
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 200)));
+      }
+      await tester.pump();
+      // Turning it on never shrinks the page - it used to go to nothing.
+      expect(tester.getSize(find.byType(InteractiveViewer)).height,
+          pageHeight);
+
+      // Over the drawing, the lens shows.
+      final page = tester.getRect(find.byType(InteractiveViewer));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: page.center);
+      await mouse.moveTo(page.center + const Offset(10, 10));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('av_magnifier_lens')), findsOneWidget);
+      await mouse.removePointer();
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('the button stays away until there is a run to measure', (

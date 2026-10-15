@@ -418,6 +418,11 @@ class RoomCostSettings {
   /// the base one.
   bool ownTaxRate;
 
+  /// The base rate the room was last saved at, by whoever had one set. A
+  /// person with no default rate of their own prices the room at this rather
+  /// than at 0, so a shared room reads the same on every PC.
+  double fileBaseTax = 0;
+
   final List<CostFee> fees;
 
   /// Line key (see [DeviceGroup.key]) -> the unit price for THIS room,
@@ -675,6 +680,7 @@ class RoomCostSettings {
     taxLabel = 'Sales tax';
     taxPercent = 0;
     ownTaxRate = false;
+    fileBaseTax = 0;
     includeCabling = true;
     equipmentSort = CostEquipmentSort.manufacturer;
     scopeOfWork = '';
@@ -716,6 +722,9 @@ class RoomCostSettings {
     // every time the project's rate differed from the file's.
     'taxPercent': ownTaxRate ? taxPercent : 0,
     'taxOwn': ownTaxRate,
+    // The base rate it was saved at, for a colleague who has none set - see
+    // [fileBaseTax]. Set on save only, so opening a room changes nothing.
+    if (!ownTaxRate && fileBaseTax > 0) 'taxBase': fileBaseTax,
     'includeCabling': includeCabling,
     // By maker is the default, so only a room that picked another says so.
       'equipmentSort': equipmentSort.name,
@@ -773,6 +782,7 @@ class RoomCostSettings {
     ownTaxRate = json.containsKey('taxOwn')
         ? json['taxOwn'] == true
         : taxPercent > 0;
+    fileBaseTax = (json['taxBase'] as num?)?.toDouble() ?? 0;
     // Absent in files written before cabling was priced. On is the right
     // default there too: the cable types ship unpriced, so an older room gains
     // a cabling section that says what it needs and reports it as not yet

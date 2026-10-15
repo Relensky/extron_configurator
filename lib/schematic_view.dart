@@ -14,6 +14,7 @@ import 'diagram_grid.dart';
 import 'layout_tools.dart';
 import 'processor_prompt.dart';
 import 'report_tools.dart';
+import 'schematic_layout.dart';
 import 'screenshot_tools.dart';
 import 'view_zoom.dart';
 import 'side_pane.dart';
@@ -1123,10 +1124,12 @@ class _SchematicViewState extends State<SchematicView> {
           child: InteractiveViewer(
             transformationController: _transform,
             constrained: false,
-            // Low enough that a room full of devices fits the window.
-            minScale: 0.08,
+            // Low enough that any room fits the window, however large.
+            minScale: 0.01,
             maxScale: 3.0,
-            boundaryMargin: const EdgeInsets.all(400),
+            // Unbounded, as on AV Flow: a fixed margin stopped the wheel
+            // zooming out once the drawing and its margin filled the window.
+            boundaryMargin: const EdgeInsets.all(double.infinity),
             child: RepaintBoundary(
               key: _diagramKey,
               child: _buildCanvas(provider, model, theme),
@@ -1217,6 +1220,30 @@ class _SchematicViewState extends State<SchematicView> {
           Text('Control Schematic',
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(width: 12),
+          // Always there: the processor in the middle, the devices evenly
+          // round it - or in a table when there are many. One Undo back.
+          Tooltip(
+            message: 'Space everything out evenly: the processor in the '
+                'middle and the devices round it in a circle, or in a table '
+                'when there are more than $kSchematicRingMost. Undo puts it '
+                'back.',
+            child: OutlinedButton.icon(
+              key: const ValueKey('schematic_tidy'),
+              icon: const Icon(Icons.auto_fix_high, size: 18),
+              label: const Text('Tidy layout'),
+              onPressed: model.nodes.isEmpty
+                  ? null
+                  : () {
+                      final moved = provider
+                          .arrangeSchematic(tidySchematic(model.nodes));
+                      _snack(moved == 0
+                          ? 'Already tidy - nothing needed to move.'
+                          : 'Spaced out evenly: $moved box'
+                              '${moved == 1 ? '' : 'es'} moved. Undo puts '
+                              'them back.');
+                    },
+            ),
+          ),
           FilterChip(
             avatar: Icon(_editMode ? Icons.edit : Icons.edit_outlined,
                 size: 18),

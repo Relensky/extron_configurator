@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'sideways_scroll.dart';
+
 /// ============================================================================
 ///  A WIDE SHEET THAT STAYS READABLE
 /// ============================================================================
@@ -262,6 +264,14 @@ class PinnedGrid extends StatefulWidget {
   /// recognisably a page.
   final double? maxHeight;
 
+  /// Fill [maxHeight] even when the rows are fewer, so the sideways bar sits
+  /// on the frame's bottom edge rather than under the last row.
+  final bool fillHeight;
+
+  /// Empty space after the last row, so it can scroll clear of something
+  /// floating over the bottom of the frame - see [kFloatingButtonClearance].
+  final double trailingSpace;
+
   /// Top-left: what the frozen column is. Never moves.
   final Widget corner;
 
@@ -358,6 +368,8 @@ class PinnedGrid extends StatefulWidget {
     this.frozenRowBuilder,
     this.bodyRowBuilder,
     this.maxHeight,
+    this.fillHeight = false,
+    this.trailingSpace = 0,
     this.dragging,
   }) : assert(
          (frozen != null && body != null) ||
@@ -497,14 +509,18 @@ class _PinnedGridState extends State<PinnedGrid> {
         // Room under the last row and beside the last column for the bars, so
         // a thumb never sits on top of a figure.
         final scrollsX = widget.bodyWidth > viewWidth + 0.5;
-        final contentHeight = widget.bodyHeight + (scrollsX ? _kBar : 0);
+        final contentHeight = widget.bodyHeight +
+            widget.trailingSpace +
+            (scrollsX ? _kBar : 0);
 
         final cap =
             widget.maxHeight ??
             math.max(240.0, MediaQuery.sizeOf(context).height * 0.82);
         final viewHeight = math.max(
           0.0,
-          math.min(contentHeight, cap - widget.headerHeight),
+          widget.fillHeight && widget.maxHeight != null
+              ? cap - widget.headerHeight
+              : math.min(contentHeight, cap - widget.headerHeight),
         );
         final scrollsY = contentHeight > viewHeight + 0.5;
         final bodyWidth = widget.bodyWidth + (scrollsY ? _kBar : 0);
@@ -525,7 +541,9 @@ class _PinnedGridState extends State<PinnedGrid> {
                 physics: const NeverScrollableScrollPhysics(),
                 itemExtent: widget.rowExtent,
                 itemCount: widget.rowCount,
-                padding: EdgeInsets.only(bottom: scrollsX ? _kBar : 0),
+                padding: EdgeInsets.only(
+                  bottom: widget.trailingSpace + (scrollsX ? _kBar : 0),
+                ),
                 itemBuilder: widget.frozenRowBuilder!,
               )
             : SingleChildScrollView(
@@ -535,7 +553,9 @@ class _PinnedGridState extends State<PinnedGrid> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     widget.frozen!,
-                    if (scrollsX) const SizedBox(height: _kBar),
+                    SizedBox(
+                      height: widget.trailingSpace + (scrollsX ? _kBar : 0),
+                    ),
                   ],
                 ),
               );
@@ -565,7 +585,9 @@ class _PinnedGridState extends State<PinnedGrid> {
                         physics: rowPhysics,
                         itemExtent: widget.rowExtent,
                         itemCount: widget.rowCount,
-                        padding: EdgeInsets.only(bottom: scrollsX ? _kBar : 0),
+                        padding: EdgeInsets.only(
+                          bottom: widget.trailingSpace + (scrollsX ? _kBar : 0),
+                        ),
                         itemBuilder: widget.bodyRowBuilder!,
                       ),
                     ),
@@ -593,7 +615,10 @@ class _PinnedGridState extends State<PinnedGrid> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             widget.body!,
-                            if (scrollsX) const SizedBox(height: _kBar),
+                            SizedBox(
+                              height:
+                                  widget.trailingSpace + (scrollsX ? _kBar : 0),
+                            ),
                           ],
                         ),
                       ),
@@ -608,7 +633,10 @@ class _PinnedGridState extends State<PinnedGrid> {
         // NO AUTOMATIC BARS. On a desktop every scroll view grows its own bar,
         // which put a second one beside the frozen column and under the
         // headings. The cells' two bars, hung above, are the only ones.
-        return Listener(
+        // Left and Right move the cells when nothing is selected.
+        return SidewaysScrollTarget(
+          controller: _cells,
+          child: Listener(
           onPointerMove: _pointerMoved,
           onPointerUp: (_) => _stopEdgeScroll(),
           onPointerCancel: (_) => _stopEdgeScroll(),
@@ -651,6 +679,7 @@ class _PinnedGridState extends State<PinnedGrid> {
                 ),
               ),
             ],
+          ),
           ),
           ),
           ),

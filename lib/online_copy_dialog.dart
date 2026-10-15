@@ -242,8 +242,7 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
       setState(() {
         _busy = false;
         _failed = true;
-        _result = 'Not published: the online copy has edits in it that were '
-            'not dealt with. Nothing was written over.';
+        _result = 'Not published. Nothing was written over.';
       });
       return;
     }
@@ -370,26 +369,76 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
     final toFolder = _toFolder && _folder.trim().isNotEmpty;
     for (final sheet in [true, false]) {
       if (sheet ? !_toSheet : !toFolder) continue;
-      final held = await provider.findHeldOnlineEdits(
-        folder: sheet ? null : _folder,
-        folderCopy: !sheet,
-        sheetCopy: sheet,
-      );
-      if (held == null) continue;
+      OnlineHold? held;
+      if (sheet) {
+        // PULLED FIRST, and the overwrite confirmed whatever the pull found.
+        final hasSheet = provider.project.onlineSheetId.trim().isNotEmpty;
+        if (!hasSheet) continue; // a new Sheet: nothing to write over
+        final check = await provider.checkSheetForEdits(interactive: true);
+        if (!mounted) return false;
+        if (check.held == null &&
+            !await _confirmSheetOverwrite(check.error)) {
+          return false;
+        }
+        held = check.held;
+      } else {
+        held = await provider.findHeldOnlineEdits(
+          folder: _folder,
+          sheetCopy: false,
+        );
+      }
+      final found = held;
+      if (found == null) continue;
       if (!mounted) return false;
       final applied = await showDialog<int>(
         context: context,
         builder: (_) => _ImportReviewDialog(
           provider: provider,
-          read: held.read,
-          changes: held.changes,
-          source: held.sheet ? kOnlineSheetLabel : held.file,
+          read: found.read,
+          changes: found.changes,
+          source: found.sheet ? kOnlineSheetLabel : found.file,
           beforePublish: true,
         ),
       );
       if (applied == null) return false;
     }
     return true;
+  }
+
+  /// Asks before the Google Sheet is written over. [error] is why it could
+  /// not be pulled, or '' when it was pulled and nothing in it differs.
+  Future<bool> _confirmSheetOverwrite(String error) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('online_sheet_overwrite_confirm'),
+        title: Text(
+          error.isEmpty
+              ? 'Overwrite the Google Sheet?'
+              : 'The Google Sheet could not be read',
+        ),
+        content: Text(
+          error.isEmpty
+              ? 'The Sheet was pulled first and nothing in it differs from '
+                    'this job. Publishing rewrites it with the job as it is '
+                    'now.'
+              : 'It was not pulled, so any edits typed into it since the last '
+                    'publish cannot be checked, and publishing would write '
+                    'over them.\n\n$error',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(error.isEmpty ? 'Overwrite' : 'Overwrite anyway'),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
   }
 
   /// Reads the live Google Sheet back and offers what it would change.

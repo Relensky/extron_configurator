@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import 'collab_controller.dart';
+import 'combine_details.dart';
 import 'combine_history.dart';
 import 'json_merge.dart';
 import 'merge_labels.dart';
@@ -464,8 +465,10 @@ class _IncomingChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final name = collabDocName(context.read<AppStateProvider>(), kind);
     return Tooltip(
-      message: '${incoming.who} saved this ${collabDocNoun(kind)} at '
+      message: '${incoming.who} saved '
+          '${name.isEmpty ? 'this ${collabDocNoun(kind)}' : name} at '
           '${_clock(incoming.at)}. Press to combine their changes with '
           'yours now - nothing of either of yours is lost, and anything you '
           'both changed is shown for you to choose. Saving combines them too.',
@@ -480,7 +483,7 @@ class _IncomingChip extends StatelessWidget {
           avatar: Icon(Icons.sync, color: theme.colorScheme.onTertiary),
           backgroundColor: theme.colorScheme.tertiary,
           label: Text(
-            '${incoming.who} saved the ${collabDocNoun(kind)} - Combine',
+            '${incoming.who} saved ${name.isEmpty ? 'the ${collabDocNoun(kind)}' : name} - Combine',
             style: theme.textTheme.labelMedium
                 ?.copyWith(color: theme.colorScheme.onTertiary),
           ),
@@ -530,8 +533,12 @@ Future<bool> _mergeNow(
   final collab = provider.collab;
   messenger ??= ScaffoldMessenger.maybeOf(context);
   // Read before the merge clears it.
-  final who = collab.incomingOn(kind)?.who ?? 'the other editor';
+  final incoming = collab.incomingOn(kind);
+  final who = incoming?.who ?? 'the other editor';
   final preview = collab.previewMerge(kind);
+  // Which room, job, campus and file, whose save and when.
+  final details = await combineContextRows(provider, kind, incoming);
+  if (!context.mounted) return false;
 
   // ALWAYS SHOWN FIRST: what their save brings in, before anything moves -
   // each change ticked to be taken, or unticked to leave it out.
@@ -545,6 +552,9 @@ Future<bool> _mergeNow(
       preview: preview,
       doc: collab.currentOf(kind),
       beforeSave: beforeSave,
+      name: collabDocName(provider, kind),
+      details: details,
+      fileFor: (path) => fileForMergePath(provider, kind, path),
     );
     if (picked == null) return false;
     declined = picked;
@@ -668,10 +678,41 @@ Future<Set<String>?> showMergeReviewDialog(
   required JsonMergeResult preview,
   Object? doc,
   bool beforeSave = false,
+  String name = '',
+  List<(String, String)> details = const [],
+  String Function(String path)? fileFor,
 }) {
   final noun = collabDocNoun(kind);
-  final changes = preview.changes;
+  // Grouped under the thing each belongs to, in the file's order.
+  final places = {
+    for (final c in preview.changes) c.key: describeMergePlace(c.path, doc),
+  };
+  // THE TAX RATE IS ASKED ON ITS OWN, at the top: taking it reprices
+  // everything, so it is a choice made on purpose rather than one tick
+  // among thirty.
+  final taxChanges = [
+    for (final c in preview.changes)
+      if (isTaxMergePath(c.path)) c,
+  ];
+  var takeTheirTax = true;
+  final changes = [
+    for (final c in preview.changes)
+      if (!isTaxMergePath(c.path)) c,
+  ]..sort((a, b) =>
+      mergePlaceGroup(places[a.key]!).compareTo(mergePlaceGroup(places[b.key]!)));
   final approved = {for (final c in changes) c.key};
+  final open = <String>{};
+  // The rate on each side, read off the change that carries it.
+  MergeChange? rateChange;
+  for (final c in taxChanges) {
+    final leaf = c.path.split('.').last;
+    if (leaf == 'taxPercent' || (rateChange == null && leaf == 'taxBase')) {
+      rateChange = c;
+    }
+  }
+  rateChange ??= taxChanges.firstOrNull;
+  final yourRate = describeTaxRate(rateChange?.before);
+  final theirRate = describeTaxRate(rateChange?.after);
   return showDialog<Set<String>>(
     context: context,
     builder: (ctx) => StatefulBuilder(
@@ -687,20 +728,80 @@ Future<Set<String>?> showMergeReviewDialog(
 
         return AlertDialog(
           key: const ValueKey('collab_review_dialog'),
-          title: Text('Combine the changes $who saved to this $noun?'),
+          title: Text(name.isEmpty
+              ? 'Combine the changes $who saved to this $noun?'
+              : 'Combine the changes $who saved to $name?'),
           content: SizedBox(
             width: 680,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                CombineContextTable(rows: details),
+                if (details.isNotEmpty) const SizedBox(height: 8),
+                if (taxChanges.isNotEmpty) ...[
+                  Card(
+                    key: const ValueKey('collab_review_tax'),
+                    color: theme.colorScheme.tertiaryContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Tax rate: yours is $yourRate, $who\'s save has '
+                            '$theirRate.',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: theme.colorScheme.onTertiaryContainer,
+                            ),
+                          ),
+                          RadioGroup<bool>(
+                            groupValue: takeTheirTax,
+                            onChanged: (v) =>
+                                setState(() => takeTheirTax = v ?? true),
+                            child: Column(
+                              children: [
+                                RadioListTile<bool>(
+                                  key: const ValueKey('collab_tax_theirs'),
+                                  dense: true,
+                                  value: true,
+                                  title: Text('Use $who\'s: $theirRate'),
+                                  subtitle: Text(
+                                    'Overwrites your tax rate of $yourRate. '
+                                    'Every price in this $noun is taxed at '
+                                    '$theirRate.',
+                                    style: TextStyle(
+                                      color:
+                                          theme.colorScheme.onTertiaryContainer,
+                                    ),
+                                  ),
+                                ),
+                                RadioListTile<bool>(
+                                  key: const ValueKey('collab_tax_mine'),
+                                  dense: true,
+                                  value: false,
+                                  title: Text('Keep yours: $yourRate'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 Text(
-                  changes.isEmpty
+                  changes.isEmpty && taxChanges.isNotEmpty
+                      ? 'Nothing else of theirs is new to this copy.'
+                      : changes.isEmpty
                       ? 'Nothing of theirs is new to this copy.'
                       : '${changes.length} change'
                           '${changes.length == 1 ? '' : 's'} from $who. Tick '
                           'the ones to take - anything left unticked keeps '
-                          'what you have. Your own changes are kept.',
+                          'what you have. Your own changes are kept. Open '
+                          'a line for its file, its place and the whole '
+                          'value before and after.',
                   style: theme.textTheme.bodyMedium,
                 ),
                 if (preview.conflicts.isNotEmpty) ...[
@@ -747,7 +848,22 @@ Future<Set<String>?> showMergeReviewDialog(
                         key: const ValueKey('collab_review_list'),
                         shrinkWrap: true,
                         children: [
-                          for (final c in changes)
+                          for (final (i, c) in changes.indexed) ...[
+                            // A heading whenever the thing changes.
+                            if (mergePlaceGroup(places[c.key]!).isNotEmpty &&
+                                (i == 0 ||
+                                    mergePlaceGroup(places[c.key]!) !=
+                                        mergePlaceGroup(
+                                            places[changes[i - 1].key]!)))
+                              Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(8, 10, 8, 2),
+                                child: Text(
+                                  mergePlaceGroup(places[c.key]!),
+                                  style: theme.textTheme.labelMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ),
                             CheckboxListTile(
                               key: ValueKey('collab_review_item_${c.key}'),
                               dense: true,
@@ -756,22 +872,52 @@ Future<Set<String>?> showMergeReviewDialog(
                               onChanged: (v) => setState(() => v == true
                                   ? approved.add(c.key)
                                   : approved.remove(c.key)),
-                              secondary: Icon(
-                                c.added
-                                    ? Icons.add_circle_outline
-                                    : c.removed
-                                        ? Icons.remove_circle_outline
-                                        : Icons.edit_outlined,
-                                size: 18,
-                                color: muted,
+                              secondary: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    c.added
+                                        ? Icons.add_circle_outline
+                                        : c.removed
+                                            ? Icons.remove_circle_outline
+                                            : Icons.edit_outlined,
+                                    size: 18,
+                                    color: muted,
+                                  ),
+                                  IconButton(
+                                    key: ValueKey(
+                                        'collab_review_open_${c.key}'),
+                                    tooltip: open.contains(c.key)
+                                        ? 'Hide the details'
+                                        : 'File, place, and the whole value '
+                                            'before and after',
+                                    icon: Icon(
+                                      open.contains(c.key)
+                                          ? Icons.expand_less
+                                          : Icons.expand_more,
+                                      size: 18,
+                                    ),
+                                    onPressed: () => setState(() =>
+                                        open.contains(c.key)
+                                            ? open.remove(c.key)
+                                            : open.add(c.key)),
+                                  ),
+                                ],
                               ),
-                              title: Text(describeMergePlace(c.path, doc)),
+                              title: Text(mergePlaceLeaf(places[c.key]!)),
                               subtitle: Text(
                                 what(c),
                                 style: theme.textTheme.bodySmall
                                     ?.copyWith(color: muted),
                               ),
                             ),
+                            if (open.contains(c.key))
+                              MergeChangeDetails(
+                                change: c,
+                                place: places[c.key]!,
+                                file: fileFor?.call(c.path) ?? '',
+                              ),
+                          ],
                         ],
                       ),
                     ),
@@ -790,6 +936,8 @@ Future<Set<String>?> showMergeReviewDialog(
               onPressed: () => Navigator.pop(ctx, {
                 for (final c in changes)
                   if (!approved.contains(c.key)) c.key,
+                if (!takeTheirTax)
+                  for (final c in taxChanges) c.key,
               }),
               child: Text(preview.conflicts.isNotEmpty
                   ? 'Next'
@@ -915,6 +1063,16 @@ Future<Map<String, MergeSide>?> showMergeConflictDialog(
                                         title: Text(
                                           side(c.theirs, '$who\'s'),
                                         ),
+                                        subtitle: isTaxMergePath(c.path)
+                                            ? Text(
+                                                'Overwrites your tax rate of '
+                                                '${describeTaxRate(c.mine)}.',
+                                                style: TextStyle(
+                                                  color: theme
+                                                      .colorScheme.tertiary,
+                                                ),
+                                              )
+                                            : null,
                                       ),
                                     ],
                                   ),

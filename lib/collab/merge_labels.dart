@@ -47,6 +47,8 @@ const Map<String, String> _kNames = {
   'state': 'Status',
   'qty': 'Quantity',
   'taxPercent': 'Tax rate',
+  'taxOwn': 'Own tax rate',
+  'taxBase': 'Base tax rate',
   'budget': 'Budget',
 };
 
@@ -61,6 +63,8 @@ const List<String> _kRowNames = [
   'description',
   'model',
   'item',
+  'roomCode',
+  'code',
 ];
 
 /// [path] in words, with rows named from [doc] - the document as this copy
@@ -69,12 +73,33 @@ String describeMergePlace(String path, Object? doc) {
   if (path == '(whole document)') return 'The whole file';
   final parts = <String>[];
   Object? at = doc;
+  var first = true;
   for (final step in _steps(path)) {
     final row = RegExp(r'^(.*)\[(\w+)=(.*)\]$').firstMatch(step);
     if (row == null) {
-      parts.add(_word(step));
+      // A map keyed by room id (roomSnapshots.room10) is named by the room.
+      final room = first ? null : _roomName(doc, step);
+      parts.add(room ?? _word(step));
       at = at is Map ? at[step] : null;
+      first = false;
       continue;
+    }
+    first = false;
+    if (row.group(1) == 'rooms' && row.group(2) == 'id') {
+      final room = _roomName(doc, row.group(3)!);
+      if (room != null) {
+        parts
+          ..add(_word('rooms'))
+          ..add(room);
+        final list = at is Map ? at['rooms'] : null;
+        at = null;
+        if (list is List) {
+          for (final e in list) {
+            if (e is Map && '${e['id']}' == row.group(3)) at = e;
+          }
+        }
+        continue;
+      }
     }
     final list = row.group(1)!;
     if (list.isNotEmpty) {
@@ -122,7 +147,29 @@ String _rowName(Map row, String fallback) {
       return '"${t.length > 40 ? '${t.substring(0, 39)}…' : t}"';
     }
   }
+  // A job's room is known by the folder its config is in: BSS_103, not room10.
+  final config = row['configPath'];
+  if (config is String && config.trim().isNotEmpty) {
+    final parts = config.replaceAll(r'\', '/').split('/')
+      ..removeWhere((p) => p.isEmpty);
+    if (parts.length >= 2) return '"${parts[parts.length - 2]}"';
+    return '"${parts.last}"';
+  }
   return fallback;
+}
+
+/// A job's room by its label and id - `"BSS 103" (room10)` - or null when
+/// [id] is not a room on [doc]. No label falls back to the config's folder.
+String? _roomName(Object? doc, String id) {
+  final rooms = doc is Map ? doc['rooms'] : null;
+  if (rooms is! List) return null;
+  for (final r in rooms) {
+    if (r is! Map || '${r['id']}' != id) continue;
+    final label = '${r['label'] ?? ''}'.trim();
+    final name = label.isNotEmpty ? '"$label"' : _rowName(r, '');
+    return name.isEmpty ? id : '$name ($id)';
+  }
+  return null;
 }
 
 String _word(String key) {
@@ -134,6 +181,23 @@ String _word(String key) {
       .trim();
   if (spaced.isEmpty) return key;
   return spaced[0].toUpperCase() + spaced.substring(1).toLowerCase();
+}
+
+/// True for a place that holds a tax rate - a job's, or a room's own rate,
+/// whether it has one, and the base rate it was saved at.
+bool isTaxMergePath(String path) =>
+    const {'taxPercent', 'taxOwn', 'taxBase'}.contains(path.split('.').last);
+
+/// A tax rate as a person reads it: '9.25%', or what having none means.
+String describeTaxRate(Object? v) {
+  if (v is num) {
+    final text = v == v.roundToDouble()
+        ? v.toInt().toString()
+        : v.toString();
+    return '$text%';
+  }
+  if (v is bool) return v ? 'its own rate' : 'the base rate';
+  return 'not set';
 }
 
 /// One side's value as a person reads it: a deleted thing says so, a row

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
+import 'cost_estimate.dart' show formatMoney;
 import 'print_mode.dart';
 import 'responsive.dart';
 
@@ -58,6 +59,10 @@ class LiveTextField extends StatefulWidget {
   /// Digits and a decimal point only, right-aligned.
   final bool numeric;
 
+  /// A price: printed as money - [prefix] as the currency, thousands
+  /// separated, two decimals - so "11948" prints as "$11,948.00".
+  final bool money;
+
   final bool autofocus;
   final int maxLines;
 
@@ -66,6 +71,9 @@ class LiveTextField extends StatefulWidget {
 
   /// Shows an X that empties the box - for search and filter fields.
   final bool clearable;
+
+  /// Draws the box in red - a value worth a second look, like a 0% tax rate.
+  final bool warn;
 
   /// Waits until typing pauses before calling [onChanged], instead of calling
   /// it on every key.
@@ -94,10 +102,12 @@ class LiveTextField extends StatefulWidget {
     this.prefix,
     this.suffix,
     this.numeric = false,
+    this.money = false,
     this.autofocus = false,
     this.maxLines = 1,
     this.minLines,
     this.clearable = false,
+    this.warn = false,
     this.lazy = false,
   });
 
@@ -196,11 +206,19 @@ class _LiveTextFieldState extends State<LiveTextField> {
       final shown = _controller.text.trim().isEmpty
           ? (widget.hintIsValue ? (widget.hint ?? '') : '')
           : _controller.text;
+      // A word in a price box ("unpriced") prints as the word, unprefixed.
+      final amount = widget.money
+          ? double.tryParse(shown.replaceAll(',', '').trim())
+          : null;
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
         child: Text(
-          shown.isEmpty
+          amount != null
+              ? formatMoney(amount, widget.prefix ?? '')
+              : shown.isEmpty
               ? ''
+              : widget.money
+              ? shown
               : '${widget.prefix ?? ''}$shown${widget.suffix ?? ''}',
           textAlign: widget.numeric ? TextAlign.right : TextAlign.left,
           style: const TextStyle(fontSize: 13),
@@ -211,6 +229,10 @@ class _LiveTextFieldState extends State<LiveTextField> {
     }
     return _field();
   }
+
+  OutlineInputBorder get _warnBorder => OutlineInputBorder(
+    borderSide: BorderSide(color: Theme.of(context).colorScheme.error, width: 2),
+  );
 
   Widget _field() => TextField(
     controller: _controller,
@@ -229,6 +251,8 @@ class _LiveTextFieldState extends State<LiveTextField> {
     decoration: InputDecoration(
       isDense: true,
       border: const OutlineInputBorder(),
+      enabledBorder: widget.warn ? _warnBorder : null,
+      focusedBorder: widget.warn ? _warnBorder : null,
       labelText: widget.label,
       // A box whose hint is the value it resolves to keeps its label up, so
       // that value shows without the box having to be clicked into.
@@ -237,6 +261,7 @@ class _LiveTextFieldState extends State<LiveTextField> {
           : null,
       hintText: widget.hint,
       helperText: widget.helper,
+      helperMaxLines: 4,
       prefixText: widget.prefix,
       suffixText: widget.suffix,
       suffixIcon: widget.clearable
