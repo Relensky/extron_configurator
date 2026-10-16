@@ -544,6 +544,7 @@
         "dev_usb_switchers": "0",
         "dev_wireless": "Yes",
         "gui_capture_source_available": "Yes",
+        "gui_conf_display_available": "Yes",
         "gui_demo_mode": false,
         "gui_annex_mute_available": "No",
         "gui_full_room_name": "Full Test Room Number",
