@@ -1096,7 +1096,7 @@ Offset pointAlongRoute(List<Offset> route, double distance) {
   for (int i = 0; i < pts.length - 1; i++) {
     total += (pts[i + 1] - pts[i]).distance;
   }
-  if (total == 0) return null;
+  if (total == 0 || !total.isFinite) return null;
 
   // Never past the middle: beyond that the label stops reading as "this end"
   // and starts competing with the run's own caption.

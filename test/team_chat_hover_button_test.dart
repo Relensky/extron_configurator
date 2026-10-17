@@ -31,6 +31,48 @@ void main() {
     expect(find.byType(HoverFade), findsOneWidget);
   });
 
+  // The button over an open chat is an overlay entry of its own; a theme
+  // switch rebuilt it in the middle of the build that switched it.
+  testWidgets('a theme switch with the chat open does not throw',
+      (tester) async {
+    Team.chat = TeamChat();
+    final dark = ValueNotifier(true);
+    await tester.pumpWidget(ValueListenableBuilder<bool>(
+      valueListenable: dark,
+      builder: (_, d, _) => MaterialApp(
+        theme: d ? ThemeData.dark() : ThemeData.light(),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Stack(children: [
+              Positioned.fill(
+                child: TextButton(
+                  onPressed: () => TeamChatPanel.instance.open(context),
+                  child: const Text('open'),
+                ),
+              ),
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: TeamChatFab(onPressed: () {}),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(TeamChatPanel.instance.isOpen, isTrue);
+
+    dark.value = false;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(tester.takeException(), isNull);
+
+    TeamChatPanel.instance.close();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   test('the count is the color opposite the accent', () {
     // Blue's opposite is an orange; the ink is whichever reads on it.
     final pill = teamComplementOf(const Color(0xFF1565C0));

@@ -722,6 +722,29 @@ void main() {
       await tester.pump(const Duration(seconds: 6));
     });
 
+    testWidgets('on the Project tab the open room can still be closed',
+        (tester) async {
+      final p = fresh();
+      p.newProject(name: 'Bessey Hall');
+      final roomPath = path.join(dir.path, 'bss104_config.json');
+      File(roomPath).writeAsStringSync(jsonEncode({
+        'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '104'},
+      }));
+      expect(p.addRoomToProject(roomPath), isEmpty);
+      await tester.runAsync(() => p.openConfigAtPath(roomPath));
+      p.selectTab(AppTab.project.index);
+      await pump(tester, p);
+
+      expect(find.byKey(const ValueKey('banner_room_close')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('banner_room_close')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(p.roomConfig, isEmpty);
+      expect(p.hasOpenProject, isTrue);
+      expect(find.byKey(const ValueKey('banner_room_close')), findsNothing);
+      await tester.pump(const Duration(seconds: 6));
+    });
+
     testWidgets('nothing open offers no room to close', (tester) async {
       await pump(tester, fresh());
       expect(find.byKey(const ValueKey('banner_room_close')), findsNothing);

@@ -128,7 +128,7 @@ void main() {
         (model: 'Speakers', description: 'Ceiling speakers', qty: 2),
       ]);
       final holt = room(price(), 'HOLT 171').estimate!;
-      final speakers = holt.equipment.where((l) => l.model == 'Speakers');
+      final speakers = holt.extras.where((l) => l.model == 'Speakers');
       expect(speakers, hasLength(1), reason: 'kept despite projectors only');
       expect(speakers.single.qty, 2);
       expect(speakers.single.description, 'Ceiling speakers');
@@ -232,7 +232,7 @@ void main() {
         (r) => r.fallbackName.contains('HOLT'),
       );
       expect(await provider.openProjectRoomRef(ref), isEmpty);
-      CostLine mount() => provider.projectRoomCost!.equipment.singleWhere(
+      CostLine mount() => provider.projectRoomCost!.extras.singleWhere(
         (l) => l.description == 'Projector mount',
       );
       expect(mount().qty, 1);

@@ -785,6 +785,113 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     _notifySoon();
   }
 
+  /// Adds and removes the categories people made up. Returns one to file the
+  /// open entry under, or null.
+  Future<String?> _manageCategories(AvDeviceLibrary library) {
+    final field = TextEditingController();
+    String error = '';
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          void add() {
+            final name = field.text.trim();
+            if (name.isEmpty) return;
+            if (!library.addCategory(name)) {
+              setLocal(() => error = '"$name" is already a category.');
+              return;
+            }
+            field.clear();
+            setLocal(() => error = '');
+            setState(() => _dirty = true);
+            _notifySoon();
+          }
+
+          final added = library.addedCategories;
+          return AlertDialog(
+            title: const Text('Categories'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Added categories are offered as equipment that is not '
+                    'tied to a config section. They are saved with the '
+                    'catalog.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          key: const ValueKey('cat_new_name'),
+                          controller: field,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            labelText: 'New category',
+                            isDense: true,
+                            border: const OutlineInputBorder(),
+                            errorText: error.isEmpty ? null : error,
+                          ),
+                          onSubmitted: (_) => add(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        key: const ValueKey('cat_new_add'),
+                        onPressed: add,
+                        child: const Text('Add'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (added.isEmpty)
+                    Text(
+                      'None added yet.',
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final c in added)
+                          ListTile(
+                            key: ValueKey('cat_added_$c'),
+                            dense: true,
+                            title: Text(c),
+                            onTap: () => Navigator.pop(ctx, c),
+                            trailing: IconButton(
+                              tooltip: 'Remove from the list',
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              onPressed: () {
+                                library.removeCategory(c);
+                                setLocal(() {});
+                                setState(() => _dirty = true);
+                                _notifySoon();
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _save() async {
     _flushNotify();
     final provider = context.read<AppStateProvider>();
@@ -1578,20 +1685,28 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               key: ValueKey('cat_pick_$key'),
               tooltip: 'Use a category the app tracks',
               icon: const Icon(Icons.arrow_drop_down),
-              onSelected: (v) => setState(
+              onSelected: (v) async {
+                if (v == _kManageCategories) {
+                  final picked = await _manageCategories(library);
+                  if (picked == null || !mounted) return;
+                  v = picked;
+                }
+                final next = v;
+                setState(
                 () => _apply(
                   entry.copyWith(
-                    category: v,
+                    category: next,
                     // A cable needs a signal type to be priced against the
                     // diagram; default it to the first rather than leaving an
                     // entry that looks priced and matches nothing.
-                    cableSignal: v == kCategoryCable
+                    cableSignal: next == kCategoryCable
                         ? (entry.cableSignal ?? SignalType.hdmi)
                         : null,
-                    clearCableSignal: v != kCategoryCable,
+                    clearCableSignal: next != kCategoryCable,
                   ),
                 ),
-              ),
+                );
+              },
               itemBuilder: (ctx) => [
                 _categoryHeading(ctx, 'Tracked to a config section',
                     note: 'Equipment, budgeted at its base cost'),
@@ -1603,6 +1718,31 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                       child: Text(c),
                     ),
                   ),
+                const PopupMenuDivider(),
+                _categoryHeading(ctx, 'Not tied to a config section',
+                    note: 'Equipment with no module or base cost'),
+                for (final c in [
+                  ...kUntrackedEquipmentCategories,
+                  ...library.addedCategories,
+                ])
+                  PopupMenuItem(
+                    value: c,
+                    child: Tooltip(
+                      message: categoryLimits(c, hasPorts: entry.ports.isNotEmpty),
+                      child: Text(c),
+                    ),
+                  ),
+                PopupMenuItem(
+                  key: const ValueKey('cat_manage'),
+                  value: _kManageCategories,
+                  child: const Row(
+                    children: [
+                      Icon(Icons.edit_note, size: 18),
+                      SizedBox(width: 8),
+                      Text('Add or remove categories...'),
+                    ],
+                  ),
+                ),
                 const PopupMenuDivider(),
                 _categoryHeading(ctx, 'Rack parts',
                     note: 'Rack parts list and Add rack hardware only'),
@@ -2099,6 +2239,29 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   ),
                 ),
               ),
+            ),
+            TextButton.icon(
+              key: ValueKey('bulk_ports_$key'),
+              icon: const Icon(Icons.playlist_add, size: 16),
+              label: const Text('Add several'),
+              onPressed: () async {
+                final added = await showBulkPortDialog(
+                  context,
+                  existing: ports,
+                );
+                if (added == null || added.isEmpty || !mounted) return;
+                // The power inlet stays last, where the editor keeps it.
+                setState(
+                  () => _apply(
+                    entry.copyWith(
+                      ports: withPowerInlet(
+                        [...ports, ...added],
+                        entry.powerInput,
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -2835,6 +2998,9 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 /// either group IS, which on a menu whose three halves mean genuinely
 /// different things - a config section, a rack part, a billing bucket - is
 /// the only thing worth saying.
+/// The category menu item that opens the add/remove dialog.
+const String _kManageCategories = '#manage';
+
 PopupMenuItem<String> _categoryHeading(
   BuildContext context,
   String text, {

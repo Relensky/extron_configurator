@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 
 import 'json_merge.dart';
+import 'merge_labels.dart' show isBookkeepingMergePath;
 import 'presence.dart';
 import '../app_logger.dart';
 import '../app_activity.dart';
@@ -112,6 +113,10 @@ class CollabDocState {
   Object? loaded;
   bool hasLoaded = false;
   String stamp = '';
+
+  /// Baselines being read off disk right now - see _captureBaseline. The
+  /// tick leaves the file alone until they land.
+  int capturing = 0;
   DateTime since = DateTime.now();
   DateTime? savedAt;
   List<EditorPresence> others = const [];
@@ -271,7 +276,7 @@ class CollabController extends ChangeNotifier {
         ..others = const []
         ..incoming = null
         ..lastAnnounced = null;
-      _captureBaseline(doc);
+      await _captureBaseline(doc);
       changed = true;
     }
     if (file.isEmpty) return changed;
@@ -317,6 +322,9 @@ class CollabController extends ChangeNotifier {
       ));
     }
 
+    // Our own save's base is still being read: not someone else's save.
+    if (s.capturing > 0) return changed;
+
     // Did the file move without us moving it?
     final stamp = await _stampOfAsync(doc.watchedFiles);
     if (stamp != s.stamp) {
@@ -346,11 +354,15 @@ class CollabController extends ChangeNotifier {
         // we changed too (or only what we changed differs). Said nothing -
         // the notice used to go up, and the merge it offered then said
         // "Nothing of theirs is new to this copy".
+        // Room totals re-priced on their PC count as nothing new either.
         final nothingNew = !doc.mergesItself &&
             s.baseline != null &&
             () {
               final preview = _merge3(s, doc, disk);
-              return preview.changes.isEmpty && preview.conflicts.isEmpty;
+              return preview.changes
+                      .every((c) => isBookkeepingMergePath(c.path)) &&
+                  preview.conflicts
+                      .every((c) => isBookkeepingMergePath(c.path));
             }();
         if (jsonEquals(disk, doc.current()) || nothingNew) {
           // Somebody saved exactly what we have - nothing to bring in.
@@ -473,7 +485,7 @@ class CollabController extends ChangeNotifier {
       // The tick will follow it to the new file; the base is taken there.
       return;
     }
-    _captureBaseline(doc);
+    unawaited(_captureBaseline(doc));
     s.incoming = null;
     if (saved) {
       s.savedAt = DateTime.now();
@@ -485,12 +497,26 @@ class CollabController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _captureBaseline(CollabDocument doc) {
+  /// Takes the file as it is now as the base. Read off the window's thread:
+  /// a room is eight files on a share, and reading them here froze the app
+  /// on every save and open.
+  Future<void> _captureBaseline(CollabDocument doc) async {
     final s = _state[doc.kind]!;
-    s.stamp = _stampOf(doc.watchedFiles);
-    s.baseline = doc.filePath.isEmpty ? null : cloneJson(doc.readDisk());
+    final file = doc.filePath;
     s.loaded = cloneJson(doc.current());
     s.hasLoaded = true;
+    s.capturing++;
+    try {
+      final stamp = await _stampOfAsync(doc.watchedFiles);
+      final disk = file.isEmpty ? null : await doc.readDiskAsync();
+      // Moved on to another file meanwhile: that one takes its own base.
+      if (!_samePath(doc.filePath, file)) return;
+      s
+        ..stamp = stamp
+        ..baseline = disk == null ? null : cloneJson(disk);
+    } finally {
+      s.capturing--;
+    }
   }
 
   JsonMergeResult _merge3(
@@ -539,20 +565,21 @@ class CollabController extends ChangeNotifier {
     if (doc.mergesItself) {
       final taken = await doc.pullFromDisk();
       s
-        ..baseline = cloneJson(doc.readDisk())
-        ..stamp = _stampOf(doc.watchedFiles)
+        ..baseline = cloneJson(await doc.readDiskAsync())
+        ..stamp = await _stampOfAsync(doc.watchedFiles)
         ..incoming = null;
       notifyListeners();
       return CollabMergeOutcome(merged: true, takenFromTheirs: taken);
     }
-    final disk = doc.readDisk();
+    final disk = await doc.readDiskAsync();
     if (disk == null) return CollabMergeOutcome.none;
+    final stampNow = await _stampOfAsync(doc.watchedFiles);
 
     if (s.baseline == null || (!doc.isDirty && declined.isEmpty)) {
       doc.apply(cloneJson(disk), clean: true);
       s
         ..baseline = cloneJson(disk)
-        ..stamp = _stampOf(doc.watchedFiles)
+        ..stamp = stampNow
         ..incoming = null
         ..loaded = cloneJson(doc.current())
         ..hasLoaded = true;
@@ -564,7 +591,7 @@ class CollabController extends ChangeNotifier {
     doc.apply(cloneJson(result.merged), clean: jsonEquals(result.merged, disk));
     s
       ..baseline = cloneJson(disk)
-      ..stamp = _stampOf(doc.watchedFiles)
+      ..stamp = stampNow
       ..incoming = null
       // What is in memory now is part this person's and part the file's, so
       // "untouched since opening" can no longer be read off it.
@@ -624,23 +651,6 @@ class CollabController extends ChangeNotifier {
     return b.toString();
   }
 
-  static String _stampOf(List<String> files) {
-    final b = StringBuffer();
-    for (final f in files) {
-      if (f.isEmpty) continue;
-      try {
-        final st = File(f).statSync();
-        if (st.type == FileSystemEntityType.notFound) {
-          b.write('-|');
-        } else {
-          b.write('${st.modified.microsecondsSinceEpoch}:${st.size}|');
-        }
-      } catch (_) {
-        b.write('?|');
-      }
-    }
-    return b.toString();
-  }
 
   static bool _samePath(String a, String b) {
     if (a.isEmpty || b.isEmpty) return a == b;

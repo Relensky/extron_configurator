@@ -80,6 +80,8 @@ Path dashPath(Path source, List<double> pattern) {
   if (pattern.isEmpty) return source;
   final out = Path();
   for (final metric in source.computeMetrics()) {
+    // A non-finite length would never be walked to the end.
+    if (!metric.length.isFinite) continue;
     double distance = 0;
     int index = 0;
     while (distance < metric.length) {

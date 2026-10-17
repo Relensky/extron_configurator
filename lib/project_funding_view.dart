@@ -7,6 +7,7 @@ import 'building_project.dart' show ProjectRoomRef;
 import 'cost_estimate.dart' show formatMoney, trimNumber;
 import 'live_text_field.dart';
 import 'manual_room_lines.dart' show pasteRoomList, removeManualRoomLine;
+import 'project_breakdown.dart';
 import 'project_estimate.dart' show ProjectEstimate;
 import 'project_view.dart' show openProjectRoomOn;
 import 'room_review.dart' show RoomStatusIcons, RoomToneHighlight;
@@ -31,6 +32,7 @@ typedef _FundedRoom = ({
   bool isLine,
   int priority,
   String funding,
+  String department,
   double target,
   // What the room comes to: a drawn room's priced total, a line item's
   // typed cost. Null when there is no figure.
@@ -57,6 +59,104 @@ bool projectHasFunding(AppStateProvider provider) {
       p.budgetLocked ||
       p.manualRooms.any((r) => r.priority > 0 || r.targetPrice > 0) ||
       p.rooms.any((r) => r.priority > 0 || r.targetPrice > 0);
+}
+
+/// The budget split by building and by department.
+class _Breakdowns extends StatelessWidget {
+  final List<ProjectBudgetEntry> entries;
+  final double base;
+  final String Function(double) money;
+
+  const _Breakdowns({
+    required this.entries,
+    required this.base,
+    required this.money,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    String share(double v) =>
+        base > 0 ? '${(v / base * 100).toStringAsFixed(1)}%' : '-';
+
+    Widget table(String title, String blank, List<ProjectBudgetGroup> groups) {
+      Widget cell(String text, double width, {bool bold = false}) => SizedBox(
+        width: width,
+        child: Text(
+          text,
+          textAlign: TextAlign.right,
+          style: bold ? theme.textTheme.labelSmall : theme.textTheme.bodySmall,
+        ),
+      );
+      return Padding(
+        padding: const EdgeInsets.only(right: 24, bottom: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 140,
+                  child: Text(title, style: theme.textTheme.labelSmall),
+                ),
+                cell('Rooms', 50, bold: true),
+                cell('Set aside', 110, bold: true),
+                cell('Share', 60, bold: true),
+                cell('Rooms come to', 110, bold: true),
+              ],
+            ),
+            for (final g in groups)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 140,
+                    child: Text(
+                      g.name.isEmpty ? blank : g.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  cell('${g.rooms}', 50),
+                  cell(money(g.target), 110),
+                  cell(share(g.target), 60),
+                  cell(money(g.total), 110),
+                ],
+              ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            KeyedSubtree(
+              key: const ValueKey('funding_by_building'),
+              child: table(
+                'By building',
+                'No building code',
+                groupBudget(entries, (e) => e.building),
+              ),
+            ),
+            KeyedSubtree(
+              key: const ValueKey('funding_by_department'),
+              child: table(
+                'By department',
+                'No department',
+                groupBudget(entries, (e) => e.department),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class ProjectFundingCard extends StatefulWidget {
@@ -106,6 +206,8 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
         const SizedBox(width: 8),
         head('Funding', 110),
         const SizedBox(width: 8),
+        head('Department', 120),
+        const SizedBox(width: 8),
         head('Budget', 130),
         const SizedBox(width: 8),
         head('Room total', 110, right: true),
@@ -123,6 +225,7 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
     _FundedRoom room, {
     int? priority,
     String? funding,
+    String? department,
     double? target,
   }) {
     final error = provider.setRoomFunding(
@@ -130,6 +233,7 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
       roomId: room.roomId,
       priority: priority,
       funding: funding,
+      department: department,
       targetPrice: target,
     );
     if (error.isEmpty) return;
@@ -507,6 +611,7 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
           isLine: true,
           priority: r.priority,
           funding: r.funding,
+          department: r.department,
           target: r.targetPrice,
           total: r.replacementCost > 0 ? r.replacementCost : null,
           ref: null,
@@ -519,11 +624,23 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
           isLine: false,
           priority: r.priority,
           funding: r.funding,
+          department: r.department,
           target: r.targetPrice,
           total: priced[r.id],
           ref: r,
         ),
     ];
+    // The buildings the project page is showing.
+    final entries = projectBudgetEntries(project, provider.priceProject());
+    final hidden = provider.hiddenProjectBuildings;
+    final shown = [
+      for (final e in entries)
+        if (!hidden.contains(e.building)) e,
+    ];
+    if (hidden.isNotEmpty) {
+      final keep = {for (final e in shown) '${e.manualId}|${e.roomId}'};
+      rooms.removeWhere((r) => !keep.contains('${r.manualId}|${r.roomId}'));
+    }
     switch (_sort) {
       case _RoomSort.added:
         break;
@@ -634,6 +751,17 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
               initial: room.funding,
               hint: 'Central',
               onChanged: (v) => _set(provider, room, funding: v),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 120,
+            child: LiveTextField(
+              key: ValueKey('funding_dept_${room.manualId}${room.roomId}'),
+              fieldId: 'funding_dept_${room.manualId}${room.roomId}',
+              initial: room.department,
+              hint: 'Physics',
+              onChanged: (v) => _set(provider, room, department: v),
             ),
           ),
           const SizedBox(width: 8),
@@ -794,6 +922,14 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                     key: 'funding_rooms_total',
                   ),
                 ],
+              ),
+            if (_showFigures && shown.isNotEmpty)
+              _Breakdowns(
+                entries: shown,
+                // Shares are of the maximum, or of what is set aside while
+                // there is no maximum.
+                base: project.budget > 0 ? project.budget : allocated,
+                money: money,
               ),
             if (_expanded)
               for (final p in priorities) ...[

@@ -132,11 +132,11 @@ void main() {
       desc.left,
       moreOrLessEquals(rectOf(tester, textInside('desc_')).left, epsilon: 0.5),
     );
-    // 'Qty' captions the equipment and hardware tables as well; the items one
-    // is the last of them, in the order the cards are built.
+    // 'Qty' captions the equipment and hardware tables as well; Other items
+    // sits between them, so its caption is the second.
     final qty = find.text('Qty');
     expect(qty, findsNWidgets(3));
-    final itemsQty = rectOf(tester, qty.last);
+    final itemsQty = rectOf(tester, qty.at(1));
     expect(
       itemsQty.right,
       moreOrLessEquals(rectOf(tester, textInside('qty_')).right, epsilon: 0.5),
@@ -202,9 +202,9 @@ void main() {
     await pump(tester, p);
 
     final caption = find.text('Qty');
-    // Equipment, hardware, other items — the hardware one is the second.
+    // Equipment, other items, hardware — the hardware one is the last.
     final box = rectOf(tester, textInside('hwqty_'));
-    expect(rectOf(tester, caption.at(1)).right,
+    expect(rectOf(tester, caption.at(2)).right,
         moreOrLessEquals(box.right, epsilon: 0.5));
   });
 

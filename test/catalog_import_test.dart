@@ -117,6 +117,8 @@ void main() {
     for (final entry in catalog.all) {
       for (final port in entry.ports) {
         if (port.isPowerInlet) continue;
+        // A two-way port (a switch's LAN) is placed where it is drawn.
+        if (port.direction == PortDirection.bidirectional) continue;
         expect(
           port.side,
           port.isOutput ? PortSide.right : PortSide.left,

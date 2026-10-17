@@ -324,7 +324,11 @@ Future<Uint8List> buildEstimatePdf(
       line.unitPrice <= 0 && !line.furnished ? 'TBD' : cash(line.unitPrice);
 
   String amountLabel(CostLine line) {
-    if (line.furnished) return t('By others');
+    if (line.furnished) {
+      return t(const {'stock', 'in kind'}.contains(line.furnishedBy)
+          ? 'In kind'
+          : 'By others');
+    }
     if (line.unitPrice <= 0) return 'TBD';
     return cash(line.total);
   }
@@ -343,7 +347,14 @@ Future<Uint8List> buildEstimatePdf(
   List<List<pw.Widget>> partRows(List<CostLine> lines, {bool model = true}) => [
     for (final line in lines)
       [
-        cell(line.description, sub: lineNote(line)),
+        cell(
+          // An optional part left in its section says so.
+          estimate.inlineOptional.contains(line.key)
+              ? '${line.description} (optional'
+                    '${estimate.optionalIncluded ? '' : ', not in the total'})'
+              : line.description,
+          sub: lineNote(line),
+        ),
         cell(
           model && line.model.isNotEmpty ? line.model : line.partNumber,
           sub: model && line.model.isNotEmpty && line.partNumber != line.model
@@ -410,6 +421,12 @@ Future<Uint8List> buildEstimatePdf(
                 if (estimate.labor.isNotEmpty) row(info.word('labor'), estimate.laborTotal),
                 if (estimate.extras.isNotEmpty)
                   row(info.word('other'), estimate.extrasTotal),
+                // Counted, and listed apart: on the column so it adds up.
+                if (estimate.optionalIncluded && estimate.optional.isNotEmpty)
+                  row('Optional upgrades', estimate.optionalTotal),
+                if (estimate.laborChargesIncluded &&
+                    estimate.laborCharges.isNotEmpty)
+                  row('Labor charges', estimate.laborChargesTotal),
                 if (shipping) row(info.word('shipping'), estimate.shippingTotal),
                 divider,
                 row(info.word('subtotal'), estimate.subtotal, strong: true),
@@ -454,6 +471,20 @@ Future<Uint8List> buildEstimatePdf(
               ],
             ),
           ),
+          // The decision: what the options come to, and the room either way.
+          if (estimate.hasOptional)
+            pw.Padding(
+              padding: const pw.EdgeInsets.fromLTRB(12, 6, 12, 8),
+              child: pw.Column(
+                children: [
+                  row('Optional upgrades', estimate.optionalTotal),
+                  row('Without options', estimate.grandWithoutOptions,
+                      strong: !estimate.optionalIncluded),
+                  row('With options', estimate.grandWithOptions,
+                      strong: estimate.optionalIncluded),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -612,7 +643,14 @@ Future<Uint8List> buildEstimatePdf(
                 line.unrated ? 'TBD' : cash(line.hourlyRate),
                 right: true,
               ),
-              cell(line.unrated ? 'TBD' : cash(line.total), right: true),
+              cell(
+                line.furnishedBy != null
+                    ? t('In kind ${cash(line.listTotal)}')
+                    : line.unrated
+                    ? 'TBD'
+                    : cash(line.total),
+                right: true,
+              ),
             ],
         ],
       ),
@@ -626,11 +664,87 @@ Future<Uint8List> buildEstimatePdf(
         rows: partRows(estimate.extras, model: false),
       ),
     ],
+    if (estimate.laborCharges.isNotEmpty) ...[
+      sectionTitle(estimate.laborChargesIncluded
+          ? 'Labor charges - in the total'
+          : 'Labor charges - not in the total'),
+      table(
+        header: partHeader('Part'),
+        flex: partFlex,
+        numeric: partNumeric,
+        rows: partRows(
+          [for (final c in estimate.laborCharges) c.line],
+          model: false,
+        ),
+      ),
+    ],
+    if (estimate.optional.isNotEmpty) ...[
+      sectionTitle(estimate.optionalIncluded
+          ? 'Optional upgrades - in the total'
+          : 'Optional upgrades - not in the total'),
+      table(
+        header: partHeader('Part'),
+        flex: partFlex,
+        numeric: partNumeric,
+        rows: partRows(estimate.optional, model: false),
+      ),
+    ],
+    if (estimate.optionalLabor.isNotEmpty) ...[
+      if (estimate.optional.isEmpty)
+        sectionTitle(estimate.optionalIncluded
+            ? 'Optional upgrades - in the total'
+            : 'Optional upgrades - not in the total'),
+      table(
+        header: const ['Optional labor', 'Total hours', 'Rate', 'Amount'],
+        flex: const [4.2, 1.2, 1.4, 1.6],
+        numeric: const {1, 2, 3},
+        rows: [
+          for (final line in estimate.optionalLabor)
+            [
+              cell(line.roleName, sub: line.description),
+              cell(trimNumber(line.totalHours), right: true),
+              cell(cash(line.hourlyRate), right: true),
+              cell(cash(line.total), right: true),
+            ],
+        ],
+      ),
+    ],
     pw.SizedBox(height: 16),
     pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.end,
       children: [totalsBox()],
     ),
+    // Given rather than bought, at what it is worth - not in the total.
+    if (estimate.inKind.isNotEmpty) ...[
+      sectionTitle('In kind'),
+      table(
+        header: const ['Description', 'Given by', 'Qty', 'Value'],
+        flex: const [4.2, 2.4, 0.9, 1.6],
+        numeric: const {2, 3},
+        rows: [
+          for (final l in estimate.inKind)
+            [
+              cell(l.name, sub: l.section),
+              cell(inKindSourceLabel(l.by)),
+              cell(trimNumber(l.qty), right: true),
+              cell(cash(l.value), right: true),
+            ],
+          for (final s in estimate.inKindBySource)
+            [
+              cell(''),
+              cell(s.source, style: bold),
+              cell(''),
+              cell(cash(s.value), right: true, style: bold),
+            ],
+          [
+            cell('In-kind value - not in the total above', style: bold),
+            cell(''),
+            cell(''),
+            cell(cash(estimate.inKindTotal), right: true, style: bold),
+          ],
+        ],
+      ),
+    ],
     if (info.notes.trim().isNotEmpty) ...[
       sectionTitle(info.word('notes')),
       ...paragraphs(info.notes),

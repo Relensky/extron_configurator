@@ -233,6 +233,28 @@ void main() {
           'Document Camera');
     });
 
+    test('Add all cables from config brings back one deleted by hand', () {
+      final p = room();
+      autoDrawRoutingFromConfig(p);
+      final pc = avAutoNodeId('input_pc');
+      final lead = p.avCables.firstWhere((c) => c.fromNodeId == pc);
+      p.removeAvCable(lead.id);
+      expect(landsOn(p, pc), isNull);
+      // The automatic pass leaves a removed cable removed.
+      p.avRoutedFingerprint = '';
+      autoDrawRoutingFromConfig(p);
+      expect(landsOn(p, pc), isNull);
+
+      final before = p.avCables.length;
+      final done = addAllCablesFromConfig(p);
+      expect(done.cablesDrawn, 1);
+      expect(landsOn(p, pc), 'HDMI 1');
+      expect(p.avCables, hasLength(before + 1));
+      expect(addAllCablesNote(done), 'Added 1 cable from the config.');
+      expect(addAllCablesNote(addAllCablesFromConfig(p)),
+          'Every cable the config describes is already drawn.');
+    });
+
     test('a blank field is not a device', () {
       final p = room();
       (p.roomConfig['SYSTEM_SETUP'] as Map)['input_doc_cam'] = '';

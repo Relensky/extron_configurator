@@ -385,6 +385,9 @@ class XlsxSheet {
   /// Columns kept in view when scrolling right. 0 freezes nothing.
   final int freezeColumns;
 
+  /// Kept out of sight in the tab bar - see project_restore_data.dart.
+  final bool hidden;
+
   XlsxSheet({
     required this.name,
     required this.rows,
@@ -395,6 +398,7 @@ class XlsxSheet {
     this.image,
     this.charts = const [],
     this.freezeColumns = 0,
+    this.hidden = false,
   });
 }
 
@@ -524,7 +528,8 @@ Uint8List buildXlsx(List<XlsxSheet> sheets, {String? accentHex}) {
   final sheetTags = StringBuffer();
   for (int i = 0; i < sheets.length; i++) {
     sheetTags.write(
-        '<sheet name="${esc(sheetNames[i])}" sheetId="${i + 1}" r:id="rId${i + 1}"/>');
+        '<sheet name="${esc(sheetNames[i])}" sheetId="${i + 1}"'
+        '${sheets[i].hidden ? ' state="hidden"' : ''} r:id="rId${i + 1}"/>');
   }
   archive.add(ArchiveFile.string('xl/workbook.xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'

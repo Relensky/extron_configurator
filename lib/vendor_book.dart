@@ -201,7 +201,7 @@ class VendorBook {
     '__readme':
         'The default vendor list for the Room Config Builder. One entry per '
         'company the shop asks to quote; a new job starts with these on its '
-        'Packages tab, and any of them can be added to an older job from the '
+        'Quotes tab, and any of them can be added to an older job from the '
         'same tab. Put this file on a shared drive to give everybody one '
         'directory. Editing a vendor on a job does not write back here.',
     'vendors': [for (final v in vendors) v.toJson()],

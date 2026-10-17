@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../av_device_library.dart' show CatalogPullChange;
 import 'collab_controller.dart';
 import 'combine_details.dart';
 import 'combine_history.dart';
@@ -540,10 +541,33 @@ Future<bool> _mergeNow(
   final details = await combineContextRows(provider, kind, incoming);
   if (!context.mounted) return false;
 
+  // The catalog settles itself field by field: what it will take is listed
+  // first, model by model.
+  var catalogChanges = const <CatalogPullChange>[];
+  if (kind == CollabDocKind.catalog) {
+    catalogChanges = await provider.avDeviceLibrary.previewPullFromDisk();
+    if (!context.mounted) return false;
+    if (catalogChanges.isNotEmpty &&
+        await showCatalogMergeDialog(context,
+                who: who, changes: catalogChanges, beforeSave: beforeSave) !=
+            true) {
+      return false;
+    }
+    if (!context.mounted) return false;
+  }
+
   // ALWAYS SHOWN FIRST: what their save brings in, before anything moves -
   // each change ticked to be taken, or unticked to leave it out.
   var declined = <String>{};
-  if (preview != null) {
+  // Only re-priced room totals differ: taken without asking.
+  final onlyBookkeeping = preview != null &&
+      preview.changes.every((c) => isBookkeepingMergePath(c.path)) &&
+      preview.conflicts.every((c) => isBookkeepingMergePath(c.path));
+  final asked = [
+    for (final c in preview?.conflicts ?? const <MergeConflict>[])
+      if (!isBookkeepingMergePath(c.path)) c,
+  ];
+  if (preview != null && !onlyBookkeeping) {
     if (!context.mounted) return false;
     final picked = await showMergeReviewDialog(
       context,
@@ -562,11 +586,11 @@ Future<bool> _mergeNow(
   }
 
   Map<String, MergeSide>? choices;
-  if (preview != null && preview.conflicts.isNotEmpty) {
+  if (asked.isNotEmpty) {
     choices = await showMergeConflictDialog(
       context,
       kind: kind,
-      conflicts: preview.conflicts,
+      conflicts: asked,
       who: collab.incomingOn(kind)?.who ?? 'Someone else',
       beforeSave: beforeSave,
       doc: collab.currentOf(kind),
@@ -576,8 +600,9 @@ Future<bool> _mergeNow(
   // The file as it was before the combine, kept with a timestamp.
   final backup = await provider.backupBeforeCombine(kind);
   final doc = collab.currentOf(kind);
-  MergeSide side(MergeConflict c) =>
-      choices?[c.path] ?? (c.canKeepBoth ? MergeSide.both : MergeSide.mine);
+  MergeSide side(MergeConflict c) => isBookkeepingMergePath(c.path)
+      ? MergeSide.mine
+      : choices?[c.path] ?? (c.canKeepBoth ? MergeSide.both : MergeSide.mine);
   final outcome = await collab.mergeIncoming(
     kind,
     // Anything not asked about - the file moved again since the question was
@@ -585,7 +610,15 @@ Future<bool> _mergeNow(
     resolve: side,
     declined: declined,
   );
-  if (outcome.merged && preview != null) {
+  if (outcome.merged && catalogChanges.isNotEmpty) {
+    unawaited(provider.recordCombine(
+      kind: kind,
+      from: who,
+      backup: backup,
+      items: catalogHistoryItems(catalogChanges),
+    ));
+  }
+  if (outcome.merged && preview != null && !onlyBookkeeping) {
     // Every line, approved or left out, on the combine history - written in
     // the background, so a save waiting on this combine is not held up.
     unawaited(provider.recordCombine(
@@ -645,6 +678,7 @@ List<CombineHistoryItem> combineHistoryItems(
   Object? doc,
 ) => [
   for (final c in preview.changes)
+    if (!isBookkeepingMergePath(c.path))
     CombineHistoryItem(
       place: describeMergePlace(c.path, doc),
       path: c.path,
@@ -653,6 +687,7 @@ List<CombineHistoryItem> combineHistoryItems(
       approved: !declined.contains(c.key),
     ),
   for (final c in preview.conflicts)
+    if (!isBookkeepingMergePath(c.path))
     CombineHistoryItem(
       place: describeMergePlace(c.path, doc),
       path: c.path,
@@ -666,6 +701,157 @@ List<CombineHistoryItem> combineHistoryItems(
       conflict: true,
     ),
 ];
+
+/// A catalog field's value as a person reads it; null is its default.
+String describeCatalogValue(Object? v) =>
+    v == null ? '(not set)' : describeMergeValue(v);
+
+/// The lines of a catalog combine for the history: one per field taken, one
+/// per model added.
+List<CombineHistoryItem> catalogHistoryItems(List<CatalogPullChange> changes) =>
+    [
+      for (final c in changes)
+        if (c.added)
+          CombineHistoryItem(
+            place: 'Catalog > ${c.model}',
+            path: 'devices[model=${c.model}]',
+            after: 'added',
+          )
+        else
+          for (final f in c.fields)
+            CombineHistoryItem(
+              place: 'Catalog > ${c.model} > ${describeMergeField(f.field)}',
+              path: 'devices[model=${c.model}].${f.field}',
+              before: describeCatalogValue(f.mine),
+              after: describeCatalogValue(f.theirs),
+            ),
+    ];
+
+/// Every catalog entry a combine with [who]'s save brings in - each model,
+/// and each field with yours and theirs - before any of it is taken. True to
+/// combine.
+Future<bool?> showCatalogMergeDialog(
+  BuildContext context, {
+  required String who,
+  required List<CatalogPullChange> changes,
+  bool beforeSave = false,
+}) {
+  final added = changes.where((c) => c.added).length;
+  final edited = changes.length - added;
+  final fields = changes.fold<int>(0, (n, c) => n + c.fields.length);
+  String count(int n, String word) => '$n $word${n == 1 ? '' : 's'}';
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) {
+      final theme = Theme.of(ctx);
+      final muted = theme.colorScheme.onSurfaceVariant;
+      final small = theme.textTheme.bodySmall;
+      return AlertDialog(
+        key: const ValueKey('catalog_merge_dialog'),
+        title: Text('Combine the catalog with $who\'s save'),
+        content: SizedBox(
+          width: 620,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                [
+                  if (edited > 0)
+                    '${count(edited, 'model')} changed '
+                        '(${count(fields, 'field')})',
+                  if (added > 0) '${count(added, 'model')} added',
+                ].join(', '),
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Only fields you have not changed yourself are taken; yours '
+                'stay as they are.',
+                style: small?.copyWith(color: muted),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.55,
+                  ),
+                  child: ListView(
+                    key: const ValueKey('catalog_merge_list'),
+                    shrinkWrap: true,
+                    children: [
+                      for (final c in changes) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8, bottom: 2),
+                          child: Row(
+                            children: [
+                              Icon(
+                                c.added ? Icons.add_circle_outline : Icons.edit,
+                                size: 16,
+                                color: muted,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  c.model,
+                                  style: theme.textTheme.titleSmall,
+                                ),
+                              ),
+                              Text(
+                                [
+                                  if (c.added) 'New model',
+                                  if (c.by.isNotEmpty) 'by ${c.by}',
+                                ].join(' '),
+                                style: small?.copyWith(color: muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        for (final f in c.fields)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 22, top: 2),
+                            child: SelectableText.rich(
+                              TextSpan(
+                                style: small,
+                                children: [
+                                  TextSpan(
+                                    text: '${describeMergeField(f.field)}: ',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  TextSpan(
+                                    text: describeCatalogValue(f.mine),
+                                    style: TextStyle(color: muted),
+                                  ),
+                                  const TextSpan(text: '  →  '),
+                                  TextSpan(text: describeCatalogValue(f.theirs)),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('catalog_merge_go'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(beforeSave ? 'Combine and save' : 'Combine'),
+          ),
+        ],
+      );
+    },
+  );
+}
 
 /// What combining would bring in from [who]'s save - every change, in words,
 /// each with a box to approve it - and how many places you both changed.
@@ -695,9 +881,10 @@ Future<Set<String>?> showMergeReviewDialog(
       if (isTaxMergePath(c.path)) c,
   ];
   var takeTheirTax = true;
+  // Re-priced room totals are taken without a line each.
   final changes = [
     for (final c in preview.changes)
-      if (!isTaxMergePath(c.path)) c,
+      if (!isTaxMergePath(c.path) && !isBookkeepingMergePath(c.path)) c,
   ]..sort((a, b) =>
       mergePlaceGroup(places[a.key]!).compareTo(mergePlaceGroup(places[b.key]!)));
   final approved = {for (final c in changes) c.key};

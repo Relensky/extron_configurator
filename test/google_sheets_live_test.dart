@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 
+import 'package:extron_configurator/project_restore_data.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/google_sheets_export.dart';
 import 'package:extron_configurator/google_sheets_live.dart';
@@ -268,10 +269,15 @@ void main() {
       await p.publishOnlineCopy();
 
       // Nothing changed: only the History tab, which logs the publish and
-      // the time it was made, is written to.
+      // the time it was made, is written to - and the packed project, which
+      // carries that same history.
       google.written.clear();
       await p.publishOnlineCopy();
-      expect(google.written.keys.toSet().difference({'History'}), isEmpty);
+      expect(
+          google.written.keys
+              .toSet()
+              .difference({'History', kProjectDataSheet}),
+          isEmpty);
 
       // One quantity changed: that cell on the deliveries tab, not the tab.
       p.updateProjectDelivery(p.project.deliveries.single.copyWith(qty: 20));
@@ -398,7 +404,9 @@ void main() {
 
       final baseline = readSheetBaseline(file);
       expect(baseline, isNotNull);
-      expect(baseline!.keys, containsAll(google.tabs.keys));
+      // All but the packed project, which is never compared.
+      expect(baseline!.keys,
+          containsAll(google.tabs.keys.where((t) => t != kProjectDataSheet)));
     });
 
     test('holds the publish, and is listed rather than applied', () async {

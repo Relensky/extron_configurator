@@ -223,11 +223,13 @@ class _StepButton extends StatelessWidget {
   }
 }
 
-class _RoomMenu extends StatelessWidget {
+class _RoomMenu extends StatefulWidget {
   /// Not a room id — those are always `room<n>` — so the last entry on the
   /// menu can never be mistaken for one of the rooms above it.
   static const String _newRoom = '<new-room>';
   static const String _closeRoom = '<close-room>';
+  static const String _sortByName = '<sort-name>';
+  static const String _sortByPriority = '<sort-priority>';
 
   final ProjectRoomRef? open;
   final List<ProjectRoomRef> rooms;
@@ -235,7 +237,33 @@ class _RoomMenu extends StatelessWidget {
   const _RoomMenu({required this.open, required this.rooms});
 
   @override
+  State<_RoomMenu> createState() => _RoomMenuState();
+
+  /// P1 first, then P2 and on; rooms with no priority last. Ties by name.
+  static List<ProjectRoomRef> sorted(
+    List<ProjectRoomRef> rooms,
+    String Function(ProjectRoomRef) code, {
+    required bool byPriority,
+  }) {
+    int rank(ProjectRoomRef r) => r.priority > 0 ? r.priority : 1 << 30;
+    return [...rooms]..sort((a, b) {
+        if (byPriority) {
+          final p = rank(a).compareTo(rank(b));
+          if (p != 0) return p;
+        }
+        return compareRoomNames(code(a), code(b));
+      });
+  }
+}
+
+class _RoomMenuState extends State<_RoomMenu> {
+  /// To open the menu again after a sort is picked, in the new order.
+  final GlobalKey<PopupMenuButtonState<String>> _button = GlobalKey();
+
+  @override
   Widget build(BuildContext context) {
+    final open = widget.open;
+    final rooms = widget.rooms;
     final theme = Theme.of(context);
     final provider = context.read<AppStateProvider>();
     final onBar =
@@ -257,13 +285,16 @@ class _RoomMenu extends StatelessWidget {
     // one of them on every rebuild of the app bar, which is every keystroke
     // anywhere in the application.
     final names = _namesOf(provider);
+    final byPriority = provider.roomMenuByPriority;
 
-    return PopupMenuButton<String>(
+    return KeyedSubtree(
       key: const ValueKey('room_picker_menu'),
+      child: PopupMenuButton<String>(
+      key: _button,
       // The name the button no longer has room for.
       tooltip: open == null
           ? 'Switch to another room on this project'
-          : '${names.nameFor(open!)}'
+          : '${names.nameFor(open)}'
               '\n\nSwitch to another room on this project',
       constraints: const BoxConstraints(minWidth: 260, maxWidth: 460),
       onSelected: (id) async {
@@ -271,12 +302,18 @@ class _RoomMenu extends StatelessWidget {
         // room am I working on" — so it belongs on the same menu rather than
         // three clicks away on the Project tab. It goes LAST, under a divider:
         // the rooms are the answer nearly every time this is opened.
-        if (id == _newRoom) {
+        if (id == _RoomMenu._sortByName || id == _RoomMenu._sortByPriority) {
+          provider.setRoomMenuByPriority(id == _RoomMenu._sortByPriority);
+          WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _button.currentState?.showButtonMenu());
+          return;
+        }
+        if (id == _RoomMenu._newRoom) {
           await createProjectRoom(context, provider);
           return;
         }
         // Back to the job with no room open, asking about unsaved work first.
-        if (id == _closeRoom) {
+        if (id == _RoomMenu._closeRoom) {
           await closeRoomFile(context, provider);
           return;
         }
@@ -297,9 +334,9 @@ class _RoomMenu extends StatelessWidget {
         );
       },
       itemBuilder: (ctx) => [
-        // Alphabetical by the code on the door, not the order they were added.
-        for (final ref in [...rooms]
-          ..sort((a, b) => compareRoomNames(names.codeFor(a), names.codeFor(b))))
+        // By the code on the door, or by priority - picked at the bottom.
+        for (final ref in _RoomMenu.sorted(rooms, names.codeFor,
+            byPriority: byPriority))
           PopupMenuItem(
             value: ref.id,
             // Lit in the room's state: locked by you or someone else, ready
@@ -318,7 +355,18 @@ class _RoomMenu extends StatelessWidget {
                     : Icons.radio_button_unchecked,
                 size: 18,
               ),
-              title: Text(names.codeFor(ref)),
+              title: Row(
+                children: [
+                  if (ref.priority > 0) ...[
+                    RoomPriorityBadge(
+                      priority: ref.priority,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Flexible(child: Text(names.codeFor(ref))),
+                ],
+              ),
               // THE FULL NAME BELONGS ON THE MENU, not on the button. The
               // button has to be short enough to live in a title bar; the menu
               // is a list somebody has stopped to read, and 'BSS 101' with no
@@ -343,7 +391,7 @@ class _RoomMenu extends StatelessWidget {
         const PopupMenuDivider(),
         PopupMenuItem(
           key: const ValueKey('room_picker_close'),
-          value: _closeRoom,
+          value: _RoomMenu._closeRoom,
           enabled: open != null,
           child: const ListTile(
             dense: true,
@@ -354,7 +402,7 @@ class _RoomMenu extends StatelessWidget {
           ),
         ),
         const PopupMenuItem(
-          value: _newRoom,
+          value: _RoomMenu._newRoom,
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
@@ -363,6 +411,23 @@ class _RoomMenu extends StatelessWidget {
             subtitle: Text('Created, saved and added to the job'),
           ),
         ),
+        if (rooms.length > 1) ...[
+          const PopupMenuDivider(),
+          for (final (value, label, on) in [
+            (_RoomMenu._sortByName, 'Sort A to Z', !byPriority),
+            (_RoomMenu._sortByPriority, 'Sort by priority', byPriority),
+          ])
+            PopupMenuItem(
+              key: ValueKey('room_picker_$value'),
+              value: value,
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(on ? Icons.check : Icons.sort, size: 18),
+                title: Text(label),
+              ),
+            ),
+        ],
       ],
       // Outlined in the room's lock or review color.
       child: RoomToneHighlight(
@@ -375,6 +440,10 @@ class _RoomMenu extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if ((open?.priority ?? 0) > 0) ...[
+              RoomPriorityBadge(priority: open!.priority, color: onBar),
+              const SizedBox(width: 4),
+            ],
             // THE CODE ON THE DOOR, NOT THE ROOM'S FULL NAME.
             //
             // This button lives in the title bar, in front of New, Open and
@@ -387,7 +456,7 @@ class _RoomMenu extends StatelessWidget {
             Flexible(
               child: Text(
                 open != null
-                    ? names.codeFor(open!)
+                    ? names.codeFor(open)
                     : rooms.isEmpty
                     ? 'No rooms yet'
                     : 'Pick a room',
@@ -412,6 +481,7 @@ class _RoomMenu extends StatelessWidget {
         ),
       ),
       ),
+      ),
     );
   }
 
@@ -430,6 +500,39 @@ class _RoomMenu extends StatelessWidget {
       },
     );
   }
+}
+
+/// "P1", "P2"... - a room's priority on the job, outlined in [color].
+class RoomPriorityBadge extends StatelessWidget {
+  final int priority;
+  final Color color;
+
+  const RoomPriorityBadge({
+    super.key,
+    required this.priority,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: 'Priority $priority',
+    child: Container(
+      key: ValueKey('room_priority_$priority'),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        border: Border.all(color: color),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        'P$priority',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+          height: 1.1,
+        ),
+      ),
+    ),
+  );
 }
 
 /// What to call each room, in the two lengths the picker needs.

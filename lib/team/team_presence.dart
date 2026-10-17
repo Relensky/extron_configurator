@@ -222,6 +222,7 @@ class TeamPresenceBoard extends ChangeNotifier {
   /// a moment rather than on the next heartbeat. Off in tests.
   final bool watch;
   StreamSubscription<FileSystemEvent>? _watcher;
+  bool _watchStarting = false;
   Timer? _settle;
 
   /// The dashboard's GVE login, read on each heartbeat.
@@ -272,7 +273,7 @@ class TeamPresenceBoard extends ChangeNotifier {
       _timer = Timer.periodic(
           kPresenceHeartbeat, (_) => beat(readOthers: !AppActivity.away));
       await beat();
-      _startWatching();
+      unawaited(_startWatching());
     }
     notifyListeners();
   }
@@ -280,11 +281,21 @@ class TeamPresenceBoard extends ChangeNotifier {
   /// [TEAM]: re-reads the notes whenever one changes on the share. A share
   /// that cannot be watched keeps the heartbeat's 15 s reading; one whose
   /// watch drops is watched again on the next beat.
-  void _startWatching() {
-    if (!watch || _watcher != null || _folder.isEmpty) return;
+  ///
+  /// [FREEZES]: the folder check is async. It was existsSync(), on every
+  /// beat while no watch was up, and a share slow to reconnect held the UI
+  /// thread for as long as SMB took - 16-35 s freezes with no frame to blame.
+  Future<void> _startWatching() async {
+    if (!watch || _watcher != null || _watchStarting || _folder.isEmpty) {
+      return;
+    }
+    _watchStarting = true;
+    final folder = _folder;
     try {
-      final dir = Directory(_folder);
-      if (!dir.existsSync()) return;
+      final dir = Directory(folder);
+      if (!await dir.exists()) return;
+      // Moved, stopped or watched meanwhile.
+      if (folder != _folder || _watcher != null) return;
       _watcher = dir.watch().listen((e) {
         if (!e.path.toLowerCase().endsWith('.json')) return;
         // A burst of events (write, rename) is one change.
@@ -296,6 +307,8 @@ class TeamPresenceBoard extends ChangeNotifier {
           cancelOnError: true);
     } catch (_) {
       _watcher = null;
+    } finally {
+      _watchStarting = false;
     }
   }
 
@@ -388,7 +401,7 @@ class TeamPresenceBoard extends ChangeNotifier {
       } catch (_) {}
     }
     if (!readOthers) return;
-    _startWatching();
+    unawaited(_startWatching());
     await _readOthers();
   }
 

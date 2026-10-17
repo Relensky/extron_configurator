@@ -441,8 +441,12 @@ Set<String> _matchKeys(String section, String pn, String model, String name) =>
       if (name.trim().isNotEmpty) '$section|${costPartKey('', '', name)}',
     };
 
-/// Every key a line in [estimate] can be matched on, per section.
-Set<String> existingPartKeys(CostEstimate estimate) => {
+/// Every key a line in [estimate] can be matched on, per section. Lines
+/// whose key is in [except] are left out.
+Set<String> existingPartKeys(
+  CostEstimate estimate, {
+  Set<String> except = const {},
+}) => {
   for (final (section, lines) in [
     ('Equipment', estimate.equipment),
     ('Rack hardware', estimate.hardware),
@@ -450,18 +454,104 @@ Set<String> existingPartKeys(CostEstimate estimate) => {
     ('Other items', estimate.extras),
   ])
     for (final l in lines)
-      ..._matchKeys(section, l.partNumber, l.model, l.description),
+      if (!except.contains(l.key))
+        ..._matchKeys(section, l.partNumber, l.model, l.description),
 };
+
+/// The ids of [lines] and [labor] as typed on [settings]' cost page, for
+/// replacing them. Null when any is drawn on the diagram instead, which the
+/// cost page cannot take off.
+Set<String>? typedLineIds(
+  RoomCostSettings settings,
+  Iterable<CostLine> lines,
+  Iterable<LaborCostLine> labor,
+) {
+  final typed = {
+    for (final i in [
+      ...settings.extraEquipment,
+      ...settings.extraHardware,
+      ...settings.extraCables,
+      ...settings.items,
+    ])
+      i.id,
+  };
+  final typedLabor = {for (final l in settings.labor) l.id};
+  final ids = <String>{};
+  for (final l in lines) {
+    if (!typed.contains(l.key)) return null;
+    ids.add(l.key);
+  }
+  for (final l in labor) {
+    if (!typedLabor.contains(l.id)) return null;
+    ids.add(l.id);
+  }
+  return ids;
+}
+
+/// Gives [lineKey] the quantity [qty] in [settings]: a part typed on the
+/// Cost tab takes it as its own, a line drawn on the AV Flow as the count
+/// quoted. False when the line is neither - rack hardware or a cable run on
+/// the drawing, whose count is the drawing's.
+bool setCostLineQty(RoomCostSettings settings, String lineKey, double qty) {
+  for (final list in [
+    settings.extraEquipment,
+    settings.extraHardware,
+    settings.extraCables,
+    settings.items,
+  ]) {
+    final i = list.indexWhere((item) => item.id == lineKey);
+    if (i < 0) continue;
+    list[i] = list[i].copyWith(qty: qty);
+    return true;
+  }
+  if (drawnModelOfCostKey(lineKey) == null) return false;
+  settings.qtyOverrides[lineKey] = qty;
+  return true;
+}
+
+/// The model behind a line drawn on the AV Flow, lower case, or null for a
+/// line typed on the Cost page. See [deviceGroupKey].
+String? drawnModelOfCostKey(String key) {
+  final k = key.startsWith('nocost:') ? key.substring(7) : key;
+  return k.startsWith('model:') ? k.substring(6) : null;
+}
+
+/// Takes the lines with [ids] off [settings], with the price, spares and
+/// shipping typed on them. Returns how many came off.
+int removeCostItems(RoomCostSettings settings, Set<String> ids) {
+  if (ids.isEmpty) return 0;
+  var removed = 0;
+  void drop<T>(List<T> list, String Function(T) id) {
+    final before = list.length;
+    list.removeWhere((x) => ids.contains(id(x)));
+    removed += before - list.length;
+  }
+
+  drop(settings.extraEquipment, (i) => i.id);
+  drop(settings.extraHardware, (i) => i.id);
+  drop(settings.extraCables, (i) => i.id);
+  drop(settings.items, (i) => i.id);
+  drop(settings.labor, (l) => l.id);
+  for (final id in ids) {
+    settings.priceOverrides.remove(id);
+    settings.equipmentSpares.remove(id);
+    settings.shippingEach.remove(id);
+  }
+  return removed;
+}
 
 /// [set] less what the target already has: a part matching a line on
 /// [targetEstimate], labor on the same rate with the same description, a fee
-/// of the same name. Returns what is left and how many were skipped.
+/// of the same name. Lines whose id is in [replacing] are about to come off
+/// the target, so they do not count. Returns what is left and how many were
+/// skipped.
 (CostItemSet, int) withoutExisting(
   CostItemSet set, {
   required RoomCostSettings target,
   required CostEstimate targetEstimate,
+  Set<String> replacing = const {},
 }) {
-  final existing = existingPartKeys(targetEstimate);
+  final existing = existingPartKeys(targetEstimate, except: replacing);
   var skipped = 0;
   List<CostLineItem> keep(String section, List<CostLineItem> list) {
     final out = <CostLineItem>[];
@@ -481,7 +571,10 @@ Set<String> existingPartKeys(CostEstimate estimate) => {
 
   String laborKey(LaborLine l) =>
       '${l.rateId}|${l.description.trim().toLowerCase()}';
-  final labors = {for (final l in target.labor) laborKey(l)};
+  final labors = {
+    for (final l in target.labor)
+      if (!replacing.contains(l.id)) laborKey(l),
+  };
   final keptLabor = <LaborLine>[];
   for (final l in set.labor) {
     if (labors.add(laborKey(l))) {

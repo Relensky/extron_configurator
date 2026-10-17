@@ -671,7 +671,22 @@ class GoogleLiveSheet {
       ids[sheet.name] = next;
       requests.add({
         'addSheet': {
-          'properties': {'sheetId': next, 'title': sheet.name},
+          'properties': {
+            'sheetId': next,
+            'title': sheet.name,
+            if (sheet.hidden) 'hidden': true,
+          },
+        },
+      });
+    }
+    // A tab meant to be out of sight stays so, whoever opened it up.
+    for (final sheet in sheets) {
+      final tab = have[sheet.name];
+      if (!sheet.hidden || tab == null) continue;
+      requests.add({
+        'updateSheetProperties': {
+          'properties': {'sheetId': tab.id, 'hidden': true},
+          'fields': 'hidden',
         },
       });
     }

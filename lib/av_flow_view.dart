@@ -17,6 +17,10 @@ import 'catalog_category_prompt.dart';
 import 'av_device_library.dart';
 import 'cable_length_field.dart';
 import 'av_flow_overview.dart';
+import 'av_flow_name_route.dart';
+import 'av_flow_place.dart';
+import 'av_flow_ties.dart' show powerStrips;
+import 'av_flow_ties_dialog.dart';
 import 'av_flow_layout.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
@@ -39,6 +43,7 @@ import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'room_locations.dart';
 import 'room_locations_view.dart';
+import 'room_parts_copy.dart';
 import 'room_preset_save_dialog.dart';
 import 'screenshot_tools.dart';
 import 'side_pane.dart';
@@ -366,9 +371,16 @@ class _AvFlowViewState extends State<AvFlowView>
     }
   }
 
+  /// The magnifier's zoom picked with its - and + buttons; null follows the
+  /// page (full size, or twice the page's zoom when that is more).
+  double? _lensZoom;
+
+  /// Index into [kLensSizes].
+  int _lensSize = 1;
+
   /// The magnifier's square at the pointer.
   Widget _buildLens() {
-    const side = 280.0;
+    final side = kLensSizes[_lensSize].$1;
     return ValueListenableBuilder<Offset?>(
       valueListenable: _lensAt,
       builder: (context, at, _) {
@@ -387,9 +399,16 @@ class _AvFlowViewState extends State<AvFlowView>
             color = cable.colorFor(provider.avSignalColors);
           }
         }
+        // Beside the pointer, flipped to the other side near the far edges.
+        final view = renderedSize(_viewportKey);
+        var left = at.dx + 16, top = at.dy + 16;
+        if (view != null) {
+          if (left + side > view.width) left = math.max(0, at.dx - 16 - side);
+          if (top + side > view.height) top = math.max(0, at.dy - 16 - side);
+        }
         return Positioned(
-          left: at.dx + 16,
-          top: at.dy + 16,
+          left: left,
+          top: top,
           width: side,
           height: side,
           child: IgnorePointer(
@@ -397,8 +416,7 @@ class _AvFlowViewState extends State<AvFlowView>
               image: shot.image,
               ratio: shot.ratio,
               scene: _transform.toScene(at),
-              // Full size, or twice the page's zoom when that is more.
-              zoom: math.max(1.0, pageScale * 2),
+              zoom: _lensZoom ?? autoLensZoom(pageScale),
               // The selected run's chevrons, moving in the lens too.
               repaint: route == null ? null : _signalFlow,
               paintLive: route == null || route.length < 2
@@ -451,6 +469,9 @@ class _AvFlowViewState extends State<AvFlowView>
   /// The device picked with a click in Edit mode, which the keyboard
   /// shortcuts act on.
   String? _selectedNodeId;
+
+  /// The device whose size handles are showing (Edit shape).
+  String? _shapeNodeId;
   final FocusNode _canvasFocus = FocusNode(debugLabel: 'signal flow canvas');
 
   /// Polylines from the last build, for cable hit-testing and handles.
@@ -814,8 +835,9 @@ class _AvFlowViewState extends State<AvFlowView>
           'describe.\n\n'
           'You have ${provider.avNodes.length} box(es)'
           '${byHand == 0 ? '' : ', $byHand of them added by hand,'} and '
-          '$cables cable(s) here now. Anything you drew by hand goes with the '
-          'rest.\n\n'
+          '$cables cable(s) here now. Boxes added by hand stay, with the '
+          'cables on them; the config devices and their runs are drawn '
+          'again.\n\n'
           'Devices that come back keep their rack rails, and one press of '
           'Undo puts the whole drawing back the way it was.',
         ),
@@ -835,8 +857,20 @@ class _AvFlowViewState extends State<AvFlowView>
 
     // One snapshot, covering the whole rebuild: the clear takes it, and every
     // step after it is told not to take another.
+    // Hand-added boxes are not the config's to redraw: they stay, with every
+    // cable on them whose other end is still there.
+    final handNodes = [
+      for (final n in provider.avNodes)
+        if (!n.fromConfig) n,
+    ];
+    final handIds = {for (final n in handNodes) n.id};
+    final handCables = [
+      for (final c in provider.avCables)
+        if (handIds.contains(c.fromNodeId) || handIds.contains(c.toNodeId)) c,
+    ];
     provider.clearAvFlowDrawing();
     final placed = _seedFromConfig(provider, batch: true);
+    provider.restoreAvBoxes(handNodes, handCables);
     final routed = autoDrawRoutingFromConfig(provider, evenForEstimate: true);
     final unracked = provider.pruneAvRackSlots(recordUndo: false);
 
@@ -1198,6 +1232,10 @@ class _AvFlowViewState extends State<AvFlowView>
                               onActual: _actualSize,
                               magnifier: _magnifier,
                               onMagnifier: _setMagnifier,
+                              lensZoom: _lensZoom,
+                              onLensZoom: (z) => setState(() => _lensZoom = z),
+                              lensSize: _lensSize,
+                              onLensSize: (i) => setState(() => _lensSize = i),
                             ),
                           ),
                           // Where the pointer is, for the magnifier. On top
@@ -1264,6 +1302,7 @@ class _AvFlowViewState extends State<AvFlowView>
               _selectCable(null);
               setState(() {
                 _selectedNodeId = null;
+                _shapeNodeId = null;
                 _editMode = v;
                 _cableMode = false;
                 _pendingPort = null;
@@ -1282,11 +1321,66 @@ class _AvFlowViewState extends State<AvFlowView>
                 _pendingPort = null;
               }),
             ),
+          if (_editMode && provider.avNodeById(_shapeNodeId ?? '') != null)
+            ..._shapeControls(provider, provider.avNodeById(_shapeNodeId!)!),
           FilterChip(
               avatar: const Icon(Icons.view_sidebar, size: 18),
               label: Text('Devices (${model.unplaced.length})'),
               selected: _showPalette,
               onSelected: (v) => setState(() => _showPalette = v),
+            ),
+          // Config devices and quoted equipment that are not drawn yet.
+          if (model.unplaced.isNotEmpty ||
+              undrawnQuotedLines(provider).isNotEmpty)
+            OutlinedButton.icon(
+              key: const ValueKey('av_place_undrawn'),
+              icon: const Icon(Icons.playlist_add, size: 18),
+              label: Text('Place undrawn '
+                  '(${model.unplaced.length + undrawnQuotedLines(provider).length})'),
+              onPressed: () => _showPlaceUndrawnDialog(provider, model),
+            ),
+          Tooltip(
+            message: 'Cable boxes whose names end the same - "NAV Decoder '
+                'Station 1" to "Station 1" - output to input on video. You '
+                'see the list before anything is drawn.',
+            child: OutlinedButton.icon(
+              key: const ValueKey('av_route_by_name'),
+              icon: const Icon(Icons.alt_route, size: 18),
+              label: const Text('Auto-route by name'),
+              onPressed: provider.avNodes.length < 2
+                  ? null
+                  : () => _showRouteByNameDialog(provider),
+            ),
+          ),
+          Tooltip(
+            message: 'Tie one set of boxes to another in order - 12 decoders '
+                'to 12 displays, 12 PCs to 12 encoders - or a run of one '
+                'box\'s connectors, picking the output and input.',
+            child: OutlinedButton.icon(
+              key: const ValueKey('av_tie_sequence'),
+              icon: const Icon(Icons.format_list_numbered, size: 18),
+              label: const Text('Tie in sequence'),
+              onPressed: provider.avNodes.length < 2
+                  ? null
+                  : () => _tieInSequence(provider),
+            ),
+          ),
+          if (powerStrips(provider).isNotEmpty)
+            Tooltip(
+              message: 'What each outlet of a power strip feeds, from a list '
+                  'of every box with a power inlet.',
+              child: OutlinedButton.icon(
+                key: const ValueKey('av_power_outlets'),
+                icon: const Icon(Icons.power, size: 18),
+                label: const Text('Power outlets'),
+                onPressed: () async {
+                  final n = await showPowerOutletsDialog(context, provider);
+                  if (n > 0) {
+                    _snack('$n power lead${n == 1 ? '' : 's'} changed. One '
+                        'Undo puts them back.');
+                  }
+                },
+              ),
             ),
           // Always there: after adding or editing boxes, one press lays the
           // drawing out again with nothing on top of anything.
@@ -1332,6 +1426,12 @@ class _AvFlowViewState extends State<AvFlowView>
             icon: const Icon(Icons.place_outlined, size: 18),
             label: Text('Locations (${provider.avLocations.length})'),
             onPressed: () => showLocationManager(context, provider),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('av_copy_from_room'),
+            icon: const Icon(Icons.content_copy, size: 18),
+            label: const Text('Copy from a room'),
+            onPressed: () => copyRoomPartsFromRoom(context, provider),
           ),
           // Any picture, behind the diagram. Not the floor plan on a toggle:
           // a signal flow is laid out by signal, so a plan behind it lines up
@@ -1440,6 +1540,49 @@ class _AvFlowViewState extends State<AvFlowView>
   Offset _snapped(AppStateProvider provider, Offset p) =>
       snapToGrid(p, enabled: provider.snapDiagramsToGrid);
 
+  /// The toolbar while a box is being reshaped: what to do, Reset and Done.
+  List<Widget> _shapeControls(AppStateProvider provider, AvNode node) => [
+        Text(
+          'Shape of ${node.label}: drag its right edge, bottom edge or corner',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        TextButton(
+          key: const ValueKey('av_shape_reset'),
+          onPressed: node.customWidth <= 0 && node.customHeight <= 0
+              ? null
+              : () => provider.setAvNodeSize(node.id, width: 0, height: 0),
+          child: const Text('Reset size'),
+        ),
+        FilledButton(
+          key: const ValueKey('av_shape_done'),
+          onPressed: () => setState(() => _shapeNodeId = null),
+          child: const Text('Done'),
+        ),
+      ];
+
+  /// One step of an Edit shape drag. Width and height are set from the box as
+  /// drawn, so a box at its own size starts from there.
+  void _resizeNode(
+    AppStateProvider provider,
+    String id,
+    Offset delta, {
+    required bool sideways,
+    required bool down,
+  }) {
+    final node = provider.avNodeById(id);
+    if (node == null) return;
+    provider.setAvNodeSize(
+      id,
+      width: sideways
+          ? math.max(kAvNodeMinShapeWidth, node.width + delta.dx)
+          : node.customWidth,
+      height: down
+          ? math.max(node.autoHeight, node.height + delta.dy)
+          : node.customHeight,
+      coalesce: 'flow:resize:$id',
+    );
+  }
+
   /// Picks a device for the keyboard: Delete, the arrows, Esc.
   void _selectNode(String id) {
     setState(() => _selectedNodeId = id);
@@ -1460,7 +1603,10 @@ class _AvFlowViewState extends State<AvFlowView>
     ]);
     if (action == null) return KeyEventResult.ignored;
     if (action == Shortcut.deselect) {
-      setState(() => _selectedNodeId = null);
+      setState(() {
+        _selectedNodeId = null;
+        _shapeNodeId = null;
+      });
       return KeyEventResult.handled;
     }
     if (action == Shortcut.delete) {
@@ -1487,6 +1633,11 @@ class _AvFlowViewState extends State<AvFlowView>
     return KeyEventResult.handled;
   }
 
+  String _removedNote(AvNode node, bool keptOnCost) => keptOnCost
+      ? '${node.label} taken off the drawing with its cables. It is still on '
+          'the Cost page; Place undrawn puts it back.'
+      : '${node.label} removed, along with its cables.';
+
   /// Removes a device and its cables, asking first unless App Config says
   /// not to.
   Future<void> _deleteNode(AppStateProvider provider, AvNode node) async {
@@ -1499,10 +1650,10 @@ class _AvFlowViewState extends State<AvFlowView>
         builder: (ctx) => AlertDialog(
           title: Text('Remove ${node.label}?'),
           content: Text(
-            cables == 0
-                ? 'It comes off the drawing. Ctrl+Z brings it back.'
-                : 'It comes off the drawing with its $cables '
-                      'cable${cables == 1 ? '' : 's'}. Ctrl+Z brings it back.',
+            '${cables == 0 ? 'It comes off the drawing' : 'It comes off the '
+                'drawing with its $cables cable${cables == 1 ? '' : 's'}'}'
+            '${node.excludeFromCost || node.isJackField ? '' : ', and stays on '
+                'the Cost page as a quoted line'}. Ctrl+Z brings it back.',
           ),
           actions: [
             TextButton(
@@ -1518,10 +1669,10 @@ class _AvFlowViewState extends State<AvFlowView>
       );
       if (ok != true || !mounted) return;
     }
-    provider.removeAvNode(node.id);
+    final kept = provider.removeAvNodeKeepCost(node.id);
     setState(() => _selectedNodeId = null);
     _canvasFocus.requestFocus();
-    _snack('${node.label} removed, along with its cables.');
+    _snack(_removedNote(node, kept != null));
   }
 
   void _onNodeDragStart(String nodeId) {
@@ -1789,6 +1940,11 @@ class _AvFlowViewState extends State<AvFlowView>
                   onDragUpdate: _onNodeDragUpdate,
                   onDragEnd: () => _onNodeDragEnd(provider),
                   onEdit: () => _showNodeDialog(provider, node),
+                  onResize: _editMode && _shapeNodeId == node.id
+                      ? (delta, {required sideways, required down}) =>
+                          _resizeNode(provider, node.id, delta,
+                              sideways: sideways, down: down)
+                      : null,
                 ),
               ),
             ),
@@ -2181,6 +2337,18 @@ class _AvFlowViewState extends State<AvFlowView>
                   onPressed: () => _seedFromConfig(provider),
                 ),
                 const SizedBox(height: 8),
+                // The cables the config describes, the ones deleted by hand
+                // too - in one press, without the routing report.
+                OutlinedButton.icon(
+                  key: const ValueKey('av_flow_add_all_cables'),
+                  icon: const Icon(Icons.cable, size: 18),
+                  label: const Text('Add all cables from config'),
+                  onPressed: provider.roomConfig.isEmpty
+                      ? null
+                      : () => _snack(addAllCablesNote(
+                          addAllCablesFromConfig(provider))),
+                ),
+                const SizedBox(height: 8),
                 // The boxes are only half of what the config knows. The other
                 // half is the switcher input and output numbers, which say
                 // which box feeds which — and used to be read off the System
@@ -2257,6 +2425,231 @@ class _AvFlowViewState extends State<AvFlowView>
         powerSource: powerSourceForInput(template.powerInput),
       ),
     );
+    final placed = provider.avNodeById(d.key);
+    if (placed != null) drawNavRunsFor(provider, [placed]);
+  }
+
+  Future<void> _tieInSequence(AppStateProvider provider) async {
+    final n = await showTieInSequenceDialog(context, provider);
+    if (n > 0) {
+      _snack('Tied $n run${n == 1 ? '' : 's'} in sequence. One Undo takes '
+          'them off.');
+    }
+  }
+
+  /// The runs Auto-route by name found, each with a tick, and Draw for the
+  /// ticked ones as one Undo step.
+  Future<void> _showRouteByNameDialog(AppStateProvider provider) async {
+    final runs = planNameRoutes(provider);
+    if (runs.isEmpty) {
+      _snack('No free video connectors to join between boxes whose names '
+          'end the same. Tie in sequence picks the connectors by hand.');
+      return;
+    }
+    final pick = List<bool>.filled(runs.length, true);
+    var more = false;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final picked = pick.where((v) => v).length;
+          return AlertDialog(
+            title: Text('Auto-route by name: ${runs.length} '
+                'run${runs.length == 1 ? '' : 's'}'),
+            content: SizedBox(
+              width: 620,
+              height: math.min(520, MediaQuery.sizeOf(ctx).height - 220),
+              child: ListView(
+                children: [
+                  for (final (i, r) in runs.indexed)
+                    CheckboxListTile(
+                      key: ValueKey('av_name_route_$i'),
+                      dense: true,
+                      value: pick[i],
+                      onChanged: (v) => setLocal(() => pick[i] = v ?? false),
+                      title: Text('${r.fromLabel} (${r.fromPortLabel}) → '
+                          '${r.toLabel} (${r.toPortLabel})'),
+                      subtitle: Text(
+                          '${kSignalLabels[r.signal] ?? r.signal.name} · '
+                          'both named ${r.value}'),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                key: const ValueKey('av_name_route_more'),
+                onPressed: () {
+                  more = true;
+                  Navigator.of(ctx).pop(false);
+                },
+                child: const Text('More ties...'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                key: const ValueKey('av_name_route_go'),
+                onPressed:
+                    picked == 0 ? null : () => Navigator.of(ctx).pop(true),
+                child: Text('Draw $picked'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (!mounted) return;
+    // More ties: on to picking the connectors by hand.
+    if (more) {
+      await _tieInSequence(provider);
+      return;
+    }
+    if (ok != true) return;
+    var drawn = 0;
+    for (final (i, r) in runs.indexed) {
+      if (!pick[i]) continue;
+      final added = provider.addAvCable(
+        fromNodeId: r.fromNodeId,
+        fromPortId: r.fromPortId,
+        toNodeId: r.toNodeId,
+        toPortId: r.toPortId,
+        signal: r.signal,
+        recordUndo: drawn == 0,
+      );
+      if (added != null) drawn++;
+    }
+    _snack('Drew $drawn run${drawn == 1 ? '' : 's'} by name. One Undo takes '
+        'them off.');
+  }
+
+  /// Every device not on the drawing - config blocks and Cost page
+  /// equipment - with a tick each, and Place for the ticked ones.
+  Future<void> _showPlaceUndrawnDialog(
+    AppStateProvider provider,
+    AvFlowModel model,
+  ) async {
+    final config = [...model.unplaced];
+    final quoted = undrawnQuotedLines(provider);
+    final pickConfig = {for (final d in config) d.key: true};
+    final pickQuoted = {for (final q in quoted) q.id: true};
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final all = [...pickConfig.values, ...pickQuoted.values];
+          final picked = all.where((v) => v).length;
+          void setAll(bool v) => setLocal(() {
+                pickConfig.updateAll((_, _) => v);
+                pickQuoted.updateAll((_, _) => v);
+              });
+          Widget heading(String text) => Padding(
+                padding: const EdgeInsets.fromLTRB(4, 10, 4, 2),
+                child: Text(text, style: Theme.of(ctx).textTheme.titleSmall),
+              );
+          return AlertDialog(
+            title: const Text('Place undrawn devices'),
+            content: SizedBox(
+              width: 520,
+              height: math.min(520, MediaQuery.sizeOf(ctx).height - 220),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => setAll(true),
+                        child: const Text('Select all'),
+                      ),
+                      TextButton(
+                        onPressed: () => setAll(false),
+                        child: const Text('Select none'),
+                      ),
+                    ],
+                  ),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        if (config.isNotEmpty)
+                          heading('In the room config'),
+                        for (final d in config)
+                          CheckboxListTile(
+                            key: ValueKey('av_place_${d.key}'),
+                            dense: true,
+                            value: pickConfig[d.key],
+                            onChanged: (v) =>
+                                setLocal(() => pickConfig[d.key] = v ?? false),
+                            secondary: Icon(iconForAvNode(d.key, d.model),
+                                size: 20),
+                            title: Text(d.label),
+                            subtitle: Text([
+                              d.model.isEmpty ? d.key : d.model,
+                              if (d.dismissed) 'removed from the drawing',
+                            ].join(' · ')),
+                          ),
+                        if (quoted.isNotEmpty)
+                          heading('On the Cost page only'),
+                        for (final q in quoted)
+                          CheckboxListTile(
+                            key: ValueKey('av_place_${q.id}'),
+                            dense: true,
+                            value: pickQuoted[q.id],
+                            onChanged: (v) =>
+                                setLocal(() => pickQuoted[q.id] = v ?? false),
+                            secondary: const Icon(Icons.request_quote_outlined,
+                                size: 20),
+                            title: Text(q.description.trim().isEmpty
+                                ? q.catalogModel
+                                : q.description),
+                            subtitle: Text([
+                              if (q.catalogModel.trim().isNotEmpty)
+                                q.catalogModel
+                              else
+                                'not in the catalog - a plain box',
+                              if (q.qty != 1) 'qty ${trimNumber(q.qty)}',
+                            ].join(' · ')),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                key: const ValueKey('av_place_go'),
+                onPressed:
+                    picked == 0 ? null : () => Navigator.of(ctx).pop(true),
+                child: Text(picked == 0 ? 'Place' : 'Place $picked'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    var boxes = 0;
+    for (final d in config) {
+      if (pickConfig[d.key] != true) continue;
+      _placeConfigDevice(provider, d);
+      boxes++;
+    }
+    for (final q in quoted) {
+      if (pickQuoted[q.id] != true) continue;
+      boxes += placeQuotedLineOnFlow(provider, q);
+    }
+    if (boxes == 0) return;
+    drawNavNetworkRuns(provider);
+    // The runs the config describes, for what just went on.
+    autoDrawRoutingFromConfig(provider);
+    _snack('$boxes box${boxes == 1 ? '' : 'es'} placed on the drawing.');
   }
 
   /// Where a hand-added box should land: below everything already drawn, in
@@ -2487,6 +2880,15 @@ class _AvFlowViewState extends State<AvFlowView>
       provider.numberAvLineUnits(
         deviceGroupKey(provider.avNodeById(placed.first)!),
       );
+    }
+    // NAV endpoints land on the switch in order as they are added.
+    if (placed.any((id) {
+      final node = provider.avNodeById(id);
+      return node != null &&
+          (navRole(node) != null ||
+              isNetworkSwitchNode(node, provider.avDeviceLibrary));
+    })) {
+      drawNavNetworkRuns(provider);
     }
 
     _addPlacedDevicesToConfig(provider, placed);
@@ -3432,6 +3834,18 @@ class _AvFlowViewState extends State<AvFlowView>
                       onPressed: () =>
                           setLocal(() => ports.add(newAvPort(index: ports.length))),
                     ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.playlist_add, size: 16),
+                      label: const Text('Add several'),
+                      onPressed: () async {
+                        final added = await showBulkPortDialog(
+                          ctx,
+                          existing: ports,
+                        );
+                        if (added == null || !ctx.mounted) return;
+                        setLocal(() => ports.addAll(added));
+                      },
+                    ),
                   ],
                 ),
                 const Divider(),
@@ -3517,6 +3931,11 @@ class _AvFlowViewState extends State<AvFlowView>
               onPressed: () => Navigator.of(ctx).pop('copy'),
               child: const Text('Copy as JSON'),
             ),
+            TextButton(
+              key: const ValueKey('av_edit_shape'),
+              onPressed: () => Navigator.of(ctx).pop('shape'),
+              child: const Text('Edit shape'),
+            ),
             // No Spacer here: AlertDialog lays its actions out in an
             // OverflowBar, which is not a Flex, so an Expanded inside it
             // throws and takes the whole tab down with it.
@@ -3535,9 +3954,19 @@ class _AvFlowViewState extends State<AvFlowView>
 
     if (result == null || result == 'cancel') return;
 
+    // Size handles on the box itself; nothing typed in the dialog is kept.
+    if (result == 'shape') {
+      if (!mounted) return;
+      setState(() {
+        _selectedNodeId = node.id;
+        _shapeNodeId = node.id;
+      });
+      return;
+    }
+
     if (result == 'delete') {
-      provider.removeAvNode(node.id);
-      _snack('${node.label} removed, along with its cables.');
+      final kept = provider.removeAvNodeKeepCost(node.id);
+      _snack(_removedNote(node, kept != null));
       return;
     }
 
@@ -4539,6 +4968,10 @@ class _AvNodeBox extends StatelessWidget {
   final VoidCallback onDragEnd;
   final VoidCallback onEdit;
 
+  /// Set while this box is being reshaped: its size handles show and call it.
+  final void Function(Offset delta, {required bool sideways, required bool down})?
+      onResize;
+
   const _AvNodeBox({
     required this.node,
     required this.editMode,
@@ -4556,6 +4989,7 @@ class _AvNodeBox extends StatelessWidget {
     required this.onDragUpdate,
     required this.onDragEnd,
     required this.onEdit,
+    this.onResize,
   });
 
   bool get _canDrag => onDragStart != null;
@@ -4764,7 +5198,78 @@ class _AvNodeBox extends StatelessWidget {
               top: node.localAnchorOf(port.id).dy - kAvPortHandleRadius,
               child: IgnorePointer(child: _portDot(context, port)),
             ),
+
+          // Edit shape: the right edge, the bottom edge and the corner.
+          if (onResize != null) ...[
+            _resizeHandle(context,
+                key: 'right',
+                left: width - 8,
+                top: kAvNodeHeaderHeight,
+                width: 8,
+                height: height - kAvNodeHeaderHeight - 12,
+                cursor: SystemMouseCursors.resizeLeftRight,
+                sideways: true,
+                down: false),
+            _resizeHandle(context,
+                key: 'bottom',
+                left: 12,
+                top: height - 8,
+                width: width - 24,
+                height: 8,
+                cursor: SystemMouseCursors.resizeUpDown,
+                sideways: false,
+                down: true),
+            _resizeHandle(context,
+                key: 'corner',
+                left: width - 14,
+                top: height - 14,
+                width: 14,
+                height: 14,
+                cursor: SystemMouseCursors.resizeUpLeftDownRight,
+                sideways: true,
+                down: true),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _resizeHandle(
+    BuildContext context, {
+    required String key,
+    required double left,
+    required double top,
+    required double width,
+    required double height,
+    required MouseCursor cursor,
+    required bool sideways,
+    required bool down,
+  }) {
+    final color = Theme.of(context).colorScheme.primary;
+    final corner = sideways && down;
+    return Positioned(
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+      child: MouseRegion(
+        cursor: cursor,
+        child: GestureDetector(
+          key: ValueKey('av_resize_${key}_${node.id}'),
+          behavior: HitTestBehavior.opaque,
+          onPanUpdate: (d) =>
+              onResize!(d.delta, sideways: sideways, down: down),
+          child: Center(
+            child: Container(
+              width: corner ? 10 : (sideways ? 4 : 28),
+              height: corner ? 10 : (down ? 4 : 28),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

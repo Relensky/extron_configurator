@@ -157,12 +157,12 @@ void main() {
   /// window is too narrow to carry its label.
   const panes = <({String key, IconData icon})>[
     (key: 'rooms', icon: Icons.meeting_room),
-    (key: 'parts', icon: Icons.inventory_2),
+    (key: 'parts', icon: Icons.devices_other),
     (key: 'plans', icon: Icons.architecture),
     (key: 'timeline', icon: Icons.event_available),
     (key: 'lifecycle', icon: Icons.history_toggle_off),
     (key: 'responsibility', icon: Icons.handshake_outlined),
-    (key: 'vendors', icon: Icons.local_shipping),
+    (key: 'vendors', icon: Icons.inventory),
     (key: 'todo', icon: Icons.checklist),
     (key: 'notes', icon: Icons.sticky_note_2_outlined),
   ];

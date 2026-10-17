@@ -16,7 +16,7 @@ const Map<String, String> _kNames = {
   'rooms': 'Rooms',
   'manualRooms': 'Line-item rooms',
   'vendors': 'Vendors',
-  'rfqs': 'Packages',
+  'rfqs': 'Quotes',
   'spares': 'Spares',
   'plans': 'Drawings',
   'purchaseOrders': 'Purchase orders',
@@ -172,6 +172,9 @@ String? _roomName(Object? doc, String id) {
   return null;
 }
 
+/// A field's key in words: `partNumber` -> `Part number`.
+String describeMergeField(String key) => _word(key);
+
 String _word(String key) {
   final known = _kNames[key];
   if (known != null) return known;
@@ -187,6 +190,15 @@ String _word(String key) {
 /// whether it has one, and the base rate it was saved at.
 bool isTaxMergePath(String path) =>
     const {'taxPercent', 'taxOwn', 'taxBase'}.contains(path.split('.').last);
+
+/// True for the room totals a job keeps for itself (see
+/// BuildingProject.roomSnapshots). Each copy re-prices them at its own
+/// catalog prices, so a difference there is no reason to ask anybody to
+/// combine.
+bool isBookkeepingMergePath(String path) {
+  final top = path.split(RegExp(r'[.\[]')).first;
+  return top == 'roomSnapshots' || top == 'roomsCheckedAt';
+}
 
 /// A tax rate as a person reads it: '9.25%', or what having none means.
 String describeTaxRate(Object? v) {

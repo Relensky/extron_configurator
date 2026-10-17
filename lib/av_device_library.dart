@@ -304,6 +304,14 @@ const Map<String, String> kCatalogCategorySuggestions = {
   'accessories': kCategoryMisc,
 };
 
+/// A network switch with no control module behind it: an unmanaged or IT-owned
+/// switch. Equipment like any other, but not tied to a SWITCHDEVICE_ section,
+/// so it is never budgeted from the Network switch base cost.
+const String kCategoryStandaloneSwitch = 'Network switch (no module)';
+
+/// Equipment kinds the app knows that no config section maps onto.
+const List<String> kUntrackedEquipmentCategories = [kCategoryStandaloneSwitch];
+
 /// The categories offered even when nothing is filed under them yet: the kinds
 /// the app tracks, then the rack parts, then the three it keys behavior off.
 ///
@@ -312,6 +320,7 @@ const Map<String, String> kCatalogCategorySuggestions = {
 /// single bucket would put a drawer and a blanking plate in the same drawer.
 const List<String> kWellKnownCategories = [
   ...kTrackedCategories,
+  ...kUntrackedEquipmentCategories,
   ...kRackItemCategories,
   kCategoryConsumable,
   kCategoryCable,
@@ -354,6 +363,10 @@ String categoryLimits(String category, {bool hasPorts = true}) {
   if (kTrackedCategories.any((t) => t.toLowerCase() == lower)) {
     return 'Equipment: offered in Add equipment and the new-device wizard, '
         'and budgeted at the $c base cost when it has no price of its own.';
+  }
+  if (lower == kCategoryStandaloneSwitch.toLowerCase()) {
+    return 'Network switch with no control module: offered in Add equipment, '
+        'but not tied to a config section or budgeted from a base cost.';
   }
   return 'Not a category the app tracks: offered as equipment, but never '
       'budgeted from a base cost when it has no price.';
@@ -1049,6 +1062,20 @@ class DuplicatePartGroup {
   String get modelList => entries.map((t) => t.model).join(', ');
 }
 
+/// One catalog entry a combine would bring in: a model somebody added, or
+/// the fields of one they edited, each with this copy's value and theirs. A
+/// null value is a field left at its default.
+typedef CatalogPullChange = ({
+  String model,
+  bool added,
+  List<({String field, Object? mine, Object? theirs})> fields,
+  String by,
+});
+
+/// Who last changed an entry, and when - said once per model, not listed as
+/// fields of their own.
+const Set<String> kCatalogStampFields = {'changedBy', 'changedAt'};
+
 class AvDeviceLibrary {
   /// Model (normalized) -> template.
   final Map<String, AvDeviceTemplate> _byModel = {};
@@ -1056,6 +1083,14 @@ class AvDeviceLibrary {
   /// Config section prefix ('CAMERADEVICE_') -> template used when no model
   /// matches. Overrides the built-in family fallbacks.
   final Map<String, AvDeviceTemplate> _familyDefaults = {};
+
+  /// Categories people added in the Device Editor, offered in the pickers even
+  /// before anything is filed under them. Saved with the catalog.
+  final Set<String> _addedCategories = {};
+
+  /// [_addedCategories] as the file held them at the last read or write, so a
+  /// save can tell a removal here from an addition by somebody else.
+  final Set<String> _categoriesBaseline = {};
 
   /// Where the library came from, for the App Config / toolbar hint.
   String source = 'Built-in defaults';
@@ -1081,6 +1116,49 @@ class AvDeviceLibrary {
       ..addEntries(
         _byModel.entries.where((e) => e.value.custom),
       );
+    _categoriesBaseline
+      ..clear()
+      ..addAll(_addedCategories);
+  }
+
+  /// The categories added in the Device Editor, A to Z.
+  List<String> get addedCategories => _addedCategories.toList()
+    ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+  /// Adds [name] to the pickers. False when it is blank or already offered.
+  bool addCategory(String name) {
+    final c = name.trim();
+    if (c.isEmpty) return false;
+    final lower = c.toLowerCase();
+    if (kWellKnownCategories.any((k) => k.toLowerCase() == lower) ||
+        _addedCategories.any((k) => k.toLowerCase() == lower)) {
+      return false;
+    }
+    _addedCategories.add(c);
+    _invalidate();
+    return true;
+  }
+
+  /// Takes an added category off the pickers. Entries filed under it keep it.
+  bool removeCategory(String name) {
+    final lower = name.trim().toLowerCase();
+    final before = _addedCategories.length;
+    _addedCategories.removeWhere((k) => k.toLowerCase() == lower);
+    if (_addedCategories.length == before) return false;
+    _invalidate();
+    return true;
+  }
+
+  void _readCategories(Object? list) {
+    if (list is! List) return;
+    for (final c in list) {
+      final name = c?.toString().trim() ?? '';
+      if (name.isEmpty ||
+          _addedCategories.any((k) => k.toLowerCase() == name.toLowerCase())) {
+        continue;
+      }
+      _addedCategories.add(name);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1110,6 +1188,7 @@ class AvDeviceLibrary {
           for (final e in _familyDefaults.entries)
             e.key: e.value.toJson()..remove('model'),
         },
+        'categories': addedCategories,
       };
 
   /// Replaces every entry with what [doc] holds.
@@ -1120,6 +1199,8 @@ class AvDeviceLibrary {
   void applyDoc(Map<String, dynamic> doc) {
     _byModel.clear();
     _familyDefaults.clear();
+    _addedCategories.clear();
+    _readCategories(doc['categories']);
     for (final d in (doc['entries'] as List? ?? [])) {
       if (d is! Map) continue;
       final json = Map<String, dynamic>.from(d);
@@ -1229,6 +1310,7 @@ class AvDeviceLibrary {
     if (cached != null) return cached;
     final set = <String>{
       ...kWellKnownCategories,
+      ..._addedCategories,
       for (final t in _byModel.values)
         if (t.category.trim().isNotEmpty) t.category.trim(),
     };
@@ -1780,6 +1862,7 @@ class AvDeviceLibrary {
               'Edited on the Device Editor tab; entries here override the '
               "app's built-in models.",
           'devices': [for (final t in custom) t.toJson()],
+          if (_addedCategories.isNotEmpty) 'categories': addedCategories,
           if (_familyDefaults.isNotEmpty)
             'familyDefaults': {
               for (final e in _familyDefaults.entries)
@@ -1828,6 +1911,10 @@ class AvDeviceLibrary {
         if (e.value.custom) e.key: e.value,
     };
     if (mine.length != _baseline.length) return true;
+    if (_addedCategories.length != _categoriesBaseline.length ||
+        !_addedCategories.every(_categoriesBaseline.contains)) {
+      return true;
+    }
     for (final e in mine.entries) {
       final base = _baseline[e.key];
       if (base == null) return true;
@@ -1855,6 +1942,62 @@ class AvDeviceLibrary {
       // Unreadable now: keep the old base, and the next save merges again.
     }
     return adopted;
+  }
+
+  /// What [pullFromDisk] would take, without taking it: each model somebody
+  /// added, and each field of one somebody edited with this copy's value and
+  /// theirs. The same rule as [_mergeFields], so the list is what happens.
+  Future<List<CatalogPullChange>> previewPullFromDisk() async {
+    if (filePath.isEmpty || _baseline.isEmpty) return const [];
+    late final AvDeviceLibrary disk;
+    try {
+      if (!await File(filePath).exists()) return const [];
+      disk = await readFile(filePath);
+    } catch (_) {
+      return const [];
+    }
+    final out = <CatalogPullChange>[];
+    for (final theirs in disk.all) {
+      final key = _norm(theirs.model);
+      final base = _baseline[key];
+      final mine = _byModel[key];
+      final by = theirs.toJson()['changedBy']?.toString() ?? '';
+      if (base == null) {
+        if (mine == null) {
+          out.add((model: theirs.model, added: true, fields: const [], by: by));
+        }
+        continue;
+      }
+      if (mine == null) continue;
+      final baseJson = base.toJson();
+      final mineJson = mine.toJson();
+      final theirsJson = theirs.toJson();
+      final fields = [
+        for (final field in {
+          ...baseJson.keys,
+          ...mineJson.keys,
+          ...theirsJson.keys,
+        })
+          if (!kCatalogStampFields.contains(field) &&
+              jsonEncode(theirsJson[field]) != jsonEncode(baseJson[field]) &&
+              jsonEncode(mineJson[field]) == jsonEncode(baseJson[field]))
+            (field: field, mine: mineJson[field], theirs: theirsJson[field]),
+      ];
+      if (fields.isNotEmpty) {
+        out.add((model: theirs.model, added: false, fields: fields, by: by));
+      }
+    }
+    for (final key in disk._familyDefaults.keys) {
+      if (_familyDefaults.containsKey(key)) continue;
+      out.add((
+        model: 'Family default: $key',
+        added: true,
+        fields: const [],
+        by: '',
+      ));
+    }
+    out.sort((a, b) => a.model.toLowerCase().compareTo(b.model.toLowerCase()));
+    return out;
   }
 
   /// Folds anybody else's edits into this catalog before it is written over
@@ -1937,6 +2080,15 @@ class AvDeviceLibrary {
       _familyDefaults[e.key] = e.value;
       tookFamily = true;
     }
+    // A category on disk that was not there at the last read is somebody
+    // else's addition; one in the baseline but not here was removed here.
+    bool known(Set<String> set, String c) =>
+        set.any((k) => k.toLowerCase() == c.toLowerCase());
+    for (final c in disk._addedCategories) {
+      if (known(_categoriesBaseline, c) || known(_addedCategories, c)) continue;
+      _addedCategories.add(c);
+      tookFamily = true;
+    }
 
     // A fallback taken from disk is a change even when no ENTRY moved, and
     // [familyDefaults] is handed out from a held view now. Counting only
@@ -2007,6 +2159,7 @@ class AvDeviceLibrary {
       if (t.model.isEmpty) continue;
       library._byModel[_norm(t.model)] = t;
     }
+    library._readCategories(doc['categories']);
     library._invalidate();
     library.filePath = filePath;
     library.source = filePath;
@@ -2059,6 +2212,7 @@ class AvDeviceLibrary {
           library._byModel[_norm(t.model)] = t;
           added++;
         }
+        library._readCategories(doc['categories']);
         final families = doc['familyDefaults'];
         if (families is Map) {
           families.forEach((prefix, value) {

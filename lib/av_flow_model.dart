@@ -675,6 +675,9 @@ const double kAvPortRowHeight = 22;
 const double kAvNodeMinBodyHeight = 20;
 const double kAvNodePadBottom = 10;
 
+/// The narrowest a box can be drawn by hand with Edit shape.
+const double kAvNodeMinShapeWidth = 120;
+
 /// ---------------------------------------------------------------------------
 ///  THE GRID THE AUTOMATIC PASSES LAY OUT ON
 /// ---------------------------------------------------------------------------
@@ -959,6 +962,10 @@ class AvNode {
   /// file at all.
   final List<EquipmentSwap> swaps;
 
+  /// Size set by hand with Edit shape; 0 sizes the box to its ports.
+  final double customWidth;
+  final double customHeight;
+
   const AvNode({
     required this.id,
     required this.label,
@@ -978,6 +985,8 @@ class AvNode {
     this.installedOn,
     this.lifeYears = 0,
     this.swaps = const [],
+    this.customWidth = 0,
+    this.customHeight = 0,
   });
 
   /// Numbered jacks rather than a device's connectors — a wall box OR a patch
@@ -1021,6 +1030,8 @@ class AvNode {
     installedOn: installedOn,
     lifeYears: lifeYears,
     swaps: swaps,
+    customWidth: customWidth,
+    customHeight: customHeight,
   );
 
   AvNode copyWith({
@@ -1041,6 +1052,8 @@ class AvNode {
     DateTime? installedOn,
     int? lifeYears,
     List<EquipmentSwap>? swaps,
+    double? customWidth,
+    double? customHeight,
 
     /// Takes the install date OFF, which `installedOn: null` cannot say —
     /// a null there means "leave it alone", the same as every other field
@@ -1067,6 +1080,8 @@ class AvNode {
         clearInstalledOn ? null : (installedOn ?? this.installedOn),
     lifeYears: lifeYears ?? this.lifeYears,
     swaps: swaps ?? this.swaps,
+    customWidth: customWidth ?? this.customWidth,
+    customHeight: customHeight ?? this.customHeight,
   );
 
   /// This position with [model] swapped in on [on]: the outgoing unit filed in
@@ -1126,6 +1141,12 @@ class AvNode {
   /// Width driven by the longest label that has to fit inside the box: the
   /// title, and the widest left+right port label pair sharing a row.
   double get width {
+    if (customWidth > 0) return math.max(customWidth, kAvNodeMinShapeWidth);
+    return autoWidth;
+  }
+
+  /// The width the box takes from its labels and ports.
+  double get autoWidth {
     // A panel is as wide as its outlet row needs and no taller than a strip;
     // the general clamp would squash twenty-four jacks into 300px.
     if (isPatchPanel) {
@@ -1145,6 +1166,13 @@ class AvNode {
   }
 
   double get height {
+    if (customHeight > 0) return math.max(customHeight, autoHeight);
+    return autoHeight;
+  }
+
+  /// The height the box takes from its port rows. A box drawn by hand is never
+  /// shorter, so every side port stays on it.
+  double get autoHeight {
     // Header, one strip of room for the jack numbers, and the outlet row.
     if (isPatchPanel) return kAvNodeHeaderHeight + kAvPatchPanelBodyHeight;
     final rows = math.max(leftPorts.length, rightPorts.length);
@@ -1208,11 +1236,19 @@ class AvNode {
     }
   }
 
-  double _rowCenterY(int index) =>
-      kAvNodeHeaderHeight +
-      (topPorts.isEmpty ? 0.0 : 6.0) +
-      index * kAvPortRowHeight +
-      kAvPortRowHeight / 2;
+  double _rowCenterY(int index) {
+    final top = kAvNodeHeaderHeight + (topPorts.isEmpty ? 0.0 : 6.0);
+    return top + index * rowPitch + rowPitch / 2;
+  }
+
+  /// Spacing of the side port rows: the standard row, spread out to fill a
+  /// box drawn taller by hand.
+  double get rowPitch {
+    final rows = math.max(leftPorts.length, rightPorts.length);
+    if (customHeight <= 0 || rows == 0 || isPatchPanel) return kAvPortRowHeight;
+    final extra = height - autoHeight;
+    return kAvPortRowHeight + extra / rows;
+  }
 
   static double _edgeX(int index, int count, double w) =>
       w * (index + 1) / (count + 1);
@@ -1236,6 +1272,8 @@ class AvNode {
     if (installedOn != null) 'installedOn': formatEquipmentDate(installedOn!),
     if (lifeYears != 0) 'lifeYears': lifeYears,
     if (swaps.isNotEmpty) 'swaps': [for (final s in swaps) s.toJson()],
+    if (customWidth > 0) 'width': customWidth,
+    if (customHeight > 0) 'height': customHeight,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
 
@@ -1266,6 +1304,8 @@ class AvNode {
     // Anything below -1 is not a life anybody meant: read as unrecorded
     // rather than as a position that falls due before it was installed.
     lifeYears: _sanitizeLifeYears((json['lifeYears'] as num?)?.toInt() ?? 0),
+    customWidth: (json['width'] as num?)?.toDouble() ?? 0,
+    customHeight: (json['height'] as num?)?.toDouble() ?? 0,
     swaps: [
       for (final s in (json['swaps'] as List? ?? []))
         if (s is Map) EquipmentSwap.fromJson(Map<String, dynamic>.from(s)),

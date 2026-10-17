@@ -1540,7 +1540,7 @@
       "addedByUser": true,
       "manufacturer": "Cisco",
       "partNumber": "C1300-48FP-4X",
-      "category": "AV / Misc",
+      "category": "Network switch (no module)",
       "rackUnits": 0,
       "price": 2054.99,
       "educationPrice": 2054.99,
@@ -1562,7 +1562,7 @@
       "model": "Network switch",
       "manufacturer": "Cisco",
       "partNumber": "CBS350-8P-E-2G-NA",
-      "category": "AV / Misc",
+      "category": "Network switch (no module)",
       "rackUnits": 0,
       "price": 500.0,
       "educationPrice": 306.93,
@@ -107954,7 +107954,7 @@
     {
       "model": "TL-SG108PE",
       "manufacturer": "TP-Link",
-      "category": "AV / Misc",
+      "category": "Network switch (no module)",
       "rackUnits": 0,
       "price": 60.0,
       "educationPrice": 60.0,
@@ -108239,6 +108239,307 @@
           "side": "bottom"
         }
       ]
+    },
+    {
+      "model": "M4250-40G8F-PoE+",
+      "addedByUser": true,
+      "manufacturer": "Netgear ",
+      "partNumber": "GSM4248P-100NAS",
+      "category": "Network switch (no module)",
+      "rackUnits": 1,
+      "price": 3062.05,
+      "educationPrice": 2399.99,
+      "ports": [
+        {
+          "id": "port_1792193726451136",
+          "label": "IN 1",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193736779585",
+          "label": "IN 2",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193740002685",
+          "label": "IN 3",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193740194249",
+          "label": "IN 4",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193740371232",
+          "label": "IN 5",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193740546459",
+          "label": "IN 6",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193740730443",
+          "label": "IN 7",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193741018580",
+          "label": "IN 8",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193741266443",
+          "label": "IN 9",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193741434122",
+          "label": "IN 10",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193741611171",
+          "label": "IN 11",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193741770172",
+          "label": "IN 12",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193741946568",
+          "label": "IN 13",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193742114940",
+          "label": "IN 14",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193742282560",
+          "label": "IN 15",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193742477124",
+          "label": "IN 16",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193742674987",
+          "label": "IN 17",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193742867614",
+          "label": "IN 18",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193743083380",
+          "label": "IN 19",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193743346855",
+          "label": "IN 20",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1792193743958550",
+          "label": "IN 21",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193744194778",
+          "label": "IN 22",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193744362500",
+          "label": "IN 23",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193745069085",
+          "label": "IN 24",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193746003028",
+          "label": "IN 25",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193746599199",
+          "label": "IN 26",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193746710284",
+          "label": "IN 27",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193746877389",
+          "label": "IN 28",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193747082745",
+          "label": "IN 29",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193747266790",
+          "label": "IN 30",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193747443285",
+          "label": "IN 31",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193747602571",
+          "label": "IN 32",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193747915262",
+          "label": "IN 33",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193748099475",
+          "label": "IN 34",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193748275079",
+          "label": "IN 35",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193748451045",
+          "label": "IN 36",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193748627707",
+          "label": "IN 37",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193749618280",
+          "label": "IN 38",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193749907086",
+          "label": "IN 39",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "port_1792193750514421",
+          "label": "IN 40",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "addedBy": "dstanley",
+      "addedAt": "2026-10-16T16:36:43.492535"
     }
   ]
 }

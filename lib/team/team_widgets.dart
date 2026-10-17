@@ -104,16 +104,22 @@ Color teamColorFor(String user) {
   return palette[h % palette.length];
 }
 
-/// People's pictures: `<login>.png` / `.jpg` in the avatars folder
-/// (team_config.json's avatarsFolder - the configurator's `assets\avatars`
-/// works - or the team folder's `avatars`). The folder is listed in the
-/// background now and then; drawing never touches the share.
+/// People's pictures: `<login>.png` / `.jpg` in one shared folder,
+/// [kDefaultAvatarsFolder] (the dashboard's team_config.json avatarsFolder
+/// can point elsewhere), so a picture set in any CTS app shows in all of
+/// them. The folder is listed in the background now and then; drawing never
+/// touches the share. A picture replaced under the same name is dropped from
+/// the image cache when the listing sees it change, so it updates everywhere.
 class TeamAvatars extends ChangeNotifier {
   TeamAvatars._();
   static final TeamAvatars instance = TeamAvatars._();
 
+  /// The picture types kept.
+  static const List<String> types = ['.png', '.jpg', '.jpeg'];
+
   String _folder = '';
   Map<String, String> _files = const {};
+  Map<String, String> _stamps = const {};
   DateTime _listed = DateTime.fromMillisecondsSinceEpoch(0);
   bool _listing = false;
 
@@ -123,6 +129,7 @@ class TeamAvatars extends ChangeNotifier {
     if (folder == _folder) return;
     _folder = folder;
     _files = const {};
+    _stamps = const {};
     _listed = DateTime.fromMillisecondsSinceEpoch(0);
     _list();
   }
@@ -146,12 +153,54 @@ class TeamAvatars extends ChangeNotifier {
     return _files[stemOf(user)];
   }
 
+  /// Copies [picture] in as [user]'s avatar, in place of any they had.
+  /// '' when it worked, else why not.
+  Future<String> setPicture(String user, String picture) async {
+    final dot = picture.lastIndexOf('.');
+    final ext = dot < 0 ? '' : picture.substring(dot).toLowerCase();
+    if (!types.contains(ext)) return 'Pick a PNG or JPEG picture.';
+    if (_folder.isEmpty) return 'There is no avatars folder to keep it in.';
+    try {
+      await Directory(_folder).create(recursive: true);
+      await _deletePictures(user);
+      final target = '$_folder${Platform.pathSeparator}${stemOf(user)}$ext';
+      await File(picture).copy(target);
+      await refresh();
+      TeamHost.log('[TEAM] avatar set from $picture to $target');
+      return '';
+    } catch (e) {
+      return 'The picture could not be copied: $e';
+    }
+  }
+
+  /// Takes [user]'s picture away; the initials come back.
+  Future<void> removePicture(String user) async {
+    if (_folder.isEmpty) return;
+    await _deletePictures(user);
+    await refresh();
+  }
+
+  Future<void> _deletePictures(String user) async {
+    for (final ext in types) {
+      final f = File('$_folder${Platform.pathSeparator}${stemOf(user)}$ext');
+      try {
+        if (await f.exists()) {
+          await FileImage(f).evict();
+          await f.delete();
+        }
+      } catch (e) {
+        TeamHost.log('[TEAM] could not delete the old avatar ${f.path}: $e');
+      }
+    }
+  }
+
   Future<void> _list() async {
     if (_listing || _folder.isEmpty) return;
     _listing = true;
     _listed = DateTime.now();
     try {
       final found = <String, String>{};
+      final stamps = <String, String>{};
       final dir = Directory(_folder);
       if (await dir.exists()) {
         await for (final e in dir.list()) {
@@ -160,12 +209,25 @@ class TeamAvatars extends ChangeNotifier {
           final dot = name.lastIndexOf('.');
           if (dot <= 0) continue;
           final ext = name.substring(dot);
-          if (ext != '.png' && ext != '.jpg' && ext != '.jpeg') continue;
-          found[name.substring(0, dot)] = e.path;
+          if (!types.contains(ext)) continue;
+          final stem = name.substring(0, dot);
+          found[stem] = e.path;
+          final stat = await e.stat();
+          stamps[stem] = '${stat.modified.millisecondsSinceEpoch}:${stat.size}';
         }
       }
-      if (found.length != _files.length ||
-          found.entries.any((e) => _files[e.key] != e.value)) {
+      var changed = found.length != _files.length ||
+          found.entries.any((e) => _files[e.key] != e.value);
+      // The same file name with a new picture in it (set from another app).
+      for (final e in found.entries) {
+        final was = _stamps[e.key];
+        if (was != null && was != stamps[e.key]) {
+          await FileImage(File(e.value)).evict();
+          changed = true;
+        }
+      }
+      _stamps = stamps;
+      if (changed) {
         _files = found;
         notifyListeners();
       }
@@ -3074,6 +3136,14 @@ class _ChatBodyState extends State<_ChatBody> {
   Widget _reactionChip(TeamMessage m, ChatReaction r, ThemeData theme) {
     final scheme = theme.colorScheme;
     final names = r.users.map(chat.nameOf).toList();
+    // Opaque fill so the count's ink can be picked against what is drawn.
+    final fill = r.mine
+        ? Color.alphaBlend(
+            scheme.primaryContainer.withValues(alpha: 0.7), scheme.surface)
+        : scheme.surfaceContainerHighest;
+    final ink = ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
+        ? Colors.white
+        : Colors.black87;
     return Tooltip(
       message: '${names.join(', ')} reacted with ${r.emoji}'
           '${r.mine ? '\nClick to take yours off' : ''}',
@@ -3084,9 +3154,7 @@ class _ChatBodyState extends State<_ChatBody> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: r.mine
-                ? scheme.primaryContainer.withValues(alpha: 0.7)
-                : scheme.surfaceContainerHighest,
+            color: fill,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
                 color: r.mine ? scheme.primary : scheme.outlineVariant),
@@ -3097,7 +3165,7 @@ class _ChatBodyState extends State<_ChatBody> {
             Text('${r.users.length}',
                 style: theme.textTheme.labelSmall?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: r.mine ? scheme.onPrimaryContainer : null)),
+                    color: ink)),
           ]),
         ),
       ),
@@ -3240,10 +3308,20 @@ class _ChatBodyState extends State<_ChatBody> {
               padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
               child: InteractiveViewer(
                 maxScale: 6,
-                child: Center(
-                  child: a.isWeb
-                      ? Image.network(a.url, fit: BoxFit.contain)
-                      : Image.file(File(path), fit: BoxFit.contain),
+                // A click beside the picture closes it, like the backdrop.
+                child: GestureDetector(
+                  key: const ValueKey('team_chat_picture_backdrop'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: close,
+                  child: Center(
+                    child: GestureDetector(
+                      // Swallows a click on the picture itself.
+                      onTap: () {},
+                      child: a.isWeb
+                          ? Image.network(a.url, fit: BoxFit.contain)
+                          : Image.file(File(path), fit: BoxFit.contain),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -4885,7 +4963,12 @@ class _TeamChatFabState extends State<TeamChatFab> {
   @override
   void didUpdateWidget(covariant TeamChatFab old) {
     super.didUpdateWidget(old);
-    _lift?.markNeedsBuild();
+    // After the frame: this runs during a build, when the overlay cannot be
+    // marked dirty (a theme switch rebuilds both at once).
+    if (_lift == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _lift?.markNeedsBuild();
+    });
   }
 
   @override
@@ -5045,8 +5128,7 @@ class _TeamChatStandaloneState extends State<TeamChatStandalone> {
     _presence.attach(widget.teamFolder);
     _chat.attach(widget.teamFolder);
     if (widget.teamFolder.isNotEmpty) {
-      TeamAvatars.instance.setFolder(
-          '${widget.teamFolder}${Platform.pathSeparator}avatars');
+      TeamAvatars.instance.setFolder(kDefaultAvatarsFolder);
     }
     _chat.setOpen(true);
   }

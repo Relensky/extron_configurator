@@ -175,6 +175,19 @@ void main() {
       );
     });
 
+    test('a job set to buy no spares flags nothing, and the switch undoes '
+        'it', () {
+      final project = BuildingProject()..noSpares = true;
+      final lines = [line(description: 'Switcher')];
+      expect(estimateOf(lines, project: project).partsWithoutSpares, isEmpty);
+      // Kept through a save.
+      final back = BuildingProject.fromJson(project.toJson());
+      expect(back.noSpares, isTrue);
+      back.noSpares = false;
+      expect(estimateOf(lines, project: back).partsWithoutSpares,
+          hasLength(1));
+    });
+
     test('the spares cost what the line costs', () {
       final estimate = estimateOf([
         line(description: 'Display', spareQty: 2, unitPrice: 1500),

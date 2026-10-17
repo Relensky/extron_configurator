@@ -10,6 +10,7 @@ import 'class_schedule.dart' show ClassScheduleIndex;
 import 'online_index.dart';
 import 'project_estimate.dart';
 import 'project_workbook.dart';
+import 'xlsx_writer.dart' show XlsxSheet;
 
 /// ============================================================================
 ///  THE COPY SOMEBODY ELSE CAN READ
@@ -196,6 +197,9 @@ Future<OnlineCopyResult> writeOnlineCopy({
   /// The project file's own path — what the index joins this job to its campus
   /// and its rooms by. See online_index.dart.
   String source = '',
+
+  /// The hidden tab holding the whole job - see project_restore_data.dart.
+  XlsxSheet? dataSheet,
   /// The rooms' config paths, absolute, and the campus file this job is on.
   List<String> roomPaths = const [],
   String campusPath = '',
@@ -243,6 +247,7 @@ Future<OnlineCopyResult> writeOnlineCopy({
           // The published copy is the one that comes back: it carries the two
           // sheets somebody can type in. See online_roundtrip.dart.
           editable: true,
+          dataSheet: dataSheet,
         ),
         text: null,
       ),

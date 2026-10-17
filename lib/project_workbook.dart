@@ -8,7 +8,9 @@ import 'control_gaps.dart';
 import 'cost_estimate.dart';
 import 'equipment_lifecycle.dart';
 import 'online_roundtrip.dart';
+import 'project_breakdown.dart';
 import 'project_estimate.dart';
+import 'project_labor.dart';
 import 'project_schedule.dart';
 import 'report_tools.dart';
 import 'procurement_log.dart';
@@ -599,7 +601,9 @@ RoomTotalRefs _formulaRoomTotals(XlsxSheet sheet, CostEstimate e) {
   set('Rack hardware', _sumOf(sheet, 'Rack Hardware'));
   set('Cabling', _sumOf(sheet, 'Cabling'));
   set('Other items', _sumOf(sheet, 'Other Items'));
-  final laborRow = rowStarting('Labor');
+  set(kLaborChargesTotalLabel, _sumOf(sheet, kLaborChargesSection));
+  // 'Labor (' - not the Labor charges row.
+  final laborRow = rowStarting('Labor (');
   final laborSum = _sumOf(sheet, 'Labor');
   if (laborRow != null && laborSum != null) {
     _setFormula(sheet, laborRow, col, laborSum);
@@ -612,6 +616,8 @@ RoomTotalRefs _formulaRoomTotals(XlsxSheet sheet, CostEstimate e) {
     at('Cabling'),
     labor,
     at('Other items'),
+    // Only while counted: left out, the row is labeled as not in the total.
+    at(kLaborChargesTotalLabel),
     at('Shipping'),
   ].whereType<String>().toList();
   const subtotalLabel = 'Subtotal (before fees and tax)';
@@ -811,7 +817,8 @@ void _formulaSummaryTotals(
     at('Other items'),
   ].whereType<String>().toList();
   if (parts.isNotEmpty) set('Parts subtotal', parts.join('+'));
-  final laborRow = rowStarting('Labor');
+  // 'Labor (' - not the Labor charges row.
+  final laborRow = rowStarting('Labor (');
   final labor = sumOf('Labor');
   if (laborRow != null && labor != null) {
     _setFormula(sheet, laborRow, building.col, labor);
@@ -930,6 +937,8 @@ List<ReportSection> allItemsSections(
       ('Rack hardware', e.hardware),
       ('Cabling', e.cabling),
       ('Other items', e.extras),
+      if (e.laborChargesIncluded)
+        ('Labor charges', [for (final c in e.laborCharges) c.line]),
     ]) {
       for (final line in lines) {
         final kind = switch (section) {
@@ -1117,6 +1126,10 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
   XlsxMoney cash(double v) => money(v, currency);
 
   final project = estimate.project;
+  final inKind = estimate.costedRooms.fold<double>(
+    0,
+    (sum, r) => sum + (r.estimate?.inKindTotal ?? 0),
+  );
 
   final sections = <ReportSection>[
     (
@@ -1217,6 +1230,13 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
         ['Cabling', cash(estimate.cablingTotal)],
         ['Other items', cash(estimate.extrasTotal)],
         ['Parts subtotal', cash(estimate.partsTotal)],
+        if (estimate.hasLaborCharges)
+          [
+            estimate.project.includeLaborCharges
+                ? 'Labor charges'
+                : 'Labor charges (not in the total)',
+            cash(estimate.laborChargesTotal),
+          ],
         [
           'Labor (${trimNumber(estimate.laborCrewHours)} crew hrs, '
               '${trimNumber(estimate.laborHours)} total hrs)',
@@ -1227,6 +1247,11 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
         ['Fees', cash(estimate.feeTotal)],
         ['Tax', cash(estimate.taxTotal)],
         ['PROJECT TOTAL', cash(estimate.grandTotal)],
+        // Given rather than bought: stock, our labor, owner furnished.
+        if (inKind > 0) ...[
+          ['In kind (not in the total)', cash(inKind)],
+          ['Project value with in kind', cash(estimate.grandTotal + inKind)],
+        ],
       ],
     ),
   ];
@@ -1351,6 +1376,32 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
                     ? '${formatScheduleDate(t.due!)} - PAST ITS DATE'
                     : formatScheduleDate(t.due!),
             formatScheduleDate(t.created),
+          ],
+      ],
+    ));
+  }
+
+  // The budget by building and by department, as the funding card shows it.
+  final entries = projectBudgetEntries(project, estimate);
+  final base = project.budget > 0 ? project.budget : project.targetTotal;
+  for (final (title, blank, keyOf) in [
+    ('By building', 'No building code', (ProjectBudgetEntry e) => e.building),
+    ('By department', 'No department', (ProjectBudgetEntry e) => e.department),
+  ]) {
+    final groups = groupBudget(entries, keyOf);
+    // One blank group says nothing.
+    if (groups.every((g) => g.name.isEmpty)) continue;
+    sections.add((
+      title: title,
+      header: const ['Name', 'Rooms', 'Set aside', 'Share', 'Rooms come to'],
+      rows: [
+        for (final g in groups)
+          [
+            g.name.isEmpty ? blank : g.name,
+            g.rooms,
+            money(g.target, estimate.currency),
+            base > 0 ? '${(g.target / base * 100).toStringAsFixed(1)}%' : '',
+            money(g.total, estimate.currency),
           ],
       ],
     ));
@@ -2834,6 +2885,7 @@ Uint8List buildProjectWorkbookBytes({
   PricingTier tier = PricingTier.msrp,
   bool editable = false,
   ClassScheduleIndex? classSchedule,
+  XlsxSheet? dataSheet,
 }) => buildXlsx(buildProjectWorkbookSheets(
   estimate: estimate,
   generated: generated,
@@ -2842,6 +2894,7 @@ Uint8List buildProjectWorkbookBytes({
   tier: tier,
   editable: editable,
   classSchedule: classSchedule,
+  dataSheet: dataSheet,
 ));
 
 /// The project workbook's sheets, before they are a file - the live Google
@@ -2891,6 +2944,10 @@ List<XlsxSheet> buildProjectWorkbookSheets({
   /// The class schedule, for the Class Schedule tab written when the job has
   /// install windows. Without it the windows are still charted.
   ClassScheduleIndex? classSchedule,
+
+  /// The hidden tab holding the whole job, so the book can restore it. See
+  /// projectDataSheetFor in project_restore_data.dart.
+  XlsxSheet? dataSheet,
 }) {
   final stamp = generated ?? DateTime.now();
   final title = _projectTitle(estimate.project);
@@ -3011,6 +3068,17 @@ List<XlsxSheet> buildProjectWorkbookSheets({
       _formulaPartsByRoomTotals(sheet);
       sheets.add(sheet);
     }
+  }
+
+  // Labor by room, by job type and by who provides it.
+  final labor = projectLaborSections(estimate);
+  if (labor.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kProjectLaborSheet),
+      title: '$title - labor',
+      sections: labor,
+      generated: stamp,
+    ));
   }
 
   // Purchasing works down this in date order and does not care which vendor
@@ -3210,6 +3278,9 @@ List<XlsxSheet> buildProjectWorkbookSheets({
     }
   }
 
+  // The whole job, out of sight, for putting it back - see
+  // project_restore_data.dart.
+  if (dataSheet != null) sheets.add(dataSheet);
   return sheets;
 }
 

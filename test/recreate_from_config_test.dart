@@ -20,9 +20,10 @@ import 'package:extron_configurator/ui_schema.dart';
 ///  reconciling the drawing box by box costs more than drawing it again, and
 ///  the only way to draw it again was to delete twenty boxes by hand.
 ///
-///  What is checked here is that "again" means AGAIN — the hand work goes, the
-///  config's own picture comes back — and that it is one press of Undo to
-///  change your mind.
+///  What is checked here is that "again" means AGAIN for the config's own
+///  picture, while boxes added by hand stay with their cables (taking them
+///  off the drawing took them off the quote), and that it is one press of
+///  Undo to change your mind.
 /// ============================================================================
 void main() {
   late UiSchema schema;
@@ -129,7 +130,7 @@ void main() {
       expect(p.avNodeById(byHand.id), isNotNull);
     });
 
-    testWidgets('drops the hand work and draws the config again',
+    testWidgets('keeps the hand-added boxes and draws the config again',
         (tester) async {
       final p = flowRoom();
       await pumpFlow(tester, p);
@@ -156,9 +157,9 @@ void main() {
 
       await pressRecreate(tester, const ValueKey('av_flow_recreate'));
 
-      // Gone: the box, its lead, and the drag.
-      expect(p.avNodeById(byHand.id), isNull);
-      expect(p.avCables.any((c) => c.toNodeId == byHand.id), isFalse);
+      // Kept: the hand box and its lead. Gone: the drag.
+      expect(p.avNodeById(byHand.id), isNotNull);
+      expect(p.avCables.any((c) => c.toNodeId == byHand.id), isTrue);
       expect(p.avNodeById('SWITCHERDEVICE_1')!.pos,
           isNot(const Offset(1234, 900)));
 
@@ -166,7 +167,7 @@ void main() {
       // routing the config's numbers describe.
       expect(p.avNodeById('PROJECTORDEVICE_1'), isNotNull);
       expect(p.avDismissedDevices, isEmpty);
-      expect(p.avCables.length, drawn);
+      expect(p.avCables.length, drawn + 1);
       expect(
         p.avCables.any((c) =>
             c.fromNodeId == avAutoNodeId('input_pc') &&
@@ -180,18 +181,19 @@ void main() {
         (tester) async {
       final p = flowRoom();
       await pumpFlow(tester, p);
-      final byHand = p.addAvNode(handBox('Whiteboard'));
+      p.setAvNodePosition('SWITCHERDEVICE_1', const Offset(1234, 900));
 
       await pressRecreate(tester, const ValueKey('av_flow_recreate'));
-      expect(p.avNodeById(byHand.id), isNull);
+      expect(p.avNodeById('SWITCHERDEVICE_1')!.pos,
+          isNot(const Offset(1234, 900)));
 
       // Twenty boxes placed is one edit, not twenty.
       expect(p.avUndoLabel(AvUndoScope.flow), 'Recreate from config');
       p.undoAvFlow(AvUndoScope.flow);
-      expect(p.avNodeById(byHand.id), isNotNull);
+      expect(p.avNodeById('SWITCHERDEVICE_1')!.pos, const Offset(1234, 900));
     });
 
-    testWidgets('a rail keeps its device, and loses what is not coming back',
+    testWidgets('a rail keeps its device, hand-added ones included',
         (tester) async {
       final p = flowRoom();
       await pumpFlow(tester, p);
@@ -204,9 +206,8 @@ void main() {
 
       // Re-reading the config is not a reason to unrack the room.
       expect(p.avRackSlots['SWITCHERDEVICE_1']?.startU, 4);
-      // And the rail the hand-added box was on is empty, rather than occupied
-      // by a name nothing answers to.
-      expect(p.avRackSlots.containsKey(byHand.id), isFalse);
+      // The hand-added box stays, and so does its rail.
+      expect(p.avRackSlots[byHand.id]?.startU, 6);
     });
   });
 

@@ -286,7 +286,7 @@ Future<ProjectSwapResult> applyProjectSwap({
   final results = await _pooled(todo, (room) async {
     try {
       final done = await _swapInRoomFiles(
-        room: room,
+        configPath: room.configPath,
         template: plan.to,
         fromModel: plan.fromModel,
         moduleForModel: moduleForModel,
@@ -331,6 +331,23 @@ Future<ProjectSwapResult> applyProjectSwap({
 //  WRITING ONE ROOM
 // ---------------------------------------------------------------------------
 
+/// Every [fromModel] box in the room at [configPath] swapped for [template],
+/// in its files: cables carried across, control blocks updated.
+Future<({int boxes, int carried, int dropped, int blocks})>
+swapModelInRoomFiles({
+  required String configPath,
+  required String fromModel,
+  required AvDeviceTemplate template,
+  required String Function(String model) moduleForModel,
+  required Map<String, String> deviceCountMap,
+}) => _swapInRoomFiles(
+  configPath: configPath,
+  template: template,
+  fromModel: fromModel,
+  moduleForModel: moduleForModel,
+  deviceCountMap: deviceCountMap,
+);
+
 const JsonEncoder _encoder = JsonEncoder.withIndent('    ');
 
 /// Rewrites one room's diagram file and config in place.
@@ -342,14 +359,14 @@ const JsonEncoder _encoder = JsonEncoder.withIndent('    ');
 /// The drawing is edited as the JSON it is: the swapped boxes and the runs on
 /// them are replaced, everything else in the file is written back as found.
 Future<({int boxes, int carried, int dropped, int blocks})> _swapInRoomFiles({
-  required RoomSwapPlan room,
+  required String configPath,
   required AvDeviceTemplate template,
   required String fromModel,
   required String Function(String model) moduleForModel,
   required Map<String, String> deviceCountMap,
   String label = '',
 }) async {
-  final files = await _readRoomFiles(room.configPath);
+  final files = await _readRoomFiles(configPath);
   if (files.error.isNotEmpty) throw StateError(files.error);
   final flow = files.flow;
   // No diagram file: nothing on the drawing to swap. Not an error — a room
@@ -417,7 +434,7 @@ Future<({int boxes, int carried, int dropped, int blocks})> _swapInRoomFiles({
     blocks++;
   }
   if (blocks > 0) {
-    await writeFileSafely(room.configPath, _encoder.convert(files.config));
+    await writeFileSafely(configPath, _encoder.convert(files.config));
   }
 
   return (

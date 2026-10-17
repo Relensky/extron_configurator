@@ -386,6 +386,29 @@ void main() {
       me.dispose();
     });
 
+    test('a save that only re-priced room totals asks nobody to combine',
+        () async {
+      final me = controllerFor('me');
+      await me.tick();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await File(file).writeAsString(jsonEncode({
+        ...doc.memory,
+        'roomSnapshots': {
+          'room1': {'total': 28554.67},
+        },
+        'roomsCheckedAt': '2026-10-16T10:30:34',
+      }));
+      await me.tick();
+      expect(me.incomingOn(CollabDocKind.project), isNull);
+
+      // A real change still is.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await File(file).writeAsString(jsonEncode({...doc.memory, 'n': 9}));
+      await me.tick();
+      expect(me.incomingOn(CollabDocKind.project), isNotNull);
+      me.dispose();
+    });
+
     test('a save that cannot be read yet is read on a later tick', () async {
       final me = controllerFor('me');
       await me.tick();

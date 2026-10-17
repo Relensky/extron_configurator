@@ -341,7 +341,7 @@ const List<HelpTopic> kHelpTopics = [
         'delivery.\n\n'
         'vendor_list.json is the companies the shop asks to quote. Edited '
         'from App Config, and every new job starts with them on its '
-        'Packages tab.\n\n'
+        'Quotes tab.\n\n'
         'If the app does something you do not want, the fix is usually a rule '
         'or a schema entry rather than a new build.',
   ),
@@ -916,6 +916,55 @@ const List<HelpTopic> kHelpTopics = [
         'unfilled rather than as free.',
   ),
   HelpTopic(
+    title: 'Project labor',
+    section: 'The money',
+    where: 'Projects → Labor',
+    plain:
+        'Every room on the job with its labor cost, hours and the labor rates '
+        'it is costed from, plus totals by job type and by who provides it.',
+    keywords: ['labor', 'crew', 'hours', 'rate', 'department', 'contractor'],
+    body:
+        'Press the Labor figure at the top of a project, or the Labor tab. '
+        'Each room opens to its crew lines. Below the rooms, the same hours '
+        'are added up by job type (department / contractor) and by who '
+        'provides them: paid by the job, our staff in kind, or another '
+        'department. The workbook and the Google Sheet carry the same '
+        'breakdown on their Labor tab. Crews are edited on each room\'s Cost '
+        'tab.',
+  ),
+  HelpTopic(
+    title: 'Labor charges',
+    section: 'The money',
+    where: 'Cost tab → tag button → Charge to labor',
+    plain:
+        'Charge a line - lumber, parts for a contractor - to one of the room '
+        'crews, and choose whether those charges count in the total.',
+    keywords: ['labor', 'charge', 'fee', 'lumber', 'contractor', 'department'],
+    body:
+        'Open the tag button on a line and pick a crew under Charge to labor. '
+        'The line moves to the Labor charges section with the crew it goes '
+        'with. The switch on that section counts the charges in the room '
+        'total or leaves them out; on a project, the With labor charges chip '
+        'does the same for every room. The project Labor tab adds the charges '
+        'to each crew by job type and by who provides it.',
+  ),
+  HelpTopic(
+    title: 'Buildings and departments',
+    section: 'The money',
+    where: 'Projects → Buildings drop-down; Priorities and funding',
+    plain:
+        'See every building on a job with its total, show only some of them, '
+        'and give each room a department to see how the budget splits.',
+    keywords: ['building', 'department', 'filter', 'breakdown', 'budget'],
+    body:
+        'The arrow beside the Buildings field lists every building on the '
+        'job with its rooms and total. Untick one to leave it off the project '
+        'page; every building is shown again when the project is reopened. '
+        'Exports always cover the whole job. On Priorities and funding, type a '
+        'Department for each room; the tables under the budget split the '
+        'money by building and by department.',
+  ),
+  HelpTopic(
     title: 'Spares',
     section: 'The money',
     where: 'Cost tab → Spares',
@@ -1040,7 +1089,7 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'Packages and the rules that fill them',
     section: 'The job',
-    where: 'Project tab → Packages',
+    where: 'Project tab → Quotes',
     plain:
         'Splits the shopping list into batches that go to different '
         'suppliers, screens from one and cabling from another. Rules decide '
@@ -1079,7 +1128,7 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'Vendors - the companies you ask',
     section: 'The job',
-    where: 'Project tab → Packages, below the packages',
+    where: 'Project tab → Quotes, below the packages',
     plain:
         'The suppliers on this job. Each one can be invited to quote on one '
         'or more of the batches above.',
@@ -1110,7 +1159,7 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'Sending one package to several vendors',
     section: 'The job',
-    where: 'Project tab → Packages → Invite a vendor',
+    where: 'Project tab → Quotes → Invite a vendor',
     plain:
         'Sends the same request for a price to several suppliers at once, '
         'so what comes back can be compared like for like.',
@@ -1148,7 +1197,7 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'Comparing the quotes that come back',
     section: 'The job',
-    where: 'Project tab → Packages, and the Timeline',
+    where: 'Project tab → Quotes, and the Timeline',
     plain:
         'Puts the quotes side by side, line by line, so you can see who is '
         'cheaper on what, and where a quote has quietly left something out.',
@@ -1195,7 +1244,7 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'Awarding a package',
     section: 'The job',
-    where: 'Project tab → Packages → Award...',
+    where: 'Project tab → Quotes → Award...',
     plain:
         'Records which supplier won a batch. From that moment every part in '
         'it says who is supplying it.',
@@ -1317,7 +1366,7 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'The default vendor list',
     section: 'The job',
-    where: 'App Config tab -> Default vendors, and Project tab -> Packages',
+    where: 'App Config tab -> Default vendors, and Project tab -> Quotes',
     plain:
         'Your usual suppliers, kept in one place, so every new job starts '
         'with them already listed instead of being typed in again.',
@@ -1342,7 +1391,7 @@ const List<HelpTopic> kHelpTopics = [
         'They live in vendor_list.json. Point the path at a shared drive and '
         'everybody starts from one directory, which is what stops the same '
         'supplier being spelled three ways across three quote comparisons.\n\n'
-        'A NEW JOB ARRIVES WITH THEM on its Packages tab. A job started before '
+        'A NEW JOB ARRIVES WITH THEM on its Quotes tab. A job started before '
         'a company was added can take it from "Add saved vendors" beside Add '
         'vendor on the same tab, which only ever offers what the job has not '
         'got. It opens the list and you TICK the ones you want: a shop with '
@@ -2003,7 +2052,7 @@ const List<HelpTopic> kHelpTopics = [
   HelpTopic(
     title: 'Quote request packs',
     section: 'Getting work out',
-    where: 'Project tab → Packages → export',
+    where: 'Project tab → Quotes → export',
     plain:
         'A tidy bundle to send a supplier: what you want priced, with the '
         'drawings and notes they need in order to price it.',

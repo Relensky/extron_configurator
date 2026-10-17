@@ -60,7 +60,7 @@ const Map<BriefingPane, String> kBriefingPaneLabels = {
   BriefingPane.parts: 'Equipment',
   BriefingPane.plans: 'Plans',
   BriefingPane.timeline: 'Timeline',
-  BriefingPane.vendors: 'Packages',
+  BriefingPane.vendors: 'Quotes',
   BriefingPane.todo: 'To do',
 };
 

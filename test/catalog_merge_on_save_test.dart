@@ -84,6 +84,46 @@ void main() {
         reason: 'theirs, which the old full-file rewrite erased');
   });
 
+  test('a combine lists each model and field it will take first', () async {
+    final mine = await open();
+    final theirs = await open();
+    reprice(theirs, 'DMP 64', 250);
+    theirs.upsert(theirs
+        .templateForModel('DMP 64')!
+        .copyWith(rackUnits: 2));
+    theirs.upsert(const AvDeviceTemplate(
+      model: 'IN1608',
+      category: 'Switcher',
+      price: 900,
+      ports: [],
+      custom: true,
+    ));
+    // Their price on the matrix loses to mine, so it is not listed.
+    reprice(theirs, 'DTP CrossPoint 84', 120);
+    await theirs.save();
+    reprice(mine, 'DTP CrossPoint 84', 150);
+
+    final changes = await mine.previewPullFromDisk();
+    final byModel = {for (final c in changes) c.model: c};
+    final dsp = byModel['DMP 64']!;
+    expect(dsp.added, isFalse);
+    expect(dsp.by, isNotEmpty);
+    final dspFields = {for (final f in dsp.fields) f.field: (f.mine, f.theirs)};
+    expect(dspFields['price'], (200.0, 250.0));
+    expect(dspFields['rackUnits'], (1, 2));
+    expect(dspFields.keys, isNot(contains('changedBy')));
+    final matrix = byModel['DTP CrossPoint 84'];
+    expect(matrix?.fields.map((f) => f.field) ?? const <String>[],
+        isNot(contains('price')));
+    expect(byModel['IN1608']!.added, isTrue);
+    // Previewing took nothing.
+    expect(mine.templateForModel('DMP 64')!.price, 200);
+    expect(mine.templateForModel('IN1608'), isNull);
+    await mine.pullFromDisk();
+    expect(mine.templateForModel('DMP 64')!.price, 250);
+    expect(mine.templateForModel('DTP CrossPoint 84')!.price, 150);
+  });
+
   test('two fields of one model survive together', () async {
     final mine = await open();
     final theirs = await open();

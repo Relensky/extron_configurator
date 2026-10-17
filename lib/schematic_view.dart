@@ -2011,6 +2011,7 @@ class _DashedBorderPainter extends BoxPainter {
       ..strokeWidth = width;
 
     for (final metric in (Path()..addRRect(rect)).computeMetrics()) {
+      if (!metric.length.isFinite) continue;
       double at = 0;
       while (at < metric.length) {
         final end = math.min(at + _dash, metric.length);
@@ -2370,6 +2371,7 @@ class _DashedSpecimenPainter extends CustomPainter {
       const Radius.circular(2),
     );
     for (final metric in (Path()..addRRect(rect)).computeMetrics()) {
+      if (!metric.length.isFinite) continue;
       double at = 0;
       while (at < metric.length) {
         final end = math.min(at + 3.0, metric.length);

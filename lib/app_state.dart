@@ -24,6 +24,8 @@ import 'config_key_mapper.dart';
 import 'flow_rules.dart';
 import 'cabling_schematic.dart';
 import 'building_project.dart';
+import 'project_backups.dart';
+import 'project_restore_data.dart';
 import 'av_flow_routing.dart' show autoDrawRoutingFromConfig;
 import 'processor_prompt.dart' show isControlProcessorCategory;
 import 'av_flow_view.dart' show buildAvFlowModel, seedAvFlowFromConfig;
@@ -40,7 +42,7 @@ import 'room_workbook.dart';
 import 'cost_compare.dart';
 import 'cost_estimate.dart';
 import 'xlsx_reader.dart' show readXlsxSheets;
-import 'xlsx_writer.dart' show XlsxTheme;
+import 'xlsx_writer.dart' show XlsxSheet, XlsxTheme;
 import 'labor_rates.dart';
 import 'model_swap.dart' as swap;
 import 'av_flow_swap_dialogs.dart' show applyModelSwap, applyControlSwap;
@@ -52,7 +54,7 @@ import 'install_windows.dart';
 import 'project_schedule.dart' show formatScheduleDate;
 import 'project_swap.dart';
 import 'project_swap.dart' as project_swap
-    show applyProjectRename, planProjectRename;
+    show applyProjectRename, planProjectRename, swapModelInRoomFiles;
 import 'keyboard_shortcuts.dart';
 import 'layout_tools.dart';
 import 'room_locations.dart';
@@ -1201,14 +1203,18 @@ class AppStateProvider extends ChangeNotifier {
   // --- avatars ---------------------------------------------------------------
   //
   //  A picture in place of the initials on the presence chips. Kept in the
-  //  Root Folder's assets\avatars - on the file share when that is the root,
-  //  so everybody on the job sees everybody's - named for the Windows login.
+  //  folder every CTS app shares (kDefaultAvatarsFolder, the share's
+  //  Configurator_Files\assets\avatars) whatever the Root Folder is, so the
+  //  CTS Dashboard and Instructor Contact show the same picture and can set
+  //  it too - named for the Windows login.
 
   static const List<String> _kAvatarTypes = ['.png', '.jpg', '.jpeg'];
 
-  /// Where avatars are kept: `<root>\assets\avatars`.
-  String get avatarFolder =>
-      path.join(effectiveRootFolder, 'assets', 'avatars');
+  /// Where avatars are kept: the shared folder; `<root>\assets\avatars`
+  /// under test.
+  String get avatarFolder => runningUnderTest
+      ? path.join(effectiveRootFolder, 'assets', 'avatars')
+      : kDefaultAvatarsFolder;
 
   /// The file name an avatar is kept under: the login, safe for a file name.
   static String _avatarStem(String user) =>
@@ -1383,6 +1389,8 @@ class AppStateProvider extends ChangeNotifier {
       _avatarCache[stem] = local;
       _avatarCheckedAt[stem] = DateTime.now();
       AppLogger.logInfo('Avatar set from $picture to $target.');
+      // The team chat and presence read the shared folder too.
+      unawaited(TeamAvatars.instance.refresh());
       notifyListeners();
       return '';
     } catch (e, stack) {
@@ -1400,6 +1408,7 @@ class AppStateProvider extends ChangeNotifier {
     imageCache.clearLiveImages();
     _avatarCache[stem] = null;
     _avatarCheckedAt[stem] = DateTime.now();
+    unawaited(TeamAvatars.instance.refresh());
     notifyListeners();
   }
 
@@ -1407,7 +1416,10 @@ class AppStateProvider extends ChangeNotifier {
     for (final ext in _kAvatarTypes) {
       final f = File(path.join(avatarFolder, '$stem$ext'));
       try {
-        if (await f.exists()) await f.delete();
+        if (await f.exists()) {
+          await FileImage(f).evict();
+          await f.delete();
+        }
       } catch (e) {
         AppLogger.logError('Could not delete the old avatar ${f.path}', e);
       }
@@ -1715,6 +1727,7 @@ class AppStateProvider extends ChangeNotifier {
       // plain-text copy left by an older build.
       'useDefaultProcessorPassword': useDefaultProcessorPassword,
       'isDarkMode': isDarkMode,
+      'roomMenuByPriority': roomMenuByPriority,
       'themeStyle': themeStyle,
       'classicColor': classicColor,
       'aurisColor': aurisColor,
@@ -2010,6 +2023,16 @@ class AppStateProvider extends ChangeNotifier {
   void _bumpConfigRevision() => configRevision++;
 
   bool isDarkMode = true;
+
+  /// The title bar's room menu lists rooms by priority rather than A to Z.
+  bool roomMenuByPriority = false;
+
+  void setRoomMenuByPriority(bool value) {
+    if (roomMenuByPriority == value) return;
+    roomMenuByPriority = value;
+    notifyListeners();
+    unawaited(_persistSettings());
+  }
 
   /// Visual style selected in App Config. 'classic' (the default) is a
   /// Material theme built with flex_color_scheme around [classicColor];
@@ -5734,7 +5757,14 @@ class AppStateProvider extends ChangeNotifier {
   ///
   /// Returns a short summary of what landed, for the message afterwards.
   ({int devices, int jacks, int cables, int racks, int locations})
-  applyRoomPreset(RoomPreset preset, {String jackPrefix = ''}) {
+  applyRoomPreset(
+    RoomPreset preset, {
+    String jackPrefix = '',
+
+    /// Preset box ids that stand for a box this room already has, for the
+    /// gear placed on its sheets.
+    Map<String, String> linkedNodes = const {},
+  }) {
     _pushAvUndo('Apply ${preset.name}', const {
       AvUndoScope.flow,
       AvUndoScope.racks,
@@ -5855,11 +5885,49 @@ class AppStateProvider extends ChangeNotifier {
     //
     //  Never replaces a sheet the room already has: an imported drawing is a
     //  fact about the building and a preset has no business overwriting one.
+    //  Gear placed on a sheet follows its box to the box's new id. A sheet
+    //  the room already has keeps its drawing, and only gets the gear it
+    //  does not have yet.
+    final boxIds = {...nodeMap, ...linkedNodes};
+    List<PlanDevice> gearOf(FloorPlan sheet) => [
+      for (final d in sheet.devices)
+        switch (nodeIdOfDeviceKey(d.deviceKey)) {
+          null => d,
+          // A box that did not come across: filed by name, so it ties to
+          // this room's unit of that name.
+          final id => d.copyWith(
+            deviceKey: boxIds[id] == null
+                ? roomDeviceKey(d.label)
+                : nodeDeviceKey(boxIds[id]!),
+          ),
+        },
+    ];
     for (final sheet in preset.floorPlans) {
-      final already = avFloorPlans.any(
+      final at = avFloorPlans.indexWhere(
         (p) => p.name.trim().toLowerCase() == sheet.name.trim().toLowerCase(),
       );
-      if (already) continue;
+      if (at >= 0) {
+        final plan = avFloorPlans[at];
+        final have = {for (final d in plan.devices) d.deviceKey};
+        final taken = {for (final d in plan.devices) d.id};
+        var n = plan.devices.length;
+        final added = <PlanDevice>[];
+        for (final d in gearOf(sheet)) {
+          if (!have.add(d.deviceKey)) continue;
+          String id;
+          do {
+            n++;
+            id = 'DEV_$n';
+          } while (taken.contains(id));
+          taken.add(id);
+          added.add(d.copyWith(id: id));
+        }
+        if (added.isNotEmpty) {
+          avFloorPlans[at] =
+              plan.copyWith(devices: [...plan.devices, ...added]);
+        }
+        continue;
+      }
       addAvFloorPlan(
         sheet.withId('').copyWith(
           markers: {
@@ -5867,6 +5935,7 @@ class AppStateProvider extends ChangeNotifier {
               if (locationMap[entry.key] != null)
                 locationMap[entry.key]!: entry.value,
           },
+          devices: gearOf(sheet),
         ),
       );
     }
@@ -5883,6 +5952,46 @@ class AppStateProvider extends ChangeNotifier {
       racks: preset.racks.length,
       locations: locationMap.length,
     );
+  }
+
+  /// [preset], made from the room at [fromConfig], put into this room as one
+  /// undo step. The plan sheets' drawings are copied into this room's folder,
+  /// and jacks numbered for that room ([fromSetup] is its SYSTEM_SETUP) are
+  /// renumbered for this one.
+  Future<({int devices, int jacks, int cables, int racks, int locations})>
+      copyRoomPartsFrom(
+    String fromConfig,
+    RoomPreset preset, {
+    Object? fromSetup,
+    Map<String, String> linkedNodes = const {},
+  }) async {
+    final plans = <FloorPlan>[];
+    for (final plan in preset.floorPlans) {
+      var image = plan.imageFile;
+      if (image.trim().isNotEmpty) {
+        final source = _resolveRoomImage(image, fromConfig);
+        image = File(source).existsSync()
+            ? await importRoomImage(source, 'floorplan')
+            : '';
+      }
+      plans.add(plan.copyWith(imageFile: image));
+    }
+    final from = dominantJackPrefix(preset.nodes, fromSetup);
+    final to = from.isEmpty ? '' : _dominantRoomNumber();
+    final result = applyRoomPreset(
+      preset.copyWith(floorPlans: plans, jackPrefix: from),
+      jackPrefix: to,
+      linkedNodes: linkedNodes,
+    );
+    AppLogger.logInfo('Copied ${preset.summary} from $fromConfig.');
+    return result;
+  }
+
+  /// This room's number, digits only - what its jacks start with.
+  String _dominantRoomNumber() {
+    final setup = roomConfig['SYSTEM_SETUP'];
+    return ((setup is Map ? setup['gve_room']?.toString() : null) ?? '')
+        .replaceAll(RegExp(r'[^0-9]'), '');
   }
 
   /// Writes [preset]'s SYSTEM_SETUP values into the room, and returns how many
@@ -6156,15 +6265,19 @@ class AppStateProvider extends ChangeNotifier {
   /// jacks are actually numbered with, that is the answer. Only a room with no
   /// number falls back to the shared-run guess, which then has to drop the
   /// trailing digits because it cannot tell them from the numbering.
-  String _dominantJackPrefix() {
+  String _dominantJackPrefix() =>
+      dominantJackPrefix(avNodes, roomConfig['SYSTEM_SETUP']);
+
+  /// The prefix [nodes]' jacks share, the room number in [setup] when every
+  /// jack starts with it.
+  static String dominantJackPrefix(List<AvNode> nodes, Object? setup) {
     final labels = [
-      for (final n in avNodes)
+      for (final n in nodes)
         if (n.isJackField)
           for (final p in n.ports) p.label.trim(),
     ].where((l) => l.isNotEmpty).toList();
     if (labels.isEmpty) return '';
 
-    final setup = roomConfig['SYSTEM_SETUP'];
     final roomNumber = ((setup is Map ? setup['gve_room']?.toString() : null) ??
             '')
         .replaceAll(RegExp(r'[^0-9]'), '');
@@ -6534,15 +6647,23 @@ class AppStateProvider extends ChangeNotifier {
     );
     _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.items.add(item);
+    _flagForProjectPriority(item.id);
     notifyListeners();
     return item;
   }
 
   /// Adds the cost items copied from another room or a cost preset, as one
-  /// undo step. Returns how many lines went on.
-  int applyAvCostItems(CostItemSet set, {String from = 'cost items'}) {
+  /// undo step. The lines with ids in [replacing] come off first. Returns how
+  /// many lines went on.
+  int applyAvCostItems(
+    CostItemSet set, {
+    String from = 'cost items',
+    Set<String> replacing = const {},
+  }) {
     if (set.isEmpty) return 0;
-    _pushAvUndo('Add $from', _costScope);
+    _pushAvUndo(replacing.isEmpty ? 'Add $from' : 'Replace with $from',
+        _costScope);
+    removeCostItems(avCost, replacing);
     final added = addCostItems(avCost, set, _nextCostId);
     notifyListeners();
     return added;
@@ -6552,10 +6673,14 @@ class AppStateProvider extends ChangeNotifier {
   /// copying out of the open room into another. The open room itself takes
   /// them live, with Undo. Returns how many lines went on, or -1 when the
   /// file could not be written.
-  Future<int> addCostItemsToRoomFile(String configPath, CostItemSet set) async {
+  Future<int> addCostItemsToRoomFile(
+    String configPath,
+    CostItemSet set, {
+    Set<String> replacing = const {},
+  }) async {
     if (set.isEmpty) return 0;
     if (_samePath(configPath, currentConfigPath)) {
-      return applyAvCostItems(set);
+      return applyAvCostItems(set, replacing: replacing);
     }
     // Written, so filed where the room is written now.
     moveRoomFilesIntoFolder(configPath);
@@ -6566,6 +6691,7 @@ class AppStateProvider extends ChangeNotifier {
         final old = Map<String, dynamic>.from((doc['cost'] as Map?) ?? const {});
         final settings = RoomCostSettings()..readJson(old);
         var n = highestCostId(settings);
+        removeCostItems(settings, replacing);
         added = addCostItems(settings, set, (prefix) => '$prefix${++n}');
         // Over the old map, so nothing this build does not write is lost.
         doc['cost'] = {...old, ...settings.toJson()};
@@ -6579,7 +6705,77 @@ class AppStateProvider extends ChangeNotifier {
     return added;
   }
 
+  /// Gives each line in [qtys] its quantity in the room at [configPath] -
+  /// this room, as typing it in the Qty box does, or that room's file.
+  /// Returns how many lines took it, or -1 when the file could not be
+  /// written. See setCostLineQty.
+  Future<int> setCostQtysInRoom(
+    String configPath,
+    Map<String, double> qtys,
+  ) async {
+    if (qtys.isEmpty) return 0;
+    if (configPath.isEmpty || _samePath(configPath, currentConfigPath)) {
+      var n = 0;
+      final typed = avCostTypedKeys;
+      for (final e in qtys.entries) {
+        if (typed.contains(e.key)) {
+          final before = jsonEncode(avCost.toJson());
+          final copy = RoomCostSettings()..readJson(avCost.toJson());
+          setCostLineQty(copy, e.key, e.value);
+          if (jsonEncode(copy.toJson()) == before) continue;
+          _pushAvUndo('Quantity', _costScope);
+          setCostLineQty(avCost, e.key, e.value);
+          n++;
+        } else if (drawnModelOfCostKey(e.key) != null) {
+          final drawn = _costLineUnits(e.key).length.toDouble();
+          setAvEquipmentQty(e.key, e.value, drawn: drawn);
+          n++;
+        }
+      }
+      notifyListeners();
+      return n;
+    }
+    moveRoomFilesIntoFolder(configPath);
+    var n = 0;
+    final ok = await _editRoomFile(
+      roomSidecarPaths(configPath)[RoomSidecarPart.cost] ?? '',
+      (doc) {
+        final old =
+            Map<String, dynamic>.from((doc['cost'] as Map?) ?? const {});
+        final settings = RoomCostSettings()..readJson(old);
+        for (final e in qtys.entries) {
+          if (setCostLineQty(settings, e.key, e.value)) n++;
+        }
+        doc['cost'] = {...old, ...settings.toJson()};
+      },
+    );
+    if (!ok) return -1;
+    AppLogger.logInfo('Copied $n quantit(ies) into $configPath.');
+    _projectRooms.clear();
+    _projectEstimate = null;
+    notifyListeners();
+    return n;
+  }
+
   void updateAvCostItem(CostLineItem item) {
+    // The project's add-on, edited in this room: it becomes this room's own
+    // line, still bought for the priority, and the add-on comes off here.
+    if (item.id.startsWith('addon:')) {
+      _pushAvUndo('Edit ${_costLineName(item)}', _costScope);
+      final own = CostLineItem.fromJson(
+          {...item.toJson(), 'id': _nextCostId('ITEM_')});
+      avCost.droppedAddOns.add(item.id);
+      avCost.items.add(own);
+      avCost.projectBuys.add(own.id);
+      for (final m in [avCost.priceOverrides, avCost.qtyOverrides]) {
+        final v = m.remove(item.id);
+        if (v != null) m[own.id] = v;
+      }
+      final by = avCost.furnishedLines.remove(item.id);
+      if (by != null) avCost.furnishedLines[own.id] = by;
+      notifyListeners();
+      return;
+    }
     final index = avCost.items.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
     _pushAvUndo('Edit ${_costLineName(item)}', _costScope,
@@ -6589,6 +6785,14 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   void removeAvCostItem(String itemId) {
+    // The project's add-on: off this room only.
+    if (itemId.startsWith('addon:')) {
+      if (avCost.droppedAddOns.contains(itemId)) return;
+      _pushAvUndo('Remove the project add-on', _costScope);
+      avCost.droppedAddOns.add(itemId);
+      notifyListeners();
+      return;
+    }
     final was = avCost.items.where((i) => i.id == itemId).firstOrNull;
     if (was == null) return;
     _pushAvUndo('Remove ${_costLineName(was)}', _costScope);
@@ -6636,6 +6840,7 @@ class AppStateProvider extends ChangeNotifier {
     );
     _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.extraEquipment.add(item);
+    _flagForProjectPriority(item.id);
     notifyListeners();
     return item;
   }
@@ -6682,13 +6887,15 @@ class AppStateProvider extends ChangeNotifier {
         .firstOrNull;
     if (item == null) return const [];
     final template = avDeviceLibrary.templateForModel(item.catalogModel);
-    if (template == null) return const [];
+    // Off the catalog: a plain box with the line's name and no connectors.
+    final model = template?.model ?? item.catalogModel.trim();
+    final label = item.description.trim().isEmpty
+        ? model
+        : item.description.trim();
+    if (template == null && label.isEmpty) return const [];
 
     final typed = avCost.priceOverrides[item.id];
     final count = item.qty < 1 ? 1 : item.qty.round();
-    final label = item.description.trim().isEmpty
-        ? template.model
-        : item.description.trim();
 
     // ONE ENTRY FOR THE WHOLE MOVE, spanning both tabs it lands on. Dropping a
     // quote line and drawing three boxes is one thing somebody did, and four
@@ -6696,21 +6903,30 @@ class AppStateProvider extends ChangeNotifier {
     // inner calls are told to keep quiet for exactly that reason.
     _pushAvUndo('Draw $label', {AvUndoScope.cost, AvUndoScope.flow});
 
+    // A line taken off the drawing goes back as the box it was.
+    final backAs = count == 1 && item.removedFrom.isNotEmpty
+        ? item.removedFrom
+        : '';
     final added = <AvNode>[];
     for (int i = 0; i < count; i++) {
       added.add(
         addAvNode(
           recordUndo: false,
           AvNode(
-            id: '',
+            id: backAs,
+            fromConfig: backAs.isNotEmpty && roomConfig[backAs] is Map,
             label: count == 1 ? label : '$label ${i + 1}',
-            model: template.model,
+            model: model,
             pos: Offset(at.dx, at.dy + i * 140),
-            ports: withPowerInlet(template.ports, template.powerInput),
-            rackUnits: template.rackUnits,
-            powerWatts: template.powerWatts,
-            btuPerHour: template.btuPerHour,
-            powerSource: powerSourceForInput(template.powerInput),
+            ports: template == null
+                ? const []
+                : withPowerInlet(template.ports, template.powerInput),
+            rackUnits: template?.rackUnits ?? 0,
+            powerWatts: template?.powerWatts ?? 0,
+            btuPerHour: template?.btuPerHour ?? 0,
+            powerSource: template == null
+                ? PowerSource.unspecified
+                : powerSourceForInput(template.powerInput),
             excludeFromControl: excludeFromControl || item.noControl,
           ),
         ),
@@ -6720,9 +6936,18 @@ class AppStateProvider extends ChangeNotifier {
     removeAvCostExtraEquipment(item.id, recordUndo: false);
     // Devices group by model on the estimate — the key the diagram will price
     // them under, and where the typed figure has to land to survive.
-    if (typed != null && template.model.trim().isNotEmpty) {
-      avCost.priceOverrides['model:${template.model.trim().toLowerCase()}'] =
-          typed;
+    // A box with no model is priced on its own, at what the line said.
+    final price = typed ?? (item.unitPrice > 0 ? item.unitPrice : null);
+    if (price != null) {
+      if (model.isNotEmpty) {
+        if (typed != null) {
+          avCost.priceOverrides['model:${model.toLowerCase()}'] = typed;
+        }
+      } else {
+        for (final n in added) {
+          avCost.priceOverrides[deviceGroupKey(n)] = price;
+        }
+      }
     }
     notifyListeners();
     return added;
@@ -6801,6 +7026,7 @@ class AppStateProvider extends ChangeNotifier {
     );
     _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.extraHardware.add(item);
+    _flagForProjectPriority(item.id);
     notifyListeners();
     return item;
   }
@@ -6849,6 +7075,7 @@ class AppStateProvider extends ChangeNotifier {
     );
     _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.extraCables.add(item);
+    _flagForProjectPriority(item.id);
     notifyListeners();
     return item;
   }
@@ -7051,8 +7278,8 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// One fewer on a drawn line. Takes the highest-numbered unit off the
-  /// diagram when one can go without losing anything - not cabled and not
-  /// in the config - else only the quote's count comes down.
+  /// diagram - one with nothing tied to it first, else one that is cabled or
+  /// in the config, its cables and its config block with it.
   void removeAvEquipmentUnit(String lineKey, {required double quoted}) {
     final units = _costLineUnits(lineKey);
     final id = quoted <= units.length ? _nextUnitToTakeOff(lineKey) : null;
@@ -7077,8 +7304,7 @@ class AppStateProvider extends ChangeNotifier {
 
   /// A typed quantity below the drawn count, once the typing is done: takes
   /// units off the diagram the way the minus button does, down to the typed
-  /// count. Units that can't go (cabled, in the config) stay, and the quote
-  /// keeps the typed figure.
+  /// count - cabled and config units too.
   ///
   /// Not done per keystroke: typing "20" over "13" passes through "2".
   void settleAvEquipmentQty(String lineKey) {
@@ -7115,20 +7341,31 @@ class AppStateProvider extends ChangeNotifier {
     AvUndoScope.cost,
   };
 
-  /// The highest-numbered unit on [lineKey] that can go without losing
-  /// anything - not cabled and not in the config - or null.
-  String? _nextUnitToTakeOff(String lineKey) => lastNumberedUnit(
-    [
-      for (final n in _costLineUnits(lineKey))
-        if (!n.fromConfig &&
-            !avCables.any((c) => c.fromNodeId == n.id || c.toNodeId == n.id))
-          (id: n.id, label: n.label),
-    ],
-    lineName: avCost.lineNames[lineKey] ?? '',
-  );
+  /// The highest-numbered unit on [lineKey] to take off: of the ones with
+  /// nothing tied to them - not cabled, not in the config - if there are
+  /// any, else of all of them. Null when the line has none drawn.
+  ///
+  /// A count brought down means fewer of them, so a third projector in the
+  /// config goes too, rather than the quote saying two and the room three.
+  String? _nextUnitToTakeOff(String lineKey) {
+    final units = _costLineUnits(lineKey);
+    bool free(AvNode n) =>
+        !n.fromConfig &&
+        roomConfig[n.id] is! Map &&
+        !avCables.any((c) => c.fromNodeId == n.id || c.toNodeId == n.id);
+    final pick = units.any(free) ? units.where(free) : units;
+    return lastNumberedUnit(
+      [for (final n in pick) (id: n.id, label: n.label)],
+      lineName: avCost.lineNames[lineKey] ?? '',
+    );
+  }
 
-  /// Takes one unit off the diagram, its rack slot and the floor plans.
+  /// Takes one unit off the diagram, its cables, its rack slot and the floor
+  /// plans - and its block out of the room config, the family renumbered and
+  /// recounted. The config is not on the drawing's undo history.
   void _takeUnitOff(String id) {
+    avCables.removeWhere((c) => c.fromNodeId == id || c.toNodeId == id);
+    final inConfig = roomConfig[id] is Map;
     avNodes.removeWhere((n) => n.id == id);
     final vacated = avRackSlots.remove(id);
     if (vacated != null) {
@@ -7144,6 +7381,10 @@ class AppStateProvider extends ChangeNotifier {
             if (d.deviceKey != key) d,
         ],
       );
+    }
+    if (inConfig) {
+      removeDeviceBlocks([id]);
+      AppLogger.logInfo('Took $id off the drawing and out of the room config.');
     }
   }
 
@@ -7212,6 +7453,125 @@ class AppStateProvider extends ChangeNotifier {
       );
       avCost.furnishedLines[lineKey] = trimmed;
     }
+    notifyListeners();
+  }
+
+  /// The parts typed on the Cost tab, by line key - the lines that can be
+  /// flagged optional.
+  Set<String> get avCostTypedKeys => {
+    for (final i in [
+      ...avCost.extraEquipment,
+      ...avCost.extraHardware,
+      ...avCost.extraCables,
+      ...avCost.items,
+    ])
+      i.id,
+  };
+
+  /// Flags [lineKey] as an optional upgrade, or back to part of the room.
+  /// Charges a cost line with one of the room's crews, or ('' / null) with
+  /// none. See [RoomCostSettings.laborCharges].
+  void setAvCostLaborCharge(String lineKey, String? laborId) {
+    final id = laborId ?? '';
+    if ((avCost.laborCharges[lineKey] ?? '') == id) return;
+    _pushAvUndo(id.isEmpty ? 'Not charged to labor' : 'Charged to labor',
+        _costScope);
+    id.isEmpty
+        ? avCost.laborCharges.remove(lineKey)
+        : avCost.laborCharges[lineKey] = id;
+    // Changes no room total.
+    notifyListeners();
+  }
+
+  void setAvCostOptional(String lineKey, bool optional) {
+    if (avCost.optionalLines.contains(lineKey) == optional) return;
+    _pushAvUndo(optional ? 'Optional' : 'Part of the room', _costScope);
+    optional
+        ? avCost.optionalLines.add(lineKey)
+        : avCost.optionalLines.remove(lineKey);
+    notifyListeners();
+  }
+
+  /// The room total counts the optional parts, or leaves them out.
+  void setAvCostIncludeOptional(bool include) {
+    if (avCost.includeOptional == include) return;
+    _pushAvUndo(include ? 'Count the options' : 'Leave the options out',
+        _costScope);
+    avCost.includeOptional = include;
+    notifyListeners();
+  }
+
+  /// The optional parts are listed in a section of their own.
+  void setAvCostOptionalSection(bool apart) {
+    if (avCost.optionalSection == apart) return;
+    _pushAvUndo('List the options', _costScope);
+    avCost.optionalSection = apart;
+    notifyListeners();
+  }
+
+  /// Takes every optional line off this room - for once the room has gone
+  /// out to buy and the options were not taken. A line drawn on the AV Flow
+  /// takes its boxes off the drawing, as the minus button does. Returns how
+  /// many lines came off.
+  int purgeAvCostOptional() {
+    final gone = avCost.optionalLines;
+    final lists = [
+      avCost.extraEquipment,
+      avCost.extraHardware,
+      avCost.extraCables,
+      avCost.items,
+    ];
+    var n = lists.fold(
+        0, (sum, l) => sum + l.where((i) => gone.contains(i.id)).length);
+    final drawn = [
+      for (final key in gone)
+        if (_costLineUnits(key).isNotEmpty) key,
+    ];
+    if (n == 0 && drawn.isEmpty && gone.isEmpty) return 0;
+    _pushAvUndo('Remove the options', _unitOffScopes);
+    for (final l in lists) {
+      l.removeWhere((i) => gone.contains(i.id));
+    }
+    final crews = avCost.labor.where((l) => gone.contains(l.id)).length;
+    avCost.labor.removeWhere((l) => gone.contains(l.id));
+    n += crews;
+    for (final key in drawn) {
+      for (final unit in _costLineUnits(key)) {
+        _takeUnitOff(unit.id);
+      }
+      n++;
+    }
+    for (final key in gone) {
+      avCost.priceOverrides.remove(key);
+      avCost.qtyOverrides.remove(key);
+      avCost.equipmentSpares.remove(key);
+      avCost.furnishedLines.remove(key);
+      avCost.projectBuys.remove(key);
+    }
+    gone.clear();
+    AppLogger.logInfo('Took $n optional part(s) off the room.');
+    notifyListeners();
+    return n;
+  }
+
+  /// A line added to a room whose project priority buys only some
+  /// categories is bought for that priority: somebody adding it means it.
+  void _flagForProjectPriority(String lineKey) {
+    final ref = openProjectRoom;
+    if (ref == null || ref.wholeRoom) return;
+    if (project.buysOnlyFor(ref.priority).isEmpty) return;
+    avCost.projectBuys.add(lineKey);
+  }
+
+  /// Flags [lineKey] as bought for the room's priority on its project, or
+  /// back to left as existing. See [RoomCostSettings.projectBuys].
+  void setAvCostProjectBuys(String lineKey, bool buy) {
+    if (avCost.projectBuys.contains(lineKey) == buy) return;
+    _pushAvUndo(
+      buy ? 'Bought for the priority' : 'Left as existing',
+      _costScope,
+    );
+    buy ? avCost.projectBuys.add(lineKey) : avCost.projectBuys.remove(lineKey);
     notifyListeners();
   }
 
@@ -7341,7 +7701,22 @@ class AppStateProvider extends ChangeNotifier {
   /// — applying a room type adds twenty boxes, and twenty presses of Undo to
   /// get back to before it is not an undo anybody uses.
   AvNode addAvNode(AvNode node, {bool recordUndo = true}) {
-    if (recordUndo) _pushAvUndo('Add ${node.label}', _flowScope);
+    // Back on the drawing: the quoted line it left behind goes.
+    final returning = node.id.isNotEmpty &&
+        avCost.extraEquipment.any((i) => i.removedFrom == node.id);
+    if (recordUndo) {
+      _pushAvUndo('Add ${node.label}',
+          returning ? {AvUndoScope.flow, AvUndoScope.cost} : _flowScope);
+    }
+    if (returning) {
+      final ids = [
+        for (final i in avCost.extraEquipment)
+          if (i.removedFrom == node.id) i.id,
+      ];
+      for (final id in ids) {
+        removeAvCostExtraEquipment(id, recordUndo: false);
+      }
+    }
     String id = node.id;
     if (id.isEmpty || avNodeById(id) != null) {
       do {
@@ -7671,13 +8046,67 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sets a box's hand-drawn size; 0 for either returns it to its own size.
+  /// [coalesce] folds one drag into one undo entry.
+  void setAvNodeSize(
+    String nodeId, {
+    required double width,
+    required double height,
+    String coalesce = '',
+  }) {
+    final index = avNodes.indexWhere((n) => n.id == nodeId);
+    if (index < 0) return;
+    _pushAvUndo('Resize ${avNodes[index].label}', _flowScope,
+        coalesce: coalesce);
+    avNodes[index] =
+        avNodes[index].copyWith(customWidth: width, customHeight: height);
+    notifyListeners();
+  }
+
+  /// Takes a box off the AV Flow and keeps it on the Cost page as a quoted
+  /// line, so taking it off the drawing never takes it off the quote. A box
+  /// kept off the estimate just goes. Returns the line, or null.
+  CostLineItem? removeAvNodeKeepCost(String nodeId) {
+    final node = avNodeById(nodeId);
+    if (node == null) return null;
+    final keep = !node.excludeFromCost && !node.isJackField;
+    if (!keep) {
+      removeAvNode(nodeId);
+      return null;
+    }
+    _pushAvUndo('Remove ${node.label} from the drawing', const {
+      AvUndoScope.flow,
+      AvUndoScope.racks,
+      AvUndoScope.cost,
+    });
+    final template = avDeviceLibrary.templateForModel(node.model);
+    final typed = avCost.priceOverrides[deviceGroupKey(node)];
+    final item = CostLineItem(
+      id: _nextCostId('EQP_'),
+      description: node.label,
+      category: template?.category ?? '',
+      // A box off the catalog keeps the price it was quoted at.
+      unitPrice: template == null ? (typed ?? 0) : 0,
+      catalogModel: template?.model ?? node.model.trim(),
+      noControl: node.excludeFromControl,
+      removedFrom: node.id,
+    );
+    avCost.extraEquipment.add(item);
+    removeAvNode(nodeId, recordUndo: false);
+    return item;
+  }
+
   /// Removes a node along with every cable touching it and its rack slot.
   /// Config-seeded nodes are remembered in [avDismissedDevices] so the next
-  /// seed pass leaves them off.
-  void removeAvNode(String nodeId) {
+  /// seed pass leaves them off. See [removeAvNodeKeepCost] for a removal
+  /// made on the drawing.
+  void removeAvNode(String nodeId, {bool recordUndo = true}) {
     final node = avNodeById(nodeId);
     if (node == null) return;
-    _pushAvUndo('Remove ${node.label}', const {AvUndoScope.flow, AvUndoScope.racks});
+    if (recordUndo) {
+      _pushAvUndo(
+          'Remove ${node.label}', const {AvUndoScope.flow, AvUndoScope.racks});
+    }
     avNodes.removeWhere((n) => n.id == nodeId);
     avCables.removeWhere((c) => c.fromNodeId == nodeId || c.toNodeId == nodeId);
     final vacated = avRackSlots.remove(nodeId);
@@ -7703,6 +8132,15 @@ class AppStateProvider extends ChangeNotifier {
     // changed.
     avRoutedFingerprint = '';
     notifyListeners();
+  }
+
+  /// Forgets the cables taken off the canvas by hand, so the routing pass
+  /// draws them again. Takes the undo step for the pass that follows - see
+  /// addAllCablesFromConfig.
+  void forgetAvDismissedCables() {
+    _pushAvUndo('Add all cables from config', _flowScope);
+    avDismissedCables.clear();
+    avRoutedFingerprint = '';
   }
 
   /// Empties the signal-flow drawing so it can be built again from the config:
@@ -7731,6 +8169,27 @@ class AppStateProvider extends ChangeNotifier {
     // The automatic routing pass keys off this. Cleared, it runs again over
     // the room it has just been handed.
     avRoutedFingerprint = '';
+    notifyListeners();
+  }
+
+  /// Puts boxes back exactly as they were - ids, places and all - with the
+  /// [cables] among them whose two ends both exist again. Part of a batch
+  /// that has already taken its undo step (Recreate from config).
+  void restoreAvBoxes(List<AvNode> nodes, List<AvCable> cables) {
+    for (final n in nodes) {
+      if (avNodeById(n.id) == null) avNodes.add(n);
+      avDismissedDevices.remove(n.id);
+    }
+    bool hasPort(String node, String port) =>
+        avNodeById(node)?.portById(port) != null;
+    for (final c in cables) {
+      if (avCables.any((x) => x.id == c.id)) continue;
+      if (!hasPort(c.fromNodeId, c.fromPortId) ||
+          !hasPort(c.toNodeId, c.toPortId)) {
+        continue;
+      }
+      avCables.add(c);
+    }
     notifyListeners();
   }
 
@@ -7815,8 +8274,97 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void removeAvCable(String cableId) {
-    _pushAvUndo('Remove cable $cableId', _flowScope);
+  /// Joins each tie's two connectors, first taking off whatever is on
+  /// either of them, as ONE undo step. Returns how many were drawn.
+  int applyAvTies(
+    List<
+            ({
+              String fromNode,
+              String fromPort,
+              String toNode,
+              String toPort,
+              SignalType signal,
+            })>
+        ties, {
+    String label = 'Tie in sequence',
+  }) {
+    if (ties.isEmpty) return 0;
+    _pushAvUndo(label, _flowScope);
+    var drawn = 0;
+    for (final t in ties) {
+      bool on(String node, String port) =>
+          avCables.any((c) =>
+              (c.fromNodeId == node && c.fromPortId == port) ||
+              (c.toNodeId == node && c.toPortId == port));
+      for (final c in [...avCables]) {
+        final touches = (c.fromNodeId == t.fromNode &&
+                c.fromPortId == t.fromPort) ||
+            (c.toNodeId == t.fromNode && c.toPortId == t.fromPort) ||
+            (c.fromNodeId == t.toNode && c.fromPortId == t.toPort) ||
+            (c.toNodeId == t.toNode && c.toPortId == t.toPort);
+        if (touches) removeAvCable(c.id, recordUndo: false);
+      }
+      if (on(t.fromNode, t.fromPort) || on(t.toNode, t.toPort)) continue;
+      final added = addAvCable(
+        fromNodeId: t.fromNode,
+        fromPortId: t.fromPort,
+        toNodeId: t.toNode,
+        toPortId: t.toPort,
+        signal: t.signal,
+        recordUndo: false,
+      );
+      if (added != null) drawn++;
+    }
+    notifyListeners();
+    return drawn;
+  }
+
+  /// Sets what each outlet of [stripId] feeds, outlet port id -> box id or
+  /// null for nothing, as ONE undo step. A box moved to a new outlet comes
+  /// off its old one. Returns how many leads changed.
+  int setAvStripOutlets(String stripId, Map<String, String?> feeds) {
+    final strip = avNodeById(stripId);
+    if (strip == null || feeds.isEmpty) return 0;
+    _pushAvUndo('Power ties on ${strip.label}', _flowScope);
+    var changed = 0;
+    bool on(AvCable c, String node, String port) =>
+        (c.fromNodeId == node && c.fromPortId == port) ||
+        (c.toNodeId == node && c.toPortId == port);
+    for (final e in feeds.entries) {
+      final target = e.value == null ? null : avNodeById(e.value!);
+      final inlet = target?.ports
+          .where((p) =>
+              p.signal == SignalType.power &&
+              p.direction != PortDirection.output)
+          .firstOrNull;
+      final already = target != null &&
+          inlet != null &&
+          avCables.any((c) => on(c, stripId, e.key) && on(c, target.id, inlet.id));
+      if (already) continue;
+      for (final c in [...avCables]) {
+        if (on(c, stripId, e.key) ||
+            (target != null && inlet != null && on(c, target.id, inlet.id))) {
+          removeAvCable(c.id, recordUndo: false);
+        }
+      }
+      if (target != null && inlet != null) {
+        addAvCable(
+          fromNodeId: stripId,
+          fromPortId: e.key,
+          toNodeId: target.id,
+          toPortId: inlet.id,
+          signal: SignalType.power,
+          recordUndo: false,
+        );
+      }
+      changed++;
+    }
+    notifyListeners();
+    return changed;
+  }
+
+  void removeAvCable(String cableId, {bool recordUndo = true}) {
+    if (recordUndo) _pushAvUndo('Remove cable $cableId', _flowScope);
     final cable = avCables.where((c) => c.id == cableId).firstOrNull;
     avCables.removeWhere((c) => c.id == cableId);
     // Remembered as a run the drawing does not want, so the routing pass
@@ -8243,18 +8791,59 @@ class AppStateProvider extends ChangeNotifier {
     loadAvFlowForCurrentConfig();
   }
 
+  /// The room's sidecar files, read ahead without blocking: path -> text,
+  /// null for one that is not there. Used once, by the next
+  /// [loadAvFlowForCurrentConfig].
+  Map<String, String?>? _sidecarsAhead;
+  Map<RoomSidecarPart, String>? _sidecarPathsAhead;
+  String _sidecarsAheadFor = '';
+
+  void _forgetSidecarsAhead() {
+    _sidecarsAhead = null;
+    _sidecarPathsAhead = null;
+    _sidecarsAheadFor = '';
+  }
+
+  /// Reads the open room's sidecars off the window's thread so the load that
+  /// follows does not stop the window on a slow share.
+  Future<void> _prefetchRoomSidecars() async {
+    final config = currentConfigPath;
+    if (config.isEmpty) return;
+    try {
+      final ahead = runningUnderTest
+          ? readRoomSidecars(config)
+          : await readRoomSidecarsAsync(config);
+      if (currentConfigPath != config) return;
+      _sidecarsAhead = ahead.texts;
+      _sidecarPathsAhead = ahead.paths;
+      _sidecarsAheadFor = config;
+    } catch (_) {}
+  }
+
   /// Replaces the in-memory AV diagram with the one saved beside the working
   /// config (blank when there is no sidecar).
   void loadAvFlowForCurrentConfig() {
     _resetAvFlow();
+    // Used once: a later load reads what is on disk then.
+    // Only for this room: another room's files are another room's.
+    final fresh = _sidecarsAheadFor == currentConfigPath;
+    final ahead = fresh ? _sidecarsAhead : null;
+    final pathsAhead = fresh ? _sidecarPathsAhead : null;
+    _forgetSidecarsAhead();
 
     /// One part file, or null when it is absent or unreadable. A broken part
     /// costs its own section and nothing else — losing the rack elevation
     /// because the cost file has a stray comma in it would be absurd.
     Map<String, dynamic>? readPart(String file, String what) {
-      if (file.isEmpty || !File(file).existsSync()) return null;
+      if (file.isEmpty) return null;
+      // Read ahead off the window's thread when the room was opened - see
+      // [_prefetchRoomSidecars]. Null text there means the file is absent.
+      final known = ahead != null && ahead.containsKey(file);
+      if (!known && !File(file).existsSync()) return null;
       try {
-        final doc = jsonDecode(File(file).readAsStringSync());
+        final text = known ? ahead[file] : File(file).readAsStringSync();
+        if (text == null) return null;
+        final doc = jsonDecode(text);
         if (doc is! Map) throw const FormatException('Root must be an object.');
         return Map<String, dynamic>.from(doc);
       } catch (e) {
@@ -8266,14 +8855,16 @@ class AppStateProvider extends ChangeNotifier {
     // The flow file under whichever name is on disk, so a room documented
     // before the rename opens untouched. The open already moved loose files
     // into the room folder; the old name is retired on the next save.
-    final flowFile = _readableAvFlowSidecar;
+    final flowFile =
+        pathsAhead?[RoomSidecarPart.flow] ?? _readableAvFlowSidecar;
     final parts = <RoomSidecarPart, Map<String, dynamic>?>{
       RoomSidecarPart.flow: readPart(flowFile, 'signal flow'),
     };
     for (final part in RoomSidecarPart.values) {
       if (part == RoomSidecarPart.flow) continue;
       parts[part] = readPart(
-        readableRoomSidecarPath(currentConfigPath, part),
+        pathsAhead?[part] ??
+            readableRoomSidecarPath(currentConfigPath, part),
         kRoomSidecarSuffix[part]!,
       );
     }
@@ -8582,6 +9173,8 @@ class AppStateProvider extends ChangeNotifier {
   /// the sidecars are not optional extras with their own buttons to forget.
   /// Each one no-ops when there is nothing to write.
   Future<List<String>> saveProjectSidecars() async {
+    // What is on disk is about to change: a read-ahead of it is stale.
+    _forgetSidecarsAhead();
     final written = <String>[];
     if (hasAvFlow) {
       final saved = await saveAvFlow();
@@ -9863,6 +10456,7 @@ class AppStateProvider extends ChangeNotifier {
       // older build left a plain-text copy behind.
       await _loadProcessorPassword(saved);
       isDarkMode = saved['isDarkMode'] is bool ? saved['isDarkMode'] : true;
+      roomMenuByPriority = saved['roomMenuByPriority'] == true;
       themeStyle = str('themeStyle', 'classic');
       classicColor = str('classicColor', '2196F3');
       aurisColor = str('aurisColor', 'F0A500');
@@ -10038,7 +10632,7 @@ class AppStateProvider extends ChangeNotifier {
       // Remember the working file so 'Apply Changes' in the raw editor can
       // save back to it directly.
       currentConfigPath = f.path;
-      _moveLooseRoomFiles();
+      await _moveLooseRoomFiles();
 
       // The room on screen is not the room the last target named.
       clearDeploymentTarget();
@@ -10070,6 +10664,10 @@ class AppStateProvider extends ChangeNotifier {
         await rememberRecentFile(RecentKind.room, f.path, name: recentRoomName);
       }
       AppLogger.logInfo("Loaded existing config from ${f.path}");
+      _backUpRoomForMe(f.path);
+      // The drawing and the rest, read now off the window's thread for the
+      // load that follows - whichever tab asks first.
+      await _prefetchRoomSidecars();
       return true;
     } catch (e, stack) {
       AppLogger.logError("Failed to load existing config", e, stack);
@@ -10121,15 +10719,29 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Repoints [loaded]'s rooms that moved into their own folder since the job
   /// was saved. Returns how many.
-  static int _followMovedRooms(BuildingProject loaded, String projectPath) {
-    int moved = 0;
-    for (int i = 0; i < loaded.rooms.length; i++) {
-      final ref = loaded.rooms[i];
-      final absolute = BuildingProject.resolvePath(ref.configPath, projectPath);
-      if (absolute.isEmpty || File(absolute).existsSync()) continue;
-      final now = folderLayoutPathFor(absolute);
-      if (now == absolute || !File(now).existsSync()) continue;
-      loaded.rooms[i] = ref.copyWith(
+  ///
+  /// Every room is checked at once rather than one after another: on a slow
+  /// share thirty blocking checks held the window for seconds on every open.
+  static Future<int> _followMovedRooms(
+    BuildingProject loaded,
+    String projectPath,
+  ) async {
+    final found = await Future.wait([
+      for (final ref in loaded.rooms)
+        () async {
+          final absolute =
+              BuildingProject.resolvePath(ref.configPath, projectPath);
+          if (absolute.isEmpty || await File(absolute).exists()) return null;
+          final now = folderLayoutPathFor(absolute);
+          if (now == absolute || !await File(now).exists()) return null;
+          return now;
+        }(),
+    ]);
+    var moved = 0;
+    for (var i = 0; i < found.length; i++) {
+      final now = found[i];
+      if (now == null) continue;
+      loaded.rooms[i] = loaded.rooms[i].copyWith(
         configPath: BuildingProject.storePath(now, projectPath),
       );
       moved++;
@@ -10139,22 +10751,22 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Moves an older room's loose companion files into its folder. See
   /// [moveRoomFilesIntoFolder]; pictures follow once the plans are read.
-  void _moveLooseRoomFiles() {
-    if (moveOldConfigFolderIntoRoomFiles(currentConfigPath)) {
-      AppLogger.logInfo('Moved the config folder beside '
-          '$currentConfigPath into $kRoomFilesFolder.');
+  ///
+  /// On a worker - see [tidyRoomFilesAsync].
+  Future<void> _moveLooseRoomFiles() async {
+    try {
+      // Inline under test: a worker still reading when a test tears its
+      // folder down fails the test, not the app.
+      final notes = runningUnderTest
+          ? tidyRoomFiles(currentConfigPath)
+          : await tidyRoomFilesAsync(currentConfigPath);
+      for (final note in notes) {
+        AppLogger.logInfo(note);
+      }
+    } catch (e, stack) {
+      AppLogger.logError(
+          "The room's loose files could not be tidied", e, stack);
     }
-    // Named for the room (SCI248_cost.json), not for the processor's folder
-    // the config sits in (upload_to_root_cost.json) - see [roomStem].
-    final renamed = renameRoomFilesToStem(currentConfigPath);
-    if (renamed.isNotEmpty) {
-      AppLogger.logInfo('Renamed the room\'s files for the room: '
-          '${renamed.join(', ')}.');
-    }
-    final moved = moveRoomFilesIntoFolder(currentConfigPath);
-    if (moved.isEmpty) return;
-    AppLogger.logInfo('Moved ${moved.join(', ')} into the '
-        '${path.basename(roomFolderPath(currentConfigPath))} folder.');
   }
 
   /// Why the last [openConfigAtPath] failed, for the screen. '' after a
@@ -10249,7 +10861,7 @@ class AppStateProvider extends ChangeNotifier {
       // Remember the working file so 'Apply Changes' in the raw editor can
       // save back to it directly.
       currentConfigPath = savePath;
-      _moveLooseRoomFiles();
+      await _moveLooseRoomFiles();
 
       // Backup the pristine download in the room's folder, then load it
       await _processLoadedConfig(
@@ -13243,11 +13855,25 @@ class AppStateProvider extends ChangeNotifier {
     // the config goes to disk.
     pendingRawEditorCommit?.call();
     if (currentConfigPath.isEmpty) return null;
+    // THE ROOM THIS SAVE IS FOR, start to finish - see saveProject. A room
+    // closed or switched while the backup is being taken is not written.
+    final file = currentConfigPath;
+    final config = roomConfig;
+    if (config['SYSTEM_SETUP'] is! Map && roomFileHasContent(file)) {
+      throw StateError('This room is empty and ${path.basename(file)} is '
+          'not, so it was not saved over it.');
+    }
+    if (_persistenceEnabled) {
+      await backUpRoomDocumentAsync(file);
+    }
     await _backupWorkingFile();
+    if (currentConfigPath != file || !identical(roomConfig, config)) {
+      throw StateError('The room was closed or switched while it was '
+          'saving, so it was not saved.');
+    }
     try {
       const encoder = JsonEncoder.withIndent('    ');
-      await writeFileSafely(
-          currentConfigPath, encoder.convert(_sortJson(roomConfig)));
+      await writeFileSafely(file, encoder.convert(_sortJson(config)));
       AppLogger.logInfo("Saved current config to working file $currentConfigPath");
       _markConverted(currentConfigPath);
       // Saving the project saves the WHOLE project: the AV diagram and its
@@ -13259,6 +13885,7 @@ class AppStateProvider extends ChangeNotifier {
       // and when" is asked months later by somebody who was not here, and the
       // app log is a developer's file on one machine.
       _logRoomSaved(currentConfigPath, sidecars);
+      _backUpRoomForMe(currentConfigPath);
       // The room now matches its files, so the unsaved-work check — the dot on
       // the Save button, the prompt when a room is switched, and the warning
       // when the app is closed — has a fresh baseline. Without this the
@@ -15629,6 +16256,7 @@ class AppStateProvider extends ChangeNotifier {
     projectDirty = false;
     _projectStarted = true;
     _projectRooms.clear();
+    _hiddenProjectBuildings.clear();
     AppLogger.logInfo('New project started.');
     _projectDocumentReplaced();
   }
@@ -15641,7 +16269,7 @@ class AppStateProvider extends ChangeNotifier {
   Future<String> openProject(String file) async {
     try {
       final loaded = await BuildingProject.load(file);
-      final followed = _followMovedRooms(loaded, file);
+      final followed = await _followMovedRooms(loaded, file);
       // EVERY ROOM READ FIRST, in the background. Pricing the job reads them
       // otherwise, one after another on the window's own thread, and on a
       // share that is a freeze of several seconds with nothing on screen.
@@ -15674,6 +16302,7 @@ class AppStateProvider extends ChangeNotifier {
             'folders; save the project to keep the new links.');
       }
       _projectStarted = true;
+      _hiddenProjectBuildings.clear();
       _projectRooms
         ..clear()
         ..addAll(read);
@@ -15684,6 +16313,7 @@ class AppStateProvider extends ChangeNotifier {
         'Project "${project.name}" opened from $file '
         '(${project.rooms.length} rooms, ${project.vendors.length} vendors).',
       );
+      _backUpProjectForMe(file);
       // Before the room check, so the totals it records are at that rate.
       final adoptedTax = _adoptDefaultTaxIntoProject();
       final check = _updateRoomSnapshots(read, stamps);
@@ -15695,6 +16325,7 @@ class AppStateProvider extends ChangeNotifier {
       final record = check.recorded || adoptedTax;
       if (record && !projectDirty) {
         try {
+          await backUpProjectFileAsync(file);
           await project.save(file);
           saved = true;
           AppLogger.logInfo('Room check recorded in $file.');
@@ -15720,6 +16351,44 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  /// Where this person's own project copies are kept - see
+  /// [backUpProjectForUser].
+  String get projectBackupDir =>
+      path.join(_userSettingsDir(), 'backups', 'projects');
+
+  /// Where this person's own room and campus copies are kept.
+  String get roomBackupDir => path.join(_userSettingsDir(), 'backups', 'rooms');
+  String get campusBackupDir =>
+      path.join(_userSettingsDir(), 'backups', 'campus');
+
+  /// Off the window's thread and not waited for: the share is slow, and
+  /// this copy is a spare.
+  void _backUpRoomForMe(String configPath) {
+    if (!_persistenceEnabled) return;
+    final dir = roomBackupDir;
+    unawaited(backUpRoomForUserAsync(configPath, dir).then(
+        (copy) {
+      if (copy != null) AppLogger.logInfo('Your own copy of the room: $copy');
+    }, onError: (_) {}));
+  }
+
+  /// Your own copy of a campus file - see [backUpCampusForUser].
+  void backUpCampusForMe(String file) {
+    if (!_persistenceEnabled) return;
+    final dir = campusBackupDir;
+    unawaited(backUpCampusForUserAsync(file, dir).then((copy) {
+      if (copy != null) AppLogger.logInfo('Your own copy of the campus: $copy');
+    }, onError: (_) {}));
+  }
+
+  void _backUpProjectForMe(String file) {
+    if (!_persistenceEnabled) return;
+    final dir = projectBackupDir;
+    unawaited(backUpProjectForUserAsync(file, dir).then((copy) {
+      if (copy != null) AppLogger.logInfo('Your own copy of the project: $copy');
+    }, onError: (_) {}));
+  }
+
   /// Puts the job away, leaving an empty one behind.
   ///
   /// EMPTY, not "a new project": [newProject] seeds the usual vendor split,
@@ -15742,6 +16411,7 @@ class AppStateProvider extends ChangeNotifier {
     _projectStarted = false;
     _projectRooms.clear();
     _projectRoomStamps.clear();
+    _hiddenProjectBuildings.clear();
     roomsChangedOnOpen = const [];
     AppLogger.logInfo('Project "$was" closed.');
     _projectDocumentReplaced();
@@ -15784,6 +16454,10 @@ class AppStateProvider extends ChangeNotifier {
   }) async {
     final target = to.isNotEmpty ? to : currentProjectPath;
     if (target.isEmpty) return 'The project has no file to save to yet.';
+    // THE JOB THIS SAVE IS FOR. The online copy below waits on the network,
+    // and a project closed meanwhile leaves an empty one in its place - which
+    // was once saved over the real file. Only this job is ever written.
+    final job = project;
     lastOnlinePublishFailed = const [];
     _adoptDefaultTaxIntoProject();
 
@@ -15886,8 +16560,24 @@ class AppStateProvider extends ChangeNotifier {
       _savingProjectTo = '';
     }
 
+    if (!identical(project, job)) {
+      AppLogger.logError(
+        'The project was closed or replaced while it was saving; nothing was '
+        'written to $target.',
+      );
+      return 'The project was closed while it was saving, so it was not '
+          'saved.';
+    }
+    final blank = blankProjectOverJob(job, target);
+    if (blank.isNotEmpty) {
+      AppLogger.logError('Refused to save over $target: $blank');
+      return blank;
+    }
+
     try {
-      await project.save(target);
+      await backUpProjectFileAsync(target);
+      await job.save(target);
+      _backUpProjectForMe(target);
       currentProjectPath = target;
       _syncChat();
       projectDirty = false;
@@ -16131,6 +16821,7 @@ class AppStateProvider extends ChangeNotifier {
     String roomId = '',
     int? priority,
     String? funding,
+    String? department,
     double? targetPrice,
   }) {
     final line = manualId.isEmpty
@@ -16165,6 +16856,7 @@ class AppStateProvider extends ChangeNotifier {
         line.copyWith(
           priority: priority,
           funding: funding?.trim(),
+          department: department?.trim(),
           targetPrice: targetPrice,
         ),
       );
@@ -16173,6 +16865,7 @@ class AppStateProvider extends ChangeNotifier {
       project.rooms[at] = room!.copyWith(
         priority: priority,
         funding: funding?.trim(),
+        department: department?.trim(),
         targetPrice: targetPrice,
       );
     }
@@ -16192,6 +16885,15 @@ class AppStateProvider extends ChangeNotifier {
         itemName: name,
         field: 'Funding',
         summary: funding.trim().isEmpty ? 'cleared' : funding.trim(),
+        coalesce: true,
+      );
+    }
+    if (department != null) {
+      _logProjectEdit(
+        itemKey: key,
+        itemName: name,
+        field: 'Department',
+        summary: department.trim().isEmpty ? 'cleared' : department.trim(),
         coalesce: true,
       );
     }
@@ -16407,6 +17109,73 @@ class AppStateProvider extends ChangeNotifier {
         coalesce: true,
       );
     }
+    _projectChanged();
+  }
+
+  /// This job buys no spares: the No spare warnings go, until it is turned
+  /// back off.
+  void setProjectNoSpares(bool none) {
+    if (project.noSpares == none) return;
+    project.noSpares = none;
+    _logProjectEdit(
+      itemKey: 'spares',
+      itemName: project.name,
+      field: 'Spares',
+      summary: none ? 'no spares on this job' : 'spares asked for again',
+    );
+    _projectChanged();
+  }
+
+  /// The project's total with the rooms' optional upgrades, or without.
+  void setProjectIncludeLaborCharges(bool include) {
+    if (project.includeLaborCharges == include) return;
+    project.includeLaborCharges = include;
+    _logProjectEdit(
+      itemKey: 'laborCharges',
+      itemName: project.name,
+      field: 'Labor charges',
+      summary: include
+          ? 'total with labor charges'
+          : 'total without labor charges',
+    );
+    _projectChanged();
+  }
+
+  /// The room total counts its labor charges, or leaves them out.
+  void setAvCostIncludeLaborCharges(bool include) {
+    if (avCost.includeLaborCharges == include) return;
+    _pushAvUndo(
+      include ? 'Count the labor charges' : 'Leave the labor charges out',
+      _costScope,
+    );
+    avCost.includeLaborCharges = include;
+    notifyListeners();
+  }
+
+  void setProjectIncludeOptional(bool include) {
+    if (project.includeOptional == include) return;
+    project.includeOptional = include;
+    _logProjectEdit(
+      itemKey: 'optional',
+      itemName: project.name,
+      field: 'Options',
+      summary: include ? 'total with options' : 'total without options',
+    );
+    _projectChanged();
+  }
+
+  /// Leaves [roomId]'s optional upgrades off the project's total, or counts
+  /// them as the project does. See [ProjectRoomRef.optionalOff].
+  void setProjectRoomOptionalOff(String roomId, bool off) {
+    final index = project.rooms.indexWhere((r) => r.id == roomId);
+    if (index < 0 || project.rooms[index].optionalOff == off) return;
+    project.rooms[index] = project.rooms[index].copyWith(optionalOff: off);
+    _logProjectEdit(
+      itemKey: 'room:$roomId',
+      itemName: projectRoomLogName(roomId),
+      field: 'Options',
+      summary: off ? 'options off' : 'options priced',
+    );
     _projectChanged();
   }
 
@@ -16739,6 +17508,7 @@ class AppStateProvider extends ChangeNotifier {
     project.rooms.last = project.rooms.last.copyWith(
       priority: line.priority,
       funding: line.funding,
+      department: line.department,
       targetPrice: line.targetPrice,
     );
 
@@ -17207,8 +17977,26 @@ class AppStateProvider extends ChangeNotifier {
         at: stamp,
       );
     }
+    // The job this publish is for; see [saveProject]. Nothing below writes
+    // into a project that has been closed or replaced meanwhile.
+    final job = project;
+    OnlineCopyResult gone() {
+      AppLogger.logInfo('The project was closed while its online copy was '
+          'being written; nothing more was recorded.');
+      return (
+        folder: '',
+        written: const <String>[],
+        failed: const ['the project was closed'],
+        at: stamp,
+      );
+    }
+
     final estimate = priceProject();
     final classes = await classScheduleForExport();
+    // The whole job for the hidden tab, read and packed once for both copies
+    // and without blocking the window. See project_restore_data.dart.
+    final dataSheet = await projectDataSheetFor(job, currentProjectPath);
+    if (!identical(project, job)) return gone();
 
     // THE SHEET GOES ALONGSIDE THE FOLDER, and neither waits on the other: a
     // locked file must not keep the Sheet stale, nor Google being unreachable
@@ -17216,11 +18004,13 @@ class AppStateProvider extends ChangeNotifier {
     String? sheetError;
     if (toSheet) {
       try {
-        await _publishLiveSheet(estimate, classes, stamp, interactive);
+        await _publishLiveSheet(
+            estimate, classes, stamp, interactive, job, dataSheet);
       } catch (e, stack) {
         sheetError = '$e';
         AppLogger.logError('The Google Sheet could not be updated', e, stack);
       }
+      if (!identical(project, job)) return gone();
     }
     if (!toFolder) {
       final ok = sheetError == null;
@@ -17255,9 +18045,15 @@ class AppStateProvider extends ChangeNotifier {
       baseCosts: baseCosts,
       tier: pricingTier,
       classSchedule: classes,
-      includeProjectFile: includeProjectFile,
+      dataSheet: dataSheet,
+      // Never the project's own file: a job published into its own folder
+      // would have its copy written over the real thing.
+      includeProjectFile: includeProjectFile &&
+          !samePath(path.join(target, onlineProjectFileName(job)),
+              currentProjectPath),
       at: stamp,
     );
+    if (!identical(project, job)) return gone();
     final OnlineCopyResult result = (
       folder: files.folder,
       written: [
@@ -17280,16 +18076,16 @@ class AppStateProvider extends ChangeNotifier {
       // else has been in the workbook since. See online_copy.dart.
       final written = onlineWorkbookStamp(
         folder: target,
-        workbookName: onlineWorkbookName(project),
+        workbookName: onlineWorkbookName(job),
       );
-      project.onlineFileStamp = written?.modified;
+      job.onlineFileStamp = written?.modified;
       // EVERY TAB, as for the live Sheet - what the next publish and every
       // pull compare the workbook against. See online_sheet_merge.dart.
       if (written != null) {
         try {
           writeSheetBaseline(
             _sheetBaselineFile,
-            workbookGrids(await File(written.file).readAsBytes()),
+            await workbookGridsAsync(await File(written.file).readAsBytes()),
             workbook: true,
           );
         } catch (e, stack) {
@@ -17333,6 +18129,8 @@ class AppStateProvider extends ChangeNotifier {
     ClassScheduleIndex? classes,
     DateTime stamp,
     bool interactive,
+    BuildingProject job,
+    XlsxSheet? dataSheet,
   ) async {
     final live = _liveSheet(interactive: interactive);
     final sheets = buildProjectWorkbookSheets(
@@ -17343,22 +18141,23 @@ class AppStateProvider extends ChangeNotifier {
       classSchedule: classes,
       generated: stamp,
       editable: true,
+      dataSheet: dataSheet,
     );
-    var id = project.onlineSheetId.trim();
+    var id = job.onlineSheetId.trim();
     if (id.isEmpty) {
       id = await live.create(
-        onlineFileStem(project).replaceAll('_', ' '),
+        onlineFileStem(job).replaceAll('_', ' '),
         firstTab: sheets.first.name,
       );
-      project.onlineSheetId = id;
+      job.onlineSheetId = id;
     }
     await live.write(id, sheets);
     // What it says now, so the next publish can tell whether anybody typed.
     try {
-      project.onlineSheetStamp =
+      job.onlineSheetStamp =
           liveSheetStamp(await live.read(id, kLiveReadBackSheets));
     } catch (_) {
-      project.onlineSheetStamp = '';
+      job.onlineSheetStamp = '';
     }
     // EVERY TAB, kept beside the project - what the next publish and every
     // pull compare the Sheet against, cell by cell. See
@@ -17366,7 +18165,13 @@ class AppStateProvider extends ChangeNotifier {
     try {
       writeSheetBaseline(
         _sheetBaselineFile,
-        await live.read(id, [for (final s in sheets) s.name], entered: true),
+        await live.read(
+            id,
+            [
+              for (final s in sheets)
+                if (s.name != kProjectDataSheet) s.name,
+            ],
+            entered: true),
       );
     } catch (e, stack) {
       AppLogger.logError(
@@ -21108,6 +21913,59 @@ class AppStateProvider extends ChangeNotifier {
   /// on every rebuild of the Project tab — tagging a part re-prices, and
   /// re-reading forty files to answer "which column does this row go in" would
   /// make the tab feel broken.
+  /// Building codes the project page is not showing. Not saved: every
+  /// project opens with all of them shown.
+  Set<String> get hiddenProjectBuildings => _hiddenProjectBuildings;
+  final Set<String> _hiddenProjectBuildings = {};
+
+  void setProjectBuildingShown(String code, bool shown) {
+    final changed = shown
+        ? _hiddenProjectBuildings.remove(code)
+        : _hiddenProjectBuildings.add(code);
+    if (!changed) return;
+    _keepEstimate = true;
+    notifyListeners();
+  }
+
+  void showAllProjectBuildings() {
+    if (_hiddenProjectBuildings.isEmpty) return;
+    _hiddenProjectBuildings.clear();
+    _keepEstimate = true;
+    notifyListeners();
+  }
+
+  ProjectEstimate? _shownEstimate;
+  ProjectEstimate? _shownFrom;
+  String _shownKey = '';
+
+  /// [priceProject] with [hiddenProjectBuildings] left off - what the project
+  /// page shows. Exports and saves use [priceProject], the whole job.
+  ProjectEstimate priceProjectShown() {
+    final full = priceProject();
+    if (_hiddenProjectBuildings.isEmpty) return full;
+    final key = (_hiddenProjectBuildings.toList()..sort()).join('|');
+    final cached = _shownEstimate;
+    if (cached != null && identical(_shownFrom, full) && _shownKey == key) {
+      return cached;
+    }
+    _shownFrom = full;
+    _shownKey = key;
+    return _shownEstimate = computeProjectEstimate(
+      project: project,
+      projectPath: currentProjectPath,
+      library: avDeviceLibrary,
+      rates: laborRates,
+      baseCosts: baseCosts,
+      tier: pricingTier,
+      // The rooms the whole job already read; nothing is read again.
+      rooms: {for (final r in full.rooms) r.ref.id: r.room},
+      deviceCountMap: uiSchema.deviceCountMap,
+      moduleForModel: moduleForModel,
+      defaultTaxPercent: defaultTaxPercent,
+      hiddenBuildings: _hiddenProjectBuildings,
+    );
+  }
+
   ProjectEstimate priceProject({bool fresh = false}) {
     if (fresh) {
       _projectRooms.clear();
@@ -21191,6 +22049,7 @@ class AppStateProvider extends ChangeNotifier {
     final changed = <({String room, double before, double after})>[];
     final next = <String, RoomSnapshot>{};
     var different = false;
+    var repriced = false;
     for (final room in estimate.rooms) {
       final now = RoomSnapshot(
         filesModified: stamps[room.ref.id],
@@ -21203,13 +22062,27 @@ class AppStateProvider extends ChangeNotifier {
         continue;
       }
       final moved = (was.total - now.total).abs() > 0.005;
-      if (moved || was.filesModified != now.filesModified) different = true;
-      if (moved) {
-        changed.add((room: room.name, before: was.total, after: now.total));
+      // Same files, new total: this PC's prices, not an edit. Kept in memory
+      // but not worth writing the shared job over - every opener pricing a
+      // little differently rewrote it, and everyone else was asked to combine.
+      if (was.filesModified != now.filesModified) {
+        different = true;
+        if (moved) {
+          changed.add((room: room.name, before: was.total, after: now.total));
+        }
+      } else if (moved) {
+        repriced = true;
       }
     }
     if (next.length != project.roomSnapshots.length) different = true;
-    if (!different) return (recorded: false, changed: const []);
+    if (!different) {
+      if (repriced) {
+        project.roomSnapshots
+          ..clear()
+          ..addAll(next);
+      }
+      return (recorded: false, changed: const []);
+    }
     project.roomSnapshots
       ..clear()
       ..addAll(next);
@@ -21389,6 +22262,46 @@ class AppStateProvider extends ChangeNotifier {
       openRoomBoxes: openBoxes,
       openRoomDirty: openBoxes > 0,
     );
+  }
+
+  /// Swaps every [fromModel] box for [template]: in this room when
+  /// [configPath] is '' or the open room, with one undo step; else in that
+  /// room's files. Returns the boxes swapped and the cables that came off.
+  Future<({int boxes, int dropped})> swapModelInRoom(
+    String configPath,
+    String fromModel,
+    AvDeviceTemplate template,
+  ) async {
+    final needle = fromModel.trim().toLowerCase();
+    if (configPath.isEmpty ||
+        path.equals(path.normalize(configPath),
+            path.normalize(currentConfigPath))) {
+      final boxes = [
+        for (final n in avNodes)
+          if (n.model.trim().toLowerCase() == needle) n,
+      ];
+      var dropped = 0;
+      for (final node in boxes) {
+        dropped += applyModelSwap(this, node, template,
+                recordUndo: node == boxes.first)
+            .dropped;
+      }
+      if (boxes.isNotEmpty) {
+        applyControlSwap(this, [for (final n in boxes) n.id], template.model);
+      }
+      return (boxes: boxes.length, dropped: dropped);
+    }
+    final done = await project_swap.swapModelInRoomFiles(
+      configPath: configPath,
+      fromModel: fromModel,
+      template: template,
+      moduleForModel: moduleForModel,
+      deviceCountMap: uiSchema.deviceCountMap,
+    );
+    _projectRooms.clear();
+    _projectEstimate = null;
+    notifyListeners();
+    return (boxes: done.boxes, dropped: done.dropped);
   }
 
   /// Every room with a box on [model], for renaming them all. Writes nothing.

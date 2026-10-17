@@ -1,14 +1,19 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_state.dart';
+import 'av_device_library.dart' show AvDeviceTemplate;
 import 'building_project.dart';
 import 'cost_compare.dart';
 import 'cost_estimate.dart';
+import 'file_dialogs.dart';
+import 'history_sources.dart' show roomNameForConfig;
 import 'project_estimate.dart';
 import 'project_search.dart';
+import 'recent_files.dart';
 
 /// A room picked to compare with or copy from: its config file and its name.
 typedef OtherRoom = ({String configPath, String label});
@@ -44,35 +49,141 @@ class _OtherRoomDialog extends StatefulWidget {
   State<_OtherRoomDialog> createState() => _OtherRoomDialogState();
 }
 
+/// The project dropdown's "Open project file..." entry.
+const _kOpenProjectFile = '\u0000open';
+
 class _OtherRoomDialogState extends State<_OtherRoomDialog> {
+  /// Every project offered: the open one, recent ones, then the rest.
   List<SearchProject> _projects = [];
+
+  /// Picked with "Open project file..." - first after the open project.
+  final List<SearchProject> _openedFiles = [];
   String _projectFile = '';
   List<OtherRoom> _rooms = [];
+
+  /// Rooms opened lately, by path - drawn with a clock.
+  Set<String> _recentRooms = {};
   String _picked = '';
   bool _loadingProjects = true;
   bool _loadingRooms = false;
   String _error = '';
+  int _dropdownResets = 0;
+
+  AppStateProvider get _provider => widget.provider;
 
   @override
   void initState() {
     super.initState();
-    _projectFile = widget.provider.currentProjectPath;
+    _projectFile = _provider.currentProjectPath;
+    _projects = _ordered(const []);
     _findProjects();
-    if (_projectFile.isNotEmpty) _loadRooms(_projectFile);
+    if (_projectFile.isNotEmpty) {
+      _loadRooms(_projectFile);
+    } else {
+      _listRecentRooms();
+    }
   }
+
+  static String _norm(String p) => path.normalize(p).toLowerCase();
+
+  /// Recent entries of [kind] whose files are still there, newest first.
+  List<RecentFile> _recent(RecentKind kind) =>
+      [for (final r in _provider.recentFiles[kind]) if (r.stillThere) r];
+
+  /// The open project first, then recent ones, then [found] by name.
+  List<SearchProject> _ordered(List<SearchProject> found) {
+    final byPath = {for (final p in found) _norm(p.path): p};
+    final seen = <String>{};
+    final out = <SearchProject>[];
+    void add(String file, String name) {
+      if (file.isEmpty || !seen.add(_norm(file))) return;
+      out.add(byPath[_norm(file)] ??
+          (path: file, name: name.trim().isEmpty ? searchProjectName(file) : name));
+    }
+
+    add(_provider.currentProjectPath, _provider.project.name);
+    for (final p in _openedFiles) {
+      add(p.path, p.name);
+    }
+    for (final r in _recent(RecentKind.project)) {
+      add(r.file, r.name);
+    }
+    for (final p in found) {
+      add(p.path, p.name);
+    }
+    return out;
+  }
+
+  Set<String> get _recentProjects =>
+      {for (final r in _recent(RecentKind.project)) _norm(r.file)};
 
   Future<void> _findProjects() async {
     final found = await ProjectSearch.projects(
-      widget.provider.effectiveRootFolder,
+      _provider.effectiveRootFolder,
       extra: [
-        if (widget.provider.currentProjectPath.isNotEmpty)
-          widget.provider.currentProjectPath,
+        if (_provider.currentProjectPath.isNotEmpty)
+          _provider.currentProjectPath,
       ],
     );
     if (!mounted) return;
     setState(() {
-      _projects = found;
+      _projects = _ordered(found);
       _loadingProjects = false;
+    });
+  }
+
+  /// "Open project file...": any project on disk, added to the list.
+  Future<void> _openProjectFile() async {
+    final picked = await pickFilesCompat(
+      dialogTitle: 'Which project has the room to copy from?',
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+    );
+    final file = picked?.files.singleOrNull?.path;
+    if (file == null || !mounted) return;
+    setState(() {
+      _openedFiles.insert(0, (path: file, name: searchProjectName(file)));
+      _projects = _ordered(_projects);
+      _projectFile = file;
+    });
+    _loadRooms(file);
+  }
+
+  /// "Room file...": a config.json picked straight off disk.
+  Future<void> _openRoomFile() async {
+    final picked = await pickFilesCompat(
+      dialogTitle: 'Which room\'s config.json to copy from?',
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+    );
+    final file = picked?.files.singleOrNull?.path;
+    if (file == null || !mounted) return;
+    if (_same(file, _provider.currentConfigPath)) {
+      setState(() => _error = 'That is the room that is open.');
+      return;
+    }
+    final recent = _recent(RecentKind.room)
+        .where((r) => _same(r.file, file))
+        .firstOrNull;
+    Navigator.pop(context, (
+      configPath: file,
+      label: roomNameForConfig(file, label: recent?.name ?? ''),
+    ));
+  }
+
+  /// With no project picked: the rooms opened lately.
+  void _listRecentRooms() {
+    final open = _provider.currentConfigPath;
+    final rooms = [
+      for (final r in _recent(RecentKind.room))
+        if (!_same(r.file, open))
+          (configPath: r.file, label: roomNameForConfig(r.file, label: r.name)),
+    ];
+    setState(() {
+      _rooms = rooms;
+      _recentRooms = {for (final r in rooms) _norm(r.configPath)};
+      _picked = '';
+      _error = '';
     });
   }
 
@@ -85,24 +196,43 @@ class _OtherRoomDialogState extends State<_OtherRoomDialog> {
     });
     try {
       // The open project as it stands, unsaved rooms and all.
-      final project = _same(file, widget.provider.currentProjectPath)
-          ? widget.provider.project
+      final project = _same(file, _provider.currentProjectPath)
+          ? _provider.project
           : await BuildingProject.load(file);
-      final open = widget.provider.currentConfigPath;
+      final open = _provider.currentConfigPath;
+      // Recently opened rooms first, newest first; then the rest by name.
+      final recent = _recent(RecentKind.room);
+      final rank = {
+        for (var i = 0; i < recent.length; i++) _norm(recent[i].file): i,
+      };
+      final names = {for (final r in recent) _norm(r.file): r.name};
       final rooms = <OtherRoom>[
         for (final ref in project.rooms)
           if (BuildingProject.resolvePath(ref.configPath, file)
               case final p when p.isNotEmpty && !_same(p, open))
             (
               configPath: p,
-              label: ref.label.trim().isNotEmpty
-                  ? ref.label.trim()
-                  : path.basenameWithoutExtension(p),
+              // Folder-layout rooms are all config.json: name them by folder.
+              label: roomNameForConfig(
+                p,
+                label: ref.label.trim().isNotEmpty
+                    ? ref.label
+                    : names[_norm(p)] ?? '',
+              ),
             ),
-      ]..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+      ]..sort((a, b) {
+          final ra = rank[_norm(a.configPath)] ?? 1 << 20;
+          final rb = rank[_norm(b.configPath)] ?? 1 << 20;
+          if (ra != rb) return ra.compareTo(rb);
+          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+        });
       if (!mounted || file != _projectFile) return;
       setState(() {
         _rooms = rooms;
+        _recentRooms = {
+          for (final r in rooms)
+            if (rank.containsKey(_norm(r.configPath))) _norm(r.configPath),
+        };
         _loadingRooms = false;
       });
     } catch (e) {
@@ -122,8 +252,12 @@ class _OtherRoomDialogState extends State<_OtherRoomDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasProject =
-        _projects.any((p) => _same(p.path, _projectFile));
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final selected = _projects
+        .where((p) => _same(p.path, _projectFile))
+        .firstOrNull
+        ?.path;
+    final recentProjects = _recentProjects;
     return AlertDialog(
       title: Text(widget.title),
       content: SizedBox(
@@ -132,36 +266,70 @@ class _OtherRoomDialogState extends State<_OtherRoomDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_loadingProjects && _projects.isEmpty)
-              const LinearProgressIndicator()
-            else
-              DropdownButtonFormField<String>(
-                key: const ValueKey('other_room_project'),
-                initialValue: hasProject ? _projectFile : null,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Project',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                items: [
-                  for (final p in _projects)
-                    DropdownMenuItem(
-                      value: p.path,
-                      child: Text(
-                        _same(p.path, widget.provider.currentProjectPath)
-                            ? '${p.name} (open project)'
-                            : p.name,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  _projectFile = v;
-                  _loadRooms(v);
-                },
+            DropdownButtonFormField<String>(
+              // Rebuilt when a file is opened, so it shows the new pick.
+              key: ValueKey('other_room_project|$selected|$_dropdownResets'),
+              initialValue: selected,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Project',
+                border: const OutlineInputBorder(),
+                isDense: true,
+                helperText: _loadingProjects
+                    ? 'Looking under the Root Folder for more...'
+                    : null,
               ),
+              hint: const Text('No project - recent rooms are listed'),
+              items: [
+                DropdownMenuItem(
+                  value: _kOpenProjectFile,
+                  child: Row(
+                    children: [
+                      Icon(Icons.folder_open, size: 18, color: muted),
+                      const SizedBox(width: 8),
+                      const Text('Open project file...'),
+                    ],
+                  ),
+                ),
+                for (final p in _projects)
+                  DropdownMenuItem(
+                    value: p.path,
+                    child: Row(
+                      children: [
+                        Icon(
+                          _same(p.path, _provider.currentProjectPath)
+                              ? Icons.folder_special_outlined
+                              : recentProjects.contains(_norm(p.path))
+                              ? Icons.history
+                              : Icons.folder_outlined,
+                          size: 18,
+                          color: muted,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _same(p.path, _provider.currentProjectPath)
+                                ? '${p.name} (open project)'
+                                : p.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+              onChanged: (v) {
+                if (v == null) return;
+                if (v == _kOpenProjectFile) {
+                  // Back to what it showed until a file is picked.
+                  setState(() => _dropdownResets++);
+                  _openProjectFile();
+                  return;
+                }
+                _projectFile = v;
+                _loadRooms(v);
+              },
+            ),
             const SizedBox(height: 10),
             Expanded(
               child: _loadingRooms
@@ -172,7 +340,7 @@ class _OtherRoomDialogState extends State<_OtherRoomDialog> {
                   ? Center(
                       child: Text(
                         _projectFile.isEmpty
-                            ? 'Pick a project to list its rooms.'
+                            ? 'Pick a project, or a room file below.'
                             : 'No other rooms in this project.',
                         style: theme.textTheme.bodySmall,
                       ),
@@ -181,11 +349,22 @@ class _OtherRoomDialogState extends State<_OtherRoomDialog> {
                       children: [
                         for (final r in _rooms)
                           ListTile(
-                            key: ValueKey('other_room_${r.label}'),
+                            // By path: two rooms can share a name.
+                            key: ValueKey('other_room_${r.configPath}'),
                             dense: true,
-                            leading: const Icon(Icons.meeting_room_outlined,
-                                size: 20),
+                            leading: Icon(
+                              _recentRooms.contains(_norm(r.configPath))
+                                  ? Icons.history
+                                  : Icons.meeting_room_outlined,
+                              size: 20,
+                            ),
                             title: Text(r.label),
+                            subtitle: _projectFile.isEmpty
+                                ? Text(
+                                    path.dirname(r.configPath),
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : null,
                             selected: r.configPath == _picked,
                             onTap: () =>
                                 setState(() => _picked = r.configPath),
@@ -197,6 +376,12 @@ class _OtherRoomDialogState extends State<_OtherRoomDialog> {
         ),
       ),
       actions: [
+        OutlinedButton.icon(
+          key: const ValueKey('other_room_file'),
+          icon: const Icon(Icons.file_open_outlined, size: 18),
+          label: const Text('Room file...'),
+          onPressed: _openRoomFile,
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
@@ -329,24 +514,174 @@ class CostCompareDialog extends StatefulWidget {
 }
 
 class _CostCompareDialogState extends State<CostCompareDialog> {
-  late final CostComparison _c =
-      compareRoomCosts(widget.hereEstimate, widget.thereEstimate);
+  // Both sides as they stand now: a copy changes one, and the window stays
+  // open to copy more either way.
+  late CostEstimate _hereEstimate = widget.hereEstimate;
+  late CostEstimate _thereEstimate = widget.thereEstimate;
+  late RoomCostSettings _thereSettings = widget.thereSettings;
+  late CostComparison _c = compareRoomCosts(_hereEstimate, _thereEstimate);
   bool _differencesOnly = true;
   CopyDirection _into = CopyDirection.intoHere;
   final Set<String> _picked = {};
   bool _busy = false;
 
+  /// Parts both rooms have can be ticked, and replace the target's.
+  bool _replace = false;
+
+  /// With [_replace] on: a part only the source has, by row key, and the
+  /// different part in the target it goes in place of.
+  final Map<String, String> _swaps = {};
+
+  /// What the last copy did, shown above the buttons.
+  String _done = '';
+
   bool get _intoHere => _into == CopyDirection.intoHere;
   String get _targetName => _intoHere ? widget.hereName : widget.thereName;
+  RoomCostSettings get _targetSettings =>
+      _intoHere ? widget.hereSettings : _thereSettings;
 
   static String _rowKey(CostDiffRow r) =>
       '${r.section}|${r.name}|${r.partNumber}';
 
-  /// The source room has it and the target does not.
-  bool _canCopy(CostDiffRow r) =>
-      _intoHere ? r.inThere && !r.inHere : r.inHere && !r.inThere;
-
+  bool _inSource(CostDiffRow r) => _intoHere ? r.inThere : r.inHere;
   bool _inTarget(CostDiffRow r) => _intoHere ? r.inHere : r.inThere;
+
+  /// The target's lines for [r] that a replace takes off, or null when it
+  /// cannot: one is drawn on the target's diagram.
+  Set<String>? _replaceIds(CostDiffRow r) => typedLineIds(
+    _targetSettings,
+    _intoHere ? r.linesHere : r.linesThere,
+    _intoHere ? r.laborHere : r.laborThere,
+  );
+
+  /// The target's parts [r] could go in place of: the same section, and
+  /// not [r] itself.
+  List<CostDiffRow> _swapChoices(CostDiffRow r) => [
+    for (final t in _c.rows)
+      if (t.section == r.section && _inTarget(t) && _rowKey(t) != _rowKey(r))
+        t,
+  ];
+
+  /// The target part [r] replaces, if one was picked for it.
+  CostDiffRow? _swapFor(CostDiffRow r) {
+    if (!_replace || _inTarget(r)) return null;
+    final key = _swaps[_rowKey(r)];
+    if (key == null) return null;
+    for (final t in _c.rows) {
+      if (_rowKey(t) == key && _inTarget(t)) return t;
+    }
+    return null;
+  }
+
+  double _targetQty(CostDiffRow r) => _intoHere ? r.qtyHere : r.qtyThere;
+
+  /// The models of [t]'s boxes on the target's AV Flow, lower case.
+  List<String> _drawnModels(CostDiffRow t) => {
+    for (final l in _intoHere ? t.linesHere : t.linesThere)
+      ?drawnModelOfCostKey(l.key),
+  }.toList();
+
+  /// The catalog entry the source room's [r] is, for putting on a box.
+  AvDeviceTemplate? _templateOf(CostDiffRow r) {
+    final library = widget.provider.avDeviceLibrary;
+    for (final l in _intoHere ? r.linesThere : r.linesHere) {
+      final model = drawnModelOfCostKey(l.key) ?? l.model.trim();
+      if (model.isEmpty) continue;
+      final t = library.templateForModel(model);
+      if (t != null) return t;
+    }
+    return null;
+  }
+
+  /// [t] is drawn on the target's AV Flow, and [r] can go on its boxes.
+  bool _swapsOnDrawing(CostDiffRow r, CostDiffRow t) =>
+      _replaceIds(t) == null &&
+      _drawnModels(t).isNotEmpty &&
+      _templateOf(r) != null;
+
+  /// [r] can go in place of [t].
+  bool _canSwap(CostDiffRow r, CostDiffRow t) =>
+      _replaceIds(t) != null || _swapsOnDrawing(r, t);
+
+  /// [r] is in both rooms in different numbers, and the target's one line
+  /// can take the source's count. Null when it cannot.
+  ({String key, double qty})? _qtyCopy(CostDiffRow r) {
+    if (!_inSource(r) || !_inTarget(r)) return null;
+    if (r.kind != CostDiffKind.qty && r.kind != CostDiffKind.qtyAndPrice) {
+      return null;
+    }
+    final lines = _intoHere ? r.linesHere : r.linesThere;
+    if (lines.length != 1) return null;
+    final key = lines.single.key;
+    final typed = {
+      for (final i in [
+        ..._targetSettings.extraEquipment,
+        ..._targetSettings.extraHardware,
+        ..._targetSettings.extraCables,
+        ..._targetSettings.items,
+      ])
+        i.id,
+    };
+    if (!typed.contains(key) && drawnModelOfCostKey(key) == null) return null;
+    return (key: key, qty: _intoHere ? r.qtyThere : r.qtyHere);
+  }
+
+  /// Gives the target the source's count on [rows].
+  Future<void> _copyQtys(List<CostDiffRow> rows) async {
+    final qtys = {
+      for (final r in rows)
+        if (_qtyCopy(r) case final c?) c.key: c.qty,
+    };
+    if (qtys.isEmpty) return;
+    setState(() => _busy = true);
+    final n = await widget.provider.setCostQtysInRoom(
+      _intoHere ? '' : widget.thereConfigPath,
+      qtys,
+    );
+    if (!mounted) return;
+    if (n < 0) {
+      setState(() {
+        _busy = false;
+        _done = '${widget.thereName}\'s cost file could not be written. '
+            'No quantity was copied.';
+      });
+      return;
+    }
+    await _refresh();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _done = '$n quantit${n == 1 ? 'y' : 'ies'} copied into $_targetName.';
+    });
+  }
+
+  /// The source room has it, and the target does not - or does, differently,
+  /// and is being replaced.
+  bool _canCopy(CostDiffRow r) {
+    if (!_inSource(r)) return false;
+    if (!_inTarget(r)) return true;
+    return _replace && r.kind != CostDiffKind.same && _replaceIds(r) != null;
+  }
+
+  /// Both sides priced again after a copy.
+  Future<void> _refresh() async {
+    if (_intoHere) {
+      _hereEstimate = widget.provider.roomCost;
+    } else {
+      final priced =
+          await priceOtherRoom(widget.provider, widget.thereConfigPath);
+      if (priced.estimate != null) {
+        _thereEstimate = priced.estimate!;
+        _thereSettings = priced.room.settings;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _c = compareRoomCosts(_hereEstimate, _thereEstimate);
+      _picked.clear();
+      _swaps.clear();
+    });
+  }
 
   List<CostDiffRow> get _pickedRows => [
     for (final r in _c.rows)
@@ -374,23 +709,35 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
   };
 
   Future<void> _copy() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
     final provider = widget.provider;
+    // A part drawn on the target's AV Flow is swapped on its boxes, which
+    // then price as the new model; it is not added as a line as well.
+    final onDrawing = <(CostDiffRow, CostDiffRow)>[
+      for (final r in _pickedRows)
+        if (_swapFor(r) case final t? when _swapsOnDrawing(r, t)) (r, t),
+    ];
+    final rows = [
+      for (final r in _pickedRows)
+        if (!onDrawing.any((p) => identical(p.$1, r))) r,
+    ];
+    final taken = <CostDiffRow>[
+      for (final r in rows)
+        if (_inTarget(r)) r else ?_swapFor(r),
+    ];
+    final replacing = <String>{for (final t in taken) ...?_replaceIds(t)};
     final set = costItemsFromRows(
-      _pickedRows,
-      source: _intoHere ? widget.thereSettings : widget.hereSettings,
+      rows,
+      source: _intoHere ? _thereSettings : widget.hereSettings,
       fromThere: _intoHere,
     );
     final (kept, skipped) = withoutExisting(
       set,
-      target: _intoHere ? widget.hereSettings : widget.thereSettings,
-      targetEstimate: _intoHere ? widget.hereEstimate : widget.thereEstimate,
+      target: _targetSettings,
+      targetEstimate: _intoHere ? _hereEstimate : _thereEstimate,
+      replacing: replacing,
     );
-    if (kept.isEmpty) {
-      messenger.showSnackBar(SnackBar(
-        content: Text('Everything picked is already in $_targetName.'),
-      ));
+    if (kept.isEmpty && onDrawing.isEmpty) {
+      setState(() => _done = 'Everything picked is already in $_targetName.');
       return;
     }
     final ok = await confirmCopyItems(
@@ -400,25 +747,61 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
       items: kept,
       skipped: skipped,
       canUndo: _intoHere,
+      replacing: replacing.length,
+      takenOff: [
+        for (final t in {for (final t in taken) _rowKey(t): t}.values)
+          if (_replaceIds(t) != null)
+            '${trimNumber(_targetQty(t))} x ${t.name}',
+      ],
+      swapped: [
+        for (final (r, t) in onDrawing)
+          '${trimNumber(_targetQty(t))} x ${t.name} becomes ${r.name}',
+      ],
     );
     if (!ok || !mounted) return;
     setState(() => _busy = true);
-    final n = _intoHere
-        ? provider.applyAvCostItems(kept, from: '${widget.thereName} items')
-        : await provider.addCostItemsToRoomFile(widget.thereConfigPath, kept);
+    var boxes = 0;
+    for (final (r, t) in onDrawing) {
+      for (final model in _drawnModels(t)) {
+        final done = await provider.swapModelInRoom(
+          _intoHere ? '' : widget.thereConfigPath,
+          model,
+          _templateOf(r)!,
+        );
+        boxes += done.boxes;
+      }
+    }
+    final n = kept.isEmpty
+        ? 0
+        : _intoHere
+        ? provider.applyAvCostItems(kept,
+            from: '${widget.thereName} items', replacing: replacing)
+        : await provider.addCostItemsToRoomFile(
+            widget.thereConfigPath, kept,
+            replacing: replacing);
     if (!mounted) return;
-    setState(() => _busy = false);
     if (n < 0) {
-      messenger.showSnackBar(SnackBar(
-        content: Text('${widget.thereName}\'s cost file could not be '
-            'written. Nothing was copied.'),
-      ));
+      setState(() {
+        _busy = false;
+        _done = '${widget.thereName}\'s cost file could not be written. '
+            'Nothing was copied.';
+      });
       return;
     }
-    navigator.pop();
-    messenger.showSnackBar(SnackBar(
-      content: Text('$n item${n == 1 ? '' : 's'} added to $_targetName.'),
-    ));
+    await _refresh();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _done = [
+        if (n > 0 || boxes == 0)
+          '$n item${n == 1 ? '' : 's'} '
+              '${replacing.isEmpty ? 'added to' : 'copied into'} $_targetName'
+              '${replacing.isEmpty ? '' : ', replacing ${replacing.length}'}.',
+        if (boxes > 0)
+          '$boxes box${boxes == 1 ? '' : 'es'} on $_targetName\'s AV Flow '
+              'swapped to the new model, cables kept.',
+      ].join(' ');
+    });
   }
 
   @override
@@ -444,16 +827,84 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
         return Checkbox(
           key: ValueKey('compare_pick_${_rowKey(r)}'),
           value: _picked.contains(_rowKey(r)),
-          onChanged: (v) => setState(() => v == true
-              ? _picked.add(_rowKey(r))
-              : _picked.remove(_rowKey(r))),
+          onChanged: (v) => setState(() {
+            if (v == true) {
+              _picked.add(_rowKey(r));
+            } else {
+              _picked.remove(_rowKey(r));
+              _swaps.remove(_rowKey(r));
+            }
+          }),
         );
       }
       return Tooltip(
-        message: _inTarget(r)
-            ? 'Already in $_targetName'
-            : 'Not in ${_intoHere ? widget.thereName : widget.hereName}',
+        message: !_inSource(r)
+            ? 'Not in ${_intoHere ? widget.thereName : widget.hereName}'
+            : !_replace
+            ? 'Already in $_targetName - tick Replace to copy over it'
+            : r.kind == CostDiffKind.same
+            ? 'The same in both rooms'
+            : 'Drawn on $_targetName\'s diagram - change it there',
         child: const Checkbox(value: false, onChanged: null),
+      );
+    }
+
+    // A part only the source has, put in place of a different one: the
+    // other room's projector off, this room's on.
+    Widget swap(CostDiffRow r) {
+      final key = _rowKey(r);
+      final chosen = _swapFor(r);
+      final choices = _swapChoices(r);
+      final link = small?.copyWith(color: theme.colorScheme.primary);
+      return PopupMenuButton<String>(
+        key: ValueKey('compare_swap_$key'),
+        tooltip: 'Take one of $_targetName\'s parts off and put this on '
+            'in its place',
+        enabled: choices.isNotEmpty,
+        onSelected: (v) => setState(() {
+          if (v.isEmpty) {
+            _swaps.remove(key);
+          } else {
+            _swaps[key] = v;
+            _picked.add(key);
+          }
+        }),
+        itemBuilder: (_) => [
+          for (final t in choices)
+            PopupMenuItem<String>(
+              value: _rowKey(t),
+              enabled: _canSwap(r, t),
+              child: Text(
+                '${trimNumber(_targetQty(t))} x ${t.name}'
+                '${t.partNumber.isEmpty ? '' : ' (${t.partNumber})'}'
+                '${_swapsOnDrawing(r, t) ? ' - swapped on the AV Flow' : ''}'
+                '${_canSwap(r, t) ? '' : ' - drawn on the AV Flow, and '
+                          '${r.name} is not in the catalog'}',
+              ),
+            ),
+          if (chosen != null) ...[
+            const PopupMenuDivider(),
+            const PopupMenuItem<String>(
+                value: '', child: Text('Replace nothing')),
+          ],
+        ],
+        child: Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.swap_horiz, size: 14, color: link?.color),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                chosen == null
+                    ? (choices.isEmpty
+                        ? 'Nothing in $_targetName to replace'
+                        : 'Replace a part in $_targetName...')
+                    : 'Replaces ${chosen.name} in $_targetName',
+                style: link,
+              ),
+            ),
+          ]),
+        ),
       );
     }
 
@@ -511,6 +962,27 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
                 ].join(' · '),
                 style: small?.copyWith(color: _kindColor(theme, kind)),
               ),
+              if (_replace && _inSource(r) && !_inTarget(r)) swap(r),
+              if (_qtyCopy(r) case final c?)
+                InkWell(
+                    key: ValueKey('compare_qty_${_rowKey(r)}'),
+                    onTap: _busy ? null : () => _copyQtys([r]),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.exposure, size: 14,
+                            color: theme.colorScheme.primary),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            'Copy quantity ${_qty(c.qty)} into $_targetName',
+                            style: small?.copyWith(
+                                color: theme.colorScheme.primary),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ),
             ],
           ),
         ),
@@ -565,7 +1037,8 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
               '${c.differences.length} of ${c.rows.length} differ. Both '
               'rooms are priced at today\'s catalog prices plus any price '
               'typed in each room. Tick the parts to copy; a part the other '
-              'room already has cannot be ticked.',
+              'room already has can be ticked only with Replace on. The '
+              'window stays open to copy either way.',
               style: small,
             ),
             const SizedBox(height: 8),
@@ -594,7 +1067,31 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
                   onSelectionChanged: (v) => setState(() {
                     _into = v.single;
                     _picked.clear();
+                    _swaps.clear();
                   }),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Checkbox(
+                      key: const ValueKey('compare_replace'),
+                      value: _replace,
+                      onChanged: (v) => setState(() {
+                        _replace = v ?? false;
+                        _swaps.clear();
+                        _picked.removeWhere((k) => !copyable
+                            .any((r) => _rowKey(r) == k && !_inTarget(r)));
+                      }),
+                    ),
+                    Tooltip(
+                      message: 'Parts both rooms have can be ticked too. The '
+                          'copy takes the target\'s line off and puts this '
+                          'one on in its place. A part only one room has can '
+                          'go in place of a different one: pick it from '
+                          'Replace a part.',
+                      child: Text('Replace existing items', style: small),
+                    ),
+                  ],
                 ),
                 TextButton(
                   key: const ValueKey('compare_pick_all'),
@@ -603,11 +1100,29 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
                       : () => setState(() => _picked
                         ..clear()
                         ..addAll(copyable.map(_rowKey))),
-                  child: Text('Tick all ${copyable.length} missing'),
+                  child: Text(_replace
+                      ? 'Tick all ${copyable.length}'
+                      : 'Tick all ${copyable.length} missing'),
+                ),
+                TextButton(
+                  key: const ValueKey('compare_qty_all'),
+                  onPressed: _busy ||
+                          !c.rows.any((r) => _qtyCopy(r) != null)
+                      ? null
+                      : () => _copyQtys(c.rows),
+                  child: Text(
+                    'Copy all ${c.rows.where((r) => _qtyCopy(r) != null).length} '
+                    'quantities',
+                  ),
                 ),
                 TextButton(
                   onPressed:
-                      _picked.isEmpty ? null : () => setState(_picked.clear),
+                      _picked.isEmpty
+                          ? null
+                          : () => setState(() {
+                              _picked.clear();
+                              _swaps.clear();
+                            }),
                   child: const Text('Clear'),
                 ),
                 FilterChip(
@@ -645,6 +1160,12 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
                     ),
             ),
             const Divider(),
+            if (_done.isNotEmpty)
+              Text(
+                _done,
+                key: const ValueKey('compare_done'),
+                style: bold?.copyWith(color: theme.colorScheme.primary),
+              ),
             Align(
               alignment: Alignment.centerRight,
               child: SizedBox(
@@ -661,8 +1182,9 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+          key: const ValueKey('compare_close'),
+          onPressed: _busy ? null : () => Navigator.pop(context),
+          child: Text(_done.isEmpty ? 'Close' : 'Done'),
         ),
         FilledButton.icon(
           key: const ValueKey('compare_copy'),
@@ -684,7 +1206,8 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
 }
 
 /// "Adding 3 items from the listed categories:" and the list, before any
-/// cost items go into [to]. [skipped] are the ones [to] already has.
+/// cost items go into [to]. [skipped] are the ones [to] already has;
+/// [replacing] how many of [to]'s lines come off for them.
 Future<bool> confirmCopyItems(
   BuildContext context,
   AppStateProvider provider, {
@@ -692,6 +1215,11 @@ Future<bool> confirmCopyItems(
   required CostItemSet items,
   int skipped = 0,
   bool canUndo = true,
+  int replacing = 0,
+  List<String> takenOff = const [],
+
+  /// Boxes on [to]'s AV Flow that take a new model, cables kept.
+  List<String> swapped = const [],
 }) async {
   final sections = costItemSections(
     items,
@@ -712,11 +1240,12 @@ Future<bool> confirmCopyItems(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Adding $count item${count == 1 ? '' : 's'} from the '
-                      'listed categories:',
-                      style: theme.textTheme.bodyMedium,
-                    ),
+                    if (count > 0 || swapped.isEmpty)
+                      Text(
+                        'Adding $count item${count == 1 ? '' : 's'} from the '
+                        'listed categories:',
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     for (final e in sections.entries) ...[
                       const SizedBox(height: 8),
                       Text(e.key,
@@ -730,16 +1259,47 @@ Future<bool> confirmCopyItems(
                               style: theme.textTheme.bodySmall),
                         ),
                     ],
+                    if (swapped.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('Swapped on the AV Flow in $to, cables kept',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          )),
+                      for (final line in swapped)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, top: 2),
+                          child: Text('• $line',
+                              style: theme.textTheme.bodySmall),
+                        ),
+                    ],
+                    if (takenOff.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('Taken off $to',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          )),
+                      for (final line in takenOff)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, top: 2),
+                          child: Text('• $line',
+                              style: theme.textTheme.bodySmall),
+                        ),
+                    ],
                     const SizedBox(height: 12),
                     Text(
                       [
-                        'They are added without replacing any items.',
+                        replacing == 0
+                            ? 'They are added without replacing any items.'
+                            : 'They replace $replacing '
+                                  'line${replacing == 1 ? '' : 's'} in $to.',
                         'Items that already exist are skipped'
                             '${skipped > 0 ? ' ($skipped here)' : ''}.',
                         canUndo
-                            ? 'Undo removes them.'
+                            ? (replacing == 0
+                                ? 'Undo removes them.'
+                                : 'Undo puts the old lines back.')
                             : '$to is not open here, so Undo cannot take '
-                                  'them back off - open it and delete them.',
+                                  'them back off - open it and change them.',
                       ].join(' '),
                       style: theme.textTheme.bodySmall,
                     ),
@@ -755,7 +1315,9 @@ Future<bool> confirmCopyItems(
               FilledButton(
                 key: const ValueKey('copy_items_go'),
                 onPressed: () => Navigator.pop(ctx, true),
-                child: Text('Add $count'),
+                child: Text(replacing == 0 && swapped.isEmpty
+                    ? 'Add $count'
+                    : 'Replace'),
               ),
             ],
           );

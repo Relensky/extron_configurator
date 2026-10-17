@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'project_backups.dart';
 import 'assumed_cycle_bar.dart';
 import 'av_flow_model.dart' show formatEquipmentDate;
 import 'building_project.dart' show kProjectFileSuffix;
@@ -81,6 +82,7 @@ Future<void> showCampusLifecycle(BuildContext context) async {
   if (remembered.isNotEmpty) {
     try {
       final campus = await CampusFile.load(remembered);
+      provider.backUpCampusForMe(remembered);
       if (!context.mounted) return;
       await showCampusLifecycleFile(context, campus);
       return;
@@ -460,8 +462,10 @@ class _CampusViewState extends State<_CampusView> {
         ? picked
         : '$picked$kCampusFileSuffix';
     try {
+      backUpCampusFile(target);
       await campus.save(target);
       if (!mounted) return;
+      context.read<AppStateProvider>().backUpCampusForMe(target);
       setState(() {
         _name = name;
         _file = target;
@@ -541,6 +545,7 @@ class _CampusViewState extends State<_CampusView> {
     try {
       final campus = await CampusFile.load(file);
       if (!mounted) return;
+      context.read<AppStateProvider>().backUpCampusForMe(file);
       rememberCampusAsRecent(context, campus);
       setState(() {
         _paths

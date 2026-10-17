@@ -120,7 +120,7 @@ class _VendorBookDialogState extends State<VendorBookDialog> {
           children: [
             Text(
               'The companies this shop asks to quote. A new job starts with '
-              'these on its Packages tab, and an older job can take any of '
+              'these on its Quotes tab, and an older job can take any of '
               'them from the same tab. Editing a vendor on a job does not '
               'change this list.',
               style: theme.textTheme.bodySmall,

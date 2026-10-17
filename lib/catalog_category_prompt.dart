@@ -20,7 +20,13 @@ Future<bool> confirmCatalogCategories(
 
   final picked = await showDialog<Map<String, String>>(
     context: context,
-    builder: (_) => _MissingCategoryDialog(entries: missing),
+    builder: (_) => _MissingCategoryDialog(
+      entries: missing,
+      untracked: [
+        ...kUntrackedEquipmentCategories,
+        ...library.addedCategories,
+      ],
+    ),
   );
   if (picked == null) return false;
   for (final t in missing) {
@@ -39,7 +45,10 @@ Future<bool> confirmCatalogCategories(
 
 class _MissingCategoryDialog extends StatefulWidget {
   final List<AvDeviceTemplate> entries;
-  const _MissingCategoryDialog({required this.entries});
+
+  /// Equipment kinds no config section maps onto, added ones included.
+  final List<String> untracked;
+  const _MissingCategoryDialog({required this.entries, this.untracked = const []});
 
   @override
   State<_MissingCategoryDialog> createState() => _MissingCategoryDialogState();
@@ -66,6 +75,10 @@ class _MissingCategoryDialogState extends State<_MissingCategoryDialog> {
       const DropdownMenuItem<String>(value: '', child: Text('(none)')),
       heading('Equipment, budgeted at its base cost'),
       for (final c in kTrackedCategories) item(c),
+      if (widget.untracked.isNotEmpty) ...[
+        heading('Equipment, not tied to a config section'),
+        for (final c in widget.untracked) item(c),
+      ],
       heading('Rack parts'),
       for (final c in kRackItemCategories) item(c),
       heading('Billed, not drawn'),

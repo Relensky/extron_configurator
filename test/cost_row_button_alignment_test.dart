@@ -245,9 +245,10 @@ void main() {
 
     /// Which 40-wide slot, counted back from the right edge, [icon] sits in
     /// on each table row that has one. Slot 1 is the rightmost.
-    Set<int> slotsOf(IconData icon) {
+    Set<int> slotsOf(IconData icon, {bool labor = true}) {
       final out = <int>{};
       for (final key in keys) {
+        if (!labor && '$key'.contains('gridrow_labor_')) continue;
         final found = find.descendant(
           of: find.byKey(key),
           matching: find.byIcon(icon),
@@ -266,6 +267,9 @@ void main() {
     expect(slotsOf(Icons.delete_outline), {1}, reason: 'delete');
     expect(slotsOf(Icons.restart_alt), {2}, reason: 'back to catalog price');
     expect(slotsOf(Icons.find_replace), {4}, reason: 'replace');
+    // Labor has a narrow column of its own: the tag button and delete.
+    expect(slotsOf(Icons.sell_outlined, labor: false), {5},
+        reason: 'the tag button');
     // Add-to-catalog draws as a plus on a line that has no entry yet and as a
     // pencil on one that has, so both faces have to land in the same slot.
     expect(

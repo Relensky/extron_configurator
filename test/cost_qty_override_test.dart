@@ -108,7 +108,7 @@ void main() {
     expect(labels(p), ['Display']);
   });
 
-  test('one fewer leaves a cabled unit and lowers the quote instead', () {
+  test('one fewer takes a cabled unit off too, with its cable', () {
     final p = room();
     final key = estimateOf(p).equipment.single.key;
     for (final id in ['D1', 'D2']) {
@@ -124,8 +124,28 @@ void main() {
       );
     }
     p.removeAvEquipmentUnit(key, quoted: 2);
-    expect(labels(p), hasLength(2));
-    expect(p.avCost.qtyOverrides[key], 1);
+    expect(labels(p), ['Display']);
+    expect(p.avCables.map((c) => c.id), ['CD1']);
+    expect(p.avCost.qtyOverrides.containsKey(key), isFalse);
+  });
+
+  test('one fewer takes a unit in the config out of the config', () {
+    final p = room();
+    final key = estimateOf(p).equipment.single.key;
+    p.roomConfig['SYSTEM_SETUP'] = {'dev_projectors': '3'};
+    for (final n in [1, 2, 3]) {
+      p.roomConfig['PROJECTORDEVICE_$n'] = {'name': 'Projector $n'};
+    }
+    // Three drawn units, the third tied to the config's third projector.
+    p.setAvEquipmentQty(key, 3, drawn: 2);
+    final third = p.avNodes.last;
+    expect(p.rekeyAvNode(third.id, 'PROJECTORDEVICE_3'), isTrue);
+    p.removeAvEquipmentUnit(key, quoted: 3);
+    p.removeAvEquipmentUnit(key, quoted: 2);
+    p.removeAvEquipmentUnit(key, quoted: 1);
+    expect(labels(p), isEmpty);
+    expect(p.roomConfig.containsKey('PROJECTORDEVICE_3'), isFalse);
+    expect(p.roomConfig['SYSTEM_SETUP']['dev_projectors'], '2');
   });
 
   test('spares still go on top, and it round-trips', () {
@@ -187,7 +207,7 @@ void main() {
     expect(labels(p).last, 'Display 20');
   });
 
-  test('settled fewer leaves cabled units and keeps the typed figure', () {
+  test('settled fewer takes cabled units off too', () {
     final p = room();
     final key = estimateOf(p).equipment.single.key;
     p.setAvEquipmentQty(key, 4, drawn: 2);
@@ -203,8 +223,8 @@ void main() {
     );
     p.setAvEquipmentQty(key, 0, drawn: 4);
     p.settleAvEquipmentQty(key);
-    // The cabled one stays, and alone it loses its number.
-    expect(labels(p), ['Display']);
-    expect(p.avCost.qtyOverrides[key], 0);
+    expect(labels(p), isEmpty);
+    expect(p.avCables, isEmpty);
+    expect(p.avCost.qtyOverrides.containsKey(key), isFalse);
   });
 }

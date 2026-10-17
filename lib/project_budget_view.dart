@@ -2,7 +2,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
-import 'cost_estimate.dart' show formatMoney;
+import 'cost_estimate.dart'
+    show formatMoney, inKindSourceLabel, InKindLine, trimNumber;
 import 'live_text_field.dart';
 import 'project_budget.dart';
 
@@ -18,10 +19,21 @@ class ProjectBudgetCard extends StatefulWidget {
   final double estimateTotal;
   final String currency;
 
+  /// What the rooms' optional upgrades come to, and whether the project
+  /// counts them. See [BuildingProject.includeOptional].
+  final double optionalTotal;
+  final bool hasOptional;
+
+  /// Every line the rooms are given in kind, with its room.
+  final List<({String room, InKindLine line})> inKind;
+
   const ProjectBudgetCard({
     super.key,
     required this.estimateTotal,
     required this.currency,
+    this.optionalTotal = 0,
+    this.hasOptional = false,
+    this.inKind = const [],
   });
 
   @override
@@ -124,7 +136,21 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
             Wrap(
               children: [
                 figure('Budget', summary.budget),
-                figure('Rooms estimate', summary.estimate),
+                figure(
+                  project.includeOptional
+                      ? 'Rooms estimate, with options'
+                      : 'Rooms estimate',
+                  summary.estimate,
+                ),
+                if (widget.hasOptional)
+                  figure('Optional upgrades', widget.optionalTotal,
+                      key: 'project_budget_optional'),
+                if (widget.inKind.isNotEmpty)
+                  figure(
+                    'In kind (not in the total)',
+                    widget.inKind.fold(0.0, (s, e) => s + e.line.value),
+                    key: 'project_budget_in_kind',
+                  ),
                 figure('Committed', summary.committed),
                 figure('Spent', summary.spent),
                 figure('Planned', summary.planned),
@@ -151,6 +177,64 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                   ),
               ],
             ),
+            if (widget.hasOptional || project.includeOptional)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilterChip(
+                  key: const ValueKey('project_budget_with_options'),
+                  label: const Text('Rooms estimate with options'),
+                  selected: project.includeOptional,
+                  onSelected: provider.setProjectIncludeOptional,
+                ),
+              ),
+            // Everything the job is given rather than buys, room by room.
+            if (widget.inKind.isNotEmpty)
+              ExpansionTile(
+                key: const ValueKey('project_budget_in_kind_list'),
+                tilePadding: EdgeInsets.zero,
+                title: Text(
+                  'In kind - ${widget.inKind.length} '
+                  'item${widget.inKind.length == 1 ? '' : 's'}',
+                  style: theme.textTheme.titleSmall,
+                ),
+                children: [
+                  for (final e in widget.inKind)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(children: [
+                        SizedBox(
+                          width: 120,
+                          child: Text(e.room,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall),
+                        ),
+                        Expanded(
+                          child: Text(
+                            '${e.line.name} (${e.line.section})',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 170,
+                          child: Text(inKindSourceLabel(e.line.by),
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall),
+                        ),
+                        SizedBox(
+                          width: 60,
+                          child: Text(trimNumber(e.line.qty),
+                              textAlign: TextAlign.right,
+                              style: theme.textTheme.bodySmall),
+                        ),
+                        SizedBox(
+                          width: 110,
+                          child: Text(money(e.line.value),
+                              textAlign: TextAlign.right),
+                        ),
+                      ]),
+                    ),
+                ],
+              ),
             if (summary.hasBudget) ...[
               const SizedBox(height: 6),
               ClipRRect(

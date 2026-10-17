@@ -91,6 +91,27 @@ void main() {
       return p;
     }
 
+    testWidgets('a part off the catalog can go on from our stock, in kind',
+        (tester) async {
+      final p = await open(tester);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Name on the estimate'),
+          'Old projector lift');
+      await tester.tap(find.byKey(const ValueKey('add_from_stock')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const ValueKey('add_stock_value')), '400');
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add'));
+      await tester.pumpAndSettle();
+      final line = p.avCost.extraEquipment.single;
+      expect(line.description, 'Old projector lift');
+      expect(line.unitPrice, 400);
+      expect(p.avCost.furnishedLines[line.id], 'stock');
+      expect(p.roomCost.equipmentTotal, 0);
+      expect(p.roomCost.inKindTotal, 400);
+      expect(find.byKey(const ValueKey('cost_in_kind')), findsOneWidget);
+    });
+
     testWidgets('off, a rack shelf is not offered as equipment',
         (tester) async {
       await open(tester);

@@ -324,3 +324,271 @@ AvPort newAvPort({
   direction: direction,
   side: direction == PortDirection.output ? PortSide.right : PortSide.left,
 );
+
+/// The name a run of [signal] connectors is given before anybody types one.
+String bulkPortDefaultName(SignalType signal) =>
+    signal == SignalType.network ? 'LAN' : (kSignalCodes[signal] ?? 'PORT');
+
+/// [count] connectors named `[name] [start]` upward, all of one signal,
+/// direction and side. Ids are unique against [existingIds] and each other.
+List<AvPort> bulkAvPorts({
+  required int count,
+  required String name,
+  required SignalType signal,
+  required PortDirection direction,
+  required PortSide side,
+  int start = 1,
+  Iterable<String> existingIds = const [],
+}) {
+  final label = name.trim().isEmpty ? bulkPortDefaultName(signal) : name.trim();
+  final slug = label.toLowerCase().replaceAll(RegExp('[^a-z0-9]+'), '_');
+  final prefix = switch (direction) {
+    PortDirection.input => 'in',
+    PortDirection.output => 'out',
+    PortDirection.bidirectional => 'io',
+  };
+  final taken = existingIds.toSet();
+  final out = <AvPort>[];
+  for (var i = 0; i < count; i++) {
+    final n = start + i;
+    var id = '${prefix}_${slug}_$n';
+    for (var k = 2; taken.contains(id); k++) {
+      id = '${prefix}_${slug}_${n}_$k';
+    }
+    taken.add(id);
+    out.add(AvPort(
+      id: id,
+      label: '$label $n',
+      signal: signal,
+      direction: direction,
+      side: side,
+    ));
+  }
+  return out;
+}
+
+/// Asks how many connectors to add and what they are, for a 48-port switch
+/// or a 16-input matrix. Null when cancelled.
+Future<List<AvPort>?> showBulkPortDialog(
+  BuildContext context, {
+  required List<AvPort> existing,
+}) => showDialog<List<AvPort>>(
+  context: context,
+  builder: (_) => _BulkPortDialog(existing: existing),
+);
+
+class _BulkPortDialog extends StatefulWidget {
+  final List<AvPort> existing;
+  const _BulkPortDialog({required this.existing});
+
+  @override
+  State<_BulkPortDialog> createState() => _BulkPortDialogState();
+}
+
+class _BulkPortDialogState extends State<_BulkPortDialog> {
+  final _count = TextEditingController(text: '8');
+  final _name = TextEditingController(
+    text: bulkPortDefaultName(SignalType.network),
+  );
+  final _start = TextEditingController(text: '1');
+  SignalType _signal = SignalType.network;
+  PortDirection _direction = PortDirection.bidirectional;
+  PortSide _side = PortSide.left;
+  // The name follows the type until somebody types their own.
+  bool _nameTyped = false;
+
+  /// Highest count accepted, so a typo of 4800 cannot hang the editor.
+  static const int kMax = 512;
+
+  @override
+  void dispose() {
+    _count.dispose();
+    _name.dispose();
+    _start.dispose();
+    super.dispose();
+  }
+
+  int? get _countValue {
+    final n = int.tryParse(_count.text.trim());
+    return n == null || n < 1 || n > kMax ? null : n;
+  }
+
+  int get _startValue => int.tryParse(_start.text.trim()) ?? 1;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final count = _countValue;
+    final ports = count == null
+        ? const <AvPort>[]
+        : bulkAvPorts(
+            count: count,
+            name: _name.text,
+            signal: _signal,
+            direction: _direction,
+            side: _side,
+            start: _startValue,
+            existingIds: widget.existing.map((p) => p.id),
+          );
+    InputDecoration deco(String label) => InputDecoration(
+      labelText: label,
+      isDense: true,
+      border: const OutlineInputBorder(),
+    );
+    return AlertDialog(
+      title: const Text('Add several connectors'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 110,
+                  child: TextField(
+                    key: const ValueKey('bulk_port_count'),
+                    controller: _count,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    decoration: deco('How many').copyWith(
+                      errorText: count == null ? '1 to $kMax' : null,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('bulk_port_name'),
+                    controller: _name,
+                    decoration: deco('Name'),
+                    onChanged: (_) => setState(() => _nameTyped = true),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 90,
+                  child: TextField(
+                    key: const ValueKey('bulk_port_start'),
+                    controller: _start,
+                    keyboardType: TextInputType.number,
+                    decoration: deco('Start at'),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<SignalType>(
+              key: const ValueKey('bulk_port_signal'),
+              initialValue: _signal,
+              isExpanded: true,
+              decoration: deco('Type'),
+              items: [
+                for (final s in SignalType.values)
+                  DropdownMenuItem(
+                    value: s,
+                    child: Text(kSignalLabels[s] ?? s.name),
+                  ),
+              ],
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() {
+                  _signal = v;
+                  if (!_nameTyped) _name.text = bulkPortDefaultName(v);
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<PortDirection>(
+                    key: const ValueKey('bulk_port_direction'),
+                    initialValue: _direction,
+                    isExpanded: true,
+                    decoration: deco('Direction'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: PortDirection.input,
+                        child: Text('Input'),
+                      ),
+                      DropdownMenuItem(
+                        value: PortDirection.output,
+                        child: Text('Output'),
+                      ),
+                      DropdownMenuItem(
+                        value: PortDirection.bidirectional,
+                        child: Text('Both (in and out)'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() {
+                        _direction = v;
+                        // Same rule as the row editor: outputs sit right.
+                        if (v == PortDirection.output) {
+                          _side = PortSide.right;
+                        } else if (_side == PortSide.right) {
+                          _side = PortSide.left;
+                        }
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<PortSide>(
+                    // Keyed on the value so a direction change redraws it.
+                    key: ValueKey('bulk_port_side_${_side.name}'),
+                    initialValue: _side,
+                    isExpanded: true,
+                    decoration: deco('Location'),
+                    items: const [
+                      DropdownMenuItem(value: PortSide.left, child: Text('Left')),
+                      DropdownMenuItem(
+                        value: PortSide.right,
+                        child: Text('Right'),
+                      ),
+                      DropdownMenuItem(value: PortSide.top, child: Text('Top')),
+                      DropdownMenuItem(
+                        value: PortSide.bottom,
+                        child: Text('Bottom'),
+                      ),
+                    ],
+                    onChanged: (v) =>
+                        v == null ? null : setState(() => _side = v),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              ports.isEmpty
+                  ? 'Nothing to add yet.'
+                  : ports.length == 1
+                  ? 'Adds ${ports.first.label}.'
+                  : 'Adds ${ports.length}: ${ports.first.label} to '
+                        '${ports.last.label}.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('bulk_port_add'),
+          onPressed: ports.isEmpty ? null : () => Navigator.pop(context, ports),
+          child: Text(ports.isEmpty ? 'Add' : 'Add ${ports.length}'),
+        ),
+      ],
+    );
+  }
+}

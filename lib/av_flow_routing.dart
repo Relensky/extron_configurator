@@ -698,6 +698,27 @@ RoutingPlan planRoutingFromConfig(
   AppStateProvider provider, {
   bool respectDismissed = false,
 }) {
+  final plan =
+      _planConfigRouting(provider, respectDismissed: respectDismissed);
+  // The AV LAN, which the config does not describe: NAV endpoints onto the
+  // switch in order.
+  final nav = planNavNetworkRuns(provider,
+      planned: plan.cables, respectDismissed: respectDismissed);
+  if (nav.isEmpty) return plan;
+  return RoutingPlan(
+    newNodes: plan.newNodes,
+    cables: [...plan.cables, ...nav],
+    unresolved: plan.unresolved,
+    alreadyDrawn: plan.alreadyDrawn,
+    powered: plan.powered,
+    addedPorts: plan.addedPorts,
+  );
+}
+
+RoutingPlan _planConfigRouting(
+  AppStateProvider provider, {
+  required bool respectDismissed,
+}) {
   final config = provider.roomConfig;
   final setup = config['SYSTEM_SETUP'];
   if (setup is! Map) {
@@ -2278,6 +2299,183 @@ RoutingPlan planRoutingFromConfig(
   );
 }
 
+// ---------------------------------------------------------------------------
+//  NAV ON THE NETWORK SWITCH
+// ---------------------------------------------------------------------------
+
+/// What a NAV box is on the AV LAN.
+enum NavRole { encoder, decoder, navigator }
+
+/// The NAV role of [node], read off its model (or its label when it has none).
+/// 'NAV E 101' and 'NAV 10E 501 MM' are encoders, 'NAV SD 101' and
+/// 'NAV D 121' decoders.
+NavRole? navRole(AvNode node) {
+  final name =
+      (node.model.trim().isEmpty ? node.label : node.model).trim().toUpperCase();
+  if (name.contains('NAVIGATOR')) return NavRole.navigator;
+  final match = RegExp(r'^NAV\s+(?:10)?(E|SD|D)\b').firstMatch(name);
+  if (match == null) return null;
+  return match.group(1) == 'E' ? NavRole.encoder : NavRole.decoder;
+}
+
+/// The connector a NAV box joins the AV LAN on: 'NAV 1G/PoE', 'NAV 10G', or
+/// the NAVigator's 'NAV'. Not OOB, which is its management port.
+AvPort? navLanPort(AvNode node) => node.ports
+    .where((p) => basePortLabel(p.label).trim().toUpperCase().startsWith('NAV'))
+    .firstOrNull;
+
+/// True when [node] is a network switch.
+bool isNetworkSwitchNode(AvNode node, AvDeviceLibrary library) {
+  if (navRole(node) != null) return false;
+  if (node.id.startsWith('SWITCHDEVICE_')) return true;
+  final category = library.templateForModel(node.model)?.category ?? '';
+  if (category == 'Network switch' || category == kCategoryStandaloneSwitch) {
+    return true;
+  }
+  final words = '${node.label} ${node.model}'.toLowerCase();
+  return RegExp(r'network switch|poe switch|ethernet switch|lan switch')
+      .hasMatch(words);
+}
+
+/// A switch's access ports in front-panel order: network, not the uplink.
+List<AvPort> _switchAccessPorts(AvNode node) {
+  final indexed = [
+    for (final (i, p) in node.ports.indexed)
+      if (p.signal == SignalType.network &&
+          p.direction != PortDirection.input &&
+          !RegExp(r'UPLINK', caseSensitive: false).hasMatch(p.label))
+        (i: i, port: p),
+  ];
+  indexed.sort((a, b) {
+    final na = parsePortLabel(a.port.label).number;
+    final nb = parsePortLabel(b.port.label).number;
+    if (na != null && nb != null && na != nb) return na - nb;
+    return a.i - b.i;
+  });
+  return [for (final e in indexed) e.port];
+}
+
+/// Label order with the numbers compared as numbers: 'Encoder 2' before
+/// 'Encoder 10'.
+int _naturalLabelCompare(AvNode a, AvNode b) {
+  final pattern = RegExp(r'(\d+)|(\D+)');
+  final pa = pattern.allMatches(a.label.toLowerCase()).toList();
+  final pb = pattern.allMatches(b.label.toLowerCase()).toList();
+  for (var i = 0; i < pa.length && i < pb.length; i++) {
+    final x = pa[i].group(0)!, y = pb[i].group(0)!;
+    final nx = int.tryParse(x), ny = int.tryParse(y);
+    final c = nx != null && ny != null ? nx.compareTo(ny) : x.compareTo(y);
+    if (c != 0) return c;
+  }
+  final byLength = pa.length.compareTo(pb.length);
+  return byLength != 0 ? byLength : a.id.compareTo(b.id);
+}
+
+/// The AV LAN runs for a room with a NAVigator: every NAV endpoint not yet
+/// cabled goes to the next free port on the network switch, encoders first,
+/// then decoders, then the NAVigator itself.
+///
+/// [planned] are runs another pass is about to draw, so a port it takes is
+/// not handed out twice. Nothing is drawn without both a NAVigator and a
+/// switch on the canvas.
+List<RoutedCable> planNavNetworkRuns(
+  AppStateProvider provider, {
+  List<RoutedCable> planned = const [],
+  bool respectDismissed = false,
+}) {
+  final nodes = provider.avNodes;
+  final roles = <AvNode, NavRole>{
+    for (final n in nodes) n: ?navRole(n),
+  };
+  if (!roles.values.contains(NavRole.navigator)) return const [];
+  final switches = nodes
+      .where((n) => isNetworkSwitchNode(n, provider.avDeviceLibrary))
+      .toList()
+    ..sort((a, b) => a.id.compareTo(b.id));
+  if (switches.isEmpty) return const [];
+
+  final taken = <String>{};
+  for (final c in provider.avCables) {
+    taken
+      ..add('${c.fromNodeId}.${c.fromPortId}')
+      ..add('${c.toNodeId}.${c.toPortId}');
+  }
+  for (final c in planned) {
+    taken
+      ..add('${c.fromNodeId}.${c.fromPortId}')
+      ..add('${c.toNodeId}.${c.toPortId}');
+  }
+  final dismissedSockets = <String>{
+    if (respectDismissed)
+      for (final key in provider.avDismissedCables) ...key.split('>'),
+  };
+
+  final free = [
+    for (final s in switches)
+      for (final p in _switchAccessPorts(s))
+        if (!taken.contains('${s.id}.${p.id}')) (node: s, port: p),
+  ];
+
+  final cables = <RoutedCable>[];
+  var next = 0;
+  for (final role in NavRole.values) {
+    final group = roles.entries
+        .where((e) => e.value == role)
+        .map((e) => e.key)
+        .toList()
+      ..sort(_naturalLabelCompare);
+    for (final node in group) {
+      final lan = navLanPort(node);
+      if (lan == null) continue;
+      final socket = '${node.id}.${lan.id}';
+      if (taken.contains(socket) || dismissedSockets.contains(socket)) {
+        continue;
+      }
+      if (next >= free.length) return cables;
+      final sw = free[next++];
+      // A decoder's stream comes off the switch; everything else feeds it.
+      final intoSwitch = role != NavRole.decoder
+          ? lan.direction != PortDirection.input
+          : lan.direction == PortDirection.output;
+      final (from, fromPort, to, toPort) = intoSwitch
+          ? (node, lan, sw.node, sw.port)
+          : (sw.node, sw.port, node, lan);
+      cables.add(RoutedCable(
+        configKey: 'nav_lan',
+        value: node.label,
+        fromNodeId: from.id,
+        fromPortId: fromPort.id,
+        fromPortLabel: fromPort.label,
+        toNodeId: to.id,
+        toPortId: toPort.id,
+        toPortLabel: toPort.label,
+        signal: SignalType.network,
+        fromLabel: from.label,
+        toLabel: to.label,
+      ));
+    }
+  }
+  return cables;
+}
+
+/// Draws [planNavNetworkRuns] onto the canvas, as part of whatever undo step
+/// the caller has taken. Returns how many runs were drawn.
+int drawNavNetworkRuns(AppStateProvider provider) {
+  var drawn = 0;
+  for (final c in planNavNetworkRuns(provider, respectDismissed: true)) {
+    final added = provider.addAvCable(
+      fromNodeId: c.fromNodeId,
+      fromPortId: c.fromPortId,
+      toNodeId: c.toNodeId,
+      toPortId: c.toPortId,
+      signal: c.signal,
+      recordUndo: false,
+    );
+    if (added != null) drawn++;
+  }
+  return drawn;
+}
+
 /// The id given to a projection screen's motor control connector when the
 /// routing pass has to add one.
 const String kScreenMotorPortId = 'in_motor';
@@ -2669,6 +2867,29 @@ RoutingResult autoDrawRoutingFromConfig(
   return result;
 }
 
+/// Every cable the config describes, drawn again - the ones taken off by
+/// hand included. Boxes taken off by hand stay off. One press of Undo.
+///
+/// The cable half of **Place all from config**, for a drawing whose runs
+/// were deleted or never drawn.
+RoutingResult addAllCablesFromConfig(AppStateProvider provider) {
+  provider.forgetAvDismissedCables();
+  final plan = planRoutingFromConfig(provider, respectDismissed: true);
+  final result = plan.isEmpty
+      ? _noRouting
+      : applyRoutingFromConfig(provider, plan, quiet: true);
+  provider.avRoutedFingerprint = routingFingerprint(provider);
+  provider.notifyListeners();
+  return result;
+}
+
+/// What [addAllCablesFromConfig] did, as a sentence.
+String addAllCablesNote(RoutingResult r) => r.cablesDrawn == 0
+    ? 'Every cable the config describes is already drawn.'
+    : 'Added ${r.cablesDrawn} cable${r.cablesDrawn == 1 ? '' : 's'} from the '
+          'config${r.nodesAdded == 0 ? '' : ', with ${r.nodesAdded} '
+              'box${r.nodesAdded == 1 ? '' : 'es'} the runs needed'}.';
+
 /// Everything the routing pass reads out of the config, as one string.
 ///
 /// The routing values in SYSTEM_SETUP (`input_*`, `output_*`, the outlet
@@ -2710,6 +2931,14 @@ String routingFingerprint(AppStateProvider provider) {
     parts.add('screens=${screens.join(',')}'
         '/${provider.flowRules.screenControl.join(',')}');
   }
+  // So are NAV boxes and switches placed by hand.
+  final nav = [
+    for (final n in provider.avNodes)
+      if (navRole(n) != null ||
+          isNetworkSwitchNode(n, provider.avDeviceLibrary))
+        n.id,
+  ]..sort();
+  if (nav.isNotEmpty) parts.add('nav=${nav.join(',')}');
   return parts.join(';');
 }
 

@@ -563,6 +563,7 @@
         "gui_routing_mode": "Normal",
         "gui_tab": "4_Cams_Mic_Dev",
         "gui_tab_type": "DOC_USB_WL",
+        "gui_usb_button_text": "",
         "gui_usb_or_vga": "USB",
         "gve_bldg": "Test",
         "gve_id_processor": "Controller1",

@@ -27,10 +27,13 @@ import 'name_colors.dart';
 import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
 import 'project_briefing_dialog.dart';
+import 'project_breakdown.dart' show projectBuildings;
 import 'project_budget_view.dart';
 import 'project_deliveries_view.dart';
 import 'online_copy_dialog.dart';
 import 'project_estimate.dart';
+import 'project_labor.dart' show LaborRoomSort;
+import 'project_labor_view.dart';
 import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
 import 'project_plans_view.dart';
@@ -78,13 +81,15 @@ import 'vendor_rfq_view.dart';
 /// Which pane is showing.
 enum _ProjectPane {
   rooms('Rooms', Icons.meeting_room),
+  // Each room's labor, the rates it is costed from, and who provides it.
+  labor('Labor', Icons.engineering),
   // EQUIPMENT, not "core components". The list is every piece of kit the job
   // buys, once, with the quantities merged across rooms - and "equipment" is
   // what everybody standing in front of it calls that. The name it had was the
   // internal one for the merged-part key, which is not a thing anybody outside
   // this code has to know about. The workbook's sheet keeps its own name; it
   // has been going out to vendors under it.
-  parts('Equipment', Icons.inventory_2),
+  parts('Equipment', Icons.devices_other),
   // The drawings the job is quoted against - next to the rooms because that
   // is what they are about, and before the money because they are what the
   // money was worked out from.
@@ -94,7 +99,7 @@ enum _ProjectPane {
   // on, what has landed, and where that kit is now. Straight after the
   // timeline because it is the other half of the same story: the timeline
   // says when each part has to be bought, this says what turned up.
-  deliveries('Deliveries', Icons.inventory),
+  deliveries('Deliveries', Icons.local_shipping),
   // What the building already HAS and when it falls due - next to the
   // timeline, because both are the job read as a calendar: one for the work
   // being quoted, one for the work after it.
@@ -104,7 +109,7 @@ enum _ProjectPane {
   responsibility('Responsibility', Icons.handshake_outlined),
   // The contractor's schedule of AV kit and where each submittal is.
   procurement('Procurement', Icons.assignment_turned_in_outlined),
-  vendors('Packages', Icons.local_shipping),
+  vendors('Quotes', Icons.inventory),
   todo('To do', Icons.checklist),
   notes('Notes', Icons.sticky_note_2_outlined);
 
@@ -339,6 +344,9 @@ class _ProjectViewState extends State<ProjectView> {
   /// the room rows below it have to stay lazily built. Off by default: the
   /// calendar is the document a budget meeting is sent.
   bool _lifecycleStandards = false;
+
+  /// How the Labor pane orders its rooms.
+  LaborRoomSort _laborSort = LaborRoomSort.project;
 
   /// Master-list filter: '' for everything, otherwise a vendor id, or the
   /// sentinel below for the parts nothing claimed.
@@ -625,7 +633,7 @@ class _ProjectViewState extends State<ProjectView> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
-    final estimate = provider.priceProject();
+    final estimate = provider.priceProjectShown();
 
     // ONE SCROLL REGION FOR THE WHOLE TAB.
     //
@@ -648,6 +656,12 @@ class _ProjectViewState extends State<ProjectView> {
           const SliverToBoxAdapter(child: Divider(height: 1)),
           ...switch (_pane) {
             _ProjectPane.rooms => roomsSlivers(context, estimate),
+            _ProjectPane.labor => laborSlivers(
+              context,
+              estimate,
+              sort: _laborSort,
+              onSort: (v) => setState(() => _laborSort = v),
+            ),
             _ProjectPane.parts => partsSlivers(
               context,
               estimate: estimate,
@@ -822,7 +836,9 @@ class _ProjectViewState extends State<ProjectView> {
                     icon: Icons.send_outlined,
                     label: 'Quote requests',
                     emphasis: _ActionEmphasis.filled,
-                    onPressed: () => _exportRfqs(provider, estimate),
+                    // The whole job, whatever buildings the page is showing.
+                    onPressed: () =>
+                        _exportRfqs(provider, provider.priceProject()),
                   ),
                   // THE SAME BOOK, WHERE OTHER PEOPLE CAN READ IT. Beside the
                   // Workbook button because it writes the same document - the
@@ -868,15 +884,78 @@ class _ProjectViewState extends State<ProjectView> {
                 value: formatMoney(estimate.grandTotal, estimate.currency),
                 emphasis: true,
               ),
+              // The rooms' optional upgrades: in the total or not, and the
+              // total the other way for the decision.
+              if (estimate.hasOptional || estimate.project.includeOptional) ...[
+                FilterChip(
+                  key: const ValueKey('project_include_optional'),
+                  label: const Text('With options'),
+                  selected: estimate.project.includeOptional,
+                  onSelected: context
+                      .read<AppStateProvider>()
+                      .setProjectIncludeOptional,
+                ),
+                _TotalChip(
+                  label: estimate.project.includeOptional
+                      ? 'Without options'
+                      : 'With options',
+                  value: formatMoney(
+                    estimate.project.includeOptional
+                        ? estimate.grandWithoutOptions
+                        : estimate.grandWithOptions,
+                    estimate.currency,
+                  ),
+                ),
+                _TotalChip(
+                  label: 'Options',
+                  value: formatMoney(estimate.optionalTotal, estimate.currency),
+                ),
+              ],
+              // Lines charged with a crew: in the total or not.
+              if (estimate.hasLaborCharges) ...[
+                FilterChip(
+                  key: const ValueKey('project_include_labor_charges'),
+                  label: const Text('With labor charges'),
+                  selected: estimate.project.includeLaborCharges,
+                  onSelected: provider.setProjectIncludeLaborCharges,
+                ),
+                _TotalChip(
+                  label: 'Labor charges',
+                  value: formatMoney(
+                    estimate.laborChargesTotal,
+                    estimate.currency,
+                  ),
+                ),
+              ],
+              if (estimate.inKindTotal > 0)
+                _TotalChip(
+                  label: 'In kind',
+                  value: formatMoney(estimate.inKindTotal, estimate.currency),
+                ),
+              if (provider.hiddenProjectBuildings.isNotEmpty)
+                InputChip(
+                  key: const ValueKey('project_buildings_filtered'),
+                  avatar: const Icon(Icons.filter_alt, size: 18),
+                  label: Text(
+                    'Hiding ${provider.hiddenProjectBuildings.map((c) => c.isEmpty ? 'no code' : c).join(', ')}',
+                  ),
+                  tooltip: 'Show every building again',
+                  onDeleted: provider.showAllProjectBuildings,
+                  onPressed: provider.showAllProjectBuildings,
+                ),
               _TotalChip(
                 label: 'Parts',
                 value: formatMoney(estimate.partsTotal, estimate.currency),
               ),
+              // Opens the Labor pane.
               _TotalChip(
+                key: const ValueKey('project_labor_chip'),
                 label: 'Labor',
                 value:
                     '${formatMoney(estimate.laborTotal, estimate.currency)}'
                     '  ·  ${trimNumber(estimate.laborHours)} hrs',
+                tooltip: 'Labor by room, rate and who provides it',
+                onTap: () => _showPane(_ProjectPane.labor),
               ),
               // WHICH OF THE CATALOG'S TWO PRICES EVERY FIGURE ABOVE IS
               // COSTED FROM. The room's estimate has carried this switch for a
@@ -1147,12 +1226,19 @@ class _ProjectViewState extends State<ProjectView> {
       hint: 'Meriam Library AV refresh',
       onChanged: (v) => provider.setProjectField(name: v),
     );
-    final building = LiveTextField(
-      fieldId: 'project_bldg_${provider.currentProjectPath}',
-      initial: provider.project.building,
-      label: 'Buildings',
-      hint: 'ARTS, HOLT',
-      onChanged: (v) => provider.setProjectField(building: v),
+    final building = Row(
+      children: [
+        Expanded(
+          child: LiveTextField(
+            fieldId: 'project_bldg_${provider.currentProjectPath}',
+            initial: provider.project.building,
+            label: 'Buildings',
+            hint: 'ARTS, HOLT',
+            onChanged: (v) => provider.setProjectField(building: v),
+          ),
+        ),
+        _BuildingPicker(provider: provider),
+      ],
     );
     final job = LiveTextField(
       fieldId: 'project_number_${provider.currentProjectPath}',
@@ -1208,7 +1294,7 @@ class _ProjectViewState extends State<ProjectView> {
           const SizedBox(width: 8),
           Expanded(flex: 2, child: stakeholder),
           const SizedBox(width: 8),
-          SizedBox(width: 160, child: building),
+          SizedBox(width: 200, child: building),
           const SizedBox(width: 8),
           SizedBox(width: 140, child: job),
           const SizedBox(width: 8),
@@ -1515,15 +1601,93 @@ class _RoomsChangedNotice extends StatelessWidget {
 }
 
 // A labeled figure in the header strip.
+/// The job's buildings, each with a box: unticked ones are left off the
+/// page. Every one is ticked when a project opens.
+class _BuildingPicker extends StatelessWidget {
+  final AppStateProvider provider;
+
+  const _BuildingPicker({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final full = provider.priceProject();
+    final buildings = projectBuildings(provider.project, full);
+    final hidden = provider.hiddenProjectBuildings;
+    final theme = Theme.of(context);
+    return MenuAnchor(
+      menuChildren: [
+        CheckboxMenuButton(
+          key: const ValueKey('project_buildings_all'),
+          value: hidden.isEmpty,
+          closeOnActivate: false,
+          onChanged: (_) => provider.showAllProjectBuildings(),
+          child: const Text('All buildings'),
+        ),
+        const Divider(height: 1),
+        if (buildings.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('No buildings yet'),
+          ),
+        for (final b in buildings)
+          CheckboxMenuButton(
+            key: ValueKey('project_building_${b.name}'),
+            value: !hidden.contains(b.name),
+            closeOnActivate: false,
+            onChanged: (on) =>
+                provider.setProjectBuildingShown(b.name, on ?? true),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: Text(b.name.isEmpty ? 'No building code' : b.name),
+                ),
+                SizedBox(
+                  width: 70,
+                  child: Text(
+                    '${b.rooms} room${b.rooms == 1 ? '' : 's'}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                SizedBox(
+                  width: 110,
+                  child: Text(
+                    formatMoney(b.total, full.currency),
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+      builder: (context, controller, _) => IconButton(
+        key: const ValueKey('project_buildings_menu'),
+        tooltip: 'Buildings on this job and their totals',
+        icon: Icon(
+          hidden.isEmpty ? Icons.arrow_drop_down : Icons.filter_alt,
+          color: hidden.isEmpty ? null : theme.colorScheme.primary,
+        ),
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+      ),
+    );
+  }
+}
+
 class _TotalChip extends StatelessWidget {
   final String label;
   final String value;
   final bool emphasis;
+  final VoidCallback? onTap;
+  final String? tooltip;
 
   const _TotalChip({
+    super.key,
     required this.label,
     required this.value,
     this.emphasis = false,
+    this.onTap,
+    this.tooltip,
   });
 
   @override
@@ -1565,7 +1729,7 @@ class _TotalChip extends StatelessWidget {
       prefer: [Color.alphaBlend(ink.withValues(alpha: 0.75), fill), ink],
     );
 
-    return Container(
+    final chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: fill,
@@ -1575,9 +1739,18 @@ class _TotalChip extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: theme.textTheme.labelSmall?.copyWith(
-            color: labelInk,
-          )),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: theme.textTheme.labelSmall?.copyWith(
+                color: labelInk,
+              )),
+              if (onTap != null) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.open_in_new, size: 11, color: labelInk),
+              ],
+            ],
+          ),
           Text(
             value,
             style:
@@ -1587,6 +1760,18 @@ class _TotalChip extends StatelessWidget {
                     ?.copyWith(fontWeight: FontWeight.bold, color: ink),
           ),
         ],
+      ),
+    );
+    if (onTap == null) return chip;
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: chip,
+        ),
       ),
     );
   }
@@ -1761,6 +1946,9 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
         child: ProjectBudgetCard(
           estimateTotal: estimate.grandTotal,
           currency: estimate.currency,
+          optionalTotal: estimate.optionalTotal,
+          hasOptional: estimate.hasOptional,
+          inKind: estimate.inKindLines,
         ),
       ),
     ),
@@ -2127,6 +2315,48 @@ class _RoomRowState extends State<_RoomRow> {
               bold: true,
               stretch: stretch,
             ),
+            if (e.inKindTotal > 0)
+              _cell(
+                context,
+                'In kind',
+                formatMoney(e.inKindTotal, currency),
+                ink: ink,
+                quiet: quiet,
+                stretch: stretch,
+              ),
+            if (e.grandWithOptions != e.grandWithoutOptions)
+              _cell(
+                context,
+                'Options',
+                formatMoney(e.grandWithOptions - e.grandWithoutOptions,
+                    currency),
+                ink: ink,
+                quiet: quiet,
+                stretch: stretch,
+              ),
+            // Its optional upgrades, priced on the project or off.
+            if (e.grandWithOptions != e.grandWithoutOptions)
+              Tooltip(
+                message: room.ref.optionalOff
+                    ? 'Options off the project total. Press to price them.'
+                    : 'Options ${formatMoney(e.optionalTotal, currency)} - '
+                          'press to leave them off the project total.',
+                child: IconButton(
+                  key: ValueKey('project_room_optional_${room.ref.id}'),
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    room.ref.optionalOff
+                        ? Icons.playlist_remove
+                        : Icons.playlist_add_check,
+                    size: 18,
+                    color: ink,
+                  ),
+                  onPressed: () => provider.setProjectRoomOptionalOff(
+                    room.ref.id,
+                    !room.ref.optionalOff,
+                  ),
+                ),
+              ),
           ];
     final figures = figuresFor(stretch: false);
 
@@ -2536,6 +2766,10 @@ class _BuildingTotals extends StatelessWidget {
             line('Tax', estimate.taxTotal),
             const Divider(),
             line('Project total', estimate.grandTotal, bold: true),
+            if (estimate.hasOptional) ...[
+              line('Without options', estimate.grandWithoutOptions),
+              line('With options', estimate.grandWithOptions),
+            ],
             if (estimate.mixedCurrency)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -3390,7 +3624,9 @@ List<Widget> partsSlivers(
             locations: locations[shown[index].key] ?? const [],
             spareRoom: room,
             sparesOnly: sparesOnly,
-            installedUnspared: unspared[shown[index].key] ?? 0,
+            installedUnspared: estimate.project.noSpares
+                ? 0
+                : unspared[shown[index].key] ?? 0,
             askingAboutSpares: vendorFilter == kNoSpareFilter,
             selected: selected.contains(shown[index].key),
             onSelect: onToggleSelected == null

@@ -42,6 +42,13 @@ import 'package:url_launcher/url_launcher.dart';
 const String kDefaultTeamFolder =
     r'\\doit-files\ATEC\CTS\StaffFiles\Classroom Technology\Dashboard\team';
 
+/// Where everyone's avatar picture is kept (`<login>.png` / `.jpg`): the
+/// Room Config Builder's shared `assets\avatars`, which every app reads and
+/// writes, so a picture set in one shows in all of them.
+const String kDefaultAvatarsFolder =
+    r'\\doit-files\ATEC\CTS\StaffFiles\Classroom Technology\Projects'
+    r'\Configurator_Files\assets\avatars';
+
 /// Which apps write to the team folder, for labels: app id -> name.
 const Map<String, String> kTeamApps = {
   'dashboard': 'CTS Dashboard',

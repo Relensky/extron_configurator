@@ -133,6 +133,29 @@ void main() {
     expect(again.roomsChangedOnOpen, isEmpty);
   });
 
+  test('a catalog price moving, with no room touched, is not written',
+      () async {
+    await makeProject();
+    expect(await provider().openProject(projectFile), isEmpty);
+    final stamp = File(projectFile).lastModifiedSync();
+    final checked = onDisk().roomsCheckedAt;
+
+    // Another PC whose catalog prices the camera differently.
+    final p = provider();
+    p.avDeviceLibrary.upsert(const AvDeviceTemplate(
+      model: 'Camera Y',
+      manufacturer: 'Generic',
+      category: 'Camera',
+      price: 2400,
+      ports: [],
+    ));
+    expect(await p.openProject(projectFile), isEmpty);
+    expect(p.roomsChangedOnOpen, isEmpty);
+    expect(p.projectDirty, isFalse);
+    expect(File(projectFile).lastModifiedSync(), stamp);
+    expect(onDisk().roomsCheckedAt, checked);
+  });
+
   test('opening a room re-reads a room whose files changed', () async {
     await makeProject();
     final p = provider();

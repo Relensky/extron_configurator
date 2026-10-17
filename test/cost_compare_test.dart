@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
+import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/cost_compare.dart';
 import 'package:extron_configurator/cost_compare_view.dart';
 import 'package:extron_configurator/cost_estimate.dart';
@@ -265,7 +266,8 @@ void main() {
   });
 
   group('the comparison dialog', () {
-    Future<AppStateProvider> open(WidgetTester tester) async {
+    Future<AppStateProvider> open(WidgetTester tester,
+        {bool projector = false}) async {
       tester.view.physicalSize = const Size(1400, 1000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -276,6 +278,10 @@ void main() {
       p.loadAvFlowForCurrentConfig();
       p.avCost.extraEquipment.add(
           part('EQP_1', 'DTP HDMI 4K 330 Tx', pn: '60-1331-12', price: 11948));
+      if (projector) {
+        p.avCost.extraEquipment
+            .add(part('EQP_9', 'Old projector', pn: '99-1', price: 2000));
+      }
       final there = RoomCostSettings()
         ..extraEquipment.addAll([
           part('EQP_2', 'DTP HDMI 4K 330 Tx', pn: '60-1331-12', price: 700),
@@ -346,6 +352,247 @@ void main() {
       final button = tester.widget<SegmentedButton<CopyDirection>>(
           find.byKey(const ValueKey('compare_direction')));
       expect(button.segments.last.enabled, isFalse);
+    });
+
+    testWidgets('stays open after a copy, with the copied part now in both',
+        (tester) async {
+      await open(tester);
+      const speaker =
+          ValueKey('compare_pick_Equipment|Ceiling speaker|42-1');
+      await tester.tap(find.byKey(speaker));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('compare_copy')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('copy_items_go')));
+      await tester.pumpAndSettle();
+      expect(find.text('Arts 111 vs Arts 112'), findsOneWidget);
+      expect(find.text('1 item added to Arts 111.'), findsOneWidget);
+      expect(find.byKey(speaker), findsNothing);
+      expect(find.text('Done'), findsOneWidget);
+    });
+
+    testWidgets('Replace lets a part both rooms have be copied over',
+        (tester) async {
+      final p = await open(tester);
+      const dtp =
+          ValueKey('compare_pick_Equipment|DTP HDMI 4K 330 Tx|60-1331-12');
+      expect(find.byKey(dtp), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('compare_replace')));
+      await tester.pump();
+      await tester.tap(find.byKey(dtp));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('compare_copy')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('They replace 1 line in Arts 111'),
+          findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('copy_items_go')));
+      await tester.pumpAndSettle();
+      final dtps = p.avCost.extraEquipment
+          .where((i) => i.partNumber == '60-1331-12')
+          .toList();
+      expect(dtps, hasLength(1));
+      expect(dtps.single.unitPrice, 700);
+      expect(find.text('Arts 111 vs Arts 112'), findsOneWidget);
+    });
+
+    testWidgets('a part only the other room has goes in place of one here',
+        (tester) async {
+      final p = await open(tester, projector: true);
+      const swap = ValueKey('compare_swap_Equipment|Ceiling speaker|42-1');
+      expect(find.byKey(swap), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('compare_replace')));
+      await tester.pump();
+      await tester.tap(find.byKey(swap));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('1 x Old projector (99-1)').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Replaces Old projector in Arts 111'), findsOneWidget);
+      expect(find.text('Copy 1 into Arts 111'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('compare_copy')));
+      await tester.pumpAndSettle();
+      expect(find.text('Taken off Arts 111'), findsOneWidget);
+      expect(find.text('• 1 x Old projector'), findsOneWidget);
+      expect(find.textContaining('They replace 1 line in Arts 111'),
+          findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('copy_items_go')));
+      await tester.pumpAndSettle();
+      expect(p.avCost.extraEquipment.map((i) => i.description),
+          ['DTP HDMI 4K 330 Tx', 'Ceiling speaker']);
+      expect(find.text('1 item copied into Arts 111, replacing 1.'),
+          findsOneWidget);
+    });
+  });
+
+  testWidgets('a quantity difference copies onto the line here',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..roomConfig = {
+        'SYSTEM_SETUP': {'gui_full_room_name': 'Arts 111'},
+      };
+    p.loadAvFlowForCurrentConfig();
+    p.avCost.extraEquipment
+        .add(part('EQP_1', 'Ceiling speaker', pn: '42-1', qty: 2, price: 150));
+    final there = RoomCostSettings()
+      ..extraEquipment.add(
+          part('EQP_7', 'Ceiling speaker', pn: '42-1', qty: 4, price: 150));
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: CostCompareDialog(
+          provider: p,
+          hereName: 'Arts 111',
+          thereName: 'Arts 112',
+          hereEstimate: priced(p.avCost),
+          thereEstimate: priced(there),
+          hereSettings: p.avCost,
+          thereSettings: there,
+          currency: r'$',
+        ),
+      ),
+    ));
+    expect(find.text('Copy all 1 quantities'), findsOneWidget);
+    await tester.tap(find.text('Copy quantity 4 into Arts 111'));
+    await tester.pumpAndSettle();
+    expect(p.avCost.extraEquipment.single.qty, 4);
+    expect(find.text('1 quantity copied into Arts 111.'), findsOneWidget);
+    expect(find.text('Copy all 0 quantities'), findsOneWidget);
+  });
+
+  testWidgets('a camera drawn in both rooms is swapped on the AV Flow',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final lib = AvDeviceLibrary.empty()
+      ..upsert(const AvDeviceTemplate(
+          model: 'TR333', category: 'Camera', price: 900, ports: []))
+      ..upsert(const AvDeviceTemplate(
+          model: 'TR311HW', category: 'Camera', price: 700, ports: []));
+    AvNode cam(String model) => AvNode(
+        id: 'CAMERADEVICE_1',
+        label: 'Camera 1 - $model',
+        model: model,
+        pos: Offset.zero,
+        ports: const []);
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..roomConfig = {
+        'SYSTEM_SETUP': {'gui_full_room_name': 'BSS 106'},
+      };
+    p.loadAvFlowForCurrentConfig();
+    p.avDeviceLibrary = lib;
+    p.addAvNode(cam('TR333'));
+    final there = RoomCostSettings();
+    final thereEstimate = computeRoomCost(
+      model: AvFlowModel(
+        nodes: [cam('TR311HW')],
+        cables: const [],
+        racks: const [],
+        rackSlots: const {},
+        canvasSize: Size.zero,
+        roomTitle: '',
+        unplaced: const [],
+      ),
+      library: lib,
+      settings: there,
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: CostCompareDialog(
+          provider: p,
+          hereName: 'BSS 106',
+          thereName: 'BSS 103',
+          hereEstimate: p.roomCost,
+          thereEstimate: thereEstimate,
+          hereSettings: p.avCost,
+          thereSettings: there,
+          currency: r'$',
+        ),
+      ),
+    ));
+    await tester.tap(find.byKey(const ValueKey('compare_replace')));
+    await tester.pump();
+    final swap = find.byWidgetPredicate((w) =>
+        w.key is ValueKey &&
+        '${(w.key as ValueKey).value}'.startsWith('compare_swap_') &&
+        '${(w.key as ValueKey).value}'.contains('TR311HW'));
+    await tester.tap(swap);
+    await tester.pumpAndSettle();
+    final choice = find.textContaining('swapped on the AV Flow');
+    expect(choice, findsOneWidget);
+    await tester.tap(choice);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('compare_copy')));
+    await tester.pumpAndSettle();
+    expect(find.text('Swapped on the AV Flow in BSS 106, cables kept'),
+        findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('copy_items_go')));
+    await tester.pumpAndSettle();
+
+    expect(p.avNodes.single.model, 'TR311HW');
+    expect(p.avNodes.single.id, 'CAMERADEVICE_1');
+    expect(p.avCost.extraEquipment, isEmpty,
+        reason: 'the box prices as the new model; no line is added');
+    expect(find.textContaining('1 box on BSS 106'), findsOneWidget);
+  });
+
+  group('removeCostItems', () {
+    test('takes the lines and what was typed on them off', () {
+      final s = RoomCostSettings()
+        ..extraEquipment.addAll([part('EQP_1', 'A'), part('EQP_2', 'B')])
+        ..priceOverrides['EQP_1'] = 5;
+      expect(removeCostItems(s, {'EQP_1'}), 1);
+      expect(s.extraEquipment.map((i) => i.id), ['EQP_2']);
+      expect(s.priceOverrides, isEmpty);
+    });
+  });
+
+  group('the room picker', () {
+    testWidgets('names rooms that are all config.json by their folders',
+        (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final dir = Directory.systemTemp.createTempSync('picker_rooms');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final sep = Platform.pathSeparator;
+      final refs = <ProjectRoomRef>[];
+      for (final name in ['Arts 111', 'Arts 112', 'Arts 113']) {
+        final config = '${dir.path}$sep$name${sep}config.json';
+        File(config)
+          ..createSync(recursive: true)
+          ..writeAsStringSync('{}');
+        refs.add(ProjectRoomRef(id: name, configPath: config));
+      }
+      final file = '${dir.path}${sep}Arts_project.json';
+      final p = AppStateProvider(autoLoadSettings: false);
+      await tester.runAsync(() async {
+        await BuildingProject(name: 'Arts', rooms: refs).save(file);
+        expect(await p.openProject(file), '');
+      });
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => pickOtherRoom(context, p,
+                  title: 'Pick', action: 'Next'),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('go'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.takeException(), isNull);
+      for (final name in ['Arts 111', 'Arts 112', 'Arts 113']) {
+        expect(find.text(name), findsOneWidget);
+      }
+      expect(find.byKey(const ValueKey('other_room_file')), findsOneWidget);
+      await tester.tap(find.text('Arts (open project)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Open project file...'), findsWidgets);
     });
   });
 }

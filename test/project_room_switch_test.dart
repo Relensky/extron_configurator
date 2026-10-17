@@ -374,6 +374,49 @@ void main() {
       expect(find.text('Room B'), findsOneWidget);
     });
 
+    testWidgets('shows each room\'s priority as P1, P2 beside its name',
+        (tester) async {
+      final p = withProject();
+      p.project.rooms[0] = p.project.rooms[0].copyWith(priority: 1);
+      p.project.rooms[1] = p.project.rooms[1].copyWith(priority: 2);
+      await tester.runAsync(
+        () => p.openProjectRoomRef(p.project.rooms.first),
+      );
+      await pump(tester, p);
+      // The button carries the open room's.
+      expect(find.text('P1'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('room_picker_menu')));
+      await tester.pumpAndSettle();
+      expect(find.text('P1'), findsNWidgets(2));
+      expect(find.text('P2'), findsOneWidget);
+    });
+
+    testWidgets('sorts by priority or A to Z from the bottom of the menu',
+        (tester) async {
+      final p = withProject();
+      p.project.rooms[0] = p.project.rooms[0].copyWith(priority: 2);
+      p.project.rooms[1] = p.project.rooms[1].copyWith(priority: 1);
+      await pump(tester, p);
+      double top(String name) => tester.getTopLeft(find.text(name)).dy;
+
+      await tester.tap(find.byKey(const ValueKey('room_picker_menu')));
+      await tester.pumpAndSettle();
+      expect(top('Room A'), lessThan(top('Room B')));
+
+      // Picking a sort opens the menu again in the new order.
+      await tester
+          .tap(find.byKey(const ValueKey('room_picker_<sort-priority>')));
+      await tester.pumpAndSettle();
+      expect(p.roomMenuByPriority, isTrue);
+      expect(top('Room B'), lessThan(top('Room A')));
+
+      await tester.tap(find.byKey(const ValueKey('room_picker_<sort-name>')));
+      await tester.pumpAndSettle();
+      expect(p.roomMenuByPriority, isFalse);
+      expect(top('Room A'), lessThan(top('Room B')));
+    });
+
     testWidgets('closes the open room from the menu, keeping the job',
         (tester) async {
       final p = withProject();

@@ -76,6 +76,14 @@ String roomCodeFromConfig(Map<String, dynamic> config) {
   ].where((part) => part.isNotEmpty).join(' ');
 }
 
+/// The building code a room's config gives it ('BSS'), upper case; '' when
+/// it has none.
+String buildingCodeFromConfig(Map<String, dynamic> config) {
+  final setup = config['SYSTEM_SETUP'];
+  if (setup is! Map) return '';
+  return setup['gve_bldg']?.toString().trim().toUpperCase() ?? '';
+}
+
 /// One room, read off disk and ready to price.
 class LoadedRoom {
   /// The config that was read.
@@ -214,6 +222,28 @@ Future<LoadedRoom> readRoomFromDiskAsync(
       return null;
     }
   });
+}
+
+/// A room's whole document - drawing, racks, plans, cabling, cost - merged
+/// from its parts the way the app's loader does. Null when it has none.
+Future<Map<String, dynamic>?> readRoomDocumentAsync(String configPath) async {
+  final parts = <RoomSidecarPart, Map<String, dynamic>?>{};
+  for (final entry in _roomPartCandidates(configPath).entries) {
+    for (final file in entry.value) {
+      try {
+        final f = File(file);
+        if (!await f.exists()) continue;
+        final doc = jsonDecode(await f.readAsString());
+        if (doc is! Map) continue;
+        parts[entry.key] = Map<String, dynamic>.from(doc);
+        break;
+      } catch (_) {
+        // Unreadable: the next place, as the loader does.
+      }
+    }
+  }
+  if (parts.values.every((p) => p == null)) return null;
+  return mergeRoomSidecar(parts);
 }
 
 /// The newest time any of a room's files was written - the config and every
@@ -919,6 +949,70 @@ class ProjectEstimate {
   /// from a building-wide percentage.
   final double grandTotal;
 
+  /// The counted rooms' totals with their optional upgrades and without - a
+  /// room with its options off is without either way.
+  double get grandWithOptions => costedRooms.fold(
+    0.0,
+    (sum, r) =>
+        sum +
+        (r.estimate == null
+            ? 0
+            : r.ref.optionalOff
+            ? r.estimate!.grandWithoutOptions
+            : r.estimate!.grandWithOptions),
+  );
+  double get grandWithoutOptions => costedRooms.fold(
+    0.0,
+    (sum, r) => sum + (r.estimate?.grandWithoutOptions ?? 0),
+  );
+
+  /// What the counted rooms' optional upgrades add to the project, tax and
+  /// fees included - less the rooms with their options off.
+  double get optionalTotal => costedRooms.fold(
+    0.0,
+    (sum, r) =>
+        sum +
+        (r.estimate == null || r.ref.optionalOff
+            ? 0
+            : r.estimate!.grandWithOptions - r.estimate!.grandWithoutOptions),
+  );
+
+  /// Some counted room has lines charged with a crew.
+  bool get hasLaborCharges =>
+      costedRooms.any((r) => r.estimate?.laborCharges.isNotEmpty ?? false);
+
+  /// What the counted rooms' labor charges come to, before fees and tax.
+  double get laborChargesTotal => costedRooms.fold(
+    0.0,
+    (sum, r) => sum + (r.estimate?.laborChargesTotal ?? 0),
+  );
+
+  /// What counting the labor charges adds to the project, fees and tax
+  /// included.
+  double get laborChargesEffect => costedRooms.fold(0.0, (sum, r) {
+    final e = r.estimate;
+    if (e == null || e.laborCharges.isEmpty) return sum;
+    return sum + e.grandWithLaborCharges - e.grandWithoutLaborCharges;
+  });
+
+  /// What the counted rooms are given in kind, at what it is worth.
+  double get inKindTotal => costedRooms.fold(
+    0.0,
+    (sum, r) => sum + (r.estimate?.inKindTotal ?? 0),
+  );
+
+  /// Every line given in kind across the counted rooms, with its room.
+  List<({String room, InKindLine line})> get inKindLines => [
+    for (final r in costedRooms)
+      if (r.estimate != null)
+        for (final l in r.estimate!.inKind) (room: r.name, line: l),
+  ];
+
+  /// Some counted room has optional upgrades.
+  bool get hasOptional => costedRooms.any((r) =>
+      r.estimate != null &&
+      r.estimate!.grandWithOptions != r.estimate!.grandWithoutOptions);
+
   final double equipmentTotal;
   final double hardwareTotal;
   final double cablingTotal;
@@ -1058,10 +1152,14 @@ class ProjectEstimate {
   /// anybody wants a report to nag about, and a list that asked for one would
   /// be long enough that nobody would read the rows that matter — the boxes
   /// with power supplies in them that a room stops working without.
-  late final List<MasterPartLine> partsWithoutSpares = [
-    for (final l in master)
-      if (l.kind == MasterPartKind.equipment && !l.hasSpares) l,
-  ];
+  ///
+  /// Empty on a job set to buy no spares - see [BuildingProject.noSpares].
+  late final List<MasterPartLine> partsWithoutSpares = project.noSpares
+      ? const []
+      : [
+          for (final l in master)
+            if (l.kind == MasterPartKind.equipment && !l.hasSpares) l,
+        ];
 
   /// Units bought for the shelf across the whole job.
   double get spareUnits =>
@@ -1356,9 +1454,11 @@ RoomCostSettings? scopeToCategories(
       ...estimate.cabling,
       ...estimate.extras,
     ])
-      // A category or one item by its model.
+      // A category or one item by its model, or a line flagged by hand.
       if (!bought.contains(line.category.trim().toLowerCase()) &&
-          !bought.contains(line.model.trim().toLowerCase()))
+          !bought.contains(line.model.trim().toLowerCase()) &&
+          !settings.projectBuys.contains(line.key) &&
+          !line.key.startsWith('addon:'))
         line.key,
   ];
   if (keys.isEmpty) return null;
@@ -1390,27 +1490,46 @@ RoomCostSettings? projectScopedSettings({
   // existing.
   if (addOns.isNotEmpty) {
     scoped ??= copyCostSettings(settings);
-    for (var i = 0; i < addOns.length; i++) {
-      final a = addOns[i];
-      final t = library.templateForModel(a.model);
-      final id = 'addon:$priority:$i';
-      scoped.extraEquipment.add(
-        CostLineItem(
-          id: id,
-          description: a.description.trim().isNotEmpty
-              ? a.description.trim()
-              : a.model,
-          category: t?.category ?? '',
-          // A count typed on the room's Cost tab - two mounts for a room
-          // with two projectors - stands in for the project's.
-          qty: settings.qtyOverrides[id] ?? a.qty,
-          catalogModel: a.model,
-        ),
-      );
-    }
+    // Under Other items, with the mounts and licenses typed on a room.
+    scoped.items.addAll(projectAddOnItems(
+      project: project,
+      priority: priority,
+      settings: settings,
+      library: library,
+    ));
   }
   return scoped;
 }
+
+/// The project's add-ons for a room at [priority], as the room's Other items
+/// lines - less the ones taken off it. See [BuildingProject.priorityAddOns].
+List<CostLineItem> projectAddOnItems({
+  required BuildingProject project,
+  required int priority,
+  required RoomCostSettings settings,
+  required AvDeviceLibrary library,
+}) {
+  final addOns = project.addOnsFor(priority);
+  return [
+    for (var i = 0; i < addOns.length; i++)
+      if (!settings.droppedAddOns.contains(projectAddOnId(priority, i)))
+        CostLineItem(
+          id: projectAddOnId(priority, i),
+          description: addOns[i].description.trim().isNotEmpty
+              ? addOns[i].description.trim()
+              : addOns[i].model,
+          category: library.templateForModel(addOns[i].model)?.category ?? '',
+          // A count typed on the room's Cost tab - two mounts for a room
+          // with two projectors - stands in for the project's.
+          qty: settings.qtyOverrides[projectAddOnId(priority, i)] ??
+              addOns[i].qty,
+          catalogModel: addOns[i].model,
+        ),
+  ];
+}
+
+/// The id the [n]th add-on of [priority] is quoted under in each room.
+String projectAddOnId(int priority, int n) => 'addon:$priority:$n';
 
 /// A copy of [settings] to change without touching the room's own.
 ///
@@ -1447,6 +1566,10 @@ ProjectEstimate computeProjectEstimate({
 
   /// The app's tax rate, for a job that has not set its own.
   double defaultTaxPercent = 0,
+
+  /// Building codes left off - see [buildingCodeFromConfig]. Their rooms are
+  /// not priced or listed, and neither are building-wide spares.
+  Set<String> hiddenBuildings = const {},
 }) {
   final currency = project.currency.isEmpty ? r'$' : project.currency;
   final baseTax = project.taxPercent ?? defaultTaxPercent;
@@ -1458,6 +1581,10 @@ ProjectEstimate computeProjectEstimate({
   for (final ref in project.rooms) {
     final absolute = BuildingProject.resolvePath(ref.configPath, projectPath);
     final room = rooms?[ref.id] ?? readRoomFromDisk(absolute);
+    if (hiddenBuildings.isNotEmpty &&
+        hiddenBuildings.contains(buildingCodeFromConfig(room.config))) {
+      continue;
+    }
 
     if (!room.ok) {
       costed.add(ProjectRoomCost(ref: ref, room: room));
@@ -1470,12 +1597,25 @@ ProjectEstimate computeProjectEstimate({
         : baseTax;
     // The room may be cached or live, so it is not touched: the job's rate
     // goes on a copy.
-    final settings =
+    var settings =
         room.settings.ownTaxRate || room.settings.taxPercent == roomBase
             ? room.settings
             : (RoomCostSettings()
                 ..readJson(room.settings.toJson())
                 ..taxPercent = roomBase);
+    // Optional upgrades count as the project says, not as the room's own
+    // Cost tab is showing them.
+    final withOptions = project.includeOptional && !ref.optionalOff;
+    if (settings.optionalLines.isNotEmpty &&
+        settings.includeOptional != withOptions) {
+      settings = copyCostSettings(settings)..includeOptional = withOptions;
+    }
+    // And the labor charges.
+    if (settings.laborCharges.isNotEmpty &&
+        settings.includeLaborCharges != project.includeLaborCharges) {
+      settings = copyCostSettings(settings)
+        ..includeLaborCharges = project.includeLaborCharges;
+    }
 
     var estimate = computeRoomCost(
       model: room.model,
@@ -1609,6 +1749,17 @@ ProjectEstimate computeProjectEstimate({
     for (final l in e.extras) {
       take(room, l, MasterPartKind.other);
     }
+    // Still bought, under the section they came from - while counted.
+    if (e.laborChargesIncluded) {
+      for (final c in e.laborCharges) {
+        take(room, c.line, switch (c.section) {
+          'Equipment' => MasterPartKind.equipment,
+          'Rack hardware' => MasterPartKind.hardware,
+          'Cabling' => MasterPartKind.cabling,
+          _ => MasterPartKind.other,
+        });
+      }
+    }
   }
 
   // --- the spares the JOB buys ---------------------------------------------
@@ -1635,6 +1786,7 @@ ProjectEstimate computeProjectEstimate({
         !included.any((r) => r.ref.id == spare.roomId)) {
       continue;
     }
+    if (spare.forBuilding && hiddenBuildings.isNotEmpty) continue;
 
     final existing = acc[spare.partKey];
     if (existing != null) {

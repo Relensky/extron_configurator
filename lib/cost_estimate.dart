@@ -120,6 +120,10 @@ class CostLineItem {
   final String manufacturer;
   final String partNumber;
 
+  /// The AV Flow box this line was taken off the drawing as, or ''. Putting
+  /// that box back takes the line off again.
+  final String removedFrom;
+
   const CostLineItem({
     required this.id,
     required this.description,
@@ -132,6 +136,7 @@ class CostLineItem {
     this.noControl = false,
     this.manufacturer = '',
     this.partNumber = '',
+    this.removedFrom = '',
   });
 
   double get total => qty * unitPrice;
@@ -147,6 +152,7 @@ class CostLineItem {
     bool? noControl,
     String? manufacturer,
     String? partNumber,
+    String? removedFrom,
   }) => CostLineItem(
     id: id,
     description: description ?? this.description,
@@ -159,6 +165,7 @@ class CostLineItem {
     noControl: noControl ?? this.noControl,
     manufacturer: manufacturer ?? this.manufacturer,
     partNumber: partNumber ?? this.partNumber,
+    removedFrom: removedFrom ?? this.removedFrom,
   );
 
   Map<String, dynamic> toJson() => {
@@ -173,6 +180,7 @@ class CostLineItem {
     if (noControl) 'noControl': true,
     if (manufacturer.trim().isNotEmpty) 'manufacturer': manufacturer.trim(),
     if (partNumber.trim().isNotEmpty) 'partNumber': partNumber.trim(),
+    if (removedFrom.isNotEmpty) 'removedFrom': removedFrom,
   };
 
   factory CostLineItem.fromJson(Map<String, dynamic> json) => CostLineItem(
@@ -187,6 +195,7 @@ class CostLineItem {
     noControl: json['noControl'] == true,
     manufacturer: json['manufacturer']?.toString() ?? '',
     partNumber: json['partNumber']?.toString() ?? '',
+    removedFrom: json['removedFrom']?.toString() ?? '',
   );
 }
 
@@ -542,6 +551,35 @@ class RoomCostSettings {
   /// everything. See scopeToCategories in project_estimate.dart.
   final Set<String> outOfScope = {};
 
+  /// Line keys bought for the room's priority on its project although that
+  /// priority buys only some categories - flagged by hand on the Cost tab.
+  /// Saved. See scopeToCategories in project_estimate.dart.
+  final Set<String> projectBuys = {};
+
+  /// The project's add-on lines (`addon:<priority>:<n>`) this room is not
+  /// quoted for. Saved. See projectScopedSettings in project_estimate.dart.
+  final Set<String> droppedAddOns = {};
+
+  /// Line keys of parts added on the Cost tab as optional: an upgrade that is
+  /// priced for the decision but bought only if somebody says so.
+  final Set<String> optionalLines = {};
+
+  /// Line key -> the [LaborLine.id] it is charged with: lumber, conduit or
+  /// parts bought for a crew. The line stays in its own section and total;
+  /// the project's Labor tab lists it with that crew.
+  final Map<String, String> laborCharges = {};
+
+  /// The room total counts the [laborCharges] lines.
+  bool includeLaborCharges = true;
+
+  /// The room total counts [optionalLines].
+  bool includeOptional = false;
+
+  /// [optionalLines] are listed in a section of their own, with their total
+  /// and the room total with and without them. Off lists them in their own
+  /// sections - only while they are counted.
+  bool optionalSection = true;
+
   /// Cabling LINE KEY -> extra runs to buy beyond what the diagram shows.
   /// Spares are a decision, not a diagram fact, so they live here rather than
   /// being inferred: "three more HDMI leads because two always go missing" is
@@ -669,6 +707,13 @@ class RoomCostSettings {
       equipmentSpares.isEmpty &&
       furnishedLines.isEmpty &&
       furnishedQty.isEmpty &&
+      projectBuys.isEmpty &&
+      droppedAddOns.isEmpty &&
+      optionalLines.isEmpty &&
+      laborCharges.isEmpty &&
+      includeLaborCharges &&
+      !includeOptional &&
+      optionalSection &&
       lineNames.isEmpty &&
       lineParts.isEmpty &&
       extraEquipment.isEmpty &&
@@ -702,6 +747,13 @@ class RoomCostSettings {
     qtyOverrides.clear();
     furnishedLines.clear();
     furnishedQty.clear();
+    projectBuys.clear();
+    droppedAddOns.clear();
+    optionalLines.clear();
+    laborCharges.clear();
+    includeLaborCharges = true;
+    includeOptional = false;
+    optionalSection = true;
     lineNames.clear();
     lineParts.clear();
     extraEquipment.clear();
@@ -757,6 +809,16 @@ class RoomCostSettings {
       'qtyOverrides': Map<String, double>.of(qtyOverrides),
     if (furnishedLines.isNotEmpty)
       'furnishedLines': Map<String, String>.of(furnishedLines),
+    if (projectBuys.isNotEmpty) 'projectBuys': projectBuys.toList()..sort(),
+    if (droppedAddOns.isNotEmpty)
+      'droppedAddOns': droppedAddOns.toList()..sort(),
+    if (optionalLines.isNotEmpty)
+      'optionalLines': optionalLines.toList()..sort(),
+    if (laborCharges.isNotEmpty)
+      'laborCharges': Map<String, String>.of(laborCharges),
+    if (!includeLaborCharges) 'includeLaborCharges': false,
+    if (includeOptional) 'includeOptional': true,
+    if (!optionalSection) 'optionalSection': false,
     if (furnishedQty.isNotEmpty)
       'furnishedQty': Map<String, double>.of(furnishedQty),
     if (lineNames.isNotEmpty) 'lineNames': Map<String, String>.of(lineNames),
@@ -872,6 +934,24 @@ class RoomCostSettings {
         final qty = (value as num?)?.toDouble();
         if (qty == null || qty < 0) return;
         qtyOverrides[key.toString()] = qty;
+      });
+    }
+    includeOptional = json['includeOptional'] == true;
+    includeLaborCharges = json['includeLaborCharges'] != false;
+    optionalSection = json['optionalSection'] != false;
+    for (final (key, into) in [
+      ('projectBuys', projectBuys),
+      ('droppedAddOns', droppedAddOns),
+      ('optionalLines', optionalLines),
+    ]) {
+      final list = json[key];
+      if (list is List) into.addAll(list.map((e) => e.toString()));
+    }
+    final charged = json['laborCharges'];
+    if (charged is Map) {
+      charged.forEach((key, value) {
+        final id = value?.toString() ?? '';
+        if (id.isNotEmpty) laborCharges[key.toString()] = id;
       });
     }
     final furnished = json['furnishedLines'];
@@ -1404,8 +1484,25 @@ String furnishedNote(CostLine line) {
       '${trimNumber(line.qty)} $who';
 }
 
+/// The report section and Totals row the labor charges go under.
+const String kLaborChargesSection = 'Labor Charges';
+const String kLaborChargesTotalLabel = 'Labor charges';
+
+/// What the charged lines come to before shipping, which has its own row.
+double _chargesBeforeShipping(CostEstimate e) =>
+    _cents(e.laborCharges.fold(0.0, (sum, c) => sum + c.line.total));
+
 /// One fee with the money it works out to.
 typedef FeeAmount = ({CostFee fee, double amount});
+
+/// A cost line charged with a crew - see [RoomCostSettings.laborCharges]:
+/// the section it came from and the crew it goes with.
+typedef LaborChargeLine = ({
+  CostLine line,
+  String section,
+  String crewId,
+  String crew,
+});
 
 /// A crew line, costed. The hours and head count are kept alongside the money
 /// because "two CTS III for three days" is what gets checked; the total is
@@ -1422,6 +1519,18 @@ class LaborCostLine {
   /// True when the rate card has no figure for this role yet.
   final bool unrated;
 
+  /// Who is giving this labor instead of the job paying for it - 'in kind'
+  /// for our own staff - or null when it is quoted. Keyed by the line's id
+  /// in [RoomCostSettings.furnishedLines], like a part.
+  final String? furnishedBy;
+
+  /// The rate card entry this line costs from; '' for a line with only its
+  /// own rate.
+  final String rateId;
+
+  /// True when the line pays its own rate rather than the card's.
+  final bool customRate;
+
   const LaborCostLine({
     required this.id,
     required this.roleName,
@@ -1431,11 +1540,40 @@ class LaborCostLine {
     required this.hourlyRate,
     required this.taxable,
     required this.unrated,
+    this.furnishedBy,
+    this.rateId = '',
+    this.customRate = false,
   });
 
   double get totalHours => techs * hours;
-  double get total => totalHours * hourlyRate;
+
+  /// What it costs this job: nothing when it is given in kind.
+  double get total => furnishedBy == null ? listTotal : 0;
+
+  /// What the hours are worth at the rate.
+  double get listTotal => totalHours * hourlyRate;
 }
+
+/// One thing given to the job rather than bought on it: a part from stock,
+/// labor in kind, an owner's display. [by] is who gives it - see
+/// [inKindSourceLabel].
+typedef InKindLine = ({
+  String section,
+  String name,
+  String by,
+  double qty,
+  double value,
+});
+
+/// Who gives an in-kind line, as a report heads it.
+String inKindSourceLabel(String by) => switch (by.trim().toLowerCase()) {
+  'stock' => 'From our stock',
+  'in kind' => 'Our labor and staff',
+  'the owner' => 'Owner furnished',
+  'another department' => 'Another department',
+  '' => 'Others',
+  _ => by.trim(),
+};
 
 class CostEstimate {
   final String currency;
@@ -1508,6 +1646,47 @@ class CostEstimate {
   final int excludedLines;
   final int excludedDevices;
 
+  /// Optional parts listed apart from their sections - see
+  /// [RoomCostSettings.optionalLines]. Empty when there are none, or when
+  /// they are counted and listed in their own sections.
+  final List<CostLine> optional;
+
+  /// Labor flagged optional, listed apart like [optional].
+  final List<LaborCostLine> optionalLabor;
+
+  /// Keys of optional lines listed in their own sections rather than apart -
+  /// counted in the total only when [optionalIncluded].
+  final Set<String> inlineOptional;
+
+  /// What the optional parts come to, shipping included, before fees and tax.
+  final double optionalTotal;
+
+  /// [grandTotal] counts the optional parts.
+  final bool optionalIncluded;
+
+  /// The room total with every optional part, and with none.
+  final double grandWithOptions;
+  final double grandWithoutOptions;
+
+  /// Lines charged with a crew, listed in a section of their own - see
+  /// [RoomCostSettings.laborCharges].
+  final List<LaborChargeLine> laborCharges;
+
+  /// What [laborCharges] come to, shipping included, before fees and tax.
+  final double laborChargesTotal;
+
+  /// [grandTotal] counts [laborCharges].
+  final bool laborChargesIncluded;
+
+  /// The room total with the labor charges and without them.
+  final double grandWithLaborCharges;
+  final double grandWithoutLaborCharges;
+
+  /// True when the room has optional parts, counted or not.
+  bool get hasOptional => grandWithOptions != grandWithoutOptions ||
+      optional.isNotEmpty ||
+      optionalLabor.isNotEmpty;
+
   /// Lines the catalog could only price at the OTHER tier. Worth a look before
   /// the total goes anywhere: an education job with list prices in it reads
   /// high, and the reverse reads low.
@@ -1544,6 +1723,18 @@ class CostEstimate {
     this.otherTierLines = 0,
     this.excludedLines = 0,
     this.excludedDevices = 0,
+    this.optional = const [],
+    this.optionalLabor = const [],
+    this.inlineOptional = const {},
+    this.optionalTotal = 0,
+    this.optionalIncluded = false,
+    this.grandWithOptions = 0,
+    this.grandWithoutOptions = 0,
+    this.laborCharges = const [],
+    this.laborChargesTotal = 0,
+    this.laborChargesIncluded = true,
+    this.grandWithLaborCharges = 0,
+    this.grandWithoutLaborCharges = 0,
   });
 
   bool get isComplete => unpricedLines == 0 && unratedLabor == 0;
@@ -1553,6 +1744,55 @@ class CostEstimate {
 
   /// The tier's short name, for a column heading or a report row.
   String get tierLabel => kPricingTierShort[tier] ?? tier.name;
+
+  /// Everything given to the job rather than bought on it, at what it is
+  /// worth: parts from stock or elsewhere, and labor in kind.
+  List<InKindLine> get inKind => [
+    for (final (section, lines) in [
+      ('Equipment', equipment),
+      ('Rack hardware', hardware),
+      ('Cabling', cabling),
+      ('Other items', extras),
+      ('Labor charges', [for (final c in laborCharges) c.line]),
+    ])
+      for (final l in lines)
+        if (l.furnishedBy != null && l.furnishedCount > 0)
+          (
+            section: section,
+            name: l.description,
+            by: l.furnishedBy!,
+            qty: l.furnishedCount,
+            value: _cents(l.furnishedCount * l.unitPrice),
+          ),
+    for (final l in labor)
+      if (l.furnishedBy != null)
+        (
+          section: 'Labor',
+          name: [l.roleName, l.description]
+              .where((s) => s.trim().isNotEmpty)
+              .join(' - '),
+          by: l.furnishedBy!,
+          qty: l.totalHours,
+          value: _cents(l.listTotal),
+        ),
+  ];
+
+  /// What [inKind] is worth in all.
+  double get inKindTotal =>
+      _cents(inKind.fold(0.0, (sum, l) => sum + l.value));
+
+  /// [inKind]'s worth by who gives it, largest first, under
+  /// [inKindSourceLabel]'s names.
+  List<({String source, double value})> get inKindBySource {
+    final out = <String, double>{};
+    for (final l in inKind) {
+      final key = inKindSourceLabel(l.by);
+      out[key] = (out[key] ?? 0) + l.value;
+    }
+    return [
+      for (final e in out.entries) (source: e.key, value: _cents(e.value)),
+    ]..sort((a, b) => b.value.compareTo(a.value));
+  }
 }
 
 /// Rounds to cents. Percentages of percentages otherwise leave a fraction of a
@@ -2155,7 +2395,9 @@ CostEstimate computeRoomCost({
 
   // Existing equipment the job leaves in place - see [outOfScope].
   if (settings.outOfScope.isNotEmpty) {
-    for (final lines in [hardware, cabling, extras]) {
+    // Equipment too: a part typed on the Cost tab, not drawn, is existing
+    // like a drawn one. A drawn group left off never reached the list.
+    for (final lines in [equipment, hardware, cabling, extras]) {
       final before = lines.length;
       lines.removeWhere((l) => settings.outOfScope.contains(l.key));
       excludedLines += before - lines.length;
@@ -2194,11 +2436,6 @@ CostEstimate computeRoomCost({
     ship(cabling);
     ship(extras);
   }
-  final shippingTotal = _cents(
-    [...equipment, ...hardware, ...cabling, ...extras]
-        .fold(0.0, (sum, l) => sum + l.shippingTotal),
-  );
-
   // --- labor: rate x techs x hours, off the shared rate card -------------
   final labor = <LaborCostLine>[];
   for (final line in settings.labor) {
@@ -2215,59 +2452,189 @@ CostEstimate computeRoomCost({
         taxable: line.taxable,
         // Hours with no rate behind them: real work, missing money.
         unrated: hourly <= 0 && line.totalHours() > 0,
+        furnishedBy: settings.furnishedLines[line.id],
+        rateId: line.rateId,
+        customRate: line.customRate > 0,
       ),
     );
   }
-  final laborTotal = _cents(labor.fold(0.0, (sum, l) => sum + l.total));
   final laborHours = labor.fold(0.0, (sum, l) => sum + l.totalHours);
   final laborCrewHours = labor.fold(0.0, (sum, l) => sum + l.hours);
   final unratedLabor = labor.where((l) => l.unrated).length;
 
-  final equipmentTotal = _cents(
-    equipment.fold(0.0, (sum, l) => sum + l.total),
-  );
-  final hardwareTotal = _cents(hardware.fold(0.0, (sum, l) => sum + l.total));
-  final cablingTotal = _cents(cabling.fold(0.0, (sum, l) => sum + l.total));
-  final extrasTotal = _cents(extras.fold(0.0, (sum, l) => sum + l.total));
-  final subtotal = _cents(
-    equipmentTotal +
-        hardwareTotal +
-        cablingTotal +
-        extrasTotal +
-        laborTotal +
-        shippingTotal,
-  );
+  // --- optional parts --------------------------------------------------------
+  //  The room is added up twice, with the optional parts and without, so the
+  //  page can say what the upgrade costs and what the room costs either way.
+  final optionalKeys = settings.optionalLines;
+  bool isOptional(CostLine l) => optionalKeys.contains(l.key);
 
-  // Every fee is a percentage of the SAME pre-tax subtotal — they don't
-  // compound onto each other, because two 5% fees quoted on a job mean 10% of
-  // the job, not 10.25%.
-  final fees = <FeeAmount>[
-    for (final fee in settings.fees)
-      (fee: fee, amount: _cents(subtotal * fee.percent / 100)),
+  // --- labor charges ---------------------------------------------------------
+  //  Lines charged with one of this room's crews go in a section of their
+  //  own, counted in the total or not as the room says. An optional line
+  //  stays optional.
+  final crews = {for (final l in labor) l.id: l};
+  final chargeCrew = {
+    for (final e in settings.laborCharges.entries)
+      if (crews.containsKey(e.value) && !optionalKeys.contains(e.key))
+        e.key: e.value,
+  };
+  bool isCharged(CostLine l) => chargeCrew.containsKey(l.key);
+  LaborChargeLine charge(CostLine line, String section) {
+    final crew = crews[chargeCrew[line.key]]!;
+    return (
+      line: line,
+      section: section,
+      crewId: crew.id,
+      crew: crew.description.trim().isEmpty
+          ? crew.roleName
+          : '${crew.roleName} - ${crew.description.trim()}',
+    );
+  }
+  final chargedAll = <LaborChargeLine>[
+    for (final (section, lines) in [
+      ('Equipment', equipment),
+      ('Rack hardware', hardware),
+      ('Cabling', cabling),
+      ('Other items', extras),
+    ])
+      for (final l in lines)
+        if (isCharged(l)) charge(l, section),
   ];
-  final feeTotal = _cents(fees.fold(0.0, (sum, f) => sum + f.amount));
+  final anyCharges = chargedAll.isNotEmpty;
+  final optionalAll = [
+    for (final lines in [equipment, hardware, cabling, extras])
+      ...lines.where(isOptional),
+  ];
+  // Labor too: a crew that comes with the upgrade.
+  final optionalLaborAll = [
+    for (final l in labor)
+      if (optionalKeys.contains(l.id)) l,
+  ];
+  final anyOptional = optionalAll.isNotEmpty || optionalLaborAll.isNotEmpty;
 
-  final taxableExtras = _cents(
-    extras.where((l) => l.taxable).fold(0.0, (sum, l) => sum + l.total),
-  );
-  final taxableLabor = _cents(
-    labor.where((l) => l.taxable).fold(0.0, (sum, l) => sum + l.total),
-  );
-  final taxableFees = _cents(
-    fees.where((f) => f.fee.taxable).fold(0.0, (sum, f) => sum + f.amount),
-  );
-  // Hardware and cable are goods like any other device: taxed on the same
-  // terms as the equipment they go with.
-  final taxableBase = _cents(
-    equipmentTotal +
-        hardwareTotal +
-        cablingTotal +
-        taxableExtras +
-        taxableLabor +
-        taxableFees +
-        (settings.shippingTaxable ? shippingTotal : 0),
-  );
-  final tax = _cents(taxableBase * settings.taxPercent / 100);
+  ({
+    double equipment,
+    double hardware,
+    double cabling,
+    double extras,
+    double labor,
+    double shipping,
+    double subtotal,
+    List<FeeAmount> fees,
+    double feeTotal,
+    double taxableBase,
+    double tax,
+    double grand,
+  }) sum(bool withOptional, [bool? withCharges]) {
+    List<CostLine> pick(List<CostLine> lines) => [
+      for (final l in lines)
+        if ((withOptional || !isOptional(l)) && !isCharged(l)) l,
+    ];
+    final eq = pick(equipment), hw = pick(hardware);
+    final cb = pick(cabling), ex = pick(extras);
+    final ch = (withCharges ?? settings.includeLaborCharges)
+        ? chargedAll
+        : const <LaborChargeLine>[];
+    final lb = withOptional
+        ? labor
+        : [for (final l in labor) if (!optionalKeys.contains(l.id)) l];
+    final laborTotal = _cents(lb.fold(0.0, (sum, l) => sum + l.total));
+    double total(List<CostLine> lines) =>
+        _cents(lines.fold(0.0, (sum, l) => sum + l.total));
+    final shippingTotal = _cents(
+      [...eq, ...hw, ...cb, ...ex, for (final c in ch) c.line]
+          .fold(0.0, (sum, l) => sum + l.shippingTotal),
+    );
+    final equipmentTotal = total(eq);
+    final hardwareTotal = total(hw);
+    final cablingTotal = total(cb);
+    final extrasTotal = total(ex);
+    final chargesTotal = total([for (final c in ch) c.line]);
+    final subtotal = _cents(
+      equipmentTotal +
+          hardwareTotal +
+          cablingTotal +
+          extrasTotal +
+          chargesTotal +
+          laborTotal +
+          shippingTotal,
+    );
+
+    // Every fee is a percentage of the SAME pre-tax subtotal — they don't
+    // compound onto each other, because two 5% fees quoted on a job mean 10%
+    // of the job, not 10.25%.
+    final fees = <FeeAmount>[
+      for (final fee in settings.fees)
+        (fee: fee, amount: _cents(subtotal * fee.percent / 100)),
+    ];
+    final feeTotal = _cents(fees.fold(0.0, (sum, f) => sum + f.amount));
+
+    final taxableExtras = _cents(
+      ex.where((l) => l.taxable).fold(0.0, (sum, l) => sum + l.total),
+    );
+    final taxableLabor = _cents(
+      lb.where((l) => l.taxable).fold(0.0, (sum, l) => sum + l.total),
+    );
+    final taxableFees = _cents(
+      fees.where((f) => f.fee.taxable).fold(0.0, (sum, f) => sum + f.amount),
+    );
+    // Goods are taxed as their section is; an other item by its own flag.
+    final taxableCharges = _cents(
+      ch
+          .where((c) => c.section != 'Other items' || c.line.taxable)
+          .fold(0.0, (sum, c) => sum + c.line.total),
+    );
+    // Hardware and cable are goods like any other device: taxed on the same
+    // terms as the equipment they go with.
+    final taxableBase = _cents(
+      equipmentTotal +
+          hardwareTotal +
+          cablingTotal +
+          taxableExtras +
+          taxableCharges +
+          taxableLabor +
+          taxableFees +
+          (settings.shippingTaxable ? shippingTotal : 0),
+    );
+    final tax = _cents(taxableBase * settings.taxPercent / 100);
+    return (
+      equipment: equipmentTotal,
+      hardware: hardwareTotal,
+      cabling: cablingTotal,
+      extras: extrasTotal,
+      labor: laborTotal,
+      shipping: shippingTotal,
+      subtotal: subtotal,
+      fees: fees,
+      feeTotal: feeTotal,
+      taxableBase: taxableBase,
+      tax: tax,
+      grand: _cents(subtotal + feeTotal + tax),
+    );
+  }
+
+  final full = sum(true);
+  final base = anyOptional ? sum(false) : full;
+  final shown = settings.includeOptional ? full : base;
+  final withCharges = anyCharges ? sum(settings.includeOptional, true) : shown;
+  final withoutCharges = anyCharges
+      ? sum(settings.includeOptional, false)
+      : shown;
+  for (final lines in [equipment, hardware, cabling, extras]) {
+    lines.removeWhere(isCharged);
+  }
+  // Listed apart unless they are counted and wanted in their own sections.
+  final apart = anyOptional &&
+      (settings.optionalSection || !settings.includeOptional);
+  if (apart) {
+    for (final lines in [equipment, hardware, cabling, extras]) {
+      lines.removeWhere(isOptional);
+    }
+    labor.removeWhere((l) => optionalKeys.contains(l.id));
+  }
+  final sections = apart ? base : shown;
+  // The hours on the page are the crews on the page.
+  final shownLabor = labor;
 
   return CostEstimate(
     currency: settings.currency,
@@ -2277,29 +2644,55 @@ CostEstimate computeRoomCost({
     cabling: cabling,
     extras: extras,
     labor: labor,
-    fees: fees,
-    equipmentTotal: equipmentTotal,
-    hardwareTotal: hardwareTotal,
-    cablingTotal: cablingTotal,
-    extrasTotal: extrasTotal,
-    laborTotal: laborTotal,
-    laborHours: laborHours,
-    laborCrewHours: laborCrewHours,
-    shippingTotal: shippingTotal,
+    fees: shown.fees,
+    equipmentTotal: sections.equipment,
+    hardwareTotal: sections.hardware,
+    cablingTotal: sections.cabling,
+    extrasTotal: sections.extras,
+    laborTotal: sections.labor,
+    laborHours: apart
+        ? shownLabor.fold(0.0, (sum, l) => sum + l.totalHours)
+        : laborHours,
+    laborCrewHours: apart
+        ? shownLabor.fold(0.0, (sum, l) => sum + l.hours)
+        : laborCrewHours,
+    shippingTotal: shown.shipping,
     unratedLabor: unratedLabor,
-    subtotal: subtotal,
-    feeTotal: feeTotal,
-    taxableBase: taxableBase,
+    subtotal: shown.subtotal,
+    feeTotal: shown.feeTotal,
+    taxableBase: shown.taxableBase,
     taxPercent: settings.taxPercent,
     taxLabel: settings.taxLabel,
-    tax: tax,
-    grandTotal: _cents(subtotal + feeTotal + tax),
+    tax: shown.tax,
+    grandTotal: shown.grand,
     unpricedLines: unpricedLines,
     unpricedDevices: unpricedDevices,
     estimatedLines: estimatedLines,
     otherTierLines: otherTierLines,
     excludedLines: excludedLines,
     excludedDevices: excludedDevices,
+    optional: apart ? optionalAll : const [],
+    inlineOptional: apart || !anyOptional
+        ? const {}
+        : {...optionalKeys},
+    optionalLabor: apart ? optionalLaborAll : const [],
+    optionalTotal: _cents(
+      optionalAll.fold(0.0, (sum, l) => sum + l.total + l.shippingTotal) +
+          optionalLaborAll.fold(0.0, (sum, l) => sum + l.total),
+    ),
+    optionalIncluded: settings.includeOptional,
+    grandWithOptions: full.grand,
+    grandWithoutOptions: base.grand,
+    laborCharges: chargedAll,
+    laborChargesTotal: _cents(
+      chargedAll.fold(
+        0.0,
+        (sum, c) => sum + c.line.total + c.line.shippingTotal,
+      ),
+    ),
+    laborChargesIncluded: settings.includeLaborCharges,
+    grandWithLaborCharges: withCharges.grand,
+    grandWithoutLaborCharges: withoutCharges.grand,
   );
 }
 
@@ -2423,6 +2816,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       estimate.hardware.isEmpty &&
       estimate.cabling.isEmpty &&
       estimate.extras.isEmpty &&
+      estimate.laborCharges.isEmpty &&
       estimate.labor.isEmpty &&
       estimate.fees.isEmpty &&
       estimate.taxPercent == 0) {
@@ -2553,9 +2947,20 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
             line.hours,
             line.totalHours,
             line.unrated ? 'no rate set' : cash(line.hourlyRate),
-            cash(line.total),
+            line.furnishedBy != null
+                ? 'In kind ${formatMoney(line.listTotal, currency)}'
+                : cash(line.total),
             line.taxable ? 'Yes' : 'No',
           ],
+      ],
+    ),
+    // Given rather than bought, line by line.
+    if (estimate.inKind.isNotEmpty) (
+      title: 'In Kind',
+      header: const ['Description', 'Section', 'Given by', 'Qty', 'Value'],
+      rows: [
+        for (final l in estimate.inKind)
+          [l.name, l.section, inKindSourceLabel(l.by), l.qty, cash(l.value)],
       ],
     ),
     (
@@ -2586,6 +2991,34 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
     ),
   ];
 
+  // Lines charged with a crew, in a section of their own.
+  if (estimate.laborCharges.isNotEmpty) {
+    sections.add((
+      title: kLaborChargesSection,
+      header: const [
+        'Description',
+        'Charged to',
+        'From',
+        'Part number',
+        'Qty',
+        'Unit price',
+        'Extended',
+      ],
+      rows: [
+        for (final c in estimate.laborCharges)
+          [
+            c.line.description,
+            c.crew,
+            c.section,
+            c.line.partNumber,
+            c.line.qty,
+            cash(c.line.unitPrice),
+            cash(c.line.total),
+          ],
+      ],
+    ));
+  }
+
   final totals = <List<dynamic>>[
     ['Priced at', kPricingTierLabels[estimate.tier] ?? estimate.tier.name],
     ['Equipment', cash(estimate.equipmentTotal)],
@@ -2600,6 +3033,13 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       ],
     ],
     if (estimate.extras.isNotEmpty) ['Other items', cash(estimate.extrasTotal)],
+    if (estimate.laborCharges.isNotEmpty)
+      estimate.laborChargesIncluded
+          ? [kLaborChargesTotalLabel, cash(_chargesBeforeShipping(estimate))]
+          : [
+              'Labor charges (not in the total)',
+              cash(_chargesBeforeShipping(estimate)),
+            ],
     if (shipping) ['Shipping', cash(estimate.shippingTotal)],
     ['Subtotal (before fees and tax)', cash(estimate.subtotal)],
     for (final f in estimate.fees)
@@ -2617,6 +3057,15 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       ],
     ],
     ['TOTAL', cash(estimate.grandTotal)],
+    if (estimate.inKind.isNotEmpty) ...[
+      for (final s in estimate.inKindBySource)
+        ['In kind - ${s.source}', cash(s.value)],
+      ['In-kind value (not in the total)', cash(estimate.inKindTotal)],
+      [
+        'Project value with in kind',
+        cash(estimate.grandTotal + estimate.inKindTotal),
+      ],
+    ],
     if (estimate.unpricedLines > 0)
       [
         'Not included - devices with no price',

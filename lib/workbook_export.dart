@@ -16,6 +16,7 @@ import 'diagram_capture.dart';
 import 'building_project.dart';
 import 'export_tools.dart';
 import 'google_sheets_export.dart';
+import 'project_restore_data.dart';
 import 'project_workbook.dart';
 import 'room_workbook.dart';
 
@@ -257,6 +258,8 @@ Future<void> exportProjectWorkbook(
         library: provider.avDeviceLibrary,
         baseCosts: provider.baseCosts,
         tier: provider.pricingTier,
+        dataSheet: await projectDataSheetFor(
+            provider.project, provider.currentProjectPath),
       ),
     );
     showSavedSnackBar(
@@ -405,6 +408,8 @@ Future<void> exportWorkbookToGoogleSheets(
         library: provider.avDeviceLibrary,
         baseCosts: provider.baseCosts,
         tier: provider.pricingTier,
+        dataSheet: await projectDataSheetFor(
+            provider.project, provider.currentProjectPath),
       ));
       title = '${projectFileStem(provider.project)}_project'
           .replaceAll('_', ' ');

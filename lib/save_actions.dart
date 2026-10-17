@@ -27,6 +27,7 @@ import 'building_project.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'project_briefing_dialog.dart';
+import 'project_restore_data.dart' show restoreProjectFromWorkbook;
 import 'project_setup_dialog.dart';
 import 'room_review.dart' show confirmRoomUnlocked;
 import 'room_sidecar.dart' show roomConfigDisplayName, roomConfigPathIn;
@@ -1035,6 +1036,93 @@ Future<bool> closeRoomFile(
     ),
   );
   return true;
+}
+
+/// Puts a project back from the hidden tab of its workbook or Google Sheet
+/// download - see project_restore_data.dart - then opens it. The project file
+/// there now is copied aside first; room files already there are kept unless
+/// asked. Returns true when a project was opened.
+Future<bool> restoreProjectFromWorkbookFile(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  if (!await confirmLeavingProject(context, provider)) return false;
+  final picked = await pickFilesCompat(
+    dialogTitle: 'Restore a project from its workbook',
+    type: FileType.custom,
+    allowedExtensions: const ['xlsx'],
+  );
+  final book = picked?.files.single.path;
+  if (book == null || !context.mounted) return false;
+  final folder = await FilePicker.getDirectoryPath(
+    dialogTitle: 'The folder the project goes back into',
+  );
+  if (folder == null || !context.mounted) return false;
+  var replaceRooms = false;
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) => AlertDialog(
+        title: const Text('Restore the project?'),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('The project file in $folder is put back from '
+                  '${path.basename(book)}. The one there now is copied into '
+                  'restore_backups first.'),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                key: const ValueKey('restore_replace_rooms'),
+                contentPadding: EdgeInsets.zero,
+                value: replaceRooms,
+                onChanged: (v) => setLocal(() => replaceRooms = v ?? false),
+                title: const Text('Also replace room files that are there'),
+                subtitle: const Text('Off: only missing room files are put '
+                    'back, so newer rooms are kept.'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (go != true || !context.mounted) return false;
+  final result = restoreProjectFromWorkbook(
+    await File(book).readAsBytes(),
+    folder,
+    replaceRooms: replaceRooms,
+  );
+  if (!context.mounted) return false;
+  final messenger = ScaffoldMessenger.of(context);
+  if (result.error.isNotEmpty && result.projectFile.isEmpty) {
+    messenger.showSnackBar(SnackBar(
+      content: Text(result.error),
+      backgroundColor: snackErrorFillOn(messenger),
+    ));
+    return false;
+  }
+  messenger.showSnackBar(SnackBar(
+    content: Text(result.error.isNotEmpty
+        ? result.error
+        : 'Restored: ${result.written.length} file(s) put back'
+            '${result.kept.isEmpty ? '' : ', ${result.kept.length} room '
+                'file(s) already there were kept'}.'),
+    duration: const Duration(seconds: 8),
+  ));
+  return openProjectAtPath(context, provider, result.projectFile);
 }
 
 /// Opens a project file. Returns true when one was opened.

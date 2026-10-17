@@ -91,6 +91,13 @@ void main() {
     expect(p.project.budgetLines.map((l) => l.item).toSet(), {'Mine'});
     await tester.tap(find.byKey(const ValueKey('collab_review_confirm')));
     await tester.pump();
+    // The file is read on a worker, which only real time moves along.
+    for (var i = 0; i < 10 && p.collab.incomingOn(CollabDocKind.project) != null;
+        i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)));
+      await tester.pump();
+    }
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump();
 

@@ -1449,6 +1449,7 @@ class _MainDashboardState extends State<MainDashboard> {
       try {
         final campus = await CampusFile.load(file);
         if (!context.mounted) return;
+        context.read<AppStateProvider>().backUpCampusForMe(file);
         await showCampusLifecycleFile(context, campus);
       } catch (e) {
         if (!context.mounted) return;
@@ -1900,11 +1901,11 @@ class TopLevelBar extends StatelessWidget {
                 ),
                 onPressed: () => closeProjectFile(context, context.read<AppStateProvider>()),
               ),
-              // AND THE ROOM'S OWN WAY OUT, on the pages that are about the
-              // room. A job stays open behind it - closing means the room, not
-              // everything on screen - so this is how somebody finishes with
-              // one room of a building without putting the building away.
-              if (onRoomTab && hasRoom)
+              // AND THE ROOM'S OWN WAY OUT, whenever a room is open - on the
+              // Project tab too, so the room in the background can be put
+              // away from the job. A job stays open behind it - closing means
+              // the room, not everything on screen.
+              if (hasRoom)
                 _BannerClose(
                   keyValue: 'banner_room_close',
                   tooltip: 'Close the room (the job stays open)',
@@ -2738,9 +2739,13 @@ class ProfileButton extends StatelessWidget {
     final user = provider.collab.me.user;
     final picture = provider.myAvatarFile;
     final email = provider.userEmail.trim();
+    final scheme = Theme.of(context).colorScheme;
+    final subtle = TextStyle(color: scheme.onSurfaceVariant, fontSize: 12);
     return PopupMenuButton<String>(
       key: const ValueKey('profile_button'),
-      tooltip: 'Your profile - ${provider.profileName}',
+      // The hover card below says who this is; the button's own tooltip
+      // would stack a second one on it.
+      tooltip: '',
       offset: const Offset(0, 44),
       onSelected: (v) {
         if (v == 'profile') showProfileDialog(context);
@@ -2807,10 +2812,56 @@ class ProfileButton extends StatelessWidget {
           ),
         ),
       ],
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        // Grows while the pointer is on it.
-        child: HoverGrow(
+      // Your picture in the top bar, with a card on hover - the CTS
+      // Dashboard's. The card takes the theme's own surface and text colors;
+      // the default tooltip is light in dark mode. Only App Config's avatar
+      // grows on hover.
+      child: Tooltip(
+        key: const ValueKey('profile_hover_card'),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Theme.of(context).dividerColor),
+          boxShadow: const [
+            BoxShadow(
+                blurRadius: 8, color: Colors.black26, offset: Offset(0, 2)),
+          ],
+        ),
+        richMessage: WidgetSpan(
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CollabAvatarCircle(user: user, picture: picture, radius: 36),
+                const SizedBox(width: 12),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(provider.profileName,
+                        style: TextStyle(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14)),
+                    if (email.isNotEmpty) Text(email, style: subtle),
+                    if (user.isNotEmpty && user != provider.profileName)
+                      Text('Signed in as $user', style: subtle),
+                    const SizedBox(height: 2),
+                    Text(
+                        'Profile, settings and help are in this menu',
+                        style: subtle.copyWith(
+                            fontSize: 11,
+                            color: scheme.onSurfaceVariant
+                                .withValues(alpha: 0.8))),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
           child: CollabAvatarCircle(user: user, picture: picture, radius: 15),
         ),
       ),
@@ -4359,7 +4410,7 @@ class AppSettingsView extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           'Set the companies up once and every new job starts with them on '
-          'its Packages tab, instead of the same directory being retyped per '
+          'its Quotes tab, instead of the same directory being retyped per '
           'building. A job can still add, rename or drop any vendor it likes.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
@@ -5017,6 +5068,25 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
 ///  automatically (green check). Browse individually only for files that
 ///  live somewhere else. Every Browse choice is saved immediately.
 /// ============================================================================
+/// Whether a path exists, checked once in the background and remembered.
+/// [changed] ticks when an answer lands.
+class _PathPresence {
+  static final ValueNotifier<int> changed = ValueNotifier(0);
+  static final Map<String, bool> _known = {};
+
+  static bool of(String p, {bool dir = false}) {
+    if (p.isEmpty) return false;
+    final known = _known[p];
+    if (known != null) return known;
+    _known[p] = false;
+    (dir ? Directory(p).exists() : File(p).exists()).then((ok) {
+      _known[p] = ok;
+      changed.value++;
+    }, onError: (_) {});
+    return false;
+  }
+}
+
 class FirstRunSetupDialog extends StatelessWidget {
   const FirstRunSetupDialog({super.key});
 
@@ -5034,19 +5104,44 @@ class FirstRunSetupDialog extends StatelessWidget {
     // watch: rows refresh live as paths are picked (updateSetting notifies)
     final provider = context.watch<AppStateProvider>();
 
-    final bool rootExists = Directory(provider.effectiveRootFolder).existsSync();
-    final bool templateExists = File(provider.effectiveTemplateFilePath).existsSync();
-    final bool processorsExists = File(provider.effectiveProcessorsFilePath).existsSync();
-    final bool buildingsExists = File(provider.effectiveBuildingsFilePath).existsSync();
-    final bool schemaExists = File(provider.effectiveUiSchemaPath).existsSync();
-    final bool keyMapExists = File(provider.effectiveKeyMapPath).existsSync();
-    final bool flowRulesExists =
-        File(provider.effectiveFlowRulesPath).existsSync();
-    final bool avDevicesExists =
-        File(provider.effectiveAvDevicesPath).existsSync();
-    final bool modulesExists = Directory(provider.effectiveModulesPath).existsSync();
-    final bool documentationExists = Directory(provider.effectiveDocumentationPath).existsSync();
+    // Checked in the background, once per path: this rebuilds on every
+    // change, and ten checks on a share each time held the window.
+    return ValueListenableBuilder<int>(
+      valueListenable: _PathPresence.changed,
+      builder: (context, _, _) => _buildDialog(
+        context,
+        provider,
+        rootExists: _PathPresence.of(provider.effectiveRootFolder, dir: true),
+        templateExists: _PathPresence.of(provider.effectiveTemplateFilePath),
+        processorsExists:
+            _PathPresence.of(provider.effectiveProcessorsFilePath),
+        buildingsExists: _PathPresence.of(provider.effectiveBuildingsFilePath),
+        schemaExists: _PathPresence.of(provider.effectiveUiSchemaPath),
+        keyMapExists: _PathPresence.of(provider.effectiveKeyMapPath),
+        flowRulesExists: _PathPresence.of(provider.effectiveFlowRulesPath),
+        avDevicesExists: _PathPresence.of(provider.effectiveAvDevicesPath),
+        modulesExists:
+            _PathPresence.of(provider.effectiveModulesPath, dir: true),
+        documentationExists:
+            _PathPresence.of(provider.effectiveDocumentationPath, dir: true),
+      ),
+    );
+  }
 
+  Widget _buildDialog(
+    BuildContext context,
+    AppStateProvider provider, {
+    required bool rootExists,
+    required bool templateExists,
+    required bool processorsExists,
+    required bool buildingsExists,
+    required bool schemaExists,
+    required bool keyMapExists,
+    required bool flowRulesExists,
+    required bool avDevicesExists,
+    required bool modulesExists,
+    required bool documentationExists,
+  }) {
     return AlertDialog(
       title: Row(
         children: const [
@@ -5309,7 +5404,7 @@ class _FileServerBoxState extends State<_FileServerBox> {
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     final reachable =
-        Directory(AppStateProvider.kSharedRootFolder).existsSync();
+        await Directory(AppStateProvider.kSharedRootFolder).exists();
     await provider.useSharedFolderForAll();
     if (!mounted) return;
     setState(() => _busy = false);
@@ -5545,6 +5640,9 @@ class _FileMenu extends StatelessWidget {
                 'Open Project...', () => onOpen('Open a project')),
             item('file_open_campus', Icons.location_city, 'Open Campus...',
                 () => onOpen('Open a campus')),
+            item('file_restore_project', Icons.settings_backup_restore,
+                'Restore Project from Workbook...',
+                () => restoreProjectFromWorkbookFile(context, provider)),
           ],
           child: const _MenuLabel('Open'),
         ),
@@ -5667,7 +5765,7 @@ Future<void> _useSharedFolder(
   );
   if (ok != true || !context.mounted) return;
   final messenger = ScaffoldMessenger.of(context);
-  final reachable = Directory(AppStateProvider.kSharedRootFolder).existsSync();
+  final reachable = await Directory(AppStateProvider.kSharedRootFolder).exists();
   await provider.useSharedFolderForAll();
   showTimedSnackBar(
     messenger,

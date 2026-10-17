@@ -681,6 +681,7 @@ class TeamChat extends ChangeNotifier {
   /// 4 s poll stays for shares that cannot be watched. Off in tests.
   bool watch = !Platform.environment.containsKey('FLUTTER_TEST');
   StreamSubscription<FileSystemEvent>? _watcher;
+  bool _watchStarting = false;
   Timer? _settle;
   bool _firstRead = true;
   bool _polling = false;
@@ -759,7 +760,7 @@ class TeamChat extends ChangeNotifier {
   Future<void> poll() async {
     final store = _store;
     if (store == null || _polling) return;
-    _startWatching(store);
+    unawaited(_startWatching(store));
     _polling = true;
     try {
       final first = _firstRead;
@@ -1411,11 +1412,17 @@ class TeamChat extends ChangeNotifier {
     ];
   }
 
-  void _startWatching(ChatStore store) {
-    if (!watch || _watcher != null) return;
+  /// [FREEZES]: the folder check is async - an existsSync() here, on every
+  /// 4 s poll while no watch was up, froze the UI thread for as long as a
+  /// slow share took to answer.
+  Future<void> _startWatching(ChatStore store) async {
+    if (!watch || _watcher != null || _watchStarting) return;
+    _watchStarting = true;
     try {
       final dir = Directory(store.messagesDir);
-      if (!dir.existsSync()) return;
+      if (!await dir.exists()) return;
+      // Moved, stopped or watched meanwhile.
+      if (!identical(store, _store) || _watcher != null) return;
       _watcher = dir.watch().listen((_) {
         _settle?.cancel();
         _settle = Timer(const Duration(milliseconds: 250), () {
@@ -1425,6 +1432,8 @@ class TeamChat extends ChangeNotifier {
           cancelOnError: true);
     } catch (_) {
       _watcher = null;
+    } finally {
+      _watchStarting = false;
     }
   }
 

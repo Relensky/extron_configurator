@@ -2208,6 +2208,9 @@ class ManualRoom {
   /// Who pays for it - 'Central', 'Dept'. Free text.
   final String funding;
 
+  /// The department the room is for - 'Physics'. Free text.
+  final String department;
+
   /// The money set aside for this room out of the job's budget. 0 is none.
   /// Not [replacementCost]: that is what the room would cost, this is what it
   /// is allowed.
@@ -2225,6 +2228,7 @@ class ManualRoom {
     this.priority = 0,
     this.roomType = '',
     this.funding = '',
+    this.department = '',
     this.targetPrice = 0,
   });
 
@@ -2244,6 +2248,7 @@ class ManualRoom {
     int? priority,
     String? roomType,
     String? funding,
+    String? department,
     double? targetPrice,
   }) => ManualRoom(
     id: id,
@@ -2258,6 +2263,7 @@ class ManualRoom {
     priority: priority ?? this.priority,
     roomType: roomType ?? this.roomType,
     funding: funding ?? this.funding,
+    department: department ?? this.department,
     targetPrice: targetPrice ?? this.targetPrice,
   );
 
@@ -2274,6 +2280,7 @@ class ManualRoom {
     if (priority > 0) 'priority': priority,
     if (roomType.trim().isNotEmpty) 'roomType': roomType.trim(),
     if (funding.trim().isNotEmpty) 'funding': funding.trim(),
+    if (department.trim().isNotEmpty) 'department': department.trim(),
     if (targetPrice > 0) 'targetPrice': targetPrice,
   };
 
@@ -2310,6 +2317,7 @@ class ManualRoom {
     priority: (json['priority'] as num?)?.toInt() ?? 0,
     roomType: json['roomType']?.toString() ?? '',
     funding: json['funding']?.toString() ?? '',
+    department: json['department']?.toString() ?? '',
     targetPrice: (json['targetPrice'] as num?)?.toDouble() ?? 0,
   );
 }
@@ -2369,6 +2377,9 @@ class ProjectRoomRef {
   /// line built into a room keeps its place and its money.
   final int priority;
   final String funding;
+
+  /// The department the room is for - see [ManualRoom.department].
+  final String department;
   final double targetPrice;
 
   /// Quoted as a whole room, whatever its priority buys. Set once what the
@@ -2376,6 +2387,10 @@ class ProjectRoomRef {
   /// rather than the projector it already has. See
   /// [BuildingProject.priorityBuysOnly].
   final bool wholeRoom;
+
+  /// The room's optional upgrades are left off the project's total, whatever
+  /// [BuildingProject.includeOptional] says.
+  final bool optionalOff;
 
   const ProjectRoomRef({
     required this.id,
@@ -2385,8 +2400,10 @@ class ProjectRoomRef {
     this.notes = '',
     this.priority = 0,
     this.funding = '',
+    this.department = '',
     this.targetPrice = 0,
     this.wholeRoom = false,
+    this.optionalOff = false,
   });
 
   ProjectRoomRef copyWith({
@@ -2396,8 +2413,10 @@ class ProjectRoomRef {
     String? notes,
     int? priority,
     String? funding,
+    String? department,
     double? targetPrice,
     bool? wholeRoom,
+    bool? optionalOff,
   }) => ProjectRoomRef(
     id: id,
     configPath: configPath ?? this.configPath,
@@ -2406,8 +2425,10 @@ class ProjectRoomRef {
     notes: notes ?? this.notes,
     priority: priority ?? this.priority,
     funding: funding ?? this.funding,
+    department: department ?? this.department,
     targetPrice: targetPrice ?? this.targetPrice,
     wholeRoom: wholeRoom ?? this.wholeRoom,
+    optionalOff: optionalOff ?? this.optionalOff,
   );
 
   /// The name to show before the room has been read off disk — the label if
@@ -2427,8 +2448,10 @@ class ProjectRoomRef {
     if (notes.isNotEmpty) 'notes': notes,
     if (priority > 0) 'priority': priority,
     if (funding.trim().isNotEmpty) 'funding': funding.trim(),
+    if (department.trim().isNotEmpty) 'department': department.trim(),
     if (targetPrice > 0) 'targetPrice': targetPrice,
     if (wholeRoom) 'wholeRoom': true,
+    if (optionalOff) 'optionalOff': true,
   };
 
   factory ProjectRoomRef.fromJson(Map<String, dynamic> json) => ProjectRoomRef(
@@ -2439,8 +2462,10 @@ class ProjectRoomRef {
     notes: json['notes']?.toString() ?? '',
     priority: (json['priority'] as num?)?.toInt() ?? 0,
     funding: json['funding']?.toString() ?? '',
+    department: json['department']?.toString() ?? '',
     targetPrice: (json['targetPrice'] as num?)?.toDouble() ?? 0,
     wholeRoom: json['wholeRoom'] == true,
+    optionalOff: json['optionalOff'] == true,
   );
 }
 
@@ -3082,6 +3107,17 @@ class BuildingProject {
   /// it is a deliberate step. See [targetTotal].
   bool budgetLocked;
 
+  /// The project's total counts the rooms' labor charges - see
+  /// RoomCostSettings.laborCharges. On by default.
+  bool includeLaborCharges;
+
+  /// The project's total counts the rooms' optional upgrades. Each room can
+  /// leave its own off - see [ProjectRoomRef.optionalOff].
+  bool includeOptional;
+
+  /// This job buys no spares, so nothing is flagged for having none.
+  bool noSpares;
+
   /// Priority -> the only catalog categories bought for its rooms, e.g.
   /// {5: ['Projector']}. Everything else in those rooms is already there and
   /// is listed as furnished by existing at no cost. A priority not in the map
@@ -3176,6 +3212,9 @@ class BuildingProject {
     int deliveryCounter = 0,
     this.budget = 0,
     this.budgetLocked = false,
+    this.includeOptional = false,
+    this.includeLaborCharges = true,
+    this.noSpares = false,
     Map<int, List<String>>? priorityBuysOnly,
     Map<int, List<PriorityAddOn>>? priorityAddOns,
     List<BudgetLine>? budgetLines,
@@ -4826,6 +4865,9 @@ class BuildingProject {
       'history': [for (final h in history) h.toJson()],
     if (budget != 0) 'budget': budget,
     if (budgetLocked) 'budgetLocked': true,
+    if (includeOptional) 'includeOptional': true,
+    if (!includeLaborCharges) 'includeLaborCharges': false,
+    if (noSpares) 'noSpares': true,
     if (priorityBuysOnly.isNotEmpty)
       'priorityBuysOnly': {
         for (final e in priorityBuysOnly.entries) '${e.key}': e.value,
@@ -5132,6 +5174,9 @@ class BuildingProject {
             : double.tryParse(raw?.toString() ?? '') ?? 0.0;
       }(),
       budgetLocked: json['budgetLocked'] == true,
+      includeOptional: json['includeOptional'] == true,
+      includeLaborCharges: json['includeLaborCharges'] != false,
+      noSpares: json['noSpares'] == true,
       priorityAddOns: {
         if (json['priorityAddOns'] is Map)
           for (final e in (json['priorityAddOns'] as Map).entries)
@@ -5440,6 +5485,9 @@ class BuildingProject {
     deliveryCounter: _deliveryCounter,
     budget: budget,
     budgetLocked: budgetLocked,
+    includeOptional: includeOptional,
+    includeLaborCharges: includeLaborCharges,
+    noSpares: noSpares,
     priorityBuysOnly: {
       for (final e in priorityBuysOnly.entries) e.key: List.of(e.value),
     },

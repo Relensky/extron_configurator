@@ -275,6 +275,7 @@
     "gui_huddle_space": "No",
     "gui_capture_source_available": "No",
     "gui_usb_or_vga": "USB",
+    "gui_usb_button_text": "",
     "use_qos": true,
     "save_program_logs": true,
     "disable_inactivity_timer": false,
@@ -983,6 +984,12 @@
         "VGA"
       ],
       "description": "Set the GUI and metrics to send over the USB or VGA depending on the age of the room."
+    },
+    "gui_usb_button_text": {
+      "label": "USB Routing Button Text (gui_usb_button_text)",
+      "type": "text",
+      "helperText": "Blank = USB-C / VGA. e.g. Micro",
+      "description": "Replaces the label on the USB input's routing buttons (Proj 1-4, Capture 1-2, Audio on the routing page) for a room whose USB input carries something else - e.g. 'Micro' in SCI248, where it is a wireless microscope. Blank keeps the default: 'USB-C', or 'VGA' when gui_usb_or_vga is VGA. Keep it short enough for the button; write \\r for a line break, as in the other gui_ text keys."
     },
     "ntp_primary": {
       "description": "Network Time Protocol (NTP) primary server address in use for the processor."

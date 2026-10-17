@@ -187,7 +187,7 @@ class _ChatButtonClearanceState extends State<ChatButtonClearance> {
 }
 
 /// Grows [child] toward [anchor] while the pointer is over it - your own
-/// avatar in the corner.
+/// avatar in App Config (the corner one only has its tooltip).
 class HoverGrow extends StatefulWidget {
   final Widget child;
   final double scale;

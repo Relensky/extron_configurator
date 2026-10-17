@@ -17,6 +17,37 @@ import 'package:material_ui/material_ui.dart';
 ///  not the pixels on screen (which are a blur at 5%).
 /// ============================================================================
 
+/// The magnifier's zoom steps, as the size the lens shows the drawing at.
+/// Above 100% the full-size picture is enlarged.
+const List<double> kLensZooms = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0];
+
+/// The magnifier's sizes, as the side of its square, with their names.
+const List<(double, String)> kLensSizes = [
+  (200, 'Small'),
+  (280, 'Medium'),
+  (400, 'Large'),
+  (560, 'Extra large'),
+];
+
+/// The magnifier's zoom before one is picked: full size, or twice the
+/// page's zoom when that is more.
+double autoLensZoom(double pageScale) => math.max(1.0, pageScale * 2);
+
+/// The next zoom step above [current], or below it when [up] is false.
+/// Stays put at either end.
+double nextLensZoom(double current, {required bool up}) {
+  if (up) {
+    for (final z in kLensZooms) {
+      if (z > current + 1e-6) return z;
+    }
+    return kLensZooms.last;
+  }
+  for (final z in kLensZooms.reversed) {
+    if (z < current - 1e-6) return z;
+  }
+  return kLensZooms.first;
+}
+
 /// Most pixels along either side of a snapshot - about 64 MB at most.
 const double kSnapshotMaxSide = 4096;
 
@@ -87,6 +118,10 @@ class AvZoomBar extends StatelessWidget {
     required this.onActual,
     required this.magnifier,
     required this.onMagnifier,
+    this.lensZoom,
+    this.onLensZoom,
+    this.lensSize = 1,
+    this.onLensSize,
   });
 
   final TransformationController controller;
@@ -96,6 +131,15 @@ class AvZoomBar extends StatelessWidget {
   final VoidCallback onActual;
   final bool magnifier;
   final ValueChanged<bool> onMagnifier;
+
+  /// The size the lens shows the drawing at, 1.0 for 100%; null follows the
+  /// page - see [autoLensZoom].
+  final double? lensZoom;
+  final ValueChanged<double>? onLensZoom;
+
+  /// Index into [kLensSizes].
+  final int lensSize;
+  final ValueChanged<int>? onLensSize;
 
   @override
   Widget build(BuildContext context) {
@@ -155,6 +199,44 @@ class AvZoomBar extends StatelessWidget {
               () => onMagnifier(!magnifier),
               on: magnifier,
             ),
+            // The lens's own zoom and size, while it is on.
+            if (magnifier && onLensZoom != null)
+              ListenableBuilder(
+                listenable: controller,
+                builder: (context, _) {
+                  final zoom = lensZoom ??
+                      autoLensZoom(controller.value.getMaxScaleOnAxis());
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      button('lens_out', Icons.remove, 'Magnifier zoom out',
+                          () => onLensZoom!(nextLensZoom(zoom, up: false))),
+                      Tooltip(
+                        message: 'How big the magnifier shows the drawing',
+                        child: SizedBox(
+                          width: 44,
+                          child: Text(
+                            '${(zoom * 100).round()}%',
+                            key: const ValueKey('av_lens_level'),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelSmall,
+                          ),
+                        ),
+                      ),
+                      button('lens_in', Icons.add, 'Magnifier zoom in',
+                          () => onLensZoom!(nextLensZoom(zoom, up: true))),
+                    ],
+                  );
+                },
+              ),
+            if (magnifier && onLensSize != null)
+              button(
+                'lens_size',
+                Icons.photo_size_select_large,
+                'Magnifier size: ${kLensSizes[lensSize].$2} - click for the '
+                    'next size',
+                () => onLensSize!((lensSize + 1) % kLensSizes.length),
+              ),
           ],
         ),
       ),

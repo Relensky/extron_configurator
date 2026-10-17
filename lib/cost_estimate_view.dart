@@ -16,6 +16,7 @@ import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart' show driverGapSections;
 import 'av_flow_routing.dart';
+import 'av_flow_place.dart';
 import 'av_flow_swap_dialogs.dart';
 import 'av_port_editor.dart' show avRowIcon, kRowIconWidth;
 import 'av_rack_view.dart' show iconForRackItem;
@@ -45,6 +46,7 @@ import 'search_match.dart';
 import 'tie_module_dialog.dart';
 import 'xlsx_writer.dart';
 import 'responsive.dart';
+import 'project_estimate.dart' show projectAddOnItems;
 
 /// ============================================================================
 ///  COST ESTIMATE TAB
@@ -319,8 +321,8 @@ const List<_Col> _kLaborCols = [
   _Col.field('Rate/hr', gap: 8, width: 76, numeric: true),
   _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
   _Col('Taxable', width: 92, align: TextAlign.center),
-  // One row button, 40 wide as it renders.
-  _Col('', width: 40),
+  // In kind and remove, 40 wide each as they render.
+  _Col('', width: 80),
 ];
 
 /// The other-items table's columns — see [_kEquipmentCols].
@@ -332,10 +334,10 @@ const List<_Col> _kItemsCols = [
   _Col.field('Unit price', gap: 8, width: 130, numeric: true),
   _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
   _Col('Taxable', width: 92, align: TextAlign.center),
-  // Three slots for two buttons. An item has no catalog price to fall back to,
-  // so the "back to catalog price" slot is blank - and blanking it is what
-  // puts "add to catalog" in the same column it occupies on every other table.
-  _Col('', width: 120),
+  // Five slots, the order the tables above use: the tag button, replace with
+  // another model, the catalog, the catalog price (blank - an item has none
+  // to go back to) and the trash can.
+  _Col('', width: 200),
 ];
 
 /// The ink the quiet columns are set in - the model number beside a device,
@@ -703,6 +705,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // paper was the only thing that had heard about the brightness.
     List<Widget> cardsIn(BuildContext context) => <Widget>[
       if (widget.model == null && !_capturing)
+        _estimateOnlySwitch(context, provider),
+      if (widget.model == null && !_capturing)
         ..._projectScopeBanner(context, provider, projectCost),
       _header(context, provider, estimate, model),
       if (!_capturing || settings.scopeOfWork.trim().isNotEmpty) ...[
@@ -718,7 +722,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         ),
       ],
       const SizedBox(height: 12),
+      // The upgrades, with the room either way, first: the decision the
+      // page is read for.
+      if (provider.avCost.optionalLines.isNotEmpty || estimate.hasOptional) ...[
+        _optionalCard(context, provider, estimate),
+        const SizedBox(height: 12),
+      ],
       _equipmentCard(context, provider, estimate, model),
+      const SizedBox(height: 12),
+      _itemsCard(context, provider, estimate),
       const SizedBox(height: 12),
       _hardwareCard(context, provider, estimate),
       const SizedBox(height: 12),
@@ -726,8 +738,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       const SizedBox(height: 12),
       _laborCard(context, provider, estimate),
       const SizedBox(height: 12),
-      _itemsCard(context, provider, estimate),
-      const SizedBox(height: 12),
+      if (estimate.laborCharges.isNotEmpty) ...[
+        _laborChargesCard(context, provider, estimate),
+        const SizedBox(height: 12),
+      ],
       // Side by side when there is room, stacked when there is not.
       LayoutBuilder(
         builder: (context, constraints) => constraints.maxWidth < 760
@@ -1636,7 +1650,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 ? Icons.library_add_outlined
                                 : _linkedIcon(line),
                             catalogPart.isEmpty
-                                ? 'Add this line to the device catalog'
+                                ? _addToCatalogTip(
+                                    provider,
+                                    line.model.isNotEmpty
+                                        ? line.model
+                                        : line.description,
+                                  )
                                 : _linkedTip(line, catalogPart, 'catalog'),
                             catalogPart.isNotEmpty
                                 ? () => _editCatalogFromLine(
@@ -2097,6 +2116,21 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   onPressed: () => _addExtraPart(context, provider,
                       kind: _ExtraPart.cable),
                 )),
+                // Every run the config describes onto the drawing, which is
+                // what this card counts.
+                if (provider.roomConfig.isNotEmpty)
+                  PrintHide(child: TextButton.icon(
+                    key: const ValueKey('cost_add_all_cables'),
+                    icon: const Icon(Icons.cable, size: 16),
+                    label: const Text('Add all cables from config'),
+                    onPressed: () {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final note = addAllCablesNote(
+                          addAllCablesFromConfig(provider));
+                      showTimedSnackBar(
+                          messenger, SnackBar(content: Text(note)));
+                    },
+                  )),
                 // The switch and the word it belongs to are one control, so
                 // they wrap as one rather than ending up on separate lines.
                 PrintHide(
@@ -2256,11 +2290,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             mainAxisAlignment: MainAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // THE RUNS SOMEBODY ELSE PULLS. The commonest
-                              // one there is: the network department provides
-                              // and terminates the cat6, and the room still
-                              // has every one of those runs on its schedule.
-                              _furnishedButton(context, provider, line),
                               // The shop's typical figure for a lead of this
                               // type and length, on the shared card rather
                               // than on this room — see [_setCableBaseCost].
@@ -2279,6 +2308,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                       : cableKeyParts(line.key).lengthFt,
                                 ),
                               ),
+                              // The tag button, in the slot the tables above
+                              // use for it. THE RUNS SOMEBODY ELSE PULLS. The commonest
+                              // one there is: the network department provides
+                              // and terminates the cat6, and the room still
+                              // has every one of those runs on its schedule.
+                              _furnishedButton(context, provider, line),
 // WHICH LEAD THIS LENGTH IS BOUGHT AS. The
                               // estimate picks the shortest stock lead that
                               // reaches the run, which is right until the job
@@ -2484,6 +2519,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             mainAxisAlignment: MainAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // A spool is not a length of anything, so there
+                              // is no base cost to set - and blanking that
+                              // slot is what keeps the buttons after it under
+                              // the counted run's above.
+                              _rowSlotGap,
                               if (line != null)
                                 _furnishedButton(context, provider, line)
                               else
@@ -2491,11 +2531,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                   width: kRowIconWidth,
                                   height: 34,
                                 ),
-                              // A spool is not a length of anything, so there
-                              // is no base cost to set - and blanking that
-                              // slot is what keeps the three buttons after it
-                              // under the counted run's above.
-                              _rowSlotGap,
                               KeyedSubtree(
                                 key: ValueKey('cbl_swap_${item.id}'),
                                 child: avRowIcon(
@@ -2514,7 +2549,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                     ? Icons.library_add_outlined
                                     : _linkedIcon(line),
                                 item.catalogModel.isEmpty
-                                    ? 'Add this line to the device catalog'
+                                    ? _addToCatalogTip(
+                                        provider,
+                                        item.description,
+                                      )
                                     : _linkedTip(
                                         line,
                                         item.catalogModel,
@@ -2607,6 +2645,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // Every catalog entry, not only this card's kind. A pick is filed where
     // its category puts it - see [_partKindFor].
     var showAll = false;
+    // Given from our stock: on the line, not in the total. A part off the
+    // catalog takes the value typed for it.
+    var fromStock = false;
+    final valueController = TextEditingController();
 
     final added = await showDialog<bool>(
       context: context,
@@ -2759,8 +2801,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 onTap: () => setLocal(() {
                                   selectedModel = t.model;
                                   nameController.text = t.model;
+                                  // Drawn by default only for equipment;
+                                  // a mount or a shelf is offered, not
+                                  // picked.
                                   placement =
-                                      defaultPlacementFor(provider, t.model);
+                                      _partKindFor(t) == _ExtraPart.equipment
+                                          ? defaultPlacementFor(
+                                              provider, t.model)
+                                          : EquipmentPlacement.estimateOnly;
                                   if (t.cableLengthFt > 0) {
                                     lengthFt = t.cableLengthFt;
                                   }
@@ -2857,11 +2905,48 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         : 'Priced from the catalog: $selectedModel',
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
-                  if (into == _ExtraPart.equipment)
+                  // One row: given from the shelf, and what it is worth.
+                  Tooltip(
+                    message: 'Not charged on this job. Its worth is listed as '
+                        'in kind on the estimate and the reports.',
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          key: const ValueKey('add_from_stock'),
+                          visualDensity: VisualDensity.compact,
+                          value: fromStock,
+                          onChanged: (v) =>
+                              setLocal(() => fromStock = v ?? false),
+                        ),
+                        const Text('In kind - from our stock'),
+                        const Spacer(),
+                        if (fromStock && selectedModel == null)
+                          SizedBox(
+                            width: 150,
+                            child: TextField(
+                              key: const ValueKey('add_stock_value'),
+                              controller: valueController,
+                              decoration: InputDecoration(
+                                labelText: 'Value each',
+                                prefixText: provider.currencySymbol,
+                                isDense: true,
+                              ),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'[0-9.]')),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  // Every part but cable can be drawn; one off the catalog
+                  // is drawn as a plain box.
+                  if (into != _ExtraPart.cable)
                     _PlacementChoice(
                       value: placement,
-                      // Drawing needs a catalog entry to build the box from.
-                      canDraw: selectedModel != null,
+                      canDraw: true,
                       estimateRoom: provider.isEstimateRoom,
                       onChanged: (v) => setLocal(() => placement = v),
                     ),
@@ -2895,7 +2980,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final template = library.templateForModel(selectedModel ?? '');
     // Filed by what was picked, which with All catalog items on can be
     // another card's kind.
-    final into = template == null ? kind : _partKindFor(template);
+    final filed = template == null ? kind : _partKindFor(template);
+    // Drawn means a box on the AV flow, which is equipment whatever card it
+    // was added from.
+    final into = filed != _ExtraPart.cable &&
+            placement != EquipmentPlacement.estimateOnly
+        ? _ExtraPart.equipment
+        : filed;
     // The length on the name, unless it already says it.
     final length = formatCableLength(lengthFt);
     if (into == _ExtraPart.cable &&
@@ -2906,10 +2997,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // Only a part the catalog does not have keeps what was typed for these.
     final maker = selectedModel == null ? makerController.text.trim() : '';
     final partNo = selectedModel == null ? partController.text.trim() : '';
+    final unitPrice = fromStock && selectedModel == null
+        ? double.tryParse(valueController.text.trim()) ?? 0
+        : 0.0;
     if (into != kind && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('$name added to ${_kPartKindNames[into]}.'),
       ));
+    }
+
+    // From our stock: the line goes on, then is marked as given.
+    void stock(CostLineItem item) {
+      if (fromStock) provider.setAvCostFurnished(item.id, 'stock');
     }
 
     switch (into) {
@@ -2921,8 +3020,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           description: name,
           category: template?.category ?? '',
           qty: qty,
+          unitPrice: unitPrice,
         );
-        if (!context.mounted || selectedModel == null) break;
+        stock(line);
+        if (!context.mounted) break;
         switch (placement) {
           case EquipmentPlacement.estimateOnly:
             break;
@@ -2932,6 +3033,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               at: const Offset(40, 60),
               excludeFromControl: true,
             );
+            drawNavRunsFor(provider, drawn);
             if (drawn.isNotEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -2948,31 +3050,34 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             await _buildConfigForQuotedDevice(context, provider, line);
         }
       case _ExtraPart.cable:
-        provider.addAvCostExtraCable(
+        stock(provider.addAvCostExtraCable(
           catalogModel: selectedModel ?? '',
           manufacturer: maker,
           partNumber: partNo,
           description: name,
           qty: qty,
-        );
+          unitPrice: unitPrice,
+        ));
       case _ExtraPart.hardware:
-        provider.addAvCostExtraHardware(
+        stock(provider.addAvCostExtraHardware(
           catalogModel: selectedModel ?? '',
           manufacturer: maker,
           partNumber: partNo,
           description: name,
           category: template?.category ?? '',
           qty: qty,
-        );
+          unitPrice: unitPrice,
+        ));
       case _ExtraPart.misc:
-        provider.addAvCostItem(
+        stock(provider.addAvCostItem(
           catalogModel: selectedModel ?? '',
           manufacturer: maker,
           partNumber: partNo,
           description: name,
           category: template?.category ?? '',
           qty: qty,
-        );
+          unitPrice: unitPrice,
+        ));
     }
   }
 
@@ -3010,12 +3115,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     CostLineItem line,
   ) async {
     final model = line.catalogModel.trim();
-    if (model.isEmpty) return;
     final added = provider.promoteAvCostEquipmentToDiagram(
       line.id,
       at: const Offset(40, 60),
     );
-    if (added.isEmpty) return;
+    drawNavRunsFor(provider, added);
+    if (added.isEmpty || model.isEmpty) return;
     // Drawn either way; a block only for a device the processor drives, and
     // not until an estimate is converted to a programmed room.
     if (provider.isEstimateRoom ||
@@ -3108,9 +3213,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       _kFurnishedSources = [
     (
       source: 'stock',
-      label: 'Used from stock',
-      why: 'Already on the shelf. It goes in the room and no money changes '
-          'hands on this job.',
+      label: 'In kind - from our stock',
+      why: 'Already on the shelf. It goes in the room, no money changes '
+          'hands on this job, and its worth is listed as in kind.',
     ),
     (
       source: 'another department',
@@ -3155,12 +3260,46 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final what = line.description.trim().isEmpty
         ? 'this line'
         : line.description.trim();
+    // A room its project buys only some categories for: this line is bought
+    // by its category, flagged by hand, or left as existing.
+    final ref = provider.openProjectRoom;
+    final buysOnly = ref == null || ref.wholeRoom
+        ? const <String>[]
+        : provider.project.buysOnlyFor(ref.priority);
+    final byCategory = buysOnly.any((c) =>
+        c.trim().toLowerCase() == line.category.trim().toLowerCase() ||
+        c.trim().toLowerCase() == line.model.trim().toLowerCase());
+    final canFlag =
+        buysOnly.isNotEmpty && !byCategory && !line.key.startsWith('addon:');
+    final flagged = canFlag && provider.avCost.projectBuys.contains(line.key);
+    final existing = canFlag && !flagged;
+    // Any line can be an optional upgrade.
+    const canOption = true;
+    final optional =
+        canOption && provider.avCost.optionalLines.contains(line.key);
+    // The room's crews this line can be charged with.
+    final crews = provider.avCost.labor;
+    final chargedTo = provider.avCost.laborCharges[line.key] ?? '';
+    final crew = crews.where((c) => c.id == chargedTo).firstOrNull;
+    String crewName(LaborLine c) {
+      final role =
+          provider.laborRates.byId(c.rateId)?.name ??
+          (c.rateId.isEmpty ? 'Labor' : c.rateId);
+      return c.description.trim().isEmpty
+          ? role
+          : '$role - ${c.description.trim()}';
+    }
 
     return SizedBox(
       key: ValueKey('furnished_${line.key}'),
       width: kRowIconWidth,
       child: Tooltip(
-        message: by == null
+        message: crew != null
+            ? 'Charged with ${crewName(crew)} on the project Labor tab'
+            : existing
+            ? 'Existing for priority ${ref!.priority} - left off the '
+                  'project. Press to flag it as bought.'
+            : by == null
             ? 'Bought on this job. Press to say it comes from somewhere else.'
             : line.partlyFurnished
                 ? '${furnishedNote(line)} - the other '
@@ -3170,15 +3309,112 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     : 'Furnished by $by - listed here, priced at nothing',
         child: PopupMenuButton<String>(
           icon: Icon(
-            by == null ? Icons.sell_outlined : Icons.handshake,
+            optional
+                ? Icons.playlist_add
+                : crew != null
+                ? Icons.engineering
+                : existing
+                ? Icons.inventory_2_outlined
+                : by == null
+                ? Icons.sell_outlined
+                : Icons.handshake,
             size: 18,
-            color: by == null
+            color: by == null && !flagged && !optional && crew == null
                 ? mutedInk(context, theme)
                 : theme.colorScheme.primary,
           ),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 320, maxWidth: 460),
           itemBuilder: (ctx) => [
+            if (canOption) ...[
+              PopupMenuItem(
+                key: ValueKey('cost_optional_${line.key}'),
+                value: 'optional',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    optional ? Icons.check_box : Icons.check_box_outline_blank,
+                    size: 18,
+                  ),
+                  title: const Text('Optional upgrade'),
+                  subtitle: Text(
+                    optional
+                        ? 'Priced as an option. Untick to make it part of '
+                              'the room.'
+                        : 'Price it as an option, with the room total with '
+                              'and without it.',
+                  ),
+                ),
+              ),
+              const PopupMenuDivider(),
+            ],
+            // CHARGE TO A CREW: the lumber or parts a contractor or
+            // department needs, tracked with that crew's labor.
+            PopupMenuItem(
+              enabled: false,
+              height: 28,
+              child: Text(
+                crews.isEmpty
+                    ? 'Charge to labor - add a crew under Labor first'
+                    : 'Charge to labor',
+                style: theme.textTheme.labelSmall,
+              ),
+            ),
+            for (final c in crews)
+              PopupMenuItem(
+                key: ValueKey('cost_labor_charge_${line.key}_${c.id}'),
+                value: 'labor:${c.id}',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    chargedTo == c.id
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    size: 18,
+                  ),
+                  title: Text(crewName(c)),
+                  subtitle: const Text(
+                    'Listed with this crew on the project Labor tab. The '
+                    'room total does not change.',
+                  ),
+                ),
+              ),
+            if (chargedTo.isNotEmpty)
+              PopupMenuItem(
+                key: ValueKey('cost_labor_charge_${line.key}_none'),
+                value: 'labor:',
+                child: const ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.link_off, size: 18),
+                  title: Text('Not charged to labor'),
+                ),
+              ),
+            const PopupMenuDivider(),
+            if (canFlag) ...[
+              PopupMenuItem(
+                key: ValueKey('project_buys_${line.key}'),
+                value: 'buys',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    flagged ? Icons.check_box : Icons.check_box_outline_blank,
+                    size: 18,
+                  ),
+                  title: Text('Bought for priority ${ref!.priority}'),
+                  subtitle: Text(
+                    flagged
+                        ? 'On the project. Untick to leave it as existing.'
+                        : 'Priority ${ref.priority} buys only '
+                              '${buysOnly.join(', ')}. Tick to buy this too.',
+                  ),
+                ),
+              ),
+              const PopupMenuDivider(),
+            ],
             for (final preset in _kFurnishedSources)
               PopupMenuItem(
                 value: 'set:${preset.source}',
@@ -3232,6 +3468,21 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
           ],
           onSelected: (choice) async {
+            if (choice.startsWith('labor:')) {
+              provider.setAvCostLaborCharge(
+                line.key,
+                choice.substring('labor:'.length),
+              );
+              return;
+            }
+            if (choice == 'optional') {
+              provider.setAvCostOptional(line.key, !optional);
+              return;
+            }
+            if (choice == 'buys') {
+              provider.setAvCostProjectBuys(line.key, !flagged);
+              return;
+            }
             if (choice == 'clear') {
               provider.setAvCostFurnished(line.key, null);
               return;
@@ -3258,6 +3509,114 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             provider.setAvCostFurnished(line.key, typed);
           },
         ),
+      ),
+    );
+  }
+
+  /// A crew's in-kind button: our staff giving the hours, someone else, or
+  /// quoted on this job.
+  Widget _laborInKindButton(
+    BuildContext context,
+    AppStateProvider provider,
+    LaborCostLine line,
+  ) {
+    if (PrintMode.of(context)) {
+      return const SizedBox(width: kRowIconWidth, height: 34);
+    }
+    final theme = Theme.of(context);
+    final by = line.furnishedBy;
+    final optional = provider.avCost.optionalLines.contains(line.id);
+    const choices = [
+      (
+        source: 'in kind',
+        label: 'In kind - our staff',
+        why: 'Our people do it at no charge to this job. The hours are '
+            'listed as in kind at the rate.',
+      ),
+      (
+        source: 'another department',
+        label: 'By another department',
+        why: 'Somebody else\'s crew does it.',
+      ),
+    ];
+    return SizedBox(
+      key: ValueKey('labor_furnished_${line.id}'),
+      width: kRowIconWidth,
+      child: PopupMenuButton<String>(
+        tooltip: optional
+            ? 'Optional upgrade. Press to change it.'
+            : by == null
+            ? 'Quoted on this job. Press to give it in kind.'
+            : '${inKindSourceLabel(by)} - not charged on this job',
+        icon: Icon(
+          optional
+              ? Icons.playlist_add
+              : by == null
+              ? Icons.sell_outlined
+              : Icons.handshake,
+          size: 18,
+          color: by == null && !optional
+              ? mutedInk(context, theme)
+              : theme.colorScheme.primary,
+        ),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 300, maxWidth: 420),
+        itemBuilder: (ctx) => [
+          PopupMenuItem(
+            key: ValueKey('cost_optional_${line.id}'),
+            value: 'optional',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                optional ? Icons.check_box : Icons.check_box_outline_blank,
+                size: 18,
+              ),
+              title: const Text('Optional upgrade'),
+              subtitle: Text(
+                optional
+                    ? 'Priced as an option. Untick to make it part of the '
+                          'room.'
+                    : 'Price these hours as an option, with the room total '
+                          'with and without them.',
+              ),
+            ),
+          ),
+          const PopupMenuDivider(),
+          for (final c in choices)
+            PopupMenuItem(
+              value: 'set:${c.source}',
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  by == c.source
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  size: 18,
+                ),
+                title: Text(c.label),
+                subtitle: Text(c.why),
+              ),
+            ),
+          PopupMenuItem(
+            value: 'clear',
+            enabled: by != null,
+            child: const ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.payments_outlined, size: 18),
+              title: Text('Quoted on this job'),
+              subtitle: Text('Put it back in the total at its rate.'),
+            ),
+          ),
+        ],
+        onSelected: (choice) => choice == 'optional'
+            ? provider.setAvCostOptional(line.id, !optional)
+            : provider.setAvCostFurnished(
+                line.id,
+                choice == 'clear' ? null : choice.substring('set:'.length),
+              ),
       ),
     );
   }
@@ -3592,6 +3951,25 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ),
             ),
           ),
+          // A quoted line that is not drawn yet: draw it, without a config
+          // block.
+          if (extra != null)
+            PopupMenuItem(
+              value: 'place',
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.account_tree_outlined, size: 18),
+                title: const Text('Place on the AV Flow'),
+                subtitle: Text(
+                  extra.catalogModel.trim().isEmpty
+                      ? 'Draws it on the AV Flow as a plain box with no '
+                            'connectors, one per unit.'
+                      : 'Draws it on the AV Flow with its connectors, one box '
+                            'per unit. It is not added to the room config.',
+                ),
+              ),
+            ),
           PopupMenuItem(
             value: 'tiemodule',
             enabled: catalogModel.trim().isNotEmpty,
@@ -3699,6 +4077,21 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               SnackBar(
                 content: Text(result.message),
                 backgroundColor: result.ok ? null : snackErrorFillOn(messenger),
+              ),
+            );
+            return;
+          }
+          if (choice == 'place' && extra != null) {
+            final messenger = ScaffoldMessenger.of(context);
+            final drawn = placeQuotedLineOnFlow(provider, extra);
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  drawn == 0
+                      ? 'Could not put ${extra.description} on the AV Flow.'
+                      : '${extra.description} placed on the AV Flow'
+                            '${drawn == 1 ? '' : ' ($drawn boxes)'}.',
+                ),
               ),
             );
             return;
@@ -3867,6 +4260,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         return;
       }
       nodeIds = [for (final n in added) n.id];
+      drawNavRunsFor(provider, added);
     } else {
       final group =
           groupDevices(model).where((g) => g.key == line.key).firstOrNull;
@@ -4556,7 +4950,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         _ExtraPart.equipment => library.equipment,
         _ExtraPart.cable => library.cables,
         _ExtraPart.hardware => library.rackHardware,
-        _ExtraPart.misc => library.miscItems,
+        // Mounts, licenses and services sit in categories of their own, so
+        // an Other items line can take anything in the catalog.
+        _ExtraPart.misc => library.active,
       },
       note: 'This line is quoted but not drawn, so only the line changes - '
           'its name, its part number and its price.',
@@ -5144,6 +5540,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           final existing = model.isEmpty
               ? null
               : library.templateForModel(model);
+          // The entry this was opened on, as opposed to a name typed over it.
+          final sameEntry = existing != null &&
+              current != null &&
+              AvDeviceLibrary.normalizeModel(existing.model) ==
+                  AvDeviceLibrary.normalizeModel(current.model);
+          // An entry with no price is not worth saving again without one.
+          final typedPrice =
+              double.tryParse(priceController.text.trim()) ?? 0;
+          final needsPrice =
+              sameEntry && existing.price <= 0 && typedPrice <= 0;
           final categories = <String>{
             ...library.categories,
             if (category.isNotEmpty) category,
@@ -5201,10 +5607,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     if (existing != null) ...[
                       const SizedBox(height: 6),
                       Text(
-                        'The catalog already has "${existing.model}" - saving '
-                        'replaces its entry.',
+                        key: const ValueKey('catalog_existing_note'),
+                        sameEntry && needsPrice
+                            ? '"${existing.model}" is in the catalog but has '
+                                  'no price. Put in a list price to save it to '
+                                  'the catalog.'
+                            : sameEntry
+                            ? 'Saving updates "${existing.model}" in the '
+                                  'catalog.'
+                            : 'The catalog already has "${existing.model}" - '
+                                  'saving replaces its entry.',
                         style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(ctx).colorScheme.error,
+                              color: sameEntry && !needsPrice
+                                  ? null
+                                  : Theme.of(ctx).colorScheme.error,
                             ),
                       ),
                     ],
@@ -5339,7 +5755,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       children: [
                         Expanded(
                           child: TextField(
+                            key: const ValueKey('catalog_list_price'),
                             controller: priceController,
+                            onChanged: (_) => setLocal(() {}),
                             decoration: InputDecoration(
                               labelText:
                                   'List price (${provider.currencySymbol})',
@@ -5404,7 +5822,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                onPressed: model.isEmpty
+                onPressed: model.isEmpty || needsPrice
                     ? null
                     : () => Navigator.of(ctx).pop(true),
                 // "Replace" is the honest word for a name TYPED over an
@@ -6025,6 +6443,22 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   IconData _linkedIcon(CostLine? line) =>
       _lineChanged(line) ? Icons.library_add_outlined : Icons.edit_note;
 
+  /// The add-to-catalog button's hover. A part already in the catalog (one
+  /// with no price is not linked to the row) is an update, not an add.
+  String _addToCatalogTip(
+    AppStateProvider provider,
+    String model, {
+    String what = 'line',
+  }) {
+    final entry = model.trim().isEmpty
+        ? null
+        : provider.avDeviceLibrary.templateForModel(model.trim());
+    if (entry == null) return 'Add this $what to the device catalog';
+    return entry.price > 0
+        ? 'Update ${entry.model} in the device catalog'
+        : 'Update ${entry.model} in the device catalog - it has no price yet';
+  }
+
   String _linkedTip(CostLine? line, String part, String where) =>
       _lineChanged(line)
       ? "Save this line's changes to $part in the $where"
@@ -6428,7 +6862,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final theme = Theme.of(context);
     final currency = estimate.currency;
     final book = provider.laborRates;
-    final lines = provider.avCost.labor;
+    // The crews priced here: an optional one listed apart is on the
+    // Optional upgrades card instead.
+    final lines = [
+      for (final l in provider.avCost.labor)
+        if (estimate.labor.any((c) => c.id == l.id)) l,
+    ];
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -6558,19 +6997,31 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           ),
                         ),
                       ),
-                      // Extended
-                      Text(
-                        costed.unrated
-                            ? 'no rate'
-                            : formatMoney(costed.total, currency),
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color:
-                              costed.unrated ? theme.colorScheme.error : null,
-                        ),
-                      ),
+                      // Extended - or what it is worth, given in kind.
+                      costed.furnishedBy != null
+                          ? Text(
+                              'in kind ${formatMoney(costed.listTotal, currency)}',
+                              key: ValueKey('labor_in_kind_${line.id}'),
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                                color: theme.colorScheme.primary,
+                              ),
+                            )
+                          : Text(
+                              costed.unrated
+                                  ? 'no rate'
+                                  : formatMoney(costed.total, currency),
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: costed.unrated
+                                    ? theme.colorScheme.error
+                                    : null,
+                              ),
+                            ),
                       // Taxable
                       PrintableCheckbox(
                         value: line.taxable,
@@ -6578,12 +7029,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           line.copyWith(taxable: v ?? false),
                         ),
                       ),
-                      // The row's one button.
-                      avRowIcon(
-                        Icons.delete_outline,
-                        'Remove crew',
-                        () => provider.removeAvCostLabor(line.id),
-                        danger: true,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _laborInKindButton(context, provider, costed),
+                          avRowIcon(
+                            Icons.delete_outline,
+                            'Remove crew',
+                            () => provider.removeAvCostLabor(line.id),
+                            danger: true,
+                          ),
+                        ],
                       ),
                     ], rowKey: ValueKey('gridrow_labor_${line.id}')),
                     ),
@@ -6597,13 +7053,397 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   }
 
   // --- other items ---------------------------------------------------------
+  /// Estimate only, at the top of the page: on hides the programming tabs -
+  /// Wizard, Devices, System, Raw JSON - and keeps everything else; off is
+  /// Convert to programmed room. Nothing is deleted either way.
+  Widget _estimateOnlySwitch(BuildContext context, AppStateProvider provider) {
+    final on = provider.isEstimateRoom;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Tooltip(
+        message: on
+            ? 'Estimate only: Wizard, Devices, System and Raw JSON are hidden. '
+                  'Turn off to convert it to a programmed room.'
+            : 'Back to an estimate only: hides Wizard, Devices, System and '
+                  'Raw JSON. The config, drawings, racks and photos stay.',
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Estimate only'),
+          const SizedBox(width: 6),
+          Switch(
+            key: const ValueKey('cost_estimate_only'),
+            value: on,
+            onChanged: (v) async {
+              if (!v) {
+                await convertToProgrammedRoom(context, provider);
+                return;
+              }
+              final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Back to an estimate only?'),
+                      content: const Text(
+                        'Hides the Wizard, Devices, System and Raw JSON tabs. '
+                        'Nothing is deleted: the room config is kept as it '
+                        'is, and the AV Flow, Floor Plan, Schematic, Cabling, '
+                        'Racks and Photos stay. Turn Estimate only off to '
+                        'program the room again.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          key: const ValueKey('cost_estimate_only_go'),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Estimate only'),
+                        ),
+                      ],
+                    ),
+                  ) ??
+                  false;
+              if (ok) provider.setRoomMode(RoomMode.estimate);
+            },
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// Lines charged with a crew: lumber, parts for the contractor. Listed
+  /// with the crew they go with, totaled, and in the room total or not.
+  Widget _laborChargesCard(
+    BuildContext context,
+    AppStateProvider provider,
+    CostEstimate estimate,
+  ) {
+    final theme = Theme.of(context);
+    final included = provider.avCost.includeLaborCharges;
+    String money(double v) => formatMoney(v, estimate.currency);
+    final small = theme.textTheme.bodySmall;
+    final bold = theme.textTheme.bodyMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
+    Widget figure(String label, double value, {Key? key, bool strong = false}) =>
+        Padding(
+          key: key,
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(children: [
+            Expanded(child: Text(label, style: strong ? bold : null)),
+            Text(money(value), style: strong ? bold : null),
+          ]),
+        );
+    return Card(
+      key: const ValueKey('cost_labor_charges_card'),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CardHeading(
+              title: 'Labor charges',
+              subtitle: included
+                  ? 'counted in the room total'
+                  : 'listed, not in the room total',
+            ),
+            PrintHide(
+              child: _switch(
+                key: const ValueKey('cost_labor_charges_include'),
+                label: 'Room total with labor charges',
+                value: included,
+                onChanged: provider.setAvCostIncludeLaborCharges,
+              ),
+            ),
+            const Divider(height: 12),
+            for (final c in estimate.laborCharges)
+              Padding(
+                key: ValueKey('cost_labor_charge_row_${c.line.key}'),
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(children: [
+                  _furnishedButton(context, provider, c.line),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      c.line.description,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 200,
+                    child: Text(
+                      c.crew,
+                      overflow: TextOverflow.ellipsis,
+                      style: small,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 140,
+                    child: Text(
+                      '${trimNumber(c.line.qty)} x ${money(c.line.unitPrice)}',
+                      textAlign: TextAlign.right,
+                      style: small,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 120,
+                    child: Text(
+                      money(c.line.total + c.line.shippingTotal),
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+                ]),
+              ),
+            const Divider(height: 16),
+            figure('Labor charges', estimate.laborChargesTotal,
+                key: const ValueKey('cost_labor_charges_total')),
+            figure('Room without labor charges',
+                estimate.grandWithoutLaborCharges,
+                strong: !included),
+            figure('Room with labor charges', estimate.grandWithLaborCharges,
+                strong: included),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The optional upgrades: what they come to, the room with and without
+  /// them, and the two switches.
+  Widget _optionalCard(
+    BuildContext context,
+    AppStateProvider provider,
+    CostEstimate estimate,
+  ) {
+    final theme = Theme.of(context);
+    final settings = provider.avCost;
+    final currency = estimate.currency;
+    String money(double v) => formatMoney(v, currency);
+    final small = theme.textTheme.bodySmall;
+    final bold = theme.textTheme.bodyMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
+    Widget figure(String label, double value, {Key? key, bool strong = false}) =>
+        Padding(
+          key: key,
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(children: [
+            Expanded(child: Text(label, style: strong ? bold : null)),
+            Text(money(value), style: strong ? bold : null),
+          ]),
+        );
+    return Card(
+      key: const ValueKey('cost_optional_card'),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CardHeading(
+              title: 'Optional upgrades',
+              subtitle: settings.includeOptional
+                  ? 'counted in the room total'
+                  : 'priced for the decision, not in the room total',
+              actions: [
+                PrintHide(
+                  child: TextButton.icon(
+                    key: const ValueKey('cost_optional_purge'),
+                    icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+                    label: const Text('Remove options not bought...'),
+                    onPressed: () => _purgeOptional(context, provider),
+                  ),
+                ),
+              ],
+            ),
+            PrintHide(
+              child: Wrap(
+                spacing: 16,
+                children: [
+                  _switch(
+                    key: const ValueKey('cost_optional_include'),
+                    label: 'Room total with options',
+                    value: settings.includeOptional,
+                    onChanged: provider.setAvCostIncludeOptional,
+                  ),
+                  // Only while they are counted: left out of the total, they
+                  // are always listed apart.
+                  if (settings.includeOptional)
+                    _switch(
+                      key: const ValueKey('cost_optional_section'),
+                      label: 'Options in their own section',
+                      value: settings.optionalSection,
+                      onChanged: provider.setAvCostOptionalSection,
+                    ),
+                ],
+              ),
+            ),
+            if (estimate.optional.isNotEmpty ||
+                estimate.optionalLabor.isNotEmpty) ...[
+              const Divider(height: 12),
+              for (final line in estimate.optionalLabor)
+                Padding(
+                  key: ValueKey('cost_optional_row_${line.id}'),
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(children: [
+                    _laborInKindButton(context, provider, line),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        [line.roleName, line.description]
+                            .where((s) => s.trim().isNotEmpty)
+                            .join(' - '),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 140,
+                      child: Text(
+                        '${trimNumber(line.totalHours)} hrs x '
+                        '${money(line.hourlyRate)}',
+                        textAlign: TextAlign.right,
+                        style: small,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 120,
+                      child: Text(
+                        money(line.total),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ]),
+                ),
+              for (final line in estimate.optional)
+                Padding(
+                  key: ValueKey('cost_optional_row_${line.key}'),
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(children: [
+                    _furnishedButton(context, provider, line),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        line.description,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 140,
+                      child: Text(
+                        '${trimNumber(line.qty)} x ${money(line.unitPrice)}',
+                        textAlign: TextAlign.right,
+                        style: small,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 120,
+                      child: Text(
+                        money(line.total + line.shippingTotal),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ]),
+                ),
+            ] else
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Listed in their own sections, with the playlist icon on '
+                  'the tag button.',
+                  style: small,
+                ),
+              ),
+            const Divider(height: 16),
+            figure('Options', estimate.optionalTotal,
+                key: const ValueKey('cost_optional_total')),
+            figure('Room without options', estimate.grandWithoutOptions,
+                key: const ValueKey('cost_optional_without'),
+                strong: !settings.includeOptional),
+            figure('Room with options', estimate.grandWithOptions,
+                key: const ValueKey('cost_optional_with'),
+                strong: settings.includeOptional),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _switch({
+    required Key key,
+    required String label,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) =>
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Switch(key: key, value: value, onChanged: onChanged),
+        const SizedBox(width: 4),
+        Text(label),
+      ]);
+
+  /// Asks, then takes the optional parts off the room file.
+  Future<void> _purgeOptional(
+    BuildContext context,
+    AppStateProvider provider,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final n = provider.avCost.optionalLines.length;
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Remove the options not bought?'),
+            content: Text(
+              'Takes the $n optional line${n == 1 ? '' : 's'} off this room, '
+              'for once it has gone out to buy without them. A part drawn on '
+              'the AV Flow comes off the drawing too, with its cables and its '
+              'config block. Untick Optional on any that were bought first.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                key: const ValueKey('cost_optional_purge_go'),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Remove them'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+    final gone = provider.purgeAvCostOptional();
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text('$gone optional part${gone == 1 ? '' : 's'} taken off '
+            'the room. Save to write it to the room file.'),
+      ),
+    );
+  }
+
   Widget _itemsCard(
     BuildContext context,
     AppStateProvider provider,
     CostEstimate estimate,
   ) {
     final currency = estimate.currency;
-    final items = provider.avCost.items;
+    // The lines priced here: the room's own, and the project's add-ons for
+    // its priority. Optional ones listed apart, and ones the priority leaves
+    // as existing, are not.
+    final ref = provider.openProjectRoom;
+    final own = {
+      for (final i in provider.avCost.items) i.id: i,
+      if (ref != null && !ref.wholeRoom)
+        for (final i in projectAddOnItems(
+          project: provider.project,
+          priority: ref.priority,
+          settings: provider.avCost,
+          library: provider.avDeviceLibrary,
+        ))
+          i.id: i,
+    };
+    final items = [
+      for (final l in estimate.extras) ?own[l.key],
+    ];
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -6746,12 +7586,36 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // The tag button - optional, in kind, bought for the
+                        // priority - first, as on the tables above.
+                        if (_extraLineOf(estimate, item) case final line?)
+                          _furnishedButton(context, provider, line)
+                        else
+                          _rowSlotGap,
+                        // Another model off the catalog, like the equipment.
+                        KeyedSubtree(
+                          key: ValueKey('item_swap_${item.id}'),
+                          child: avRowIcon(
+                            Icons.find_replace,
+                            'Replace this with another model',
+                            () => _swapExtraLine(
+                              context,
+                              provider,
+                              item,
+                              kind: _ExtraPart.misc,
+                            ),
+                          ),
+                        ),
                         avRowIcon(
                           item.catalogModel.isEmpty
                               ? Icons.library_add_outlined
                               : _linkedIcon(_extraLineOf(estimate, item)),
                           item.catalogModel.isEmpty
-                              ? 'Add this item to the device catalog'
+                              ? _addToCatalogTip(
+                                  provider,
+                                  item.description,
+                                  what: 'item',
+                                )
                               : _linkedTip(
                                   _extraLineOf(estimate, item),
                                   item.catalogModel,
@@ -6771,11 +7635,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                     kind: _ExtraPart.misc,
                                   ),
                         ),
-                        // An item is priced on its own line and has no
-                        // catalog figure to fall back to, so it has nothing
-                        // for this slot - and leaving it blank is what puts
-                        // the button before it and the trash can after it in
-                        // the columns every other table uses.
                         _rowSlotGap,
                         KeyedSubtree(
                           key: ValueKey('item_delete_${item.id}'),
@@ -6955,6 +7814,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ),
             if (estimate.extras.isNotEmpty)
               row('Other items', estimate.extrasTotal),
+            if (estimate.optionalIncluded && estimate.optional.isNotEmpty)
+              row('Optional upgrades', estimate.optionalTotal),
+            if (estimate.laborCharges.isNotEmpty &&
+                estimate.laborChargesIncluded)
+              row('Labor charges', estimate.laborChargesTotal),
             if (estimate.shippingTotal > 0)
               row('Shipping', estimate.shippingTotal),
             const Divider(),
@@ -6975,6 +7839,23 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ],
             const Divider(),
             row('TOTAL', estimate.grandTotal, big: true),
+            // What is given rather than bought, at what it is worth - not in
+            // the total above.
+            if (estimate.inKind.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                'In kind (not in the total)',
+                key: const ValueKey('cost_in_kind'),
+                style: theme.textTheme.titleSmall,
+              ),
+              const SizedBox(height: 4),
+              for (final s in estimate.inKindBySource) row(s.source, s.value),
+              row('In-kind value', estimate.inKindTotal, bold: true),
+              row(
+                'Project value with in kind',
+                estimate.grandTotal + estimate.inKindTotal,
+              ),
+            ],
             if (estimate.unpricedLines > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 8),

@@ -456,6 +456,26 @@ void main() {
       await mouse.moveTo(page.center + const Offset(10, 10));
       await tester.pump();
       expect(find.byKey(const ValueKey('av_magnifier_lens')), findsOneWidget);
+
+      // Its own zoom steps and sizes.
+      String lens() =>
+          tester.widget<Text>(find.byKey(const ValueKey('av_lens_level'))).data!;
+      final lensStart = lens();
+      await tester.tap(find.byKey(const ValueKey('av_zoom_lens_in')));
+      await tester.pump();
+      expect(lens(), isNot(lensStart));
+      await tester.tap(find.byKey(const ValueKey('av_zoom_lens_out')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('av_zoom_lens_out')));
+      await tester.pump();
+      expect(lens(), isNot(lensStart));
+      final small = tester.getSize(find.byKey(const ValueKey('av_magnifier_lens')));
+      await tester.tap(find.byKey(const ValueKey('av_zoom_lens_size')));
+      await mouse.moveTo(page.center + const Offset(12, 12));
+      await tester.pump();
+      expect(
+          tester.getSize(find.byKey(const ValueKey('av_magnifier_lens'))).width,
+          greaterThan(small.width));
       await mouse.removePointer();
       expect(tester.takeException(), isNull);
     });

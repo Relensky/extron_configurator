@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.129+139';
+const String kAppVersion = '0.5.146+156';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,221 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.146',
+    date: 'October 17, 2026',
+    title: 'Labor charges',
+    changes: [
+      'Cost tab: the tag button on any line can charge it to one of the room crews - lumber, conduit or parts a contractor or department needs. Lines you do not tag stay where they are.',
+      'Charged lines move to a Labor charges section of their own, listed with the crew they go with and totaled before the room total. A switch counts them in the room total or leaves them out, like the optional upgrades.',
+      'Projects: a With labor charges chip counts every room charges in the project total or leaves them out, beside a Labor charges total.',
+      'Labor tab: fees charged with labor are listed per room and added up by job type and by who provides the labor, with labor and fees together.',
+      'Estimate PDF, workbook and Google Sheet: each room has a Labor Charges section and a Labor charges line in its totals. The project Labor tab lists every fee charged with labor, and the Summary shows the labor charges total.',
+      'Labor tab: the room list can also be sorted by labor amount, biggest first. In-kind labor and charged fees count.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.145',
+    date: 'October 17, 2026',
+    title: 'Buildings and departments',
+    changes: [
+      'Projects: the Buildings field has a drop-down listing every building on the job, with its room count and total. Untick a building to leave it off the project page: the totals, rooms, equipment, labor and funding all follow. Every building is ticked when a project opens, and a chip at the top shows what is hidden with a button to show everything again.',
+      'Exports and quote requests always cover the whole job, whatever buildings the page is showing.',
+      'Priorities and funding: each room and line item has a Department. Under the budget figures, two tables break the budget down by building and by department: rooms, money set aside, share of the budget and what the rooms come to.',
+      'Workbook and Google Sheet: the Summary tab lists the budget by building and by department.',
+      'Labor tab: sort the rooms by project order, room name or priority. The job type and who-provides-it breakdowns are now above the room list, on the page and on the workbook tab.',
+      'Labor tab: totals are worked out once per change rather than on every redraw.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.144',
+    date: 'October 17, 2026',
+    title: 'Project labor breakdown',
+    changes: [
+      'Projects: a new Labor tab lists every room with its labor cost, hours and the labor rates it is costed from. Open a room to see each crew line: job type, whether the rate is off the rate card or its own, techs, hours, rate, cost and who provides it.',
+      'Labor tab: a breakdown by job type (department / contractor) with the rate, the rooms using it, hours and cost, and a breakdown by who provides it - paid by the job, our staff in kind, or another department.',
+      'Projects: the Labor figure at the top of the page now opens the Labor tab.',
+      'Workbook and Google Sheet: a new Labor tab with labor by room, by job type, by who provides it, and every labor line room by room.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.143',
+    date: 'October 17, 2026',
+    title: 'No more hangs on save',
+    changes: [
+      'Fixed: saving a project with its online copy froze the app. The whole job for the hidden Project data tab was read from the share one file at a time on the window, twice per save. It is now read in the background, a few files at a time, packed once for both the workbook and the Google Sheet, and compressed off the window.',
+      'Backups before a save, and your own copies after it, run off the window.',
+      'Opening a room reads its drawing, cost, rack and floor plan files in the background, and tidies an older room\'s loose files there too.',
+      'Opening a project checks its rooms in the background, all at once.',
+      'Team mode reads the saved file in the background after every save and open, and when combining.',
+      'Reading the published workbook back after a save happens in the background.',
+      'First-Time Setup checks its folders in the background.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.142',
+    date: 'October 16, 2026',
+    title: 'A project is never saved empty',
+    changes: [
+      'Fixed: closing a project while it was saving with an online copy could save an empty project over the real file. The save now finishes only for the project it started on, and a project closed meanwhile is not written anywhere.',
+      'The online copy never writes its project copy over the project file itself, for a job published into its own folder.',
+      'A project with no name and no rooms is never saved over a project file that has rooms.',
+      'Every project save first keeps a copy of the file as it was, in a project_backups folder beside it (the last 20).',
+      'Your own backups: every project you open or save is also copied into your own app data, in the backups folder (the last 60 of each). They are kept apart from the recovery copies, which are cleared on save, and an empty project is never kept.',
+      'Rooms: every save first keeps a copy of the whole room - the config and its drawing, cost and rack files - in room_files, backups (the last 10), and every room you open or save is copied into your own app data too (the last 30). A room closed or switched while it is saving is not written, and an empty room is never saved over one that has its setup.',
+      'Campuses: every save keeps a copy in campus_backups beside it (the last 20) and in your own app data. Saving a campus also backs up each project it points to before writing it, and never rewrites an empty project.',
+      'The project workbook and the Google Sheet carry the whole job in a hidden Project data tab: the project file and every room\'s files. File, Open, Restore Project from Workbook puts the job back from a workbook or a Google Sheet downloaded as Excel. The project file there now is copied aside first, and room files already there are kept unless you ask to replace them.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.141',
+    date: 'October 16, 2026',
+    title: 'Tie in sequence, power outlets, no-spares jobs',
+    changes: [
+      'AV Flow: Tie in sequence ties one set of boxes named in order to another - 12 decoders to 12 displays, 12 PCs to 12 encoders - or a run of one box\'s connectors, such as a power strip\'s outlets or a switcher\'s inputs. Pick the output and the input (HDMI 1 or HDMI 2, say), pair by the number in the names or in order, and pick the starting outlet or input. The list shows each run, with a tick, and what it would replace; one Undo takes them all off.',
+      'AV Flow: Power outlets lists a power strip\'s outlets, each with a drop-down of every box with a power inlet, plus Fill in order for a set named in sequence. A box moved to a new outlet comes off its old one.',
+      'AV Flow: Auto-route by name has a More ties button that opens Tie in sequence.',
+      'Project page, Spares: No spares on this job turns off the No spare warnings for the project. The same switch turns them back on.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.140',
+    date: 'October 16, 2026',
+    title: 'Devices stay on the quote; route by name',
+    changes: [
+      'AV Flow: Recreate from config keeps the boxes you added by hand and the cables on them. It used to clear them, which took them off the Cost page too.',
+      'AV Flow: removing a box from the drawing keeps it on the Cost page as a quoted line. Placing it back takes the line off again, so it is never quoted twice.',
+      'AV Flow: Place undrawn lists every device not on the drawing - config devices and Cost page equipment - with a tick each, and places the ticked ones.',
+      'AV Flow: Auto-route by name cables boxes whose names end the same, such as NAV Decoder Station 1 and Station 1, output to input on video. You see the list, with a tick each, before anything is drawn.',
+      'NAV endpoints and the NAVigator are cabled to the network switch whichever way the switch or the NAV boxes go on the drawing: Add device, the Cost page, Place undrawn or the Devices panel.',
+      'Cost page: Place on the AV Flow, on the menu of an equipment line that is not drawn, draws it without a config block. A line not in the catalog is drawn as a plain box.',
+      'Cost page: adding a part always offers all three choices - estimate only, estimate and AV flow, or estimate, AV flow and room config - for equipment, rack hardware and other items. Cable is estimate only.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.139',
+    date: 'October 16, 2026',
+    title: 'Edit shape, magnifier zoom',
+    changes: [
+      'AV Flow: Edit shape (in a device\'s Edit dialog) puts handles on the box\'s right edge, bottom edge and corner, so you can drag it wider or taller. The side connectors spread out to fill a taller box. Reset size puts it back; Done hides the handles.',
+      'AV Flow magnifier: - and + beside it change how big the lens shows the drawing (25% to 400%), and the size button makes the lens small, medium, large or extra large. Near the edge of the page the lens moves to the other side of the pointer.',
+      'Catalog: the Netgear M4250-40G8F-PoE+ has ports 1-20 on the left, 21-40 on the right and power on the bottom.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.138',
+    date: 'October 16, 2026',
+    title: 'NAV endpoints on the switch in order',
+    changes: [
+      'AV Flow: in a room with a NAVigator, NAV endpoints are cabled to the network switch on its next free ports in order - encoders first, then decoders, then the NAVigator. It happens when they are added, and with Add all cables from config.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.137',
+    date: 'October 16, 2026',
+    title: 'Add many connectors, more categories',
+    changes: [
+      'Device Editor and the AV Flow device dialog: Add several adds a run of connectors at once - say 48 - with one type, direction (input, output or both) and location (left, right, top or bottom), numbered from where you choose.',
+      'New category: Network switch (no module), for switches with no control module behind them. It is offered as equipment but not tied to a config section or a base cost.',
+      'Device Editor: Add or remove categories (at the bottom of the category menu) adds your own categories. They are saved with the catalog, so everyone using it sees them.',
+      'Team chat: clicking anywhere off a picture you opened closes it, the same as the close button.',
+      'Cost page: on a line whose part is already in the catalog, the catalog button now says Update (part) in the device catalog instead of Add this line. When that entry has no price, it says so, and the dialog asks for a list price before it saves, instead of saying the catalog already has an entry.',
+      'Cost page: Other items is above Rack hardware.',
+      'Cost page: the Optional upgrades card, above Equipment, also shows when only a labor crew is optional.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.136',
+    date: 'October 16, 2026',
+    title: 'Cost page tidy-up',
+    changes: [
+      'Optional upgrades card: Options in their own section shows only while Room total with options is on. Left out of the total, options are always listed apart, so the switch did nothing. Options listed in their own sections are marked optional on the PDF.',
+      'Cost page: the Optional upgrades card is at the top, above Equipment.',
+      'Cost page: the row buttons line up on every table - the tag button, then replace, then the catalog, then the catalog price, then delete. On Other items and the cable lines the tag button moved into that column, and on cabling the base-cost button moved left of it.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.135',
+    date: 'October 16, 2026',
+    title: 'Cables from config, quantities across rooms',
+    changes: [
+      'AV Flow and the Cost page Cabling card: Add all cables from config draws every run the config describes, including ones deleted by hand. Boxes deleted by hand stay off. One press of Undo.',
+      'Compare and copy: a part both rooms have in different numbers gets Copy quantity, and Copy all quantities does every one. A part typed on the Cost page takes the count; a drawn one in the open room is set the way the Qty box sets it, and in another room the count is quoted.',
+      'Quantity minus and a lower typed count now take the units off even when they are cabled or in the config: their cables come off, and a config device comes out of the room config with the count brought down. Taking a room from three projectors to two leaves two.',
+      'Optional upgrade can be ticked on every line, drawn ones included, and on labor. Other items rows have the tag button too, with In kind and Furnished by. Remove options not bought takes a drawn optional part off the AV Flow and an optional crew off the labor.',
+      'Cost page: an Estimate only switch at the top. On, it hides the Wizard, Devices, System and Raw JSON tabs and deletes nothing - the room config, AV Flow, Floor Plan, Schematic, Cabling, Racks and Photos all stay. Off converts it back to a programmed room.',
+      'Other items: each line has Replace with another model, like the equipment, and can take any part in the catalog - mounts included.',
+      'Project page: each room row shows its In kind value and its Options price. The totals strip at the top adds In kind and Options, and the Budget card shows the options, the in-kind value, a Rooms estimate with options switch, and the full list of in-kind items room by room.',
+      'Project page: Deliveries and Quotes have swapped icons, and Equipment has its own.',
+      'With a room open, the room close button stays beside the project close X on the Project tab, so the room can be closed from there.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.134',
+    date: 'October 16, 2026',
+    title: 'Drawn parts swap across rooms, priority buys by line',
+    changes: [
+      'Compare and copy, Replace a part: a part drawn on the other room\'s AV Flow, such as a camera or a Via Go, can be replaced now. Its box takes the new model in place and keeps its cables and spot. It was greyed out before.',
+      'Project rooms whose priority buys only some categories, like P5 buying only projectors: each line has a Bought for priority tick on its tag button, and anything you add to the room is ticked for you. Lines left as existing show a box icon. Rooms whose priority buys everything have no tick.',
+      'The project add-on for a priority, such as the P5 mount, is listed under Other items. Remove it to take it off that room only, or change its model, description or part and it becomes a line of that room, still bought for the priority.',
+      'Cost page: Other items is above Cabling.',
+      'Project page: the Packages tab is called Quotes.',
+      'Optional upgrades: tick Optional upgrade on the tag button of any part added on the Cost page. An Optional upgrades card shows what the options come to and the room total with and without them, with switches for Room total with options and Options in their own section. The estimate PDF follows the switches and prints both totals.',
+      'Optional upgrades, project page: With options beside the project total counts every room\'s options, and shows the total the other way. Each room with options has a button on its row to leave its options off the project total.',
+      'Optional upgrades: Remove options not bought takes them off the room once it has gone out to buy without them.',
+      'Equipment typed on the Cost page is left off as existing when the priority does not buy its category, the same as drawn equipment.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.133',
+    date: 'October 16, 2026',
+    title: 'Replace parts across rooms, sort the room menu',
+    changes: [
+      'Team chat: switching between light and dark mode with the chat open no longer trips over the chat button.',
+      'Compare and copy: with Replace existing items on, a part only one room has gets a Replace a part menu. Pick a different part in the other room, such as its projector, and the copy takes that one off and puts this one on in its place. The confirm window lists what is taken off.',
+      'Room menu in the title bar: Sort A to Z and Sort by priority at the bottom. By priority lists P1 rooms first, then P2 and on, with rooms that have no priority last. Your choice is remembered.',
+      'AV Flow, Copy from a room: each copied device can be added as a new box, left out, or put in place of one this room has. A replaced box keeps its spot, cables, rack place and floor plan icon, and takes the model and part number from the other room. Replace matching types pairs them all by type in one press.',
+      'Copy from a room, floor plans: each piece of gear placed on the copied sheets has a tick box. A sheet this room already has keeps its drawing and gets the ticked gear it does not have yet, instead of being skipped.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.132',
+    date: 'October 16, 2026',
+    title: 'Readable reaction counts',
+    changes: [
+      'Team chat: the number on an emoji reaction is now light or dark to suit the chip behind it, so it no longer shows as dark text in dark mode.',
+      'Drawings: a dashed line or cable label with a broken length is now skipped instead of being drawn forever.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.131',
+    date: 'October 16, 2026',
+    title: 'In kind: what we give from stock and labor',
+    changes: [
+      'Cost page: equipment, rack hardware, cabling and other items marked "In kind - from our stock" (the old Used from stock) are listed at what they are worth and left out of the total, the same as before.',
+      'Labor: each crew has an in-kind button. "In kind - our staff" leaves its hours off the total and lists them at the rate as in kind; "By another department" does the same under that name.',
+      'Totals: an In kind block under the total lists what is given by who - our stock, our labor, the owner, another department - with the in-kind value and the project value with it added.',
+      'Estimate PDF, spreadsheet and text: an In kind table lists each line given, who gives it and its value, with the in-kind value and project value with in kind beside the totals. In-kind lines say In kind rather than By others. The project workbook\'s building total adds the in-kind value of every room.',
+      'Add equipment, cable, rack hardware or other items: tick "In kind - from our stock" to add a part from the shelf. Typed by name, it does not need to be in the catalog, and Value each sets what it is worth.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.130',
+    date: 'October 16, 2026',
+    title: 'Copy from other rooms, fewer combine nags, catalog combine details',
+    changes: [
+      'Cost items, Copy from another room: the room list was blank on jobs whose rooms each sit in their own folder, like the BSS test project. Rooms are named by their folder there now.',
+      'Cost items, Copy from another room: Room file picks a room\'s config.json straight off disk, with no project needed. The project list starts with Open project file, then the open project and your recent projects; rooms you opened lately are listed first, with a clock.',
+      'Compare and copy: the window stays open after a copy, so you can copy one way and then the other before closing it. Both rooms are priced again after each copy.',
+      'Compare and copy: Replace existing items lets you tick a part both rooms have; copying takes the other room\'s line off and puts this one on in its place. A part drawn on the room\'s diagram cannot be replaced from here.',
+      'Room menu in the title bar: each room shows its priority on the job as P1, P2 and so on, and the button shows the open room\'s.',
+      'Opening a job no longer rewrites it just because prices moved. Each PC re-priced every room at its own catalog prices and saved the totals into the shared job, so everyone else was asked to combine "room snapshots" for rooms nobody had touched. Rooms whose files changed are still noted and saved.',
+      'Combine: a save that only differs in those room totals no longer asks you to combine, and the totals are left off the combine list and the combine history.',
+      'AV Flow, Copy from a room: copies another room\'s AV flow, racks, floor plan sheets (with their drawings) and cabling sheet into this one, alongside what it has. Pick the room the same way as for cost items, then tick the parts. Jacks are renumbered for this room, and Undo takes the copy back off.',
+      'Copy from a room: a device or rack part the other room uses that is not in your catalog is listed first. Add each to the catalog, with the connectors drawn in that room and a category you can change, or leave it out of the copy with its cables and rack place.',
+      'Combine, catalog: before taking another person\'s catalog save, a window lists each model they added or changed and every field, with your value and theirs. Each field taken goes in the combine history.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.129',
     date: 'October 15, 2026',

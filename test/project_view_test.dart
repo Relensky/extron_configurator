@@ -450,7 +450,7 @@ void main() {
   group('the pane switcher never wraps a label', () {
     testWidgets('a window wide enough for every label keeps them, one line '
         'each', (tester) async {
-      await pump(tester, withProject(), width: 3000);
+      await pump(tester, withProject(), width: 3400);
 
       final longest = find.byKey(
         const ValueKey('project_pane_responsibility'),
@@ -963,7 +963,7 @@ void main() {
       final p = withProject();
       final wasFirst = p.project.rfqs.first.id;
       await pump(tester, p);
-      await tester.tap(find.byIcon(Icons.local_shipping).first);
+      await tester.tap(find.byIcon(Icons.inventory).first);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Add package'));
@@ -980,7 +980,7 @@ void main() {
         (tester) async {
       final p = withProject();
       await pump(tester, p);
-      await tester.tap(find.byIcon(Icons.local_shipping).first);
+      await tester.tap(find.byIcon(Icons.inventory).first);
       await tester.pumpAndSettle();
       // The cards are closed by default now; the rules are behind the toggle.
       await tester.tap(
@@ -1342,12 +1342,12 @@ void main() {
       // from the job.
       for (final pane in [
         (key: 'rooms', icon: Icons.meeting_room),
-        (key: 'parts', icon: Icons.inventory_2),
+        (key: 'parts', icon: Icons.devices_other),
         (key: 'plans', icon: Icons.architecture),
         (key: 'timeline', icon: Icons.event_available),
         (key: 'lifecycle', icon: Icons.history_toggle_off),
         (key: 'responsibility', icon: Icons.handshake_outlined),
-        (key: 'vendors', icon: Icons.local_shipping),
+        (key: 'vendors', icon: Icons.inventory),
         (key: 'todo', icon: Icons.checklist),
         (key: 'notes', icon: Icons.sticky_note_2_outlined),
       ]) {
@@ -1513,7 +1513,7 @@ void main() {
 
       // The labels are gone from the switcher, so the icons have to be the
       // targets — and all seven have to be on screen.
-      await tester.tap(find.byIcon(Icons.inventory_2).first);
+      await tester.tap(find.byIcon(Icons.devices_other).first);
       await tester.pumpAndSettle();
       expect(find.text('Search parts'), findsOneWidget);
     });

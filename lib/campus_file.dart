@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import 'building_project.dart';
+import 'project_backups.dart';
 import 'safe_write.dart';
 
 /// ============================================================================
@@ -243,7 +244,14 @@ Future<CampusStampResult> stampCampusIntoProjects({
         unchanged++;
         continue;
       }
+      // Never an empty project, and never without a copy of the file first:
+      // these are other people's jobs.
+      if (project.rooms.isEmpty && project.name.trim().isEmpty) {
+        failed.add(path.basename(job));
+        continue;
+      }
       project.campusFile = stored;
+      backUpProjectFile(job);
       await project.save(job);
       written++;
     } catch (_) {

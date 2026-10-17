@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'online_roundtrip.dart';
+import 'project_restore_data.dart' show kProjectDataSheet;
 import 'xlsx_reader.dart';
 
 /// ============================================================================
@@ -62,6 +64,11 @@ Map<String, List<List<String>>> workbookGrids(Uint8List bytes) {
       ],
   };
 }
+
+/// [workbookGrids] on a worker: a published book is megabytes, and reading
+/// it on the window's thread held the app on every save.
+Future<Map<String, List<List<String>>>> workbookGridsAsync(Uint8List bytes) =>
+    Isolate.run(() => workbookGrids(bytes));
 
 /// What every tab said after the last publish, or null when none was kept.
 Map<String, List<List<String>>>? readSheetBaseline(
@@ -186,7 +193,8 @@ List<OnlineChange> sheetEdits(
 }) {
   final out = <OnlineChange>[];
   for (final tab in before.keys) {
-    if (skip.contains(tab)) continue;
+    // The packed project, not something anybody types into.
+    if (skip.contains(tab) || tab == kProjectDataSheet) continue;
     final current = now[tab];
     if (current == null) {
       out.add((

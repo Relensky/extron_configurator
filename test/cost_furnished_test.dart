@@ -266,7 +266,7 @@ void main() {
         find.byKey(const ValueKey('furnished_model:display x')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Used from stock'));
+      await tester.tap(find.text('In kind - from our stock'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);

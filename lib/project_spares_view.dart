@@ -84,11 +84,26 @@ List<Widget> spareSectionSlivers(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _SectionHeader(estimate: estimate),
+                // A job that buys no spares says so once, and nothing is
+                // flagged for having none. The same switch asks again.
+                SwitchListTile(
+                  key: const ValueKey('project_no_spares'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: estimate.project.noSpares,
+                  onChanged: (v) => provider.setProjectNoSpares(v),
+                  title: const Text('No spares on this job'),
+                  subtitle: Text(estimate.project.noSpares
+                      ? 'The No spare warnings are off. Turn this off to show '
+                          'them again.'
+                      : 'Turns off the No spare warnings on the project page.'),
+                ),
                 // HOW WELL THE JOB IS SPARED, before what it has spared. The
                 // shelf list below answers "what did we ask for"; this answers
                 // "is it enough", which is the question the shelf list cannot
                 // be read for and the only one a target can settle.
-                _SpareCoverCard(estimate: estimate),
+                if (!estimate.project.noSpares)
+                  _SpareCoverCard(estimate: estimate),
                 if (buildingSpares.isEmpty && byRoom.isEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),

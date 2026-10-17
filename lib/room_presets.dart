@@ -169,6 +169,37 @@ class RoomPreset {
     this.file = '',
   });
 
+  RoomPreset copyWith({
+    List<AvNode>? nodes,
+    List<AvCable>? cables,
+    List<RackItem>? rackItems,
+    Map<String, RackSlot>? rackSlots,
+    List<FloorPlan>? floorPlans,
+    String? jackPrefix,
+  }) => RoomPreset(
+    name: name,
+    description: description,
+    builtIn: builtIn,
+    locations: locations,
+    nodes: nodes ?? this.nodes,
+    cables: cables ?? this.cables,
+    racks: racks,
+    rackSlots: rackSlots ?? this.rackSlots,
+    rackItems: rackItems ?? this.rackItems,
+    screenSwitches: screenSwitches,
+    floorPlans: floorPlans ?? this.floorPlans,
+    jackPrefix: jackPrefix ?? this.jackPrefix,
+    sourceName: sourceName,
+    systemSetup: systemSetup,
+    cost: cost,
+    cabling: cabling,
+    schematic: schematic,
+    roomSettings: roomSettings,
+    savedBy: savedBy,
+    savedAt: savedAt,
+    file: file,
+  );
+
   /// What it holds, for a list: "6 devices, 4 jacks, 2 racks, 3 sheets,
   /// cost page, cabling sheet, control schematic".
   String get summary => [

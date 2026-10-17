@@ -9,7 +9,8 @@ import 'file_dialogs.dart';
 import 'hover_fade.dart' show HoverGrow;
 
 /// App Config: a picture in place of your initials where other people see
-/// you have a file open. Kept in the Root Folder's assets\avatars.
+/// you have a file open, shared with the other CTS apps. Kept in
+/// AppStateProvider.avatarFolder.
 class AvatarSettingsSection extends StatelessWidget {
   const AvatarSettingsSection({super.key});
 
@@ -43,7 +44,8 @@ class AvatarSettingsSection extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           'Shown instead of your initials when other people have the same '
-          'file open. Saved in ${provider.avatarFolder}.',
+          'file open, in the team chat, and in the CTS Dashboard and '
+          'Instructor Contact too. Saved in ${provider.avatarFolder}.',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 10),

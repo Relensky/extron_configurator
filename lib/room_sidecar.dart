@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:path/path.dart' as path;
 
@@ -721,3 +722,69 @@ Map<String, dynamic> mergeRoomSidecar(
   }
   return out;
 }
+
+
+// ---------------------------------------------------------------------------
+//  OFF THE WINDOW'S THREAD
+// ---------------------------------------------------------------------------
+//  A room is a folder of small files on a share, and every question about
+//  them - which name is on disk, is it there, move it - is a round trip.
+//  Asked one after another on the window's thread they stopped the app for
+//  seconds on every open, so these run on a worker, handed only the path.
+
+/// Tidies an older room's loose files into its folder, as [moveRoomFilesIntoFolder]
+/// and friends do. Returns what it did, for the log.
+List<String> tidyRoomFiles(String configPath) {
+  final notes = <String>[];
+  if (moveOldConfigFolderIntoRoomFiles(configPath)) {
+    notes.add('Moved the config folder beside $configPath into '
+        '$kRoomFilesFolder.');
+  }
+  // Named for the room (SCI248_cost.json), not for the processor's folder the
+  // config sits in (upload_to_root_cost.json) - see [roomStem].
+  final renamed = renameRoomFilesToStem(configPath);
+  if (renamed.isNotEmpty) {
+    notes.add("Renamed the room's files for the room: ${renamed.join(', ')}.");
+  }
+  final moved = moveRoomFilesIntoFolder(configPath);
+  if (moved.isNotEmpty) {
+    notes.add('Moved ${moved.join(', ')} into the '
+        '${path.basename(roomFolderPath(configPath))} folder.');
+  }
+  return notes;
+}
+
+Future<List<String>> tidyRoomFilesAsync(String configPath) =>
+    Isolate.run(() => tidyRoomFiles(configPath));
+
+/// Each sidecar part's file under whichever name is on disk, and its text
+/// (null when it is not there).
+typedef RoomSidecarsAhead = ({
+  Map<RoomSidecarPart, String> paths,
+  Map<String, String?> texts,
+});
+
+RoomSidecarsAhead readRoomSidecars(String configPath) {
+  final paths = <RoomSidecarPart, String>{};
+  for (final part in RoomSidecarPart.values) {
+    var p = readableRoomSidecarPath(configPath, part);
+    // The diagram under the name it had before the rename.
+    if (part == RoomSidecarPart.flow && p.isEmpty) {
+      p = readableRoomFilePath(configPath, 'avflow.json');
+    }
+    paths[part] = p;
+  }
+  final texts = <String, String?>{};
+  for (final p in paths.values) {
+    if (p.isEmpty) continue;
+    try {
+      texts[p] = File(p).readAsStringSync();
+    } catch (_) {
+      texts[p] = null;
+    }
+  }
+  return (paths: paths, texts: texts);
+}
+
+Future<RoomSidecarsAhead> readRoomSidecarsAsync(String configPath) =>
+    Isolate.run(() => readRoomSidecars(configPath));
