@@ -118,8 +118,12 @@ void main() {
       };
     p.loadAvFlowForCurrentConfig();
     p.addAvCostExtraEquipment(description: 'Projector', unitPrice: 1000);
-    final laser =
-        p.addAvCostExtraEquipment(description: 'Laser upgrade', unitPrice: 500);
+    final laser = p.addAvCostExtraEquipment(
+      description: 'Laser upgrade',
+      manufacturer: 'Epson',
+      partNumber: 'V11HA25020',
+      unitPrice: 500,
+    );
     await tester.pumpWidget(ChangeNotifierProvider<AppStateProvider>.value(
       value: p,
       child: const MaterialApp(home: Scaffold(body: CostEstimateView())),
@@ -137,6 +141,11 @@ void main() {
     expect(card, findsOneWidget);
     expect(find.byKey(ValueKey('cost_optional_row_${laser.id}')),
         findsOneWidget);
+    // Its maker and part number, while it is still left out of the total.
+    expect(p.avCost.includeOptional, isFalse);
+    final details = find.byKey(ValueKey('cost_optional_details_${laser.id}'));
+    expect(tester.widget<Text>(details).data, contains('Epson'));
+    expect(tester.widget<Text>(details).data, contains('Part V11HA25020'));
     expect(
         find.descendant(
             of: find.byKey(const ValueKey('cost_optional_with')),

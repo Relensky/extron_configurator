@@ -2011,11 +2011,18 @@ class _AvFlowViewState extends State<AvFlowView>
         contentBottom = math.max(contentBottom, point.dy);
       }
     }
-    final legendTop = contentBottom + 28;
+    final legend = provider.avFlowLegend;
+    // Under the drawing, then wherever it was dragged to from there, so a
+    // moved key still follows the drawing as it grows.
+    final legendLeft = (16 + legend.offset.dx)
+        .clamp(0.0, math.max(0.0, model.canvasSize.width - 160))
+        .toDouble();
+    final legendTop = math.max(0.0, contentBottom + 28 + legend.offset.dy);
     final legendHeight = avLegendHeight(
       model.usedSignals.length,
       model.hasCustomCableColors,
       groupHeaders: avLegendGroupCount(model.usedSignals),
+      note: legend.note,
     );
     final canvasHeight = math.max(
       model.canvasSize.height,
@@ -2138,6 +2145,8 @@ class _AvFlowViewState extends State<AvFlowView>
                   pendingPortId: _pendingPort?.$2,
                   pendingPort: pendingPort,
                   racked: provider.avRackSlots.containsKey(node.id),
+                  locationName:
+                      model.locationById(node.locationId)?.displayName ?? '',
                   onPortTap: (port) => _onPortTap(provider, node, port),
                   // Dragging and cabling never compete: in cable mode the box
                   // is a click target only.
@@ -2196,16 +2205,75 @@ class _AvFlowViewState extends State<AvFlowView>
           // always be grabbed.
           if (_editMode && _selectedCableId != null)
             ..._buildWaypointHandles(provider, model),
-          // Legend under the diagram (also part of the PNG export).
-          if (model.usedSignals.isNotEmpty || model.hasCustomCableColors)
+          // Legend under the diagram (also part of the PNG export). Dragged
+          // in Edit mode; the pencil adds a note or puts it back.
+          if (model.usedSignals.isNotEmpty ||
+              model.hasCustomCableColors ||
+              legend.note.isNotEmpty)
             Positioned(
-              left: 16,
+              key: const ValueKey('av_legend'),
+              left: legendLeft,
               top: legendTop,
-              child: _AvLegend(
-                signals: model.usedSignals,
-                hasCustomColors: model.hasCustomCableColors,
-                palette: provider.avSignalColors,
-                theme: theme,
+              child: GestureDetector(
+                onPanUpdate: _editMode
+                    ? (d) => provider.setAvFlowLegend(
+                          AvLegendSettings(
+                            offset: provider.avFlowLegend.offset + d.delta,
+                            note: provider.avFlowLegend.note,
+                          ),
+                          coalesce: 'flow:legend',
+                        )
+                    : null,
+                onDoubleTap: () => _editLegend(provider),
+                child: MouseRegion(
+                  cursor: _editMode
+                      ? SystemMouseCursors.grab
+                      : MouseCursor.defer,
+                  child: Stack(
+                    children: [
+                      // Room on the right for the pencil while editing, so it
+                      // sits inside what can be clicked.
+                      Padding(
+                        padding: EdgeInsets.only(right: _editMode ? 28 : 0),
+                        child: _AvLegend(
+                          signals: model.usedSignals,
+                          hasCustomColors: model.hasCustomCableColors,
+                          palette: provider.avSignalColors,
+                          theme: theme,
+                          note: legend.note,
+                        ),
+                      ),
+                      if (_editMode)
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: capturingDiagram,
+                            builder: (context, capturing, _) => capturing
+                                ? const SizedBox.shrink()
+                                : Material(
+                                    shape: const CircleBorder(),
+                                    elevation: 1,
+                                    child: IconButton(
+                                      key: const ValueKey('av_legend_edit'),
+                                      iconSize: 14,
+                                      visualDensity: VisualDensity.compact,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 24,
+                                        minHeight: 24,
+                                      ),
+                                      padding: EdgeInsets.zero,
+                                      tooltip: 'Add a note, or put the key '
+                                          'back under the drawing',
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () => _editLegend(provider),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
           if (model.nodes.isEmpty)
@@ -2223,6 +2291,56 @@ class _AvFlowViewState extends State<AvFlowView>
         ],
       ),
     );
+  }
+
+  /// The key's note, and the way to put a dragged key back.
+  Future<void> _editLegend(AppStateProvider provider) async {
+    final note = TextEditingController(text: provider.avFlowLegend.note);
+    final moved = provider.avFlowLegend.offset != Offset.zero;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Key'),
+        content: SizedBox(
+          width: 420,
+          child: TextField(
+            key: const ValueKey('av_legend_note'),
+            controller: note,
+            autofocus: true,
+            minLines: 2,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              labelText: 'Note under the key',
+              hintText: 'e.g. All runs plenum rated',
+              helperText: 'Printed on the drawing and the PNG. With Edit on, '
+                  'drag the key to move it.',
+            ),
+          ),
+        ),
+        actions: [
+          if (moved)
+            TextButton(
+              key: const ValueKey('av_legend_reset'),
+              onPressed: () => Navigator.of(ctx).pop('reset'),
+              child: const Text('Put it back under the drawing'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('cancel'),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('av_legend_save'),
+            onPressed: () => Navigator.of(ctx).pop('save'),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result == 'cancel' || !mounted) return;
+    provider.setAvFlowLegend(AvLegendSettings(
+      offset: result == 'reset' ? Offset.zero : provider.avFlowLegend.offset,
+      note: note.text.trim(),
+    ));
   }
 
   /// The cable numbers, one per labeled run.
@@ -5262,6 +5380,9 @@ class _AvNodeBox extends StatelessWidget {
   final VoidCallback? onSelect;
 
   final bool racked;
+
+  /// Where it is in the room, for the header; '' for nowhere.
+  final String locationName;
   final String? pendingNodeId;
   final String? pendingPortId;
 
@@ -5289,6 +5410,7 @@ class _AvNodeBox extends StatelessWidget {
     this.selected = false,
     this.onSelect,
     required this.racked,
+    this.locationName = '',
     required this.pendingNodeId,
     required this.pendingPortId,
     required this.pendingPort,
@@ -5355,7 +5477,7 @@ class _AvNodeBox extends StatelessWidget {
                   children: [
                     // Header
                     Container(
-                      height: kAvNodeHeaderHeight,
+                      height: node.headerHeight,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primary.withValues(
@@ -5387,6 +5509,18 @@ class _AvNodeBox extends StatelessWidget {
                                     node.model,
                                     style: TextStyle(
                                       fontSize: 9.5,
+                                      color: theme.hintColor,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                // Where it is, on its own line.
+                                if (locationName.isNotEmpty)
+                                  Text(
+                                    locationName,
+                                    key: ValueKey('av_node_location_${node.id}'),
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      fontStyle: FontStyle.italic,
                                       color: theme.hintColor,
                                     ),
                                     overflow: TextOverflow.ellipsis,
@@ -5474,7 +5608,7 @@ class _AvNodeBox extends StatelessWidget {
             for (final port in node.ports)
               Positioned(
                 left: node.localAnchorOf(port.id).dx - _jackPitch(node) / 2,
-                top: kAvNodeHeaderHeight + 3,
+                top: node.headerHeight + 3,
                 width: _jackPitch(node),
                 height: 14,
                 child: IgnorePointer(
@@ -5512,9 +5646,9 @@ class _AvNodeBox extends StatelessWidget {
             _resizeHandle(context,
                 key: 'right',
                 left: width - 8,
-                top: kAvNodeHeaderHeight,
+                top: node.headerHeight,
                 width: 8,
-                height: height - kAvNodeHeaderHeight - 12,
+                height: height - node.headerHeight - 12,
                 cursor: SystemMouseCursors.resizeLeftRight,
                 sideways: true,
                 down: false),
@@ -6096,23 +6230,48 @@ double avLegendHeight(
   bool hasCustomColors, {
   /// The "AV cabling" style sub-headings the key groups its rows under.
   int groupHeaders = 0,
+
+  /// The note under the key, if any.
+  String note = '',
 }) {
   const padding = 16.0; // 8 top + 8 bottom
   const title = 18.0;
   const rowHeight = 16.0;
   const customNote = 18.0;
+  // Roughly fifty characters a line at the key's width.
+  final noteLines = note.isEmpty
+      ? 0
+      : note
+          .split('\n')
+          .fold<int>(0, (n, line) => n + math.max(1, (line.length / 50).ceil()));
   return padding +
       title +
       4 +
       (signalCount + groupHeaders) * rowHeight +
-      (hasCustomColors ? customNote : 0);
+      (hasCustomColors ? customNote : 0) +
+      (noteLines == 0 ? 0 : 6 + noteLines * 14);
+}
+
+/// The family heading the key prints over [signals], or '' for none: none
+/// for the ungrouped signals, and none when the heading would only repeat
+/// the one row under it ("Network" over "Network").
+String _legendHeader(CableFamily family, List<SignalType> signals) {
+  if (family == CableFamily.other) return '';
+  final header = kCableFamilyLabels[family]!;
+  if (signals.length == 1 &&
+      (kSignalLabels[signals.single] ?? signals.single.name) == header) {
+    return '';
+  }
+  return header;
 }
 
 /// How many family sub-headings [_AvLegend] will print for [signals].
-int avLegendGroupCount(List<SignalType> signals) => {
-  for (final s in signals)
-    if (cableFamilyFor(s) != CableFamily.other) cableFamilyFor(s),
-}.length;
+int avLegendGroupCount(List<SignalType> signals) => [
+  for (final family in CableFamily.values)
+    if (signals.where((s) => cableFamilyFor(s) == family).toList()
+        case final here when here.isNotEmpty)
+      if (_legendHeader(family, here).isNotEmpty) family,
+].length;
 
 /// Lists only the signal types actually on the canvas, so it stays short.
 class _AvLegend extends StatelessWidget {
@@ -6127,11 +6286,15 @@ class _AvLegend extends StatelessWidget {
 
   final ThemeData theme;
 
+  /// Printed under the rows.
+  final String note;
+
   const _AvLegend({
     required this.signals,
     required this.hasCustomColors,
     required this.palette,
     required this.theme,
+    this.note = '',
   });
 
   /// [signals] in the order they are drawn, split so the ones that share a
@@ -6144,11 +6307,7 @@ class _AvLegend extends StatelessWidget {
     for (final family in CableFamily.values) {
       final here = signals.where((s) => cableFamilyFor(s) == family).toList();
       if (here.isEmpty) continue;
-      if (family == CableFamily.other) {
-        out.add((header: '', signals: here));
-      } else {
-        out.add((header: kCableFamilyLabels[family]!, signals: here));
-      }
+      out.add((header: _legendHeader(family, here), signals: here));
     }
     return out;
   }
@@ -6174,9 +6333,9 @@ class _AvLegend extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          // "AV cabling" as a sub-heading with the signals it covers indented
-          // under it, so the key reads the way the cable schedule and the
-          // cabling drawing name the same runs.
+          // "AV cabling" as a sub-heading over the signals it covers, so the
+          // key reads the way the cable schedule names the same runs. Every
+          // swatch on the same edge, grouped or not.
           for (final group in _grouped(signals)) ...[
             if (group.header.isNotEmpty)
               Padding(
@@ -6192,11 +6351,7 @@ class _AvLegend extends StatelessWidget {
               ),
             for (final s in group.signals)
               Padding(
-                padding: EdgeInsets.only(
-                  top: 1.5,
-                  bottom: 1.5,
-                  left: group.header.isEmpty ? 0 : 10,
-                ),
+                padding: const EdgeInsets.only(top: 1.5, bottom: 1.5),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -6223,6 +6378,18 @@ class _AvLegend extends StatelessWidget {
                   fontSize: 10,
                   fontStyle: FontStyle.italic,
                   color: theme.hintColor,
+                ),
+              ),
+            ),
+          if (note.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 300),
+                child: Text(
+                  note,
+                  key: const ValueKey('av_legend_note_text'),
+                  style: const TextStyle(fontSize: 11),
                 ),
               ),
             ),

@@ -206,6 +206,8 @@ class _CablingViewState extends State<CablingView> {
         // row nobody was looking at.
         ..._selectionBar(provider, drawing),
         const Divider(height: 1),
+        // On the page, never on the sheet: the export goes to people outside.
+        if (drawing.runsLeftOff > 0) _leftOffBanner(drawing),
         Expanded(
           key: _viewportKey,
           child: drawing.boxes.isEmpty
@@ -283,6 +285,35 @@ class _CablingViewState extends State<CablingView> {
                 if (b.cableType == _exportLayer) b,
             ],
       overridden: drawing.overridden,
+      runsLeftOff: drawing.runsLeftOff,
+      needLocation: drawing.needLocation,
+    );
+  }
+
+  /// Which runs are not on the sheet, and the devices that would put them
+  /// there with a location.
+  Widget _leftOffBanner(CablingSchematic drawing) {
+    final theme = Theme.of(context);
+    final n = drawing.runsLeftOff;
+    return Container(
+      key: const ValueKey('cabling_left_off'),
+      width: double.infinity,
+      color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, size: 18, color: theme.hintColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$n run${n == 1 ? '' : 's'} left off this sheet. Set a location '
+              'on ${drawing.needLocation.join(', ')} to show '
+              '${n == 1 ? 'it' : 'them'}.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

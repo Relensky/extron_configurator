@@ -35,6 +35,36 @@ import 'room_locations.dart';
 //  SIGNAL TYPES
 // ---------------------------------------------------------------------------
 
+/// Where the AV Flow's key sits and the note printed under it.
+class AvLegendSettings {
+  /// How far it was dragged from its place under the drawing.
+  final Offset offset;
+  final String note;
+
+  const AvLegendSettings({this.offset = Offset.zero, this.note = ''});
+
+  bool get isDefault => offset == Offset.zero && note.isEmpty;
+
+  Map<String, dynamic> toJson() => {
+    if (offset != Offset.zero) 'dx': offset.dx,
+    if (offset != Offset.zero) 'dy': offset.dy,
+    if (note.isNotEmpty) 'note': note,
+  };
+
+  factory AvLegendSettings.fromJson(Object? json) {
+    if (json is! Map) return const AvLegendSettings();
+    double read(String k) {
+      final v = (json[k] as num?)?.toDouble() ?? 0;
+      return v.isFinite ? v : 0;
+    }
+
+    return AvLegendSettings(
+      offset: Offset(read('dx'), read('dy')),
+      note: json['note']?.toString() ?? '',
+    );
+  }
+}
+
 /// What travels down a cable. Drives the line color, the legend, and the
 /// compatibility check when two ports are joined.
 enum SignalType {
@@ -715,6 +745,9 @@ String cableSignalName(AvCable cable, Map<String, AvNode> byId) {
 const double kAvNodeMinWidth = 190;
 const double kAvNodeMaxWidth = 300;
 const double kAvNodeHeaderHeight = 42;
+
+/// The extra line in a box's header that says where it is.
+const double kAvNodeLocationLine = 12;
 const double kAvPortRowHeight = 22;
 const double kAvNodeMinBodyHeight = 20;
 const double kAvNodePadBottom = 10;
@@ -1214,17 +1247,21 @@ class AvNode {
     return autoHeight;
   }
 
+  /// The header's height: a line taller when the box says where it is.
+  double get headerHeight =>
+      kAvNodeHeaderHeight + (locationId.isEmpty ? 0 : kAvNodeLocationLine);
+
   /// The height the box takes from its port rows. A box drawn by hand is never
   /// shorter, so every side port stays on it.
   double get autoHeight {
     // Header, one strip of room for the jack numbers, and the outlet row.
-    if (isPatchPanel) return kAvNodeHeaderHeight + kAvPatchPanelBodyHeight;
+    if (isPatchPanel) return headerHeight + kAvPatchPanelBodyHeight;
     final rows = math.max(leftPorts.length, rightPorts.length);
     final body = math.max(kAvNodeMinBodyHeight, rows * kAvPortRowHeight);
     // Top/bottom ports ride the edges and need a little breathing room.
     final edgePad =
         (topPorts.isEmpty ? 0.0 : 6.0) + (bottomPorts.isEmpty ? 0.0 : 6.0);
-    return kAvNodeHeaderHeight + body + kAvNodePadBottom + edgePad;
+    return headerHeight + body + kAvNodePadBottom + edgePad;
   }
 
   Size get size => Size(width, height);
@@ -1281,7 +1318,7 @@ class AvNode {
   }
 
   double _rowCenterY(int index) {
-    final top = kAvNodeHeaderHeight + (topPorts.isEmpty ? 0.0 : 6.0);
+    final top = headerHeight + (topPorts.isEmpty ? 0.0 : 6.0);
     return top + index * rowPitch + rowPitch / 2;
   }
 

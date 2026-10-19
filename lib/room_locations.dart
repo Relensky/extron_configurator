@@ -896,6 +896,116 @@ Color? _paperFromJson(dynamic raw) {
   return value == null ? null : Color(0xFF000000 | value);
 }
 
+/// Which edge of the sheet the room's front wall is on.
+enum PlanWallSide { top, bottom, left, right }
+
+const Map<PlanWallSide, String> kPlanWallSideLabels = {
+  PlanWallSide.top: 'Top of the sheet',
+  PlanWallSide.bottom: 'Bottom of the sheet',
+  PlanWallSide.left: 'Left of the sheet',
+  PlanWallSide.right: 'Right of the sheet',
+};
+
+/// The room's four walls on a sheet: a rectangle in the image's own
+/// coordinates, and which of its sides is the front wall.
+class PlanWalls {
+  final Rect rect;
+  final PlanWallSide front;
+
+  /// Floor to ceiling, in feet; 0 when nobody has said.
+  final double ceilingFt;
+
+  const PlanWalls({
+    required this.rect,
+    this.front = PlanWallSide.top,
+    this.ceilingFt = 0,
+  });
+
+  PlanWalls copyWith({Rect? rect, PlanWallSide? front, double? ceilingFt}) =>
+      PlanWalls(
+        rect: rect ?? this.rect,
+        front: front ?? this.front,
+        ceilingFt: ceilingFt ?? this.ceilingFt,
+      );
+
+  /// The floor area in square feet at [pixelsPerFoot]; 0 on a sheet with no
+  /// scale.
+  double squareFeet(double pixelsPerFoot) => pixelsPerFoot <= 0
+      ? 0
+      : rect.width * rect.height / (pixelsPerFoot * pixelsPerFoot);
+
+  PlanWalls shifted(Offset by) => copyWith(rect: rect.shift(by));
+
+  /// The walls by name, front first, each as its side of the sheet.
+  Map<String, PlanWallSide> get named {
+    const opposite = {
+      PlanWallSide.top: PlanWallSide.bottom,
+      PlanWallSide.bottom: PlanWallSide.top,
+      PlanWallSide.left: PlanWallSide.right,
+      PlanWallSide.right: PlanWallSide.left,
+    };
+    // Facing the front wall from inside the room, its left and right.
+    const leftOf = {
+      PlanWallSide.top: PlanWallSide.left,
+      PlanWallSide.bottom: PlanWallSide.right,
+      PlanWallSide.left: PlanWallSide.bottom,
+      PlanWallSide.right: PlanWallSide.top,
+    };
+    final left = leftOf[front]!;
+    return {
+      'Front': front,
+      'Back': opposite[front]!,
+      'Left': left,
+      'Right': opposite[left]!,
+    };
+  }
+
+  /// How far [p] is from each wall, in image pixels, front first.
+  Map<String, double> distancesFrom(Offset p) => {
+    for (final e in named.entries)
+      e.key: switch (e.value) {
+        PlanWallSide.top => p.dy - rect.top,
+        PlanWallSide.bottom => rect.bottom - p.dy,
+        PlanWallSide.left => p.dx - rect.left,
+        PlanWallSide.right => rect.right - p.dx,
+      },
+  };
+
+  /// Width across the front wall, and depth from it to the back, in pixels.
+  double get frontLength =>
+      front == PlanWallSide.top || front == PlanWallSide.bottom
+          ? rect.width
+          : rect.height;
+  double get depth =>
+      front == PlanWallSide.top || front == PlanWallSide.bottom
+          ? rect.height
+          : rect.width;
+
+  Map<String, dynamic> toJson() => {
+    'x': rect.left,
+    'y': rect.top,
+    'w': rect.width,
+    'h': rect.height,
+    if (front != PlanWallSide.top) 'front': front.name,
+    if (ceilingFt > 0) 'ceilingFt': ceilingFt,
+  };
+
+  static PlanWalls? fromJson(Object? json) {
+    if (json is! Map) return null;
+    double read(String k) => (json[k] as num?)?.toDouble() ?? 0;
+    final w = read('w'), h = read('h');
+    if (w <= 0 || h <= 0) return null;
+    return PlanWalls(
+      rect: Rect.fromLTWH(read('x'), read('y'), w, h),
+      front: PlanWallSide.values
+              .where((s) => s.name == json['front'])
+              .firstOrNull ??
+          PlanWallSide.top,
+      ceilingFt: read('ceilingFt') > 0 ? read('ceilingFt') : 0,
+    );
+  }
+}
+
 class FloorPlan {
   /// `PLAN_<n>`.
   final String id;
@@ -1019,6 +1129,9 @@ class FloorPlan {
   /// Gear placed on this sheet from the room's estimate.
   final List<PlanDevice> devices;
 
+  /// The room's walls on this sheet, once somebody has marked them.
+  final PlanWalls? walls;
+
   const FloorPlan({
     required this.id,
     required this.name,
@@ -1037,6 +1150,7 @@ class FloorPlan {
     this.keyPos = kDefaultPlanKeyPosition,
     this.keyHidden = false,
     this.devices = const [],
+    this.walls,
   });
 
   /// How [kind] is printed on this sheet.
@@ -1220,6 +1334,8 @@ class FloorPlan {
     Offset? keyPos,
     bool? keyHidden,
     List<PlanDevice>? devices,
+    PlanWalls? walls,
+    bool clearWalls = false,
   }) => FloorPlan(
     id: id,
     name: name ?? this.name,
@@ -1240,6 +1356,7 @@ class FloorPlan {
     keyPos: keyPos ?? this.keyPos,
     keyHidden: keyHidden ?? this.keyHidden,
     devices: devices ?? this.devices,
+    walls: clearWalls ? null : walls ?? this.walls,
   );
 
   FloorPlan withId(String newId) => FloorPlan(
@@ -1260,6 +1377,7 @@ class FloorPlan {
     keyPos: keyPos,
     keyHidden: keyHidden,
     devices: devices,
+    walls: walls,
   );
 
   Map<String, dynamic> toJson() => {
@@ -1312,6 +1430,7 @@ class FloorPlan {
       'key': {'x': keyPos.dx, 'y': keyPos.dy},
     if (keyHidden) 'keyHidden': true,
     if (devices.isNotEmpty) 'devices': [for (final d in devices) d.toJson()],
+    if (walls != null) 'walls': walls!.toJson(),
   };
 
   factory FloorPlan.fromJson(Map<String, dynamic> json) => FloorPlan(
@@ -1391,6 +1510,7 @@ class FloorPlan {
       for (final d in (json['devices'] as List? ?? []))
         if (d is Map) PlanDevice.fromJson(Map<String, dynamic>.from(d)),
     ],
+    walls: PlanWalls.fromJson(json['walls']),
   );
 }
 

@@ -5,6 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'av_flow_ties.dart';
+import 'room_locations.dart';
+import 'room_locations_view.dart';
 
 /// Tie in sequence: pick two sides and a connector on each, check the list,
 /// and draw it as one Undo step. Returns how many runs were drawn.
@@ -268,9 +270,10 @@ Future<int> showTieInSequenceDialog(
   return drawn ?? 0;
 }
 
-/// A power strip's outlets, each with a drop-down of every box with a power
-/// inlet, and Fill in order for a set named in sequence. Saved as one Undo
-/// step. Returns how many leads changed.
+/// A power strip's outlets, each with a drop-down of every box in the room
+/// and where that box is, and Fill in order for a set named in sequence or
+/// everything in one location. Saved as one Undo step, with any locations
+/// set here. Returns how many leads and locations changed.
 Future<int> showPowerOutletsDialog(
   BuildContext context,
   AppStateProvider provider, {
@@ -279,7 +282,6 @@ Future<int> showPowerOutletsDialog(
   final strips = powerStrips(provider);
   if (strips.isEmpty) return 0;
   var strip = strips.where((s) => s.id == stripId).firstOrNull ?? strips.first;
-  final powered = poweredBoxes(provider);
   final sets = tieSides(provider).where((s) => !s.isSingle).toList();
 
   Map<String, String?> current(AvNode s) => {
@@ -287,17 +289,55 @@ Future<int> showPowerOutletsDialog(
       };
   var feeds = current(strip);
   var original = Map<String, String?>.from(feeds);
-  String? fillSet = sets.firstOrNull?.key;
+  // Where each box is, as changed here; saved with the leads.
+  final placed = {for (final n in provider.avNodes) n.id: n.locationId};
+  final placedBefore = Map<String, String>.from(placed);
+  String? fillWith;
   var fillFrom = 0;
 
   final changed = await showDialog<int>(
     context: context,
     builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) {
+      final theme = Theme.of(ctx);
       final outlets = stripOutlets(strip);
       final boxes = [
-        for (final b in powered)
-          if (b.node.id != strip.id) b.node,
+        for (final n in powerableBoxes(provider))
+          if (n.id != strip.id) n,
       ];
+      final locations = provider.avLocations;
+      String where(String nodeId) {
+        final id = placed[nodeId] ?? kNoLocationId;
+        return locations.where((l) => l.id == id).firstOrNull?.displayName ??
+            '';
+      }
+
+      // Fill choices: everything in a location, then sets named in sequence.
+      final fills = <(String, String, List<AvNode>)>[
+        if (locations.isNotEmpty) ...[
+          for (final l in locations)
+            if (boxes.where((b) => placed[b.id] == l.id).toList()
+                case final inside when inside.isNotEmpty)
+              ('loc:${l.id}', 'Everything in ${l.displayName} '
+                  '(${inside.length})', inside),
+          if (boxes.where((b) => (placed[b.id] ?? '') == kNoLocationId)
+                  .toList()
+              case final loose when loose.isNotEmpty)
+            ('loc:', 'Everything with no location (${loose.length})', loose),
+        ],
+        for (final s in sets)
+          (
+            s.key,
+            s.label,
+            [
+              for (final n in s.boxes)
+                if (boxes.any((b) => b.id == n.id)) n,
+            ],
+          ),
+      ];
+      if (!fills.any((f) => f.$1 == fillWith)) {
+        fillWith = fills.firstOrNull?.$1;
+      }
+
       void assign(String outlet, String? box) {
         if (box != null) {
           // One inlet per box: it comes off any other outlet here.
@@ -312,11 +352,42 @@ Future<int> showPowerOutletsDialog(
         for (final e in feeds.entries)
           if (original[e.key] != e.value) e.key: e.value,
       };
+      final moved = {
+        for (final e in placed.entries)
+          if (placedBefore[e.key] != e.value) e.key: e.value,
+      };
+      final total = edits.length + moved.length;
+
+      Widget locationPicker(String nodeId) {
+        final known = {for (final l in locations) l.id};
+        final value = known.contains(placed[nodeId])
+            ? placed[nodeId]!
+            : kNoLocationId;
+        return DropdownButtonFormField<String>(
+          key: ValueKey('power_location_${nodeId}_$value'),
+          initialValue: value,
+          isExpanded: true,
+          decoration: const InputDecoration(isDense: true),
+          items: [
+            const DropdownMenuItem(
+              value: kNoLocationId,
+              child: Text('No location'),
+            ),
+            for (final l in locations)
+              DropdownMenuItem(
+                value: l.id,
+                child: Text(l.displayName, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: (v) => setLocal(() => placed[nodeId] = v ?? ''),
+        );
+      }
+
       return AlertDialog(
         title: const Text('Power outlets'),
         content: SizedBox(
-          width: 640,
-          height: math.min(640, MediaQuery.sizeOf(ctx).height - 200),
+          width: 760,
+          height: math.min(680, MediaQuery.sizeOf(ctx).height - 200),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -342,70 +413,102 @@ Future<int> showPowerOutletsDialog(
                   fillFrom = 0;
                 }),
               ),
-              if (sets.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: DropdownButtonFormField<String>(
-                        key: const ValueKey('power_fill_set'),
-                        initialValue: fillSet,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                            labelText: 'Fill in order with', isDense: true),
-                        items: [
-                          for (final s in sets)
-                            DropdownMenuItem(
-                                value: s.key,
-                                child: Text(s.label,
-                                    overflow: TextOverflow.ellipsis)),
-                        ],
-                        onChanged: (k) => setLocal(() => fillSet = k),
-                      ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey('power_fill_set_$fillWith'),
+                      initialValue: fillWith,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Fill in order with', isDense: true),
+                      items: [
+                        for (final f in fills)
+                          DropdownMenuItem(
+                              value: f.$1,
+                              child: Text(f.$2,
+                                  overflow: TextOverflow.ellipsis)),
+                      ],
+                      onChanged: (k) => setLocal(() => fillWith = k),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 2,
-                      child: DropdownButtonFormField<int>(
-                        key: ValueKey('power_fill_from_${strip.id}'),
-                        initialValue: fillFrom,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                            labelText: 'Starting at', isDense: true),
-                        items: [
-                          for (final (i, o) in outlets.indexed)
-                            DropdownMenuItem(value: i, child: Text(o.label)),
-                        ],
-                        onChanged: (v) => setLocal(() => fillFrom = v ?? 0),
-                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: DropdownButtonFormField<int>(
+                      key: ValueKey('power_fill_from_${strip.id}'),
+                      initialValue: fillFrom,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Starting at', isDense: true),
+                      items: [
+                        for (final (i, o) in outlets.indexed)
+                          DropdownMenuItem(value: i, child: Text(o.label)),
+                      ],
+                      onChanged: (v) => setLocal(() => fillFrom = v ?? 0),
                     ),
-                    const SizedBox(width: 8),
-                    OutlinedButton(
-                      key: const ValueKey('power_fill_go'),
-                      onPressed: fillSet == null
-                          ? null
-                          : () => setLocal(() {
-                                final set =
-                                    sets.firstWhere((s) => s.key == fillSet);
-                                final members = [
-                                  for (final n in set.boxes)
-                                    if (boxes.any((b) => b.id == n.id)) n,
-                                ];
-                                for (var i = 0;
-                                    i < members.length &&
-                                        fillFrom + i < outlets.length;
-                                    i++) {
-                                  assign(outlets[fillFrom + i].id,
-                                      members[i].id);
-                                }
-                              }),
-                      child: const Text('Fill'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    key: const ValueKey('power_fill_go'),
+                    onPressed: fillWith == null
+                        ? null
+                        : () => setLocal(() {
+                              final members =
+                                  fills.firstWhere((f) => f.$1 == fillWith).$3;
+                              for (var i = 0;
+                                  i < members.length &&
+                                      fillFrom + i < outlets.length;
+                                  i++) {
+                                assign(outlets[fillFrom + i].id,
+                                    members[i].id);
+                              }
+                            }),
+                    child: const Text('Fill'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${boxes.length} device${boxes.length == 1 ? '' : 's'} '
+                      'can take power. Set where each one is to fill a rack '
+                      'or the ceiling at once.',
+                      style: theme.textTheme.bodySmall,
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  TextButton.icon(
+                    key: const ValueKey('power_add_location'),
+                    icon: const Icon(Icons.add_location_alt_outlined,
+                        size: 18),
+                    label: const Text('Add location'),
+                    onPressed: () async {
+                      await showLocationEditor(ctx, provider, null);
+                      setLocal(() {});
+                    },
+                  ),
+                ],
+              ),
               const Divider(),
+              Row(
+                children: [
+                  const SizedBox(width: 150),
+                  Expanded(
+                    flex: 3,
+                    child: Text('Feeds', style: theme.textTheme.labelMedium),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: Text('Its location',
+                        style: theme.textTheme.labelMedium),
+                  ),
+                ],
+              ),
               Expanded(
                 child: ListView(
                   children: [
@@ -413,13 +516,18 @@ Future<int> showPowerOutletsDialog(
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 3),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            SizedBox(
-                              width: 150,
-                              child: Text(o.label,
-                                  overflow: TextOverflow.ellipsis),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: SizedBox(
+                                width: 150,
+                                child: Text(o.label,
+                                    overflow: TextOverflow.ellipsis),
+                              ),
                             ),
                             Expanded(
+                              flex: 3,
                               child: DropdownButtonFormField<String>(
                                 key: ValueKey(
                                     'power_outlet_${o.id}_${feeds[o.id]}'),
@@ -437,13 +545,24 @@ Future<int> showPowerOutletsDialog(
                                   for (final b in boxes)
                                     DropdownMenuItem(
                                       value: b.id,
-                                      child: Text(b.label,
+                                      child: Text(
+                                          where(b.id).isEmpty
+                                              ? b.label
+                                              : '${b.label}  ·  '
+                                                  '${where(b.id)}',
                                           overflow: TextOverflow.ellipsis),
                                     ),
                                 ],
                                 onChanged: (v) =>
                                     setLocal(() => assign(o.id, v)),
                               ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 2,
+                              child: feeds[o.id] == null
+                                  ? const SizedBox.shrink()
+                                  : locationPicker(feeds[o.id]!),
                             ),
                           ],
                         ),
@@ -461,13 +580,16 @@ Future<int> showPowerOutletsDialog(
           ),
           ElevatedButton(
             key: const ValueKey('power_save'),
-            onPressed: edits.isEmpty
+            onPressed: total == 0
                 ? null
-                : () => Navigator.of(ctx)
-                    .pop(provider.setAvStripOutlets(strip.id, edits)),
-            child: Text(edits.isEmpty
+                : () {
+                    final n = provider.setAvNodeLocations(moved) +
+                        provider.setAvStripOutlets(strip.id, edits);
+                    Navigator.of(ctx).pop(n);
+                  },
+            child: Text(total == 0
                 ? 'Save'
-                : 'Save ${edits.length} change${edits.length == 1 ? '' : 's'}'),
+                : 'Save $total change${total == 1 ? '' : 's'}'),
           ),
         ],
       );

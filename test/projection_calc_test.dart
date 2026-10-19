@@ -379,12 +379,55 @@ void main() {
       final size = tester.widget<TextField>(
         find.byKey(const ValueKey('projection_size')),
       );
-      expect(size.controller!.text, '10');
+      expect(size.controller!.text, "10'");
       expect(distance(), before);
 
       await tester.enterText(find.byKey(const ValueKey('projection_size')), '5');
       await tester.pump();
       expect(distance(), isNot(before));
+
+      // Feet and inches together: 11'8" is the same screen as 140".
+      await tester.enterText(
+          find.byKey(const ValueKey('projection_size')), '11\'8"');
+      await tester.pump();
+      final feetInches = distance();
+      await tester.enterText(
+          find.byKey(const ValueKey('projection_size')), '140"');
+      await tester.pump();
+      expect(distance(), feetInches);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a locked box is not typed in or changed by a drag', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        specs: const [ProjectorSpecs(source: 'PJ', throwMin: 2, throwMax: 2)],
+      );
+      final box = find.byKey(const ValueKey('projection_size'));
+      final before = tester.widget<TextField>(box).controller!.text;
+      await tester.tap(find.byKey(const ValueKey('lock_projection_size')));
+      await tester.pump();
+      expect(tester.widget<TextField>(box).readOnly, isTrue);
+
+      final view = find.byKey(const ValueKey('projection_perspective'));
+      await tester.ensureVisible(view);
+      await tester.pumpAndSettle();
+      await tester.drag(view, const Offset(-120, 0));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(box).controller!.text, before);
+
+      // Unlocked, the drag moves it again.
+      await tester.ensureVisible(box);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('lock_projection_size')));
+      await tester.pump();
+      await tester.ensureVisible(view);
+      await tester.pumpAndSettle();
+      await tester.drag(view, const Offset(-120, 0));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(box).controller!.text, isNot(before));
       expect(tester.takeException(), isNull);
     });
 

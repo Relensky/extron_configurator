@@ -6,6 +6,7 @@ import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/av_flow_ties.dart';
 import 'package:extron_configurator/av_flow_view.dart';
+import 'package:extron_configurator/room_locations.dart';
 
 /// Tie in sequence and the power outlet editor.
 void main() {
@@ -198,6 +199,53 @@ void main() {
     final s = p.avNodeById('PDU')!;
     expect([for (final o in stripOutlets(s).take(3)) outletTarget(p, s, o)],
         everyElement(isNotNull));
+    expect(tester.takeException(), isNull);
+  });
+
+  test('every box can be fed, and one with no inlet gets one', () {
+    final p = room();
+    p.avNodes.add(const AvNode(
+      id: 'CAM',
+      label: 'Camera',
+      model: '',
+      pos: Offset.zero,
+      ports: [],
+    ));
+    final ids = powerableBoxes(p).map((n) => n.id);
+    expect(ids, containsAll(['DEC_1', 'DSP_1', 'CAM']));
+    expect(ids.length, 8, reason: 'all seven boxes but nothing skipped');
+
+    p.setAvStripOutlets('PDU', {'o1': 'CAM'});
+    final cam = p.avNodeById('CAM')!;
+    expect(cam.ports.single.signal, SignalType.power);
+    expect(outletTarget(p, p.avNodeById('PDU')!, stripOutlets(p.avNodeById('PDU')!).first),
+        'CAM');
+  });
+
+  testWidgets('Power outlets fills everything in one location', (
+    tester,
+  ) async {
+    final p = await pumpRoom(tester);
+    final rack = p.addAvLocation(const RoomLocation(id: '', name: 'Rack'));
+    p.setAvNodeLocations({'DSP_2': rack.id, 'DSP_3': rack.id});
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('av_power_outlets')));
+    await tester.pumpAndSettle();
+    // Every box but the strip is offered, not only the ones with an inlet.
+    expect(find.textContaining('device'), findsWidgets);
+    expect(find.text('6 devices can take power. Set where each one is to '
+        'fill a rack or the ceiling at once.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('power_fill_go')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('power_save')));
+    await tester.pumpAndSettle();
+
+    final s = p.avNodeById('PDU')!;
+    final fed = [for (final o in stripOutlets(s)) outletTarget(p, s, o)];
+    expect(fed.take(2), ['DSP_2', 'DSP_3']);
+    expect(fed.skip(2), everyElement(isNull));
     expect(tester.takeException(), isNull);
   });
 }

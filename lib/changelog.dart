@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.150+160';
+const String kAppVersion = '0.5.155+165';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,67 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.155',
+    date: 'October 19, 2026',
+    title: 'Several screens at once',
+    changes: [
+      'Projection calculator: a throw distance entered in Throws - the projector\'s own or the room\'s - opens in the distance box already locked, so the screen size is worked from it. Unlock the box to try another.',
+      'Floor plan: a selected projector has a Projection calculator button right after the screen it is paired with.',
+      'Projection calculator: the units picked are remembered for next time, after the app is closed and opened again.',
+      'Floor plan: Screen by size has How many. One click drops that many screens in a row, numbered Screen 1, Screen 2 and on after any already on the sheet, as one Undo step.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.154',
+    date: 'October 19, 2026',
+    title: 'Projector settings kept per projector',
+    changes: [
+      'Projection calculator: Save as the projector\'s throw distance also keeps that projector\'s settings - zoom, aspect, screen size, distance, lens shift, mounting and the units - so it opens again as it was. Apply keeps them too.',
+      'Projection calculator: opened from the floor plan, the title is a drop-down of the room\'s projectors. Picking another keeps this one\'s settings and opens that one as it was saved.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.153',
+    date: 'October 19, 2026',
+    title: 'Room walls, locked-in calculations and worked-out reach',
+    changes: [
+      'Cost tab: each part on the Optional upgrades card shows its manufacturer, part number, model and category under its name, even while the options are left out of the room total.',
+      'Projection calculator: opened on a projector or screen, Save keeps what was entered with that device, and it opens the same way next time, after the project is closed and opened again.',
+      'Projection calculator and floor plan: Lock in records who approved a projector, screen or display, and when. While locked in, its angle, reach and size cannot be changed in the calculator or on the floor plan, and its bar says who approved it. Unlock asks first and takes the approval off.',
+      'Floor plan: a selected screen has a Diagonal slider in inches. The screen, its viewing angle and its reach redraw as it is dragged, to try sizes in the room, and one Undo puts it back.',
+      'Floor plan: Room walls, once the sheet has a scale. Click two opposite corners of the room, then type its width along the front wall, its depth and its ceiling height in feet and inches, and say which side of the sheet the front wall is on. The walls are drawn with their lengths, the front wall named, and the square footage and ceiling under them; the button shows the room size and area.',
+      'Floor plan: a selected device shows how far it is from the front, back, left and right walls, and says so in red when it is outside them.',
+      'Projection calculator: opened from a floor plan with walls, the ceiling is the room\'s. It shows the screen\'s drop from the ceiling, and warns when the image runs above the ceiling, when the lens cannot sit below the ceiling even with its shift, and when the throw is longer than the room is deep.',
+      'Floor plan: the reach of a screen, display or projector is worked out, not set by hand. A screen or display reaches six image heights, the farthest seat that can still read it, and follows its size. A projector reaches its paired screen, or its own throw distance, or the room\'s. The bar shows the reach; the Reach slider is only on cameras, mics and the like.',
+      'Floor plan: Screen by size also takes the image measured on the wall as width x height, such as 11\'8" x 6\'5".',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.152',
+    date: 'October 19, 2026',
+    title: 'Screens by size and calculator locks',
+    changes: [
+      'Floor plan: Add device has Screen by size, for a room whose screen model is not known. Pick the diagonal - type it or choose 100" to 165" - and the aspect, and the image is drawn to that size. Any selected screen also has a Size button to set it the same way.',
+      'Projection calculator: each box has a lock. A locked box cannot be typed in, and picking a projector spec or dragging the projector leaves it as it is.',
+      'Projection calculator: in feet, the distance, screen size, image bottom and ceiling take feet and inches together - type 11\'8", 11\' 8", 11.5 or 140".',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.151',
+    date: 'October 19, 2026',
+    title: 'Power outlets, the AV Flow key and projector throws',
+    changes: [
+      'AV Flow: Power outlets lists every device in the room, not only the few that already had a power inlet. A device without one gets a POWER inlet when an outlet is set to feed it.',
+      'AV Flow: Power outlets shows where each device is and lets you set its location on the same row. Fill in order can take everything in one location - the rack, the ceiling - and Add location makes a new one without leaving the window.',
+      'AV Flow: the key lines every signal up on the same edge, AV cabling and network included, and no longer prints Network twice.',
+      'Floor plan: a projector can be set to Auto from screen, and new ones start that way. Its reach is the distance to its paired screen and its angle is the one that fills the screen, kept within the lens zoom from the catalog. The bar says when the projector is too close or too far for its lens to fill the screen. Turned off, it keeps the beam it was showing.',
+      'Floor plan: a projection screen starts at the size its catalog entry gives (such as 120"), not a fixed 8 ft, once the sheet has a scale.',
+      'Cabling: runs to a device with no location are left off the sheet instead of going to a Not placed yet box. A line above the sheet says how many were left off and which devices need a location; it is not part of the export.',
+      'AV Flow: each box with a location says where it is on a line of its own at the top, under the name and model.',
+      'AV Flow: with Edit on, drag the key anywhere on the drawing. Its pencil adds a note printed under the key, or puts the key back under the drawing.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.150',
     date: 'October 19, 2026',

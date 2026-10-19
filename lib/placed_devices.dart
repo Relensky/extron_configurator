@@ -37,6 +37,10 @@ class RoomDeviceChoice {
   });
 }
 
+/// What a screen placed by size, with no model, is filed under. Not on the
+/// estimate, so any number can be placed.
+const String kGenericScreenKey = 'generic:screen';
+
 /// The key a device name is filed under.
 String roomDeviceKey(String name) => name.trim().toLowerCase();
 
@@ -302,6 +306,47 @@ double screenViewingReach(double width) =>
     farthestViewer(imageHeightFromWidth(width, kPlanScreenAspect))
         .clamp(20.0, 20000.0);
 
+/// How far out a display [width] wide is watched from: six picture heights
+/// at 16:9.
+double displayViewingReach(double width) =>
+    farthestViewer(imageHeightFromWidth(width, 16 / 9)).clamp(20.0, 20000.0);
+
+/// True for the shapes whose reach is worked out rather than set by hand -
+/// see [derivedReach].
+bool reachIsDerived(String shape) =>
+    shape == 'screen' || shape == 'display' || shape == 'projector';
+
+/// [device]'s reach by the math, or null to keep the one it has.
+///
+/// A screen or display: six image heights, the farthest seat that can still
+/// read it. A projector: its throw - the distance to the screen it is paired
+/// with, else its own throw distance or the room's, in feet times
+/// [pixelsPerFoot]. A locked-in device keeps what was approved.
+double? derivedReach(
+  PlanDevice device,
+  List<PlanDevice> devices, {
+  double pixelsPerFoot = 0,
+  double roomThrowFt = 0,
+}) {
+  if (device.approval != null) return null;
+  switch (device.shape) {
+    case 'screen':
+      return screenViewingReach(device.width);
+    case 'display':
+      return displayViewingReach(device.width);
+    case 'projector':
+      final screen = projectionPartner(devices, device);
+      if (screen != null && screen.shape == 'screen') {
+        return (screen.pos - device.pos).distance.clamp(20.0, 20000.0);
+      }
+      final ft = device.throwFt > 0 ? device.throwFt : roomThrowFt;
+      if (ft > 0 && pixelsPerFoot > 0) {
+        return (ft * pixelsPerFoot).clamp(20.0, 20000.0);
+      }
+  }
+  return null;
+}
+
 /// [devices] with [after] in place of the one it replaces, and the other
 /// half of its projector and screen pair kept to the image between them.
 /// A projector's throw angle or reach sizes its screen to the image it
@@ -316,9 +361,12 @@ List<PlanDevice> withProjectionLinked(
   final before = devices[at];
   final next = List<PlanDevice>.from(devices)..[at] = after;
   final partner = projectionPartner(next, after);
-  if (partner == null) return next;
+  if (partner == null || partner.approval != null) return next;
   final p = next.indexWhere((d) => d.id == partner.id);
+  // A projector on Auto from screen follows its screen, never the other way.
   if (after.shape == 'projector' &&
+      !after.autoThrow &&
+      !before.autoThrow &&
       (after.fov != before.fov || after.range != before.range)) {
     final width = imageWidthForBeam(after.range, after.fov)
         .clamp(4.0, 20000.0);
@@ -333,6 +381,39 @@ List<PlanDevice> withProjectionLinked(
     );
   }
   return next;
+}
+
+/// How a projector's beam lands on its screen. [zoom] is 0 when the lens can
+/// fill the screen from where the projector is, -1 when the projector is too
+/// close for the widest setting (the image overfills the screen), 1 when too
+/// far for the longest (it falls short of the edges).
+typedef FittedThrow = ({double fov, double range, int zoom});
+
+/// The beam [projector] throws to fill [screen]: reach to the screen, and the
+/// angle that fills its width, held inside the lens's zoom of
+/// [throwMin]:1 to [throwMax]:1 when known.
+FittedThrow fittedThrow(
+  PlanDevice projector,
+  PlanDevice screen, {
+  double throwMin = 0,
+  double throwMax = 0,
+}) {
+  final dist = (screen.pos - projector.pos).distance.clamp(20.0, 20000.0);
+  var angle = beamAngleToFill(dist, screen.width);
+  var zoom = 0;
+  if (throwMin > 0) {
+    // A short throw ratio is the wide end.
+    final wide = beamAngleForRatio(throwMin);
+    final tele = beamAngleForRatio(math.max(throwMin, throwMax));
+    if (angle > wide + 0.05) {
+      angle = wide;
+      zoom = -1;
+    } else if (angle < tele - 0.05) {
+      angle = tele;
+      zoom = 1;
+    }
+  }
+  return (fov: angle.clamp(5.0, 180.0).toDouble(), range: dist, zoom: zoom);
 }
 
 /// The usual color of the working-area bands the content needs and above.
@@ -403,6 +484,18 @@ class PlanDevice {
   /// Held where it is: no dragging, nudging or right-click removing.
   final bool locked;
 
+  /// For a projector: its angle and reach follow its paired screen and its
+  /// lens, rather than being set by hand. See [fittedThrow].
+  final bool autoThrow;
+
+  /// The projection calculator as last kept for this device, so it opens
+  /// again as it was. Empty until somebody saves it.
+  final Map<String, dynamic> calc;
+
+  /// Who locked in this device's angle, reach and size. While set they are
+  /// read only, here and in the calculator.
+  final SettingsApproval? approval;
+
   const PlanDevice({
     required this.id,
     required this.deviceKey,
@@ -420,6 +513,9 @@ class PlanDevice {
     this.rangeColors = const {},
     this.throwFt = 0,
     this.locked = false,
+    this.autoThrow = false,
+    this.calc = const {},
+    this.approval,
   });
 
   /// The color its cone, throw or viewing angle is drawn in.
@@ -452,6 +548,10 @@ class PlanDevice {
     Map<int, int>? rangeColors,
     double? throwFt,
     bool? locked,
+    bool? autoThrow,
+    Map<String, dynamic>? calc,
+    SettingsApproval? approval,
+    bool clearApproval = false,
   }) => PlanDevice(
     id: id ?? this.id,
     deviceKey: deviceKey ?? this.deviceKey,
@@ -469,6 +569,9 @@ class PlanDevice {
     rangeColors: rangeColors ?? this.rangeColors,
     throwFt: throwFt ?? this.throwFt,
     locked: locked ?? this.locked,
+    autoThrow: autoThrow ?? this.autoThrow,
+    calc: calc ?? this.calc,
+    approval: clearApproval ? null : approval ?? this.approval,
   );
 
   Map<String, dynamic> toJson() => {
@@ -492,6 +595,9 @@ class PlanDevice {
       },
     if (shape == 'projector' && throwFt > 0) 'throwFt': throwFt,
     if (locked) 'locked': true,
+    if (shape == 'projector' && autoThrow) 'autoThrow': true,
+    if (calc.isNotEmpty) 'calc': calc,
+    if (approval != null) 'approval': approval!.toJson(),
   };
 
   factory PlanDevice.fromJson(Map<String, dynamic> json) {
@@ -527,6 +633,11 @@ class PlanDevice {
         _ => 0,
       },
       locked: json['locked'] == true,
+      autoThrow: json['autoThrow'] == true,
+      calc: json['calc'] is Map
+          ? Map<String, dynamic>.from(json['calc'] as Map)
+          : const {},
+      approval: SettingsApproval.fromJson(json['approval']),
     );
   }
 }

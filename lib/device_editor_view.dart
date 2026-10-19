@@ -323,11 +323,17 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             key: const ValueKey('catalog_projection_calculator'),
             icon: const Icon(Icons.calculate_outlined, size: 16),
             label: const Text('Calculator'),
-            onPressed: () => showProjectionCalculator(
-              context,
-              title: 'Projection calculator - ${entry.model}',
-              specs: _catalogProjectionSpecs(entry),
-            ),
+            onPressed: () {
+              final provider = context.read<AppStateProvider>();
+              showProjectionCalculator(
+                context,
+                title: 'Projection calculator - ${entry.model}',
+                specs: _catalogProjectionSpecs(entry),
+                units: provider.projectionUnits,
+                onUnitsChanged: (v) =>
+                    provider.updateSetting('projectionUnits', v),
+              );
+            },
           ),
         ],
       ),

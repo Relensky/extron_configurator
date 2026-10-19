@@ -825,10 +825,17 @@ class CablingSchematic {
   /// rather than buried.
   final Set<String> overridden;
 
+  /// Runs left off because a device on one end has no location: how many,
+  /// and those devices' names. The Cabling tab says so; it is not drawn.
+  final int runsLeftOff;
+  final List<String> needLocation;
+
   const CablingSchematic({
     required this.boxes,
     required this.bundles,
     required this.overridden,
+    this.runsLeftOff = 0,
+    this.needLocation = const [],
   });
 
   CablingBox? boxById(String id) {
@@ -1428,11 +1435,6 @@ Offset _defaultPosition(int index, CablingBoxKind kind) => switch (kind) {
   CablingBoxKind.location => Offset(80, 60.0 + index * 96),
 };
 
-/// The box a run lands in when the device on that end has not been told where
-/// it is. Not a real location and never written to the sidecar — it exists
-/// only for the length of a drawing.
-const String kUnplacedBoxId = 'loc:__unplaced__';
-
 /// Builds the drawing from the room, then lays the overrides on top.
 ///
 /// The derivation is deliberately simple and explainable: one box per location
@@ -1441,11 +1443,11 @@ const String kUnplacedBoxId = 'loc:__unplaced__';
 /// in the same place is not a run between places and is left out — otherwise
 /// every rack would have a bundle to itself.
 ///
-/// A cable to a device with NO location is not left out. It used to be, and a
-/// run drawn on the signal flow then vanished off the cabling sheet with
-/// nothing said — which reads as the drawing being broken, and hides cable
-/// somebody still has to pull. Those ends land in one "Not placed yet" box
-/// instead, so the run is on the sheet and the missing answer is visible.
+/// A cable to a device with NO location is left off too: only places
+/// somebody has named go on this sheet. A box behind a camera with a short
+/// HDMI lead into it is not a run between places until it is put somewhere.
+/// What was left off, and which devices need a location, is returned so the
+/// tab can say so - see [CablingSchematic.runsLeftOff].
 CablingSchematic buildCablingSchematic({
   required AvFlowModel model,
   required List<RoomLocation> locations,
@@ -1505,18 +1507,25 @@ CablingSchematic buildCablingSchematic({
 
   // --- bundles, counted off the cables between those places ----------------
   final counts = <String, ({String from, String to, SignalType signal, int n})>{};
-  var unplacedEnds = 0;
+  var leftOff = 0;
+  final needLocation = <String>{};
+  final labels = {for (final n in model.nodes) n.id: n.label};
   for (final cable in model.cables) {
     final from = nodeLocation[cable.fromNodeId] ?? '';
     final to = nodeLocation[cable.toNodeId] ?? '';
-    // An end nobody has placed still has cable on it. It goes to the holding
-    // box rather than taking the whole run off the drawing with it.
-    final fromId = from.isEmpty ? kUnplacedBoxId : 'loc:$from';
-    final toId = to.isEmpty ? kUnplacedBoxId : 'loc:$to';
-    // Same place, or both ends unplaced: not a run BETWEEN places, and a
-    // bundle from a box to itself is not something that can be drawn.
+    // An end nobody has placed: off the sheet until it is put somewhere,
+    // with the device named so somebody can.
+    if (from.isEmpty || to.isEmpty) {
+      leftOff++;
+      for (final (id, at) in [(cable.fromNodeId, from), (cable.toNodeId, to)]) {
+        if (at.isEmpty) needLocation.add(labels[id] ?? id);
+      }
+      continue;
+    }
+    final fromId = 'loc:$from';
+    final toId = 'loc:$to';
+    // Same place: not a run BETWEEN places.
     if (fromId == toId) continue;
-    if (fromId == kUnplacedBoxId || toId == kUnplacedBoxId) unplacedEnds++;
     // Order-independent: a run is a run whichever end it was drawn from.
     final ends = [fromId, toId]..sort();
     final key = 'bundle:${ends[0]}|${ends[1]}|${cable.signal.name}';
@@ -1527,27 +1536,6 @@ CablingSchematic buildCablingSchematic({
       signal: cable.signal,
       n: (existing?.n ?? 0) + 1,
     );
-  }
-
-  // Only when something actually landed in it: a room whose devices all know
-  // where they are should not grow an empty box asking about it.
-  if (unplacedEnds > 0) {
-    final box = CablingBox(
-      id: kUnplacedBoxId,
-      label: 'Not placed yet',
-      body: '$unplacedEnds run${unplacedEnds == 1 ? '' : 's'} end here - '
-          'set a location on the device, or place it on the floor plan, and '
-          'the run moves to it.',
-      kind: CablingBoxKind.location,
-      pos: _defaultPosition(locationIndex++, CablingBoxKind.location),
-    );
-    derivedBoxes.add(box.copyWith(
-      pos: nonOverlappingPosition(
-        desired: box.pos,
-        size: box.size,
-        others: [for (final b in derivedBoxes) b.rect],
-      ),
-    ));
   }
 
   final derivedBundles = [
@@ -1690,5 +1678,7 @@ CablingSchematic buildCablingSchematic({
     boxes: boxes,
     bundles: bundles,
     overridden: overridden,
+    runsLeftOff: leftOff,
+    needLocation: needLocation.toList()..sort(),
   );
 }

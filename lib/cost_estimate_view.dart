@@ -7320,9 +7320,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     _furnishedButton(context, provider, line),
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Text(
-                        line.description,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            line.description,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          // The details a full row shows, so an option can be
+                          // looked up and quoted before it is in the total.
+                          if (_optionalDetails(line) case final details
+                              when details.isNotEmpty)
+                            Text(
+                              details,
+                              key: ValueKey('cost_optional_details_${line.key}'),
+                              style: small,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
                       ),
                     ),
                     SizedBox(
@@ -7364,6 +7379,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         ),
       ),
     );
+  }
+
+  /// Maker, part number, model and category of an optional part, as one
+  /// line: whichever are known.
+  static String _optionalDetails(CostLine line) {
+    final model = line.model.trim();
+    return [
+      line.manufacturer.trim(),
+      if (line.partNumber.trim().isNotEmpty) 'Part ${line.partNumber.trim()}',
+      if (model.isNotEmpty && model != line.description.trim()) model,
+      line.category.trim(),
+    ].where((s) => s.isNotEmpty).join('  ·  ');
   }
 
   Widget _switch({

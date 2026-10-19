@@ -987,6 +987,10 @@ class AppStateProvider extends ChangeNotifier {
       : kBuiltInGoogleClientSecret;
   bool get hasGoogleClient => effectiveGoogleClientId.isNotEmpty;
 
+  /// The projection calculator's units last picked, as the calculator writes
+  /// them ('feet|inches|footLamberts'); '' until somebody picks.
+  String projectionUnits = '';
+
   /// Your name and email, as the profile menu shows them. The name defaults
   /// to the Windows login - see [profileName].
   String userDisplayName = '';
@@ -1734,6 +1738,7 @@ class AppStateProvider extends ChangeNotifier {
       'classicSecondary': classicSecondary,
       'textScale': textScale,
       'uiScale': uiScale,
+      if (projectionUnits.isNotEmpty) 'projectionUnits': projectionUnits,
       'currencySymbol': currencySymbol,
       'defaultTaxPercent': defaultTaxPercent,
       'pricingTier': pricingTier.name,
@@ -4414,6 +4419,7 @@ class AppStateProvider extends ChangeNotifier {
         devices: [
           for (final d in sheet.devices) d.copyWith(pos: d.pos + shift),
         ],
+        walls: sheet.walls?.shifted(shift),
       );
     }
     avFloorPlans[index] = next;
@@ -4530,6 +4536,25 @@ class AppStateProvider extends ChangeNotifier {
       );
     }
     notifyListeners();
+  }
+
+  /// Puts several devices in locations at once, as one Undo step: node id ->
+  /// location id ('' for none). Returns how many moved.
+  int setAvNodeLocations(Map<String, String> locations) {
+    final moves = {
+      for (final e in locations.entries)
+        if (avNodeById(e.key) case final n? when n.locationId != e.value)
+          e.key: e.value,
+    };
+    if (moves.isEmpty) return 0;
+    _pushAvUndo('Set ${moves.length} location${moves.length == 1 ? '' : 's'}',
+        _flowScope);
+    for (final e in moves.entries) {
+      final index = avNodes.indexWhere((n) => n.id == e.key);
+      avNodes[index] = avNodes[index].copyWith(locationId: e.value);
+    }
+    notifyListeners();
+    return moves.length;
   }
 
   /// Puts a device in a location (or takes it out of one when [locationId]
@@ -4771,6 +4796,30 @@ class AppStateProvider extends ChangeNotifier {
     return stored;
   }
 
+  /// Places several devices on a sheet as one Undo step. Each gets the next
+  /// free id. Returns them as stored.
+  List<PlanDevice> addAvPlanDevices(String planId, List<PlanDevice> devices) {
+    final index = avFloorPlans.indexWhere((p) => p.id == planId);
+    if (index < 0 || devices.isEmpty) return const [];
+    final plan = avFloorPlans[index];
+    _pushAvUndo('Place ${devices.length} devices', _plansScope);
+    final taken = {for (final d in plan.devices) d.id};
+    var n = plan.devices.length;
+    final stored = <PlanDevice>[];
+    for (final d in devices) {
+      String id;
+      do {
+        n++;
+        id = 'DEV_$n';
+      } while (taken.contains(id));
+      taken.add(id);
+      stored.add(d.copyWith(id: id));
+    }
+    avFloorPlans[index] = plan.copyWith(devices: [...plan.devices, ...stored]);
+    notifyListeners();
+    return stored;
+  }
+
   /// The estimate's equipment for placing on a floor plan, one entry per
   /// unit on the AV Flow.
   List<RoomDeviceChoice> get planDeviceChoices => roomDeviceChoices(
@@ -4860,6 +4909,24 @@ class AppStateProvider extends ChangeNotifier {
 
   /// The picture behind the AV Flow canvas, if any. See [DiagramBackground].
   DiagramBackground avFlowBackground = const DiagramBackground();
+
+  /// Where the AV Flow's key sits and its note.
+  AvLegendSettings avFlowLegend = const AvLegendSettings();
+
+  /// Moves the key or changes its note. [coalesce] folds a drag into one
+  /// undo step.
+  void setAvFlowLegend(AvLegendSettings next, {String coalesce = ''}) {
+    if (next.offset == avFlowLegend.offset && next.note == avFlowLegend.note) {
+      return;
+    }
+    _pushAvUndo(
+      next.note != avFlowLegend.note ? 'Edit the key note' : 'Move the key',
+      _flowScope,
+      coalesce: coalesce,
+    );
+    avFlowLegend = next;
+    notifyListeners();
+  }
 
   /// Puts [imageFile] (already copied in by [importRoomImage]) behind the
   /// canvas at its natural [size], keeping whatever opacity and scale were set.
@@ -8331,7 +8398,20 @@ class AppStateProvider extends ChangeNotifier {
         (c.fromNodeId == node && c.fromPortId == port) ||
         (c.toNodeId == node && c.toPortId == port);
     for (final e in feeds.entries) {
-      final target = e.value == null ? null : avNodeById(e.value!);
+      var found = e.value == null ? null : avNodeById(e.value!);
+      // A box with no POWER inlet drawn gets one, so the lead has somewhere
+      // to land.
+      if (found != null &&
+          !found.ports.any((p) =>
+              p.signal == SignalType.power &&
+              p.direction != PortDirection.output)) {
+        final index = avNodes.indexWhere((n) => n.id == found!.id);
+        found = found.copyWith(
+          ports: withPowerInlet(found.ports, PowerInput.mains),
+        );
+        avNodes[index] = found;
+      }
+      final target = found;
       final inlet = target?.ports
           .where((p) =>
               p.signal == SignalType.power &&
@@ -8739,6 +8819,7 @@ class AppStateProvider extends ChangeNotifier {
     avRoomLightFc = 0;
     avContrastTarget = 15;
     avFlowBackground = const DiagramBackground();
+    avFlowLegend = const AvLegendSettings();
     avDismissedDevices.clear();
     avDismissedCables.clear();
     avRoutedFingerprint = '';
@@ -9033,6 +9114,7 @@ class AppStateProvider extends ChangeNotifier {
         avFlowBackground =
             DiagramBackground.fromJson(Map<String, dynamic>.from(background));
       }
+      avFlowLegend = AvLegendSettings.fromJson(doc['flowLegend']);
 
       final cost = doc['cost'];
       if (cost is Map) {
@@ -9206,6 +9288,7 @@ class AppStateProvider extends ChangeNotifier {
         if (!avCabling.isEmpty) 'cablingSchematic': avCabling.toJson(),
         if (avFlowBackground.hasImage)
           'flowBackground': avFlowBackground.toJson(),
+        if (!avFlowLegend.isDefault) 'flowLegend': avFlowLegend.toJson(),
         'floorPlans': avFloorPlans.map((p) => p.toJson()).toList(),
         if (avThrowDistanceFt > 0) 'throwDistanceFt': avThrowDistanceFt,
         if (avRoomLightFc > 0)
@@ -10463,6 +10546,7 @@ class AppStateProvider extends ChangeNotifier {
       classicSecondary = str('classicSecondary', '');
       textScale = double.tryParse(str('textScale', '')) ?? 1.0;
       uiScale = double.tryParse(str('uiScale', '')) ?? 1.0;
+      projectionUnits = str('projectionUnits', '');
       currencySymbol = str('currencySymbol', r'$');
       defaultTaxPercent = math.max(
         0,
@@ -11765,6 +11849,9 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'estimatePreparerContact':
         estimatePreparerContact = value;
+        break;
+      case 'projectionUnits':
+        projectionUnits = value;
         break;
     }
     notifyListeners();

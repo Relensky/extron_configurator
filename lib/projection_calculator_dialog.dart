@@ -58,19 +58,67 @@ Future<ProjectionResult?> showProjectionCalculator(
   ValueChanged<double>? onSaveDistance,
   String? saveDistanceWhose,
   double roomLightFc = 0,
-}) => showMovableDialog<ProjectionResult>(
-  context: context,
-  builder: (_) => ProjectionCalculatorDialog(
-    title: title,
-    specs: specs,
-    distanceFt: distanceFt,
-    distanceNote: distanceNote,
-    applyLabel: applyLabel,
-    onSaveDistance: onSaveDistance,
-    saveDistanceWhose: saveDistanceWhose,
-    roomLightFc: roomLightFc,
-  ),
-);
+  Map<String, dynamic> kept = const {},
+  SettingsApproval? approval,
+  String approverName = '',
+  String approverEmail = '',
+  void Function(Map<String, dynamic> inputs, SettingsApproval? approval)?
+      onKeep,
+  double roomCeilingFt = 0,
+  double roomDepthFt = 0,
+  List<({String id, String label})> switchTo = const [],
+  String currentId = '',
+  ValueChanged<String>? onSwitch,
+  bool distanceLocked = false,
+  String units = '',
+  ValueChanged<String>? onUnitsChanged,
+}) {
+  // The units somebody picked last time, from their settings.
+  if (units.isNotEmpty) applyProjectionUnitsPref(units);
+  return showMovableDialog<ProjectionResult>(
+    context: context,
+    builder: (_) => ProjectionCalculatorDialog(
+      title: title,
+      specs: specs,
+      distanceFt: distanceFt,
+      distanceNote: distanceNote,
+      applyLabel: applyLabel,
+      onSaveDistance: onSaveDistance,
+      saveDistanceWhose: saveDistanceWhose,
+      roomLightFc: roomLightFc,
+      kept: kept,
+      approval: approval,
+      approverName: approverName,
+      approverEmail: approverEmail,
+      onKeep: onKeep,
+      roomCeilingFt: roomCeilingFt,
+      roomDepthFt: roomDepthFt,
+      switchTo: switchTo,
+      currentId: currentId,
+      onSwitch: onSwitch,
+      distanceLocked: distanceLocked,
+      onUnitsChanged: onUnitsChanged,
+    ),
+  );
+}
+
+/// The calculator's units as one setting: 'feet|inches|footLamberts'.
+String projectionUnitsPref() =>
+    '${_lastDistanceUnit.name}|${_lastSizeUnit.name}|'
+    '${_lastBrightnessUnit.name}';
+
+/// Sets the calculator's units from [pref], as [projectionUnitsPref] wrote
+/// it. Anything not understood is left as it is.
+void applyProjectionUnitsPref(String pref) {
+  final parts = pref.split('|');
+  T? pick<T extends Enum>(List<T> values, int i) => i < parts.length
+      ? values.where((v) => v.name == parts[i]).firstOrNull
+      : null;
+  _lastDistanceUnit = pick(LengthUnit.values, 0) ?? _lastDistanceUnit;
+  _lastSizeUnit = pick(LengthUnit.values, 1) ?? _lastSizeUnit;
+  _lastBrightnessUnit =
+      pick(BrightnessUnit.values, 2) ?? _lastBrightnessUnit;
+}
 
 enum _SizeBy { diagonal, width, height }
 
@@ -108,6 +156,40 @@ class ProjectionCalculatorDialog extends StatefulWidget {
   /// The room's light on the screen in foot-candles; 0 starts at 5.
   final double roomLightFc;
 
+  /// What was kept for this device last time - see [inputsJson] - and who
+  /// locked it in, if anyone.
+  final Map<String, dynamic> kept;
+  final SettingsApproval? approval;
+
+  /// Who is using the app, put on a lock-in.
+  final String approverName;
+  final String approverEmail;
+
+  /// Keeps the inputs with the device: Save, Lock in and Unlock. Null when
+  /// the calculator is opened on its own, with nothing to keep them on.
+  final void Function(Map<String, dynamic> inputs, SettingsApproval? approval)?
+      onKeep;
+
+  /// The room's walls, in feet, when the floor plan has them: the ceiling
+  /// starts there, and a throw longer than the room is called out. 0 when
+  /// not known.
+  final double roomCeilingFt;
+  final double roomDepthFt;
+
+  /// The room's other projectors, to switch to from the title, with
+  /// [currentId] the one open now. Switching keeps this one's settings, then
+  /// [onSwitch] opens the other.
+  final List<({String id, String label})> switchTo;
+  final String currentId;
+  final ValueChanged<String>? onSwitch;
+
+  /// [distanceFt] was entered as a throw distance: it opens in the distance
+  /// box, over anything kept, and locked.
+  final bool distanceLocked;
+
+  /// Saves the units picked, as [projectionUnitsPref], for next time.
+  final ValueChanged<String>? onUnitsChanged;
+
   const ProjectionCalculatorDialog({
     super.key,
     this.title = 'Projection calculator',
@@ -118,6 +200,18 @@ class ProjectionCalculatorDialog extends StatefulWidget {
     this.onSaveDistance,
     this.saveDistanceWhose,
     this.roomLightFc = 0,
+    this.kept = const {},
+    this.approval,
+    this.approverName = '',
+    this.approverEmail = '',
+    this.onKeep,
+    this.roomCeilingFt = 0,
+    this.roomDepthFt = 0,
+    this.switchTo = const [],
+    this.currentId = '',
+    this.onSwitch,
+    this.distanceLocked = false,
+    this.onUnitsChanged,
   });
 
   @override
@@ -157,6 +251,119 @@ class _ProjectionCalculatorDialogState
   final _bottom = TextEditingController();
   final _ceiling = TextEditingController();
 
+  /// Boxes locked by hand: not typed in, and not changed by picking a spec
+  /// or dragging the projector.
+  final Set<TextEditingController> _locked = {};
+
+  /// Who locked these numbers in. While set, nothing here can be changed.
+  late SettingsApproval? _approval = widget.approval;
+  bool get _frozen => _approval != null;
+
+  /// The boxes by the name they are kept under.
+  late final Map<String, TextEditingController> _boxes = {
+    'throwMin': _throwMin,
+    'throwMax': _throwMax,
+    'lumens': _lumens,
+    'gain': _gain,
+    'halfGain': _halfGain,
+    'ambient': _ambient,
+    'shiftUp': _shiftUp,
+    'shiftDown': _shiftDown,
+    'shiftSide': _shiftSide,
+  };
+
+  /// Everything typed or picked, to keep with the device. Lengths in feet,
+  /// so a later change of units reads them right.
+  Map<String, dynamic> get inputsJson => {
+    'spec': _spec,
+    for (final e in _boxes.entries) e.key: e.value.text,
+    'fromDistance': _fromDistance,
+    'aspect': _aspect.label,
+    'sizeBy': _sizeBy.name,
+    'sizeFt': _feet(_size, _sizeUnit),
+    'distanceFt': _feet(_distance, _distanceUnit),
+    'bottomFt': _feet(_bottom, _distanceUnit),
+    'ceilingFt': _feet(_ceiling, _distanceUnit),
+    'zoom': _zoom,
+    'distanceUnit': _distanceUnit.name,
+    'sizeUnit': _sizeUnit.name,
+    'brightnessUnit': _brightnessUnit.name,
+    'locked': [
+      for (final e in {
+        ..._boxes,
+        'size': _size,
+        'distance': _distance,
+        'bottom': _bottom,
+        'ceiling': _ceiling,
+      }.entries)
+        if (_locked.contains(e.value)) e.key,
+    ],
+  };
+
+  /// Puts [kept] back in the boxes.
+  void _restore(Map<String, dynamic> kept) {
+    double read(String k) => (kept[k] as num?)?.toDouble() ?? 0;
+    // Units first: the lengths below are written in them. What is in the
+    // boxes now is carried over into them, for anything not kept.
+    final was = (
+      d: _feet(_distance, _distanceUnit),
+      b: _feet(_bottom, _distanceUnit),
+      c: _feet(_ceiling, _distanceUnit),
+      s: _feet(_size, _sizeUnit),
+    );
+    _distanceUnit = LengthUnit.values
+            .where((u) => u.name == kept['distanceUnit'])
+            .firstOrNull ??
+        _distanceUnit;
+    _sizeUnit = LengthUnit.values
+            .where((u) => u.name == kept['sizeUnit'])
+            .firstOrNull ??
+        _sizeUnit;
+    _brightnessUnit = BrightnessUnit.values
+            .where((u) => u.name == kept['brightnessUnit'])
+            .firstOrNull ??
+        _brightnessUnit;
+    _distance.text = _lengthText(was.d, _distanceUnit);
+    _bottom.text = _lengthText(was.b, _distanceUnit);
+    _ceiling.text = _lengthText(was.c, _distanceUnit);
+    _size.text = _lengthText(was.s, _sizeUnit, places: 1);
+    final spec = (kept['spec'] as num?)?.toInt() ?? -1;
+    _spec = spec < widget.specs.length ? spec : -1;
+    for (final e in _boxes.entries) {
+      if (kept[e.key] is String) e.value.text = kept[e.key] as String;
+    }
+    _fromDistance = kept['fromDistance'] == true;
+    _aspect = kScreenAspects
+            .where((a) => a.label == kept['aspect'])
+            .firstOrNull ??
+        _aspect;
+    _sizeBy = _SizeBy.values
+            .where((b) => b.name == kept['sizeBy'])
+            .firstOrNull ??
+        _sizeBy;
+    if (read('sizeFt') > 0) _size.text = _lengthText(read('sizeFt'), _sizeUnit);
+    if (read('distanceFt') > 0) {
+      _distance.text = _lengthText(read('distanceFt'), _distanceUnit);
+    }
+    if (read('bottomFt') > 0) {
+      _bottom.text = _lengthText(read('bottomFt'), _distanceUnit);
+    }
+    if (read('ceilingFt') > 0) {
+      _ceiling.text = _lengthText(read('ceilingFt'), _distanceUnit);
+    }
+    _zoom = read('zoom').clamp(0.0, 1.0).toDouble();
+    final names = {
+      ..._boxes,
+      'size': _size,
+      'distance': _distance,
+      'bottom': _bottom,
+      'ceiling': _ceiling,
+    };
+    for (final n in (kept['locked'] as List?) ?? const []) {
+      if (names[n] case final c?) _locked.add(c);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -164,18 +371,51 @@ class _ProjectionCalculatorDialogState
     if (widget.specs.isNotEmpty) _useSpec(0);
     final d = widget.distanceFt;
     if (d != null && d > 0) {
-      _distance.text = _fmt(d * _distanceUnit.perFoot, 2);
+      _distance.text = _lengthText(d, _distanceUnit);
       _fromDistance = true;
     }
-    _size.text = _fmt(10 * _sizeUnit.perFoot, 1);
-    _bottom.text = _fmt(4 * _distanceUnit.perFoot, 2);
-    _ceiling.text = _fmt(10 * _distanceUnit.perFoot, 2);
+    _size.text = _lengthText(10, _sizeUnit, places: 1);
+    _bottom.text = _lengthText(4, _distanceUnit);
+    _ceiling.text = _lengthText(
+      widget.roomCeilingFt > 0 ? widget.roomCeilingFt : 10,
+      _distanceUnit,
+    );
+    // As it was kept for this device, over the defaults.
+    if (widget.kept.isNotEmpty) _restore(widget.kept);
+    // A throw entered for this projector is the throw.
+    if (widget.distanceLocked && d != null && d > 0) {
+      _distance.text = _lengthText(d, _distanceUnit);
+      _fromDistance = true;
+      _locked.add(_distance);
+    }
+    // The room's ceiling, once it has one, is the ceiling.
+    if (widget.roomCeilingFt > 0) {
+      _ceiling.text = _lengthText(widget.roomCeilingFt, _distanceUnit);
+    }
   }
 
-  /// A box typed in [unit], in feet.
+  /// A box typed in [unit], in feet. In feet it takes feet and inches
+  /// together: 11'8", 11' 8", 11.5 or 140".
   double _feet(TextEditingController c, LengthUnit unit, [double fallback = 0]) {
-    final v = _num(c);
-    return v == 0 && fallback != 0 ? fallback : v / unit.perFoot;
+    final v = unit == LengthUnit.feet
+        ? parseFeetInches(c.text.replaceAll(',', '')) ?? 0
+        : _num(c) / unit.perFoot;
+    return v == 0 && fallback != 0 ? fallback : v;
+  }
+
+  /// [feet] for a box in [unit]: 11' 8" in feet, a plain number otherwise.
+  static String _lengthText(double feet, LengthUnit unit, {int places = 2}) {
+    if (unit != LengthUnit.feet) return _fmt(feet * unit.perFoot, places);
+    if (!feet.isFinite || feet <= 0) return '';
+    var ft = feet.floor();
+    var inches = (feet - ft) * 12;
+    // To the quarter inch, which is as close as anyone hangs a screen.
+    inches = (inches * 4).round() / 4;
+    if (inches >= 12) {
+      ft++;
+      inches = 0;
+    }
+    return inches == 0 ? "$ft'" : "$ft' ${trimFeetInches(inches)}\"";
   }
 
   double get _bottomFt => _feet(_bottom, _distanceUnit);
@@ -193,10 +433,8 @@ class _ProjectionCalculatorDialogState
 
   /// Retypes [c] from one unit to another so the length stays the same.
   void _convert(TextEditingController c, LengthUnit from, LengthUnit to) {
-    final v = _num(c);
-    if (v > 0 && from != to) {
-      c.text = _fmt(v / from.perFoot * to.perFoot, 2);
-    }
+    final ft = _feet(c, from);
+    if (ft > 0 && from != to) c.text = _lengthText(ft, to);
   }
 
   void _setDistanceUnit(LengthUnit u) {
@@ -297,6 +535,7 @@ class _ProjectionCalculatorDialogState
       _setSizeUnit(size);
       _brightnessUnit = _lastBrightnessUnit = bright;
     });
+    widget.onUnitsChanged?.call(projectionUnitsPref());
   }
 
   @override
@@ -314,15 +553,19 @@ class _ProjectionCalculatorDialogState
     _spec = i;
     if (i < 0) return;
     final s = widget.specs[i];
-    if (s.hasThrow) {
-      _throwMin.text = _fmt(s.throwMin, 2);
-      _throwMax.text = s.throwMax > s.throwMin ? _fmt(s.throwMax, 2) : '';
+    void put(TextEditingController c, String text) {
+      if (!_locked.contains(c)) c.text = text;
     }
-    if (s.hasLumens) _lumens.text = s.lumens.round().toString();
+
+    if (s.hasThrow) {
+      put(_throwMin, _fmt(s.throwMin, 2));
+      put(_throwMax, s.throwMax > s.throwMin ? _fmt(s.throwMax, 2) : '');
+    }
+    if (s.hasLumens) put(_lumens, s.lumens.round().toString());
     if (s.hasShift) {
-      _shiftUp.text = _fmt(s.shiftUp, 1);
-      _shiftDown.text = _fmt(s.shiftDown, 1);
-      _shiftSide.text = _fmt(s.shiftSide, 1);
+      put(_shiftUp, _fmt(s.shiftUp, 1));
+      put(_shiftDown, _fmt(s.shiftDown, 1));
+      put(_shiftSide, _fmt(s.shiftSide, 1));
     }
   }
 
@@ -367,9 +610,8 @@ class _ProjectionCalculatorDialogState
 
   /// The image the screen size field describes, in feet.
   ImageSize? get _typedImage {
-    final typed = _num(_size);
-    if (typed <= 0) return null;
-    final ft = typed / _sizeUnit.perFoot;
+    final ft = _feet(_size, _sizeUnit);
+    if (ft <= 0) return null;
     return switch (_sizeBy) {
       _SizeBy.diagonal => imageFromDiagonal(ft, _aspect),
       _SizeBy.width => imageFromWidth(ft, _aspect),
@@ -402,7 +644,34 @@ class _ProjectionCalculatorDialogState
         children: [
           const Icon(Icons.videocam_outlined),
           const SizedBox(width: 10),
-          Expanded(child: Text(widget.title)),
+          if (widget.switchTo.length > 1 && widget.onSwitch != null)
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                key: const ValueKey('projection_switch'),
+                initialValue: widget.currentId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Projection calculator',
+                  isDense: true,
+                ),
+                items: [
+                  for (final d in widget.switchTo)
+                    DropdownMenuItem(
+                      value: d.id,
+                      child: Text(d.label, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: (id) {
+                  if (id == null || id == widget.currentId) return;
+                  // This one as it stands, kept before the other opens.
+                  if (!_frozen) widget.onKeep?.call(inputsJson, null);
+                  Navigator.of(context).pop();
+                  widget.onSwitch!(id);
+                },
+              ),
+            )
+          else
+            Expanded(child: Text(widget.title)),
           OutlinedButton.icon(
             key: const ValueKey('projection_units'),
             icon: const Icon(Icons.straighten, size: 16),
@@ -418,7 +687,41 @@ class _ProjectionCalculatorDialogState
             spacing: 24,
             runSpacing: 16,
             children: [
-              SizedBox(width: 340, child: _inputs(theme)),
+              if (_approval case final a?)
+                Container(
+                  key: const ValueKey('projection_approved'),
+                  width: 744,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer
+                        .withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_outlined, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Locked in - approved by ${a.label}',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              SizedBox(
+                width: 340,
+                // Locked in: shown, not changed.
+                child: AbsorbPointer(
+                  absorbing: _frozen,
+                  child: Opacity(
+                    opacity: _frozen ? 0.75 : 1,
+                    child: _inputs(theme),
+                  ),
+                ),
+              ),
               SizedBox(width: 380, child: _results(theme, image, distance)),
               if (image != null && distance > 0 && _minRatio > 0)
                 SizedBox(width: 744, child: _diagram(image, distance)),
@@ -427,6 +730,33 @@ class _ProjectionCalculatorDialogState
         ),
       ),
       actions: [
+        if (widget.onKeep != null) ...[
+          if (_frozen)
+            TextButton.icon(
+              key: const ValueKey('projection_unlock'),
+              icon: const Icon(Icons.lock_open_outlined, size: 16),
+              label: const Text('Unlock'),
+              onPressed: _unlock,
+            )
+          else ...[
+            TextButton(
+              key: const ValueKey('projection_keep'),
+              onPressed: () {
+                widget.onKeep!(inputsJson, null);
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                  const SnackBar(content: Text('Kept with this device.')),
+                );
+              },
+              child: const Text('Save'),
+            ),
+            TextButton.icon(
+              key: const ValueKey('projection_lock_in'),
+              icon: const Icon(Icons.verified_outlined, size: 16),
+              label: const Text('Lock in...'),
+              onPressed: _lockIn,
+            ),
+          ],
+        ],
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
@@ -435,19 +765,88 @@ class _ProjectionCalculatorDialogState
           ElevatedButton(
             key: const ValueKey('projection_apply'),
             onPressed: canApply
-                ? () => Navigator.of(context).pop(
-                    ProjectionResult(
-                      distanceFt: distance,
-                      imageWidthFt: image.width,
-                      halfGain: _halfGainValue,
-                      gain: _gainValue,
-                    ),
-                  )
+                ? () {
+                    widget.onKeep?.call(inputsJson, _approval);
+                    Navigator.of(context).pop(
+                      ProjectionResult(
+                        distanceFt: distance,
+                        imageWidthFt: image.width,
+                        halfGain: _halfGainValue,
+                        gain: _gainValue,
+                      ),
+                    );
+                  }
                 : null,
             child: Text(widget.applyLabel!),
           ),
       ],
     );
+  }
+
+  /// Asks, then keeps the inputs with the device as approved by whoever is
+  /// using the app.
+  Future<void> _lockIn() async {
+    final name = widget.approverName.trim();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Lock in these numbers?'),
+        content: Text(
+          'They are kept with this device as approved by '
+          '${name.isEmpty ? 'you' : name}, and nothing in the calculator or '
+          'on the floor plan can change them until they are unlocked.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('projection_lock_in_confirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Lock in'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final approval = SettingsApproval(
+      name: name.isEmpty ? 'Unknown' : name,
+      email: widget.approverEmail.trim(),
+      at: DateTime.now(),
+    );
+    widget.onKeep!(inputsJson, approval);
+    setState(() => _approval = approval);
+  }
+
+  /// Asks, then takes the approval off so the numbers can change again.
+  Future<void> _unlock() async {
+    final a = _approval;
+    if (a == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Unlock?'),
+        content: Text(
+          'These numbers were approved by ${a.label}. Unlocking takes the '
+          'approval off.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('projection_unlock_confirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Unlock'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    widget.onKeep!(inputsJson, null);
+    setState(() => _approval = null);
   }
 
   String get _whose => widget.saveDistanceWhose == null
@@ -458,6 +857,7 @@ class _ProjectionCalculatorDialogState
       ? 'Room'
       : "${widget.saveDistanceWhose}'s";
 
+  /// A number box with a lock. [feetAndInches] lets it take 11'8".
   Widget _field(
     TextEditingController c,
     String label, {
@@ -466,23 +866,49 @@ class _ProjectionCalculatorDialogState
     String? hint,
     Key? key,
     double width = 100,
-  }) => SizedBox(
-    width: width,
-    child: TextField(
-      key: key,
-      controller: c,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-      decoration: InputDecoration(
-        labelText: label,
-        suffixText: suffix,
-        helperText: helper,
-        hintText: hint,
-        isDense: true,
+    bool feetAndInches = false,
+  }) {
+    final locked = _locked.contains(c);
+    return SizedBox(
+      width: width + 28,
+      child: TextField(
+        key: key,
+        controller: c,
+        readOnly: locked || _frozen,
+        keyboardType: feetAndInches
+            ? TextInputType.text
+            : const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(
+            feetAndInches ? RegExp('[\\d.,\'" ]') : RegExp(r'[\d.,]'),
+          ),
+        ],
+        decoration: InputDecoration(
+          labelText: label,
+          // Feet and inches carry their own marks.
+          suffixText: feetAndInches ? null : suffix,
+          helperText: helper,
+          hintText: hint ?? (feetAndInches ? '11\' 8"' : null),
+          isDense: true,
+          filled: locked,
+          suffixIconConstraints:
+              const BoxConstraints(minWidth: 28, minHeight: 28),
+          suffixIcon: IconButton(
+            key: ValueKey('lock_${key is ValueKey ? key.value : label}'),
+            iconSize: 15,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            tooltip: locked ? 'Unlock' : 'Lock so it stays as it is',
+            icon: Icon(locked ? Icons.lock : Icons.lock_open_outlined),
+            onPressed: () => setState(() {
+              if (!_locked.remove(c)) _locked.add(c);
+            }),
+          ),
+        ),
+        onChanged: (_) => setState(() {}),
       ),
-      onChanged: (_) => setState(() {}),
-    ),
-  );
+    );
+  }
 
   Widget _heading(ThemeData theme, String text) => Padding(
     padding: const EdgeInsets.only(top: 14, bottom: 6),
@@ -629,6 +1055,7 @@ class _ProjectionCalculatorDialogState
                 'Size',
                 suffix: _sizeUnit.short,
                 key: const ValueKey('projection_size'),
+                feetAndInches: _sizeUnit == LengthUnit.feet,
               ),
               // The image size unit; the number in the box is converted so
               // the screen stays the same size.
@@ -651,6 +1078,7 @@ class _ProjectionCalculatorDialogState
                 suffix: _distanceUnit.short,
                 key: const ValueKey('projection_distance'),
                 width: 170,
+                feetAndInches: _distanceUnit == LengthUnit.feet,
               ),
           ],
         ),
@@ -703,12 +1131,14 @@ class _ProjectionCalculatorDialogState
               suffix: _distanceUnit.short,
               helper: 'off the floor',
               width: 120,
+              feetAndInches: _distanceUnit == LengthUnit.feet,
             ),
             _field(
               _ceiling,
               'Ceiling',
               suffix: _distanceUnit.short,
               width: 100,
+              feetAndInches: _distanceUnit == LengthUnit.feet,
             ),
           ],
         ),
@@ -741,7 +1171,7 @@ class _ProjectionCalculatorDialogState
         distanceUnit: _distanceUnit,
         sizeUnit: _sizeUnit,
       ),
-      onDistanceChanged: (d) => setState(() => _dragTo(d)),
+      onDistanceChanged: _frozen ? null : (d) => setState(() => _dragTo(d)),
     );
   }
 
@@ -749,17 +1179,19 @@ class _ProjectionCalculatorDialogState
   /// shrinks with the throw, in whichever field drives the calculator.
   void _dragTo(double feet) {
     if (_fromDistance) {
-      _distance.text = _fmt(feet * _distanceUnit.perFoot, 2);
+      if (!_locked.contains(_distance)) {
+        _distance.text = _lengthText(feet, _distanceUnit);
+      }
       return;
     }
-    if (_ratio <= 0) return;
+    if (_ratio <= 0 || _locked.contains(_size)) return;
     final img = imageFromWidth(imageWidthAt(feet, _ratio), _aspect);
     final ft = switch (_sizeBy) {
       _SizeBy.diagonal => img.diagonal,
       _SizeBy.width => img.width,
       _SizeBy.height => img.height,
     };
-    _size.text = _fmt(ft * _sizeUnit.perFoot, 1);
+    _size.text = _lengthText(ft, _sizeUnit, places: 1);
   }
 
   /// Where [fl] sits from too dim to bright enough for a lit room.
@@ -989,6 +1421,48 @@ class _ProjectionCalculatorDialogState
             key: const ValueKey('projection_throw_range'),
           ),
         row('Throw ratio', '${_fmt(_ratio, 2)}:1'),
+        // Against the room: the ceiling the screen hangs from and the depth
+        // the projector has to fit in.
+        if (_ceilingFt > 0)
+          row(
+            'Screen drop from ceiling',
+            _ceilingFt - (_bottomFt + image.height) >= 0
+                ? _len(_ceilingFt - (_bottomFt + image.height))
+                : 'none',
+            key: const ValueKey('projection_drop'),
+          ),
+        for (final w in [
+          if (_bottomFt + image.height > _ceilingFt + 0.01)
+            'The image top is ${_len(_bottomFt + image.height - _ceilingFt)} '
+                'above the ceiling. Lower the image bottom or pick a smaller '
+                'screen.',
+          if (lens.low > _ceilingFt - 0.5)
+            'The lens cannot sit below the ceiling at this image height, even '
+                'with the lens shift. Lower the image or use more shift.',
+          if (widget.roomDepthFt > 0 && distance > widget.roomDepthFt + 0.01)
+            'The throw is longer than the room is deep '
+                '(${_len(widget.roomDepthFt)}): the projector would be outside '
+                'the room. Use a shorter throw lens or a smaller screen.',
+        ])
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.warning_amber_rounded,
+                    size: 16, color: theme.colorScheme.error),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    w,
+                    key: const ValueKey('projection_room_warning'),
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.error),
+                  ),
+                ),
+              ],
+            ),
+          ),
         if (widget.onSaveDistance != null)
           Align(
             alignment: Alignment.centerRight,
@@ -999,6 +1473,9 @@ class _ProjectionCalculatorDialogState
               onPressed: distance > 0
                   ? () {
                       widget.onSaveDistance!(distance);
+                      // And everything else set up for it, so it opens
+                      // again as it was.
+                      widget.onKeep?.call(inputsJson, _approval);
                       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                         SnackBar(
                           content: Text(

@@ -32,6 +32,48 @@ const List<ScreenAspect> kScreenAspects = [
   ScreenAspect('2.35:1', 2.35, 1),
 ];
 
+/// Who approved a device's numbers on the floor plan, and when. While there
+/// is one the numbers are locked in.
+class SettingsApproval {
+  final String name;
+  final String email;
+  final DateTime at;
+
+  const SettingsApproval({
+    required this.name,
+    this.email = '',
+    required this.at,
+  });
+
+  /// "Derek Stanley, Oct 19, 2026".
+  String get label {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final local = at.toLocal();
+    return '$name, ${months[local.month - 1]} ${local.day}, ${local.year}';
+  }
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    if (email.isNotEmpty) 'email': email,
+    'at': at.toIso8601String(),
+  };
+
+  static SettingsApproval? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final name = json['name']?.toString() ?? '';
+    final at = DateTime.tryParse(json['at']?.toString() ?? '');
+    if (name.isEmpty || at == null) return null;
+    return SettingsApproval(
+      name: name,
+      email: json['email']?.toString() ?? '',
+      at: at,
+    );
+  }
+}
+
 /// Width and height of an image, in feet.
 class ImageSize {
   final double width;
@@ -363,6 +405,19 @@ double displayDiagonalOf(AvDeviceTemplate t) {
   final inModel = RegExp(r'^[A-Za-z]+-?[A-Za-z]?(\d{2})').firstMatch(t.model.trim());
   final fromModel = double.tryParse(inModel?.group(1) ?? '') ?? 0;
   return fromModel >= 32 && fromModel <= 99 ? fromModel : 0;
+}
+
+/// A projection screen's diagonal in inches, read off its notes or model
+/// ('120"', '106-inch', 'TE120'). 0 when neither says.
+double screenDiagonalOf(AvDeviceTemplate t) {
+  final inNotes = RegExp(r'(\d{2,3})\s*(?:"|-?\s*inch|in\b)',
+          caseSensitive: false)
+      .firstMatch('${t.notes} ${t.model}');
+  final fromNotes = double.tryParse(inNotes?.group(1) ?? '') ?? 0;
+  if (fromNotes >= 50 && fromNotes <= 300) return fromNotes;
+  final inModel = RegExp(r'(\d{2,3})').firstMatch(t.model);
+  final fromModel = double.tryParse(inModel?.group(1) ?? '') ?? 0;
+  return fromModel >= 60 && fromModel <= 300 ? fromModel : 0;
 }
 
 /// Width of a 16:9 picture [diagonal] inches across, in feet.

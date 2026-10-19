@@ -98,6 +98,8 @@ const Map<RoomSidecarPart, List<String>> kRoomSidecarKeys = {
     // The backdrop belongs to the signal flow canvas, not to the floor plans:
     // it is whatever picture somebody wanted behind THIS drawing.
     'flowBackground',
+    // Where the key sits and the note under it.
+    'flowLegend',
   ],
   RoomSidecarPart.racks: ['racks', 'rackItems', 'rackSlots'],
   // The locations travel with the plans: a callout is a marker on a sheet

@@ -255,12 +255,62 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// the cone live. Written to the provider once, when the edit ends.
   PlanDevice? _devicePreview;
 
-  /// [plan]'s devices with any edit in progress shown.
+  /// [plan]'s devices with any edit in progress shown, and every projector
+  /// on Auto from screen thrown at its screen.
   List<PlanDevice> _shownDevices(FloorPlan plan) {
     final preview = _devicePreview;
-    if (preview == null) return plan.devices;
     // Its screen or projector follows live, as it will once saved.
-    return withProjectionLinked(plan.devices, preview);
+    final linked = preview == null
+        ? plan.devices
+        : withProjectionLinked(plan.devices, preview);
+    final provider = context.read<AppStateProvider>();
+    // Screens, displays and projectors reach by the math, never by hand.
+    final devices = [
+      for (final d in linked)
+        if (derivedReach(
+          d,
+          linked,
+          pixelsPerFoot: plan.pixelsPerFoot,
+          roomThrowFt: provider.avThrowDistanceFt,
+        )
+            case final r?)
+          d.copyWith(range: r)
+        else
+          d,
+    ];
+    if (!devices.any((d) => d.shape == 'projector' && d.autoThrow)) {
+      return devices;
+    }
+    return [
+      for (final d in devices)
+        if (d.shape == 'projector' && d.autoThrow)
+          if (_fitted(provider, devices, d) case final f?)
+            d.copyWith(fov: f.fov, range: f.range)
+          else
+            d
+        else
+          d,
+    ];
+  }
+
+  /// [projector]'s beam to its paired screen, inside its lens's zoom; null
+  /// with no screen to throw at.
+  FittedThrow? _fitted(
+    AppStateProvider provider,
+    List<PlanDevice> devices,
+    PlanDevice projector,
+  ) {
+    final screen = projectionPartner(devices, projector);
+    if (screen == null || screen.shape != 'screen') return null;
+    final lens = _projectorSpecs(provider, projector)
+        .where((s) => s.hasThrow)
+        .firstOrNull;
+    return fittedThrow(
+      projector,
+      screen,
+      throwMin: lens?.throwMin ?? 0,
+      throwMax: lens?.throwMax ?? 0,
+    );
   }
 
   void _previewDevice(PlanDevice device) {
@@ -1794,6 +1844,29 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             if (v) _snack('Click where to measure from, then where to.');
           },
         ),
+      if (plan != null && plan.pixelsPerFoot > 0)
+        FilterChip(
+          key: const ValueKey('plan_room_walls'),
+          avatar: const Icon(Icons.crop_square, size: 18),
+          label: Text(_wallsLabel(plan)),
+          tooltip: plan.walls == null
+              ? 'Click two opposite corners of the room, then set its size '
+                  'and ceiling height'
+              : 'The room\'s walls and ceiling height',
+          selected: _tool == _PlanTool.walls,
+          onSelected: (v) {
+            if (plan.walls != null && v) {
+              _editWalls(provider, plan, plan.walls!.rect);
+              return;
+            }
+            setState(() {
+              _tool = v ? _PlanTool.walls : _PlanTool.none;
+              _scaleStart = null;
+              _scaleHover = null;
+            });
+            if (v) _snack('Click one corner of the room, then the opposite one.');
+          },
+        ),
       if (plan != null &&
           plan.devices.any((d) => d.showFov && deviceShapeHasFov(d.shape)))
         FilterChip(
@@ -2132,6 +2205,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             : null,
         child: MouseRegion(
           onHover: (_tool == _PlanTool.scale ||
+                      _tool == _PlanTool.walls ||
                       (_tool == _PlanTool.measure && !_measureDone)) &&
                   _scaleStart != null
               ? (e) {
@@ -2191,6 +2265,22 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                       // Against the paper — see the captions above.
                       dark: darkPaper,
                       style: plan.styleFor(PlanTextKind.wiring),
+                    ),
+                  ),
+                ),
+              ),
+            // The room's walls, under everything placed in the room.
+            if (plan.walls != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    key: const ValueKey('plan_walls'),
+                    painter: _WallsPainter(
+                      walls: plan.walls!,
+                      pixelsPerFoot: plan.pixelsPerFoot,
+                      ink: darkPaper
+                          ? const Color(0xDDFFFFFF)
+                          : const Color(0xDD263238),
                     ),
                   ),
                 ),
@@ -2278,10 +2368,30 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             // Measuring or setting the scale: a click is a point on the
             // line, never a device, place or label under it. The taps still
             // reach the sheet's own handler above.
-            if (_tool == _PlanTool.scale || _tool == _PlanTool.measure)
+            if (_tool == _PlanTool.scale ||
+                _tool == _PlanTool.measure ||
+                _tool == _PlanTool.walls)
               const Positioned.fill(
                 key: ValueKey('plan_measure_cover'),
                 child: AbsorbPointer(),
+              ),
+            if (_tool == _PlanTool.walls && _scaleStart != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _WallsPainter(
+                      walls: PlanWalls(
+                        rect: Rect.fromPoints(
+                          _scaleStart!,
+                          _scaleHover ?? _scaleStart!,
+                        ),
+                      ),
+                      pixelsPerFoot: plan.pixelsPerFoot,
+                      ink: const Color(0xFFFFC107),
+                      preview: true,
+                    ),
+                  ),
+                ),
               ),
             if ((_tool == _PlanTool.scale || _tool == _PlanTool.measure) &&
                 _scaleStart != null)
@@ -3781,18 +3891,57 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     return PopupMenuButton<RoomDeviceChoice>(
       key: const ValueKey('plan_add_device'),
       tooltip: 'Place a device from the estimate',
-      onSelected: (choice) {
+      onSelected: (choice) async {
+        // A screen by size, for a room whose screen model nobody knows.
+        if (choice.key == kGenericScreenKey) {
+          final size = await _askScreenSize(null);
+          if (size == null || !mounted) return;
+          _genericScreen = size;
+          choice = RoomDeviceChoice(
+            key: kGenericScreenKey,
+            name: size.count > 1
+                ? '${size.count} screens'
+                : kScreenAspects.contains(size.aspect)
+                ? 'Screen ${trimFeetInches(size.diagonal)}" '
+                    '${size.aspect.label}'
+                : 'Screen ${size.aspect.label}',
+            qty: 0,
+            shape: 'screen',
+          );
+          if (plan.pixelsPerFoot <= 0) {
+            _snack('Set scale first so the screen is drawn to its size.');
+          }
+        }
         setState(() {
           _tool = _PlanTool.device;
           _pendingDevice = choice;
         });
         _snack('Click the sheet to place ${choice.name}.');
       },
-      itemBuilder: (ctx) => roomDeviceMenuItems(
-        ctx,
-        provider.planDeviceChoices,
-        plan.devices.map((d) => d.deviceKey),
-      ),
+      itemBuilder: (ctx) => [
+        ...roomDeviceMenuItems(
+          ctx,
+          provider.planDeviceChoices,
+          plan.devices.map((d) => d.deviceKey),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<RoomDeviceChoice>(
+          key: ValueKey('add_device_generic_screen'),
+          value: RoomDeviceChoice(
+            key: kGenericScreenKey,
+            name: 'Screen by size',
+            qty: 0,
+            shape: 'screen',
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.aspect_ratio, size: 18),
+              SizedBox(width: 10),
+              Expanded(child: Text('Screen by size (model not known)')),
+            ],
+          ),
+        ),
+      ],
       child: IgnorePointer(
         child: FilterChip(
           avatar: Icon(
@@ -3820,6 +3969,36 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final template = _templatesFor(provider, choice.key).firstOrNull;
     final ppf = plan.pixelsPerFoot;
     final throwFt = provider.avThrowDistanceFt;
+    final many = _genericScreen?.count ?? 1;
+    if (choice.key == kGenericScreenKey && many > 1) {
+      final width = _startingWidth(provider, plan, choice);
+      final gap = ppf > 0 ? 3 * ppf : 60.0;
+      // After the highest Screen <n> already on the sheet.
+      var n = 0;
+      for (final d in plan.devices) {
+        final m = RegExp(r'^Screen (\d+)$').firstMatch(d.label.trim());
+        if (m != null) n = math.max(n, int.parse(m.group(1)!));
+      }
+      final placed = provider.addAvPlanDevices(plan.id, [
+        for (var i = 0; i < many; i++)
+          PlanDevice(
+            id: '',
+            deviceKey: kGenericScreenKey,
+            label: 'Screen ${n + i + 1}',
+            shape: 'screen',
+            pos: at + Offset(i * (width + gap), 0),
+            fov: defaultDeviceFov('screen'),
+            width: width,
+          ),
+      ]);
+      _focusSheet();
+      setState(() {
+        if (placed.isNotEmpty) _selectedDeviceId = placed.first.id;
+        _tool = _PlanTool.none;
+        _pendingDevice = null;
+      });
+      return;
+    }
     final placed = provider.addAvPlanDevice(
       plan.id,
       PlanDevice(
@@ -3835,6 +4014,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ? throwFt * ppf
             : kDefaultDeviceRange,
         width: _startingWidth(provider, plan, choice),
+        // Thrown at its screen from the start; the bar turns it off.
+        autoThrow: choice.shape == 'projector',
       ),
     );
     if (placed == null) {
@@ -3919,7 +4100,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           _deviceDragId = '';
           _deviceDrag = Offset.zero;
         }),
-        onDoubleTap: () => _showDeviceEditor(provider, plan, device),
+        onDoubleTap: () => device.approval != null
+            ? _snack('${device.label} is locked in. Unlock it to edit it.')
+            : _showDeviceEditor(provider, plan, device),
         onSecondaryTap: () {
           if (device.locked) {
             _snack('${device.label} is locked. Unlock it to remove it.');
@@ -4061,12 +4244,27 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   ) {
     final ppf = plan.pixelsPerFoot;
     if (ppf <= 0) return kDefaultScreenWidth;
+    if (choice.key == kGenericScreenKey && _genericScreen != null) {
+      return _genericScreen!.widthFt * ppf;
+    }
     if (choice.shape == 'display') {
       for (final t in _templatesFor(provider, choice.key)) {
         final diagonal = displayDiagonalOf(t);
         if (diagonal > 0) return widthFromDiagonalInches(diagonal) * ppf;
       }
       return 4 * ppf;
+    }
+    if (choice.shape == 'screen') {
+      for (final t in _templatesFor(provider, choice.key)) {
+        final diagonal = screenDiagonalOf(t);
+        if (diagonal > 0) {
+          return imageFromDiagonal(
+                diagonal / 12,
+                const ScreenAspect('16:10', 16, 10),
+              ).width *
+              ppf;
+        }
+      }
     }
     return kDefaultScreenWidthFt * ppf;
   }
@@ -4263,6 +4461,195 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       }
     }
     return projectorSpecChoices(own, lenses);
+  }
+
+  /// The size picked for the next screens placed by size, and how many.
+  ({double diagonal, ScreenAspect aspect, double widthFt, int count})?
+      _genericScreen;
+
+  /// Asks for a screen's size: its diagonal in inches and its shape.
+  /// [currentWidthFt] starts the box at a screen's size now.
+  Future<({double diagonal, ScreenAspect aspect, double widthFt, int count})?>
+      _askScreenSize(double? currentWidthFt) async {
+    // How many only when placing new ones; resizing is one screen.
+    final placing = currentWidthFt == null;
+    final howMany = TextEditingController(text: '1');
+    int count() =>
+        placing ? (int.tryParse(howMany.text.trim()) ?? 1).clamp(1, 24) : 1;
+    var aspect = kScreenAspects.first;
+    final start = currentWidthFt != null && currentWidthFt > 0
+        ? imageFromWidth(currentWidthFt, aspect).diagonal * 12
+        : 120.0;
+    final diagonal = TextEditingController(text: trimFeetInches(start));
+    // Or the image measured on the wall: 11'8" x 6'5".
+    final measured = TextEditingController();
+    const presets = <double>[100, 106, 110, 120, 133, 150, 165];
+    ({double w, double h})? widthByHeight() {
+      final parts = measured.text.toLowerCase().split(RegExp(r'\s*[x×*]\s*'));
+      if (parts.length != 2) return null;
+      final w = parseFeetInches(parts[0]) ?? 0;
+      final h = parseFeetInches(parts[1]) ?? 0;
+      return w > 0 && h > 0 ? (w: w, h: h) : null;
+    }
+
+    double inches() {
+      final t = diagonal.text.trim();
+      // 120, 120", or 10' all mean a ten foot diagonal.
+      final v = t.contains("'")
+          ? (parseFeetInches(t) ?? 0) * 12
+          : double.tryParse(t.replaceAll('"', '').trim()) ?? 0;
+      return v.isFinite && v > 0 ? v : 0;
+    }
+
+    final ok = await showMovableDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final wh = widthByHeight();
+          final d = wh != null
+              ? math.sqrt(wh.w * wh.w + wh.h * wh.h) * 12
+              : inches();
+          final img = wh != null
+              ? ImageSize(wh.w, wh.h)
+              : d <= 0
+              ? null
+              : imageFromDiagonal(d / 12, aspect);
+          return AlertDialog(
+            title: const Text('Screen size'),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'The projected image, for a screen whose model is not '
+                    'known.',
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          key: const ValueKey('screen_size_diagonal'),
+                          controller: diagonal,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Diagonal',
+                            suffixText: 'in',
+                          ),
+                          onChanged: (_) => setLocal(() {}),
+                          onSubmitted: (_) => Navigator.of(ctx).pop(true),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 110,
+                        child: DropdownButtonFormField<ScreenAspect>(
+                          key: const ValueKey('screen_size_aspect'),
+                          initialValue: aspect,
+                          isExpanded: true,
+                          decoration:
+                              const InputDecoration(labelText: 'Aspect'),
+                          items: [
+                            for (final a in kScreenAspects)
+                              DropdownMenuItem(value: a, child: Text(a.label)),
+                          ],
+                          onChanged: (a) =>
+                              setLocal(() => aspect = a ?? aspect),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final p in presets)
+                        ChoiceChip(
+                          key: ValueKey('screen_size_${p.round()}'),
+                          label: Text('${p.round()}"'),
+                          selected: (d - p).abs() < 0.01,
+                          onSelected: (_) => setLocal(
+                              () => diagonal.text = trimFeetInches(p)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('screen_size_measured'),
+                    controller: measured,
+                    decoration: InputDecoration(
+                      labelText: 'Or width x height',
+                      hintText: '11\'8" x 6\'5"',
+                      helperText: wh == null && measured.text.trim().isNotEmpty
+                          ? 'Type it as width x height, like 11\'8" x 6\'5"'
+                          : 'Used instead of the diagonal when filled in',
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                    onSubmitted: (_) => Navigator.of(ctx).pop(true),
+                  ),
+                  if (placing) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const ValueKey('screen_size_count'),
+                      controller: howMany,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'How many',
+                        helperText: 'Dropped in a row and numbered in order',
+                      ),
+                      onChanged: (_) => setLocal(() {}),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Text(
+                    img == null
+                        ? 'Type the diagonal in inches.'
+                        : 'Image ${formatFeetInches(img.width)} wide x '
+                            '${formatFeetInches(img.height)} high',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                key: const ValueKey('screen_size_ok'),
+                onPressed: d <= 0 ? null : () => Navigator.of(ctx).pop(true),
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    final wh = widthByHeight();
+    if (ok == true && wh != null) {
+      return (
+        diagonal: math.sqrt(wh.w * wh.w + wh.h * wh.h) * 12,
+        aspect: ScreenAspect(
+          '${formatFeetInches(wh.w)} x ${formatFeetInches(wh.h)}',
+          wh.w,
+          wh.h,
+        ),
+        widthFt: wh.w,
+        count: count(),
+      );
+    }
+    final d = inches();
+    if (ok != true || d <= 0) return null;
+    return (
+      diagonal: d,
+      aspect: aspect,
+      widthFt: imageFromDiagonal(d / 12, aspect).width,
+      count: count(),
+    );
   }
 
   /// Asks for the room's throw distance in feet and inches.
@@ -4587,6 +4974,44 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           : (ft) => _saveProjectorThrow(provider, plan.id, projector.id, ft),
       saveDistanceWhose: plan == null ? null : projector?.label,
       roomLightFc: provider.avRoomLightFc,
+      kept: device?.calc ?? const {},
+      approval: device?.approval,
+      approverName: provider.profileName,
+      approverEmail: provider.userEmail,
+      // The room's projectors, and this device when it is a screen.
+      switchTo: [
+        for (final d in shown)
+          if (d.shape == 'projector' || d.id == device?.id)
+            (id: d.id, label: d.label),
+      ],
+      currentId: device?.id ?? '',
+      onSwitch: plan == null
+          ? null
+          : (id) {
+              // The sheet as it is now, with what was just kept on it.
+              final now = provider.avFloorPlans
+                  .where((p) => p.id == plan.id)
+                  .firstOrNull;
+              final next = now == null
+                  ? null
+                  : _shownDevices(now).where((d) => d.id == id).firstOrNull;
+              if (now == null || next == null) return;
+              setState(() => _selectedDeviceId = id);
+              _openProjectionCalculator(provider, now, next);
+            },
+      // Entered in Throws - its own or the room's - and so not to drift.
+      units: provider.projectionUnits,
+      onUnitsChanged: (v) => provider.updateSetting('projectionUnits', v),
+      distanceLocked: projector != null &&
+          (projector.throwFt > 0 || provider.avThrowDistanceFt > 0),
+      roomCeilingFt: plan?.walls?.ceilingFt ?? 0,
+      roomDepthFt: plan?.walls == null || ppf <= 0
+          ? 0
+          : plan!.walls!.depth / ppf,
+      onKeep: device == null || plan == null
+          ? null
+          : (inputs, approval) =>
+                _keepSettings(provider, plan.id, device.id, inputs, approval),
       applyLabel: device == null
           ? null
           : device.shape == 'screen'
@@ -4596,7 +5021,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           : 'Set throw angle',
     );
     if (result == null || device == null || plan == null || !mounted) return;
-    final now = _shownDevices(plan).where((d) => d.id == device.id).firstOrNull;
+    // The sheet as it is now: the calculator keeps its settings on the device
+    // as it closes, and this must not write over them.
+    final fresh =
+        provider.avFloorPlans.where((p) => p.id == plan.id).firstOrNull;
+    if (fresh == null) return;
+    final now =
+        _shownDevices(fresh).where((d) => d.id == device.id).firstOrNull;
     if (now == null) return;
     // A screen takes the calculator's viewing angle, gain and, on a scaled
     // sheet, the image width.
@@ -4616,6 +5047,130 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     if (device.shape != 'screen' && ppf <= 0) {
       _snack('Use Set scale so the throw can be drawn to length too.');
     }
+  }
+
+  /// A screen's diagonal over its width, at the shape screens are drawn.
+  static final double _screenDiagonalPerWidth =
+      math.sqrt(1 + 1 / (kPlanScreenAspect * kPlanScreenAspect));
+
+  /// The shapes whose angle and size can be locked in with an approval.
+  static bool _canLockIn(String shape) =>
+      shape == 'projector' || shape == 'screen' || shape == 'display';
+
+  /// Keeps the calculator's [inputs] with a device, and locks it in when
+  /// [approval] is given or unlocks it when not. A projector locked in while
+  /// on Auto from screen keeps the beam it was showing, set by hand.
+  void _keepSettings(
+    AppStateProvider provider,
+    String planId,
+    String deviceId,
+    Map<String, dynamic>? inputs,
+    SettingsApproval? approval,
+  ) {
+    final plan = provider.avFloorPlans.where((p) => p.id == planId).firstOrNull;
+    if (plan == null) return;
+    final shown =
+        _shownDevices(plan).where((d) => d.id == deviceId).firstOrNull;
+    final stored = plan.devices.where((d) => d.id == deviceId).firstOrNull;
+    if (shown == null || stored == null) return;
+    final wasLocked = stored.approval != null;
+    var next = stored.copyWith(
+      calc: inputs,
+      approval: approval,
+      clearApproval: approval == null,
+    );
+    if (approval != null && stored.autoThrow) {
+      next = next.copyWith(
+        autoThrow: false,
+        fov: shown.fov,
+        range: shown.range,
+      );
+    }
+    provider.updateAvPlanDevice(
+      planId,
+      next,
+      what: approval != null
+          ? 'Lock in ${stored.label}'
+          : wasLocked
+          ? 'Unlock ${stored.label}'
+          : 'Keep the calculation for ${stored.label}',
+    );
+  }
+
+  /// Lock in from the bar, without opening the calculator.
+  Future<void> _lockInFromBar(
+    AppStateProvider provider,
+    FloorPlan plan,
+    PlanDevice device,
+  ) async {
+    final name = provider.profileName.trim();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Lock in ${device.label}?'),
+        content: Text(
+          'Its angle, reach and size are kept as approved by '
+          '${name.isEmpty ? 'you' : name}, and cannot be changed until it is '
+          'unlocked.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('plan_lock_in_confirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Lock in'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    _keepSettings(
+      provider,
+      plan.id,
+      device.id,
+      null,
+      SettingsApproval(
+        name: name.isEmpty ? 'Unknown' : name,
+        email: provider.userEmail.trim(),
+        at: DateTime.now(),
+      ),
+    );
+  }
+
+  /// Unlock from the bar, after asking.
+  Future<void> _unlockFromBar(
+    AppStateProvider provider,
+    FloorPlan plan,
+    PlanDevice device,
+  ) async {
+    final a = device.approval;
+    if (a == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Unlock ${device.label}?'),
+        content: Text(
+          'Its numbers were approved by ${a.label}. Unlocking takes the '
+          'approval off.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('plan_unlock_confirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Unlock'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    _keepSettings(provider, plan.id, device.id, null, null);
   }
 
   /// Pairs [device] with [otherId], or back to the nearest with ''. Both
@@ -4746,21 +5301,22 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             'Square ${projector.label} to ${screen.label}',
           ),
         ),
-        TextButton.icon(
-          key: const ValueKey('plan_throw_to_screen'),
-          icon: const Icon(Icons.fit_screen, size: 16),
-          label: const Text('Throw to screen'),
-          // Reaches the screen and zooms to fill it, so the image drawn at
-          // the end of the throw is the screen.
-          onPressed: () => save(
-            projector.copyWith(
-              range: dist.clamp(20.0, 20000.0),
-              fov: beamAngleToFill(dist, screen.width).clamp(5.0, 180.0),
-              showFov: true,
+        if (!projector.autoThrow && projector.approval == null)
+          TextButton.icon(
+            key: const ValueKey('plan_throw_to_screen'),
+            icon: const Icon(Icons.fit_screen, size: 16),
+            label: const Text('Throw to screen'),
+            // Reaches the screen and zooms to fill it, so the image drawn at
+            // the end of the throw is the screen.
+            onPressed: () => save(
+              projector.copyWith(
+                range: dist.clamp(20.0, 20000.0),
+                fov: beamAngleToFill(dist, screen.width).clamp(5.0, 180.0),
+                showFov: true,
+              ),
+              'Throw ${projector.label} to ${screen.label}',
             ),
-            'Throw ${projector.label} to ${screen.label}',
           ),
-        ),
         TextButton.icon(
           key: const ValueKey('plan_aim_projector'),
           icon: const Icon(Icons.center_focus_strong, size: 16),
@@ -5109,7 +5665,99 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ),
           if (deviceShapeHasFov(device.shape))
             _coneColorDot(provider, plan.id, device),
-          if (deviceShapeHasFov(device.shape) && device.showFov) ...[
+          if (plan.walls case final walls? when ppf > 0)
+            Builder(builder: (context) {
+              final d = walls.distancesFrom(device.pos);
+              final outside = d.values.any((v) => v < 0);
+              return Text(
+                outside
+                    ? 'Outside the room walls'
+                    : [
+                        for (final e in d.entries)
+                          '${e.key} ${formatFeetInches(e.value / ppf)}',
+                      ].join(' · '),
+                key: const ValueKey('plan_device_walls'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: outside ? theme.colorScheme.error : null,
+                ),
+              );
+            }),
+          // Locked in: who approved it, and the way to unlock. Its angle,
+          // reach and size are not offered for editing while it is.
+          if (_canLockIn(device.shape))
+            if (device.approval case final a?) ...[
+              Tooltip(
+                message: 'Locked in. Unlock to change its angle, reach or '
+                    'size.',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.verified, size: 16,
+                        color: theme.colorScheme.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Approved by ${a.label}',
+                      key: const ValueKey('plan_device_approved'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                key: const ValueKey('plan_device_unlock'),
+                onPressed: () => _unlockFromBar(provider, plan, device),
+                child: const Text('Unlock'),
+              ),
+            ] else
+              TextButton.icon(
+                key: const ValueKey('plan_device_lock_in'),
+                icon: const Icon(Icons.verified_outlined, size: 16),
+                label: const Text('Lock in'),
+                onPressed: () => _lockInFromBar(provider, plan, device),
+              ),
+          if (device.shape == 'projector' && device.approval == null) ...[
+            FilterChip(
+              key: const ValueKey('plan_device_auto_throw'),
+              avatar: const Icon(Icons.auto_fix_high, size: 16),
+              label: const Text('Auto from screen'),
+              tooltip: device.autoThrow
+                  ? 'The angle and reach follow the paired screen and the '
+                      'lens. Turn off to set them by hand.'
+                  : 'Throw at the paired screen: reach to it, and the angle '
+                      'that fills it within the lens zoom',
+              selected: device.autoThrow,
+              onSelected: (v) => provider.updateAvPlanDevice(
+                plan.id,
+                // Turned off, it keeps the beam it was showing.
+                device.copyWith(autoThrow: v, showFov: v || device.showFov),
+                what: v
+                    ? 'Throw ${device.label} at its screen'
+                    : 'Set ${device.label} by hand',
+              ),
+            ),
+            if (device.autoThrow)
+              Builder(builder: (context) {
+                final f = _fitted(provider, _shownDevices(plan), device);
+                final warn = theme.colorScheme.error;
+                return Text(
+                  f == null
+                      ? 'No screen to throw at - pair one'
+                      : '${device.fov.round()}° · '
+                          '${ppf > 0 ? formatFeetInches(f.range / ppf) : px(f.range)}'
+                          '${f.zoom < 0 ? ' · too close: the image is bigger '
+                              'than the screen at the widest zoom' : f.zoom > 0 ? ' · too far: the image falls '
+                              'short of the screen at the longest zoom' : ''}',
+                  key: const ValueKey('plan_device_auto_readout'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: f == null || f.zoom != 0 ? warn : null,
+                  ),
+                );
+              }),
+          ],
+          if (deviceShapeHasFov(device.shape) &&
+              device.showFov &&
+              device.approval == null &&
+              !(device.shape == 'projector' && device.autoThrow)) ...[
             slider(
               key: const ValueKey('plan_device_bar_fov'),
               label: 'Angle',
@@ -5121,20 +5769,73 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               apply: (v) => device.copyWith(fov: v),
               what: 'Edit ${device.label}',
             ),
-            slider(
-              key: const ValueKey('plan_device_bar_reach'),
-              label: 'Reach',
-              value: reach,
-              min: reachMin,
-              max: reachMax,
-              format: ppf > 0 ? formatFeetInches : px,
-              parse: ppf > 0 ? parseFeetInches : null,
-              typedMax: ppf > 0 ? 20000 / ppf : 20000,
-              apply: (v) => device.copyWith(range: ppf > 0 ? v * ppf : v),
-              what: 'Edit ${device.label}',
-            ),
+            if (reachIsDerived(device.shape))
+              Tooltip(
+                message: device.shape == 'projector'
+                    ? 'The throw: to its paired screen, else its own throw '
+                        'distance or the room\'s.'
+                    : 'Six image heights: the farthest seat that can still '
+                        'read it. Follows its size.',
+                child: Text(
+                  'Reach ${ppf > 0 ? formatFeetInches(device.range / ppf) : px(device.range)}',
+                  key: const ValueKey('plan_device_derived_reach'),
+                  style: theme.textTheme.bodySmall,
+                ),
+              )
+            else
+              slider(
+                key: const ValueKey('plan_device_bar_reach'),
+                label: 'Reach',
+                value: reach,
+                min: reachMin,
+                max: reachMax,
+                format: ppf > 0 ? formatFeetInches : px,
+                parse: ppf > 0 ? parseFeetInches : null,
+                typedMax: ppf > 0 ? 20000 / ppf : 20000,
+                apply: (v) => device.copyWith(range: ppf > 0 ? v * ppf : v),
+                what: 'Edit ${device.label}',
+              ),
           ],
-          if (device.hasFace)
+          if (device.shape == 'screen' && ppf > 0 && device.approval == null)
+            TextButton.icon(
+              key: const ValueKey('plan_device_screen_size'),
+              icon: const Icon(Icons.aspect_ratio, size: 16),
+              label: const Text('Size'),
+              onPressed: () async {
+                final size = await _askScreenSize(device.width / ppf);
+                if (size == null || !mounted) return;
+                provider.updateAvPlanDevice(
+                  plan.id,
+                  device.copyWith(width: size.widthFt * ppf),
+                  what: 'Size ${device.label}',
+                );
+              },
+            ),
+          // A screen on a scaled sheet sizes by its diagonal, live: the
+          // screen, its viewing angle and its reach redraw as it is dragged,
+          // to try sizes in the room. Saved as one step on release.
+          if (device.shape == 'screen' && ppf > 0 && device.approval == null)
+            slider(
+              key: const ValueKey('plan_device_bar_diagonal'),
+              label: 'Diagonal',
+              value: (device.width / ppf * _screenDiagonalPerWidth * 12)
+                  .clamp(50.0, 300.0)
+                  .toDouble(),
+              min: 50,
+              max: 300,
+              divisions: 250,
+              format: (v) => '${v.round()}"  '
+                  '(${formatFeetInches(v / 12 / _screenDiagonalPerWidth)} '
+                  'wide)',
+              parse: (t) => double.tryParse(t.replaceAll('"', '').trim()),
+              typedMin: 20,
+              typedMax: 600,
+              apply: (v) => device.copyWith(
+                width: v / 12 / _screenDiagonalPerWidth * ppf,
+              ),
+              what: 'Resize ${device.label}',
+            )
+          else if (device.hasFace && device.approval == null)
             slider(
               key: const ValueKey('plan_device_bar_width'),
               label: 'Width',
@@ -5169,17 +5870,20 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                     _editProjectorThrow(provider, plan.id, device),
               ),
             ),
-          if (device.shape == 'projector' || device.shape == 'screen')
-            TextButton.icon(
-              key: const ValueKey('plan_device_calculator'),
-              icon: const Icon(Icons.calculate_outlined, size: 16),
-              label: const Text('Calculator'),
-              onPressed: () =>
-                  _openProjectionCalculator(provider, plan, device),
-            ),
           if (partnerShape(device.shape).isNotEmpty &&
               plan.devices.any((d) => d.shape == partnerShape(device.shape)))
             _pairMenu(provider, plan, device),
+          // Right after the screen it is paired with: this pair's numbers.
+          if (device.shape == 'projector' || device.shape == 'screen')
+            FilledButton.tonalIcon(
+              key: const ValueKey('plan_device_calculator'),
+              icon: const Icon(Icons.calculate_outlined, size: 16),
+              label: Text(device.shape == 'projector'
+                  ? 'Projection calculator'
+                  : 'Calculator'),
+              onPressed: () =>
+                  _openProjectionCalculator(provider, plan, device),
+            ),
           ..._squareControls(provider, plan, device),
           FilterChip(
             key: const ValueKey('plan_device_lock'),
@@ -5261,7 +5965,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           rotation: normalizeDegrees(rotation),
           showFov: showFov,
           fov: fov,
-          range: feet ? reach * ppf : reach,
+          range: reachIsDerived(device.shape)
+              ? device.range
+              : feet
+              ? reach * ppf
+              : reach,
           width: feet ? width * ppf : width,
         ),
       );
@@ -5390,6 +6098,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                         ),
                     ],
                   ),
+                  if (!reachIsDerived(device.shape))
                   NumberDial(
                     sliderKey: const ValueKey('plan_device_reach'),
                     label: 'Reach',
@@ -5446,11 +6155,164 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         rotation: normalizeDegrees(rotation),
         showFov: showFov,
         fov: fov,
-        range: feet ? reach * ppf : reach,
+        range: reachIsDerived(device.shape)
+            ? device.range
+            : feet
+            ? reach * ppf
+            : reach,
         width: feet ? width * ppf : width,
       ),
       what: 'Edit ${device.label}',
     );
+  }
+
+  /// The walls chip: the room's size and area once it has walls.
+  String _wallsLabel(FloorPlan plan) {
+    final w = plan.walls;
+    final ppf = plan.pixelsPerFoot;
+    if (w == null || ppf <= 0) return 'Room walls';
+    return 'Room ${formatFeetInches(w.frontLength / ppf)} x '
+        '${formatFeetInches(w.depth / ppf)} · '
+        '${w.squareFeet(ppf).round()} sq ft';
+  }
+
+  /// The room's walls: across the front, front to back, the ceiling and
+  /// which side of the sheet the front wall is on. [rect] is what was drawn,
+  /// or the walls as they are; typed sizes keep its top-left corner.
+  Future<void> _editWalls(
+    AppStateProvider provider,
+    FloorPlan plan,
+    Rect rect, {
+    bool drawn = false,
+  }) async {
+    final ppf = plan.pixelsPerFoot;
+    if (ppf <= 0) return;
+    final old = plan.walls;
+    var front = old?.front ?? PlanWallSide.top;
+    bool across(PlanWallSide f) =>
+        f == PlanWallSide.top || f == PlanWallSide.bottom;
+    String ftIn(double ft) => ft <= 0 ? '' : formatFeetInches(ft);
+    final sideways = TextEditingController(
+      text: ftIn((across(front) ? rect.width : rect.height) / ppf),
+    );
+    final deep = TextEditingController(
+      text: ftIn((across(front) ? rect.height : rect.width) / ppf),
+    );
+    final ceiling = TextEditingController(text: ftIn(old?.ceilingFt ?? 0));
+    final result = await showMovableDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) {
+        final w = parseFeetInches(sideways.text) ?? 0;
+        final d = parseFeetInches(deep.text) ?? 0;
+        Widget box(TextEditingController c, String label, Key key) =>
+            TextField(
+              key: key,
+              controller: c,
+              decoration: InputDecoration(
+                labelText: label,
+                hintText: '24\' 6"',
+              ),
+              onChanged: (_) => setLocal(() {}),
+            );
+        return AlertDialog(
+          title: const Text('Room walls'),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<PlanWallSide>(
+                  key: const ValueKey('walls_front'),
+                  initialValue: front,
+                  decoration:
+                      const InputDecoration(labelText: 'Front wall is at the'),
+                  items: [
+                    for (final e in kPlanWallSideLabels.entries)
+                      DropdownMenuItem(value: e.key, child: Text(e.value)),
+                  ],
+                  onChanged: (v) => setLocal(() {
+                    final next = v ?? front;
+                    // The two lengths swap when the front turns a corner.
+                    if (across(next) != across(front)) {
+                      final t = sideways.text;
+                      sideways.text = deep.text;
+                      deep.text = t;
+                    }
+                    front = next;
+                  }),
+                ),
+                const SizedBox(height: 8),
+                box(sideways, 'Width, along the front wall',
+                    const ValueKey('walls_width')),
+                const SizedBox(height: 8),
+                box(deep, 'Depth, front to back', const ValueKey('walls_depth')),
+                const SizedBox(height: 8),
+                box(ceiling, 'Ceiling height', const ValueKey('walls_ceiling')),
+                const SizedBox(height: 12),
+                Text(
+                  w > 0 && d > 0
+                      ? '${(w * d).round()} sq ft'
+                      : 'Type feet and inches, like 24\'6".',
+                  key: const ValueKey('walls_area'),
+                  style: Theme.of(ctx).textTheme.titleSmall,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (old != null) ...[
+              TextButton(
+                key: const ValueKey('walls_remove'),
+                onPressed: () => Navigator.of(ctx).pop('remove'),
+                child: const Text('Remove'),
+              ),
+              TextButton(
+                key: const ValueKey('walls_redraw'),
+                onPressed: () => Navigator.of(ctx).pop('redraw'),
+                child: const Text('Draw again'),
+              ),
+            ],
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('cancel'),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              key: const ValueKey('walls_save'),
+              onPressed:
+                  w > 0 && d > 0 ? () => Navigator.of(ctx).pop('save') : null,
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      }),
+    );
+    if (!mounted || result == null || result == 'cancel') return;
+    final now = provider.activeFloorPlan;
+    if (now == null) return;
+    if (result == 'remove') {
+      provider.updateAvFloorPlan(now.copyWith(clearWalls: true));
+      return;
+    }
+    if (result == 'redraw') {
+      setState(() {
+        _tool = _PlanTool.walls;
+        _scaleStart = null;
+        _scaleHover = null;
+      });
+      _snack('Click one corner of the room, then the opposite one.');
+      return;
+    }
+    final w = (parseFeetInches(sideways.text) ?? 0) * ppf;
+    final d = (parseFeetInches(deep.text) ?? 0) * ppf;
+    final size = across(front) ? Size(w, d) : Size(d, w);
+    provider.updateAvFloorPlan(now.copyWith(
+      walls: PlanWalls(
+        rect: rect.topLeft & size,
+        front: front,
+        ceilingFt: parseFeetInches(ceiling.text) ?? 0,
+      ),
+    ));
   }
 
   /// Asks how long the line just drawn really is, and sets the sheet's scale
@@ -5587,6 +6449,28 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         } else {
           setState(() => _scaleHover = at);
           _finishScale(provider, start, at);
+        }
+      case _PlanTool.walls:
+        final start = _scaleStart;
+        if (start == null) {
+          setState(() {
+            _scaleStart = at;
+            _scaleHover = at;
+          });
+        } else {
+          final plan = provider.activeFloorPlan;
+          setState(() {
+            _tool = _PlanTool.none;
+            _scaleStart = null;
+            _scaleHover = null;
+          });
+          final rect = Rect.fromPoints(start, at);
+          if (plan == null) return;
+          if (rect.width < 10 || rect.height < 10) {
+            _snack('Click two opposite corners further apart.');
+            return;
+          }
+          _editWalls(provider, plan, rect, drawn: true);
         }
       case _PlanTool.measure:
         if (_scaleStart == null || _measureDone) {
@@ -6837,7 +7721,16 @@ class _RunSpecimenPainter extends CustomPainter {
       old.color != color || old.style != style || old.offSheet != offSheet;
 }
 
-enum _PlanTool { none, location, callout, notation, device, scale, measure }
+enum _PlanTool {
+  none,
+  location,
+  callout,
+  notation,
+  device,
+  scale,
+  measure,
+  walls,
+}
 
 /// Sentinels for [_FloorPlanViewState._cableLayer]. Not cable types, so they
 /// are spelled in a way no cable ever will be.
@@ -7073,6 +7966,80 @@ List<LocationTally> countLinesByLocation(AvFlowModel model) {
 }
 
 /// The line drawn to set a sheet's scale, with its length in pixels.
+/// The room's walls: the outline, which one is the front, the two lengths
+/// and the area. [preview] is the outline being drawn.
+class _WallsPainter extends CustomPainter {
+  final PlanWalls walls;
+  final double pixelsPerFoot;
+  final Color ink;
+  final bool preview;
+
+  const _WallsPainter({
+    required this.walls,
+    required this.pixelsPerFoot,
+    required this.ink,
+    this.preview = false,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = walls.rect;
+    canvas.drawRect(
+      r,
+      Paint()
+        ..color = ink
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = preview ? 2 : 3,
+    );
+    final ppf = pixelsPerFoot;
+    String len(double px) => ppf > 0 ? formatFeetInches(px / ppf) : '${px.round()} px';
+    void label(String text, Offset at, {bool bold = false}) {
+      final t = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(
+            fontSize: 12,
+            color: preview ? Colors.black : ink,
+            backgroundColor: preview ? ink : null,
+            fontWeight: bold ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      t.paint(canvas, at - Offset(t.width / 2, t.height / 2));
+    }
+
+    // Lengths along the top and the left.
+    label(len(r.width), Offset(r.center.dx, r.top - 10));
+    label(len(r.height), Offset(r.left - 28, r.center.dy));
+    if (preview) return;
+    final frontAt = switch (walls.front) {
+      PlanWallSide.top => Offset(r.center.dx, r.top + 12),
+      PlanWallSide.bottom => Offset(r.center.dx, r.bottom - 12),
+      PlanWallSide.left => Offset(r.left + 40, r.center.dy),
+      PlanWallSide.right => Offset(r.right - 40, r.center.dy),
+    };
+    label('Front wall', frontAt, bold: true);
+    final area = walls.squareFeet(ppf);
+    if (area > 0) {
+      label(
+        '${area.round()} sq ft'
+        '${walls.ceilingFt > 0 ? ' · ${formatFeetInches(walls.ceilingFt)} ceiling' : ''}',
+        Offset(r.center.dx, r.bottom + 12),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WallsPainter old) =>
+      old.walls.rect != walls.rect ||
+      old.walls.front != walls.front ||
+      old.walls.ceilingFt != walls.ceilingFt ||
+      old.pixelsPerFoot != pixelsPerFoot ||
+      old.ink != ink ||
+      old.preview != preview;
+}
+
 class _ScaleLinePainter extends CustomPainter {
   final Offset start;
   final Offset end;

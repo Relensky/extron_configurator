@@ -260,6 +260,19 @@ List<({AvNode node, AvPort port})> poweredBoxes(AppStateProvider provider) {
   return out;
 }
 
+/// Boxes an outlet could feed: every box on the drawing but jack fields and
+/// PoE gear. Most boxes have no POWER inlet drawn; one is added when a lead
+/// is run to it.
+List<AvNode> powerableBoxes(AppStateProvider provider) => [
+      for (final n in provider.avNodes)
+        if (!n.isJackField &&
+            !n.ports.any((p) =>
+                p.signal == SignalType.power &&
+                _canTake(p) &&
+                p.label.toLowerCase().contains('poe')))
+          n,
+    ]..sort(_bySequence);
+
 /// Boxes with two or more power outlets: strips, PDUs, power controllers.
 List<AvNode> powerStrips(AppStateProvider provider) => [
       for (final n in provider.avNodes)
