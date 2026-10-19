@@ -310,7 +310,9 @@ ReportSection _cableSchedule(AvFlowModel model) {
           c.id,
           c.label,
           cableTypeLabel(c.signal),
-          kSignalCodes[c.signal] ?? c.signal.name,
+          isUsbSignal(c.signal)
+              ? cableSignalName(c, byId)
+              : kSignalCodes[c.signal] ?? c.signal.name,
           formatCableLength(c.lengthFt),
           deviceName(c.fromNodeId),
           portName(c.fromNodeId, c.fromPortId),
@@ -377,12 +379,16 @@ ReportSection cableCountSection(AvFlowModel model) {
     for (final signal in SignalType.values) {
       final ofType = here.where((c) => c.signal == signal).toList();
       if (ofType.isEmpty) continue;
-      rows.add([
-        cableTypeLabel(signal),
-        kSignalLabels[signal] ?? signal.name,
-        ofType.length,
-        ...lengthCells(lengths(ofType)),
-      ]);
+      for (final name in {for (final c in ofType) cableSignalName(c, byId)}) {
+        final named =
+            ofType.where((c) => cableSignalName(c, byId) == name).toList();
+        rows.add([
+          cableTypeLabel(signal),
+          name,
+          named.length,
+          ...lengthCells(lengths(named)),
+        ]);
+      }
     }
   }
 
@@ -483,14 +489,19 @@ ReportSection cableCountByLocationSection(AvFlowModel model) {
       for (final signal in SignalType.values) {
         final ofType = ofFamily.where((c) => c.signal == signal).toList();
         if (ofType.isEmpty) continue;
-        rows.add([
-          name,
-          zone,
-          cableTypeLabel(signal),
-          cableSignalSubLabel(signal),
-          ofType.length,
-          ...lengthCells(ofType),
-        ]);
+        for (final lead in {for (final c in ofType) cableSignalName(c, byId)}) {
+          final named =
+              ofType.where((c) => cableSignalName(c, byId) == lead).toList();
+          final usb = lead != (kSignalLabels[signal] ?? signal.name);
+          rows.add([
+            name,
+            zone,
+            cableTypeLabel(signal),
+            usb ? lead : cableSignalSubLabel(signal),
+            named.length,
+            ...lengthCells(named),
+          ]);
+        }
       }
     }
     rows.add([

@@ -428,6 +428,56 @@ void main() {
       expect(after.fromPortId, 'out1');
     });
 
+    testWidgets('the end moves to another device: device first, then input',
+        (tester) async {
+      final p = room();
+      p.addAvNode(AvNode(
+        id: 'DISPLAYDEVICE_1',
+        label: 'Confidence Monitor',
+        model: '',
+        pos: const Offset(400, 300),
+        ports: [port('hdmi', 'HDMI IN', SignalType.hdmi, PortDirection.input)],
+      ));
+      await openCableDialog(tester, p);
+      await tester.tap(find.byKey(const ValueKey('cable_to_end')));
+      await tester.pumpAndSettle();
+
+      // Starts on the device the end is on now, showing only its inputs.
+      expect(find.byKey(const ValueKey('cable_end_PROJECTORDEVICE_1_in2')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('cable_end_DISPLAYDEVICE_1_hdmi')),
+          findsNothing);
+      // The switcher has no inputs for this end, so it is not on the list.
+      await tester.tap(find.byKey(const ValueKey('cable_end_device')));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(MenuItemButton, 'Switcher'), findsNothing);
+
+      // Typed to narrow the list, then picked.
+      await tester.enterText(
+          find.descendant(
+              of: find.byKey(const ValueKey('cable_end_device')),
+              matching: find.byType(TextField)),
+          'conf');
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.widgetWithText(MenuItemButton, 'Confidence Monitor').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('cable_end_PROJECTORDEVICE_1_in2')),
+          findsNothing);
+
+      await tester
+          .tap(find.byKey(const ValueKey('cable_end_DISPLAYDEVICE_1_hdmi')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('cable_end_apply')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      final after = p.avCables.single;
+      expect(after.toNodeId, 'DISPLAYDEVICE_1');
+      expect(after.toPortId, 'hdmi');
+    });
+
     testWidgets('canceling the dialog moves nothing', (tester) async {
       final p = room();
       await openCableDialog(tester, p);

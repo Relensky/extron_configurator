@@ -56,6 +56,7 @@ Future<ProjectionResult?> showProjectionCalculator(
   String? distanceNote,
   String? applyLabel,
   ValueChanged<double>? onSaveDistance,
+  String? saveDistanceWhose,
   double roomLightFc = 0,
 }) => showMovableDialog<ProjectionResult>(
   context: context,
@@ -66,6 +67,7 @@ Future<ProjectionResult?> showProjectionCalculator(
     distanceNote: distanceNote,
     applyLabel: applyLabel,
     onSaveDistance: onSaveDistance,
+    saveDistanceWhose: saveDistanceWhose,
     roomLightFc: roomLightFc,
   ),
 );
@@ -96,8 +98,12 @@ class ProjectionCalculatorDialog extends StatefulWidget {
   final String? distanceNote;
   final String? applyLabel;
 
-  /// Saves the throw distance shown as the room's.
+  /// Saves the throw distance shown as the room's, or a projector's.
   final ValueChanged<double>? onSaveDistance;
+
+  /// Whose throw [onSaveDistance] saves, as in "Save as X's throw distance";
+  /// null is the room's.
+  final String? saveDistanceWhose;
 
   /// The room's light on the screen in foot-candles; 0 starts at 5.
   final double roomLightFc;
@@ -110,6 +116,7 @@ class ProjectionCalculatorDialog extends StatefulWidget {
     this.distanceNote,
     this.applyLabel,
     this.onSaveDistance,
+    this.saveDistanceWhose,
     this.roomLightFc = 0,
   });
 
@@ -443,6 +450,14 @@ class _ProjectionCalculatorDialogState
     );
   }
 
+  String get _whose => widget.saveDistanceWhose == null
+      ? "the room's"
+      : "${widget.saveDistanceWhose}'s";
+
+  String get _whoseTitle => widget.saveDistanceWhose == null
+      ? 'Room'
+      : "${widget.saveDistanceWhose}'s";
+
   Widget _field(
     TextEditingController c,
     String label, {
@@ -634,12 +649,23 @@ class _ProjectionCalculatorDialogState
                 _distance,
                 'Throw distance',
                 suffix: _distanceUnit.short,
-                helper: widget.distanceNote,
                 key: const ValueKey('projection_distance'),
                 width: 170,
               ),
           ],
         ),
+        // Under the row rather than the field, so the field lines up with
+        // the Aspect box.
+        if (_fromDistance && (widget.distanceNote ?? '').isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 122),
+            child: Text(
+              widget.distanceNote!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 12,
@@ -969,14 +995,15 @@ class _ProjectionCalculatorDialogState
             child: TextButton.icon(
               key: const ValueKey('projection_save_distance'),
               icon: const Icon(Icons.save_outlined, size: 16),
-              label: const Text("Save as the room's throw distance"),
+              label: Text('Save as $_whose throw distance'),
               onPressed: distance > 0
                   ? () {
                       widget.onSaveDistance!(distance);
                       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                         SnackBar(
                           content: Text(
-                            'Room throw distance set to ${_len(distance)}.',
+                            '$_whoseTitle throw distance set to '
+                            '${_len(distance)}.',
                           ),
                         ),
                       );

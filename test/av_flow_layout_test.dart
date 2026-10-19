@@ -95,4 +95,69 @@ void main() {
     // Already tidy: nothing to move, nothing to undo.
     expect(p.arrangeAvNodes(tidyAvLayout(p.avNodes, library)), 0);
   });
+
+  test('tidy orders a column so the cables do not cross', () {
+    AvPort out(int i) => AvPort(
+      id: 'out$i',
+      label: 'OUT $i',
+      signal: SignalType.hdmi,
+      direction: PortDirection.output,
+      side: PortSide.right,
+    );
+    const input = AvPort(
+      id: 'in',
+      label: 'IN',
+      signal: SignalType.hdmi,
+      direction: PortDirection.input,
+      side: PortSide.left,
+    );
+    final nodes = [
+      AvNode(
+        id: 'SWITCHERDEVICE_1',
+        label: 'Switcher',
+        model: '',
+        pos: Offset.zero,
+        ports: [for (var i = 1; i <= 3; i++) out(i)],
+      ),
+      // Drawn in the opposite order to the outputs that feed them.
+      for (var i = 1; i <= 3; i++)
+        AvNode(
+          id: 'PROJECTORDEVICE_$i',
+          label: 'Projector $i',
+          model: '',
+          pos: Offset(600, (4 - i) * 200.0),
+          ports: const [input],
+        ),
+    ];
+    final cables = [
+      for (var i = 1; i <= 3; i++)
+        AvCable(
+          id: 'C$i',
+          fromNodeId: 'SWITCHERDEVICE_1',
+          fromPortId: 'out$i',
+          toNodeId: 'PROJECTORDEVICE_$i',
+          toPortId: 'in',
+          signal: SignalType.hdmi,
+        ),
+    ];
+    final byId = {for (final n in nodes) n.id: n};
+    // Kept in the order they were in, three runs cross.
+    final plain = tidyAvLayout(nodes, library);
+    expect(avLayoutCrossings(byId, plain, cables), 3);
+
+    final at = tidyAvLayout(nodes, library, cables: cables);
+    expectNoOverlaps(nodes, at);
+    expect(avLayoutCrossings(byId, at, cables), 0);
+    expect(at['PROJECTORDEVICE_1']!.dy, lessThan(at['PROJECTORDEVICE_2']!.dy));
+    expect(at['PROJECTORDEVICE_2']!.dy, lessThan(at['PROJECTORDEVICE_3']!.dy));
+
+    // Tidied again, nothing moves.
+    final moved = [
+      for (final n in nodes) n.copyWith(pos: at[n.id]),
+    ];
+    final again = tidyAvLayout(moved, library, cables: cables);
+    for (final n in moved) {
+      expect(again[n.id], n.pos, reason: n.id);
+    }
+  });
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -436,6 +437,9 @@ class _AvFlowViewState extends State<AvFlowView>
   bool _editMode = false;
   bool _showPalette = true;
 
+  /// Toolbar groups folded away to their names.
+  final Set<String> _collapsedGroups = {};
+
   /// The magnifier: a lens following the pointer that shows the drawing at
   /// full size while the page is zoomed out to see the whole of it.
   bool _magnifier = false;
@@ -469,6 +473,14 @@ class _AvFlowViewState extends State<AvFlowView>
   /// The device picked with a click in Edit mode, which the keyboard
   /// shortcuts act on.
   String? _selectedNodeId;
+
+  /// The device found with the toolbar search, ringed for a few seconds.
+  String? _foundNodeId;
+  Timer? _foundTimer;
+
+  /// One key per row of the cable list, so a click on a run can scroll its
+  /// row into view.
+  final Map<String, GlobalKey> _cableRowKeys = {};
 
   /// The device whose size handles are showing (Edit shape).
   String? _shapeNodeId;
@@ -533,6 +545,7 @@ class _AvFlowViewState extends State<AvFlowView>
     _hideFlowForSnapshot.dispose();
     _snapshot?.image.dispose();
     _signalFlow.dispose();
+    _foundTimer?.cancel();
     _canvasFocus.dispose();
     super.dispose();
   }
@@ -585,6 +598,35 @@ class _AvFlowViewState extends State<AvFlowView>
     } else if (!_signalFlow.isAnimating) {
       _signalFlow.repeat();
     }
+  }
+
+  /// Centers the view on a device and rings it for a few seconds.
+  void _jumpToNode(AppStateProvider provider, String id) {
+    final node = provider.avNodeById(id);
+    final viewport = renderedSize(_viewportKey);
+    if (node == null || viewport == null) return;
+    centerOnRect(_transform, viewport, node.rect, minScale: kAvMinZoom);
+    _foundTimer?.cancel();
+    setState(() => _foundNodeId = id);
+    if (_editMode && !_cableMode) _selectNode(id);
+    _foundTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _foundNodeId = null);
+    });
+  }
+
+  /// Scrolls the cable list below the drawing to [id]'s row, when it is open.
+  void _revealCableRow(String? id) {
+    if (id == null || !_editMode) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final row = _cableRowKeys[id]?.currentContext;
+      if (row == null || !row.mounted) return;
+      Scrollable.ensureVisible(
+        row,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   /// Rebuilds [_backgroundImage] when the room's backdrop changes. Cheap when
@@ -889,7 +931,8 @@ class _AvFlowViewState extends State<AvFlowView>
   /// av_flow_layout.dart. One press of Undo puts it back.
   void _autoArrange(AppStateProvider provider) {
     final moved = provider.arrangeAvNodes(
-      tidyAvLayout(provider.avNodes, provider.avDeviceLibrary),
+      tidyAvLayout(provider.avNodes, provider.avDeviceLibrary,
+          cables: provider.avCables),
     );
     _snack(moved == 0
         ? 'Already tidy - nothing needed to move.'
@@ -1282,214 +1325,376 @@ class _AvFlowViewState extends State<AvFlowView>
   }
 
   Widget _buildToolbar(AppStateProvider provider, AvFlowModel model) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Wrap(
-        spacing: 8,
+    final theme = Theme.of(context);
+    // A thin rule between groups of buttons that belong together.
+    Widget rule() => SizedBox(
+      height: 28,
+      child: VerticalDivider(width: 12, color: theme.dividerColor),
+    );
+    // Each group's name folds it away, for room to work on the drawing. The
+    // same as the Floor Plan toolbar.
+    Widget header(String name, bool open) => Tooltip(
+      message: open ? 'Collapse $name' : 'Expand $name',
+      child: InkWell(
+        key: ValueKey('av_group_$name'),
+        borderRadius: BorderRadius.circular(4),
+        onTap: () => setState(() {
+          if (!_collapsedGroups.remove(name)) _collapsedGroups.add(name);
+        }),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                open ? Icons.expand_more : Icons.chevron_right,
+                size: 16,
+                color: theme.hintColor,
+              ),
+              Text(
+                name,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.hintColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    // Groups wrap as a whole where they can, so related buttons stay side by
+    // side.
+    Widget groups(List<(String, List<Widget>)> parts) {
+      final shown = parts.where((g) => g.$2.isNotEmpty).toList();
+      return Wrap(
+        spacing: 4,
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text('AV Signal Flow', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(width: 4),
-          FilterChip(
-            avatar: Icon(
-              _editMode ? Icons.edit : Icons.edit_outlined,
-              size: 18,
+          for (var i = 0; i < shown.length; i++) ...[
+            if (i > 0) rule(),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                header(shown[i].$1, !_collapsedGroups.contains(shown[i].$1)),
+                if (!_collapsedGroups.contains(shown[i].$1)) ...shown[i].$2,
+              ],
             ),
-            label: const Text('Edit'),
-            selected: _editMode,
-            onSelected: (v) {
-              _selectCable(null);
-              setState(() {
-                _selectedNodeId = null;
-                _shapeNodeId = null;
-                _editMode = v;
-                _cableMode = false;
-                _pendingPort = null;
-              });
+          ],
+        ],
+      );
+    }
+
+    // Changing the drawing by hand.
+    final edit = <Widget>[
+      FilterChip(
+        avatar: Icon(
+          _editMode ? Icons.edit : Icons.edit_outlined,
+          size: 18,
+        ),
+        label: const Text('Edit'),
+        selected: _editMode,
+        onSelected: (v) {
+          _selectCable(null);
+          setState(() {
+            _selectedNodeId = null;
+            _shapeNodeId = null;
+            _editMode = v;
+            _cableMode = false;
+            _pendingPort = null;
+          });
+        },
+      ),
+      if (_editMode)
+        FilterChip(
+          avatar: const Icon(Icons.cable, size: 18),
+          label: Text(
+            _pendingPort == null ? 'Draw Cable' : 'Pick 2nd connector...',
+          ),
+          selected: _cableMode,
+          onSelected: (v) => setState(() {
+            _cableMode = v;
+            _pendingPort = null;
+          }),
+        ),
+      if (_editMode && provider.avNodeById(_shapeNodeId ?? '') != null)
+        ..._shapeControls(provider, provider.avNodeById(_shapeNodeId!)!),
+      // Shared with the Schematic and Cabling drawings — see
+      // [AppStateProvider.snapDiagramsToGrid].
+      if (_editMode)
+        FilterChip(
+          key: const ValueKey('av_snap_to_grid'),
+          avatar: const Icon(Icons.grid_4x4, size: 18),
+          label: const Text('Snap to grid'),
+          selected: provider.snapDiagramsToGrid,
+          onSelected: (v) => provider.setSnapDiagramsToGrid(v),
+        ),
+    ];
+
+    // Putting boxes on the drawing and running cables between them.
+    final add = <Widget>[
+      FilterChip(
+          avatar: const Icon(Icons.view_sidebar, size: 18),
+          label: Text('Devices (${model.unplaced.length})'),
+          selected: _showPalette,
+          onSelected: (v) => setState(() => _showPalette = v),
+        ),
+      // Config devices and quoted equipment that are not drawn yet.
+      if (model.unplaced.isNotEmpty ||
+          undrawnQuotedLines(provider).isNotEmpty)
+        OutlinedButton.icon(
+          key: const ValueKey('av_place_undrawn'),
+          icon: const Icon(Icons.playlist_add, size: 18),
+          label: Text('Place undrawn '
+              '(${model.unplaced.length + undrawnQuotedLines(provider).length})'),
+          onPressed: () => _showPlaceUndrawnDialog(provider, model),
+        ),
+      Tooltip(
+        message: 'Cable boxes whose names end the same - "NAV Decoder '
+            'Station 1" to "Station 1" - output to input on video. You '
+            'see the list before anything is drawn.',
+        child: OutlinedButton.icon(
+          key: const ValueKey('av_route_by_name'),
+          icon: const Icon(Icons.alt_route, size: 18),
+          label: const Text('Auto-route by name'),
+          onPressed: provider.avNodes.length < 2
+              ? null
+              : () => _showRouteByNameDialog(provider),
+        ),
+      ),
+      Tooltip(
+        message: 'Tie one set of boxes to another in order - 12 decoders '
+            'to 12 displays, 12 PCs to 12 encoders - or a run of one '
+            'box\'s connectors, picking the output and input.',
+        child: OutlinedButton.icon(
+          key: const ValueKey('av_tie_sequence'),
+          icon: const Icon(Icons.format_list_numbered, size: 18),
+          label: const Text('Tie in sequence'),
+          onPressed: provider.avNodes.length < 2
+              ? null
+              : () => _tieInSequence(provider),
+        ),
+      ),
+      if (powerStrips(provider).isNotEmpty)
+        Tooltip(
+          message: 'What each outlet of a power strip feeds, from a list '
+              'of every box with a power inlet.',
+          child: OutlinedButton.icon(
+            key: const ValueKey('av_power_outlets'),
+            icon: const Icon(Icons.power, size: 18),
+            label: const Text('Power outlets'),
+            onPressed: () async {
+              final n = await showPowerOutletsDialog(context, provider);
+              if (n > 0) {
+                _snack('$n power lead${n == 1 ? '' : 's'} changed. One '
+                    'Undo puts them back.');
+              }
             },
           ),
-          if (_editMode)
-            FilterChip(
-              avatar: const Icon(Icons.cable, size: 18),
-              label: Text(
-                _pendingPort == null ? 'Draw Cable' : 'Pick 2nd connector...',
-              ),
-              selected: _cableMode,
-              onSelected: (v) => setState(() {
-                _cableMode = v;
-                _pendingPort = null;
-              }),
-            ),
-          if (_editMode && provider.avNodeById(_shapeNodeId ?? '') != null)
-            ..._shapeControls(provider, provider.avNodeById(_shapeNodeId!)!),
-          FilterChip(
-              avatar: const Icon(Icons.view_sidebar, size: 18),
-              label: Text('Devices (${model.unplaced.length})'),
-              selected: _showPalette,
-              onSelected: (v) => setState(() => _showPalette = v),
-            ),
-          // Config devices and quoted equipment that are not drawn yet.
-          if (model.unplaced.isNotEmpty ||
-              undrawnQuotedLines(provider).isNotEmpty)
-            OutlinedButton.icon(
-              key: const ValueKey('av_place_undrawn'),
-              icon: const Icon(Icons.playlist_add, size: 18),
-              label: Text('Place undrawn '
-                  '(${model.unplaced.length + undrawnQuotedLines(provider).length})'),
-              onPressed: () => _showPlaceUndrawnDialog(provider, model),
-            ),
-          Tooltip(
-            message: 'Cable boxes whose names end the same - "NAV Decoder '
-                'Station 1" to "Station 1" - output to input on video. You '
-                'see the list before anything is drawn.',
-            child: OutlinedButton.icon(
-              key: const ValueKey('av_route_by_name'),
-              icon: const Icon(Icons.alt_route, size: 18),
-              label: const Text('Auto-route by name'),
-              onPressed: provider.avNodes.length < 2
-                  ? null
-                  : () => _showRouteByNameDialog(provider),
-            ),
+        ),
+      OutlinedButton.icon(
+        icon: const Icon(Icons.place_outlined, size: 18),
+        label: Text('Locations (${provider.avLocations.length})'),
+        onPressed: () => showLocationManager(context, provider),
+      ),
+      OutlinedButton.icon(
+        key: const ValueKey('av_copy_from_room'),
+        icon: const Icon(Icons.content_copy, size: 18),
+        label: const Text('Copy from a room'),
+        onPressed: () => copyRoomPartsFromRoom(context, provider),
+      ),
+    ];
+
+    // How the drawing is laid out and how it looks.
+    final view = <Widget>[
+      // Always there: after adding or editing boxes, one press lays the
+      // drawing out again with nothing on top of anything.
+      Tooltip(
+        message: 'Lay the drawing out again so nothing overlaps and as few '
+            'cables cross as can be - '
+            'sources on the left, displays and projectors on the right '
+            '(as a table when there are many). Undo puts it back.',
+        child: OutlinedButton.icon(
+          key: const ValueKey('av_tidy_layout'),
+          icon: const Icon(Icons.auto_fix_high, size: 18),
+          label: const Text('Tidy layout'),
+          onPressed: provider.avNodes.isEmpty
+              ? null
+              : () => _autoArrange(provider),
+        ),
+      ),
+      // Whether the paper has squares on it — a different question from
+      // where a box lands, and not gated on edit mode: the lines are for
+      // reading the drawing as well as for building it. Never exported.
+      FilterChip(
+        key: const ValueKey('av_show_grid'),
+        avatar: const Icon(Icons.grid_on, size: 18),
+        label: const Text('Grid'),
+        selected: provider.showDiagramGrid,
+        onSelected: (v) => provider.setShowDiagramGrid(v),
+      ),
+      OutlinedButton.icon(
+        icon: const Icon(Icons.palette_outlined, size: 18),
+        label: const Text('Colors'),
+        onPressed: () => _showPaletteDialog(provider),
+      ),
+      // Any picture, behind the diagram. Not the floor plan on a toggle:
+      // a signal flow is laid out by signal, so a plan behind it lines up
+      // with nothing, while the drawings people actually want back there
+      // — a title block, a riser sketch, the revision being drawn over —
+      // had no way in at all.
+      OutlinedButton.icon(
+        key: const ValueKey('av_background_button'),
+        icon: const Icon(Icons.wallpaper_outlined, size: 18),
+        label: Text(
+          provider.avFlowBackground.hasImage ? 'Background' : 'Add a background',
+        ),
+        onPressed: () => provider.avFlowBackground.hasImage
+            ? _showBackgroundSettings(provider)
+            : _importBackground(provider),
+      ),
+    ];
+
+    // What goes out of the page.
+    final output = <Widget>[
+      OutlinedButton.icon(
+        icon: const Icon(Icons.save, size: 18),
+        label: const Text('Save AV Setup'),
+        onPressed: () => _saveDiagram(provider),
+      ),
+      ElevatedButton.icon(
+        icon: const Icon(Icons.image, size: 18),
+        label: const Text('Export PNG'),
+        onPressed: () => _exportPng(provider),
+      ),
+      PopupMenuButton<String>(
+        tooltip: 'Export the room report',
+        onSelected: (v) => switch (v) {
+          'copy' => _copyReportText(provider),
+          'preset' => _saveAsRoomPreset(provider),
+          _ => _exportReport(provider, v == 'xlsx'),
+        },
+        itemBuilder: (ctx) => const [
+          PopupMenuItem(
+            value: 'preset',
+            child: Text('Save this room as a room type...'),
           ),
-          Tooltip(
-            message: 'Tie one set of boxes to another in order - 12 decoders '
-                'to 12 displays, 12 PCs to 12 encoders - or a run of one '
-                'box\'s connectors, picking the output and input.',
-            child: OutlinedButton.icon(
-              key: const ValueKey('av_tie_sequence'),
-              icon: const Icon(Icons.format_list_numbered, size: 18),
-              label: const Text('Tie in sequence'),
-              onPressed: provider.avNodes.length < 2
-                  ? null
-                  : () => _tieInSequence(provider),
-            ),
+          PopupMenuDivider(),
+          PopupMenuItem(value: 'xlsx', child: Text('AV report (.xlsx)')),
+          PopupMenuItem(
+            value: 'txt',
+            child: Text('Plain text report (.txt)'),
           ),
-          if (powerStrips(provider).isNotEmpty)
-            Tooltip(
-              message: 'What each outlet of a power strip feeds, from a list '
-                  'of every box with a power inlet.',
-              child: OutlinedButton.icon(
-                key: const ValueKey('av_power_outlets'),
-                icon: const Icon(Icons.power, size: 18),
-                label: const Text('Power outlets'),
-                onPressed: () async {
-                  final n = await showPowerOutletsDialog(context, provider);
-                  if (n > 0) {
-                    _snack('$n power lead${n == 1 ? '' : 's'} changed. One '
-                        'Undo puts them back.');
-                  }
-                },
-              ),
-            ),
-          // Always there: after adding or editing boxes, one press lays the
-          // drawing out again with nothing on top of anything.
-          Tooltip(
-            message: 'Lay the drawing out again so nothing overlaps - '
-                'sources on the left, displays and projectors on the right '
-                '(as a table when there are many). Undo puts it back.',
-            child: OutlinedButton.icon(
-              key: const ValueKey('av_tidy_layout'),
-              icon: const Icon(Icons.auto_fix_high, size: 18),
-              label: const Text('Tidy layout'),
-              onPressed: provider.avNodes.isEmpty
-                  ? null
-                  : () => _autoArrange(provider),
-            ),
-          ),
-          // Shared with the Schematic and Cabling drawings — see
-          // [AppStateProvider.snapDiagramsToGrid].
-          if (_editMode)
-            FilterChip(
-              key: const ValueKey('av_snap_to_grid'),
-              avatar: const Icon(Icons.grid_4x4, size: 18),
-              label: const Text('Snap to grid'),
-              selected: provider.snapDiagramsToGrid,
-              onSelected: (v) => provider.setSnapDiagramsToGrid(v),
-            ),
-          // Whether the paper has squares on it — a different question from
-          // where a box lands, and not gated on edit mode: the lines are for
-          // reading the drawing as well as for building it. Never exported.
-          FilterChip(
-            key: const ValueKey('av_show_grid'),
-            avatar: const Icon(Icons.grid_on, size: 18),
-            label: const Text('Grid'),
-            selected: provider.showDiagramGrid,
-            onSelected: (v) => provider.setShowDiagramGrid(v),
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.palette_outlined, size: 18),
-            label: const Text('Colors'),
-            onPressed: () => _showPaletteDialog(provider),
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.place_outlined, size: 18),
-            label: Text('Locations (${provider.avLocations.length})'),
-            onPressed: () => showLocationManager(context, provider),
-          ),
-          OutlinedButton.icon(
-            key: const ValueKey('av_copy_from_room'),
-            icon: const Icon(Icons.content_copy, size: 18),
-            label: const Text('Copy from a room'),
-            onPressed: () => copyRoomPartsFromRoom(context, provider),
-          ),
-          // Any picture, behind the diagram. Not the floor plan on a toggle:
-          // a signal flow is laid out by signal, so a plan behind it lines up
-          // with nothing, while the drawings people actually want back there
-          // — a title block, a riser sketch, the revision being drawn over —
-          // had no way in at all.
-          OutlinedButton.icon(
-            key: const ValueKey('av_background_button'),
-            icon: const Icon(Icons.wallpaper_outlined, size: 18),
-            label: Text(
-              provider.avFlowBackground.hasImage ? 'Background' : 'Add a background',
-            ),
-            onPressed: () => provider.avFlowBackground.hasImage
-                ? _showBackgroundSettings(provider)
-                : _importBackground(provider),
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.save, size: 18),
-            label: const Text('Save AV Setup'),
-            onPressed: () => _saveDiagram(provider),
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.image, size: 18),
-            label: const Text('Export PNG'),
-            onPressed: () => _exportPng(provider),
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'Export the room report',
-            onSelected: (v) => switch (v) {
-              'copy' => _copyReportText(provider),
-              'preset' => _saveAsRoomPreset(provider),
-              _ => _exportReport(provider, v == 'xlsx'),
-            },
-            itemBuilder: (ctx) => const [
-              PopupMenuItem(
-                value: 'preset',
-                child: Text('Save this room as a room type...'),
-              ),
-              PopupMenuDivider(),
-              PopupMenuItem(value: 'xlsx', child: Text('AV report (.xlsx)')),
-              PopupMenuItem(
-                value: 'txt',
-                child: Text('Plain text report (.txt)'),
-              ),
-              PopupMenuItem(
-                value: 'copy',
-                child: Text('Copy text to clipboard'),
-              ),
-            ],
-            child: IgnorePointer(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.summarize, size: 18),
-                label: const Text('Report'),
-                onPressed: () {},
-              ),
-            ),
+          PopupMenuItem(
+            value: 'copy',
+            child: Text('Copy text to clipboard'),
           ),
         ],
+        child: IgnorePointer(
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.summarize, size: 18),
+            label: const Text('Report'),
+            onPressed: () {},
+          ),
+        ),
+      ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('AV Signal Flow', style: theme.textTheme.titleLarge),
+              if (model.nodes.isNotEmpty) _buildDeviceSearch(provider, model),
+            ],
+          ),
+          const SizedBox(height: 8),
+          groups([
+            ('Edit', edit),
+            ('Add and connect', add),
+            ('Layout and view', view),
+            ('Save and export', output),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  /// Type-ahead list of the devices on the drawing; picking one jumps to it.
+  Widget _buildDeviceSearch(AppStateProvider provider, AvFlowModel model) {
+    String title(AvNode n) =>
+        n.model.isEmpty ? n.label : '${n.label} (${n.model})';
+    final nodes = [...model.nodes]
+      ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+    return SizedBox(
+      width: 260,
+      child: Autocomplete<AvNode>(
+        key: const ValueKey('av_device_search'),
+        displayStringForOption: (n) => n.label,
+        optionsBuilder: (value) {
+          final q = value.text.trim().toLowerCase();
+          if (q.isEmpty) return nodes;
+          return nodes.where((n) =>
+              n.label.toLowerCase().contains(q) ||
+              n.model.toLowerCase().contains(q) ||
+              n.id.toLowerCase().contains(q));
+        },
+        onSelected: (n) {
+          _jumpToNode(provider, n.id);
+          FocusManager.instance.primaryFocus?.unfocus();
+        },
+        fieldViewBuilder: (context, controller, focus, onSubmit) => TextField(
+          key: const ValueKey('av_device_search_field'),
+          controller: controller,
+          focusNode: focus,
+          onSubmitted: (_) => onSubmit(),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'Find a device...',
+            prefixIcon: const Icon(Icons.search, size: 18),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.arrow_drop_down, size: 18),
+              tooltip: 'Show all devices',
+              onPressed: () {
+                controller.clear();
+                focus.requestFocus();
+              },
+            ),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        optionsViewBuilder: (context, onSelected, options) => Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(6),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360, maxHeight: 320),
+              child: ListView(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                children: [
+                  for (final n in options)
+                    ListTile(
+                      key: ValueKey('av_device_search_${n.id}'),
+                      dense: true,
+                      leading: Icon(iconForAvNode(n.id, n.model), size: 18),
+                      title: Text(title(n), overflow: TextOverflow.ellipsis),
+                      onTap: () => onSelected(n),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1854,7 +2059,9 @@ class _AvFlowViewState extends State<AvFlowView>
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapUp: (details) {
-                _selectCable(_cableAt(details.localPosition));
+                final hit = _cableAt(details.localPosition);
+                _selectCable(hit);
+                _revealCableRow(hit);
               },
               // Double-clicking a run opens it. onDoubleTapDown carries the
               // position; onDoubleTap does not, and without both the hit test
@@ -1945,6 +2152,39 @@ class _AvFlowViewState extends State<AvFlowView>
                           _resizeNode(provider, node.id, delta,
                               sideways: sideways, down: down)
                       : null,
+                ),
+              ),
+            ),
+          // The ring round a device found with the search. Off the page for
+          // an export.
+          if (model.nodesById[_foundNodeId] case final found?)
+            Positioned(
+              left: found.pos.dx - 6,
+              top: found.pos.dy - 6,
+              child: IgnorePointer(
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: capturingDiagram,
+                  builder: (context, capturing, _) => capturing
+                      ? const SizedBox.shrink()
+                      : Container(
+                          key: const ValueKey('av_found_ring'),
+                          width: found.width + 12,
+                          height: found.height + 12,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: theme.colorScheme.tertiary,
+                              width: 3,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.colorScheme.tertiary
+                                    .withValues(alpha: 0.45),
+                                blurRadius: 14,
+                              ),
+                            ],
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -2053,7 +2293,10 @@ class _AvFlowViewState extends State<AvFlowView>
             translation: const Offset(-0.5, -0.5),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => _selectCable(cable.id),
+              onTap: () {
+                _selectCable(cable.id);
+                _revealCableRow(cable.id);
+              },
               onDoubleTap: () => _showCableDialog(provider, cable),
               onPanStart: _editMode
                   ? (_) {
@@ -3414,7 +3657,10 @@ class _AvFlowViewState extends State<AvFlowView>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Top-aligned: the helper lines under Rack U, Watts and BTU
+                // would otherwise lift those boxes above Name and Model.
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: TextField(
@@ -3916,11 +4162,27 @@ class _AvFlowViewState extends State<AvFlowView>
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop('delete'),
-              child: Text(
-                'Remove device',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+            Tooltip(
+              message: 'Takes it off the drawing and keeps it on the Cost '
+                  'page as a quoted line',
+              child: TextButton(
+                onPressed: () => Navigator.of(ctx).pop('delete'),
+                child: Text(
+                  'Remove device',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            ),
+            Tooltip(
+              message: 'Takes it and its cables off the drawing and changes '
+                  'nothing else',
+              child: TextButton(
+                key: const ValueKey('av_remove_from_flow'),
+                onPressed: () => Navigator.of(ctx).pop('remove_flow'),
+                child: Text(
+                  'Remove from AV Flow only',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
             ),
             TextButton(
@@ -3967,6 +4229,13 @@ class _AvFlowViewState extends State<AvFlowView>
     if (result == 'delete') {
       final kept = provider.removeAvNodeKeepCost(node.id);
       _snack(_removedNote(node, kept != null));
+      return;
+    }
+    if (result == 'remove_flow') {
+      provider.removeAvNode(node.id);
+      setState(() => _selectedNodeId = null);
+      _snack('${node.label} taken off the AV Flow with its cables. Ctrl+Z '
+          'brings it back.');
       return;
     }
 
@@ -4188,6 +4457,8 @@ class _AvFlowViewState extends State<AvFlowView>
     final orphaned = provider.avCables.where(
       (c) => !AvFlowModel.cableIsResolvable(c, byId),
     );
+    final live = {for (final c in model.cables) c.id};
+    _cableRowKeys.removeWhere((id, _) => !live.contains(id));
 
     return Container(
       width: double.infinity,
@@ -4198,106 +4469,121 @@ class _AvFlowViewState extends State<AvFlowView>
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: theme.dividerColor)),
       ),
-      child: ListView(
-        shrinkWrap: true, // one line of help shouldn't hold open the panel
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _pendingPort != null
-                      ? 'Now click the connector at the other end of the cable '
-                            '(click the same one again to cancel).'
-                      : _cableMode
-                      ? 'Click a connector, then the connector at the other '
-                            'end, to draw a cable. Turn off "Draw Cable" to '
-                            'move devices again.'
-                      : 'Drag a device to move it. Click its header pencil to '
-                            'rename it or edit its connectors. Turn on "Draw '
-                            'Cable" to wire connectors together. Click a cable '
-                            'to add bends.',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-              // Lengths are set HERE rather than one cable dialog at a time:
-              // a room is usually cabled in one or two lead lengths, and
-              // twenty dialogs to say so is twenty chances to miss one.
-              if (model.cables.isNotEmpty)
-                TextButton.icon(
-                  key: const ValueKey('av_cable_lengths'),
-                  icon: const Icon(Icons.straighten, size: 16),
-                  label: const Text('Cable lengths'),
-                  onPressed: () => _showCableLengthsDialog(provider, model),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          for (final c in model.cables)
+      // Every row built, so a click on a run far down the list can find its
+      // row to scroll to.
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Row(
               children: [
-                Container(
-                  width: 26,
-                  height: 4,
-                  margin: const EdgeInsets.only(right: 10),
-                  color: c.colorFor(provider.avSignalColors),
-                ),
-                SizedBox(
-                  width: 44,
-                  child: Text(c.id, style: theme.textTheme.bodySmall),
-                ),
                 Expanded(
                   child: Text(
-                    '${endpoint(c.fromNodeId, c.fromPortId)}  →  '
-                    '${endpoint(c.toNodeId, c.toPortId)}'
-                    '${c.label.isEmpty ? '' : '   (${c.label})'}',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Text(
-                  kSignalLabels[c.signal] ?? c.signal.name,
-                  style: theme.textTheme.bodySmall,
-                ),
-                SizedBox(
-                  width: 52,
-                  child: Text(
-                    formatCableLength(c.lengthFt),
-                    textAlign: TextAlign.right,
+                    _pendingPort != null
+                        ? 'Now click the connector at the other end of the cable '
+                              '(click the same one again to cancel).'
+                        : _cableMode
+                        ? 'Click a connector, then the connector at the other '
+                              'end, to draw a cable. Turn off "Draw Cable" to '
+                              'move devices again.'
+                        : 'Drag a device to move it. Click its header pencil to '
+                              'rename it or edit its connectors. Turn on "Draw '
+                              'Cable" to wire connectors together. Click a cable '
+                              'to add bends.',
                     style: theme.textTheme.bodySmall,
                   ),
                 ),
-                IconButton(
-                  key: ValueKey('av_cable_edit_${c.id}'),
-                  icon: const Icon(Icons.edit_outlined, size: 20),
-                  tooltip: 'Edit this cable',
-                  onPressed: () => _showCableDialog(provider, c),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  tooltip: 'Remove this cable',
-                  onPressed: () => provider.removeAvCable(c.id),
-                ),
+                // Lengths are set HERE rather than one cable dialog at a time:
+                // a room is usually cabled in one or two lead lengths, and
+                // twenty dialogs to say so is twenty chances to miss one.
+                if (model.cables.isNotEmpty)
+                  TextButton.icon(
+                    key: const ValueKey('av_cable_lengths'),
+                    icon: const Icon(Icons.straighten, size: 16),
+                    label: const Text('Cable lengths'),
+                    onPressed: () => _showCableLengthsDialog(provider, model),
+                  ),
               ],
             ),
-          for (final c in orphaned)
-            Row(
-              children: [
-                const SizedBox(width: 36),
-                Expanded(
-                  child: Text(
-                    '${c.id}: endpoint no longer exists '
-                    '(${c.fromNodeId}·${c.fromPortId} → ${c.toNodeId}·${c.toPortId})',
-                    style: TextStyle(color: theme.disabledColor),
-                    overflow: TextOverflow.ellipsis,
+            const SizedBox(height: 4),
+            for (final c in model.cables)
+              Material(
+                key: _cableRowKeys.putIfAbsent(c.id, GlobalKey.new),
+                color: c.id == _selectedCableId
+                    ? theme.colorScheme.primary.withValues(alpha: 0.16)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(4),
+                  onTap: () => _selectCable(c.id),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 26,
+                        height: 4,
+                        margin: const EdgeInsets.only(right: 10),
+                        color: c.colorFor(provider.avSignalColors),
+                      ),
+                      SizedBox(
+                        width: 44,
+                        child: Text(c.id, style: theme.textTheme.bodySmall),
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${endpoint(c.fromNodeId, c.fromPortId)}  →  '
+                          '${endpoint(c.toNodeId, c.toPortId)}'
+                          '${c.label.isEmpty ? '' : '   (${c.label})'}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        cableSignalName(c, byId),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      SizedBox(
+                        width: 52,
+                        child: Text(
+                          formatCableLength(c.lengthFt),
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                      IconButton(
+                        key: ValueKey('av_cable_edit_${c.id}'),
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        tooltip: 'Edit this cable',
+                        onPressed: () => _showCableDialog(provider, c),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        tooltip: 'Remove this cable',
+                        onPressed: () => provider.removeAvCable(c.id),
+                      ),
+                    ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  tooltip: 'Discard this dangling cable',
-                  onPressed: () => provider.removeAvCable(c.id),
-                ),
-              ],
-            ),
-        ],
+              ),
+            for (final c in orphaned)
+              Row(
+                children: [
+                  const SizedBox(width: 36),
+                  Expanded(
+                    child: Text(
+                      '${c.id}: endpoint no longer exists '
+                      '(${c.fromNodeId}·${c.fromPortId} → ${c.toNodeId}·${c.toPortId})',
+                      style: TextStyle(color: theme.disabledColor),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    tooltip: 'Discard this dangling cable',
+                    onPressed: () => provider.removeAvCable(c.id),
+                  ),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -4529,6 +4815,17 @@ class _AvFlowViewState extends State<AvFlowView>
                   movingSource: false,
                   onPicked: (picked) => setLocal(() => to = picked),
                 ),
+                // A USB run between different plugs is its own lead.
+                if (_usbLead(provider, from, to) case final lead
+                    when lead.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Cable: $lead',
+                      key: const ValueKey('cable_usb_lead'),
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
+                  ),
                 const Divider(height: 20),
                 DropdownButtonFormField<SignalType>(
                   key: ValueKey('cable_signal_${signal.name}'),
@@ -4711,6 +5008,17 @@ class _AvFlowViewState extends State<AvFlowView>
         clearColorOverride: colorOverride == null,
       ),
     );
+  }
+
+  /// "USB-C to USB-A" for a USB run between different plugs, else ''.
+  static String _usbLead(
+    AppStateProvider provider,
+    CableEnd from,
+    CableEnd to,
+  ) {
+    final a = provider.avNodeById(from.nodeId)?.portById(from.portId);
+    final b = provider.avNodeById(to.nodeId)?.portById(to.portId);
+    return a == null || b == null ? '' : usbCableName(a, b);
   }
 
   /// One end of a cable in the cable dialog: where it lands now, and a button

@@ -396,6 +396,13 @@ class PlanDevice {
   /// its working area, as ARGB by the band's N in N:1 (7, 15, 50, 80).
   final Map<int, int> rangeColors;
 
+  /// For a projector: lens to screen in feet, saved for this one. 0 uses the
+  /// room's throw distance.
+  final double throwFt;
+
+  /// Held where it is: no dragging, nudging or right-click removing.
+  final bool locked;
+
   const PlanDevice({
     required this.id,
     required this.deviceKey,
@@ -411,6 +418,8 @@ class PlanDevice {
     this.pairedWith = '',
     this.coneColor = 0,
     this.rangeColors = const {},
+    this.throwFt = 0,
+    this.locked = false,
   });
 
   /// The color its cone, throw or viewing angle is drawn in.
@@ -441,6 +450,8 @@ class PlanDevice {
     String? pairedWith,
     int? coneColor,
     Map<int, int>? rangeColors,
+    double? throwFt,
+    bool? locked,
   }) => PlanDevice(
     id: id ?? this.id,
     deviceKey: deviceKey ?? this.deviceKey,
@@ -456,6 +467,8 @@ class PlanDevice {
     pairedWith: pairedWith ?? this.pairedWith,
     coneColor: coneColor ?? this.coneColor,
     rangeColors: rangeColors ?? this.rangeColors,
+    throwFt: throwFt ?? this.throwFt,
+    locked: locked ?? this.locked,
   );
 
   Map<String, dynamic> toJson() => {
@@ -477,6 +490,8 @@ class PlanDevice {
       'rangeColors': {
         for (final e in rangeColors.entries) '${e.key}': e.value,
       },
+    if (shape == 'projector' && throwFt > 0) 'throwFt': throwFt,
+    if (locked) 'locked': true,
   };
 
   factory PlanDevice.fromJson(Map<String, dynamic> json) {
@@ -507,6 +522,11 @@ class PlanDevice {
             if (int.tryParse(e.key) case final k?)
               if (e.value case final num v) k: v.toInt(),
       },
+      throwFt: switch ((json['throwFt'] as num?)?.toDouble()) {
+        final t? when t.isFinite && t > 0 => t,
+        _ => 0,
+      },
+      locked: json['locked'] == true,
     );
   }
 }

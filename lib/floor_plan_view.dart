@@ -359,6 +359,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       });
       return KeyEventResult.handled;
     }
+    if (device != null &&
+        device.locked &&
+        (action == Shortcut.delete || Shortcut.moves.contains(action))) {
+      _snack('${device.label} is locked. Unlock it to move or remove it.');
+      return KeyEventResult.handled;
+    }
     if (action == Shortcut.delete) {
       if (device != null) {
         provider.removeAvPlanDevice(plan.id, device.id);
@@ -1805,7 +1811,17 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           label: const Text('Throws and angles'),
           onPressed: () => _showConeList(provider, plan.id),
         ),
-      if (plan != null || provider.avThrowDistanceFt > 0)
+      if (plan != null &&
+          plan.devices.where((d) => d.shape == 'projector').length > 1)
+        OutlinedButton.icon(
+          key: const ValueKey('plan_throw_distance'),
+          icon: const Icon(Icons.settings_ethernet, size: 18),
+          label: Text(
+            'Throws (${plan.devices.where((d) => d.shape == 'projector').length})',
+          ),
+          onPressed: () => _editProjectorThrows(provider, plan.id),
+        )
+      else if (plan != null || provider.avThrowDistanceFt > 0)
         OutlinedButton.icon(
           key: const ValueKey('plan_throw_distance'),
           icon: const Icon(Icons.settings_ethernet, size: 18),
@@ -3871,41 +3887,55 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           _selectedCalloutId = null;
           _focusSheet();
         }),
-        onPanStart: (_) => setState(() {
-          _deviceDragId = device.id;
-          _deviceDrag = Offset.zero;
-        }),
-        onPanUpdate: (d) {
-          _deviceDrag += d.delta;
-          _dragTick.value++;
-        },
-        onPanEnd: (_) {
-          final moved = _deviceDrag;
-          setState(() {
-            _deviceDragId = '';
-            _deviceDrag = Offset.zero;
-          });
-          if (moved == Offset.zero) return;
-          provider.updateAvPlanDevice(
-            plan.id,
-            device.copyWith(pos: device.pos + moved),
-            what: 'Move ${device.label}',
-          );
-        },
+        // Locked: a drag pans the sheet instead.
+        onPanStart: device.locked
+            ? null
+            : (_) => setState(() {
+                _deviceDragId = device.id;
+                _deviceDrag = Offset.zero;
+              }),
+        onPanUpdate: device.locked
+            ? null
+            : (d) {
+                _deviceDrag += d.delta;
+                _dragTick.value++;
+              },
+        onPanEnd: device.locked
+            ? null
+            : (_) {
+              final moved = _deviceDrag;
+              setState(() {
+                _deviceDragId = '';
+                _deviceDrag = Offset.zero;
+              });
+              if (moved == Offset.zero) return;
+              provider.updateAvPlanDevice(
+                plan.id,
+                device.copyWith(pos: device.pos + moved),
+                what: 'Move ${device.label}',
+              );
+            },
         onPanCancel: () => setState(() {
           _deviceDragId = '';
           _deviceDrag = Offset.zero;
         }),
         onDoubleTap: () => _showDeviceEditor(provider, plan, device),
         onSecondaryTap: () {
+          if (device.locked) {
+            _snack('${device.label} is locked. Unlock it to remove it.');
+            return;
+          }
           provider.removeAvPlanDevice(plan.id, device.id);
           if (selected) setState(() => _selectedDeviceId = '');
           _snack('${device.label} taken off ${plan.name}.');
         },
         child: Tooltip(
-          message: '${device.label}\n'
-              'Click to select · drag to move · double-click to edit · '
-              'right-click to remove',
+          message: device.locked
+              ? '${device.label}\n'
+                  'Locked · click to select · double-click to edit'
+              : '${device.label}\n'
+                  'Click to select · drag to move · double-click to edit · '
+                  'right-click to remove',
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -3952,6 +3982,29 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                         color: Colors.white,
                       ),
                     ),
+                    if (device.locked)
+                      Positioned(
+                        right: 4,
+                        bottom: 4,
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: capturingDiagram,
+                          builder: (context, capturing, _) => capturing
+                              ? const SizedBox.shrink()
+                              : Container(
+                                  key: ValueKey('plan_lock_badge_${device.id}'),
+                                  padding: const EdgeInsets.all(1.5),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.lock,
+                                    size: 10,
+                                    color: Color(0xFF37474F),
+                                  ),
+                                ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -4214,7 +4267,205 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   /// Asks for the room's throw distance in feet and inches.
   Future<void> _editThrowDistance(AppStateProvider provider) async {
-    final current = provider.avThrowDistanceFt;
+    final ft = await _askThrow(
+      title: 'Throw distance',
+      note: "Lens to screen for this room's projector. The projection "
+          'calculator starts from it.',
+      current: provider.avThrowDistanceFt,
+    );
+    if (ft != null) provider.setAvThrowDistance(ft);
+  }
+
+  /// Asks for one projector's own throw distance. Cleared, it uses the
+  /// room's.
+  Future<void> _editProjectorThrow(
+    AppStateProvider provider,
+    String planId,
+    PlanDevice projector,
+  ) async {
+    final room = provider.avThrowDistanceFt;
+    final ft = await _askThrow(
+      title: 'Throw distance - ${projector.label}',
+      note: 'Lens to screen for this projector. The projection calculator '
+          'starts from it.${room > 0 ? ' Cleared, it uses the room\'s '
+              '${formatFeetInches(room)}.' : ''}',
+      current: projector.throwFt,
+    );
+    if (ft == null || !mounted) return;
+    _saveProjectorThrow(provider, planId, projector.id, ft);
+  }
+
+  void _saveProjectorThrow(
+    AppStateProvider provider,
+    String planId,
+    String projectorId,
+    double ft,
+  ) {
+    final plan = provider.avFloorPlans
+        .where((p) => p.id == planId)
+        .firstOrNull;
+    final now = plan?.devices.where((d) => d.id == projectorId).firstOrNull;
+    if (now == null) return;
+    provider.updateAvPlanDevice(
+      planId,
+      now.copyWith(throwFt: ft > 0 ? ft : 0),
+      what: ft > 0
+          ? 'Set the throw of ${now.label}'
+          : 'Clear the throw of ${now.label}',
+    );
+  }
+
+  /// Every projector on the sheet with its own throw distance, and the
+  /// room's that the blank ones use.
+  Future<void> _editProjectorThrows(
+    AppStateProvider provider,
+    String planId,
+  ) async {
+    final plan = provider.avFloorPlans
+        .where((p) => p.id == planId)
+        .firstOrNull;
+    if (plan == null) return;
+    final projectors = plan.devices
+        .where((d) => d.shape == 'projector')
+        .toList()
+      ..sort((a, b) => a.label.compareTo(b.label));
+    (TextEditingController, TextEditingController) fields(double ft) {
+      final whole = ft.floor();
+      return (
+        TextEditingController(text: ft > 0 ? '$whole' : ''),
+        TextEditingController(
+          text: ft > 0 ? trimFeetInches((ft - whole) * 12) : '',
+        ),
+      );
+    }
+
+    final room = fields(provider.avThrowDistanceFt);
+    final own = {for (final d in projectors) d.id: fields(d.throwFt)};
+    double read((TextEditingController, TextEditingController) f) =>
+        (double.tryParse(f.$1.text.trim()) ?? 0) +
+        (double.tryParse(f.$2.text.trim()) ?? 0) / 12;
+
+    Widget row(
+      BuildContext ctx,
+      String keyId,
+      String label,
+      (TextEditingController, TextEditingController) f, {
+      String? hint,
+    }) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label, overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 90,
+            child: TextField(
+              key: ValueKey('throw_feet_$keyId'),
+              controller: f.$1,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Feet',
+                suffixText: 'ft',
+                hintText: hint,
+                isDense: true,
+              ),
+              onSubmitted: (_) => Navigator.of(ctx).pop(true),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 90,
+            child: TextField(
+              key: ValueKey('throw_inches_$keyId'),
+              controller: f.$2,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Inches',
+                suffixText: 'in',
+                isDense: true,
+              ),
+              onSubmitted: (_) => Navigator.of(ctx).pop(true),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final saved = await showMovableDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Throw distances'),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Lens to screen for each projector. One left blank uses '
+                  "the room's throw distance.",
+                ),
+                const SizedBox(height: 12),
+                row(ctx, 'room', "Room's throw distance", room),
+                const Divider(),
+                for (final d in projectors)
+                  row(ctx, d.id, d.label, own[d.id]!, hint: 'room'),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final roomFt = read(room);
+    if (roomFt != provider.avThrowDistanceFt) {
+      provider.setAvThrowDistance(roomFt);
+    }
+    // Every projector in one step, so one Undo puts them all back.
+    final now = provider.avFloorPlans
+        .where((p) => p.id == planId)
+        .firstOrNull;
+    if (now == null) return;
+    final next = [
+      for (final d in now.devices)
+        if (own[d.id] case final f?)
+          d.copyWith(throwFt: math.max(0.0, read(f)))
+        else
+          d,
+    ];
+    final changed = [
+      for (var i = 0; i < next.length; i++)
+        if (next[i].throwFt != now.devices[i].throwFt) i,
+    ];
+    if (changed.isNotEmpty) {
+      provider.updateAvFloorPlan(now.copyWith(devices: next));
+    }
+  }
+
+  /// Feet and inches for a throw distance; null when cancelled, 0 when
+  /// cleared.
+  Future<double?> _askThrow({
+    required String title,
+    required String note,
+    required double current,
+  }) async {
     final whole = current.floor();
     final feet = TextEditingController(text: current > 0 ? '$whole' : '');
     final inches = TextEditingController(
@@ -4223,17 +4474,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final saved = await showMovableDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Throw distance'),
+        title: Text(title),
         content: SizedBox(
           width: 320,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Lens to screen for this room's projector. The projection "
-                'calculator starts from it.',
-              ),
+              Text(note),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -4296,8 +4544,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final ft = double.tryParse(feet.text.trim()) ?? 0;
     final inch = double.tryParse(inches.text.trim()) ?? 0;
     // Not disposed here: the dialog is still animating closed.
-    if (saved != true) return;
-    provider.setAvThrowDistance(ft + inch / 12);
+    if (saved != true) return null;
+    return math.max(0.0, ft + inch / 12);
   }
 
   /// Opens the projection calculator for [device], or on its own when null.
@@ -4312,11 +4560,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final shown = plan == null ? const <PlanDevice>[] : _shownDevices(plan);
     final partner = device == null ? null : projectionPartner(shown, device);
     final projector = device?.shape == 'screen' ? partner : device;
-    // The room's throw distance first, then the distance on the sheet once
-    // it is to scale.
+    // The projector's own throw, then the room's, then the distance on the
+    // sheet once it is to scale.
     double? distance;
     String? note;
-    if (provider.avThrowDistanceFt > 0) {
+    if (projector != null && projector.throwFt > 0) {
+      distance = projector.throwFt;
+      note = "${projector.label}'s throw distance";
+    } else if (provider.avThrowDistanceFt > 0) {
       distance = provider.avThrowDistanceFt;
       note = "the room's throw distance";
     } else if (device != null && partner != null && ppf > 0) {
@@ -4331,7 +4582,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       specs: _projectorSpecs(provider, projector),
       distanceFt: distance,
       distanceNote: note,
-      onSaveDistance: provider.setAvThrowDistance,
+      onSaveDistance: projector == null || plan == null
+          ? provider.setAvThrowDistance
+          : (ft) => _saveProjectorThrow(provider, plan.id, projector.id, ft),
+      saveDistanceWhose: plan == null ? null : projector?.label,
       roomLightFc: provider.avRoomLightFc,
       applyLabel: device == null
           ? null
@@ -4894,6 +5148,27 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               apply: (v) => device.copyWith(width: ppf > 0 ? v * ppf : v),
               what: 'Resize ${device.label}',
             ),
+          if (device.shape == 'projector')
+            Tooltip(
+              message: device.throwFt > 0
+                  ? 'This projector\'s own throw distance. Click to change it.'
+                  : 'Uses the room\'s throw distance. Click to give this '
+                      'projector its own.',
+              child: TextButton.icon(
+                key: const ValueKey('plan_device_throw'),
+                icon: const Icon(Icons.settings_ethernet, size: 16),
+                label: Text(
+                  device.throwFt > 0
+                      ? 'Throw ${formatFeetInches(device.throwFt)}'
+                      : provider.avThrowDistanceFt > 0
+                      ? 'Throw ${formatFeetInches(provider.avThrowDistanceFt)}'
+                            ' (room)'
+                      : 'Set throw',
+                ),
+                onPressed: () =>
+                    _editProjectorThrow(provider, plan.id, device),
+              ),
+            ),
           if (device.shape == 'projector' || device.shape == 'screen')
             TextButton.icon(
               key: const ValueKey('plan_device_calculator'),
@@ -4906,6 +5181,23 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               plan.devices.any((d) => d.shape == partnerShape(device.shape)))
             _pairMenu(provider, plan, device),
           ..._squareControls(provider, plan, device),
+          FilterChip(
+            key: const ValueKey('plan_device_lock'),
+            avatar: Icon(
+              device.locked ? Icons.lock : Icons.lock_open,
+              size: 16,
+            ),
+            label: Text(device.locked ? 'Locked' : 'Lock'),
+            tooltip: device.locked
+                ? 'Unlock so it can be dragged again'
+                : 'Lock it in place so it cannot be dragged or nudged',
+            selected: device.locked,
+            onSelected: (v) => provider.updateAvPlanDevice(
+              plan.id,
+              device.copyWith(locked: v),
+              what: v ? 'Lock ${device.label}' : 'Unlock ${device.label}',
+            ),
+          ),
           TextButton.icon(
             icon: const Icon(Icons.edit_outlined, size: 16),
             label: const Text('Edit'),

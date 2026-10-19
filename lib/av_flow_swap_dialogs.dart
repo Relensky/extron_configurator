@@ -7,7 +7,6 @@ import 'av_device_library.dart';
 import 'control_prefill.dart' show moveControlBlockToFamily;
 import 'av_flow_model.dart';
 import 'model_swap.dart';
-import 'search_match.dart';
 import 'responsive.dart';
 
 /// ============================================================================
@@ -26,14 +25,13 @@ import 'responsive.dart';
 /// One end of a cable, as the node and connector it lands on.
 typedef CableEnd = ({String nodeId, String portId});
 
-/// Picks a new connector for one end of a drawn run.
+/// Picks a new connector for one end of a drawn run: the device first, from
+/// a list you can type into, then one of its connectors.
 ///
 /// Only connectors that would actually make a cable are offered, judged by
 /// [checkPortMatch] against the end that is NOT moving — so an output end is
 /// offered outputs, and a DMP EXP lead is offered nothing but other DMP EXP
-/// sockets. That is the whole reason the list is filtered rather than showing
-/// every socket in the room: the rule already exists, and a picker that
-/// ignored it would be a second way to draw a cable the canvas refuses.
+/// sockets. Devices with none of those are left out of the device list.
 ///
 /// [signalMismatch] entries are still listed. Real rooms are full of adapters,
 /// and the canvas asks about those rather than refusing them; this marks them
@@ -49,37 +47,41 @@ Future<CableEnd?> pickCableEnd(
   required AvPort fixedPort,
   required CableEnd current,
 }) {
-  final searchController = TextEditingController();
+  // Every connector this end could legally move to, by device, with the
+  // mismatch flag so the list can say which ones need an adapter.
+  final byNode = <String, List<({AvPort port, bool mismatch})>>{};
+  final nodes = <AvNode>[];
+  for (final node in provider.avNodes) {
+    final ports = <({AvPort port, bool mismatch})>[];
+    for (final port in node.ports) {
+      final match = movingSource
+          ? checkPortMatch(node, port, fixedNode, fixedPort)
+          : checkPortMatch(fixedNode, fixedPort, node, port);
+      if (match == PortMatch.invalid) continue;
+      ports.add((port: port, mismatch: match == PortMatch.signalMismatch));
+    }
+    if (ports.isEmpty) continue;
+    byNode[node.id] = ports;
+    nodes.add(node);
+  }
+  nodes.sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+
   CableEnd? selected = current;
+  var nodeId = byNode.containsKey(current.nodeId)
+      ? current.nodeId
+      : nodes.firstOrNull?.id;
+  String title(AvNode n) =>
+      n.model.isEmpty ? n.label : '${n.label} (${n.model})';
 
   return showDialog<CableEnd>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) {
         final theme = Theme.of(ctx);
-
-        // Every connector this end could legally move to, with the mismatch
-        // flag so the list can say which ones need an adapter.
-        final options = <({AvNode node, AvPort port, bool mismatch})>[];
-        for (final node in provider.avNodes) {
-          for (final port in node.ports) {
-            final match = movingSource
-                ? checkPortMatch(node, port, fixedNode, fixedPort)
-                : checkPortMatch(fixedNode, fixedPort, node, port);
-            if (match == PortMatch.invalid) continue;
-            final query = searchController.text;
-            if (query.trim().isNotEmpty &&
-                !searchMatches('${node.label} ${node.model} ${port.label}',
-                    query)) {
-              continue;
-            }
-            options.add((
-              node: node,
-              port: port,
-              mismatch: match == PortMatch.signalMismatch,
-            ));
-          }
-        }
+        final node = nodes.where((n) => n.id == nodeId).firstOrNull;
+        final options = node == null
+            ? const <({AvPort port, bool mismatch})>[]
+            : byNode[node.id]!;
 
         return AlertDialog(
           title: Text(movingSource
@@ -98,78 +100,92 @@ Future<CableEnd?> pickCableEnd(
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  key: const ValueKey('cable_end_search'),
-                  controller: searchController,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    labelText: 'Search',
-                    hintText: 'device, model or connector',
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    suffixIcon: ClearFieldButton(
-                      controller: searchController,
-                      onCleared: () => setLocal(() {}),
+                if (nodes.isEmpty)
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        'No connector on the canvas can take this end. '
+                        'A cable runs from an output to an input, and an '
+                        'expansion bus only meets its own kind.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  )
+                else ...[
+                  // Type to narrow the list, or open it and pick.
+                  DropdownMenu<String>(
+                    key: const ValueKey('cable_end_device'),
+                    initialSelection: nodeId,
+                    width: 528,
+                    menuHeight: 320,
+                    enableFilter: true,
+                    requestFocusOnTap: true,
+                    label: const Text('Device'),
+                    leadingIcon: const Icon(Icons.search, size: 20),
+                    dropdownMenuEntries: [
+                      for (final n in nodes)
+                        DropdownMenuEntry(
+                          value: n.id,
+                          label: title(n),
+                        ),
+                    ],
+                    onSelected: (id) {
+                      if (id == null) return;
+                      setLocal(() => nodeId = id);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    movingSource ? 'Output' : 'Input',
+                    style: theme.textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: options.length,
+                      itemBuilder: (ctx, i) {
+                        final o = options[i];
+                        final isCurrent = node!.id == selected?.nodeId &&
+                            o.port.id == selected?.portId;
+                        return ListTile(
+                          key: ValueKey('cable_end_${node.id}_${o.port.id}'),
+                          dense: true,
+                          selected: isCurrent,
+                          leading: Container(
+                            width: 14,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: provider.avSignalColor(o.port.signal),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          title: Text(
+                            o.port.label,
+                            style: const TextStyle(fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            [
+                              kSignalLabels[o.port.signal] ??
+                                  o.port.signal.name,
+                              if (o.mismatch) 'needs an adapter',
+                            ].join(' · '),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: o.mismatch
+                                  ? theme.colorScheme.error
+                                  : null,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () => setLocal(() => selected =
+                              (nodeId: node.id, portId: o.port.id)),
+                        );
+                      },
                     ),
                   ),
-                  onChanged: (_) => setLocal(() {}),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: options.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No connector on the canvas can take this end. '
-                            'A cable runs from an output to an input, and an '
-                            'expansion bus only meets its own kind.',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: options.length,
-                          itemBuilder: (ctx, i) {
-                            final o = options[i];
-                            final isCurrent = o.node.id == selected?.nodeId &&
-                                o.port.id == selected?.portId;
-                            return ListTile(
-                              key: ValueKey(
-                                  'cable_end_${o.node.id}_${o.port.id}'),
-                              dense: true,
-                              selected: isCurrent,
-                              leading: Container(
-                                width: 14,
-                                height: 14,
-                                decoration: BoxDecoration(
-                                  color: provider.avSignalColor(o.port.signal),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              title: Text(
-                                '${o.node.label} · ${o.port.label}',
-                                style: const TextStyle(fontSize: 13),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                [
-                                  kSignalLabels[o.port.signal] ??
-                                      o.port.signal.name,
-                                  if (o.node.model.isNotEmpty) o.node.model,
-                                  if (o.mismatch) 'needs an adapter',
-                                ].join(' · '),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: o.mismatch
-                                      ? theme.colorScheme.error
-                                      : null,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: () => setLocal(() => selected =
-                                  (nodeId: o.node.id, portId: o.port.id)),
-                            );
-                          },
-                        ),
-                ),
+                ],
               ],
             ),
           ),

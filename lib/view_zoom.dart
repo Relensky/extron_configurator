@@ -77,6 +77,31 @@ bool fitToViewport({
   return true;
 }
 
+/// Pans [controller] so [target] (canvas coordinates) sits in the middle of a
+/// viewport of [viewport] size. Zooms in to [readableScale] when the view is
+/// further out than that, and out when the target would not fit.
+void centerOnRect(
+  TransformationController controller,
+  Size viewport,
+  Rect target, {
+  double readableScale = 0.8,
+  double padding = 40,
+  double minScale = 0.05,
+}) {
+  final fit = math.min(
+    (viewport.width - padding * 2) / target.width,
+    (viewport.height - padding * 2) / target.height,
+  );
+  final current = controller.value.getMaxScaleOnAxis();
+  final scale =
+      math.max(math.min(math.max(current, readableScale), fit), minScale);
+  final dx = viewport.width / 2 - target.center.dx * scale;
+  final dy = viewport.height / 2 - target.center.dy * scale;
+  controller.value = Matrix4.identity()
+    ..translateByDouble(dx, dy, 0, 1)
+    ..scaleByDouble(scale, scale, scale, 1);
+}
+
 /// Back to 1:1 at the top-left — the counterpart to a fit, for when the answer
 /// to "show me everything" is "now show me it properly".
 void resetZoom(TransformationController controller) {

@@ -15,8 +15,10 @@ import 'av_flow_model.dart';
 ///  the screen. Past [kAvDestinationsPerColumn] they are drawn as a table on
 ///  the right instead - a few columns of a few rows - so the room still fits.
 ///
-///  Within a column the boxes keep the order they were in, top to bottom, so
-///  a tidy does not shuffle what somebody arranged.
+///  Within a column, boxes are put in the order that crosses the fewest
+///  cables: each moves toward the boxes it is cabled to, and an order is only
+///  kept when it really does cross fewer lines. Boxes with no cables, and a
+///  drawing no reordering improves, keep the order they were in.
 /// ============================================================================
 
 /// More displays and projectors than this and they are laid out as a table.
@@ -65,11 +67,13 @@ AvLayoutColumn avLayoutColumnFor(AvNode node, AvDeviceLibrary library) {
   return AvLayoutColumn.source;
 }
 
-/// Where every box goes: id -> new top-left. Nothing overlaps.
+/// Where every box goes: id -> new top-left. Nothing overlaps. With
+/// [cables], each column is ordered to cross as few of them as it can.
 Map<String, Offset> tidyAvLayout(
   List<AvNode> nodes,
-  AvDeviceLibrary library,
-) {
+  AvDeviceLibrary library, {
+  List<AvCable> cables = const [],
+}) {
   final columns = {for (final c in AvLayoutColumn.values) c: <AvNode>[]};
   for (final n in nodes) {
     columns[avLayoutColumnFor(n, library)]!.add(n);
@@ -81,7 +85,127 @@ Map<String, Offset> tidyAvLayout(
       return y != 0 ? y : a.pos.dx.compareTo(b.pos.dx);
     });
   }
+  if (cables.isNotEmpty) _uncross(columns, cables);
+  return _place(columns);
+}
 
+/// How many pairs of [cables] cross, drawn straight between their
+/// connectors with the boxes at [at].
+int avLayoutCrossings(
+  Map<String, AvNode> byId,
+  Map<String, Offset> at,
+  List<AvCable> cables,
+) {
+  final segs = <(Offset, Offset, AvCable)>[];
+  for (final c in cables) {
+    final from = byId[c.fromNodeId], to = byId[c.toNodeId];
+    if (from == null || to == null || from.id == to.id) continue;
+    segs.add((
+      (at[from.id] ?? from.pos) + from.localAnchorOf(c.fromPortId),
+      (at[to.id] ?? to.pos) + to.localAnchorOf(c.toPortId),
+      c,
+    ));
+  }
+  double turn(Offset a, Offset b, Offset c) =>
+      (b.dx - a.dx) * (c.dy - a.dy) - (b.dy - a.dy) * (c.dx - a.dx);
+  var n = 0;
+  for (var i = 0; i < segs.length; i++) {
+    for (var j = i + 1; j < segs.length; j++) {
+      final (a, b, ca) = segs[i];
+      final (c, d, cb) = segs[j];
+      // Two runs off the same connector meet there; that is not a crossing.
+      if ((ca.fromNodeId == cb.fromNodeId && ca.fromPortId == cb.fromPortId) ||
+          (ca.toNodeId == cb.toNodeId && ca.toPortId == cb.toPortId)) {
+        continue;
+      }
+      final d1 = turn(c, d, a), d2 = turn(c, d, b);
+      final d3 = turn(a, b, c), d4 = turn(a, b, d);
+      if (d1 * d2 < 0 && d3 * d4 < 0) n++;
+    }
+  }
+  return n;
+}
+
+/// Reorders each column so its boxes sit level with what they are cabled to,
+/// a sweep at a time, and keeps the order that crossed the fewest cables.
+void _uncross(
+  Map<AvLayoutColumn, List<AvNode>> columns,
+  List<AvCable> cables,
+) {
+  final byId = {
+    for (final list in columns.values)
+      for (final n in list) n.id: n,
+  };
+  final runs = [
+    for (final c in cables)
+      if (byId.containsKey(c.fromNodeId) &&
+          byId.containsKey(c.toNodeId) &&
+          c.fromNodeId != c.toNodeId)
+        c,
+  ];
+  if (runs.isEmpty) return;
+
+  Map<AvLayoutColumn, List<AvNode>> copy() => {
+    for (final e in columns.entries) e.key: [...e.value],
+  };
+  var best = copy();
+  var fewest = avLayoutCrossings(byId, _place(columns), runs);
+
+  // A couple of dozen sweeps settles any room this app draws.
+  for (var sweep = 0; sweep < 24 && fewest > 0; sweep++) {
+    final order = sweep.isEven
+        ? AvLayoutColumn.values
+        : AvLayoutColumn.values.reversed;
+    for (final column in order) {
+      final list = columns[column]!;
+      if (list.length < 2) continue;
+      final at = _place(columns);
+      // Where each box's top would sit to put its connectors level with the
+      // other ends of its runs, on average. Boxes with none stay put.
+      final want = <String, double>{};
+      for (final n in list) {
+        var sum = 0.0, count = 0;
+        for (final c in runs) {
+          final String other, otherPort, ownPort;
+          if (c.fromNodeId == n.id) {
+            (other, otherPort, ownPort) = (c.toNodeId, c.toPortId, c.fromPortId);
+          } else if (c.toNodeId == n.id) {
+            (other, otherPort, ownPort) =
+                (c.fromNodeId, c.fromPortId, c.toPortId);
+          } else {
+            continue;
+          }
+          final o = byId[other]!;
+          sum += at[other]!.dy +
+              o.localAnchorOf(otherPort).dy -
+              n.localAnchorOf(ownPort).dy;
+          count++;
+        }
+        want[n.id] = count == 0 ? at[n.id]!.dy : sum / count;
+      }
+      // Stable, so ties keep the order they had.
+      final indexed = list.indexed.toList()
+        ..sort((a, b) {
+          final w = want[a.$2.id]!.compareTo(want[b.$2.id]!);
+          return w != 0 ? w : a.$1.compareTo(b.$1);
+        });
+      list
+        ..clear()
+        ..addAll(indexed.map((e) => e.$2));
+    }
+    final now = avLayoutCrossings(byId, _place(columns), runs);
+    if (now < fewest) {
+      fewest = now;
+      best = copy();
+    }
+  }
+  for (final e in best.entries) {
+    columns[e.key] = e.value;
+  }
+}
+
+/// The columns laid out in their current order.
+Map<String, Offset> _place(Map<AvLayoutColumn, List<AvNode>> columns) {
   final out = <String, Offset>{};
   var x = kAvAutoOriginX;
 

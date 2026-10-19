@@ -134,6 +134,51 @@ void main() {
     expect(node.rackUnits, 3);
   });
 
+  testWidgets('Rack U, Watts and BTU sit level with Name and Model', (
+    tester,
+  ) async {
+    final provider = seeded();
+    await pumpTab(tester, provider);
+    await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('av_edit_SWITCHERDEVICE_1')));
+    await tester.pumpAndSettle();
+
+    double top(String label) =>
+        tester.getTopLeft(find.widgetWithText(TextField, label)).dy;
+    for (final label in ['Model', 'Rack U', 'Watts', 'BTU/hr']) {
+      expect(top(label), top('Name'), reason: label);
+    }
+  });
+
+  testWidgets('Remove from AV Flow only touches nothing but the drawing', (
+    tester,
+  ) async {
+    final provider = seeded();
+    provider.addAvCable(
+      fromNodeId: 'SWITCHERDEVICE_1',
+      fromPortId: 'out_hdmi_1',
+      toNodeId: 'PROJECTORDEVICE_1',
+      toPortId: 'in_hdmi_1',
+      signal: SignalType.hdmi,
+    );
+    final quoted = provider.avCost.extraEquipment.length;
+    await pumpTab(tester, provider);
+    await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('av_edit_SWITCHERDEVICE_1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('av_remove_from_flow')));
+    await tester.pumpAndSettle();
+
+    expect(provider.avNodeById('SWITCHERDEVICE_1'), isNull);
+    expect(provider.avCables, isEmpty);
+    expect(provider.avCost.extraEquipment.length, quoted,
+        reason: 'no quoted line is added to the Cost page');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('every port row control is reachable, including delete', (
     tester,
   ) async {

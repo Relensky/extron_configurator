@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.146+156';
+const String kAppVersion = '0.5.150+160';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,48 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.150',
+    date: 'October 19, 2026',
+    title: 'AV Flow toolbar groups and fewer crossing lines',
+    changes: [
+      'AV Flow: the toolbar buttons are in groups - Edit, Add and connect, Layout and view, Save and export - each with a name you can click to fold it away. The page title and device search sit on their own line above.',
+      'AV Flow: Tidy layout also orders each column so as few cables cross as it can, moving each box level with what it is cabled to. Boxes with no cables keep their order.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.149',
+    date: 'October 19, 2026',
+    title: 'Labor tab layout',
+    changes: [
+      'Projects: on the Labor tab, an expanded room lists its crews and fees from the left edge instead of the middle.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.148',
+    date: 'October 19, 2026',
+    title: 'Removing a device from the AV Flow only',
+    changes: [
+      'AV Flow: the device edit window has a Remove from AV Flow only button. It takes the box and its cables off the drawing without adding it to the Cost page.',
+      'AV Flow: in the device edit window, Rack U, Watts and BTU/hr line up with Name and Model.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.147',
+    date: 'October 19, 2026',
+    title: 'Finding devices, projector throws and locking',
+    changes: [
+      'AV Flow: a Find a device box in the toolbar. Type to search by name or model, or open the list and pick one, and the view jumps to that box and rings it for a few seconds.',
+      'AV Flow: with Edit on, clicking a cable scrolls the cable list below the drawing to its row and highlights it. Clicking a row selects that cable on the drawing.',
+      'Floor plan: each projector can keep its own throw distance. Click a projector to see its throw and set it; one without its own uses the room\'s.',
+      'Floor plan: with more than one projector on the sheet, the Throws button lists every projector with its throw distance, plus the room\'s, to set them together.',
+      'Projection calculator: opened on a projector, it starts from that projector\'s throw distance and saves back to it. The Throw distance box now lines up with the Aspect box.',
+      'Floor plan: a Lock button on a selected device holds it in place. A locked device cannot be dragged, nudged with the arrow keys or removed with a right-click until it is unlocked, and shows a small lock on the sheet.',
+      'AV Flow: moving one end of a cable now asks for the device first, from a list you can type into, then shows only that device\'s inputs or outputs to pick from.',
+      'AV Flow: USB-C and USB connect without the adapter warning. A run between different plugs is listed as the cable it needs, such as USB-C to USB-A, in the cable list, the cable window, the cable schedule and the cable counts.',
+      'AV Flow: a Dante port connects to a network switch port without the signal warning.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.146',
     date: 'October 17, 2026',

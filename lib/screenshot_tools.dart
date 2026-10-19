@@ -861,9 +861,44 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
     );
   }
 
+  /// Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z) / Ctrl+C / Ctrl+S, the same four the
+  /// buttons on the bar do. Each one is a no-op when its button is greyed
+  /// out, so a key pressed on an empty canvas or mid-save does nothing.
+  Map<ShortcutActivator, VoidCallback> get _shortcuts => {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
+          if (_annotations.isNotEmpty) _undoAnnotation();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () {
+          if (_undoneAnnotations.isNotEmpty) _redoAnnotation();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyZ,
+            control: true, shift: true): () {
+          if (_undoneAnnotations.isNotEmpty) _redoAnnotation();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyC, control: true): _copy,
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): _save,
+      };
+
   @override
   Widget build(BuildContext context) {
     final image = _image;
+    // THESE KEYS BELONG TO THE EDITOR ALONE. It opens as its own dialog route,
+    // so the page underneath - and any Ctrl+S / Ctrl+Z it binds - is not an
+    // ancestor of anything focused here and never sees the key. Close the
+    // editor and the page's own shortcuts are back.
+    // AUTOFOCUSED so the keys work the moment the editor opens, before
+    // anything on the canvas has been clicked. The canvas's own Focus (Delete)
+    // sits inside this one, so its keys bubble up here too.
+    return CallbackShortcuts(
+      bindings: _shortcuts,
+      child: Focus(
+        autofocus: true,
+        child: _buildEditor(context, image),
+      ),
+    );
+  }
+
+  Widget _buildEditor(BuildContext context, ui.Image? image) {
     return Column(
       children: [
         // ----- Toolbar -----
@@ -911,23 +946,29 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                       // THE OTHER PLACE A SCREENSHOT GOES. Half of these end up
                       // pasted into a ticket or an email rather than kept as a
                       // file.
-                      OutlinedButton.icon(
-                        key: const ValueKey('annotation_copy'),
-                        onPressed: _saving ? null : _copy,
-                        icon: const Icon(Icons.copy_all_outlined, size: 16),
-                        label: const Text('Copy'),
+                      Tooltip(
+                        message: 'Copy the marked-up picture (Ctrl+C)',
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('annotation_copy'),
+                          onPressed: _saving ? null : _copy,
+                          icon: const Icon(Icons.copy_all_outlined, size: 16),
+                          label: const Text('Copy'),
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        onPressed: _saving ? null : _save,
-                        icon: _saving
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.save, size: 16),
-                        label: const Text('Save PNG'),
+                      Tooltip(
+                        message: 'Save the marked-up picture as a PNG (Ctrl+S)',
+                        child: ElevatedButton.icon(
+                          onPressed: _saving ? null : _save,
+                          icon: _saving
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))
+                              : const Icon(Icons.save, size: 16),
+                          label: const Text('Save PNG'),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       IconButton(
@@ -1053,7 +1094,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                         icon: const Icon(Icons.undo, size: 20),
                         tooltip: _annotations.isEmpty
                             ? 'Nothing to undo - no marks on this picture yet'
-                            : 'Undo the last mark drawn on this picture',
+                            : 'Undo the last mark drawn on this picture (Ctrl+Z)',
                         onPressed:
                             _annotations.isEmpty ? null : _undoAnnotation,
                       ),
@@ -1062,7 +1103,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                         icon: const Icon(Icons.redo, size: 20),
                         tooltip: _undoneAnnotations.isEmpty
                             ? 'Nothing to redo - nothing has been undone'
-                            : 'Redo the mark that was undone',
+                            : 'Redo the mark that was undone (Ctrl+Y)',
                         onPressed:
                             _undoneAnnotations.isEmpty ? null : _redoAnnotation,
                       ),

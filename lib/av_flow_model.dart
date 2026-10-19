@@ -659,7 +659,51 @@ PortMatch checkPortMatch(
   }
 
   if (from.signal == to.signal) return PortMatch.ok;
+  // USB-C and USB are one family: the lead is a USB-C to USB-A (or B) cable,
+  // not an adapter. See [usbCableName].
+  if (isUsbSignal(from.signal) && isUsbSignal(to.signal)) return PortMatch.ok;
+  // Dante rides the network: a Dante port on a switch port is the normal run.
+  if ({from.signal, to.signal}.containsAll(
+      const {SignalType.dante, SignalType.network})) {
+    return PortMatch.ok;
+  }
   return PortMatch.signalMismatch;
+}
+
+/// USB-C or USB data.
+bool isUsbSignal(SignalType s) => s == SignalType.usbC || s == SignalType.usbData;
+
+/// The plug a USB port takes: USB-C, USB-B, Micro-USB, Mini-USB or USB-A.
+/// Null for a port that is not USB.
+String? usbConnectorOf(AvPort port) {
+  if (!isUsbSignal(port.signal)) return null;
+  final label = port.label.toLowerCase();
+  if (port.signal == SignalType.usbC ||
+      RegExp(r'usb[\s-]?c\b|type[\s-]?c\b').hasMatch(label)) {
+    return 'USB-C';
+  }
+  if (label.contains('micro')) return 'Micro-USB';
+  if (label.contains('mini')) return 'Mini-USB';
+  if (RegExp(r'usb[\s-]?b\b|type[\s-]?b\b').hasMatch(label)) return 'USB-B';
+  return 'USB-A';
+}
+
+/// The lead a USB run needs when its two ends take different plugs, as in
+/// "USB-C to USB-A". '' for anything else.
+String usbCableName(AvPort from, AvPort to) {
+  final a = usbConnectorOf(from);
+  final b = usbConnectorOf(to);
+  if (a == null || b == null || a == b) return '';
+  return '$a to $b';
+}
+
+/// What [cable] carries, as listed: "USB-C to USB-A" for a USB run between
+/// different plugs, the signal's name otherwise.
+String cableSignalName(AvCable cable, Map<String, AvNode> byId) {
+  final from = byId[cable.fromNodeId]?.portById(cable.fromPortId);
+  final to = byId[cable.toNodeId]?.portById(cable.toPortId);
+  final usb = from == null || to == null ? '' : usbCableName(from, to);
+  return usb.isNotEmpty ? usb : kSignalLabels[cable.signal] ?? cable.signal.name;
 }
 
 // ---------------------------------------------------------------------------

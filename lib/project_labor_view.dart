@@ -232,6 +232,8 @@ class _RoomCard extends StatelessWidget {
           style: theme.textTheme.bodySmall?.copyWith(color: muted),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        // Left, not the tile's default center.
+        expandedAlignment: Alignment.centerLeft,
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (lines.isEmpty)
