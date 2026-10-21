@@ -457,6 +457,40 @@ const List<HelpTopic> kHelpTopics = [
         'about a thing that can never be fixed.',
   ),
   HelpTopic(
+    title: 'Manuals, and finding the missing ones',
+    section: 'The room',
+    where: 'Devices tab → Manuals (beside the device tabs); one device: '
+        'Devices tab → Device manuals',
+    plain:
+        'Two kinds of manual. Device manuals are the equipment maker\'s own '
+        'guides. Module manuals explain the control driver for that equipment. '
+        'The Manuals window lists both and shows which ones are missing.',
+    keywords: [
+      'manual', 'manuals', 'missing manual', 'user guide', 'setup guide',
+      'pdf', 'documentation', 'module manual', 'driver manual', 'spec',
+    ],
+    body:
+        'DEVICE MANUALS come from the Manuals catalog that the CTS Dashboard '
+        'also reads. App Config → Manuals Folder says where it is: blank means '
+        'the dashboard share, or press "Use the git folder" to read a clone '
+        'of the Manuals repo instead. A model is matched however it is spelled '
+        '(TR311, AVer TR311 and AVER - TR311 are the same camera).\n\n'
+        'MODULE MANUALS are the PDF for each python driver: <module name>.pdf '
+        'in App Config → Documentation Path. The Module manual button on a '
+        'device opens it.\n\n'
+        'THE MANUALS WINDOW has three tabs. This room lists every device in '
+        'the open config with its manuals. Device manuals lists every model '
+        'the drivers support and says which have no manual in the catalog. '
+        'Module manuals lists every python driver and the file name its '
+        'missing manual should be saved under. "Missing only" hides the ones '
+        'that are fine; "Copy missing list" puts the gaps on the clipboard as '
+        'a table that pastes into Excel.\n\n'
+        'To fill a device manual, add it to the Manuals catalog and publish it '
+        'to the share (see the Manuals repo README), then press refresh in the '
+        'Manuals window. To fill a module manual, save the PDF under the name '
+        'shown into the Documentation Path.',
+  ),
+  HelpTopic(
     title: 'How long the room takes to come up',
     section: 'The room',
     where: 'Devices tab (per projector, display and camera), System '

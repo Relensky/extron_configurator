@@ -199,9 +199,10 @@ void main() {
   // -------------------------------------------------------------------------
 
   // 900 is a half-width window on a 1080p laptop, 1400 a maximised one, and
-  // 1900 a desktop. 150% is the display scale a meeting room runs at.
+  // 1900 a desktop. 150% is the display scale a meeting room runs at, and
+  // 200% the largest Text Size there is.
   for (final width in [900.0, 1400.0, 1900.0]) {
-    for (final scale in [1.0, 1.5]) {
+    for (final scale in [1.0, 1.5, 2.0]) {
       testWidgets(
         'every project pane fits ${width.round()} px at '
         '${(scale * 100).round()}%',
@@ -284,7 +285,7 @@ void main() {
   }
 
   for (final width in [1100.0, 1400.0, 1900.0]) {
-    for (final scale in [1.0, 1.5]) {
+    for (final scale in [1.0, 1.5, 2.0]) {
       testWidgets(
         'the campus fits ${width.round()} px at ${(scale * 100).round()}%',
         (tester) async {
@@ -351,7 +352,7 @@ void main() {
   //  window at 150% is where it would run the field into it.
 
   for (final width in [900.0, 1400.0]) {
-    for (final scale in [1.0, 1.5]) {
+    for (final scale in [1.0, 1.5, 2.0]) {
       testWidgets(
         'app config fits ${width.round()} px at ${(scale * 100).round()}%',
         (tester) async {
@@ -400,7 +401,7 @@ void main() {
   //  meets. It read 'Create a New Fi...' at every size there is.
 
   for (final width in [1100.0, 1500.0]) {
-    for (final scale in [1.0, 1.5]) {
+    for (final scale in [1.0, 1.5, 2.0]) {
       testWidgets(
         'every tab in the rail fits ${width.round()} px at '
         '${(scale * 100).round()}%',

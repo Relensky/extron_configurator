@@ -63,6 +63,7 @@ import 'unit_numbering.dart';
 import 'recent_files.dart';
 import 'room_presets.dart';
 import 'room_sidecar.dart';
+import 'device_manuals.dart' show kDashboardManualsFolder;
 import 'nav_rail.dart' show navTabLabel;
 import 'campus_file.dart' show kCampusFileSuffix;
 import 'app_activity.dart';
@@ -433,6 +434,70 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The Cost tab line to bring to the middle of the page and light up, by
+  /// [CostLine.key] — the same request [requestedDeviceKey] is, one tab over.
+  ///
+  /// "Not priced" on the project's parts list names a part and the rooms that
+  /// have it; the price is set on that room's Cost page, which is a long page,
+  /// and arriving at the top of it left the reader hunting for the one row the
+  /// link was about. Session-only, and honored once - see
+  /// [takeCostLineRequest].
+  String requestedCostLine = '';
+
+  /// Asks the Cost tab to show [lineKey] — see [requestedCostLine].
+  void requestCostLine(String lineKey) {
+    requestedCostLine = lineKey;
+    notifyListeners();
+  }
+
+  /// More lines lit with [requestedCostLine], held until the page is left
+  /// rather than for a few seconds. Taken with [takeCostLineRequest].
+  List<String> requestedCostLines = const [];
+
+  /// Asks the Cost tab to light every one of [lineKeys] while it stays open.
+  void requestCostLines(List<String> lineKeys) {
+    requestedCostLines = [...lineKeys];
+    requestedCostLine = lineKeys.isEmpty ? '' : lineKeys.first;
+    notifyListeners();
+  }
+
+  /// The pending [requestedCostLine], handed over once: the Cost page takes
+  /// it while building, and a later visit to the page by hand is not sent
+  /// back to a line somebody asked for an hour ago. No notify - it is called
+  /// from a build.
+  String takeCostLineRequest() {
+    final key = requestedCostLine;
+    requestedCostLine = '';
+    return key;
+  }
+
+  /// The pending [requestedCostLines], handed over once alongside
+  /// [takeCostLineRequest].
+  List<String> takeCostLinesRequest() {
+    final keys = requestedCostLines;
+    requestedCostLines = const [];
+    return keys;
+  }
+
+  /// The AV Flow box to center and ring, by node id - the same request
+  /// [requestedCostLine] is, for the signal flow. Honored once - see
+  /// [takeAvNodeRequest].
+  String requestedAvNode = '';
+
+  /// Asks the AV Flow tab to show [nodeId] - see [requestedAvNode].
+  void requestAvNode(String nodeId) {
+    requestedAvNode = nodeId;
+    notifyListeners();
+  }
+
+  /// The pending [requestedAvNode], handed over once. No notify - it is
+  /// called from a build.
+  String takeAvNodeRequest() {
+    final id = requestedAvNode;
+    requestedAvNode = '';
+    return id;
+  }
+
   // --------------------------------------------------------------------------
   //  WHICH PANE OF THE PROJECT TAB
   // --------------------------------------------------------------------------
@@ -658,6 +723,10 @@ class AppStateProvider extends ChangeNotifier {
   /// machine opens on every other. Blank = `<root>/spec_sheets`. See
   /// spec_sheets.dart.
   String specSheetFolder = '';
+
+  /// The Manuals catalog folder (catalog\manuals.json + files\). Blank = the
+  /// dashboard share. See device_manuals.dart.
+  String manualsFolder = '';
 
   // ==========================================================================
   // [TEAM KIT]: presence, the team chat and "working on" tags, shared with
@@ -1572,6 +1641,27 @@ class AppStateProvider extends ChangeNotifier {
       ? specSheetFolder.trim()
       : path.join(effectiveRootFolder, 'spec_sheets');
 
+  /// Where device manuals come from: the chosen folder, else the file share's
+  /// copy, else - a fresh install off the network - `<root>\manuals`. Never a
+  /// clone of the Manuals repo unless somebody picks one: the build reads
+  /// what everybody reads.
+  String get effectiveManualsFolder => manualsFolder.trim().isNotEmpty
+      ? manualsFolder.trim()
+      : _sharedManualsAvailable
+      ? kDashboardManualsFolder
+      : path.join(effectiveRootFolder, 'manuals');
+
+  /// Looked up once a run, like [_sharedRootAvailable]. Never under test.
+  static bool? _sharedManualsReachable;
+  static bool get _sharedManualsAvailable => _sharedManualsReachable ??= () {
+        if (runningUnderTest) return false;
+        try {
+          return Directory(kDashboardManualsFolder).existsSync();
+        } catch (_) {
+          return false;
+        }
+      }();
+
   String get effectiveDocumentationPath => documentationPath.isNotEmpty
       ? documentationPath
       : _inRootOrApp('documentation');
@@ -1711,6 +1801,7 @@ class AppStateProvider extends ChangeNotifier {
       'vendorListFilePath': vendorListFilePath,
       'documentationPath': documentationPath,
       'specSheetFolder': specSheetFolder,
+      'manualsFolder': manualsFolder,
       'teamFolderPath': teamFolderPath,
       'sharedRoomsFolder': sharedRoomsFolder,
       'copyRoomsToShare': copyRoomsToShare,
@@ -9438,6 +9529,32 @@ class AppStateProvider extends ChangeNotifier {
   /// model was actually picked.
   final Map<String, List<String>> moduleModels = {};
 
+  /// Per-module DEVICE_INFO "model_support": what each group of models in one
+  /// driver can and cannot do, keyed by module stem like [moduleDefaults].
+  ///
+  /// One driver usually covers a product line whose members differ - an L630U
+  /// has no Computer (RGB) input that the L610U next to it in the same file
+  /// does, an IN1608 without the amp has no amplifier commands. Without this,
+  /// every model on the driver is offered every command and every state of
+  /// the whole line, and the wrong one is found on site. Empty for drivers
+  /// that declare none, which then work exactly as before.
+  final Map<String, List<ModelSupport>> moduleModelSupport = {};
+
+  /// The "model_support" group [moduleValue]'s DEVICE_INFO puts [model] in,
+  /// or null when the driver declares none, the model is blank, or no group
+  /// names it. Matched the way [modelEntryFor] matches - case and kit
+  /// extensions - so the config's spelling of the model still finds it.
+  ModelSupport? modelSupportFor(String moduleValue, String? model) {
+    final name = model?.trim() ?? '';
+    if (name.isEmpty) return null;
+    final groups = moduleModelSupport[moduleStem(moduleValue)];
+    if (groups == null) return null;
+    final match =
+        declaredModelFor(name, [for (final g in groups) ...g.models]);
+    if (match == null) return null;
+    return groups.firstWhere((g) => g.models.contains(match));
+  }
+
   /// Sorted model names for the device-tab Model dropdown (every model).
   List<String> get availableModels => modelRegistry.keys.toList()..sort();
 
@@ -9751,6 +9868,7 @@ class AppStateProvider extends ChangeNotifier {
     moduleComTypeDefaults.clear();
     moduleOmits.clear();
     moduleModels.clear();
+    moduleModelSupport.clear();
     try {
       final dir = Directory(mPath);
       if (!await dir.exists()) {
@@ -10502,6 +10620,7 @@ class AppStateProvider extends ChangeNotifier {
       vendorListFilePath = str('vendorListFilePath', '');
       documentationPath = str('documentationPath', '');
       specSheetFolder = str('specSheetFolder', '');
+      manualsFolder = str('manualsFolder', '');
       teamFolderPath = str('teamFolderPath', '');
       sharedRoomsFolder = str('sharedRoomsFolder', '');
       copyRoomsToShare = saved['copyRoomsToShare'] != false;
@@ -11654,6 +11773,7 @@ class AppStateProvider extends ChangeNotifier {
     vendorListFilePath = '';
     documentationPath = '';
     specSheetFolder = '';
+    manualsFolder = '';
     classSchedulePath = '';
     classSchedule = ClassScheduleIndex.empty;
     // Reloads everything that runs on a default, modules included, and saves.
@@ -11756,6 +11876,9 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'documentationPath':
         documentationPath = value; // PDFs are resolved on demand — no reload
+        break;
+      case 'manualsFolder':
+        manualsFolder = value; // read when a manuals view opens
         break;
       case 'specSheetFolder':
         specSheetFolder = value; // resolved on demand, like the manuals
@@ -12890,8 +13013,25 @@ class AppStateProvider extends ChangeNotifier {
     return defaults;
   }
 
+  /// The keep-alive (Update) commands [moduleFileName] defines, less the ones
+  /// its DEVICE_INFO "model_support" says [model] does not have. A blank
+  /// model, or a driver that declares no support, gets every command.
+  Future<List<String>> getCommandsForModule(String moduleFileName,
+      {String? model}) async {
+    final commands = await _updateCommandsForModule(moduleFileName);
+    final support = modelSupportFor(moduleFileName, model);
+    if (support == null || support.unsupported.isEmpty) return commands;
+    return commands.where(support.supports).toList();
+  }
+
+  /// [roomConfig]'s model for [deviceKey], or null.
+  String? _modelOf(String deviceKey) {
+    final device = roomConfig[deviceKey];
+    return device is Map ? device['model']?.toString() : null;
+  }
+
   /// Parses an Extron Python module file to extract valid keep-alive commands.
-  Future<List<String>> getCommandsForModule(String moduleFileName) async {
+  Future<List<String>> _updateCommandsForModule(String moduleFileName) async {
     // Construct the full local path based on the app settings and the json module string
     final fullPath = modulePyPath(moduleFileName);
 
@@ -12941,7 +13081,23 @@ class AppStateProvider extends ChangeNotifier {
   ///      every model's keys is returned
   /// Returns [] when the module file or the command can't be resolved, so the
   /// field falls back to free text entry.
+  ///
+  /// With a [model], the driver's DEVICE_INFO "model_support" has the last
+  /// word: the states it lists for that model's group are the ones offered,
+  /// and a command it says the group lacks has none. See
+  /// [moduleModelSupport].
   Future<List<String>> getStatesForModuleCommand(
+      String moduleFileName, String command, {String? model}) async {
+    final support = modelSupportFor(moduleFileName, model);
+    if (support != null) {
+      if (!support.supports(command)) return [];
+      final declared = support.valuesFor(command);
+      if (declared != null) return declared;
+    }
+    return _statesForModuleCommand(moduleFileName, command);
+  }
+
+  Future<List<String>> _statesForModuleCommand(
       String moduleFileName, String command) async {
     if (moduleFileName.isEmpty || command.isEmpty) return [];
     final fullPath = modulePyPath(moduleFileName);
@@ -13091,6 +13247,13 @@ class AppStateProvider extends ChangeNotifier {
           if (patterns.isNotEmpty) {
             moduleOmits[moduleStem(moduleName)] = patterns;
           }
+        }
+
+        // "model_support": per-group commands and states - see
+        // [moduleModelSupport].
+        final support = ModelSupport.listFrom(info['model_support']);
+        if (support.isNotEmpty) {
+          moduleModelSupport[moduleStem(moduleName)] = support;
         }
       }
       // Fallback: the driver's own self.Models dict keys
@@ -14779,7 +14942,8 @@ class AppStateProvider extends ChangeNotifier {
   ///      else the module's first command
   Future<String> _resolveKeepAliveCommand(
       String deviceKey, String moduleName) async {
-    final commands = await getCommandsForModule(moduleName);
+    final commands =
+        await getCommandsForModule(moduleName, model: _modelOf(deviceKey));
     if (commands.isEmpty) return '';
 
     String pick(String wanted) => commands.firstWhere(
@@ -14821,7 +14985,8 @@ class AppStateProvider extends ChangeNotifier {
       final moduleName = device['module']?.toString() ?? '';
       if (moduleName.isEmpty) continue;
 
-      final commands = await getCommandsForModule(moduleName);
+      final commands =
+          await getCommandsForModule(moduleName, model: _modelOf(key));
       if (commands.isEmpty) {
         // Module .py not found in the modules folder (or has no Update methods)
         AppLogger.logInfo("No matching .py commands for '$moduleName' on $key; keep-alive left as-is.");
@@ -14859,7 +15024,8 @@ class AppStateProvider extends ChangeNotifier {
       final moduleName = device['module']?.toString() ?? '';
       if (moduleName.isEmpty) continue; // already flagged by module resolution
 
-      final commands = await getCommandsForModule(moduleName);
+      final model = _modelOf(sectionKey);
+      final commands = await getCommandsForModule(moduleName, model: model);
       if (commands.isEmpty) {
         systemLogs.add(
             "FLAGGED: '$sectionKey.keep_alive_command' could not be checked - "
@@ -14875,7 +15041,7 @@ class AppStateProvider extends ChangeNotifier {
       device['keep_alive_command'] = chosen;
       systemLogs.add(
           "MODULE: '$sectionKey.keep_alive_command' "
-          "${current.isEmpty ? 'was empty' : "'$current' is not a command in '$moduleName'"} "
+          "${current.isEmpty ? 'was empty' : "'$current' is not a command in '$moduleName'${modelSupportFor(moduleName, model) == null ? '' : ' for the $model'}"} "
           "- set to '$chosen' from that module.");
     }
   }
@@ -15079,7 +15245,9 @@ class AppStateProvider extends ChangeNotifier {
         if (current.isEmpty) continue;
 
         final command = spec!.moduleCommand ?? key;
-        final states = await getStatesForModuleCommand(moduleName, command);
+        final model = device['model']?.toString();
+        final states =
+            await getStatesForModuleCommand(moduleName, command, model: model);
         // No states parsed at all: the module has no such command (or it can't
         // be read). That's a different problem from a wrong value, and the
         // field says so itself — don't cry wolf over every value here.
@@ -15088,9 +15256,12 @@ class AppStateProvider extends ChangeNotifier {
           continue;
         }
 
+        final forModel = modelSupportFor(moduleName, model) == null
+            ? ''
+            : " for the $model";
         systemLogs.add(
             "FLAGGED: '$sectionKey.$key' is '$current', which is not a "
-            "'$command' state in '$moduleName' - pick one of "
+            "'$command' state in '$moduleName'$forModel - pick one of "
             "${states.join(', ')}, or add '$current' to the module.");
       }
     }
@@ -23251,6 +23422,99 @@ class ConversionChange {
       case ConversionKind.changed:
         return '${show(before)} → ${show(after)}';
     }
+  }
+}
+
+/// One group of a driver's DEVICE_INFO "model_support": the models that share
+/// a set of commands, the commands they lack, and the states they accept
+/// where those are narrower than the whole driver's. In the file:
+///
+///     "model_support": {
+///         "L730U": {
+///             "models": ["PowerLite L630U", "PowerLite L730U"],
+///             "unsupported": ["SplitScreenSwap"],
+///             "values": {"Input": ["HDMI 1", "HDMI 2", "HDBaseT"]},
+///         },
+///     }
+///
+/// A list of such dicts is read the same way, with the name optional.
+class ModelSupport {
+  final String name;
+  final List<String> models;
+
+  /// Command names (as in `Set<name>`/`Update<name>`) this group does not have.
+  final Set<String> unsupported;
+
+  /// Command -> the states this group accepts. Commands not listed are left
+  /// to the driver's own dictionaries.
+  final Map<String, List<String>> values;
+
+  const ModelSupport({
+    required this.name,
+    required this.models,
+    this.unsupported = const {},
+    this.values = const {},
+  });
+
+  /// True unless [command] is one this group lacks (case-insensitive, the
+  /// way the keep-alive dropdown compares).
+  bool supports(String command) {
+    final wanted = command.toLowerCase();
+    return !unsupported.any((c) => c.toLowerCase() == wanted);
+  }
+
+  /// The states declared for [command], or null when none are.
+  List<String>? valuesFor(String command) {
+    final wanted = command.toLowerCase();
+    for (final entry in values.entries) {
+      if (entry.key.toLowerCase() == wanted) return entry.value;
+    }
+    return null;
+  }
+
+  /// Every well-formed group in a parsed "model_support" value; anything that
+  /// is not a dict with a "models" list is skipped rather than guessed at.
+  static List<ModelSupport> listFrom(dynamic raw) {
+    List<String> strings(dynamic v) => v is List
+        ? [
+            for (final e in v)
+              if (e != null && e.toString().trim().isNotEmpty)
+                e.toString().trim(),
+          ]
+        : const [];
+
+    ModelSupport? one(String name, dynamic group) {
+      if (group is! Map) return null;
+      final models = strings(group['models']);
+      if (models.isEmpty) return null;
+      final values = <String, List<String>>{};
+      final rawValues = group['values'];
+      if (rawValues is Map) {
+        rawValues.forEach((k, v) {
+          if (v is List) values[k.toString()] = strings(v);
+        });
+      }
+      return ModelSupport(
+        name: (group['name'] ?? name).toString(),
+        models: models,
+        unsupported: strings(group['unsupported']).toSet(),
+        values: values,
+      );
+    }
+
+    final out = <ModelSupport>[];
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        final group = one(k.toString(), v);
+        if (group != null) out.add(group);
+      });
+    } else if (raw is List) {
+      for (var i = 0; i < raw.length; i++) {
+        final group = one('${i + 1}', raw[i]);
+        if (group != null) out.add(group);
+      }
+    }
+    return out;
   }
 }
 

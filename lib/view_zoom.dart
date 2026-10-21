@@ -23,6 +23,14 @@ import 'package:material_ui/material_ui.dart';
 ///  harder to recover from than a view that plainly did nothing.
 /// ============================================================================
 
+/// A drawing's text at drawing size, whatever Text Size is set to.
+///
+/// Boxes, port rows and cable routes are laid out in fixed drawing units, so
+/// text scaled past them spilled out of its box and under the cables. The
+/// zoom makes a drawing bigger instead, and an export no longer depends on
+/// the Text Size of whoever saved it.
+Widget drawingText(Widget child) => MediaQuery.withNoTextScaling(child: child);
+
 /// The rendered size of whatever [key] is attached to, or null when it has not
 /// been laid out yet (the very first frame, or a tab that has never been on
 /// screen).

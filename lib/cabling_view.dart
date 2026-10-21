@@ -18,6 +18,7 @@ import 'av_flow_model.dart'
 import 'av_flow_report.dart' show cablingSections;
 import 'av_port_editor.dart' show avRowIcon;
 import 'cabling_schematic.dart';
+import 'collapsible_bar.dart';
 import 'keyboard_shortcuts.dart';
 import 'color_wheel_picker.dart';
 import 'diagram_capture.dart';
@@ -195,7 +196,11 @@ class _CablingViewState extends State<CablingView> {
     }
     final drawing = _asDrawn(provider, provider.cablingDrawing);
 
-    return Column(
+    final selection = _selectionBar(provider, drawing);
+    // The controls fold, drag taller or shorter, and scroll past their share.
+    return ScrollingHeader(
+      id: 'cabling',
+      header: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _toolbar(provider, drawing),
@@ -204,11 +209,21 @@ class _CablingViewState extends State<CablingView> {
         // already long enough to wrap, and "set the count in the toolbar" is
         // useless advice when the controls have wrapped off the bottom of a
         // row nobody was looking at.
-        ..._selectionBar(provider, drawing),
+        if (selection.isNotEmpty) ...[
+          const Divider(height: 1),
+          CollapsibleBar(
+            id: 'cabling_selection',
+            title: 'Selected',
+            padding: EdgeInsets.zero,
+            child: Column(children: selection.skip(1).toList()),
+          ),
+        ],
         const Divider(height: 1),
         // On the page, never on the sheet: the export goes to people outside.
         if (drawing.runsLeftOff > 0) _leftOffBanner(drawing),
-        Expanded(
+      ],
+      ),
+      body: KeyedSubtree(
           key: _viewportKey,
           child: drawing.boxes.isEmpty
               ? _emptyState(provider)
@@ -243,16 +258,15 @@ class _CablingViewState extends State<CablingView> {
                         // captures exactly what it draws — see [printSkin].
                         child: printSkin(
                           enabled: _printMode,
-                          child: Builder(
+                          child: drawingText(Builder(
                             builder: (ctx) => _canvas(ctx, provider, drawing),
-                          ),
+                          )),
                         ),
                       ),
                     ),
                   ),
                 ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -441,8 +455,9 @@ class _CablingViewState extends State<CablingView> {
     _snack('$what taken off the drawing - Undo puts it back.');
   }
 
+  // Scrolls when a large text or interface size makes it taller than the page.
   Widget _emptyState(AppStateProvider provider) => Center(
-    child: Padding(
+    child: SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -482,7 +497,7 @@ class _CablingViewState extends State<CablingView> {
   // --- toolbar --------------------------------------------------------------
 
   Widget _toolbar(AppStateProvider provider, CablingSchematic drawing) {
-    final theme = Theme.of(context);
+    final folded = BarFolds.isFolded('cabling_toolbar');
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -491,7 +506,18 @@ class _CablingViewState extends State<CablingView> {
         runSpacing: 6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text('Cabling', style: theme.textTheme.titleLarge),
+          PageTitle('Cabling', folded: folded),
+          FoldButton(
+            id: 'cabling_toolbar',
+            name: 'the toolbar',
+            onChanged: () => setState(() {}),
+          ),
+          FoldAllButtons(
+            page: 'cabling',
+            ids: const ['cabling_toolbar', 'cabling_selection'],
+            onChanged: (_) => setState(() {}),
+          ),
+          if (!folded) ...[
           const SizedBox(width: 4),
           for (final kind in const [
             CablingBoxKind.pullBox,
@@ -724,6 +750,7 @@ class _CablingViewState extends State<CablingView> {
                 visualDensity: VisualDensity.compact,
               ),
             ),
+          ],
         ],
       ),
     );

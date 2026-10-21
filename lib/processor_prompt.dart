@@ -33,7 +33,8 @@ class NoProcessorPrompt extends StatelessWidget {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
-        child: Padding(
+        // Scrolls when a large text or interface size makes it too tall.
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisSize: MainAxisSize.min,

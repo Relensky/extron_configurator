@@ -11,6 +11,7 @@ import 'config_dictionary.dart';
 import 'config_maintenance.dart';
 import 'device_info_editor.dart';
 import 'model_defaults_dialog.dart';
+import 'device_manuals_view.dart';
 import 'pdf_viewer_dialog.dart';
 import 'schema_field_builder.dart';
 import 'search_match.dart';
@@ -98,10 +99,24 @@ class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
                     }
                   }
                 },
-                child: TabBar(
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  tabs: activeKeys.map((key) => Tab(text: config[key]['name'] ?? key)).toList(),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TabBar(
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
+                        tabs: activeKeys.map((key) => Tab(text: config[key]['name'] ?? key)).toList(),
+                      ),
+                    ),
+                    // Every device's manuals, and what is missing.
+                    TextButton.icon(
+                      key: const ValueKey('room_manuals_button'),
+                      icon: const Icon(Icons.menu_book, size: 18),
+                      label: const Text('Manuals'),
+                      onPressed: () => showManualsDialog(context, provider),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                 ),
               ),
               Expanded(
@@ -843,7 +858,7 @@ class DeviceConfigurationForm extends StatelessWidget {
             const SizedBox(width: 16),
             ElevatedButton.icon(
               icon: const Icon(Icons.picture_as_pdf),
-              label: const Text('Manual (PDF)'),
+              label: const Text('Module manual'),
               onPressed: () {
                 final currentModule =
                     provider.roomConfig[deviceKey]?['module']?.toString() ?? '';
@@ -851,6 +866,17 @@ class DeviceConfigurationForm extends StatelessWidget {
                 // can't be resolved). The viewer itself offers "Open externally".
                 PdfViewerDialog.open(context, provider, currentModule);
               },
+            ),
+            const SizedBox(width: 8),
+            // The hardware's own guides, from the Manuals catalog.
+            OutlinedButton.icon(
+              key: const ValueKey('device_manuals_button'),
+              icon: const Icon(Icons.menu_book),
+              label: const Text('Device manuals'),
+              onPressed: () => showDeviceManualsDialog(
+                  context,
+                  provider,
+                  provider.roomConfig[deviceKey]?['model']?.toString().trim() ?? ''),
             ),
           ],
         )),
@@ -996,7 +1022,10 @@ class DeviceConfigurationForm extends StatelessWidget {
                     context, provider, deviceKey, 'keep_alive_command')
                 : null,
             FutureBuilder<List<String>>(
-            future: provider.getCommandsForModule(moduleName),
+            // Only the commands the picked model has, when the driver's
+            // DEVICE_INFO "model_support" says which those are.
+            future: provider.getCommandsForModule(moduleName,
+                model: deviceData['model']?.toString()),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const CircularProgressIndicator();
               List<String> commands = snapshot.data?.toSet().toList() ?? [];
@@ -1010,7 +1039,11 @@ class DeviceConfigurationForm extends StatelessWidget {
                 isExpanded: true,
                 decoration: InputDecoration(
                   labelText: 'Keep Alive Command',
-                  helperText: 'Parsed from $moduleName.py',
+                  helperText: provider.modelSupportFor(
+                              moduleName, deviceData['model']?.toString()) ==
+                          null
+                      ? 'Parsed from $moduleName.py'
+                      : 'Parsed from $moduleName.py, for the ${deviceData['model']}',
                   border: const OutlineInputBorder(),
                 ),
                 items: commands.map((cmd) => DropdownMenuItem(value: cmd, child: Text(cmd.isEmpty ? '-- None --' : cmd, overflow: TextOverflow.ellipsis))).toList(),

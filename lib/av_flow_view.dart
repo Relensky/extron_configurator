@@ -14,6 +14,7 @@ import 'file_dialogs.dart';
 import 'contrast.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'collapsible_bar.dart';
 import 'catalog_category_prompt.dart';
 import 'av_device_library.dart';
 import 'cable_length_field.dart';
@@ -1213,6 +1214,15 @@ class _AvFlowViewState extends State<AvFlowView>
       if (mounted) _syncBackgroundImage(provider);
     });
 
+    // A link elsewhere asked for a device: center it and ring it, once the
+    // drawing has a size to center in.
+    if (provider.requestedAvNode.isNotEmpty) {
+      final id = provider.takeAvNodeRequest();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _jumpToNode(provider, id);
+      });
+    }
+
     // A RUN DELETED WHILE IT WAS SELECTED leaves its id behind. The waypoint
     // handles and the flow layer both tolerate that and simply draw nothing,
     // but the animation would go on ticking for a line that is no longer on
@@ -1224,11 +1234,19 @@ class _AvFlowViewState extends State<AvFlowView>
       });
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildToolbar(provider, model),
-        const Divider(height: 1),
+    // The toolbar scrolls once it passes half the page, so a large Interface
+    // Size never squeezes the drawing out.
+    return ScrollingHeader(
+      id: 'av_flow',
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildToolbar(provider, model),
+          const Divider(height: 1),
+        ],
+      ),
+      body: Column(
+        children: [
         Expanded(
           child: Row(
             children: [
@@ -1258,7 +1276,8 @@ class _AvFlowViewState extends State<AvFlowView>
                                   const EdgeInsets.all(double.infinity),
                               child: RepaintBoundary(
                                 key: _diagramKey,
-                                child: _buildCanvas(provider, model, theme),
+                                child: drawingText(
+                                    _buildCanvas(provider, model, theme)),
                               ),
                             ),
                           ),
@@ -1320,12 +1339,14 @@ class _AvFlowViewState extends State<AvFlowView>
             initialHeight: 200,
             child: _buildCablePanel(provider, model),
           ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildToolbar(AppStateProvider provider, AvFlowModel model) {
     final theme = Theme.of(context);
+    final folded = BarFolds.isFolded('av_toolbar');
     // A thin rule between groups of buttons that belong together.
     Widget rule() => SizedBox(
       height: 28,
@@ -1612,17 +1633,33 @@ class _AvFlowViewState extends State<AvFlowView>
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text('AV Signal Flow', style: theme.textTheme.titleLarge),
-              if (model.nodes.isNotEmpty) _buildDeviceSearch(provider, model),
+              PageTitle('AV Signal Flow', folded: folded),
+              // Folds the search and the buttons away, for room to work.
+              FoldButton(
+                id: 'av_toolbar',
+                name: 'the toolbar',
+                onChanged: () => setState(() {}),
+              ),
+              FoldAllButtons(
+                page: 'av',
+                ids: const ['av_toolbar'],
+                onChanged: (folded) => setState(() {
+                  if (!folded) _collapsedGroups.clear();
+                }),
+              ),
+              if (model.nodes.isNotEmpty && !folded)
+                _buildDeviceSearch(provider, model),
             ],
           ),
-          const SizedBox(height: 8),
-          groups([
-            ('Edit', edit),
-            ('Add and connect', add),
-            ('Layout and view', view),
-            ('Save and export', output),
-          ]),
+          if (!folded) ...[
+            const SizedBox(height: 8),
+            groups([
+              ('Edit', edit),
+              ('Add and connect', add),
+              ('Layout and view', view),
+              ('Save and export', output),
+            ]),
+          ],
         ],
       ),
     );
@@ -2049,10 +2086,13 @@ class _AvFlowViewState extends State<AvFlowView>
             Positioned(
               left: 0,
               top: 0,
-              child: Opacity(
-                opacity: provider.avFlowBackground.opacity,
+              // Its own layer, faded by the image itself rather than an
+              // Opacity layer, so a drag never redraws it.
+              child: RepaintBoundary(
                 child: Image(
                   image: _backgroundImage!,
+                  opacity: AlwaysStoppedAnimation(
+                      provider.avFlowBackground.opacity),
                   width:
                       model.canvasSize.width * provider.avFlowBackground.scale,
                   fit: BoxFit.contain,

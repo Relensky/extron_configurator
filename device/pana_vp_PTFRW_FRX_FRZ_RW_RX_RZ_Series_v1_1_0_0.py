@@ -69,6 +69,31 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "pana_1_2583_noSDI_Ethernet": {
+            "models": [
+                "PT-FRW62C", "PT-FRW73C", "PT-FRW93C", "PT-FRX110C",
+                "PT-RW620", "PT-RW730", "PT-RW930", "PT-RX110",
+            ],
+            "values": {
+                "Input": [
+                    "RGB 1", "RGB 2", "DVI", "HDMI",
+                    "Digital Link", "Video", "S-Video",
+                ],
+            },
+        },
+        "pana_1_2583_SDI_Ethernet": {
+            "models": [
+                "PT-FRZ67C", "PT-FRZ78C", "PT-FRZ98C", "PT-RZ660",
+                "PT-RZ770",
+            ],
+        },
+    },
 }
 
 

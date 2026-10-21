@@ -750,6 +750,9 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
               fieldId: 'funding_src_${room.manualId}${room.roomId}',
               initial: room.funding,
               hint: 'Central',
+              // Held until typing pauses: every change re-totals the whole
+              // job, and per letter the typing lagged behind the keys.
+              lazy: true,
               onChanged: (v) => _set(provider, room, funding: v),
             ),
           ),
@@ -761,6 +764,8 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
               fieldId: 'funding_dept_${room.manualId}${room.roomId}',
               initial: room.department,
               hint: 'Physics',
+              // The same - and the By department table re-groups on it.
+              lazy: true,
               onChanged: (v) => _set(provider, room, department: v),
             ),
           ),

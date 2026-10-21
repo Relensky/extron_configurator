@@ -9,33 +9,239 @@ import re
 DEVICE_INFO = {
     "device_type": "projector",
     "models": [
-        "EB-L610W",
-        "EB-L610U",
         "EB-L615U",
+        "EB-L610U",
+        "CB-L615U",
+        "CB-L610U",
+        "PowerLite L615U",
+        "PowerLite L610U",
         "EB-L510U",
-        "EB-L600U",
+        "EB-L610W",
+        "CB-L510U",
+        "CB-L610W",
+        "PowerLite L510U",
+        "PowerLite L610W",
         "EB-L400U",
         "EB-L500W",
-        "EB-L500",
         "EB-L610",
-        "PowerLite L610W",
-        "PowerLite L500W",
+        "EB-L500",
+        "CB-L400U",
+        "CB-L500W",
+        "CB-L610",
+        "CB-L500",
         "PowerLite L400U",
-        "PowerLite L510U",
+        "PowerLite L500W",
         "PowerLite L610",
-        "PowerLite L610U",
-        "PowerLite L615U",
-        "PowerLite L630U",
+        "PowerLite L500",
+        "EB-L735U",
+        "EB-L730U",
+        "EB-L720U",
+        "EB-L630U",
+        "EB-L635SU",
+        "EB-L630SU",
+        "EB-L530U",
+        "EB-L520U",
+        "EB-L630W",
+        "CB-L735U",
+        "CB-L730U",
+        "CB-L720U",
+        "CB-L630U",
+        "CB-L635SU",
+        "CB-L630SU",
+        "CB-L530U",
+        "CB-L520U",
+        "CB-L630W",
+        "PowerLite L735U",
         "PowerLite L730U",
+        "PowerLite L720U",
+        "PowerLite L630U",
+        "PowerLite L635SU",
+        "PowerLite L630SU",
+        "PowerLite L530U",
+        "PowerLite L520U",
+        "PowerLite L630W",
+        "EB-L520W",
+        "CB-L520W",
+        "PowerLite L520W",
+        "EB-L775U",
+        "EB-L770U",
+        "EB-L570U",
+        "CB-L775U",
+        "CB-L770U",
+        "CB-L570U",
+        "EB-L895E",
+        "EB-L890E",
+        "EB-L690E",
+        "EB-L795SE",
+        "EB-L790SE",
+        "EB-L895U",
+        "EB-L890U",
+        "EB-L790U",
+        "EB-L690U",
+        "EB-L790SU",
+        "EB-L690SU",
+        "EB-L695SU",
+        "CB-L895E",
+        "CB-L890E",
+        "CB-L690E",
+        "CB-L795SE",
+        "CB-L790SE",
+        "CB-L895U",
+        "CB-L890U",
+        "CB-L790U",
+        "CB-L690U",
+        "CB-L790SU",
+        "CB-L690SU",
+        "CB-L695SU",
+        "EB-L695SE",
+        "EB-L690SE",
+        "EB-L790G",
+        "EB-L590SE",
+        "CB-L695SE",
+        "CB-L690SE",
+        "CB-L790G",
+        "CB-L590SE",
+        "EB-L600U",
+        "EB-L690",
     ],
+    # What each group of models can do, from the ESC/VP21 command list
+    # (Rev.W). Read by the app, which offers a device only its model's
+    # commands and inputs, AND by DeviceClass below, which narrows itself to
+    # the same group - so the two can never disagree.
+    "model_support": {
+        # Sheet L610U: HDBaseT and Screen Mirroring
+        "L615U": {
+            "models": [
+                "EB-L615U", "EB-L610U", "CB-L615U", "CB-L610U",
+                "PowerLite L615U", "PowerLite L610U",
+            ],
+            "values": {
+                "Input": [
+                    "Computer 1", "Computer 1 (RGB)", "Computer 1 (Component)", "Computer 2",
+                    "Computer 2 (RGB)", "Computer 2 (Component)", "HDMI 1", "HDMI 2",
+                    "HDBaseT", "USB", "LAN", "Screen Mirroring",
+                ],
+            },
+        },
+        # Sheet L610U: HDBaseT, no Screen Mirroring (EB-L600U is not on the sheet)
+        "L510U": {
+            "models": [
+                "EB-L510U", "EB-L610W", "CB-L510U", "CB-L610W",
+                "PowerLite L510U", "PowerLite L610W", "EB-L600U",
+            ],
+            "values": {
+                "Input": [
+                    "Computer 1", "Computer 1 (RGB)", "Computer 1 (Component)", "Computer 2",
+                    "Computer 2 (RGB)", "Computer 2 (Component)", "HDMI 1", "HDMI 2",
+                    "HDBaseT", "USB", "LAN",
+                ],
+            },
+        },
+        # Sheet L610U: no HDBaseT
+        "L400U": {
+            "models": [
+                "EB-L400U", "EB-L500W", "EB-L610", "EB-L500",
+                "CB-L400U", "CB-L500W", "CB-L610", "CB-L500",
+                "PowerLite L400U", "PowerLite L500W", "PowerLite L610", "PowerLite L500",
+            ],
+            "values": {
+                "Input": [
+                    "Computer 1", "Computer 1 (RGB)", "Computer 1 (Component)", "Computer 2",
+                    "Computer 2 (RGB)", "Computer 2 (Component)", "HDMI 1", "HDMI 2",
+                    "USB", "LAN",
+                ],
+            },
+        },
+        # Sheet L730U: Computer 1/2 only as 10/20 (11/14/21/24 answer ERR), no SPS 05
+        "L730U": {
+            "models": [
+                "EB-L735U", "EB-L730U", "EB-L720U", "EB-L630U",
+                "EB-L635SU", "EB-L630SU", "EB-L530U", "EB-L520U",
+                "EB-L630W", "CB-L735U", "CB-L730U", "CB-L720U",
+                "CB-L630U", "CB-L635SU", "CB-L630SU", "CB-L530U",
+                "CB-L520U", "CB-L630W", "PowerLite L735U", "PowerLite L730U",
+                "PowerLite L720U", "PowerLite L630U", "PowerLite L635SU", "PowerLite L630SU",
+                "PowerLite L530U", "PowerLite L520U", "PowerLite L630W",
+            ],
+            "unsupported": ["SplitScreenSwap"],
+            "values": {
+                "Input": [
+                    "Computer 1", "Computer 2", "HDMI 1", "HDMI 2",
+                    "HDBaseT", "USB", "LAN", "Screen Mirroring",
+                ],
+            },
+        },
+        # Sheet L730U, L520W column: no Screen Mirroring, has SPS 05
+        "L520W": {
+            "models": [
+                "EB-L520W", "CB-L520W", "PowerLite L520W",
+            ],
+            "values": {
+                "Input": [
+                    "Computer 1", "Computer 2", "HDMI 1", "HDMI 2",
+                    "HDBaseT", "USB", "LAN",
+                ],
+            },
+        },
+        # Sheet L570U: no computer inputs, no KEY 4A
+        "L570U": {
+            "models": [
+                "EB-L775U", "EB-L770U", "EB-L570U", "CB-L775U",
+                "CB-L770U", "CB-L570U",
+            ],
+            "unsupported": ["AutoImage"],
+            "values": {
+                "Input": [
+                    "HDMI 1", "HDMI 2", "HDBaseT", "USB",
+                    "LAN",
+                ],
+            },
+        },
+        # Sheet L890E: Miracast (56) and AirPlay (E0, not on ECC models), no KEY 4A or SPS 05
+        "L890E": {
+            "models": [
+                "EB-L895E", "EB-L890E", "EB-L690E", "EB-L795SE",
+                "EB-L790SE", "EB-L895U", "EB-L890U", "EB-L790U",
+                "EB-L690U", "EB-L790SU", "EB-L690SU", "EB-L695SU",
+                "CB-L895E", "CB-L890E", "CB-L690E", "CB-L795SE",
+                "CB-L790SE", "CB-L895U", "CB-L890U", "CB-L790U",
+                "CB-L690U", "CB-L790SU", "CB-L690SU", "CB-L695SU",
+                "PowerLite L895E", "PowerLite L890E", "PowerLite L690E", "PowerLite L795SE",
+                "PowerLite L790SE", "PowerLite L895U", "PowerLite L890U", "PowerLite L790U",
+                "PowerLite L690U", "PowerLite L790SU", "PowerLite L690SU", "PowerLite L695SU",
+            ],
+            "unsupported": ["AutoImage", "SplitScreenSwap"],
+            "values": {
+                "Input": [
+                    "HDMI 1", "HDMI 2", "HDBaseT", "USB",
+                    "LAN", "Screen Mirroring", "AirPlay",
+                ],
+            },
+        },
+        # Sheet L890E: L690SE/L695SE/L790G/L590SE have no Miracast/AirPlay
+        "L890SE": {
+            "models": [
+                "EB-L695SE", "EB-L690SE", "EB-L790G", "EB-L590SE",
+                "CB-L695SE", "CB-L690SE", "CB-L790G", "CB-L590SE",
+                "PowerLite L695SE", "PowerLite L690SE", "PowerLite L790G", "PowerLite L590SE",
+                "EB-L690",
+            ],
+            "unsupported": ["AutoImage", "SplitScreenSwap"],
+            "values": {
+                "Input": [
+                    "HDMI 1", "HDMI 2", "HDBaseT", "USB",
+                    "LAN",
+                ],
+            },
+        },
+    },
     "connection": {
         "com_type": "Network",
         "protocol": "TCP",
         "net_port": 3629,
         "service_port": 0,
         "host": "processor1",
-        "ip_address": "",  # site-specific — blank
-        "serial_port": "",  # site-specific — blank
+        "ip_address": "",
     },
     "defaults": {
         "btn_name": "Btn_Con_Projector1",
@@ -51,31 +257,71 @@ DEVICE_INFO = {
         "password": "ATEC2008",
     },
     # How this driver is reached on each connection style, read by the app:
-    # changing com_type loads the matching block, and picking a model merges it
-    # over "connection" + "defaults". Ports are the ones the module's
-    # communication sheet documents; protocol, baud and service port are the
-    # defaults declared by the wrapper classes at the bottom of this file.
-    "network": {
-        "protocol": "TCP",
-        "net_port": 3629,
-        "service_port": 0,
+    # changing com_type loads the matching block, and picking a model merges
+    # it over "connection" + "defaults".
+    "serial": {
+        "host": "processor1",
+        "baud": 9600,
     },
     "serialoverethernet": {
         "protocol": "TCP",
         "net_port": 2001,
         "service_port": 0,
-        "ip_address": "192.168.254.254",  # the Extron gateway, not the device
-        "password": "ATEC2007",  # the gateway, like the address above
         "host": "processor1",
+        "ip_address": "192.168.254.254",
+        "password": "ATEC2007",
     },
-    "serial": {
-        "baud": 9600,
-        "host": "processor1",  # the processor the COM port is on
+    "network": {
+        "protocol": "TCP",
+        "net_port": 3629,
+        "service_port": 0,
     },
 }
 
 
 class DeviceClass:
+
+    # SOURCE codes from the ESC/VP21 command list (Rev.W). Each model method
+    # at the bottom picks the ones its projector accepts.
+    InputCodes = {
+        'Computer 1' : '10',
+        'Computer 1 (RGB)' : '11',
+        'Computer 1 (Component)' : '14',
+        'Computer 2' : '20',
+        'Computer 2 (RGB)' : '21',
+        'Computer 2 (Component)' : '24',
+        'HDMI 1' : '30',
+        'USB' : '52',
+        'LAN' : '53',
+        'Screen Mirroring' : '56',
+        'HDBaseT' : '80',
+        'HDMI 2' : 'A0',
+        'AirPlay' : 'E0',
+    }
+
+    # Every code SOURCE? can answer with, for any model ('1F'/'2F' are the
+    # Auto sub-modes of Computer 1/2, '59' the second mirroring source).
+    InputStatusNames = {
+        '10' : 'Computer 1',
+        '11' : 'Computer 1 (RGB)',
+        '14' : 'Computer 1 (Component)',
+        '1F' : 'Computer 1',
+        '20' : 'Computer 2',
+        '21' : 'Computer 2 (RGB)',
+        '24' : 'Computer 2 (Component)',
+        '2F' : 'Computer 2',
+        '30' : 'HDMI 1',
+        '52' : 'USB',
+        '53' : 'LAN',
+        '56' : 'Screen Mirroring',
+        '59' : 'Screen Mirroring',
+        '80' : 'HDBaseT',
+        'A0' : 'HDMI 2',
+        'E0' : 'AirPlay',
+    }
+
+    DefaultInputs = ['Computer 1 (RGB)', 'Computer 1 (Component)', 'Computer 2 (RGB)', 'Computer 2 (Component)', 'HDMI 1', 'USB', 'LAN', 'HDMI 2', 'HDBaseT']
+
     def __init__(self):
 
         self.WarmUpTime = 45.0
@@ -91,25 +337,18 @@ class DeviceClass:
         self.connectionFlag = True
         self.initializationChk = True
         self.Debug = False
-        self.Models = {
-            'EB-L610W': self.epsn_1_3564_1,
-            'EB-L610U': self.epsn_1_3564_1,
-            'EB-L615U': self.epsn_1_3564_1,
-            'EB-L510U': self.epsn_1_3564_1,
-            'EB-L600U': self.epsn_1_3564_1,
-            'EB-L400U': self.epsn_1_3564_1,
-            'EB-L500W': self.epsn_1_3564_2,
-            'EB-L500': self.epsn_1_3564_2,
-            'EB-L610': self.epsn_1_3564_2,
-            'PowerLite L610W': self.epsn_1_3564_1,
-            'PowerLite L500W': self.epsn_1_3564_2,
-            'PowerLite L400U': self.epsn_1_3564_1,
-            'PowerLite L510U': self.epsn_1_3564_1,
-            'PowerLite L610': self.epsn_1_3564_2,
-            'PowerLite L610U': self.epsn_1_3564_1,
-            'PowerLite L615U': self.epsn_1_3564_1,
-            'PowerLite L630U': self.epsn_1_3564_1,
-            }
+        # Per-model capabilities, narrowed by the model methods at the bottom
+        # (ESC/VP21 command list Rev.W). The defaults are used for a model name
+        # that is not in self.Models.
+        self.Unsupported = set()
+        self.SetInputStateValues = {name: self.InputCodes[name] for name in self.DefaultInputs}
+        self.UpdateInputStateValues = self.InputStatusNames
+        # Every model in DEVICE_INFO["model_support"], each narrowing the driver
+        # to its own group's commands and inputs when the wrapper calls it.
+        self.Models = {}
+        for group in DEVICE_INFO['model_support'].values():
+            for model in group['models']:
+                self.Models[model] = (lambda group=group: self.__UseModelSupport(group))
 
         self.Commands = {
             'ConnectionStatus': {'Status': {}},
@@ -120,9 +359,9 @@ class DeviceClass:
             'Freeze': { 'Status': {}, 'AllowedValues': ['On', 'Off']},
             'Input': { 
                 'Status': {}, 
-                'AllowedValues': ['Computer 1 (RGB)', 'Computer 1 (Component)', 'Computer 2 (RGB)', 'Computer 2 (Component)', 'HDMI 1', 'USB', 'LAN', 'HDMI 2', 'HDBaseT']
+                'AllowedValues': ['Computer 1 (RGB)', 'Computer 1 (Component)', 'Computer 2 (RGB)', 'Computer 2 (Component)', 'HDMI 1', 'USB', 'LAN', 'HDMI 2', 'HDBaseT', 'Computer 1', 'Computer 2', 'Screen Mirroring', 'AirPlay']
             },
-            'LampMode': { 'Status': {}, 'AllowedValues': ['Normal', 'Quiet', 'Long']},
+            'LampMode': { 'Status': {}, 'AllowedValues': ['Normal', 'Quiet', 'Long', 'Custom']},
             'LampUsage': { 'Status': {}},
             'MenuNavigation': { 'Status': {}, 'AllowedValues': ['Menu', 'Escape', 'Enter', 'Up', 'Down', 'Left', 'Right']},
             'OperationHours': { 'Status': {}},
@@ -131,19 +370,19 @@ class DeviceClass:
             'SplitScreenSource': {
                 'Parameters':['Side'], 
                 'Status': {},
-                'AllowedValues': ['Computer 1 (RGB)', 'Computer 1 (Component)', 'Computer 2 (RGB)', 'Computer 2 (Component)', 'HDMI 1', 'USB', 'LAN', 'HDMI 2', 'HDBaseT']
+                'AllowedValues': ['Computer 1 (RGB)', 'Computer 1 (Component)', 'Computer 2 (RGB)', 'Computer 2 (Component)', 'HDMI 1', 'USB', 'LAN', 'HDMI 2', 'HDBaseT', 'Computer 1', 'Computer 2', 'Screen Mirroring', 'AirPlay'], 'ParameterValues': {'Side': ['Left', 'Right']}
             },
             'SplitScreenSwap': { 'Status': {}},
-            'Volume': { 'Status': {}},
+            'Volume': { 'Status': {}, 'AllowedValues': ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20']},
         }
 
         if self.Unidirectional == 'False':
             self.AddMatchString(re.compile(b'ASPECT=(00|10|20|30|40|50|60|A0)( 30)?\r:'), self.__MatchAspectRatio, None)
             self.AddMatchString(re.compile(b'MUTE=(ON|OFF)\r:'), self.__MatchAVMute, None)
-            self.AddMatchString(re.compile(b'ERR=(0[0-9]|0[A-F]|1[0-6])\r:'), self.__MatchDeviceStatus, None)
+            self.AddMatchString(re.compile(b'ERR=([0-9A-F]{2})\r:'), self.__MatchDeviceStatus, None)
             self.AddMatchString(re.compile(b'FREEZE=(ON|OFF)\r:'), self.__MatchFreeze, None)
-            self.AddMatchString(re.compile(b'SOURCE=(11|14|21|24|30|52|53|80|A0)\r:'), self.__MatchInput, None)
-            self.AddMatchString(re.compile(b'LUMINANCE=(00|01|04)\r:'), self.__MatchLampMode, None)
+            self.AddMatchString(re.compile(b'SOURCE=([0-9A-F]{2})\r:'), self.__MatchInput, None)
+            self.AddMatchString(re.compile(b'LUMINANCE=(00|01|04|05)\r:'), self.__MatchLampMode, None)
             self.AddMatchString(re.compile(b'LAMP=([0-9]*)\r:'), self.__MatchLampUsage, None)
             self.AddMatchString(re.compile(b'ONTIME=([0-9]*)\r:'), self.__MatchOperationHours, None)
             self.AddMatchString(re.compile(b'PWR=(00|01|02|03|04|05|09)\r:'), self.__MatchPower, None)
@@ -195,11 +434,12 @@ class DeviceClass:
             '10' : '4:3'
         }
 
-        if match.group(2):
+        if match.group(2) or match.group(1) == b'30':
             value = 'Auto'
         else:
-            value = ValueStateValues[match.group(1).decode()]
-        self.WriteStatus('AspectRatio', value, None)
+            value = ValueStateValues.get(match.group(1).decode())
+        if value:
+            self.WriteStatus('AspectRatio', value, None)
 
     def SetAutoImage(self, value, qualifier):
 
@@ -253,10 +493,12 @@ class DeviceClass:
             '0E' : 'Power Supply Error', 
             '0F' : 'Error Shutter Failure', 
             '10' : 'Cooling System Error', 
-            '11' : 'Cooling System Error (Pump)'
+            '11' : 'Cooling System Error (Pump)',
+            'FF' : 'Other Error'
         }
 
-        value = ValueStateValues[match.group(1).decode()]
+        code = match.group(1).decode()
+        value = ValueStateValues.get(code, 'Unknown Error ({0})'.format(code))
         self.WriteStatus('DeviceStatus', value, None)
 
     def SetFreeze(self, value, qualifier):
@@ -286,6 +528,9 @@ class DeviceClass:
 
     def SetInput(self, value, qualifier):
 
+        if value not in self.SetInputStateValues:
+            self.Discard('Invalid Command for SetInput')
+            return
         InputCmdString = 'SOURCE {0}\r'.format(self.SetInputStateValues[value])
         self.__SetHelper('Input', InputCmdString, value, qualifier)
 
@@ -296,16 +541,17 @@ class DeviceClass:
 
     def __MatchInput(self, match, tag):
 
-
-        value = self.UpdateInputStateValues[match.group(1).decode()]
-        self.WriteStatus('Input', value, None)
+        value = self.UpdateInputStateValues.get(match.group(1).decode())
+        if value:
+            self.WriteStatus('Input', value, None)
 
     def SetLampMode(self, value, qualifier):
 
         ValueStateValues = {
             'Normal' : '00', 
             'Quiet' : '01',
-            'Long' : '04'
+            'Long' : '04',
+            'Custom' : '05'
         }
 
         LampModeCmdString = 'LUMINANCE {0}\r'.format(ValueStateValues[value])
@@ -321,7 +567,8 @@ class DeviceClass:
         ValueStateValues = {
             '00' : 'Normal', 
             '01' : 'Quiet',
-            '04' : 'Long'
+            '04' : 'Long',
+            '05' : 'Custom'
         }
 
         value = ValueStateValues[match.group(1).decode()]
@@ -409,6 +656,9 @@ class DeviceClass:
             'Right' : '04'
         }
 
+        if value not in self.SetInputStateValues:
+            self.Discard('Invalid Command for SetSplitScreenSource')
+            return
         SplitScreenSourceCmdString = 'SPS {0} {1}\r'.format(SideStates[qualifier['Side']], self.SetInputStateValues[value])
         self.__SetHelper('SplitScreenSource', SplitScreenSourceCmdString, value, qualifier)
     def SetSplitScreenSwap(self, value, qualifier):
@@ -463,15 +713,18 @@ class DeviceClass:
         self.WriteStatus('Volume', value, None)
 
     def __SetHelper(self, command, commandstring, value, qualifier):
+        if command in self.Unsupported:
+            self.Discard('Invalid Command for Set' + command)
+            return
         self.Debug = True
         # Use SendAndWait to catch timeouts/errors during control
         # The delimiter ':' matches the end of Epson responses (e.g. "PWR=01\r:")
         self.SendAndWait(commandstring, self.DefaultResponseTimeout, deliTag=b':')
 
-
-        self.Send(commandstring)
-
     def __UpdateHelper(self, command, commandstring, value, qualifier):
+        if command in self.Unsupported:
+            self.Discard('Invalid Command for Update' + command)
+            return
         if self.Unidirectional == 'True':
             self.Discard('Inappropriate Command ' + command)
         else:
@@ -503,58 +756,17 @@ class DeviceClass:
         self.WriteStatus('ConnectionStatus', 'Disconnected')
         self.connectionFlag = False
 
-    def epsn_1_3564_1(self):
+    def __SetInputs(self, names):
 
-        self.SetInputStateValues = {
-                'Computer 1 (RGB)' : '11', 
-                'Computer 1 (Component)' : '14', 
-                'Computer 2 (RGB)' : '21', 
-                'Computer 2 (Component)' : '24', 
-                'HDMI 1' : '30', 
-                'USB' : '52', 
-                'LAN' : '53', 
-                'HDMI 2' : 'A0',
-                'HDBaseT' : '80'
-            }
+        self.SetInputStateValues = {name: self.InputCodes[name] for name in names}
+        self.Commands['Input']['AllowedValues'] = list(names)
+        self.Commands['SplitScreenSource']['AllowedValues'] = list(names)
 
+    # One DEVICE_INFO["model_support"] group: its inputs and the commands it lacks.
+    def __UseModelSupport(self, group):
 
-        self.UpdateInputStateValues = {
-            '11' : 'Computer 1 (RGB)', 
-            '14' : 'Computer 1 (Component)', 
-            '21' : 'Computer 2 (RGB)', 
-            '24' : 'Computer 2 (Component)', 
-            '30' : 'HDMI 1', 
-            '52' : 'USB', 
-            '53' : 'LAN', 
-            'A0' : 'HDMI 2',
-            '80' : 'HDBaseT'
-        }
-
-
-
-    def epsn_1_3564_2(self):
-
-        self.SetInputStateValues = {
-                'Computer 1 (RGB)' : '11', 
-                'Computer 1 (Component)' : '14', 
-                'Computer 2 (RGB)' : '21', 
-                'Computer 2 (Component)' : '24', 
-                'HDMI 1' : '30', 
-                'USB' : '52', 
-                'LAN' : '53', 
-                'HDMI 2' : 'A0',
-            }
-
-        self.UpdateInputStateValues = {
-            '11' : 'Computer 1 (RGB)', 
-            '14' : 'Computer 1 (Component)', 
-            '21' : 'Computer 2 (RGB)', 
-            '24' : 'Computer 2 (Component)', 
-            '30' : 'HDMI 1', 
-            '52' : 'USB', 
-            '53' : 'LAN', 
-            'A0' : 'HDMI 2',
-        }
+        self.__SetInputs(group['values']['Input'])
+        self.Unsupported = set(group.get('unsupported', []))
 
     ######################################################    
     # RECOMMENDED not to modify the code below this point

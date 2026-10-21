@@ -57,6 +57,49 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "extr_2_3239_sw2": {
+            "models": [
+                "SW2 HD 4K PLUS",
+            ],
+            "values": {
+                "Input": [
+                    "1", "2",
+                ],
+            },
+        },
+        "extr_2_3239_sw4": {
+            "models": [
+                "SW4 HD 4K PLUS",
+            ],
+            "values": {
+                "Input": [
+                    "1", "2", "3", "4",
+                ],
+            },
+        },
+        "extr_2_3239_sw6": {
+            "models": [
+                "SW6 HD 4K PLUS",
+            ],
+            "values": {
+                "Input": [
+                    "1", "2", "3", "4",
+                    "5", "6",
+                ],
+            },
+        },
+        "extr_2_3239_sw8": {
+            "models": [
+                "SW8 HD 4K PLUS",
+            ],
+        },
+    },
 }
 
 

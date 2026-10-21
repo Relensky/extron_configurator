@@ -429,8 +429,13 @@ class SchemaFieldBuilder {
     final String? conflict = provider.uiSchema.consistencyMessageFor(
         fieldKey, sectionKey, _sectionMap(provider, sectionKey));
 
+    // A blank value IS an option when the schema lists one for it - "(none -
+    // no button)" on dtp_power_toggle_1 - and has to show as that choice. As
+    // null it showed an empty box, which reads as "not set yet" rather than
+    // "deliberately none".
+    final bool blankListed = options.any((o) => o.value.isEmpty);
     return DropdownButtonFormField<String>(
-      initialValue: current.isNotEmpty ? current : null,
+      initialValue: current.isNotEmpty || blankListed ? current : null,
       // Expanded, so an option longer than the field is cut short with an
       // ellipsis rather than pushed past its edge.
       isExpanded: true,
@@ -518,6 +523,8 @@ class SchemaFieldBuilder {
     final section = provider.roomConfig[sectionKey];
     final String moduleName =
         (section is Map ? section['module'] : null)?.toString() ?? '';
+    final String model =
+        (section is Map ? section['model'] : null)?.toString() ?? '';
     return _ModuleStatesField(
       key: ValueKey('$sectionKey.$fieldKey.states'),
       provider: provider,
@@ -527,6 +534,7 @@ class SchemaFieldBuilder {
       label: label,
       value: value,
       moduleName: moduleName,
+      model: model,
     );
   }
 
@@ -782,6 +790,10 @@ class _ModuleStatesField extends StatefulWidget {
   final dynamic value;
   final String moduleName;
 
+  /// The device's model: a driver's DEVICE_INFO "model_support" can narrow
+  /// the states to the ones that model has.
+  final String model;
+
   const _ModuleStatesField({
     super.key,
     required this.provider,
@@ -791,6 +803,7 @@ class _ModuleStatesField extends StatefulWidget {
     required this.label,
     required this.value,
     required this.moduleName,
+    this.model = '',
   });
 
   @override
@@ -805,8 +818,9 @@ class _ModuleStatesFieldState extends State<_ModuleStatesField> {
   @override
   void initState() {
     super.initState();
-    _states = widget.provider
-        .getStatesForModuleCommand(widget.moduleName, _command);
+    _states = widget.provider.getStatesForModuleCommand(
+        widget.moduleName, _command,
+        model: widget.model);
   }
 
   @override
@@ -815,9 +829,11 @@ class _ModuleStatesFieldState extends State<_ModuleStatesField> {
     // Only when there is something new to parse. Re-reading the same module on
     // every rebuild is the loop this class exists to stop.
     if (old.moduleName != widget.moduleName ||
+        old.model != widget.model ||
         (old.spec.moduleCommand ?? old.fieldKey) != _command) {
-      _states = widget.provider
-          .getStatesForModuleCommand(widget.moduleName, _command);
+      _states = widget.provider.getStatesForModuleCommand(
+          widget.moduleName, _command,
+          model: widget.model);
     }
   }
 

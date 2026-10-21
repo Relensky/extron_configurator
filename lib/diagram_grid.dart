@@ -29,7 +29,9 @@ class DiagramGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return IgnorePointer(
+    // Its own layer: a drag repaints the cables over it, not the grid.
+    return RepaintBoundary(
+      child: IgnorePointer(
       child: ValueListenableBuilder<bool>(
         valueListenable: capturingDiagram,
         builder: (context, capturing, _) => capturing
@@ -46,6 +48,7 @@ class DiagramGrid extends StatelessWidget {
                       dark ? const Color(0x26FFFFFF) : const Color(0x1F000000),
                 ),
               ),
+      ),
       ),
     );
   }

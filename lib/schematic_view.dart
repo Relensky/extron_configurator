@@ -16,6 +16,7 @@ import 'processor_prompt.dart';
 import 'report_tools.dart';
 import 'schematic_layout.dart';
 import 'screenshot_tools.dart';
+import 'collapsible_bar.dart';
 import 'view_zoom.dart';
 import 'side_pane.dart';
 import 'workbook_export.dart';
@@ -1114,11 +1115,19 @@ class _SchematicViewState extends State<SchematicView> {
     final model = _withDragPreview(provider, SchematicModel.build(provider));
     final theme = Theme.of(context);
 
-    return Column(
+    // The controls fold, drag taller or shorter, and scroll past their share.
+    return ScrollingHeader(
+      id: 'schematic',
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildToolbar(provider, model),
+          const Divider(height: 1),
+        ],
+      ),
+      body: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildToolbar(provider, model),
-        const Divider(height: 1),
         Expanded(
           key: _viewportKey,
           child: InteractiveViewer(
@@ -1132,7 +1141,7 @@ class _SchematicViewState extends State<SchematicView> {
             boundaryMargin: const EdgeInsets.all(double.infinity),
             child: RepaintBoundary(
               key: _diagramKey,
-              child: _buildCanvas(provider, model, theme),
+              child: drawingText(_buildCanvas(provider, model, theme)),
             ),
           ),
         ),
@@ -1145,6 +1154,7 @@ class _SchematicViewState extends State<SchematicView> {
             child: _buildEditPanel(provider, model),
           ),
       ],
+      ),
     );
   }
 
@@ -1210,6 +1220,7 @@ class _SchematicViewState extends State<SchematicView> {
 
   Widget _buildToolbar(AppStateProvider provider, SchematicModel model) {
     final choices = _landingChoices(provider, model);
+    final folded = BarFolds.isFolded('schematic_toolbar');
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Wrap(
@@ -1217,8 +1228,13 @@ class _SchematicViewState extends State<SchematicView> {
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text('Control Schematic',
-              style: Theme.of(context).textTheme.titleLarge),
+          PageTitle('Control Schematic', folded: folded),
+          FoldButton(
+            id: 'schematic_toolbar',
+            name: 'the toolbar',
+            onChanged: () => setState(() {}),
+          ),
+          if (!folded) ...[
           const SizedBox(width: 12),
           // Always there: the processor in the middle, the devices evenly
           // round it - or in a table when there are many. One Undo back.
@@ -1409,6 +1425,7 @@ class _SchematicViewState extends State<SchematicView> {
               ),
             ),
           ),
+          ],
         ],
       ),
     );

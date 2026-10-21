@@ -66,6 +66,23 @@ void main() {
     expect(top(tester, 'ARTS 105'), lessThan(top(tester, 'BSS 103')));
   });
 
+  // Every change to a department re-totals the job, so the box holds what is
+  // typed until the typing pauses instead of re-totalling per letter.
+  testWidgets('the department is committed once typing pauses',
+      (tester) async {
+    final provider = await pump(tester);
+    final line = provider.project.manualRooms.first;
+    final box = find.descendant(
+      of: find.byKey(ValueKey('funding_dept_${line.id}')),
+      matching: find.byType(EditableText),
+    );
+    await tester.enterText(box, 'Physics');
+    await tester.pump();
+    expect(provider.project.manualRooms.first.department, isNot('Physics'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(provider.project.manualRooms.first.department, 'Physics');
+  });
+
   testWidgets('a line item shows its cost beside its budget', (tester) async {
     final provider = await pump(tester);
     final line = provider.project.manualRooms.first;

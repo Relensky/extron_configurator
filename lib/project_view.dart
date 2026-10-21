@@ -2082,6 +2082,18 @@ Future<void> openProjectRoomOn(
   /// [AppStateProvider.requestedDeviceKey]. Landing on the first of fourteen
   /// device tabs is most of the work of acting on a flag.
   String deviceKey = '',
+
+  /// The Cost page line to center and light up when the flag is about one
+  /// line - see [AppStateProvider.requestedCostLine].
+  String costLineKey = '',
+
+  /// Cost page lines to light while the page stays open - see
+  /// [AppStateProvider.requestedCostLines].
+  List<String> costLineKeys = const [],
+
+  /// The AV Flow box to center and ring - see
+  /// [AppStateProvider.requestedAvNode].
+  String avNodeId = '',
 }) async {
   final provider = context.read<AppStateProvider>();
   final messenger = ScaffoldMessenger.of(context);
@@ -2104,6 +2116,11 @@ Future<void> openProjectRoomOn(
     if (!context.mounted) return;
   }
 
+  // After the room switch, which reads the room off disk: a request made
+  // before it would be honored by the page of the room being left.
+  if (costLineKey.isNotEmpty) provider.requestCostLine(costLineKey);
+  if (costLineKeys.isNotEmpty) provider.requestCostLines(costLineKeys);
+  if (avNodeId.isNotEmpty) provider.requestAvNode(avNodeId);
   provider.selectTab(tab.index);
   showTimedSnackBar(
     messenger,
@@ -2143,31 +2160,15 @@ class _RoomRowState extends State<_RoomRow> {
   /// carrying a checkbox, three figures and four buttons.
   bool _hoveringName = false;
 
-  /// Makes this the room the editor is working on.
-  ///
-  /// Goes through the SAME prompt the picker in the title bar does: switching
-  /// rooms reads the next room off disk, so anything unsaved in the one being
-  /// left goes with it. Two doors into one action must not have two different
-  /// answers to that question.
-  Future<void> _open(AppStateProvider provider) async {
-    if (!await confirmLeavingRoom(context, provider)) return;
-    if (!mounted) return;
-
-    final messenger = ScaffoldMessenger.of(context);
-    final error = await provider.openProjectRoomRef(widget.room.ref);
-    showTimedSnackBar(
-      messenger,
-      SnackBar(
-        duration: const Duration(seconds: 4),
-        content: Text(
-          error.isEmpty
-              ? '${widget.room.name} is now the open room.'
-              : error,
-        ),
-        backgroundColor: error.isEmpty ? null : snackErrorFillOn(messenger),
-      ),
-    );
-  }
+  /// Opens this room on its Cost page, the same as its name on the funding
+  /// list and the picker in the title bar. The open room just goes to Cost.
+  Future<void> _open() => openProjectRoomOn(
+        context,
+        widget.room.ref,
+        AppTab.cost,
+        'its cost',
+        roomName: widget.room.name,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -2218,13 +2219,13 @@ class _RoomRowState extends State<_RoomRow> {
     );
 
     final name = _NameTarget(
-      enabled: !isOpen,
+      enabled: room.ok,
       hovering: _hoveringName,
       onHover: (v) => setState(() => _hoveringName = v),
-      onTap: () => _open(provider),
+      onTap: _open,
       tooltip: isOpen
-          ? 'This is the room the editor is working on'
-          : 'Open ${room.name} in the editor',
+          ? 'Go to the Cost page of this room'
+          : 'Open ${room.name} on its Cost page',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2233,11 +2234,10 @@ class _RoomRowState extends State<_RoomRow> {
             style: theme.textTheme.titleSmall?.copyWith(
               color: ink,
               // Struck through when the room is off the total, and underlined
-              // while the pointer is over it — the two never coincide, because
-              // the open room is not a way in to itself.
+              // while the pointer is over it.
               decoration: dimmed
                   ? TextDecoration.lineThrough
-                  : (_hoveringName && !isOpen
+                  : (_hoveringName
                         ? TextDecoration.underline
                         : null),
               decorationColor: ink,
@@ -2915,9 +2915,41 @@ class _DriverGapRoomRow extends StatelessWidget {
                 color: errorTextOn(theme.colorScheme, theme.cardColor),
               ),
               const SizedBox(width: 8),
+              // The room's name opens it on its Cost page, the undriven
+              // devices lit until the page is left.
+              Flexible(
+                child: Tooltip(
+                  message: 'Open ${room.name} on its Cost page, with these '
+                      'devices highlighted',
+                  child: InkWell(
+                    key: ValueKey('gap_room_cost_${room.ref.id}'),
+                    borderRadius: BorderRadius.circular(3),
+                    onTap: () => openProjectRoomOn(
+                      context,
+                      room.ref,
+                      AppTab.cost,
+                      'the devices with no control module are highlighted',
+                      roomName: room.name,
+                      costLineKeys: [
+                        for (final g in gaps)
+                          if (g.costLineKey.isNotEmpty) g.costLineKey,
+                      ],
+                    ),
+                    child: Text(
+                      room.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.primary,
+                        decoration: TextDecoration.underline,
+                        decorationColor: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               Text(
-                '${room.name}  ·  $devices device'
-                '${devices == 1 ? '' : 's'}',
+                '  ·  $devices device${devices == 1 ? '' : 's'}',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -2974,6 +3006,7 @@ class _DriverGapRoomRow extends StatelessWidget {
                             '${gap.device} is drawn here with no config block '
                                 'behind it',
                             roomName: room.name,
+                            avNodeId: gap.nodeId,
                           )
                         : openProjectRoomOn(
                             context,
@@ -3175,6 +3208,9 @@ List<Widget> _partsByRoomSlivers(
       0.0,
       (s, l) => s + l.qtyByRoom[room.ref.id]! * l.unitPrice,
     );
+    // The room's first part with no price: the room name then links to its
+    // Cost page, landed on that line - see [_openUnpricedOn].
+    final unpriced = lines.where((l) => l.unpriced).firstOrNull;
     cards.add(
       Card(
         key: ValueKey('parts_room_${room.ref.id}'),
@@ -3187,7 +3223,30 @@ List<Widget> _partsByRoomSlivers(
               Row(
                 children: [
                   Expanded(
-                    child: Text(room.name, style: theme.textTheme.titleSmall),
+                    child: unpriced == null
+                        ? Text(room.name, style: theme.textTheme.titleSmall)
+                        : Align(
+                            alignment: Alignment.centerLeft,
+                            child: Tooltip(
+                              message: 'Open ${room.name} on its Cost page, '
+                                  'at ${unpriced.description} (not priced)',
+                              child: InkWell(
+                                key: ValueKey(
+                                    'parts_room_unpriced_${room.ref.id}'),
+                                borderRadius: BorderRadius.circular(3),
+                                onTap: () =>
+                                    _openUnpricedOn(context, room, unpriced),
+                                child: Text(
+                                  room.name,
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                   ),
                   if (room.ref.priority > 0)
                     Padding(
@@ -4094,6 +4153,87 @@ ProjectRoomCost? _flagRoom(ProjectEstimate estimate, Iterable<String> ids) {
   return null;
 }
 
+/// The [CostLine.key] [line] is carried under in room [roomId], or ''. A part
+/// is one line per room in nearly every case; where a room has it on two
+/// (a drawn one and a typed spare) the first is as good a place to land as
+/// the other, and both are on screen together.
+String _costLineIn(MasterPartLine line, String roomId) =>
+    (line.lineKeysByRoom[roomId] ?? const <String>{}).firstOrNull ?? '';
+
+/// Opens [room]'s Cost page on [line]'s row, centered and lit up, to price it.
+Future<void> _openUnpricedOn(
+  BuildContext context,
+  ProjectRoomCost room,
+  MasterPartLine line,
+) =>
+    openProjectRoomOn(
+      context,
+      room.ref,
+      AppTab.cost,
+      '${line.description} has no price - it is highlighted here',
+      roomName: room.name,
+      costLineKey: _costLineIn(line, room.ref.id),
+    );
+
+/// The rooms an unpriced part is in, each one a link to that room's Cost page
+/// with the part's line centered and lit up - see [_openUnpricedOn].
+///
+/// A SINGLE CLICK, unlike the double-click jumps elsewhere on this list: the
+/// room names had no click of their own to lose, and a link that needs two is
+/// a link nobody finds.
+class _UnpricedRoomLinks extends StatelessWidget {
+  final MasterPartLine line;
+  final ProjectEstimate estimate;
+  final Map<String, String> roomNames;
+
+  const _UnpricedRoomLinks({
+    required this.line,
+    required this.estimate,
+    required this.roomNames,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final plain = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final link = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.primary,
+      decoration: TextDecoration.underline,
+      decorationColor: theme.colorScheme.primary,
+    );
+    final ids = line.roomIdsByQty();
+    return Wrap(
+      children: [
+        for (final (i, id) in ids.indexed)
+          Builder(builder: (context) {
+            final label =
+                '${roomNames[id] ?? id} ×${trimNumber(line.qtyByRoom[id] ?? 0)}';
+            final room = _flagRoom(estimate, [id]);
+            final comma = i < ids.length - 1 ? ', ' : '';
+            if (room == null) return Text('$label$comma', style: plain);
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Tooltip(
+                  message: 'Open ${room.name} on its Cost page, at this part',
+                  child: InkWell(
+                    key: ValueKey('part_unpriced_room_${line.key}_$id'),
+                    borderRadius: BorderRadius.circular(3),
+                    onTap: () => _openUnpricedOn(context, room, line),
+                    child: Text(label, style: link),
+                  ),
+                ),
+                if (comma.isNotEmpty) Text(comma, style: plain),
+              ],
+            );
+          }),
+      ],
+    );
+  }
+}
+
 class _PartRow extends StatelessWidget {
   final MasterPartLine line;
   final ProjectEstimate estimate;
@@ -4310,12 +4450,22 @@ class _PartRow extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  Text(
-                    rooms,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  // A part with no price names its rooms as LINKS: the price
+                  // is set on a room's Cost page, and each link opens that
+                  // page with this part's line in the middle of it, lit up.
+                  if (line.unpriced)
+                    _UnpricedRoomLinks(
+                      line: line,
+                      estimate: estimate,
+                      roomNames: roomNames,
+                    )
+                  else
+                    Text(
+                      rooms,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
                   // NOTHING AT ALL until something has been logged against
                   // this part. A job that does not track deliveries should not
                   // grow a line on every row of its master list saying so.
@@ -4656,6 +4806,8 @@ class _PartRow extends StatelessWidget {
                             'the price for ${line.description} is on this '
                                 'page',
                             roomName: priceRoom.name,
+                            costLineKey:
+                                _costLineIn(line, priceRoom.ref.id),
                           ),
                   child: Text(
                   line.unpriced
@@ -8356,7 +8508,10 @@ class _PartSortMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final sorted = sort != PartSortKey.natural;
-    return Container(
+    // Shrinks only when a narrow window at large text has no room for it.
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Container(
       padding: const EdgeInsets.only(left: 10),
       decoration: BoxDecoration(
         border: Border.all(color: theme.colorScheme.outlineVariant),
@@ -8401,6 +8556,7 @@ class _PartSortMenu extends StatelessWidget {
             onPressed: sorted ? () => onChanged(sort, !ascending) : null,
           ),
         ],
+      ),
       ),
     );
   }

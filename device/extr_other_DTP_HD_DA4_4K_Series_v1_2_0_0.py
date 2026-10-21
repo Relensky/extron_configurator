@@ -57,6 +57,23 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "extr_31_1180_4": {
+            "models": [
+                "DTP HD DA4 4K 230", "DTP HD DA4 4K 330",
+            ],
+        },
+        "extr_31_1180_8": {
+            "models": [
+                "DTP HD DA8 4K 230", "DTP HD DA8 4K 330",
+            ],
+        },
+    },
 }
 
 

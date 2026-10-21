@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.155+165';
+const String kAppVersion = '0.5.161+171';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -33,13 +33,87 @@ class ChangelogEntry {
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
-    version: '0.5.155',
+    version: '0.5.161',
+    date: 'October 21, 2026',
+    title: 'Controls that fold and resize',
+    changes: [
+      'The controls above a page - Floor Plan, AV Flow, Racks, Cabling, Control Schematic, Catalog, Schema Editor and Flow Rules - can be dragged taller or shorter by the grip under them, like the side panes. A scrollbar shows when there is more than fits. Double-click the grip for the default height.',
+      'Small Collapse all and Expand all buttons beside the page title fold or open every bar on the page at once.',
+      'A page\'s title shrinks when its controls are folded, so the drawing gets the room.',
+      'Floor Plan: the exports fold away with the toolbar, and the sheets, off-the-sheet, selected run, selected device and notation rows each fold to their names.',
+      'Cabling and Control Schematic: the toolbar folds, and so does the Cabling row for what is selected.',
+      'Catalog, Schema Editor and Flow Rules: the buttons fold (Save stays), and so do the catalog\'s search and filters and the description at the top of each schema and rules section.',
+      'The folded project bar says Project bar, so it is clear what it brings back.',
+      'The scrollbar on the tabs down the left side has its own room, so it no longer covers the selected tab.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.160',
+    date: 'October 21, 2026',
+    title: 'Drawings and pages at 150% and 200%',
+    changes: [
+      'AV Flow, Racks, Floor Plan, Cabling and Schematic: the drawings keep their text at drawing size whatever the Text Size is, so labels no longer spill out of their boxes or run under the cables at 150% and 200%. Use the zoom to make a drawing bigger. Exported pictures no longer change with your Text Size.',
+      'Fixed at 150% and 200% text or Interface Size: the empty Floor Plan, Cabling and no-processor pages scroll instead of being cut off, the Schema Editor\'s coverage controls scroll above the list, and the Device Editor title, its price column and the Parts sort control fit.',
+      'Faster drawing at large sizes: the floor plan image, the walls, the alignment grid and the AV Flow backdrop are no longer redrawn on every frame of a drag.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.159',
+    date: 'October 21, 2026',
+    title: 'Room to work at a large Interface Size',
+    changes: [
+      'Floor Plan, AV Flow and Racks: the bars above the drawing scroll, with a scrollbar, once they take more than half the page, so the drawing always keeps its share at a large Interface Size.',
+      'Floor Plan: the Cable runs chips and the location counts (ceiling, rack, lectern and the rest) fold away to their names with the arrow in front of them.',
+      'AV Flow: the fold button beside AV Signal Flow hides Find a device and the toolbar, and brings them back.',
+      'Racks and Catalog: a fold button beside the page title hides the buttons; on Racks the rack tools row folds to its name too. Save catalog stays on screen.',
+      'The project bar under the title (Project, the room name and the document buttons) hides with the up arrow at its left end. The thin strip left in its place brings it back.',
+      'At an Interface Size above 125%, the tabs down the left side (Cost, Lifecycle and the rest) stay full size with their names, and scroll with a scrollbar when they do not all fit.',
+      'Project, Rooms: clicking a room name opens that room on its Cost page, the same as the room picker and the priority list. On the open room it goes to the Cost page.',
+      'No control module list: each room name opens that room on its Cost page with its devices that have no control module highlighted. The highlight stays until you leave the page.',
+      'No control module list: Signal flow opens the room on the AV Flow page centered on that device, ringed so it stands out.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.158',
+    date: 'October 21, 2026',
+    title: 'Device manuals',
+    changes: [
+      'Devices: a Device manuals button beside the module manual opens the equipment maker\'s guides for the picked model, from the same Manuals catalog the CTS Dashboard reads. The module manual button is now called Module manual.',
+      'Devices: a Manuals button beside the device tabs lists every device in the room with its manuals, and two reports of what is missing - device manuals for every model the modules support, and the module manual each python module still needs. Copy missing list puts the gaps on the clipboard.',
+      'App Config: Manuals Folder says where device manuals come from. Blank reads the file share, or - on a computer that cannot reach it - the Root Folder\'s manuals folder; Use the file share sets it to the share. With no manuals in the folder, the manuals windows say so and ask for them to be added.',
+      'Priorities and funding: the Department and Funding boxes keep up with typing. What is typed is saved once the typing pauses, or at once on Enter or clicking away, instead of re-totalling the whole job on every letter.',
+      'System: DTP Power Toggle 1 shows "(none - no button)" when it is blank, instead of an empty box. Any setting whose blank choice has a name shows that name the same way.',
+      'System: every APC outlet in the new-room template supports reboot by default. Turn it off for an outlet that must only switch on or off.',
+      'Python modules: the shared devices folder and the ControlScript template\'s modules carry each model group\'s commands and inputs, the Epson PowerLite laser module included.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.157',
+    date: 'October 20, 2026',
+    title: 'Each model\'s own commands',
+    changes: [
+      'Devices: the Keep Alive Command list and the Input and Aspect Ratio choices show only what the picked model has, when its python module says which models differ. A room\'s saved value its model does not have is flagged at load the same way a value the module lacks is.',
+      'Modules: the Epson PowerLite laser module now covers the L610U, L730U, L570U and L890E families from Epson\'s command list (about 110 model names), and an L630U or L730U is offered only the inputs it accepts. Every other module that covers several models now lists its model groups, and says which of them lack a command or an input where the module itself knows - the IN1606 and IN1608 without the amp, the DTP CrossPoint 82 and 84, the SW HD 4K Plus sizes, and several Panasonic and Epson projector ranges.',
+      'Project, Parts: on a part with no price, each room it is in is a link. It opens that room\'s Cost page with the part\'s line in the middle of the screen, outlined for a few seconds. On By room, the room\'s name does the same for its first unpriced part.',
+      'Floor plan: the AV Flow tab\'s zoom bar sits over the sheet\'s corner - zoom out and in, Fit, 100%, and the magnifier, a lens beside the pointer that shows the sheet at full size, with its own zoom and size.',
+      'Python module info editor: a module\'s model_support list is written back one entry per line rather than as one long line.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.156',
     date: 'October 19, 2026',
-    title: 'Several screens at once',
+    title: 'Locked throws and remembered units',
     changes: [
       'Projection calculator: a throw distance entered in Throws - the projector\'s own or the room\'s - opens in the distance box already locked, so the screen size is worked from it. Unlock the box to try another.',
       'Floor plan: a selected projector has a Projection calculator button right after the screen it is paired with.',
       'Projection calculator: the units picked are remembered for next time, after the app is closed and opened again.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.155',
+    date: 'October 19, 2026',
+    title: 'Several screens at once',
+    changes: [
       'Floor plan: Screen by size has How many. One click drops that many screens in a row, numbered Screen 1, Screen 2 and on after any already on the sheet, as one Undo step.',
     ],
   ),

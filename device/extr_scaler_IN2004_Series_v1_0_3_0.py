@@ -59,6 +59,28 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "extr_17_17181_2004": {
+            "models": [
+                "IN2004",
+            ],
+        },
+        "extr_17_17181_DIDO": {
+            "models": [
+                "DTP3 IN2004 DI/DO",
+            ],
+        },
+        "extr_17_17181_DTP3": {
+            "models": [
+                "DTP3 IN2004 DO",
+            ],
+        },
+    },
 }
 
 

@@ -3,6 +3,7 @@ import 'team/team_notices.dart';
 import 'team/team_widgets.dart';
 import 'team_setup.dart';
 import 'hover_fade.dart';
+import 'collapsible_bar.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -80,6 +81,7 @@ import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
 import 'room_photos_view.dart';
 import 'settings_path_field.dart';
+import 'device_manuals.dart' show kDashboardManualsFolder;
 import 'recovery_dialog.dart';
 import 'save_actions.dart';
 import 'dynamic_devices_view.dart';
@@ -1012,10 +1014,16 @@ class _MainDashboardState extends State<MainDashboard> {
           : Column(
         children: [
           // The job and the gear, above every tab rather than among them.
-          TopLevelBar(
-            selectedIndex: selectedIndex,
-            onSelect: provider.selectTab,
-            actions: documentActions,
+          // Folds to a thin strip for room at a large Interface Size.
+          ValueListenableBuilder<int>(
+            valueListenable: BarFolds.changes,
+            builder: (context, _, _) => BarFolds.isFolded(kTopBarFoldId)
+                ? const _TopBarFolded()
+                : TopLevelBar(
+                    selectedIndex: selectedIndex,
+                    onSelect: provider.selectTab,
+                    actions: documentActions,
+                  ),
           ),
           Expanded(
             child: Row(
@@ -1044,6 +1052,8 @@ class _MainDashboardState extends State<MainDashboard> {
               // And the start page - new file, project or campus - in their
               // place.
               showStart: !hasConfig,
+              // Big buttons and a scrollbar at a large size, not tiny ones.
+              keepFullSize: provider.uiScale > 1.25,
             ),
             ),
           ),
@@ -1854,9 +1864,18 @@ class TopLevelBar extends StatelessWidget {
       // IconButton already carries its own margin, so twelve more pixels only
       // left it floating short of the edge.
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 0, 4),
+        padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
         child: Row(
           children: [
+            // Hides this bar for more room; Save keeps the right corner.
+            IconButton(
+              key: const ValueKey('top_bar_hide'),
+              tooltip: 'Hide this bar for more room',
+              visualDensity: VisualDensity.compact,
+              color: actionInk,
+              icon: const Icon(Icons.keyboard_arrow_up),
+              onPressed: () => BarFolds.setFolded(kTopBarFoldId, true),
+            ),
             // THE WAY UP AND OUT OF THE ROOM — only when there is somewhere to
             // go. Pushed out rather than flat: it should read as a different
             // kind of control from the tabs below it.
@@ -2069,6 +2088,50 @@ class TopLevelBar extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The [BarFolds] id of the project bar.
+const String kTopBarFoldId = 'top_bar';
+
+/// The project bar folded: a thin strip that brings it back.
+class _TopBarFolded extends StatelessWidget {
+  const _TopBarFolded();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Tooltip(
+        message: 'Show the project bar',
+        child: InkWell(
+          key: const ValueKey('top_bar_show'),
+          onTap: () => BarFolds.setFolded(kTopBarFoldId, false),
+          // Named, so the strip says what it brings back.
+          child: SizedBox(
+            width: double.infinity,
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.keyboard_arrow_down,
+                  size: 16,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Project bar',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -3987,6 +4050,42 @@ class AppSettingsView extends StatelessWidget {
                 if (dir != null) provider.updateSetting('specSheetFolder', dir);
               },
             ),
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // DEVICE MANUALS - the Manuals catalog the CTS Dashboard reads.
+        // See device_manuals.dart.
+        SettingsPathField(
+          provider: provider,
+          settingKey: 'manualsFolder',
+          value: provider.manualsFolder,
+          decoration: InputDecoration(
+            labelText: 'Manuals Folder (device manuals)',
+            hintText: provider.effectiveManualsFolder,
+            helperText: 'Blank = the file share, or the Root Folder\'s manuals '
+                'folder when the share cannot be reached. Holds '
+                'catalog\\manuals.json and files\\.',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.menu_book),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                final dir = await FilePicker.getDirectoryPath();
+                if (dir != null) provider.updateSetting('manualsFolder', dir);
+              },
+            ),
+          ),
+        ),
+        // The file share, by its path: the button says where it goes.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const ValueKey('manuals_use_file_share'),
+            icon: const Icon(Icons.folder_shared, size: 16),
+            label: const Text('Use the file share'),
+            onPressed: () => provider.updateSetting(
+                'manualsFolder', kDashboardManualsFolder),
           ),
         ),
         const SizedBox(height: 20),

@@ -1805,8 +1805,8 @@
     },
     "power1_outlet_*_supports_reboot": {
       "type": "bool",
-      "description": "Whether this outlet's hardware can power-cycle on command. Optional - a room without the key behaves as before. Set false for an outlet that must only be switched on or off (a screen relay, a device that dislikes a hard cycle).",
-      "helperText": "Optional. Leave unset for rooms that don't use reboot control.",
+      "description": "Whether this outlet's hardware can power-cycle on command. On by default: every outlet in the new-room template supports reboot, and a converted room gets true for each outlet it has. Set false for an outlet that must only be switched on or off (a screen relay, a device that dislikes a hard cycle).",
+      "helperText": "On by default - turn off for an outlet that must only switch on or off.",
       "__comment": "Listed after the generic power1_outlet_* entry: patterns are matched in reverse file order, so the more specific one wins."
     },
     "power1_outlet_*_reboot_only": {

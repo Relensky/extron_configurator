@@ -58,6 +58,29 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "pana_1_5905_A": {
+            "models": [
+                "PT-VMZ51S", "PT-BMZ51", "PT-VMZ41",
+            ],
+            "values": {
+                "Input": [
+                    "Computer 1", "Computer 2", "HDMI 1", "HDMI 2",
+                    "Network", "Memory Viewer", "Network/USB",
+                ],
+            },
+        },
+        "pana_1_5905_B": {
+            "models": [
+                "PT-VMZ71", "PT-VMZ61", "PT-VMW61", "PT-VMW51",
+            ],
+        },
+    },
 }
 
 

@@ -87,6 +87,51 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "pana_1_326_A": {
+            "models": [
+                "PT-EZ770ZL", "PT-EX800Z", "PT-EW730Z", "PT-EW730ZL",
+                "PT-EX800ZL", "PT-EZ770Z", "PT-EZ770ZE", "PT-SLX80CL",
+                "PT-SLZ77C", "PT-SLZ77CL", "PT-SLW83C", "PT-SLW83CL",
+                "PT-SLX80C",
+            ],
+        },
+        "pana_1_326_C": {
+            "models": [
+                "PT-EZ580", "PT-EW640", "PT-EX610", "PT-EZ580L",
+                "PT-EW640L", "PT-EX610L",
+            ],
+        },
+        "pana_1_326_D": {
+            "models": [
+                "PT-EW540", "PT-EX510", "PT-EW540E", "PT-EW540L",
+                "PT-SLW65C", "PT-SLW65CL", "PT-SLX62C", "PT-SLX62CL",
+                "PT-EX510L",
+            ],
+            "values": {
+                "Input": [
+                    "Video", "RGB 1", "RGB 2", "DVI",
+                    "HDMI",
+                ],
+            },
+        },
+        "pana_1_326_B": {
+            "models": [
+                "PT-SLX75C", "PT-SLX75CL",
+            ],
+            "values": {
+                "Input": [
+                    "RGB 1", "RGB 2", "Video", "DVI",
+                    "HDMI",
+                ],
+            },
+        },
+    },
 }
 
 

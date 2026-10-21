@@ -52,12 +52,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('plan_set_scale')), findsOneWidget);
 
-    // The whole toolbar folds to its title and the exports.
+    // The whole toolbar folds to its title, the exports with it.
     await tester.tap(find.byKey(const ValueKey('plan_toolbar_toggle')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('plan_set_scale')), findsNothing);
-    expect(find.text('Location report'), findsOneWidget);
+    expect(find.text('Location report'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('plan_toolbar_toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('plan_set_scale')), findsOneWidget);
+    expect(find.text('Location report'), findsOneWidget);
+
+    // Collapse all folds the toolbar and every bar; Expand all brings them
+    // back.
+    await tester.tap(find.byKey(const ValueKey('plan_collapse_all')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('plan_set_scale')), findsNothing);
+    expect(find.text('Locations'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('plan_expand_all')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('plan_set_scale')), findsOneWidget);
     expect(tester.takeException(), isNull);

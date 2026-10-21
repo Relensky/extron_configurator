@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart';
+import 'collapsible_bar.dart';
 import 'flow_rules.dart';
 import 'side_pane.dart';
 import 'responsive.dart' show kFloatingButtonClearance;
@@ -146,11 +147,19 @@ class _FlowRulesViewState extends State<FlowRulesView> {
     final rules = provider.flowRules;
     final theme = Theme.of(context);
 
-    return Column(
+    // The controls fold, drag taller or shorter, and scroll past their share.
+    return ScrollingHeader(
+      id: 'flow_rules',
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _toolbar(provider, rules, theme),
+          const Divider(height: 1),
+        ],
+      ),
+      body: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _toolbar(provider, rules, theme),
-        const Divider(height: 1),
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -182,6 +191,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -199,6 +209,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
       };
 
   Widget _toolbar(AppStateProvider provider, FlowRules rules, ThemeData theme) {
+    final folded = BarFolds.isFolded('flow_rules_toolbar');
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Wrap(
@@ -206,18 +217,30 @@ class _FlowRulesViewState extends State<FlowRulesView> {
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text('AV Flow Rules', style: theme.textTheme.titleLarge),
-          Text(
-            _dirty ? 'Edited - not saved yet' : rules.source,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: _dirty ? theme.colorScheme.error : theme.disabledColor,
-            ),
+          PageTitle('AV Flow Rules', folded: folded),
+          FoldButton(
+            id: 'flow_rules_toolbar',
+            name: 'the buttons',
+            onChanged: () => setState(() {}),
           ),
+          FoldAllButtons(
+            page: 'flow_rules',
+            ids: const ['flow_rules_toolbar', 'flow_rules_section'],
+            onChanged: (_) => setState(() {}),
+          ),
+          // Save stays when the rest folds.
           ElevatedButton.icon(
             key: const ValueKey('flow_rules_save'),
             icon: const Icon(Icons.save, size: 18),
             label: const Text('Save'),
             onPressed: _save,
+          ),
+          if (!folded) ...[
+          Text(
+            _dirty ? 'Edited - not saved yet' : rules.source,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: _dirty ? theme.colorScheme.error : theme.disabledColor,
+            ),
           ),
           OutlinedButton.icon(
             icon: const Icon(Icons.refresh, size: 18),
@@ -235,6 +258,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
             label: const Text('Reset to built-in'),
             onPressed: _resetToBuiltIn,
           ),
+          ],
         ],
       ),
     );
@@ -286,8 +310,11 @@ class _FlowRulesViewState extends State<FlowRulesView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        CollapsibleBar(
+          id: 'flow_rules_section',
+          title: _section.label,
+          child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 12, 16, 4),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -311,6 +338,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                 ),
             ],
           ),
+        ),
         ),
         const Divider(height: 16),
         Expanded(

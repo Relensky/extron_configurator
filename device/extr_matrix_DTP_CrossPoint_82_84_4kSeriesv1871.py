@@ -53,6 +53,64 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "extr_15_2019_82": {
+            "models": [
+                "DTP CrossPoint 82 4K",
+            ],
+            "unsupported": [
+                "HDCPOutputAuthorization", "HDCPOutputStatus", "VideoMute",
+            ],
+        },
+        "extr_15_2019_82_MA": {
+            "models": [
+                "DTP CrossPoint 82 4K IPCP MA 70",
+            ],
+            "unsupported": [
+                "HDCPOutputAuthorization", "HDCPOutputStatus", "VideoMute",
+            ],
+        },
+        "extr_15_2019_82_SA": {
+            "models": [
+                "DTP CrossPoint 82 4K IPCP SA",
+            ],
+            "unsupported": [
+                "HDCPOutputAuthorization", "HDCPOutputStatus", "VideoMute",
+            ],
+        },
+        "extr_15_2019_84": {
+            "models": [
+                "DTP CrossPoint 84 4K",
+            ],
+            "unsupported": [
+                "AutoImage", "Freeze", "Logo", "OutputResolution",
+                "ScalerPresetRecall", "ScalerPresetSave", "TestPattern",
+            ],
+        },
+        "extr_15_2019_84_MA": {
+            "models": [
+                "DTP CrossPoint 84 4K IPCP MA 70",
+            ],
+            "unsupported": [
+                "AutoImage", "Freeze", "Logo", "OutputResolution",
+                "ScalerPresetRecall", "ScalerPresetSave", "TestPattern",
+            ],
+        },
+        "extr_15_2019_84_SA": {
+            "models": [
+                "DTP CrossPoint 84 4K IPCP SA",
+            ],
+            "unsupported": [
+                "AutoImage", "Freeze", "Logo", "OutputResolution",
+                "ScalerPresetRecall", "ScalerPresetSave", "TestPattern",
+            ],
+        },
+    },
 }
 
 

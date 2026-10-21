@@ -82,6 +82,50 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "epsn_1_2420_WXGA": {
+            "models": [
+                "BrightLink 695Wi", "CB-695Wi", "EB-685WT", "BrightLink 685Wi",
+                "EB-685Wi", "CB-685Wi", "BrightLink 680Wi", "EB-695WT",
+                "EB-680Wi", "CB-680Wi", "BrightLink 675Wi", "EB-675Wi",
+                "CB-675Wi", "EB-685W", "PowerLite 685W", "CB-685W",
+                "PowerLite 675W", "EB-675W", "CB-675W",
+            ],
+            "values": {
+                "AspectRatio": [
+                    "Normal", "16:9", "Auto", "Full",
+                    "Zoom", "Real",
+                ],
+            },
+        },
+        "epsn_1_2420_EB695wi": {
+            "models": [
+                "EB-695Wi", "EB-595Wi",
+            ],
+            "values": {
+                "AspectRatio": [
+                    "Normal", "16:9", "Auto", "Full",
+                    "Zoom", "Real",
+                ],
+            },
+        },
+        "epsn_1_2420_XGA": {
+            "models": [
+                "EB-680", "PowerLite 680", "CB-680", "PowerLite 670",
+                "EB-670", "CB-670",
+            ],
+            "values": {
+                "AspectRatio": [
+                    "Normal", "16:9", "Auto", "4:3",
+                ],
+            },
+        },
+    },
 }
 
 

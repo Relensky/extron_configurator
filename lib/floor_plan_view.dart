@@ -8,11 +8,21 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
+import 'collapsible_bar.dart';
 import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_device_library.dart' show AvDeviceTemplate;
 import 'av_flow_model.dart';
+import 'av_flow_overview.dart'
+    show
+        AvMagnifierLens,
+        AvZoomBar,
+        autoLensZoom,
+        kLensSizes,
+        setZoomAboutCenter,
+        snapshotDrawing,
+        zoomAboutCenter;
 import 'av_flow_report.dart';
 import 'av_port_editor.dart' show avRowIcon;
 import 'cable_colors_dialog.dart';
@@ -117,6 +127,9 @@ const List<Color> kPaperSwatches = [
 /// How far out the floor plan zooms: 2%, so a large sheet fits whole.
 const double kPlanMinScale = 0.02;
 
+/// How far in it zooms.
+const double kPlanMaxScale = 4.0;
+
 class FloorPlanView extends StatefulWidget {
   const FloorPlanView({super.key});
 
@@ -182,10 +195,18 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// True while an export without the cones and angles is being drawn.
   bool _hideCones = false;
 
-  /// Toolbar groups folded to their names, and the whole toolbar folded
-  /// away. Kept while the app runs, so a tab switch does not undo them.
+  /// Toolbar groups folded to their names. Kept while the app runs, so a
+  /// tab switch does not undo them.
   static final Set<String> _collapsedGroups = {};
-  static bool _toolbarCollapsed = false;
+
+  /// The whole toolbar, exports included, folded away.
+  static bool get _toolbarCollapsed => BarFolds.isFolded('plan_toolbar');
+
+  /// Every bar on the page, for Collapse all and Expand all.
+  static const _foldIds = [
+    'plan_toolbar', 'plan_sheets', 'plan_off_sheet', 'plan_cable_runs',
+    'plan_run', 'plan_device', 'plan_notation', 'plan_locations',
+  ];
 
   /// The Viewing angles switch: cones and angles off on screen. An export
   /// still draws them or not as its menu says.
@@ -346,9 +367,135 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     });
   }
 
+  // --- zoom bar and magnifier ------------------------------------------------
+  //  The AV Flow tab's, over this sheet's corner: the same buttons, the same
+  //  lens, so a plan zoomed out to see the whole floor can be read without
+  //  zooming back in. See av_flow_overview.dart for both widgets.
+
+  /// Zooms out until the whole sheet is on screen.
+  void _fitPlan() {
+    final fitted = fitToViewport(
+      controller: _transform,
+      contentKey: _planKey,
+      viewportKey: _viewportKey,
+      minScale: kPlanMinScale,
+    );
+    if (!fitted) _snack('The plan is still drawing - try again.');
+  }
+
+  /// Zoom by [factor] about the middle of the view.
+  void _zoomPlanBy(double factor) {
+    final viewport = renderedSize(_viewportKey);
+    if (viewport == null) return;
+    zoomAboutCenter(_transform, viewport, factor,
+        minScale: kPlanMinScale, maxScale: kPlanMaxScale);
+  }
+
+  /// 100%, about the middle of the view.
+  void _planActualSize() {
+    final viewport = renderedSize(_viewportKey);
+    if (viewport == null) return;
+    setZoomAboutCenter(_transform, viewport, 1.0);
+  }
+
+  /// The magnifier, the lens's zoom (null follows the page) and its size.
+  bool _magnifier = false;
+  double? _lensZoom;
+  int _lensSize = 1;
+
+  /// Where the lens is, in the viewport; null with the pointer off the sheet.
+  final ValueNotifier<Offset?> _lensAt = ValueNotifier(null);
+
+  /// The lens's picture of the sheet, and what it was taken of.
+  ({ui.Image image, double ratio})? _snapshot;
+  Object? _snapshotOf;
+  bool _snapping = false;
+
+  void _setMagnifier(bool on) {
+    setState(() => _magnifier = on);
+    if (!on) {
+      _lensAt.value = null;
+      _snapshot?.image.dispose();
+      _snapshot = null;
+      _snapshotOf = null;
+    }
+  }
+
+  /// A new picture for the lens when the sheet has changed since the last
+  /// one - [of] says what it shows. After the frame, so it is of the page.
+  void _refreshSnapshot(Object of, {int attempt = 0}) {
+    if (!_magnifier || _snapping || of == _snapshotOf) return;
+    _snapping = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      ({ui.Image image, double ratio})? shot;
+      try {
+        if (mounted) shot = await snapshotDrawing(_planKey);
+      } finally {
+        _snapping = false;
+      }
+      if (!mounted) {
+        shot?.image.dispose();
+        return;
+      }
+      if (shot == null) {
+        // Not painted yet - try again shortly, a few times.
+        if (attempt < 8) {
+          Future<void>.delayed(const Duration(milliseconds: 250), () {
+            if (mounted) _refreshSnapshot(of, attempt: attempt + 1);
+          });
+        }
+        return;
+      }
+      final old = _snapshot;
+      setState(() {
+        _snapshot = shot;
+        _snapshotOf = of;
+      });
+      old?.image.dispose();
+    });
+  }
+
+  /// The lens's square beside the pointer, flipped near the far edges.
+  Widget _buildLens() {
+    final side = kLensSizes[_lensSize].$1;
+    return ValueListenableBuilder<Offset?>(
+      valueListenable: _lensAt,
+      builder: (context, at, _) {
+        final shot = _snapshot;
+        // Positioned even when hidden: the Stack sizes off its children.
+        if (at == null || shot == null) {
+          return const Positioned(left: 0, top: 0, child: SizedBox.shrink());
+        }
+        final view = renderedSize(_viewportKey);
+        var left = at.dx + 16, top = at.dy + 16;
+        if (view != null) {
+          if (left + side > view.width) left = math.max(0, at.dx - 16 - side);
+          if (top + side > view.height) top = math.max(0, at.dy - 16 - side);
+        }
+        return Positioned(
+          left: left,
+          top: top,
+          width: side,
+          height: side,
+          child: IgnorePointer(
+            child: AvMagnifierLens(
+              image: shot.image,
+              ratio: shot.ratio,
+              scene: _transform.toScene(at),
+              zoom: _lensZoom ??
+                  autoLensZoom(_transform.value.getMaxScaleOnAxis()),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _dragTick.dispose();
+    _lensAt.dispose();
+    _snapshot?.image.dispose();
     unregisterDiagramCanvas(AppTab.floorPlan, _planKey);
     unregisterPlanSheetCapture(_captureSheets);
     _transform.dispose();
@@ -948,24 +1095,60 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       if (mounted) _syncImage(provider);
     });
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    // Everything over the sheet scrolls once it passes half the page, so a
+    // large Interface Size never squeezes the sheet out.
+    return ScrollingHeader(
+      id: 'floor_plan',
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         _toolbar(provider, plan),
-        _sheetBar(provider, plan),
-        if (plan != null && plan.hasContentOffSheet) _offSheetBar(provider, plan),
-        if (plan != null) _layerBar(provider, plan, drawing),
+        if (provider.avFloorPlans.isNotEmpty)
+          CollapsibleBar(
+            id: 'plan_sheets',
+            title: 'Sheets',
+            child: _sheetBar(provider, plan),
+          ),
+        if (plan != null && plan.hasContentOffSheet)
+          CollapsibleBar(
+            id: 'plan_off_sheet',
+            title: 'Off the sheet',
+            child: _offSheetBar(provider, plan),
+          ),
+        if (plan != null)
+          CollapsibleBar(
+            id: 'plan_cable_runs',
+            title: 'Cable runs',
+            child: _layerBar(provider, plan, drawing),
+          ),
         if (plan != null && _selectedRunId.isNotEmpty)
-          _runBar(provider, plan, drawing),
+          CollapsibleBar(
+            id: 'plan_run',
+            title: 'Selected run',
+            child: _runBar(provider, plan, drawing),
+          ),
         if (plan != null && _selectedDeviceId.isNotEmpty)
-          _deviceBar(provider, plan),
+          CollapsibleBar(
+            id: 'plan_device',
+            title: 'Selected device',
+            child: _deviceBar(provider, plan),
+          ),
         if (_tool == _PlanTool.notation && plan != null)
-          _notationBar(provider, plan),
+          CollapsibleBar(
+            id: 'plan_notation',
+            title: 'Notation',
+            child: _notationBar(provider, plan),
+          ),
         const Divider(height: 1),
-        _CountStrip(model: model),
+        CollapsibleBar(
+          id: 'plan_locations',
+          title: 'Locations',
+          child: _CountStrip(model: model),
+        ),
         const Divider(height: 1),
-        Expanded(
-          child: Row(
+        ],
+      ),
+      body: Row(
             children: [
               Expanded(
                 key: _viewportKey,
@@ -974,39 +1157,95 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                     : Focus(
                         focusNode: _planFocus,
                         onKeyEvent: (_, event) => _onPlanKey(plan, event),
-                        child: InteractiveViewer(
-                          transformationController: _transform,
-                          constrained: false,
-                          // A drag has to draw rather than shove the sheet
-                          // sideways while the notation tool is on. Zoom still
-                          // works — that is the scroll wheel, not a drag.
-                          panEnabled: _tool != _PlanTool.notation,
-                          minScale: kPlanMinScale,
-                          maxScale: 4.0,
-                          // Unbounded: a finite margin stops the zoom where
-                          // the sheet plus margin fills the window, so a
-                          // large sheet could never be seen whole.
-                          boundaryMargin: const EdgeInsets.all(
-                            double.infinity,
-                          ),
-                          child: RepaintBoundary(
-                            key: _planKey,
-                            // Inside the boundary, so the black-and-white
-                            // export captures exactly what it draws — see
-                            // [printSkin]. A Builder because the drawing reads
-                            // the theme this substitutes.
-                            child: printSkin(
-                              enabled: _printMode,
-                              child: ValueListenableBuilder<int>(
-                                valueListenable: _dragTick,
-                                builder: (_, _, _) => Builder(
-                                  builder: (ctx) =>
-                                      _plan(ctx, provider, model, plan, drawing),
+                        child: Builder(builder: (context) {
+                          // The lens's picture follows the sheet: a new one
+                          // when the room, the sheet or the print look change.
+                          _refreshSnapshot(
+                              (provider.revision, plan.id, _printMode));
+                          // Expand: the sheet is always the whole of this
+                          // space, whatever the lens is doing.
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Positioned.fill(
+                                child: InteractiveViewer(
+                                  transformationController: _transform,
+                                  constrained: false,
+                                  // A drag has to draw rather than shove the
+                                  // sheet sideways while the notation tool is
+                                  // on. Zoom still works — that is the scroll
+                                  // wheel, not a drag.
+                                  panEnabled: _tool != _PlanTool.notation,
+                                  minScale: kPlanMinScale,
+                                  maxScale: kPlanMaxScale,
+                                  // Unbounded: a finite margin stops the zoom
+                                  // where the sheet plus margin fills the
+                                  // window, so a large sheet could never be
+                                  // seen whole.
+                                  boundaryMargin: const EdgeInsets.all(
+                                    double.infinity,
+                                  ),
+                                  child: RepaintBoundary(
+                                    key: _planKey,
+                                    // Inside the boundary, so the
+                                    // black-and-white export captures exactly
+                                    // what it draws — see [printSkin]. A
+                                    // Builder because the drawing reads the
+                                    // theme this substitutes.
+                                    child: printSkin(
+                                      enabled: _printMode,
+                                      child: drawingText(
+                                          ValueListenableBuilder<int>(
+                                        valueListenable: _dragTick,
+                                        builder: (_, _, _) => Builder(
+                                          builder: (ctx) => _plan(ctx,
+                                              provider, model, plan, drawing),
+                                        ),
+                                      )),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        ),
+                              if (_magnifier) _buildLens(),
+                              // Zoom, over the sheet's corner - the AV Flow
+                              // tab's bar.
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: AvZoomBar(
+                                  key: const ValueKey('plan_zoom_bar'),
+                                  controller: _transform,
+                                  onOut: () => _zoomPlanBy(1 / 1.25),
+                                  onIn: () => _zoomPlanBy(1.25),
+                                  onFit: _fitPlan,
+                                  onActual: _planActualSize,
+                                  magnifier: _magnifier,
+                                  onMagnifier: _setMagnifier,
+                                  lensZoom: _lensZoom,
+                                  onLensZoom: (z) =>
+                                      setState(() => _lensZoom = z),
+                                  lensSize: _lensSize,
+                                  onLensSize: (i) =>
+                                      setState(() => _lensSize = i),
+                                ),
+                              ),
+                              // Where the pointer is, for the lens. On top and
+                              // see-through, so every click and cursor still
+                              // reaches the sheet under it.
+                              if (_magnifier)
+                                Positioned.fill(
+                                  child: MouseRegion(
+                                    key: const ValueKey(
+                                        'plan_magnifier_tracker'),
+                                    opaque: false,
+                                    onHover: (e) =>
+                                        _lensAt.value = e.localPosition,
+                                    onExit: (_) => _lensAt.value = null,
+                                  ),
+                                ),
+                            ],
+                          );
+                        }),
                       ),
               ),
               // Draggable and foldable: the sheet is the point of this page,
@@ -1019,8 +1258,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               ),
             ],
           ),
-        ),
-      ],
     );
   }
 
@@ -1711,15 +1948,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         OutlinedButton.icon(
           icon: const Icon(Icons.fit_screen, size: 18),
           label: const Text('Fit to view'),
-          onPressed: () {
-            final fitted = fitToViewport(
-              controller: _transform,
-              contentKey: _planKey,
-              viewportKey: _viewportKey,
-              minScale: kPlanMinScale,
-            );
-            if (!fitted) _snack('The plan is still drawing - try again.');
-          },
+          onPressed: _fitPlan,
         ),
       ],
     ];
@@ -2027,8 +2256,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text('Floor Plan', style: theme.textTheme.titleLarge),
+                padding: EdgeInsets.only(top: _toolbarCollapsed ? 8 : 4),
+                child: PageTitle('Floor Plan', folded: _toolbarCollapsed),
               ),
               IconButton(
                 key: const ValueKey('plan_toolbar_toggle'),
@@ -2038,8 +2267,17 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 icon: Icon(
                   _toolbarCollapsed ? Icons.unfold_more : Icons.unfold_less,
                 ),
-                onPressed: () =>
-                    setState(() => _toolbarCollapsed = !_toolbarCollapsed),
+                onPressed: () => setState(() => BarFolds.toggle('plan_toolbar')),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: FoldAllButtons(
+                  page: 'plan',
+                  ids: _foldIds,
+                  onChanged: (folded) => setState(() {
+                    if (!folded) _collapsedGroups.clear();
+                  }),
+                ),
               ),
               const SizedBox(width: 4),
               Expanded(
@@ -2047,8 +2285,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                     ? const SizedBox.shrink()
                     : groups([('Sheet', sheet), ('Look', look)]),
               ),
-              const SizedBox(width: 16),
-              line(output),
+              if (!_toolbarCollapsed) ...[
+                const SizedBox(width: 16),
+                line(output),
+              ],
             ],
           ),
           if (!_toolbarCollapsed) ...[
@@ -2064,11 +2304,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
   }
 
+  // Scrolls when a large text or interface size makes it taller than the page.
   Widget _emptyState(AppStateProvider provider) => Center(
-    child: Padding(
+    child: SingleChildScrollView(
       padding: const EdgeInsets.all(40),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             Icons.map_outlined,
@@ -2240,8 +2481,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               // before the architect's PDF turns up and is how the room
               // presets ship. A sheet whose image has gone missing is the
               // only one that gets a message, and it earns it.
+              // Its own layer, so a drag tick does not redraw the plan image.
               child: _image != null
-                  ? Image(image: _image!, fit: BoxFit.fill)
+                  ? RepaintBoundary(
+                      child: Image(image: _image!, fit: BoxFit.fill))
                   : plan.hasImage
                       ? Center(
                           child: Text(
@@ -2273,6 +2516,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             if (plan.walls != null)
               Positioned.fill(
                 child: IgnorePointer(
+                  child: RepaintBoundary(
                   child: CustomPaint(
                     key: const ValueKey('plan_walls'),
                     painter: _WallsPainter(
@@ -2282,6 +2526,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                           ? const Color(0xDDFFFFFF)
                           : const Color(0xDD263238),
                     ),
+                  ),
                   ),
                 ),
               ),

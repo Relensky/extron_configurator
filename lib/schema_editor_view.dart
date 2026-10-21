@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'collapsible_bar.dart';
 import 'side_pane.dart';
 import 'ui_schema.dart';
 import 'responsive.dart';
@@ -330,9 +331,13 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
     final schema = provider.uiSchema;
     final theme = Theme.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    final folded = BarFolds.isFolded('schema_toolbar');
+    // The controls fold, drag taller or shorter, and scroll past their share.
+    return ScrollingHeader(
+      id: 'schema_editor',
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Wrap(
@@ -340,18 +345,30 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text('Schema Editor', style: theme.textTheme.titleLarge),
-              Text(
-                _dirty ? 'Edited - not saved yet' : schema.source,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: _dirty ? theme.colorScheme.error : theme.disabledColor,
-                ),
+              PageTitle('Schema Editor', folded: folded),
+              FoldButton(
+                id: 'schema_toolbar',
+                name: 'the buttons',
+                onChanged: () => setState(() {}),
               ),
+              FoldAllButtons(
+                page: 'schema',
+                ids: const ['schema_toolbar', 'schema_section'],
+                onChanged: (_) => setState(() {}),
+              ),
+              // Save stays when the rest folds.
               ElevatedButton.icon(
                 key: const ValueKey('schema_editor_save'),
                 icon: const Icon(Icons.save, size: 18),
                 label: const Text('Save'),
                 onPressed: _save,
+              ),
+              if (!folded) ...[
+              Text(
+                _dirty ? 'Edited - not saved yet' : schema.source,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: _dirty ? theme.colorScheme.error : theme.disabledColor,
+                ),
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.refresh, size: 18),
@@ -365,10 +382,16 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
               ),
               Text('${schema.fieldCount} field definitions',
                   style: theme.textTheme.bodySmall),
+              ],
             ],
           ),
         ),
         const Divider(height: 1),
+        ],
+      ),
+      body: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -405,6 +428,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -419,8 +443,13 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
         _SchemaSection.raw => _rawEditor(provider, theme),
       };
 
-  Widget _header(ThemeData theme, {List<Widget> actions = const []}) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+  // Folds to the section's name.
+  Widget _header(ThemeData theme, {List<Widget> actions = const []}) =>
+      CollapsibleBar(
+        id: 'schema_section',
+        title: _section.label,
+        child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 12, 16, 4),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -437,6 +466,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
             const SizedBox(width: 12),
             ...actions,
           ],
+        ),
         ),
       );
 
@@ -478,7 +508,10 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
       if (schema.specFor(k, sectionKey: _block) != null) described++;
     }
 
-    return Column(
+    // The controls scroll at large sizes instead of crushing the list.
+    return ScrollingHeader(
+      id: 'schema_coverage',
+      header: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _header(theme, actions: [
@@ -544,13 +577,14 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
         ),
         _searchBox(),
         const SizedBox(height: 8),
+      ],
+      ),
         // FILTERED FIRST, THEN BUILT LAZILY. A SYSTEM_SETUP block runs to
         // several hundred keys, and this list used to lay out a row for every
         // one of them on every rebuild — which is every character typed into
         // the search box above it, the one place the list is guaranteed to be
         // long and the typing guaranteed to be fast.
-        Expanded(
-          child: Builder(builder: (context) {
+      body: Builder(builder: (context) {
             final visible = [
               for (final key in keys)
                 if (_matchesSearch(key))
@@ -572,8 +606,6 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
               },
             );
           }),
-        ),
-      ],
     );
   }
 

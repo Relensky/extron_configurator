@@ -105,6 +105,32 @@ DEVICE_INFO = {
         "net_port": 80,
         "service_port": 0,
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "pana_19_3420_Others": {
+            "models": [
+                "AW-HE100", "AW-HE120", "AW-HE38H", "AW-HE38HK",
+                "AW-HE38HW", "AW-HE40HKE", "AW-HE40HKP", "AW-HE40HWE",
+                "AW-HE40HWP", "AW-HE40SKE", "AW-HE40SKP", "AW-HE40SWE",
+                "AW-HE40SWP", "AW-HE50", "AW-HE50H", "AW-HE50S",
+                "AW-HE60", "AW-HE60SE", "AW-HE65HKMC", "AW-HE65HWMC",
+                "AW-HE65SKMC", "AW-HE65SWMC", "AW-HE70HK", "AW-HE70HW",
+                "AW-HE70SK", "AW-HE70SW", "AW-UE70", "AW-UE70KE",
+                "AW-UE70KP", "AW-UE70WE", "AW-UE70WP", "AW-HE40HWPJ9",
+                "AW-HE40SWPJ9", "AW-HE40HWEJ9", "AW-HE40SWEJ9", "AW-HE40HKPJ9",
+                "AW-HE40SKPJ9", "AW-HE40HKEJ9", "AW-HE40SKEJ9",
+            ],
+        },
+        "pana_19_3420_UE150": {
+            "models": [
+                "AW-UE150WP", "AW-UE150KP", "AW-UE150WE", "AW-UE150KE",
+            ],
+        },
+    },
 }
 
 

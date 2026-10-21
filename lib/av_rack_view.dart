@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'collapsible_bar.dart';
 import 'contrast.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
@@ -248,11 +249,21 @@ class _AvRackViewState extends State<AvRackView> {
         .where((i) => !provider.avRackSlots.containsKey(i.id))
         .toList();
 
-    return Column(
-      children: [
-        _buildRackToolbar(provider, unracked, looseHardware, theme),
-        const Divider(height: 1),
-        Expanded(
+    // The tools scroll once they pass half the page, so a large Interface
+    // Size never squeezes the racks out.
+    return ScrollingHeader(
+      id: 'racks',
+      header: Column(
+        children: [
+          CollapsibleBar(
+            id: 'rack_tools',
+            title: 'Rack tools',
+            child: _buildRackToolbar(provider, unracked, looseHardware, theme),
+          ),
+          const Divider(height: 1),
+        ],
+      ),
+      body: KeyedSubtree(
           key: _viewportKey,
           child: provider.avRacks.isEmpty
               ? _buildEmptyState(provider, theme)
@@ -268,12 +279,11 @@ class _AvRackViewState extends State<AvRackView> {
                     boundaryMargin: const EdgeInsets.all(200),
                     child: RepaintBoundary(
                       key: widget.captureKey,
-                      child: _buildRacksCanvas(provider, theme),
+                      child: drawingText(_buildRacksCanvas(provider, theme)),
                     ),
                   ),
                 ),
-        ),
-      ],
+      ),
     );
   }
 

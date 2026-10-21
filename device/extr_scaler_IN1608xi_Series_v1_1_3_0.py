@@ -64,6 +64,31 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "extr_17_3288_1608": {
+            "models": [
+                "IN1608 xi",
+            ],
+            "unsupported": [
+                "AmplifiedOutputProgram",
+            ],
+        },
+        "extr_17_3288_1608_SA": {
+            "models": [
+                "IN1608 xi SA", "IN1608 xi IPCP SA",
+            ],
+        },
+        "extr_17_3288_1608_MA": {
+            "models": [
+                "IN1608 xi MA 70", "IN1608 xi IPCP MA 70",
+            ],
+        },
+    },
 }
 
 

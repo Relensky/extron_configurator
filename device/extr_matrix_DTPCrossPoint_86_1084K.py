@@ -63,6 +63,43 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "extr_15_1691_108": {
+            "models": [
+                "DTP CrossPoint 108 4K",
+            ],
+        },
+        "extr_15_1691_108_SA": {
+            "models": [
+                "DTP CrossPoint 108 4K IPCP SA",
+            ],
+        },
+        "extr_15_1691_108_MA": {
+            "models": [
+                "DTP CrossPoint 108 4K IPCP MA 70",
+            ],
+        },
+        "extr_15_1691_86": {
+            "models": [
+                "DTP CrossPoint 86 4K",
+            ],
+        },
+        "extr_15_1691_86_SA": {
+            "models": [
+                "DTP CrossPoint 86 4K IPCP SA",
+            ],
+        },
+        "extr_15_1691_86_MA": {
+            "models": [
+                "DTP CrossPoint 86 4K IPCP MA 70",
+            ],
+        },
+    },
 }
 
 

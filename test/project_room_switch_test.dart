@@ -513,10 +513,10 @@ void main() {
       // And for the open to finish: it checks the job's other rooms last,
       // then says so.
       for (var i = 0;
-          i < 80 &&
+          i < 400 &&
               (p.currentConfigPath.isEmpty ||
                   p.avNodes.isEmpty ||
-                  find.textContaining('is now the open room').evaluate().isEmpty);
+                  find.textContaining('its cost').evaluate().isEmpty);
           i++) {
         await tester.pump();
         await tester.runAsync(
@@ -528,28 +528,24 @@ void main() {
       expect(p.openProjectRoom?.id, p.project.rooms.last.id);
       // The whole room, not just the config — the same as every other way in.
       expect(p.avNodes.single.model, 'Camera Y');
+      // And lands on its Cost page, like the funding list and the picker.
+      expect(p.selectedTabIndex, AppTab.cost.index);
     });
 
-    testWidgets('the open room is not a way into itself', (tester) async {
+    testWidgets('the open room name goes to its Cost page', (tester) async {
       final p = withProject();
       await tester.runAsync(
         () => p.openProjectRoomRef(p.project.rooms.first),
       );
       await pumpTab(tester, p);
 
-      // Its name is inside a plain Tooltip rather than an InkWell, and the
-      // tooltip says why instead of leaving somebody clicking at a row that
-      // does nothing.
-      final nameA = inList('Room A');
-      expect(nameA, findsOneWidget);
-      expect(
-        find.ancestor(of: nameA, matching: find.byType(InkWell)),
-        findsNothing,
-      );
-      final tip = tester.widget<Tooltip>(
-        find.ancestor(of: nameA, matching: find.byType(Tooltip)).first,
-      );
-      expect(tip.message, contains('working on'));
+      await tester.tap(inList('Room A'));
+      await tester.pumpAndSettle();
+      expect(p.openProjectRoom?.id, p.project.rooms.first.id);
+      expect(p.selectedTabIndex, AppTab.cost.index);
+      // The confirmation's timer runs out.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('an unsaved room is offered a save before the switch',

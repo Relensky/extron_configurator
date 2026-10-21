@@ -742,6 +742,31 @@ String pythonLiteralOf(dynamic value) {
   return '"$text"';
 }
 
+/// [pythonLiteralOf], laid out one entry per line once it is too long for one,
+/// at [depth] four-space indents. A key the editor does not know - a driver's
+/// "model_support" - goes back into the file as readable as it came out,
+/// not as one 3000-character line.
+String pythonBlockOf(dynamic value, int depth) {
+  final inline = pythonLiteralOf(value);
+  if ((value is! List && value is! Map) ||
+      inline.length + depth * 4 <= 92 ||
+      (value is List && value.isEmpty) ||
+      (value is Map && value.isEmpty)) {
+    return inline;
+  }
+  final pad = '    ' * (depth + 1);
+  final close = '    ' * depth;
+  if (value is List) {
+    final items = value.map((e) => '$pad${pythonBlockOf(e, depth + 1)},');
+    return '[\n${items.join('\n')}\n$close]';
+  }
+  final map = value as Map;
+  final items = map.entries.map((e) =>
+      '$pad${pythonLiteralOf(e.key.toString())}: '
+      '${pythonBlockOf(e.value, depth + 1)},');
+  return '{\n${items.join('\n')}\n$close}';
+}
+
 /// What a value LOOKS like in the editor's single text field - the inverse of
 /// [pythonScalarOf], so a value read out of a file and typed straight back in
 /// comes out the same on the other side.
@@ -816,7 +841,7 @@ String formatDeviceInfo(DeviceInfoDraft draft) {
   }
   for (final entry in draft.extras.entries) {
     out.writeln('    ${pythonLiteralOf(entry.key)}: '
-        '${pythonLiteralOf(entry.value)},');
+        '${pythonBlockOf(entry.value, 1)},');
   }
 
   out.write('}');

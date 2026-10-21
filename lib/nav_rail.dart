@@ -155,6 +155,9 @@ const double _kFontMin = 7;
 /// amount that overflows.
 const double _kLabelLineHeight = 1.05;
 
+/// Room left beside the tabs for the scrollbar when the rail scrolls.
+const double kRailScrollGutter = 12;
+
 /// The row geometry chosen for one pane size.
 ///
 /// [labels] is false in the last-resort mode, where the words come off and the
@@ -183,6 +186,11 @@ class AppNavRail extends StatefulWidget {
   /// Shows [kStartNavTab] at the top - while no room is open.
   final bool showStart;
 
+  /// Keeps full-size rows and scrolls instead of shrinking them to fit. On at
+  /// a large Interface Size, where shrunken rows undo the point of
+  /// picking one.
+  final bool keepFullSize;
+
   const AppNavRail({
     super.key,
     required this.selectedIndex,
@@ -190,6 +198,7 @@ class AppNavRail extends StatefulWidget {
     this.tabs = kNavTabs,
     this.hidden = const {},
     this.showStart = false,
+    this.keepFullSize = false,
   });
 
   @override
@@ -357,6 +366,9 @@ class _AppNavRailState extends State<AppNavRail> {
       );
     }
 
+    // A large size scrolls rather than shrinks.
+    if (widget.keepFullSize) return candidate(1);
+
     for (int step = 0; step <= 8; step++) {
       final fit = candidate(1 - step / 8);
       if (fit.rowHeight * _shown.length <= height) return fit;
@@ -394,7 +406,8 @@ class _AppNavRailState extends State<AppNavRail> {
       builder: (context, constraints) {
         final key =
             '${constraints.maxWidth}x${constraints.maxHeight}'
-            '@${scaler.scale(10)}:${base.fontSize}:${_shown.length}';
+            '@${scaler.scale(10)}:${base.fontSize}:${_shown.length}'
+            ':${widget.keepFullSize}';
         if (key != _fitKey || _fit == null) {
           _fit = _computeFit(constraints.maxWidth, constraints.maxHeight, base);
           _fitKey = key;
@@ -404,12 +417,16 @@ class _AppNavRailState extends State<AppNavRail> {
 
         return Scrollbar(
           controller: _scroll,
+          // Shown whenever it scrolls, so the tabs below the fold are seen.
+          thumbVisibility: !fits,
           child: SingleChildScrollView(
             controller: _scroll,
             // Never scrolls when it fits. A rail that can be nudged by a stray
             // wheel event while every tab is already visible only loses people
             // their place.
             physics: fits ? const NeverScrollableScrollPhysics() : null,
+            // A gutter for the scrollbar, so it never sits over a tab's band.
+            padding: EdgeInsets.only(right: fits ? 0 : kRailScrollGutter),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: Column(

@@ -62,6 +62,29 @@ DEVICE_INFO = {
         "baud": 9600,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "pana_1_2277_FW430": {
+            "models": [
+                "PT-FW430U", "PT-FW430E", "PT-FW430EA",
+            ],
+            "values": {
+                "AspectRatio": [
+                    "Auto", "S4:3", "Normal", "Native",
+                    "Full", "H-Fit", "V-Fit",
+                ],
+            },
+        },
+        "pana_1_2277_FX400": {
+            "models": [
+                "PT-FX400U", "PT-FX400E", "PT-FX400EA",
+            ],
+        },
+    },
 }
 
 

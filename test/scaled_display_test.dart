@@ -10,10 +10,11 @@ import 'package:extron_configurator/main.dart';
 /// ============================================================================
 ///  Windows display scaling shrinks the room the app has to lay out in: a
 ///  1366x768 laptop at 125% gives it about 1093x590 (after the title bar), a
-///  1920x1080 screen at 150% about 1280x680. Every tab has to come up there
+///  1920x1080 screen at 150% about 1280x680, and at 200% (or Interface Size
+///  200%) about 960x510. Every tab has to come up there
 ///  without anything overflowing out of sight.
 void main() {
-  for (final size in const [Size(1093, 590), Size(1280, 680)]) {
+  for (final size in const [Size(1093, 590), Size(1280, 680), Size(960, 510)]) {
     testWidgets(
         'every tab fits at ${size.width.toInt()}x${size.height.toInt()}',
         (tester) async {

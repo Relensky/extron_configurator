@@ -66,6 +66,33 @@ DEVICE_INFO = {
         "baud": 38400,
         "host": "processor1",  # the processor the COM port is on
     },
+    # What each group of models in this driver can do, worked out from the
+    # driver's own model methods: the commands a group's methods leave it
+    # unable to send, and the states it accepts where narrower than the
+    # whole driver. The app offers a device only its own model's; a group
+    # that lists neither has every command and state the driver has.
+    "model_support": {
+        "extr_25_2513_128": {
+            "models": [
+                "DMP 128 Plus", "DMP 128 Plus C",
+            ],
+        },
+        "extr_25_2513_128AT": {
+            "models": [
+                "DMP 128 Plus C AT", "DMP 128 Plus AT",
+            ],
+        },
+        "extr_25_2513_128V": {
+            "models": [
+                "DMP 128 Plus C V",
+            ],
+        },
+        "extr_25_2513_128VAT": {
+            "models": [
+                "DMP 128 Plus C V AT",
+            ],
+        },
+    },
 }
 
 

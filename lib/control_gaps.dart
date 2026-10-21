@@ -83,6 +83,12 @@ class ControlGap {
   /// one the list was about. With the key, the page opens on the device.
   final String sectionKey;
 
+  /// The box on the signal flow, or '' when it is not drawn.
+  final String nodeId;
+
+  /// Its line on the room's Cost page, or '' when it is not drawn.
+  final String costLineKey;
+
   const ControlGap({
     required this.device,
     required this.model,
@@ -91,6 +97,8 @@ class ControlGap {
     required this.kind,
     required this.note,
     this.sectionKey = '',
+    this.nodeId = '',
+    this.costLineKey = '',
   });
 
   String get sourceLabel => fromConfig ? 'Room config' : 'Added by hand';
@@ -159,6 +167,8 @@ List<ControlGap> controlGapsForRoom({
         fromConfig: configModule != null,
         kind: ControlGapKind.noModel,
         note: 'No model recorded, so no module can be matched',
+        nodeId: node.id,
+        costLineKey: group.key,
         sectionKey: configModule != null ? node.id : '',
       ));
       continue;
@@ -174,6 +184,8 @@ List<ControlGap> controlGapsForRoom({
         fromConfig: true,
         kind: ControlGapKind.moduleUnset,
         note: 'No module set on the device - $claimed matches this model',
+        nodeId: node.id,
+        costLineKey: group.key,
         sectionKey: node.id,
       ));
       continue;
@@ -185,6 +197,8 @@ List<ControlGap> controlGapsForRoom({
       fromConfig: configModule != null,
       kind: ControlGapKind.noModuleClaims,
       note: 'No Python module claims this model',
+      nodeId: node.id,
+      costLineKey: group.key,
       sectionKey: configModule != null ? node.id : '',
     ));
   }

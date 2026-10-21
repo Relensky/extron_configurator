@@ -13,6 +13,7 @@ import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'catalog_category_prompt.dart';
+import 'collapsible_bar.dart';
 import 'contrast.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
@@ -924,19 +925,21 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     final entries = _filtered(library);
     _countFilters(library);
 
-    return LayoutBuilder(
-      builder: (context, box) => Column(
+    // Capped, scrollable and draggable: on a short screen at high scaling the
+    // wrapped buttons would otherwise push the list off the page.
+    return ScrollingHeader(
+      id: 'catalog',
+      maxFraction: 0.45,
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildToolbar(provider, library),
+          const Divider(height: 1),
+        ],
+      ),
+      body: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Capped and scrollable: on a short screen at high scaling the wrapped
-        // buttons would otherwise push the list off the page.
-        ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: box.maxHeight * 0.45),
-          child: SingleChildScrollView(
-            child: _buildToolbar(provider, library),
-          ),
-        ),
-        const Divider(height: 1),
         Expanded(
           child: Row(
             children: [
@@ -1225,24 +1228,41 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           LayoutBuilder(
             builder: (context, box) {
               final scale = MediaQuery.textScalerOf(context).scale(1);
+              final folded = BarFolds.isFolded('catalog_buttons');
               final inline = box.maxWidth >= 1100 * scale;
               final top = Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      'Device Editor',
-                      style: theme.textTheme.titleLarge,
+                  Flexible(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: folded ? 10 : 4),
+                      child: PageTitle('Device Editor', folded: folded),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  // Folds the buttons away; Save stays.
+                  FoldButton(
+                    id: 'catalog_buttons',
+                    name: 'the catalog buttons',
+                    onChanged: () => setState(() {}),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: FoldAllButtons(
+                      page: 'catalog',
+                      ids: const ['catalog_buttons', 'catalog_filters'],
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   // Cleared by an automatic save too, not only by Save.
                   if (_dirty && library.differsFromBaseline) ...[
                     unsaved,
                     const SizedBox(width: 8),
                   ],
-                  if (inline) Expanded(child: buttons) else const Spacer(),
+                  if (inline && !folded)
+                    Expanded(child: buttons)
+                  else
+                    const Spacer(),
                   const SizedBox(width: 12),
                   ElevatedButton.icon(
                     key: const ValueKey('catalog_save'),
@@ -1252,7 +1272,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   ),
                 ],
               );
-              if (inline) return top;
+              if (inline || folded) return top;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [top, const SizedBox(height: 8), buttons],
@@ -1264,7 +1284,11 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           // two pickers and two chips are wider than a laptop window with the
           // side pane open, and a Row of that shape paints its last control
           // off the edge of the page under a yellow-and-black bar.
-          Wrap(
+          CollapsibleBar(
+            id: 'catalog_filters',
+            title: 'Search and filters',
+            padding: EdgeInsets.zero,
+            child: Wrap(
             spacing: 12,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -1402,6 +1426,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               ),
             ],
           ),
+          ),
         ],
       ),
     );
@@ -1512,8 +1537,11 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           ),
           // Both tiers, so a part way through pricing the catalog is obvious
           // from the list rather than one entry at a time.
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          // Scaled down rather than spilling out of the row at large text.
+          trailing: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
@@ -1535,6 +1563,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 ),
               ),
             ],
+          ),
           ),
           onTap: () => setState(() => _selectedKey = key),
         );

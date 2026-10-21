@@ -1,5 +1,6 @@
 import 'file_dialogs.dart';
 import 'cost_estimate_actions.dart';
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:io';
 
@@ -439,11 +440,88 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     },
   );
 
+  // --- the line a link sent the reader to ----------------------------------
+  //  See [AppStateProvider.requestedCostLine]. The page is a ListView, which
+  //  only builds what is near the screen, so a line far down the page has no
+  //  context to scroll to yet: the page steps down until it is built, then
+  //  centers it. Lit for a few seconds, then the page is just the page again.
+
+  final ScrollController _scroll = ScrollController();
+  final GlobalKey _spotKey = GlobalKey();
+  String _spotLine = '';
+  Timer? _spotTimer;
+
+  /// Lines lit together until the page is left, as the No control module
+  /// list asks - see [AppStateProvider.requestedCostLines].
+  Set<String> _spotLines = const {};
+
+  /// Takes up a new request, once.
+  void _takeSpotRequest(AppStateProvider provider) {
+    if (widget.model != null || provider.requestedCostLine.isEmpty) return;
+    _spotLine = provider.takeCostLineRequest();
+    _spotLines = provider.takeCostLinesRequest().toSet();
+    _spotTimer?.cancel();
+    // A set stays lit while the page is open; one line fades.
+    if (_spotLines.isEmpty) {
+      _spotTimer = Timer(const Duration(seconds: 6), () {
+        if (mounted) setState(() => _spotLine = '');
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) _scroll.jumpTo(0);
+      _scrollToSpot(0);
+    });
+  }
+
+  void _scrollToSpot(int tries) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _spotLine.isEmpty) return;
+      final spot = _spotKey.currentContext;
+      if (spot != null) {
+        Scrollable.ensureVisible(spot, alignment: 0.5);
+        return;
+      }
+      if (tries > 80 || !_scroll.hasClients) return;
+      final pos = _scroll.position;
+      if (pos.pixels >= pos.maxScrollExtent) return; // not on this page
+      _scroll.jumpTo(
+          math.min(pos.pixels + pos.viewportDimension * 0.8,
+              pos.maxScrollExtent));
+      _scrollToSpot(tries + 1);
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  /// [row], lit up while it is the line a link sent the reader to.
+  ///
+  /// The outline is painted OVER the row rather than around it, so no cell
+  /// moves off the caption it sits under - see cost_header_alignment_test.
+  Widget _spot(String lineKey, Widget row) {
+    if (_capturing ||
+        lineKey.isEmpty ||
+        (lineKey != _spotLine && !_spotLines.contains(lineKey))) {
+      return row;
+    }
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      // Scrolled to: the first of a set.
+      key: lineKey == _spotLine ? _spotKey : null,
+      color: scheme.primary.withValues(alpha: 0.12),
+      foregroundDecoration: BoxDecoration(
+        border: Border.all(color: scheme.primary, width: 2),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: row,
+    );
+  }
+
   @override
   void dispose() {
     if (identical(CostEstimateActions.current, _actions)) {
       CostEstimateActions.current = null;
     }
+    _spotTimer?.cancel();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -676,6 +754,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
+    _takeSpotRequest(provider);
     // The tab's own case is the provider's, which holds both of these for as
     // long as nothing has changed - so coming back to this page costs nothing.
     // A caller that handed a model in is pricing something else, and gets its
@@ -857,6 +936,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         // ones in boxes.
         child: SelectionArea(
           child: ListView(
+            controller: _scroll,
             padding: const EdgeInsets.fromLTRB(
               16,
               12,
@@ -1390,7 +1470,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   final catalogPart = extra != null
                       ? extra.catalogModel.trim()
                       : (isCatalogSource(line.source) ? line.model.trim() : '');
-                  return _stripe(
+                  return _spot(line.key, _stripe(
                     context,
                     i,
                     Padding(
@@ -1738,7 +1818,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       ),
                     ], rowKey: ValueKey('gridrow_eqp_${line.key}')),
                     ),
-                  );
+                  ));
                 },
               ),
             ],
@@ -1832,7 +1912,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                     ? line.model.trim()
                                     : line.description.trim())
                               : '');
-                    return _stripe(
+                    return _spot(line.key, _stripe(
                       context,
                       i,
                       Padding(
@@ -2055,7 +2135,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       ),
                     ], rowKey: ValueKey('gridrow_hw_${line.key}')),
                 ),
-                    );
+                    ));
                   },
                 ),
             ],
@@ -2198,7 +2278,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       final catalog =
                           library.templateForModel(line.model) ??
                               library.cableForSignal(signal);
-                      return _stripe(
+                      return _spot(line.key, _stripe(
                         context,
                         i,
                         Padding(
@@ -2386,7 +2466,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           ),
                         ], rowKey: ValueKey('gridrow_cbl_${line.key}')),
                       ),
-                      );
+                      ));
                     },
                   ),
               // Cable bought for the job that no run on the diagram accounts
@@ -2400,7 +2480,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         .firstOrNull;
                     // Carries on from the counted runs above rather than
                     // restarting: the two loops are one table to read.
-                    return _stripe(
+                    return _spot(item.id, _stripe(
                       context,
                       countedCabling.length + i,
                       Padding(
@@ -2598,7 +2678,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           ),
                         ], rowKey: ValueKey('gridrow_cbl_${item.id}')),
                     ),
-                    );
+                    ));
                   },
                 ),
             ],
@@ -7504,7 +7584,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               const Divider(height: 12),
             ],
             for (final (i, item) in items.indexed)
-              _stripe(
+              _spot(item.id, _stripe(
                 context,
                 i,
                 Padding(
@@ -7676,7 +7756,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     ),
                   ], rowKey: ValueKey('gridrow_item_${item.id}')),
               ),
-              ),
+              )),
           ],
         ),
       ),

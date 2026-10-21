@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'collapsible_bar.dart';
 import 'av_rack_view.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
@@ -63,6 +64,7 @@ class _RackTabViewState extends State<RackTabView> {
       return const Center(child: Text('No configuration loaded.'));
     }
 
+    final folded = BarFolds.isFolded('rack_header');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -73,11 +75,18 @@ class _RackTabViewState extends State<RackTabView> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text(
-                'Rack Elevations',
-                style: Theme.of(context).textTheme.titleLarge,
+              PageTitle('Rack Elevations', folded: folded),
+              FoldButton(
+                id: 'rack_header',
+                name: 'the rack buttons',
+                onChanged: () => setState(() {}),
               ),
-              const SizedBox(width: 4),
+              FoldAllButtons(
+                page: 'rack',
+                ids: const ['rack_header', 'rack_tools'],
+                onChanged: (_) => setState(() {}),
+              ),
+              if (!folded) ...[
               FilterChip(
                 avatar: Icon(
                   _editMode ? Icons.edit : Icons.edit_outlined,
@@ -109,6 +118,7 @@ class _RackTabViewState extends State<RackTabView> {
                 label: const Text('Export PNG'),
                 onPressed: () => _exportPng(provider),
               ),
+              ],
             ],
           ),
         ),

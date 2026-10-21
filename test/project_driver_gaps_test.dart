@@ -125,6 +125,41 @@ void main() {
     expect(rooms, {'Room A', 'Room B'});
   });
 
+  test('each drawn gap knows its box and its Cost line', () {
+    final p = withProject();
+    final estimate = p.priceProject();
+    for (final entry in estimate.controlGaps) {
+      expect(entry.gap.nodeId, isNotEmpty);
+      final keys = {
+        for (final l in entry.room.estimate!.equipment) l.key,
+      };
+      expect(keys, contains(entry.gap.costLineKey),
+          reason: 'the room name lights this line on the Cost page');
+    }
+  });
+
+  testWidgets('a room name on the undriven list opens its Cost page',
+      (tester) async {
+    final p = withProject();
+    await pumpProject(tester, p);
+    await tester.tap(find.byKey(const ValueKey('project_warnings')));
+    await tester.pumpAndSettle();
+
+    final roomB = p.project.rooms[1];
+    await tester.runAsync(() async => tester
+        .tap(find.byKey(ValueKey('gap_room_cost_${roomB.id}'))));
+    for (var i = 0;
+        i < 400 && p.selectedTabIndex != AppTab.cost.index;
+        i++) {
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+    }
+    expect(p.openProjectRoom?.id, roomB.id);
+    expect(p.selectedTabIndex, AppTab.cost.index);
+  });
+
   testWidgets('the warning opens the undriven list, and names the rooms',
       (tester) async {
     final p = withProject();
