@@ -9,6 +9,7 @@ import 'live_text_field.dart';
 import 'manual_room_lines.dart' show pasteRoomList, removeManualRoomLine;
 import 'project_breakdown.dart';
 import 'project_estimate.dart' show ProjectEstimate;
+import 'project_room_options_button.dart';
 import 'project_view.dart' show openProjectRoomOn;
 import 'room_review.dart' show RoomStatusIcons, RoomToneHighlight;
 
@@ -211,6 +212,8 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
         head('Budget', 130),
         const SizedBox(width: 8),
         head('Room total', 110, right: true),
+        const SizedBox(width: 8),
+        head('Options', 44),
         const SizedBox(width: 48),
       ],
     );
@@ -593,6 +596,10 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
       for (final r in widget.estimate?.rooms ?? const [])
         if (r.ok) r.ref.id: r.total,
     };
+    final costed = {
+      for (final r in widget.estimate?.rooms ?? const [])
+        if (r.ok) r.ref.id: r,
+    };
     // The id "working on" and review marks use: the open room's from memory.
     final openId = provider.openProjectRoom?.id;
     final teamIds = {
@@ -802,6 +809,25 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                 ),
               ),
             ),
+          ),
+          const SizedBox(width: 8),
+          // Its optional upgrades, in the project total or out - the same
+          // icon as on its row in the room list.
+          SizedBox(
+            width: 44,
+            child: switch (costed[room.roomId]) {
+              final r? when room.ref != null &&
+                  ProjectRoomOptionsButton.shows(r) =>
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: ProjectRoomOptionsButton(
+                    key: ValueKey('funding_optional_${room.roomId}'),
+                    room: r,
+                    currency: cur,
+                  ),
+                ),
+              _ => null,
+            },
           ),
           IconButton(
             key: ValueKey('funding_remove_${room.manualId}${room.roomId}'),

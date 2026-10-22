@@ -31,6 +31,7 @@ import 'contrast.dart';
 import 'cable_length_field.dart';
 import 'cost_compare_view.dart';
 import 'cost_estimate.dart';
+import 'cost_line_ties.dart';
 import 'estimate_pdf.dart';
 import 'estimate_settings_section.dart' show showEstimateNoticeDialog;
 import 'export_tools.dart';
@@ -47,6 +48,7 @@ import 'search_match.dart';
 import 'tie_module_dialog.dart';
 import 'xlsx_writer.dart';
 import 'responsive.dart';
+import 'room_design_options_bar.dart';
 import 'project_estimate.dart' show projectAddOnItems;
 
 /// ============================================================================
@@ -521,8 +523,43 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       CostEstimateActions.current = null;
     }
     _spotTimer?.cancel();
+    _tiedEdits?.removeListener(_warnTiedEdit);
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// The provider's notice of a tied line's quantity changing.
+  ValueNotifier<String>? _tiedEdits;
+
+  /// The line last warned about, and when, so typing a count warns once.
+  String _tiedWarned = '';
+  DateTime _tiedWarnedAt = DateTime(0);
+
+  /// Says which lines go with the one whose count just changed.
+  void _warnTiedEdit() {
+    final key = _tiedEdits?.value ?? '';
+    if (key.isEmpty || !mounted) return;
+    final now = DateTime.now();
+    if (key == _tiedWarned &&
+        now.difference(_tiedWarnedAt) < const Duration(seconds: 10)) {
+      return;
+    }
+    _tiedWarned = key;
+    _tiedWarnedAt = now;
+    final provider = context.read<AppStateProvider>();
+    final estimate = provider.roomCost;
+    final warning = tiedWarning(estimate, provider.avCost, key);
+    if (warning.isEmpty) return;
+    showTimedSnackBar(
+      ScaffoldMessenger.of(context),
+      SnackBar(
+        key: const ValueKey('cost_tie_snack'),
+        content: Text(
+          'The count of ${tiedLineName(estimate, key)} changed. $warning',
+        ),
+        duration: const Duration(seconds: 6),
+      ),
+    );
   }
 
   @override
@@ -531,6 +568,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // Only the tab's own estimate - a caller pricing some other model is not
     // what the toolbar means by "the estimate".
     if (widget.model == null) CostEstimateActions.current = _actions;
+    if (widget.model == null) {
+      _tiedEdits = context.read<AppStateProvider>().avCostTiedEdit
+        ..addListener(_warnTiedEdit);
+    }
     if (widget.debugCaptureBrightness != null) {
       _capturing = true;
       _captureBrightness = widget.debugCaptureBrightness!;
@@ -783,6 +824,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // headings, black figures and the totals in a white box, because the
     // paper was the only thing that had heard about the brightness.
     List<Widget> cardsIn(BuildContext context) => <Widget>[
+      // Other builds of this room, each priced: the chosen one is the room.
+      if (widget.model == null && !_capturing) ...[
+        const RoomDesignOptionsBar(),
+        const SizedBox(height: 8),
+      ],
       if (widget.model == null && !_capturing)
         _estimateOnlySwitch(context, provider),
       if (widget.model == null && !_capturing)
@@ -2124,8 +2170,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               child: avRowIcon(
                                 Icons.delete_outline,
                                 'Remove this line from the quote',
-                                () => provider
-                                    .removeAvCostExtraHardware(extra.id),
+                                () => _removeTiedLine(
+                                  context,
+                                  provider,
+                                  key: line.key,
+                                  name: line.description,
+                                  remove: () => provider
+                                      .removeAvCostExtraHardware(extra.id),
+                                ),
                                 danger: true,
                               ),
                             )
@@ -2669,8 +2721,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 child: avRowIcon(
                                   Icons.delete_outline,
                                   'Remove this line from the quote',
-                                  () =>
-                                      provider.removeAvCostExtraCable(item.id),
+                                  () => _removeTiedLine(
+                                    context,
+                                    provider,
+                                    key: item.id,
+                                    name: item.description,
+                                    remove: () =>
+                                        provider.removeAvCostExtraCable(item.id),
+                                  ),
                                   danger: true,
                                 ),
                               ),
@@ -3357,6 +3415,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     const canOption = true;
     final optional =
         canOption && provider.avCost.optionalLines.contains(line.key);
+    // The lines tagged as going with this one.
+    final ties = provider.avCostTiesOf(line.key);
+    final tiedNames = [
+      for (final k in ties) (key: k, name: tiedLineName(provider.roomCost, k)),
+    ];
+    final tiedTip = ties.isEmpty
+        ? ''
+        : 'Tied to ${tiedNames.map((t) => t.name).join(', ')}.\n';
     // The room's crews this line can be charged with.
     final crews = provider.avCost.labor;
     final chargedTo = provider.avCost.laborCharges[line.key] ?? '';
@@ -3374,7 +3440,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       key: ValueKey('furnished_${line.key}'),
       width: kRowIconWidth,
       child: Tooltip(
-        message: crew != null
+        message: tiedTip + (crew != null
             ? 'Charged with ${crewName(crew)} on the project Labor tab'
             : existing
             ? 'Existing for priority ${ref!.priority} - left off the '
@@ -3386,7 +3452,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       '${trimNumber(line.boughtQty)} are bought on this job'
                 : by.isEmpty
                     ? 'Furnished by others - listed here, priced at nothing'
-                    : 'Furnished by $by - listed here, priced at nothing',
+                    : 'Furnished by $by - listed here, priced at nothing'),
         child: PopupMenuButton<String>(
           icon: Icon(
             optional
@@ -3395,11 +3461,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 ? Icons.engineering
                 : existing
                 ? Icons.inventory_2_outlined
-                : by == null
-                ? Icons.sell_outlined
-                : Icons.handshake,
+                : by != null
+                ? Icons.handshake
+                : ties.isNotEmpty
+                ? Icons.link
+                : Icons.sell_outlined,
             size: 18,
-            color: by == null && !flagged && !optional && crew == null
+            color: by == null &&
+                    !flagged &&
+                    !optional &&
+                    crew == null &&
+                    ties.isEmpty
                 ? mutedInk(context, theme)
                 : theme.colorScheme.primary,
           ),
@@ -3429,6 +3501,38 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ),
               const PopupMenuDivider(),
             ],
+            // TIED ITEMS: a mount with its display, a mic with its base.
+            PopupMenuItem(
+              enabled: false,
+              height: 28,
+              child: Text('Tied items', style: theme.textTheme.labelSmall),
+            ),
+            for (final t in tiedNames)
+              PopupMenuItem(
+                key: ValueKey('cost_untie_${line.key}_${t.key}'),
+                value: 'untie:${t.key}',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.link_off, size: 18),
+                  title: Text(t.name),
+                  subtitle: const Text('Tied to this line. Press to untie.'),
+                ),
+              ),
+            PopupMenuItem(
+              key: ValueKey('cost_tie_${line.key}'),
+              value: 'tie',
+              child: const ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.add_link, size: 18),
+                title: Text('Tie to another item...'),
+                subtitle: Text(
+                  'Warns when either one is removed, replaced or recounted.',
+                ),
+              ),
+            ),
+            const PopupMenuDivider(),
             // CHARGE TO A CREW: the lumber or parts a contractor or
             // department needs, tracked with that crew's labor.
             PopupMenuItem(
@@ -3548,6 +3652,23 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
           ],
           onSelected: (choice) async {
+            if (choice.startsWith('untie:')) {
+              provider.untieAvCostLines(
+                line.key,
+                choice.substring('untie:'.length),
+              );
+              return;
+            }
+            if (choice == 'tie') {
+              final other = await pickTieLine(
+                context,
+                estimate: provider.roomCost,
+                line: line,
+                tied: ties.toSet(),
+              );
+              if (other != null) provider.tieAvCostLines(line.key, other);
+              return;
+            }
             if (choice.startsWith('labor:')) {
               provider.setAvCostLaborCharge(
                 line.key,
@@ -4634,12 +4755,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final what = line.description.trim().isEmpty
         ? (line.model.trim().isEmpty ? 'this line' : line.model.trim())
         : line.description.trim();
+    final tied = tiedWarning(provider.roomCost, provider.avCost, line.key);
 
     if (extra != null) {
       final ok = await _confirmDelete(
         context,
         title: 'Remove $what?',
-        detail: const [
+        detail: [
+          if (tied.isNotEmpty) tied,
           'The line comes off the quote. Nothing is drawn for it and no '
               'device block is behind it, so nothing else in the room '
               'changes.',
@@ -4688,6 +4811,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       context,
       title: qty > 1 ? 'Delete all $qty × $what?' : 'Delete $what?',
       detail: [
+        if (tied.isNotEmpty) tied,
         qty > 1
             ? 'All $qty come off the signal flow diagram.'
             : 'It comes off the signal flow diagram.',
@@ -4751,6 +4875,38 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     );
   }
 
+  /// Asks first when the line keyed [key] is tied to others, then runs
+  /// [action]. See cost_line_ties.dart.
+  Future<bool> _okIfTied(
+    BuildContext context,
+    AppStateProvider provider, {
+    required String key,
+    required String name,
+    required String action,
+  }) => confirmTiedChange(
+    context,
+    estimate: provider.roomCost,
+    settings: provider.avCost,
+    key: key,
+    name: name.trim().isEmpty ? 'This line' : name.trim(),
+    action: action,
+  );
+
+  /// Removes a typed line after the tie check.
+  Future<void> _removeTiedLine(
+    BuildContext context,
+    AppStateProvider provider, {
+    required String key,
+    required String name,
+    required VoidCallback remove,
+  }) async {
+    if (!await _okIfTied(context, provider,
+        key: key, name: name, action: 'Remove')) {
+      return;
+    }
+    remove();
+  }
+
   /// The one "are you sure" every delete on this page asks.
   ///
   /// Spelled out as a list of consequences rather than a sentence, because
@@ -4808,6 +4964,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     CostLineItem? extra,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
+    if (!await _okIfTied(context, provider,
+        key: line.key, name: line.description, action: 'Replace')) {
+      return;
+    }
+    if (!context.mounted) return;
     // The boxes on the drawing this row counts. Regrouped rather than carried
     // on the line: the estimate reduces a group to a quantity, and a swap has
     // to reach every device behind it.
@@ -4971,6 +5132,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       carried += result.carried;
       dropped += result.dropped;
     }
+    // The line's key follows the model, so its ties move with it.
+    final swapped = provider.avNodeById(group.nodes.first.id);
+    if (swapped != null) {
+      provider.moveAvCostTies(line.key, deviceGroupKey(swapped));
+    }
 
     final said = [
       qty > 1
@@ -5020,6 +5186,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final name = item.description.trim().isEmpty
         ? (item.catalogModel.trim().isEmpty ? 'this line' : item.catalogModel)
         : item.description.trim();
+    if (!await _okIfTied(context, provider,
+        key: item.id, name: name, action: 'Replace')) {
+      return;
+    }
+    if (!context.mounted) return;
     final picked = await pickCatalogModel(
       context,
       provider,
@@ -5097,6 +5268,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       );
     }
     final messenger = ScaffoldMessenger.of(context);
+    if (!await _okIfTied(context, provider,
+        key: line.key, name: line.description, action: 'Replace')) {
+      return;
+    }
+    if (!context.mounted) return;
     final items = provider.avRackItems
         .where((i) => rackItemKey(i) == line.key)
         .toList();
@@ -5167,6 +5343,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     required SignalType signal,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
+    if (!await _okIfTied(context, provider,
+        key: line.key, name: line.description, action: 'Replace')) {
+      return;
+    }
+    if (!context.mounted) return;
     final library = provider.avDeviceLibrary;
     final lengthFt = cableKeyParts(line.key).lengthFt;
     final forSignal = library.cablesForSignal(signal);
@@ -7321,8 +7502,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             _CardHeading(
               title: 'Optional upgrades',
               subtitle: settings.includeOptional
-                  ? 'counted in the room total'
-                  : 'priced for the decision, not in the room total',
+                  ? 'counted in the room total, listed with the parts'
+                  : 'in their own section, not in the room total',
               actions: [
                 PrintHide(
                   child: TextButton.icon(
@@ -7338,24 +7519,56 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               child: Wrap(
                 spacing: 16,
                 children: [
+                  // On, they are counted and listed with the parts; off, in
+                  // their own section.
                   _switch(
                     key: const ValueKey('cost_optional_include'),
-                    label: 'Room total with options',
+                    label: 'Include options in the room total',
                     value: settings.includeOptional,
                     onChanged: provider.setAvCostIncludeOptional,
                   ),
-                  // Only while they are counted: left out of the total, they
-                  // are always listed apart.
-                  if (settings.includeOptional)
-                    _switch(
-                      key: const ValueKey('cost_optional_section'),
-                      label: 'Options in their own section',
-                      value: settings.optionalSection,
-                      onChanged: provider.setAvCostOptionalSection,
-                    ),
                 ],
               ),
             ),
+            // The project total is set on the Project tab, for all rooms,
+            // this one, or option by option. Said here so a room left out
+            // is not a surprise.
+            if (provider.openProjectRoom case final ref?)
+              Builder(builder: (context) {
+                final counted = provider.project.optionsCounted(ref);
+                final some = counted &&
+                    ref.optionalLinesOff.any(settings.optionalLines.contains);
+                return Padding(
+                  key: const ValueKey('cost_optional_project_note'),
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(children: [
+                    Icon(
+                      !counted
+                          ? Icons.playlist_remove
+                          : some
+                          ? Icons.playlist_add
+                          : Icons.playlist_add_check,
+                      size: 16,
+                      color: !counted
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        !counted
+                            ? 'Not in the project total: this room\'s '
+                                  'options are left out on the Project tab.'
+                            : some
+                            ? 'Some in the project total: the Project tab '
+                                  'leaves the others out.'
+                            : 'In the project total. Set on the Project tab.',
+                        style: small,
+                      ),
+                    ),
+                  ]),
+                );
+              }),
             if (estimate.optional.isNotEmpty ||
                 estimate.optionalLabor.isNotEmpty) ...[
               const Divider(height: 12),
@@ -7748,7 +7961,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           child: avRowIcon(
                             Icons.delete_outline,
                             'Remove item',
-                            () => provider.removeAvCostItem(item.id),
+                            () => _removeTiedLine(
+                              context,
+                              provider,
+                              key: item.id,
+                              name: item.description,
+                              remove: () => provider.removeAvCostItem(item.id),
+                            ),
                             danger: true,
                           ),
                         ),

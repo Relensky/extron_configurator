@@ -434,6 +434,8 @@ List<String> get kRoomCompanionSuffixes => [
   'previous.json',
   'backup_log.txt',
   kConvertedMarkerSuffix,
+  // The index of the room's design options - see room_design_options.dart.
+  'design_options.json',
 ];
 
 /// Written beside a room each time the app saves its config: the file on disk

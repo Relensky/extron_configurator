@@ -497,12 +497,67 @@ class ProjectRoomCost {
   /// about drivers rather than say everything is fine.
   final List<ControlGap> controlGaps;
 
+  /// The room total with none of its optional upgrades, when [estimate]
+  /// counts only some of them and so cannot say. Null otherwise.
+  final double? withoutAllOptions;
+
   const ProjectRoomCost({
     required this.ref,
     required this.room,
     this.estimate,
     this.controlGaps = const [],
+    this.withoutAllOptions,
   });
+
+  /// The room total with every optional upgrade, and with none.
+  double get grandWithOptions => estimate?.grandWithOptions ?? 0;
+  double get grandWithoutOptions =>
+      withoutAllOptions ?? estimate?.grandWithoutOptions ?? 0;
+
+  /// The room has optional upgrades.
+  bool get hasOptions => ok && grandWithOptions != grandWithoutOptions;
+
+  /// What the options the project counts add to the room, tax and fees
+  /// included.
+  double get optionsCounted => ok ? total - grandWithoutOptions : 0;
+
+  /// The room's optional lines - parts and labor - with what each comes to
+  /// before fees and tax, in the order they were made optional. Found by key
+  /// wherever the estimate lists them: apart, or with the parts while
+  /// counted. A key the quote no longer has is skipped.
+  List<({String key, String name, double amount})> get optionLines {
+    final e = estimate;
+    final keys = room.settings.optionalLines;
+    if (e == null || keys.isEmpty) return const [];
+    final found = <String, ({String key, String name, double amount})>{};
+    for (final l in [
+      ...e.optional,
+      ...e.equipment,
+      ...e.hardware,
+      ...e.cabling,
+      ...e.extras,
+    ]) {
+      if (!keys.contains(l.key)) continue;
+      found.putIfAbsent(l.key, () => (
+        key: l.key,
+        name: l.description.trim().isNotEmpty
+            ? l.description.trim()
+            : l.model.trim(),
+        amount: l.total + l.shippingTotal,
+      ));
+    }
+    for (final l in [...e.optionalLabor, ...e.labor]) {
+      if (!keys.contains(l.id)) continue;
+      found.putIfAbsent(l.id, () => (
+        key: l.id,
+        name: [l.roleName, l.description]
+            .where((s) => s.trim().isNotEmpty)
+            .join(' - '),
+        amount: l.total,
+      ));
+    }
+    return [for (final k in keys) if (found[k] case final l?) l];
+  }
 
   /// What to call this room: the label somebody typed, else the name in the
   /// config, else the file name. Never blank — a quote line with no room on
@@ -949,33 +1004,16 @@ class ProjectEstimate {
   /// from a building-wide percentage.
   final double grandTotal;
 
-  /// The counted rooms' totals with their optional upgrades and without - a
-  /// room with its options off is without either way.
-  double get grandWithOptions => costedRooms.fold(
-    0.0,
-    (sum, r) =>
-        sum +
-        (r.estimate == null
-            ? 0
-            : r.ref.optionalOff
-            ? r.estimate!.grandWithoutOptions
-            : r.estimate!.grandWithOptions),
-  );
-  double get grandWithoutOptions => costedRooms.fold(
-    0.0,
-    (sum, r) => sum + (r.estimate?.grandWithoutOptions ?? 0),
-  );
+  /// The counted rooms' totals with every optional upgrade and with none.
+  double get grandWithOptions =>
+      costedRooms.fold(0.0, (sum, r) => sum + r.grandWithOptions);
+  double get grandWithoutOptions =>
+      costedRooms.fold(0.0, (sum, r) => sum + r.grandWithoutOptions);
 
-  /// What the counted rooms' optional upgrades add to the project, tax and
-  /// fees included - less the rooms with their options off.
-  double get optionalTotal => costedRooms.fold(
-    0.0,
-    (sum, r) =>
-        sum +
-        (r.estimate == null || r.ref.optionalOff
-            ? 0
-            : r.estimate!.grandWithOptions - r.estimate!.grandWithoutOptions),
-  );
+  /// What the optional upgrades the project counts add to it, tax and fees
+  /// included - room by room and line by line.
+  double get optionalTotal =>
+      costedRooms.fold(0.0, (sum, r) => sum + r.optionsCounted);
 
   /// Some counted room has lines charged with a crew.
   bool get hasLaborCharges =>
@@ -1009,9 +1047,7 @@ class ProjectEstimate {
   ];
 
   /// Some counted room has optional upgrades.
-  bool get hasOptional => costedRooms.any((r) =>
-      r.estimate != null &&
-      r.estimate!.grandWithOptions != r.estimate!.grandWithoutOptions);
+  bool get hasOptional => costedRooms.any((r) => r.hasOptions);
 
   final double equipmentTotal;
   final double hardwareTotal;
@@ -1603,47 +1639,71 @@ ProjectEstimate computeProjectEstimate({
             : (RoomCostSettings()
                 ..readJson(room.settings.toJson())
                 ..taxPercent = roomBase);
-    // Optional upgrades count as the project says, not as the room's own
-    // Cost tab is showing them.
-    final withOptions = project.includeOptional && !ref.optionalOff;
-    if (settings.optionalLines.isNotEmpty &&
-        settings.includeOptional != withOptions) {
-      settings = copyCostSettings(settings)..includeOptional = withOptions;
-    }
-    // And the labor charges.
+    // The labor charges count as the project says.
     if (settings.laborCharges.isNotEmpty &&
         settings.includeLaborCharges != project.includeLaborCharges) {
       settings = copyCostSettings(settings)
         ..includeLaborCharges = project.includeLaborCharges;
     }
 
-    var estimate = computeRoomCost(
-      model: room.model,
-      library: library,
-      settings: settings,
-      rates: rates,
-      baseCosts: baseCosts,
-      tier: tier,
-    );
-    // A priority that buys only some categories, or adds items: priced
-    // again as the job buys it, unless the room has been set to quote whole.
-    // The room's own file is not touched.
-    final scoped = ref.wholeRoom ? null : projectScopedSettings(
-      project: project,
-      priority: ref.priority,
-      estimate: estimate,
-      settings: settings,
-      library: library,
-    );
-    if (scoped != null) {
-      estimate = computeRoomCost(
+    CostEstimate price(RoomCostSettings settings) {
+      final estimate = computeRoomCost(
         model: room.model,
         library: library,
-        settings: scoped,
+        settings: settings,
         rates: rates,
         baseCosts: baseCosts,
         tier: tier,
       );
+      // A priority that buys only some categories, or adds items: priced
+      // again as the job buys it, unless the room has been set to quote
+      // whole. The room's own file is not touched.
+      final scoped = ref.wholeRoom ? null : projectScopedSettings(
+        project: project,
+        priority: ref.priority,
+        estimate: estimate,
+        settings: settings,
+        library: library,
+      );
+      return scoped == null
+          ? estimate
+          : computeRoomCost(
+              model: room.model,
+              library: library,
+              settings: scoped,
+              rates: rates,
+              baseCosts: baseCosts,
+              tier: tier,
+            );
+    }
+
+    // Optional upgrades count as the project says, not as the room's own
+    // Cost tab is showing them: all of them, none, or the ones not left
+    // out line by line.
+    final optional = settings.optionalLines;
+    final counted = optional.isNotEmpty && project.optionsCounted(ref);
+    final linesOff = counted
+        ? {for (final k in ref.optionalLinesOff) if (optional.contains(k)) k}
+        : const <String>{};
+    double? withoutAllOptions;
+    CostEstimate estimate;
+    if (optional.isEmpty) {
+      estimate = price(settings);
+    } else if (linesOff.isEmpty) {
+      estimate = price(settings.includeOptional == counted
+          ? settings
+          : (copyCostSettings(settings)..includeOptional = counted));
+    } else {
+      // Some counted, some not: the counted ones priced as ordinary lines,
+      // and the room priced again with none for the total without options.
+      final partial = copyCostSettings(settings)..includeOptional = false;
+      partial.optionalLines
+        ..clear()
+        ..addAll(linesOff);
+      estimate = price(partial);
+      withoutAllOptions = price(
+        copyCostSettings(settings)..includeOptional = false,
+      ).grandWithoutOptions;
     }
 
     // Only a room that actually counts can make the book mixed-currency: an
@@ -1658,6 +1718,7 @@ ProjectEstimate computeProjectEstimate({
       ref: ref,
       room: room,
       estimate: estimate,
+      withoutAllOptions: withoutAllOptions,
       controlGaps: moduleForModel == null
           ? const []
           : controlGapsForRoom(

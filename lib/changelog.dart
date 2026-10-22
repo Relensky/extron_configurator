@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.161+171';
+const String kAppVersion = '0.5.165+175';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,50 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.165',
+    date: 'October 22, 2026',
+    title: 'Options room by room and one by one',
+    changes: [
+      'Project tab: a room\'s options can be counted in the project total without turning on With options at the top. With options sets every room at once; each room can still go the other way.',
+      'Project tab: the options and design option on a room\'s row are now small icons with a drop-down menu. Hover for what they say; the options menu counts the room\'s options or leaves them out, and each option by itself. The icon shows all counted, some, or left out in red.',
+      'Project tab: the priority card uses the same small options icon, so it no longer crowds the room total and the remove button.',
+      'Project tab: the budget card has an Options by room list - a switch for each room with options, and one for each of its options.',
+      'Project tab: the room list\'s figures are left-aligned in fixed columns, so Equipment, Labor, Room total, In kind and Options line up from room to room, with the icons in set places after them.',
+      'Project tab: the totals at the top show Without options, With all options and Options counted.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.164',
+    date: 'October 21, 2026',
+    title: 'Options on the project, room by room',
+    changes: [
+      'Project tab: With options at the top is back. It counts every room\'s optional upgrades in the project total, whatever each room\'s Cost tab shows.',
+      'Project tab: each room with options has an Options chip on its row, in the room list and on the priority card. It shows what the options come to and whether they are in the project total; press it to leave that room\'s options out or count them again. A room left out reads Options off in red.',
+      'Cost tab: the Optional upgrades card keeps its one switch. On a project room, a line under it says whether the project total counts this room\'s options, and why not when it does not.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.163',
+    date: 'October 21, 2026',
+    title: 'One switch for optional upgrades',
+    changes: [
+      'Cost tab: the Optional upgrades card has one switch. On, the options are counted and listed with the other parts; off, they are listed in their own section and left out of the total.',
+      'The project total counts each room\'s options as that room\'s switch says. The Project tab no longer has its own With options switch or the options button on each room\'s row; it shows the total without options and with all of them.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.162',
+    date: 'October 21, 2026',
+    title: 'Design options and tied items',
+    changes: [
+      'Cost tab: design options. New option at the top of the Cost tab copies the whole room - drawing, racks, plans, cabling and quote - into a named option to change into another build. Each option shows its room total; choosing one makes it the room, so every tab, the next save and the project total use it. The other options are kept in room_files\\design_options. Rename or remove them from the ... button; a removed option is moved to design_options\\removed.',
+      'Project tab: a room with design options has a menu on its row to choose which one the project total counts.',
+      'Cost tab: the Optional upgrades card has an Options in the project total switch for a room on a project - the same as the button on the room\'s row on the Project tab.',
+      'Cost tab: tie items together from the tag button - a mount with its display, a mic with its base. Removing or replacing either one asks first and names the other, and changing how many are bought says which items go with it. Untie from the same menu.',
+      'Export to Google Sheets on a project with a live Google Sheet now updates that Sheet and opens it, instead of making another copy in Drive. If somebody typed into the Sheet, their edits are offered first, as on a save.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.161',
     date: 'October 21, 2026',

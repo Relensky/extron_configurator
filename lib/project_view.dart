@@ -22,7 +22,9 @@ import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'manual_room_lines.dart';
 import 'project_funding_view.dart';
+import 'project_room_options_button.dart';
 import 'responsive.dart' show ClearFieldButton, kFloatingButtonClearance;
+import 'room_design_options.dart';
 import 'name_colors.dart';
 import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
@@ -884,30 +886,37 @@ class _ProjectViewState extends State<ProjectView> {
                 value: formatMoney(estimate.grandTotal, estimate.currency),
                 emphasis: true,
               ),
-              // The rooms' optional upgrades: in the total or not, and the
-              // total the other way for the decision.
+              // The rooms' optional upgrades: every room's in the total or
+              // none, each room's menu going its own way, and the totals
+              // either way for the decision.
               if (estimate.hasOptional || estimate.project.includeOptional) ...[
                 FilterChip(
                   key: const ValueKey('project_include_optional'),
                   label: const Text('With options'),
+                  tooltip: 'Count every room\'s optional upgrades in the '
+                      'project total, or none. A room\'s options icon can '
+                      'still go its own way.',
                   selected: estimate.project.includeOptional,
                   onSelected: context
                       .read<AppStateProvider>()
                       .setProjectIncludeOptional,
                 ),
                 _TotalChip(
-                  label: estimate.project.includeOptional
-                      ? 'Without options'
-                      : 'With options',
+                  label: 'Without options',
                   value: formatMoney(
-                    estimate.project.includeOptional
-                        ? estimate.grandWithoutOptions
-                        : estimate.grandWithOptions,
+                    estimate.grandWithoutOptions,
                     estimate.currency,
                   ),
                 ),
                 _TotalChip(
-                  label: 'Options',
+                  label: 'With all options',
+                  value: formatMoney(
+                    estimate.grandWithOptions,
+                    estimate.currency,
+                  ),
+                ),
+                _TotalChip(
+                  label: 'Options counted',
                   value: formatMoney(estimate.optionalTotal, estimate.currency),
                 ),
               ],
@@ -1948,6 +1957,10 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
           currency: estimate.currency,
           optionalTotal: estimate.optionalTotal,
           hasOptional: estimate.hasOptional,
+          optionRooms: [
+            for (final r in estimate.costedRooms)
+              if (r.hasOptions) r,
+          ],
           inKind: estimate.inKindLines,
         ),
       ),
@@ -1993,6 +2006,9 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
             itemBuilder: (context, index) => _RoomRow(
               room: rooms[index],
               currency: estimate.currency,
+              inKindColumn: estimate.costedRooms
+                  .any((r) => (r.estimate?.inKindTotal ?? 0) > 0),
+              optionsColumn: estimate.hasOptional,
               // Moving a room only means something in the order added.
               isFirst: !movable || index == 0,
               isLast: !movable || index == rooms.length - 1,
@@ -2139,9 +2155,16 @@ class _RoomRow extends StatefulWidget {
   final bool isFirst;
   final bool isLast;
 
+  /// Some room on the list has an In kind or Options figure: every row keeps
+  /// the column, so the figures line up down the list.
+  final bool inKindColumn;
+  final bool optionsColumn;
+
   const _RoomRow({
     required this.room,
     required this.currency,
+    this.inKindColumn = false,
+    this.optionsColumn = false,
     required this.isFirst,
     required this.isLast,
   });
@@ -2170,6 +2193,100 @@ class _RoomRowState extends State<_RoomRow> {
         roomName: widget.room.name,
       );
 
+  /// The room's design options as a menu on its row. See
+  /// room_design_options.dart.
+  Widget _designOptionPicker(
+    BuildContext context,
+    AppStateProvider provider, {
+    required String roomPath,
+    required RoomDesignOptions options,
+    required double activeTotal,
+    required String currency,
+    required Color ink,
+  }) {
+    final room = widget.room;
+    String totalOf(RoomDesignOption o) => formatMoney(
+      o.id == options.active
+          ? activeTotal
+          : provider.designOptionTotal(roomPath, o.id) ?? o.total,
+      currency,
+    );
+    final active = options.activeOption;
+    return PopupMenuButton<String>(
+      key: ValueKey('project_room_design_${room.ref.id}'),
+      tooltip: 'Design option: ${active?.name ?? 'none chosen'}'
+          '${active == null ? '' : ' ${totalOf(active)}'} - the chosen one '
+          'goes to the project total. Click to choose.',
+      itemBuilder: (_) => [
+        for (final o in options.options)
+          PopupMenuItem(
+            key: ValueKey('project_room_design_${room.ref.id}_${o.id}'),
+            value: o.id,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                o.id == options.active
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                size: 18,
+              ),
+              title: Text(o.name),
+              trailing: Text(totalOf(o)),
+            ),
+          ),
+      ],
+      onSelected: (id) async {
+        if (id == options.active) return;
+        final messenger = ScaffoldMessenger.of(context);
+        final name = options.byId(id)?.name ?? id;
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Switch ${room.name} to $name?'),
+            content: Text(
+              '${options.activeOption?.name ?? 'The current design'} is kept '
+              'as it is. The room\'s files become $name, and the project '
+              'total counts it.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                key: const ValueKey('project_room_design_go'),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Switch'),
+              ),
+            ],
+          ),
+        );
+        if (ok != true) return;
+        final result =
+            await provider.chooseProjectRoomDesignOption(room.ref.id, id);
+        showTimedSnackBar(
+          messenger,
+          SnackBar(
+            content: Text(
+              result.isEmpty ? '${room.name} is now $name.' : result,
+            ),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.alt_route, size: 18, color: ink),
+            Icon(Icons.arrow_drop_down, size: 16, color: ink),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final room = widget.room;
@@ -2180,6 +2297,11 @@ class _RoomRowState extends State<_RoomRow> {
     final dimmed = !room.ref.included;
     final isOpen = provider.openProjectRoom?.id == room.ref.id;
     final unsaved = isOpen && provider.roomShowsUnsaved;
+    final roomPath = BuildingProject.resolvePath(
+      room.ref.configPath,
+      provider.currentProjectPath,
+    );
+    final designOptions = provider.designOptionsFor(roomPath);
     // The id "working on" and review marks use: the open room's from memory.
     final teamId = isOpen && provider.teamRoomId.isNotEmpty
         ? provider.teamRoomId
@@ -2315,48 +2437,58 @@ class _RoomRowState extends State<_RoomRow> {
               bold: true,
               stretch: stretch,
             ),
-            if (e.inKindTotal > 0)
+            // Kept, blank, on a row without one, so the columns line up.
+            if (widget.inKindColumn)
               _cell(
                 context,
                 'In kind',
-                formatMoney(e.inKindTotal, currency),
+                e.inKindTotal > 0 ? formatMoney(e.inKindTotal, currency) : '',
                 ink: ink,
                 quiet: quiet,
                 stretch: stretch,
+                blank: e.inKindTotal <= 0,
               ),
-            if (e.grandWithOptions != e.grandWithoutOptions)
+            if (widget.optionsColumn)
               _cell(
                 context,
                 'Options',
-                formatMoney(e.grandWithOptions - e.grandWithoutOptions,
-                    currency),
+                room.hasOptions
+                    ? formatMoney(
+                        room.grandWithOptions - room.grandWithoutOptions,
+                        currency,
+                      )
+                    : '',
                 ink: ink,
                 quiet: quiet,
                 stretch: stretch,
+                blank: !room.hasOptions,
               ),
-            // Its optional upgrades, priced on the project or off.
-            if (e.grandWithOptions != e.grandWithoutOptions)
-              Tooltip(
-                message: room.ref.optionalOff
-                    ? 'Options off the project total. Press to price them.'
-                    : 'Options ${formatMoney(e.optionalTotal, currency)} - '
-                          'press to leave them off the project total.',
-                child: IconButton(
-                  key: ValueKey('project_room_optional_${room.ref.id}'),
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(
-                    room.ref.optionalOff
-                        ? Icons.playlist_remove
-                        : Icons.playlist_add_check,
-                    size: 18,
-                    color: ink,
-                  ),
-                  onPressed: () => provider.setProjectRoomOptionalOff(
-                    room.ref.id,
-                    !room.ref.optionalOff,
-                  ),
-                ),
-              ),
+            // Its optional upgrades, in the project total or out, and its
+            // design options: icons in set places, so they line up too.
+            SizedBox(
+              width: 40,
+              child: ProjectRoomOptionsButton.shows(room)
+                  ? ProjectRoomOptionsButton(
+                      room: room,
+                      currency: currency,
+                      ink: ink,
+                    )
+                  : null,
+            ),
+            SizedBox(
+              width: 40,
+              child: designOptions.options.isNotEmpty
+                  ? _designOptionPicker(
+                      context,
+                      provider,
+                      roomPath: roomPath,
+                      options: designOptions,
+                      activeTotal: e.grandTotal,
+                      currency: currency,
+                      ink: ink,
+                    )
+                  : null,
+            ),
           ];
     final figures = figuresFor(stretch: false);
 
@@ -2620,6 +2752,10 @@ class _RoomRowState extends State<_RoomRow> {
     /// True beside the notes box on the wide row: the figure fills the height
     /// it is given and sits level with the box, under a label at the top.
     bool stretch = false,
+
+    /// The column is kept for the rows around it; this room has nothing in
+    /// it, so not even the label shows.
+    bool blank = false,
   }) {
     final theme = Theme.of(context);
     final figure = Text(
@@ -2639,8 +2775,8 @@ class _RoomRowState extends State<_RoomRow> {
       // against the start of Room total.
       child: Padding(
         padding: const EdgeInsets.only(left: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        child: blank ? const SizedBox.shrink() : Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               label,
@@ -2650,7 +2786,7 @@ class _RoomRowState extends State<_RoomRow> {
             ),
             if (stretch)
               Expanded(
-                child: Align(alignment: Alignment.centerRight, child: figure),
+                child: Align(alignment: Alignment.centerLeft, child: figure),
               )
             else
               figure,

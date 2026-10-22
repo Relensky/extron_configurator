@@ -2388,9 +2388,17 @@ class ProjectRoomRef {
   /// [BuildingProject.priorityBuysOnly].
   final bool wholeRoom;
 
-  /// The room's optional upgrades are left off the project's total, whatever
-  /// [BuildingProject.includeOptional] says.
+  /// The room's optional upgrades are left off the project's total while
+  /// [BuildingProject.includeOptional] counts the others.
   final bool optionalOff;
+
+  /// The room's optional upgrades are counted in the project's total while
+  /// [BuildingProject.includeOptional] leaves the others out.
+  final bool optionalOn;
+
+  /// Keys of the room's optional lines the project leaves out even while the
+  /// room's options are counted - one option bought, another not.
+  final Set<String> optionalLinesOff;
 
   const ProjectRoomRef({
     required this.id,
@@ -2404,6 +2412,8 @@ class ProjectRoomRef {
     this.targetPrice = 0,
     this.wholeRoom = false,
     this.optionalOff = false,
+    this.optionalOn = false,
+    this.optionalLinesOff = const {},
   });
 
   ProjectRoomRef copyWith({
@@ -2417,6 +2427,8 @@ class ProjectRoomRef {
     double? targetPrice,
     bool? wholeRoom,
     bool? optionalOff,
+    bool? optionalOn,
+    Set<String>? optionalLinesOff,
   }) => ProjectRoomRef(
     id: id,
     configPath: configPath ?? this.configPath,
@@ -2429,6 +2441,8 @@ class ProjectRoomRef {
     targetPrice: targetPrice ?? this.targetPrice,
     wholeRoom: wholeRoom ?? this.wholeRoom,
     optionalOff: optionalOff ?? this.optionalOff,
+    optionalOn: optionalOn ?? this.optionalOn,
+    optionalLinesOff: optionalLinesOff ?? this.optionalLinesOff,
   );
 
   /// The name to show before the room has been read off disk — the label if
@@ -2452,6 +2466,9 @@ class ProjectRoomRef {
     if (targetPrice > 0) 'targetPrice': targetPrice,
     if (wholeRoom) 'wholeRoom': true,
     if (optionalOff) 'optionalOff': true,
+    if (optionalOn) 'optionalOn': true,
+    if (optionalLinesOff.isNotEmpty)
+      'optionalLinesOff': optionalLinesOff.toList()..sort(),
   };
 
   factory ProjectRoomRef.fromJson(Map<String, dynamic> json) => ProjectRoomRef(
@@ -2466,6 +2483,11 @@ class ProjectRoomRef {
     targetPrice: (json['targetPrice'] as num?)?.toDouble() ?? 0,
     wholeRoom: json['wholeRoom'] == true,
     optionalOff: json['optionalOff'] == true,
+    optionalOn: json['optionalOn'] == true,
+    optionalLinesOff: {
+      for (final k in (json['optionalLinesOff'] as List? ?? const []))
+        k.toString(),
+    },
   );
 }
 
@@ -3112,8 +3134,13 @@ class BuildingProject {
   bool includeLaborCharges;
 
   /// The project's total counts the rooms' optional upgrades. Each room can
-  /// leave its own off - see [ProjectRoomRef.optionalOff].
+  /// go the other way - see [optionsCounted].
   bool includeOptional;
+
+  /// [ref]'s optional upgrades are in the project's total: as
+  /// [includeOptional] says, unless the room was set the other way.
+  bool optionsCounted(ProjectRoomRef ref) =>
+      includeOptional ? !ref.optionalOff : ref.optionalOn;
 
   /// This job buys no spares, so nothing is flagged for having none.
   bool noSpares;

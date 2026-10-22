@@ -6,6 +6,7 @@ import 'cost_estimate.dart'
     show formatMoney, inKindSourceLabel, InKindLine, trimNumber;
 import 'live_text_field.dart';
 import 'project_budget.dart';
+import 'project_estimate.dart' show ProjectRoomCost;
 
 /// ============================================================================
 ///  THE BUDGET CARD ON THE PROJECT TAB
@@ -19,10 +20,14 @@ class ProjectBudgetCard extends StatefulWidget {
   final double estimateTotal;
   final String currency;
 
-  /// What the rooms' optional upgrades come to, and whether the project
-  /// counts them. See [BuildingProject.includeOptional].
+  /// What the optional upgrades the project counts come to, and whether any
+  /// room has some. See [BuildingProject.optionsCounted].
   final double optionalTotal;
   final bool hasOptional;
+
+  /// The rooms with optional upgrades, for the switches room by room and
+  /// option by option.
+  final List<ProjectRoomCost> optionRooms;
 
   /// Every line the rooms are given in kind, with its room.
   final List<({String room, InKindLine line})> inKind;
@@ -33,6 +38,7 @@ class ProjectBudgetCard extends StatefulWidget {
     required this.currency,
     this.optionalTotal = 0,
     this.hasOptional = false,
+    this.optionRooms = const [],
     this.inKind = const [],
   });
 
@@ -45,6 +51,68 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
 
   double _parse(String v) =>
       double.tryParse(v.replaceAll(RegExp(r'[^0-9.\-]'), '')) ?? 0;
+
+  /// One room's options: a switch for the room, and one for each option
+  /// under it when it has more than one.
+  Widget _optionRoom(
+    BuildContext context,
+    AppStateProvider provider,
+    ProjectRoomCost room,
+    String Function(double) money,
+  ) {
+    final theme = Theme.of(context);
+    final ref = room.ref;
+    final counted = provider.project.optionsCounted(ref);
+    final lines = room.optionLines;
+    final allKeys = {for (final l in lines) l.key};
+    final small = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Column(
+      key: ValueKey('project_budget_options_${ref.id}'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SwitchListTile(
+          key: ValueKey('project_budget_options_room_${ref.id}'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: Text(room.name),
+          subtitle: Text(
+            counted
+                ? '${money(room.optionsCounted)} of '
+                      '${money(room.grandWithOptions - room.grandWithoutOptions)}'
+                      ' in the estimate'
+                : 'Left out - '
+                      '${money(room.grandWithOptions - room.grandWithoutOptions)}',
+            style: small,
+          ),
+          value: counted,
+          onChanged: (v) => provider.setProjectRoomOptionsCounted(ref.id, v),
+        ),
+        if (lines.length > 1)
+          for (final l in lines)
+            Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: SwitchListTile(
+                key: ValueKey('project_budget_option_${ref.id}_${l.key}'),
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                contentPadding: EdgeInsets.zero,
+                title: Text(l.name, style: theme.textTheme.bodyMedium),
+                secondary: Text(money(l.amount), style: small),
+                controlAffinity: ListTileControlAffinity.trailing,
+                value: counted && !ref.optionalLinesOff.contains(l.key),
+                onChanged: (v) => provider.setProjectRoomOptionLine(
+                  ref.id,
+                  l.key,
+                  v,
+                  allKeys: allKeys,
+                ),
+              ),
+            ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,14 +204,9 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
             Wrap(
               children: [
                 figure('Budget', summary.budget),
-                figure(
-                  project.includeOptional
-                      ? 'Rooms estimate, with options'
-                      : 'Rooms estimate',
-                  summary.estimate,
-                ),
+                figure('Rooms estimate', summary.estimate),
                 if (widget.hasOptional)
-                  figure('Optional upgrades', widget.optionalTotal,
+                  figure('Options counted', widget.optionalTotal,
                       key: 'project_budget_optional'),
                 if (widget.inKind.isNotEmpty)
                   figure(
@@ -183,9 +246,26 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                 child: FilterChip(
                   key: const ValueKey('project_budget_with_options'),
                   label: const Text('Rooms estimate with options'),
+                  tooltip: 'Every room\'s options in the estimate, or none. '
+                      'Each room and option below can go its own way.',
                   selected: project.includeOptional,
                   onSelected: provider.setProjectIncludeOptional,
                 ),
+              ),
+            // Each room's options, and each option, in the estimate or out.
+            if (widget.optionRooms.isNotEmpty)
+              ExpansionTile(
+                key: const ValueKey('project_budget_options_list'),
+                tilePadding: EdgeInsets.zero,
+                title: Text(
+                  'Options by room - ${widget.optionRooms.length} '
+                  'room${widget.optionRooms.length == 1 ? '' : 's'}',
+                  style: theme.textTheme.titleSmall,
+                ),
+                children: [
+                  for (final room in widget.optionRooms)
+                    _optionRoom(context, provider, room, money),
+                ],
               ),
             // Everything the job is given rather than buys, room by room.
             if (widget.inKind.isNotEmpty)

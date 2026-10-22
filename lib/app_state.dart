@@ -62,6 +62,7 @@ import 'placed_devices.dart';
 import 'unit_numbering.dart';
 import 'recent_files.dart';
 import 'room_presets.dart';
+import 'room_design_options.dart';
 import 'room_sidecar.dart';
 import 'device_manuals.dart' show kDashboardManualsFolder;
 import 'nav_rail.dart' show navTabLabel;
@@ -6938,7 +6939,9 @@ class AppStateProvider extends ChangeNotifier {
     if (index < 0) return;
     _pushAvUndo('Edit ${_costLineName(item)}', _costScope,
         coalesce: 'cost:item:${item.id}');
+    final was = avCost.items[index];
     avCost.items[index] = item;
+    if (was.qty != item.qty) _noteTiedEdit(item.id);
     notifyListeners();
   }
 
@@ -7008,7 +7011,9 @@ class AppStateProvider extends ChangeNotifier {
     if (index < 0) return;
     _pushAvUndo('Edit ${_costLineName(item)}', _costScope,
         coalesce: 'cost:extraEquipment:${item.id}');
+    final was = avCost.extraEquipment[index];
     avCost.extraEquipment[index] = item;
+    if (was.qty != item.qty) _noteTiedEdit(item.id);
     notifyListeners();
   }
 
@@ -7194,7 +7199,9 @@ class AppStateProvider extends ChangeNotifier {
     if (index < 0) return;
     _pushAvUndo('Edit ${_costLineName(item)}', _costScope,
         coalesce: 'cost:extraHardware:${item.id}');
+    final was = avCost.extraHardware[index];
     avCost.extraHardware[index] = item;
+    if (was.qty != item.qty) _noteTiedEdit(item.id);
     notifyListeners();
   }
 
@@ -7243,7 +7250,9 @@ class AppStateProvider extends ChangeNotifier {
     if (index < 0) return;
     _pushAvUndo('Edit ${_costLineName(item)}', _costScope,
         coalesce: 'cost:extraCables:${item.id}');
+    final was = avCost.extraCables[index];
     avCost.extraCables[index] = item;
+    if (was.qty != item.qty) _noteTiedEdit(item.id);
     notifyListeners();
   }
 
@@ -7337,6 +7346,7 @@ class AppStateProvider extends ChangeNotifier {
     } else {
       avCost.cableSpares[lineKey] = qty;
     }
+    _noteTiedEdit(lineKey);
     notifyListeners();
   }
 
@@ -7352,6 +7362,7 @@ class AppStateProvider extends ChangeNotifier {
     } else {
       avCost.equipmentSpares[lineKey] = qty;
     }
+    _noteTiedEdit(lineKey);
     notifyListeners();
   }
 
@@ -7361,7 +7372,10 @@ class AppStateProvider extends ChangeNotifier {
   /// More than the diagram has adds the missing units to it, named on in
   /// sequence, so each one can be placed on the floor plan and the racks.
   void setAvEquipmentQty(String lineKey, double? qty, {required double drawn}) {
-    if (qty != null && _addCostLineUnits(lineKey, qty)) return;
+    if (qty != null && _addCostLineUnits(lineKey, qty)) {
+      _noteTiedEdit(lineKey);
+      return;
+    }
     final clear = qty == null || qty < 0 || (qty - drawn).abs() < 1e-9;
     if (clear && !avCost.qtyOverrides.containsKey(lineKey)) return;
     if (!clear && avCost.qtyOverrides[lineKey] == qty) return;
@@ -7371,6 +7385,7 @@ class AppStateProvider extends ChangeNotifier {
     } else {
       avCost.qtyOverrides[lineKey] = qty;
     }
+    _noteTiedEdit(lineKey);
     notifyListeners();
   }
 
@@ -7457,6 +7472,7 @@ class AppStateProvider extends ChangeNotifier {
       avCost.qtyOverrides.remove(lineKey);
     }
     _renameAfterUnitsOff(lineKey, node.label);
+    _noteTiedEdit(lineKey);
     notifyListeners();
   }
 
@@ -7650,20 +7666,51 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The room total counts the optional parts, or leaves them out.
+  /// Tags [a] and [b] as going together - see [RoomCostSettings.lineTies].
+  void tieAvCostLines(String a, String b) {
+    if (a == b || a.isEmpty || b.isEmpty) return;
+    if (avCost.lineTies[a]?.contains(b) ?? false) return;
+    _pushAvUndo('Tie items', _costScope);
+    avCost.tie(a, b);
+    notifyListeners();
+  }
+
+  /// Takes the tie between [a] and [b] off.
+  void untieAvCostLines(String a, String b) {
+    if (!(avCost.lineTies[a]?.contains(b) ?? false)) return;
+    _pushAvUndo('Untie items', _costScope);
+    avCost.untie(a, b);
+    notifyListeners();
+  }
+
+  /// The lines tied to [lineKey].
+  List<String> avCostTiesOf(String lineKey) => avCost.tiesOf(lineKey);
+
+  /// Carries [from]'s ties to [to], when a replaced part gives its line a
+  /// new key. Not its own undo step: it goes with the replace.
+  void moveAvCostTies(String from, String to) {
+    if (from == to || avCost.tiesOf(from).isEmpty) return;
+    avCost.moveTies(from, to);
+    notifyListeners();
+  }
+
+  /// The key of a tied line whose quantity was just changed, for the Cost
+  /// tab to warn about. Set to '' and back so the same line warns again.
+  final ValueNotifier<String> avCostTiedEdit = ValueNotifier('');
+
+  void _noteTiedEdit(String lineKey) {
+    if (avCost.tiesOf(lineKey).isEmpty) return;
+    avCostTiedEdit.value = '';
+    avCostTiedEdit.value = lineKey;
+  }
+
+  /// The room total counts the optional parts, listed with the parts, or
+  /// leaves them out in a section of their own.
   void setAvCostIncludeOptional(bool include) {
     if (avCost.includeOptional == include) return;
     _pushAvUndo(include ? 'Count the options' : 'Leave the options out',
         _costScope);
     avCost.includeOptional = include;
-    notifyListeners();
-  }
-
-  /// The optional parts are listed in a section of their own.
-  void setAvCostOptionalSection(bool apart) {
-    if (avCost.optionalSection == apart) return;
-    _pushAvUndo('List the options', _costScope);
-    avCost.optionalSection = apart;
     notifyListeners();
   }
 
@@ -17410,9 +17457,18 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Counts every room's optional upgrades in the project total, or none.
+  /// A room set the other way follows; the lines left out one by one stay
+  /// left out.
   void setProjectIncludeOptional(bool include) {
     if (project.includeOptional == include) return;
     project.includeOptional = include;
+    for (var i = 0; i < project.rooms.length; i++) {
+      final r = project.rooms[i];
+      if (r.optionalOff || r.optionalOn) {
+        project.rooms[i] = r.copyWith(optionalOff: false, optionalOn: false);
+      }
+    }
     _logProjectEdit(
       itemKey: 'optional',
       itemName: project.name,
@@ -17422,17 +17478,70 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
-  /// Leaves [roomId]'s optional upgrades off the project's total, or counts
-  /// them as the project does. See [ProjectRoomRef.optionalOff].
-  void setProjectRoomOptionalOff(String roomId, bool off) {
+  /// Counts [roomId]'s optional upgrades in the project's total, or leaves
+  /// them out, whichever way the project's own switch is set. Counting a
+  /// room whose every line was left out counts them all again. See
+  /// [BuildingProject.optionsCounted].
+  void setProjectRoomOptionsCounted(String roomId, bool on) {
     final index = project.rooms.indexWhere((r) => r.id == roomId);
-    if (index < 0 || project.rooms[index].optionalOff == off) return;
-    project.rooms[index] = project.rooms[index].copyWith(optionalOff: off);
+    if (index < 0) return;
+    var ref = project.rooms[index];
+    if (project.optionsCounted(ref) == on) return;
+    ref = project.includeOptional
+        ? ref.copyWith(optionalOff: !on)
+        : ref.copyWith(optionalOn: on);
+    project.rooms[index] = ref;
     _logProjectEdit(
       itemKey: 'room:$roomId',
       itemName: projectRoomLogName(roomId),
       field: 'Options',
-      summary: off ? 'options off' : 'options priced',
+      summary: on ? 'options priced' : 'options off',
+    );
+    _projectChanged();
+  }
+
+  /// Counts one of [roomId]'s optional lines, [key], in the project's total
+  /// or leaves it out. [allKeys] is every optional line the room has:
+  /// counting one line of a room left out counts that line only, and leaving
+  /// out the last one leaves the room out.
+  void setProjectRoomOptionLine(
+    String roomId,
+    String key,
+    bool on, {
+    required Set<String> allKeys,
+  }) {
+    final index = project.rooms.indexWhere((r) => r.id == roomId);
+    if (index < 0) return;
+    var ref = project.rooms[index];
+    final counted = project.optionsCounted(ref);
+    if (on == (counted && !ref.optionalLinesOff.contains(key))) return;
+    Set<String> off;
+    var roomOn = counted;
+    if (on) {
+      off = counted
+          ? ({...ref.optionalLinesOff}..remove(key))
+          : ({...allKeys}..remove(key));
+      roomOn = true;
+    } else {
+      off = {...ref.optionalLinesOff, key};
+      // Every line out: the room is out, and starts whole when counted again.
+      if (allKeys.every(off.contains)) {
+        off = {};
+        roomOn = false;
+      }
+    }
+    ref = ref.copyWith(optionalLinesOff: off);
+    if (roomOn != counted) {
+      ref = project.includeOptional
+          ? ref.copyWith(optionalOff: !roomOn)
+          : ref.copyWith(optionalOn: roomOn);
+    }
+    project.rooms[index] = ref;
+    _logProjectEdit(
+      itemKey: 'room:$roomId',
+      itemName: projectRoomLogName(roomId),
+      field: 'Options',
+      summary: on ? 'option priced: $key' : 'option off: $key',
     );
     _projectChanged();
   }
@@ -18050,6 +18159,34 @@ class AppStateProvider extends ChangeNotifier {
   /// then publishes. Cleared by a publish that actually wrote.
   OnlineHold? _onlineHold;
   OnlineHold? get onlineHold => _onlineHold;
+
+  /// The job publishes to a live Google Sheet that already exists.
+  bool get projectHasLiveSheet =>
+      project.publishesToSheet && project.onlineSheetId.trim().isNotEmpty;
+
+  /// Publishes the job to its live Sheet, for the Google Sheets export: so
+  /// the button updates the one Sheet instead of making another copy.
+  /// Checked for typed edits first, as a save is. Null when held - see
+  /// [onlineHold] and offerHeldOnlineEdits.
+  Future<OnlineCopyResult?> publishToLiveSheet() async {
+    final held = await findHeldOnlineEdits(sheetCopy: false);
+    final sheet = held == null
+        ? await checkSheetForEdits(interactive: true)
+        : null;
+    final hold = held ?? sheet?.held;
+    if (hold != null) {
+      _onlineHold = hold;
+      notifyListeners();
+      return null;
+    }
+    return publishOnlineCopy(
+      interactive: true,
+      sheetBlocked: (sheet?.error ?? '').isEmpty
+          ? ''
+          : 'not updated: it could not be read first to check for edits '
+                '(${sheet!.error})',
+    );
+  }
 
   /// Forgets a held publish — the caller has dealt with it, one way or the
   /// other.
@@ -22023,6 +22160,207 @@ class AppStateProvider extends ChangeNotifier {
     // Racks or Cost as the diagram. See [warmRoomTabs].
     warmRoomTabs();
     return '';
+  }
+
+  // --- design options -----------------------------------------------------
+  //  Other builds of the same room, each a whole copy of its files. See
+  //  room_design_options.dart.
+
+  /// Config path (normalized) -> its options, once read.
+  final Map<String, RoomDesignOptions> _designOptions = {};
+  final Set<String> _designOptionsReading = {};
+
+  /// Option config path (normalized) -> its room total, priced from its files.
+  final Map<String, double> _designOptionTotals = {};
+  final Set<String> _designOptionTotalsPricing = {};
+
+  static String _pathKey(String p) => path.normalize(p).toLowerCase();
+
+  /// [configPath]'s design options. Read off the window's thread the first
+  /// time it is asked, and none until then.
+  RoomDesignOptions designOptionsFor(String configPath) {
+    if (configPath.isEmpty) return RoomDesignOptions.none;
+    final key = _pathKey(configPath);
+    final known = _designOptions[key];
+    if (known != null) return known;
+    if (runningUnderTest) {
+      return _designOptions[key] = readDesignOptions(configPath);
+    }
+    if (_designOptionsReading.add(key)) {
+      unawaited(readDesignOptionsAsync(configPath).then((options) {
+        _designOptionsReading.remove(key);
+        _designOptions[key] = options;
+        if (options.options.isNotEmpty) notifyListeners();
+      }));
+    }
+    return RoomDesignOptions.none;
+  }
+
+  /// The open room's design options.
+  RoomDesignOptions get roomDesignOptions =>
+      designOptionsFor(currentConfigPath);
+
+  /// The room total of option [id] of [configPath], priced from its own
+  /// files, or null while that is being worked out.
+  double? designOptionTotal(String configPath, String id) {
+    final optionConfig = designOptionConfigPath(configPath, id);
+    final key = _pathKey(optionConfig);
+    final known = _designOptionTotals[key];
+    if (known != null) return known;
+    if (!_designOptionTotalsPricing.add(key)) return null;
+    Future<void> price() async {
+      try {
+        final room = await readRoomFromDiskAsync(optionConfig);
+        if (!room.ok) return;
+        _designOptionTotals[key] = computeRoomCost(
+          model: room.model,
+          library: avDeviceLibrary,
+          settings: room.settings,
+          rates: laborRates,
+          baseCosts: baseCosts,
+          tier: pricingTier,
+        ).grandTotal;
+        notifyListeners();
+      } catch (e, stack) {
+        AppLogger.logError(
+            'Could not price design option $optionConfig', e, stack);
+      } finally {
+        _designOptionTotalsPricing.remove(key);
+      }
+    }
+
+    unawaited(price());
+    return null;
+  }
+
+  void _designOptionsChanged(String configPath, RoomDesignOptions options) {
+    _designOptions[_pathKey(configPath)] = options;
+    final folder = _pathKey(designOptionFolder(configPath, ''));
+    _designOptionTotals.removeWhere((k, _) => k.startsWith(folder));
+    _forgetCachedRoom(configPath);
+  }
+
+  /// Saves the open room when it has changes, since an option is a copy of
+  /// its files. '' when it worked, else the message.
+  Future<String> _saveBeforeDesignOption() async {
+    if (currentConfigPath.isEmpty) {
+      return 'Error: save the room once first, so it has files to copy.';
+    }
+    if (!roomHasUnsavedChanges) return '';
+    final saved = await saveRoomInPlace();
+    return saved.startsWith('Error') ? saved : '';
+  }
+
+  /// Starts a new design option of the open room named [name], a copy of
+  /// the room as it is, and makes it the one being worked on. The first one
+  /// also files the room as it was under [firstName]. '' when it worked.
+  Future<String> createRoomDesignOption(
+    String name, {
+    String firstName = 'Base design',
+  }) async {
+    final saved = await _saveBeforeDesignOption();
+    if (saved.isNotEmpty) return saved;
+    try {
+      final options = createDesignOption(
+        currentConfigPath,
+        name: name.trim().isEmpty ? 'New option' : name.trim(),
+        firstName: firstName.trim().isEmpty ? 'Base design' : firstName.trim(),
+        total: roomCost.grandTotal,
+      );
+      _designOptionsChanged(currentConfigPath, options);
+      AppLogger.logInfo(
+          'Design option "$name" started for $currentConfigPath.');
+      notifyListeners();
+      return '';
+    } catch (e, stack) {
+      AppLogger.logError('Could not start a design option', e, stack);
+      return 'Error: $e';
+    }
+  }
+
+  /// Makes option [id] the open room's design: the room is saved, filed
+  /// away under the option it was, and [id] is opened in its place. ''
+  /// when it worked.
+  Future<String> chooseRoomDesignOption(String id) async {
+    final saved = await _saveBeforeDesignOption();
+    if (saved.isNotEmpty) return saved;
+    final configPath = currentConfigPath;
+    final RoomDesignOptions? options;
+    try {
+      options = chooseDesignOption(configPath, id, total: roomCost.grandTotal);
+    } catch (e, stack) {
+      AppLogger.logError('Could not switch the design option', e, stack);
+      return 'Error: $e';
+    }
+    if (options == null) return 'Error: that option is not on this room.';
+    _designOptionsChanged(configPath, options);
+    final ok = await openConfigAtPath(configPath, remember: false);
+    if (!ok) {
+      return lastOpenError.isEmpty
+          ? 'Error: the room could not be opened again - see the log.'
+          : 'Error: $lastOpenError';
+    }
+    loadAvFlowForCurrentConfig();
+    AppLogger.logInfo('Design option "${options.activeOption?.name}" is now '
+        'the room at $configPath.');
+    notifyListeners();
+    return '';
+  }
+
+  /// Chooses option [id] for the project room [roomId]: the open room goes
+  /// through [chooseRoomDesignOption], any other has its files switched on
+  /// disk. '' when it worked.
+  Future<String> chooseProjectRoomDesignOption(String roomId, String id) async {
+    final ref = project.rooms.where((r) => r.id == roomId).firstOrNull;
+    if (ref == null) return 'Error: that room is not on the project.';
+    if (openProjectRoom?.id == roomId) return chooseRoomDesignOption(id);
+    final configPath =
+        BuildingProject.resolvePath(ref.configPath, currentProjectPath);
+    final total = priceProject().rooms
+            .where((r) => r.ref.id == roomId)
+            .firstOrNull
+            ?.estimate
+            ?.grandTotal ??
+        0;
+    final RoomDesignOptions? options;
+    try {
+      options = chooseDesignOption(configPath, id, total: total);
+    } catch (e, stack) {
+      AppLogger.logError('Could not switch the design option', e, stack);
+      return 'Error: $e';
+    }
+    if (options == null) return 'Error: that option is not on this room.';
+    _designOptionsChanged(configPath, options);
+    _logProjectEdit(
+      itemKey: 'room:$roomId',
+      itemName: projectRoomLogName(roomId),
+      field: 'Design option',
+      summary: options.activeOption?.name ?? id,
+    );
+    notifyListeners();
+    return '';
+  }
+
+  /// Renames option [id] of [configPath].
+  void renameRoomDesignOption(String configPath, String id, String name) {
+    if (name.trim().isEmpty) return;
+    try {
+      _designOptionsChanged(
+          configPath, renameDesignOption(configPath, id, name));
+    } catch (e, stack) {
+      AppLogger.logError('Could not rename the design option', e, stack);
+    }
+    notifyListeners();
+  }
+
+  /// Takes option [id] off [configPath]; its files are kept aside.
+  void removeRoomDesignOption(String configPath, String id) {
+    try {
+      _designOptionsChanged(configPath, removeDesignOption(configPath, id));
+    } catch (e, stack) {
+      AppLogger.logError('Could not remove the design option', e, stack);
+    }
+    notifyListeners();
   }
 
   /// Steps to the next or previous room on the project, skipping nothing —

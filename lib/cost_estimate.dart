@@ -572,13 +572,47 @@ class RoomCostSettings {
   /// The room total counts the [laborCharges] lines.
   bool includeLaborCharges = true;
 
-  /// The room total counts [optionalLines].
+  /// The room total counts [optionalLines], listed with the parts. Off
+  /// lists them in a section of their own, not counted. The project total
+  /// counts them as the Project tab says.
   bool includeOptional = false;
 
-  /// [optionalLines] are listed in a section of their own, with their total
-  /// and the room total with and without them. Off lists them in their own
-  /// sections - only while they are counted.
-  bool optionalSection = true;
+  /// Line key -> the line keys tagged as going with it: a mount with its
+  /// display, a mic with its base. Both ways round, so either line warns
+  /// when the other is removed, replaced or recounted. A key whose line has
+  /// left the quote stays until untied, so the warning outlives the line.
+  final Map<String, Set<String>> lineTies = {};
+
+  /// The lines tied to [key], sorted.
+  List<String> tiesOf(String key) =>
+      (lineTies[key]?.toList() ?? <String>[])..sort();
+
+  /// Ties [a] and [b] together. False when they are the same line or are
+  /// already tied.
+  bool tie(String a, String b) {
+    if (a.isEmpty || b.isEmpty || a == b) return false;
+    final added = (lineTies[a] ??= {}).add(b);
+    (lineTies[b] ??= {}).add(a);
+    return added;
+  }
+
+  /// Unties [a] and [b]. False when they were not tied.
+  bool untie(String a, String b) {
+    final had = lineTies[a]?.remove(b) ?? false;
+    lineTies[b]?.remove(a);
+    lineTies.removeWhere((_, v) => v.isEmpty);
+    return had;
+  }
+
+  /// Moves [from]'s ties onto [to] - a line whose key changed when its part
+  /// was replaced.
+  void moveTies(String from, String to) {
+    if (from == to) return;
+    for (final other in tiesOf(from)) {
+      untie(from, other);
+      tie(to, other);
+    }
+  }
 
   /// Cabling LINE KEY -> extra runs to buy beyond what the diagram shows.
   /// Spares are a decision, not a diagram fact, so they live here rather than
@@ -713,7 +747,7 @@ class RoomCostSettings {
       laborCharges.isEmpty &&
       includeLaborCharges &&
       !includeOptional &&
-      optionalSection &&
+      lineTies.isEmpty &&
       lineNames.isEmpty &&
       lineParts.isEmpty &&
       extraEquipment.isEmpty &&
@@ -753,7 +787,7 @@ class RoomCostSettings {
     laborCharges.clear();
     includeLaborCharges = true;
     includeOptional = false;
-    optionalSection = true;
+    lineTies.clear();
     lineNames.clear();
     lineParts.clear();
     extraEquipment.clear();
@@ -818,7 +852,10 @@ class RoomCostSettings {
       'laborCharges': Map<String, String>.of(laborCharges),
     if (!includeLaborCharges) 'includeLaborCharges': false,
     if (includeOptional) 'includeOptional': true,
-    if (!optionalSection) 'optionalSection': false,
+    if (lineTies.isNotEmpty)
+      'lineTies': {
+        for (final key in lineTies.keys.toList()..sort()) key: tiesOf(key),
+      },
     if (furnishedQty.isNotEmpty)
       'furnishedQty': Map<String, double>.of(furnishedQty),
     if (lineNames.isNotEmpty) 'lineNames': Map<String, String>.of(lineNames),
@@ -938,7 +975,6 @@ class RoomCostSettings {
     }
     includeOptional = json['includeOptional'] == true;
     includeLaborCharges = json['includeLaborCharges'] != false;
-    optionalSection = json['optionalSection'] != false;
     for (final (key, into) in [
       ('projectBuys', projectBuys),
       ('droppedAddOns', droppedAddOns),
@@ -946,6 +982,17 @@ class RoomCostSettings {
     ]) {
       final list = json[key];
       if (list is List) into.addAll(list.map((e) => e.toString()));
+    }
+    // Read both ways round, so a hand-edited file with one side of a tie
+    // still warns from either line.
+    final ties = json['lineTies'];
+    if (ties is Map) {
+      ties.forEach((key, value) {
+        if (value is! List) return;
+        for (final other in value) {
+          tie(key.toString(), other.toString());
+        }
+      });
     }
     final charged = json['laborCharges'];
     if (charged is Map) {
@@ -2623,9 +2670,8 @@ CostEstimate computeRoomCost({
   for (final lines in [equipment, hardware, cabling, extras]) {
     lines.removeWhere(isCharged);
   }
-  // Listed apart unless they are counted and wanted in their own sections.
-  final apart = anyOptional &&
-      (settings.optionalSection || !settings.includeOptional);
+  // Counted, they are listed with the parts; left out, apart.
+  final apart = anyOptional && !settings.includeOptional;
   if (apart) {
     for (final lines in [equipment, hardware, cabling, extras]) {
       lines.removeWhere(isOptional);

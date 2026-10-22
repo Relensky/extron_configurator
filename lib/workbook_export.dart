@@ -16,6 +16,8 @@ import 'diagram_capture.dart';
 import 'building_project.dart';
 import 'export_tools.dart';
 import 'google_sheets_export.dart';
+import 'google_sheets_live.dart' show kOnlineSheetLabel, liveSheetUrl;
+import 'online_copy_dialog.dart' show offerHeldOnlineEdits;
 import 'project_restore_data.dart';
 import 'project_workbook.dart';
 import 'room_workbook.dart';
@@ -318,6 +320,13 @@ Future<void> exportWorkbookToGoogleSheets(
   if (scope == null || !context.mounted) return;
   final messenger = ScaffoldMessenger.of(context);
 
+  // A job with a live Sheet updates that Sheet rather than making another
+  // copy of it. See google_sheets_live.dart.
+  if (scope != WorkbookScope.room && provider.projectHasLiveSheet) {
+    await _publishToLiveSheet(context, provider);
+    return;
+  }
+
   final uploader = GoogleSheetsUploader(
     clientId: provider.effectiveGoogleClientId,
     clientSecret: provider.effectiveGoogleClientSecret,
@@ -438,4 +447,54 @@ Future<void> exportWorkbookToGoogleSheets(
       ),
     );
   }
+}
+
+/// The Google Sheets export for a job with a live Sheet: publishes to it,
+/// asking first when somebody has typed into it, and opens it.
+Future<void> _publishToLiveSheet(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  showTimedSnackBar(
+    messenger,
+    const SnackBar(
+      duration: Duration(seconds: 4),
+      content: Text('Updating the project\'s Google Sheet...'),
+    ),
+  );
+  final result = await provider.publishToLiveSheet();
+  if (!context.mounted) return;
+  if (result == null) {
+    // Somebody typed into it: their edits come in before ours go out.
+    await offerHeldOnlineEdits(context, provider);
+    return;
+  }
+  final sheetFailed = result.failed
+      .where((f) => f.startsWith(kOnlineSheetLabel))
+      .toList();
+  final ok = result.written.contains(kOnlineSheetLabel);
+  if (ok) {
+    AppLogger.logInfo('Google Sheets export published to the live Sheet '
+        '${provider.project.onlineSheetId}.');
+    await openWebLink(
+      context,
+      liveSheetUrl(provider.project.onlineSheetId),
+      title: 'Google Sheet',
+    );
+  }
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      duration: Duration(seconds: ok ? 6 : 10),
+      content: Text(
+        ok
+            ? 'The project\'s Google Sheet is up to date - it is open in your '
+                  'browser.'
+            : 'The Google Sheet could not be updated: '
+                  '${(sheetFailed.isEmpty ? result.failed : sheetFailed).join('; ')}',
+      ),
+      backgroundColor: ok ? null : snackErrorFillOn(messenger),
+    ),
+  );
 }

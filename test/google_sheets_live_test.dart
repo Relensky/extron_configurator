@@ -378,6 +378,38 @@ void main() {
       p.applyOnlineImport(p.onlineHold!.read);
       expect(p.project.deliveries.single.qty, 20);
     });
+
+    test('the Google Sheets export updates the live Sheet, not a new one',
+        () async {
+      final (:p, :google) = job();
+      expect(p.projectHasLiveSheet, isFalse, reason: 'no Sheet made yet');
+      await p.publishOnlineCopy();
+      expect(p.projectHasLiveSheet, isTrue);
+
+      p.updateProjectDelivery(p.project.deliveries.single.copyWith(qty: 20));
+      final result = await p.publishToLiveSheet();
+      expect(result!.written, [kOnlineSheetLabel]);
+      expect(google.created, 1);
+      expect(p.project.onlineSheetId, 'sheet-1');
+    });
+
+    test('the export stands down when somebody typed into the Sheet',
+        () async {
+      final (:p, :google) = job();
+      await p.saveProject(to: path.join(dir.path, 'bessey.json'));
+      await p.publishOnlineCopy();
+
+      final grid = google.tabs[kEditableDeliveriesSheet]!.grid;
+      final header = grid.indexWhere(
+        (r) => r.isNotEmpty && r.first == kRoundTripIdColumn,
+      );
+      grid[header + 1][grid[header].indexOf('Qty')] = '20';
+      final before = google.batches;
+
+      expect(await p.publishToLiveSheet(), isNull);
+      expect(p.onlineHold?.sheet, isTrue);
+      expect(google.batches, before);
+    });
   });
 
   // The tabs the app writes and cannot read back - a room's listing, the

@@ -11,7 +11,7 @@ import 'package:extron_configurator/cost_estimate_view.dart';
 import 'package:extron_configurator/labor_rates.dart';
 
 /// Optional upgrades on a room's estimate: priced for the decision, counted
-/// or not, listed apart or in their sections, and purged once not bought.
+/// with the parts or apart in their own section, and purged once not bought.
 void main() {
   const empty = AvFlowModel(
     nodes: [],
@@ -47,32 +47,14 @@ void main() {
     expect(e.hasOptional, isTrue);
   });
 
-  test('counted and listed apart: the total has them, the section not', () {
+  test('counted: listed with the parts, nothing apart', () {
     final e = price(room()..includeOptional = true);
-    expect(e.equipment.map((l) => l.key), ['EQP_1']);
-    expect(e.equipmentTotal, 1000);
-    expect(e.optional.single.key, 'EQP_2');
-    expect(e.subtotal, 1500);
-    expect(e.grandTotal, 1650);
-  });
-
-  test('counted in their own sections: nothing apart', () {
-    final e = price(room()
-      ..includeOptional = true
-      ..optionalSection = false);
     expect(e.equipment.map((l) => l.key).toSet(), {'EQP_1', 'EQP_2'});
+    expect(e.equipmentTotal, 1500);
     expect(e.optional, isEmpty);
     expect(e.inlineOptional, {'EQP_2'});
     expect(e.grandTotal, 1650);
     expect(e.grandWithoutOptions, 1100);
-  });
-
-  test('not counted: listed apart whatever the section switch says', () {
-    final e = price(room()..optionalSection = false);
-    expect(e.equipment.map((l) => l.key), ['EQP_1']);
-    expect(e.optional.single.key, 'EQP_2');
-    expect(e.inlineOptional, isEmpty);
-    expect(e.grandTotal, 1100);
   });
 
   test('a room with no options is unchanged', () {
@@ -82,16 +64,12 @@ void main() {
   });
 
   test('the flags and switches are saved', () {
-    final s = room()
-      ..includeOptional = true
-      ..optionalSection = false;
+    final s = room()..includeOptional = true;
     final back = RoomCostSettings()..readJson(s.toJson());
     expect(back.optionalLines, {'EQP_2'});
     expect(back.includeOptional, isTrue);
-    expect(back.optionalSection, isFalse);
     final plain = RoomCostSettings()..readJson(RoomCostSettings().toJson());
     expect(plain.includeOptional, isFalse);
-    expect(plain.optionalSection, isTrue);
   });
 
   test('purging takes the options off the room', () {
@@ -158,14 +136,15 @@ void main() {
         findsOneWidget);
 
     expect(find.byKey(const ValueKey('cost_optional_section')), findsNothing,
-        reason: 'hidden while options are left out of the total');
+        reason: 'one switch only');
     await tester.ensureVisible(
         find.byKey(const ValueKey('cost_optional_include')));
     await tester.tap(find.byKey(const ValueKey('cost_optional_include')));
     await tester.pumpAndSettle();
     expect(p.avCost.includeOptional, isTrue);
     expect(p.roomCost.grandTotal, 1500);
-    expect(find.byKey(const ValueKey('cost_optional_section')), findsOneWidget);
+    expect(find.byKey(ValueKey('cost_optional_row_${laser.id}')), findsNothing,
+        reason: 'counted, it is listed with the parts');
   });
 
   test('a drawn line can be optional, and purging takes its boxes off', () {
@@ -229,7 +208,8 @@ void main() {
     expect(e.grandWithOptions, 2050);
     e = price(s..includeOptional = true);
     expect(e.grandTotal, 2050);
-    expect(e.laborTotal, 0, reason: 'listed apart, so not in the section');
+    expect(e.laborTotal, 400, reason: 'counted, so listed with the labor');
+    expect(e.optionalLabor, isEmpty);
 
     final p = AppStateProvider(autoLoadSettings: false);
     p.avCost.labor.add(const LaborLine(id: 'LABOR_1', hours: 2));
