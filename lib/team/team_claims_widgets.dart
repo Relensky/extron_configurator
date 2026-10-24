@@ -102,23 +102,38 @@ Future<String> teamSetTag({
   if (error.isNotEmpty) return error;
   final chat = Team.chat;
   if (chat == null) return '';
-  final name = label.isEmpty ? id : label;
+  final what = teamTagWhat(kind, id, label);
+  final byName = [claims.myName(), chat.myName(), me]
+      .map((s) => s.trim())
+      .firstWhere((s) => s.isNotEmpty, orElse: () => me);
   if (who.toLowerCase() != me.toLowerCase()) {
-    // Someone else: they hear about it from you, either way.
+    // Someone else: they hear about it from you, either way - by name, so
+    // the notice says who without opening the chat.
     await chat.post(
         on
-            ? 'I tagged you as working on **$name**.'
-            : 'I took you off **$name** - you are no longer tagged as '
+            ? '$byName tagged you as working on $what.'
+            : '$byName took you off $what - you are no longer tagged as '
                 'working on it.',
         to: dmChannel(me, who));
   } else if (on) {
     // Joining: the people already on it hear that you are too.
     for (final c in others) {
-      await chat.post('I am working on **$name** with you too.',
+      await chat.post('$byName is working on $what with you too.',
           to: dmChannel(me, c.who));
     }
   }
   return '';
+}
+
+/// What a tag is on, for its chat message: 'room **ARTS 209**', or the
+/// label alone when it already says what it is ('**Ticket #12345 - ...**').
+/// A room is named by its full room name - this app's label adds
+/// "(room configuration)".
+String teamTagWhat(String kind, String id, String label) {
+  final name = label.trim().isEmpty ? id : label.trim();
+  if (kind.toLowerCase() == 'room') return 'room **$id**';
+  if (name.toLowerCase().startsWith(kind.toLowerCase())) return '**$name**';
+  return '$kind **$name**';
 }
 
 /// Takes [c] off, as this person - see [teamSetTag].
