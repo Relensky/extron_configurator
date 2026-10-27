@@ -1333,17 +1333,17 @@ Future<void> copyCostItemsFromRoom(
 ) =>
     showCompareRoomCosts(context, provider, copying: true);
 
-/// Saves this room's cost items as a preset on the shared Root Folder.
+/// Saves this room's whole cost page as a preset on the shared Root Folder.
 Future<void> saveCostPresetFromRoom(
   BuildContext context,
   AppStateProvider provider,
 ) async {
   final messenger = ScaffoldMessenger.of(context);
-  final items = CostItemSet.fromSettings(provider.avCost);
+  final items = CostItemSet.wholePage(provider.avCost, provider.roomCost);
   if (items.isEmpty) {
     messenger.showSnackBar(const SnackBar(
-      content: Text('This room has no cost items to save - add equipment, '
-          'hardware, cable, labor, other items or fees first.'),
+      content: Text('This room\'s cost page is empty - there is nothing to '
+          'save.'),
     ));
     return;
   }
@@ -1367,10 +1367,11 @@ Future<void> saveCostPresetFromRoom(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Saves ${items.summary} - with the prices, spares and '
-                  'shipping typed on them - to the "$kCostPresetFolder" '
-                  'folder under the Root Folder, where everybody can apply '
-                  'it. Devices counted off the diagram are not included.',
+                  'Saves the whole cost page - ${items.summary}, with the '
+                  'room\'s prices, spares and shipping - to the '
+                  '"$kCostPresetFolder" folder under the Root Folder, where '
+                  'everybody can apply it. Devices, rack hardware and cable '
+                  'drawn in this room are saved as lines of their own.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),

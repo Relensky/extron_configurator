@@ -163,6 +163,7 @@ abstract final class Shortcut {
   static const undo = 'app.undo';
   static const redo = 'app.redo';
   static const help = 'app.help';
+  static const find = 'app.find';
 
   static const nextBox = 'text.nextBox';
   static const previousBox = 'text.previousBox';
@@ -247,6 +248,15 @@ const List<ShortcutAction> kShortcutActions = [
     label: 'Help',
     area: ShortcutArea.app,
     defaults: [KeyBinding(_K.f1)],
+  ),
+  ShortcutAction(
+    id: Shortcut.find,
+    label: 'Find on page',
+    area: ShortcutArea.app,
+    help: 'Searches the text on screen and jumps to each match. Enter or F3 '
+        'goes to the next, Shift+Enter or Shift+F3 the one before, Esc '
+        'closes it.',
+    defaults: [KeyBinding(_K.keyF, control: true)],
   ),
   ShortcutAction(
     id: Shortcut.nextBox,

@@ -1512,8 +1512,13 @@ String priceFromLabel(CostLine line) {
         ? _capitalized(furnishedNote(line))
         : '$own; ${furnishedNote(line)}';
   }
+  if (by == kAlreadyInstalled) return 'Already installed';
   return by.isEmpty ? 'Furnished by others' : 'Furnished by $by';
 }
+
+/// The furnished source for a line already in the room and staying: listed,
+/// priced at nothing, and not counted as in kind.
+const String kAlreadyInstalled = 'installed';
 
 String _capitalized(String s) =>
     s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
@@ -1525,7 +1530,11 @@ String _capitalized(String s) =>
 String furnishedNote(CostLine line) {
   final by = line.furnishedBy;
   if (by == null) return '';
-  final who = by.isEmpty ? 'furnished by others' : 'furnished by $by';
+  final who = by == kAlreadyInstalled
+      ? 'already installed'
+      : by.isEmpty
+      ? 'furnished by others'
+      : 'furnished by $by';
   if (!line.partlyFurnished) return who;
   return '${trimNumber(line.furnishedCount)} of '
       '${trimNumber(line.qty)} $who';
@@ -1618,6 +1627,7 @@ String inKindSourceLabel(String by) => switch (by.trim().toLowerCase()) {
   'in kind' => 'Our labor and staff',
   'the owner' => 'Owner furnished',
   'another department' => 'Another department',
+  kAlreadyInstalled => 'Already installed',
   '' => 'Others',
   _ => by.trim(),
 };
@@ -1803,7 +1813,9 @@ class CostEstimate {
       ('Labor charges', [for (final c in laborCharges) c.line]),
     ])
       for (final l in lines)
-        if (l.furnishedBy != null && l.furnishedCount > 0)
+        if (l.furnishedBy != null &&
+            l.furnishedBy != kAlreadyInstalled &&
+            l.furnishedCount > 0)
           (
             section: section,
             name: l.description,

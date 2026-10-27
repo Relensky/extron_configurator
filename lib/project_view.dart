@@ -24,7 +24,6 @@ import 'manual_room_lines.dart';
 import 'project_funding_view.dart';
 import 'project_room_options_button.dart';
 import 'responsive.dart' show ClearFieldButton, kFloatingButtonClearance;
-import 'room_design_options.dart';
 import 'name_colors.dart';
 import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
@@ -649,7 +648,9 @@ class _ProjectViewState extends State<ProjectView> {
     // Slivers rather than a Column in a SingleChildScrollView, so the rows are
     // still built lazily: a building with two hundred parts on its master list
     // should not lay out two hundred cards to show the first six.
-    return Scrollbar(
+    // Every figure on the tab can be selected and copied.
+    return SelectionArea(
+      child: Scrollbar(
       controller: _scroll,
       child: CustomScrollView(
         controller: _scroll,
@@ -715,6 +716,7 @@ class _ProjectViewState extends State<ProjectView> {
             child: SizedBox(height: kFloatingButtonClearance),
           ),
         ],
+      ),
       ),
     );
   }
@@ -2173,7 +2175,28 @@ class _RoomRow extends StatefulWidget {
   State<_RoomRow> createState() => _RoomRowState();
 }
 
+/// Rooms on the project list start collapsed; tests that read a row's
+/// figures and notes turn this on.
+@visibleForTesting
+bool roomRowsStartExpanded = false;
+
 class _RoomRowState extends State<_RoomRow> {
+  /// The project room ids opened out this session, so a row stays open
+  /// across rebuilds and pane switches.
+  static final Set<String> _opened = {};
+
+  bool get _expanded =>
+      roomRowsStartExpanded || _opened.contains(widget.room.ref.id);
+
+  void _toggleExpanded() => setState(() {
+    if (roomRowsStartExpanded) {
+      roomRowsStartExpanded = false;
+      _opened.clear();
+      return;
+    }
+    if (!_opened.remove(widget.room.ref.id)) _opened.add(widget.room.ref.id);
+  });
+
   /// Whether the pointer is over the room's name.
   ///
   /// Stateful for one underline. A name that opens the room when you click it
@@ -2193,100 +2216,6 @@ class _RoomRowState extends State<_RoomRow> {
         roomName: widget.room.name,
       );
 
-  /// The room's design options as a menu on its row. See
-  /// room_design_options.dart.
-  Widget _designOptionPicker(
-    BuildContext context,
-    AppStateProvider provider, {
-    required String roomPath,
-    required RoomDesignOptions options,
-    required double activeTotal,
-    required String currency,
-    required Color ink,
-  }) {
-    final room = widget.room;
-    String totalOf(RoomDesignOption o) => formatMoney(
-      o.id == options.active
-          ? activeTotal
-          : provider.designOptionTotal(roomPath, o.id) ?? o.total,
-      currency,
-    );
-    final active = options.activeOption;
-    return PopupMenuButton<String>(
-      key: ValueKey('project_room_design_${room.ref.id}'),
-      tooltip: 'Design option: ${active?.name ?? 'none chosen'}'
-          '${active == null ? '' : ' ${totalOf(active)}'} - the chosen one '
-          'goes to the project total. Click to choose.',
-      itemBuilder: (_) => [
-        for (final o in options.options)
-          PopupMenuItem(
-            key: ValueKey('project_room_design_${room.ref.id}_${o.id}'),
-            value: o.id,
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                o.id == options.active
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_unchecked,
-                size: 18,
-              ),
-              title: Text(o.name),
-              trailing: Text(totalOf(o)),
-            ),
-          ),
-      ],
-      onSelected: (id) async {
-        if (id == options.active) return;
-        final messenger = ScaffoldMessenger.of(context);
-        final name = options.byId(id)?.name ?? id;
-        final ok = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text('Switch ${room.name} to $name?'),
-            content: Text(
-              '${options.activeOption?.name ?? 'The current design'} is kept '
-              'as it is. The room\'s files become $name, and the project '
-              'total counts it.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                key: const ValueKey('project_room_design_go'),
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Switch'),
-              ),
-            ],
-          ),
-        );
-        if (ok != true) return;
-        final result =
-            await provider.chooseProjectRoomDesignOption(room.ref.id, id);
-        showTimedSnackBar(
-          messenger,
-          SnackBar(
-            content: Text(
-              result.isEmpty ? '${room.name} is now $name.' : result,
-            ),
-          ),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.alt_route, size: 18, color: ink),
-            Icon(Icons.arrow_drop_down, size: 16, color: ink),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final room = widget.room;
@@ -2297,11 +2226,6 @@ class _RoomRowState extends State<_RoomRow> {
     final dimmed = !room.ref.included;
     final isOpen = provider.openProjectRoom?.id == room.ref.id;
     final unsaved = isOpen && provider.roomShowsUnsaved;
-    final roomPath = BuildingProject.resolvePath(
-      room.ref.configPath,
-      provider.currentProjectPath,
-    );
-    final designOptions = provider.designOptionsFor(roomPath);
     // The id "working on" and review marks use: the open room's from memory.
     final teamId = isOpen && provider.teamRoomId.isNotEmpty
         ? provider.teamRoomId
@@ -2367,6 +2291,7 @@ class _RoomRowState extends State<_RoomRow> {
           ),
           // Editing now, working on, ready to approve, approved.
           RoomStatusIcons(roomId: teamId, color: ink, labels: true),
+          if (_expanded || !room.ok)
           Text(
             room.ok ? room.ref.configPath : room.room.error,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -2378,7 +2303,7 @@ class _RoomRowState extends State<_RoomRow> {
           // The room in the editor is priced from MEMORY, so its row can be
           // ahead of its own file. Saying so is the price of that: a total
           // nobody can reconcile with the folder is a total nobody trusts.
-          if (isOpen)
+          if (isOpen && _expanded)
             Row(
               children: [
                 Icon(Icons.edit_note, size: 13, color: ink),
@@ -2477,13 +2402,9 @@ class _RoomRowState extends State<_RoomRow> {
             ),
             SizedBox(
               width: 40,
-              child: designOptions.options.isNotEmpty
-                  ? _designOptionPicker(
-                      context,
-                      provider,
-                      roomPath: roomPath,
-                      options: designOptions,
-                      activeTotal: e.grandTotal,
+              child: ProjectRoomDesignButton.shows(provider, room)
+                  ? ProjectRoomDesignButton(
+                      room: room,
                       currency: currency,
                       ink: ink,
                     )
@@ -2603,6 +2524,18 @@ class _RoomRowState extends State<_RoomRow> {
       ),
     ];
 
+    final expander = IconButton(
+      key: ValueKey('room_row_expand_${room.ref.id}'),
+      tooltip: _expanded ? 'Hide the room details' : 'Show the room details',
+      visualDensity: VisualDensity.compact,
+      icon: Icon(
+        _expanded ? Icons.expand_less : Icons.expand_more,
+        size: 20,
+        color: ink,
+      ),
+      onPressed: _toggleExpanded,
+    );
+
     // Outlined in the room's state: locked by you or someone else, ready to
     // approve, approved.
     return RoomToneHighlight(
@@ -2622,10 +2555,39 @@ class _RoomRowState extends State<_RoomRow> {
         // becomes two: what the room IS, then what it COSTS.
         child: LayoutBuilder(
           builder: (context, box) {
+            // COLLAPSED: the name, the room total and the buttons.
+            if (!_expanded) {
+              return Row(
+                children: [
+                  expander,
+                  include,
+                  Expanded(flex: 3, child: name),
+                  if (e != null)
+                    SizedBox(
+                      width: 150,
+                      child: Row(
+                        children: [
+                          _cell(
+                            context,
+                            'Room total',
+                            formatMoney(e.grandTotal, currency),
+                            ink: ink,
+                            quiet: quiet,
+                            bold: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(width: 4),
+                  ...actions,
+                ],
+              );
+            }
             if (box.maxWidth >= gridMetric(context, 900)) {
               final stretched = figuresFor(stretch: true);
               return Row(
                 children: [
+                  expander,
                   include,
                   Expanded(flex: 3, child: name),
                   // ONE BLOCK, ONE HEIGHT. The notes box is taller than a
@@ -2658,6 +2620,7 @@ class _RoomRowState extends State<_RoomRow> {
               children: [
                 Row(
                   children: [
+                    expander,
                     include,
                     Expanded(child: name),
                     ...actions,

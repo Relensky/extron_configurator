@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'app_state.dart';
+import 'cost_compare.dart' show CostItemSet;
 import 'room_presets.dart';
 
 /// "Save Room as Preset": the whole open room - AV flow, racks, floor plan
@@ -84,13 +85,9 @@ class _SaveRoomPresetDialogState extends State<_SaveRoomPresetDialog> {
       ].join(', '),
       RoomPresetPart.floorPlans => n(p.avFloorPlans.length, 'sheet'),
       RoomPresetPart.cabling => p.avCabling.isEmpty ? 'as drawn' : 'laid out',
-      RoomPresetPart.cost => [
-        n(cost.extraEquipment.length + cost.extraHardware.length +
-            cost.extraCables.length + cost.items.length, 'added line'),
-        n(cost.labor.length, 'labor line'),
-        n(cost.fees.length, 'fee'),
-        n(cost.priceOverrides.length, 'room price'),
-      ].join(', '),
+      // The whole page, drawn devices included.
+      RoomPresetPart.cost =>
+        CostItemSet.wholePage(cost, p.roomCost).summary,
       RoomPresetPart.schematic => p.schematicPositions.isEmpty
           ? 'not laid out'
           : n(p.schematicPositions.length, 'placed block'),

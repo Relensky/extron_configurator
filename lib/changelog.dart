@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.165+175';
+const String kAppVersion = '0.5.174+184';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,94 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.174',
+    date: 'October 27, 2026',
+    title: 'Already installed, and copyable figures',
+    changes: [
+      'Cost, the tag button on a line: Already installed in the room. The line stays listed at its price and counts nothing in the total, the same as a furnished line, and its Extended cell reads installed. It is not counted as in kind.',
+      'Cost: the Model column keeps a readable width; a narrow window scrolls sideways instead of squeezing it away. Click a model to see everything on that line, select any of it, or Copy line to copy the whole line item. Editing the maker and part number is a button there.',
+      'Project: every figure on the tab can be selected and copied - the totals, the budget, funding and each room.',
+      'Project, Rooms: each room starts collapsed to its name, room total and buttons. The arrow at its left shows the figures, the file and the notes.',
+      'The editors strip on the banner shows everyone who has the room or project open, shrinking to their pictures (names on hover) before it falls back to a +N list.',
+      'Opening a project or room no longer shows a notice for each person who already has it open - they are on the banner. Someone opening it after you still gets one.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.173',
+    date: 'October 27, 2026',
+    title: 'Cost presets keep the whole cost page',
+    changes: [
+      'Cost, Save as cost preset: saves the whole cost page - the devices, rack hardware and cable drawn in the room as well as the lines typed by hand, with labor, fees, the scope of work and the estimate notes. A drawn device is saved at the quantity and room price it has, and a part from stock stays marked that way. Before, only the typed lines went in, so a room like LANG 300 saved one item and two labor lines.',
+      'Applying a cost preset adds its scope of work and notes under the room\'s own, unless the room already says the same thing.',
+      'Save Room as Preset: the cost page part lists everything it will keep. Saved without the AV flow, the drawn devices go in as lines of their own; applied to a room that has its own cost page, the scope, notes and the prices typed on drawn devices come along too.',
+      'Find on page searches 200 ms after you stop typing, the same wait as the CTS Dashboard\'s log search.',
+      'App Config, Team chat in the top bar: puts the chat button beside the team count, top right, instead of the hover button at the bottom right - the same setting as the CTS Dashboard\'s. Off brings the hover button back.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.172',
+    date: 'October 27, 2026',
+    title: 'Find waits for you to stop typing',
+    changes: [
+      'Find on page waits until you stop typing for a second before it searches, so typing stays quick on long pages. Enter searches straight away.',
+      'Find on page: the bar has an outline, so it stands out in dark mode.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.171',
+    date: 'October 26, 2026',
+    title: 'Find searches the whole page',
+    changes: [
+      'Find on page (Ctrl+F) searches the whole page, not just what is on screen: long lists and tables are searched to the bottom, and Enter scrolls to a match wherever it is.',
+      'Find on page: the magnifying glass lines up with the text you type.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.170',
+    date: 'October 26, 2026',
+    title: 'Find on page',
+    changes: [
+      'Find on page: Ctrl+F opens a find bar on any page. It highlights every match on screen and jumps to each in turn - Enter or F3 for the next, Shift+Enter or Shift+F3 for the one before, Esc to close. The key can be changed in App Config, Keyboard shortcuts.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.169',
+    date: 'October 24, 2026',
+    title: 'Tag messages name you and the room',
+    changes: [
+      'Team, working on: tagging someone on a room - or taking them off - sends them a chat message that names you and the room ("Derek tagged you as working on room ARTS 209"), in every CTS app. Tagging or untagging yourself messages nobody.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.168',
+    date: 'October 22, 2026',
+    title: 'Logs export to the Desktop',
+    changes: [
+      'Logs: Export names the file after the app (Room_Config_Builder_logs_...) and the Save dialog opens on your Desktop.',
+      'Unsaved work found: the button that throws the recovered copy away says Discard the unsaved work instead of Keep the file.',
+      'Combine: a list or row that changed lists exactly what changed in it - each row added or removed and each field\'s old and new value - instead of a count like "was 500 items, now 501 items". The combine history records the same lines.',
+      'Cost, labor: changing a labor line (adding crew, say) no longer snaps back. A room whose only cost lines were labor gave a new labor line an id another line already had, so an edit to one landed on the other. Rooms saved that way are fixed when they open.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.167',
+    date: 'October 22, 2026',
+    title: 'Design options on the budget',
+    changes: [
+      'Project, Budget: a room with design options has the same design option menu beside its name as on the room list - pick which design the project total counts without leaving the budget.',
+      'The app fits itself to the screen it is on, the way the CTS Dashboard does: it is laid out for a 1920 x 1080 screen and scaled to fit the monitor, so a 1440p or 4K monitor shows the same layout more sharply and a small laptop gets it scaled down. Interface Size (App Config) zooms on top of that, and Follow Windows still leaves Windows\' scaling in charge.',
+      'Dragging the window to another monitor resizes the app once, when you let go, rather than at every crossing.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.166',
+    date: 'October 22, 2026',
+    title: 'Online counts people, not apps',
+    changes: [
+      'Team: the online count on the team button, the members button and Online now counts each person once, even when they have more than one CTS app open.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.165',
     date: 'October 22, 2026',

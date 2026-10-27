@@ -193,13 +193,16 @@ const Widget _rowSlotGap = SizedBox(width: kRowIconWidth, height: 34);
 /// and the caption over it both use it, so the two stay in line.
 const double kModelCellInset = 8;
 
+/// The least the Model column gets; a narrower window scrolls sideways.
+const double _kModelMinWidth = 180;
+
 const List<_Col> _kEquipmentCols = [
   // MIXED COLUMNS. A device off the diagram prints its name and its count as
   // plain text; a line added here has a box for both. Both cells carry the
   // box's inset (see [_CellText]), so the caption sits over either kind and
   // the two kinds of row line up with each other.
   _Col.field('Device', flex: 3),
-  _Col('Model', flex: 2, inset: kModelCellInset),
+  _Col('Model', flex: 2, inset: kModelCellInset, minWidth: _kModelMinWidth),
   // DRAWN, SPARES, TOTAL — the same three the cabling table has, for the same
   // reason. The drawing says how many the room has; a job often buys one more
   // than that, and the spare is real money no drawing will ever account for.
@@ -254,12 +257,20 @@ const double _kMinFlexWidth = 60;
 /// The list padding, card margin and card padding around every table.
 const double _kTableChrome = 2 * 16 + 2 * 4 + 2 * 12;
 
-/// The narrowest [columns] can lay out with their flex columns still
-/// readable.
-double _tableMinWidth(List<_Col> columns) => columns.fold(
-  0.0,
-  (w, c) => w + c.gap + (c.flex > 0 ? c.flex * _kMinFlexWidth : c.width),
-);
+/// The narrowest [columns] can lay out with every flex column at its least.
+double _tableMinWidth(List<_Col> columns) {
+  final flex = columns.fold(0, (n, c) => n + c.flex);
+  // Flex space big enough that each flex column's share reaches its least.
+  final flexSpace = columns
+      .where((c) => c.flex > 0)
+      .map((c) => math.max(c.minWidth, c.flex * _kMinFlexWidth) * flex / c.flex)
+      .fold(0.0, math.max);
+  return columns.fold(
+        0.0,
+        (w, c) => w + c.gap + (c.flex > 0 ? 0 : c.width),
+      ) +
+      flexSpace;
+}
 
 /// How wide the page has to be before it scrolls sideways instead. Measured
 /// off the widest table, so a narrow window scrolls rather than squeezing
@@ -279,7 +290,7 @@ const List<_Col> _kHardwareCols = [
   _Col('Item', flex: 3),
   // Maker, model and part number, so a plate or a mount can be ordered off
   // the row.
-  _Col('Model', flex: 2, inset: kModelCellInset),
+  _Col('Model', flex: 2, inset: kModelCellInset, minWidth: _kModelMinWidth),
   _Col('Kind', flex: 2),
   // Mixed, like the equipment table's: placed hardware prints
   // its count, a line added here has a box for it.
@@ -298,7 +309,7 @@ const List<_Col> _kHardwareCols = [
 /// quoted by hand.
 const List<_Col> _kCablingCols = [
   _Col('Cable type', flex: 3),
-  _Col('Model', flex: 2, inset: kModelCellInset),
+  _Col('Model', flex: 2, inset: kModelCellInset, minWidth: _kModelMinWidth),
   _Col('Drawn', width: 66, align: TextAlign.right),
   // Cable the job needs that is not a run on the diagram - and not a spare.
   _Col.field('Not drawn', gap: 12, width: 80, numeric: true),
@@ -331,7 +342,13 @@ const List<_Col> _kLaborCols = [
 /// The other-items table's columns — see [_kEquipmentCols].
 const List<_Col> _kItemsCols = [
   _Col.field('Description', flex: 3),
-  _Col.field('Model', gap: 8, flex: 2, extraInset: kModelCellInset),
+  _Col.field(
+    'Model',
+    gap: 8,
+    flex: 2,
+    extraInset: kModelCellInset,
+    minWidth: _kModelMinWidth,
+  ),
   _Col.field('Category', gap: 8, flex: 2),
   _Col.field('Qty', gap: 8, width: 70, numeric: true),
   _Col.field('Unit price', gap: 8, width: 130, numeric: true),
@@ -3371,6 +3388,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       label: 'Furnished by others',
       why: 'Not this job\'s money, and the quote does not need to say whose.',
     ),
+    (
+      source: kAlreadyInstalled,
+      label: 'Already installed in the room',
+      why: 'In the room now and staying. Listed here, priced at nothing.',
+    ),
   ];
 
   /// The row button that takes a line off this quote WITHOUT taking it out of
@@ -3450,9 +3472,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             : line.partlyFurnished
                 ? '${furnishedNote(line)} - the other '
                       '${trimNumber(line.boughtQty)} are bought on this job'
-                : by.isEmpty
-                    ? 'Furnished by others - listed here, priced at nothing'
-                    : 'Furnished by $by - listed here, priced at nothing'),
+                : '${priceFromLabel(line)} - listed here, priced at '
+                      'nothing'),
         child: PopupMenuButton<String>(
           icon: Icon(
             optional
@@ -3461,6 +3482,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 ? Icons.engineering
                 : existing
                 ? Icons.inventory_2_outlined
+                : by == kAlreadyInstalled
+                ? Icons.home_repair_service_outlined
                 : by != null
                 ? Icons.handshake
                 : ties.isNotEmpty
@@ -3974,7 +3997,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       return Tooltip(
         message: priceFromLabel(line),
         child: Text(
-          'furnished',
+          line.furnishedBy == kAlreadyInstalled ? 'installed' : 'furnished',
           textAlign: TextAlign.right,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -6671,7 +6694,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (line == null || _capturing) return cell;
     return InkWell(
       key: ValueKey('partedit_${line.key}'),
-      onTap: () => _editLinePart(context, line),
+      onTap: () => _showLineDetails(context, line),
       child: Row(
         children: [
           Expanded(child: cell),
@@ -6751,6 +6774,89 @@ class _CostEstimateViewState extends State<CostEstimateView> {
 
   /// Edits a line's maker and part number, warning that it leaves the
   /// catalog; a line already off it can be put back.
+  /// Everything on [line], selectable, with a button that copies it all and
+  /// one that edits the maker and part number.
+  Future<void> _showLineDetails(BuildContext context, CostLine line) async {
+    final currency = context.read<AppStateProvider>().roomCost.currency;
+    final rows = <(String, String)>[
+      ('Item', line.description.trim()),
+      ('Manufacturer', line.manufacturer.trim()),
+      ('Model', line.model.trim()),
+      ('Part number', line.partNumber.trim()),
+      ('Category', line.category.trim()),
+      ('Qty', trimNumber(line.qty)),
+      if (line.spareQty > 0) ('Spares', trimNumber(line.spareQty)),
+      ('Unit price', formatMoney(line.unitPrice, currency)),
+      if (line.shippingEach > 0)
+        ('Ship ea.', formatMoney(line.shippingEach, currency)),
+      (
+        'Extended',
+        line.furnished ? priceFromLabel(line) : formatMoney(line.total, currency),
+      ),
+      ('Price from', priceFromLabel(line)),
+    ].where((r) => r.$2.isNotEmpty).toList();
+    final text = [for (final (k, v) in rows) '$k: $v'].join('\n');
+    final edit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Line item'),
+        content: SizedBox(
+          width: 460,
+          child: SelectionArea(
+            child: Table(
+              key: const ValueKey('line_details'),
+              columnWidths: const {0: IntrinsicColumnWidth()},
+              children: [
+                for (final (k, v) in rows)
+                  TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(0, 3, 16, 3),
+                        child: Text(
+                          k,
+                          style: TextStyle(color: mutedInk(ctx, Theme.of(ctx))),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Text(v),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            key: const ValueKey('line_details_edit'),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Edit maker and part #'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+          TextButton.icon(
+            key: const ValueKey('line_details_copy'),
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('Copy line'),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: text));
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Line copied')),
+                );
+              }
+            },
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    if (edit == true && context.mounted) await _editLinePart(context, line);
+  }
+
   Future<void> _editLinePart(BuildContext context, CostLine line) async {
     final provider = context.read<AppStateProvider>();
     final maker = TextEditingController(text: line.manufacturer.trim());
@@ -8430,6 +8536,9 @@ class _Col {
   /// The cell's `Expanded` flex, or 0 when [width] is fixed.
   final int flex;
 
+  /// The least a flex cell gets before the page scrolls sideways.
+  final double minWidth;
+
   final String text;
   final TextAlign align;
 
@@ -8459,6 +8568,7 @@ class _Col {
     this.flex = 0,
     this.align = TextAlign.left,
     this.inset = 0,
+    this.minWidth = 0,
   }) : keepsBox = false,
        stepper = false;
 
@@ -8473,6 +8583,7 @@ class _Col {
     this.keepsBox = false,
     this.stepper = false,
     double extraInset = 0,
+    this.minWidth = 0,
   }) : align = numeric ? TextAlign.right : TextAlign.left,
        inset = kFieldTextInset + extraInset;
 

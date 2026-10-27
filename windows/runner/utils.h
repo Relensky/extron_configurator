@@ -1,6 +1,8 @@
 #ifndef RUNNER_UTILS_H_
 #define RUNNER_UTILS_H_
 
+#include <windows.h>
+
 #include <string>
 #include <vector>
 
@@ -15,5 +17,10 @@ std::string Utf8FromUtf16(const wchar_t* utf16_string);
 // Gets the command line arguments passed in as a std::vector<std::string>,
 // encoded in UTF-8. Returns an empty std::vector<std::string> on failure.
 std::vector<std::string> GetCommandLineArguments();
+
+// Physical pixels per app layout pixel on [monitor]: the app is laid out for
+// 1920x1080 and fitted to the monitor, ignoring Windows' display scaling.
+// Must match AppScale.scaleFor in lib/app_scale.dart.
+double AppFitScale(HMONITOR monitor);
 
 #endif  // RUNNER_UTILS_H_

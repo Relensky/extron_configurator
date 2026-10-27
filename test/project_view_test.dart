@@ -26,6 +26,8 @@ import 'package:extron_configurator/timeline_export_view.dart';
 /// The tab is also read on whatever window somebody has — and it carries wide
 /// tables — so the layout gets the same overflow check the Cost tab has.
 void main() {
+  // These read each room row's figures and notes.
+  setUpAll(() => roomRowsStartExpanded = true);
   late Directory dir;
 
   setUp(() => dir = Directory.systemTemp.createTempSync('rcb_project_view'));

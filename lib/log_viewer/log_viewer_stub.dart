@@ -25,6 +25,8 @@ String? writeLogExport(String path, String text) =>
 
 String defaultExportFolder() => '';
 
+String desktopFolder() => '';
+
 String exportPathIn(String folder, String fileName) => fileName;
 
 Future<void> revealInFileManager(String path) async {}

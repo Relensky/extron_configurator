@@ -15,6 +15,8 @@ import 'package:extron_configurator/project_view.dart';
 /// them lost on the way to the file. A note nobody can rely on is worse than
 /// no notes field, because somebody will put the asbestos warning in it.
 void main() {
+  // These read each room row's figures and notes.
+  setUpAll(() => roomRowsStartExpanded = true);
   late Directory dir;
 
   setUp(() => dir = Directory.systemTemp.createTempSync('notes_test_'));

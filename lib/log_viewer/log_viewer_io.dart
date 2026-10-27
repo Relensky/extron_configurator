@@ -166,6 +166,36 @@ String defaultExportFolder() {
   return Directory.systemTemp.path;
 }
 
+/// Where the export Save dialog starts: the user's Desktop, where Windows
+/// says it is (OneDrive can move it), else [defaultExportFolder].
+String desktopFolder() {
+  if (Platform.isWindows) {
+    try {
+      final r = Process.runSync('reg', [
+        'query',
+        r'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders',
+        '/v',
+        'Desktop',
+      ]);
+      final m = RegExp(r'Desktop\s+REG_\w+\s+(.+)')
+          .firstMatch(r.stdout.toString());
+      if (m != null) {
+        final String dir = m.group(1)!.trim().replaceAllMapped(
+            RegExp('%([^%]+)%'),
+            (v) => Platform.environment[v.group(1)!] ?? v.group(0)!);
+        if (Directory(dir).existsSync()) return dir;
+      }
+    } catch (_) {}
+  }
+  final String? home =
+      Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
+  if (home != null) {
+    final String candidate = '$home${Platform.pathSeparator}Desktop';
+    if (Directory(candidate).existsSync()) return candidate;
+  }
+  return defaultExportFolder();
+}
+
 /// [fileName] inside [folder].
 String exportPathIn(String folder, String fileName) =>
     '$folder${Platform.pathSeparator}$fileName';

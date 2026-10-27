@@ -267,7 +267,8 @@ class CollabController extends ChangeNotifier {
 
     // A different file than last time: the old one is no longer ours to be
     // present on, and the new one's base is whatever is on disk now.
-    if (!_samePath(file, s.path)) {
+    final opened = !_samePath(file, s.path);
+    if (opened) {
       if (s.path.isNotEmpty) await PresenceBoard(s.path).withdraw(me);
       s
         ..path = file
@@ -312,6 +313,8 @@ class CollabController extends ChangeNotifier {
       final key = '${doc.kind.name}|${o.user.toLowerCase()}@'
           '${o.machine.toLowerCase()}|${file.toLowerCase()}';
       if (!_announced.add(key)) continue;
+      // Whoever had it open first shows on the top bar; no notice on open.
+      if (opened && !catalog) continue;
       _notices.add(CollabNotice(
         doc.kind,
         catalog

@@ -30,6 +30,7 @@ import 'log_viewer_platform.dart' as platform;
 import 'log_viewer_types.dart';
 
 export 'log_viewer_types.dart';
+export 'log_viewer_platform.dart' show desktopFolder;
 
 /// Asks where to save an export, suggesting [suggestedName]. Returns the path,
 /// or null when the person cancelled. Apps with file_picker pass one; without

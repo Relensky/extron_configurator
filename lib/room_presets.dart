@@ -47,7 +47,8 @@ const Map<RoomPresetPart, String> kRoomPresetPartLabels = {
   RoomPresetPart.racks: 'Racks and what is in them',
   RoomPresetPart.floorPlans: 'Floor plan sheets (without the drawing images)',
   RoomPresetPart.cabling: 'Cabling sheet layout',
-  RoomPresetPart.cost: 'Cost page - prices, added lines, labor, fees, text',
+  RoomPresetPart.cost:
+      'Cost page - every line, labor, fees, scope of work and notes',
   RoomPresetPart.schematic: 'Control schematic layout',
   RoomPresetPart.setup: 'Switcher inputs and outputs, source layout',
 };

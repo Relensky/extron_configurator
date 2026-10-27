@@ -83,6 +83,7 @@ import 'safe_write.dart';
 import 'legacy_chat_import.dart';
 import 'project_search.dart' show ProjectSearch, projectThreadName;
 import 'changelog.dart' show kAppVersion;
+import 'hover_fade.dart' as hover show teamChatInTopBar;
 import 'team/team_chat.dart';
 import 'team/team_claims.dart';
 import 'team/team_host.dart';
@@ -1843,6 +1844,7 @@ class AppStateProvider extends ChangeNotifier {
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
       'confirmBeforeDelete': confirmBeforeDelete,
       'briefingOnProjectOpen': briefingOnProjectOpen,
+      'teamChatInTopBar': teamChatInTopBar,
       'catalogHideWarranties': catalogHideWarranties,
       'catalogUsOnly': catalogUsOnly,
       if (shortcuts.overrides.isNotEmpty)
@@ -2158,7 +2160,8 @@ class AppStateProvider extends ChangeNotifier {
   double textScale = 1.0;
 
   /// How big the whole interface is drawn, whatever Windows' display scaling
-  /// is: 1.0 is the size the app is at Windows 100%. 0 follows Windows.
+  /// is: 1.0 is the app fitted to the monitor (see app_scale.dart). 0 follows
+  /// Windows.
   double uiScale = 1.0;
 
   /// What goes in front of every figure the app prints. One app-wide answer
@@ -6288,9 +6291,17 @@ class AppStateProvider extends ChangeNotifier {
       cabling: has(RoomPresetPart.cabling) && !avCabling.isEmpty
           ? Map<String, dynamic>.from(cloneJson(avCabling.toJson()) as Map)
           : const {},
-      cost: has(RoomPresetPart.cost)
-          ? Map<String, dynamic>.from(cloneJson(avCost.toJson()) as Map)
-          : const {},
+      // The whole cost page. Without the AV flow its drawn devices, rack
+      // hardware and cable would have nothing to count them, so they go in
+      // as lines of their own.
+      cost: !has(RoomPresetPart.cost)
+          ? const {}
+          : has(RoomPresetPart.flow)
+              ? Map<String, dynamic>.from(cloneJson(avCost.toJson()) as Map)
+              : costPageOf(
+                  CostItemSet.wholePage(avCost, roomCost),
+                  avCost,
+                ).toJson(),
       schematic: has(RoomPresetPart.schematic) && schematicPositions.isNotEmpty
           ? Map<String, dynamic>.from(
               cloneJson(schematicLayoutAsJson()) as Map)
@@ -6369,11 +6380,11 @@ class AppStateProvider extends ChangeNotifier {
           ..taxLabel = label
           ..currency = currencySymbol;
       } else {
-        addCostItems(
-          avCost,
-          CostItemSet.fromSettings(RoomCostSettings()..readJson(json)),
-          _nextCostId,
-        );
+        // Its lines, scope and notes go on with the room's own; what it says
+        // about the devices it drew goes on where the room says nothing.
+        final page = RoomCostSettings()..readJson(json);
+        addCostItems(avCost, CostItemSet.fromSettings(page), _nextCostId);
+        mergeDrawnLineSettings(avCost, page);
       }
       _avCostCounter = math.max(_avCostCounter, highestCostId(avCost));
     }
@@ -9287,18 +9298,15 @@ class AppStateProvider extends ChangeNotifier {
           avCables[i] = avCables[i].copyWith(label: avCables[i].id);
         }
       }
-      for (final id in [
-        for (final f in avCost.fees) f.id,
-        for (final i in avCost.items) i.id,
-        for (final i in avCost.extraEquipment) i.id,
-        for (final i in avCost.extraHardware) i.id,
-        for (final i in avCost.extraCables) i.id,
-      ]) {
-        final match = RegExp(r'_(\d+)$').firstMatch(id);
-        if (match != null) {
-          _avCostCounter =
-              math.max(_avCostCounter, int.parse(match.group(1)!));
-        }
+      // Every cost line, labor included: labor was left out, so a room whose
+      // only line was LABOR_2 handed out LABOR_1 and then LABOR_2 again.
+      _avCostCounter = math.max(_avCostCounter, highestCostId(avCost));
+      // And the twins that made are given ids of their own.
+      final renumbered = repairCostIds(avCost, _nextCostId);
+      if (renumbered > 0) {
+        AppLogger.logInfo('Cost estimate: $renumbered line'
+            '${renumbered == 1 ? '' : 's'} shared an id with another and '
+            'got a new one.');
       }
       for (final i in avRackItems) {
         final match = RegExp(r'^RACKITEM_(\d+)$').firstMatch(i.id);
@@ -10396,6 +10404,17 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The team chat's button sits in the top bar instead of hovering in the
+  /// page's corner, as the CTS Dashboard's setting of the same name does.
+  bool get teamChatInTopBar => hover.teamChatInTopBar.value;
+
+  void setTeamChatInTopBar(bool value) {
+    hover.teamChatInTopBar.value = value;
+    // ignore: unawaited_futures
+    _persistSettings();
+    notifyListeners();
+  }
+
   /// The catalog list hides warranty extensions and service plans.
   bool catalogHideWarranties = false;
 
@@ -10681,6 +10700,7 @@ class AppStateProvider extends ChangeNotifier {
       briefingOnProjectOpen = saved['briefingOnProjectOpen'] is bool
           ? saved['briefingOnProjectOpen'] as bool
           : true;
+      hover.teamChatInTopBar.value = saved['teamChatInTopBar'] == true;
       catalogHideWarranties = saved['catalogHideWarranties'] == true;
       catalogUsOnly = saved['catalogUsOnly'] == true;
       shortcuts = KeyboardShortcuts.fromJson(saved['keyboardShortcuts']);
@@ -12679,11 +12699,20 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Helper method to convert a string to Title Case (e.g., "ARTS & HUMANITIES" -> "Arts & Humanities")
+  /// Apostrophes are kept ("SELVESTER'S CAFE" -> "Selvester's Cafe"), and a
+  /// one-letter prefix capitalizes the next letter ("O'CONNELL" -> "O'Connell").
+  /// A legacy double quote standing in for the apostrophe is converted.
   String _toTitleCase(String text) {
     if (text.isEmpty) return text;
-    return text.split(' ').map((word) {
+    return text.replaceAll('"', "'").split(' ').map((word) {
       if (word.isEmpty) return word;
-      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+      final titled = word[0].toUpperCase() + word.substring(1).toLowerCase();
+      if (titled.length > 2 && titled[1] == "'") {
+        return titled.substring(0, 2) +
+            titled[2].toUpperCase() +
+            titled.substring(3);
+      }
+      return titled;
     }).join(' ');
   }
 

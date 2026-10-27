@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
@@ -79,7 +80,7 @@ bool collabHasChanged(EditorPresence presence) =>
 /// How many editors get a chip of their own before the rest go in a list.
 const int kCollabChipsShown = 3;
 
-/// The editors past [kCollabChipsShown]: '+2', opening a list of who they
+/// The editors with no room on the bar: '+2', opening a list of who they
 /// are and where.
 class _MoreEditors extends StatelessWidget {
   final List<({EditorPresence presence, CollabDocKind kind})> editors;
@@ -161,6 +162,17 @@ bool collabStripCompact({
   return shareWidth - needed < kCollabNameRoom;
 }
 
+/// What an editor shrunk to its icon takes on the bar: the circle, its
+/// ring and the gap before it.
+const double kCollabCompactWidth = 34;
+
+/// How many editors fit on the bar as icons beside [otherChips], leaving the
+/// name [kCollabNameRoom]. At least one.
+int collabCompactFit({required double shareWidth, required int otherChips}) {
+  final room = shareWidth - kCollabNameRoom - 12 - otherChips * 100;
+  return math.max(1, (room / kCollabCompactWidth).floor());
+}
+
 /// The label on an editor's chip: their name, and the room they are in.
 String collabEditorLabel(EditorPresence presence) =>
     presence.room.trim().isEmpty
@@ -225,20 +237,36 @@ class CollabPresenceStrip extends StatelessWidget {
         // Editors first.
         editors.sort((a, b) => (collabHasChanged(b.presence) ? 1 : 0)
             .compareTo(collabHasChanged(a.presence) ? 1 : 0));
-        // A FEW ON THE BAR, THE REST IN A LIST. Five people editing at once
-        // is five chips the bar has no room for.
-        final shown = editors.take(kCollabChipsShown).toList();
+        // EVERYONE ON THE BAR while they fit: full chips, then icons with
+        // the names on hover, and only then a few icons and a '+N' list.
+        // With no width to measure, a few chips and the rest in a list.
         final width = shareWidth;
-        final compact = width != null &&
-            shown.isNotEmpty &&
-            collabStripCompact(
+        var shown = editors.take(kCollabChipsShown).toList();
+        var compact = false;
+        if (width != null && editors.isNotEmpty) {
+          shown = editors;
+          compact = collabStripCompact(
+            shareWidth: width,
+            labels: [for (final e in editors) collabEditorLabel(e.presence)],
+            otherChips: chips.length,
+            style: Theme.of(context).textTheme.labelMedium,
+            textScaler: MediaQuery.textScalerOf(context),
+          );
+          if (compact) {
+            final all = collabCompactFit(
               shareWidth: width,
-              labels: [for (final e in shown) collabEditorLabel(e.presence)],
-              otherChips: chips.length +
-                  (editors.length > kCollabChipsShown ? 1 : 0),
-              style: Theme.of(context).textTheme.labelMedium,
-              textScaler: MediaQuery.textScalerOf(context),
+              otherChips: chips.length,
             );
+            if (editors.length > all) {
+              shown = editors
+                  .take(collabCompactFit(
+                    shareWidth: width,
+                    otherChips: chips.length + 1,
+                  ))
+                  .toList();
+            }
+          }
+        }
         for (final e in shown) {
           chips.add(CollabEditorAvatar(
             key: ValueKey('collab_editor_chip_${e.presence.user}@${e.presence.machine}'),
@@ -247,10 +275,10 @@ class CollabPresenceStrip extends StatelessWidget {
             compact: compact,
           ));
         }
-        if (editors.length > kCollabChipsShown) {
+        if (editors.length > shown.length) {
           chips.add(_MoreEditors(
             key: const ValueKey('collab_more_chip'),
-            editors: editors.skip(kCollabChipsShown).toList(),
+            editors: editors.skip(shown.length).toList(),
           ));
         }
         if (chips.isEmpty) return const SizedBox.shrink();
@@ -682,8 +710,13 @@ List<CombineHistoryItem> combineHistoryItems(
     CombineHistoryItem(
       place: describeMergePlace(c.path, doc),
       path: c.path,
-      before: c.before == null ? '' : describeMergeValue(c.before),
-      after: c.after == null ? '(removed)' : describeMergeValue(c.after),
+      // A row or list changed in place says what in it changed.
+      before: c.before == null || _inPlace(c) ? '' : describeMergeValue(c.before),
+      after: c.after == null
+          ? '(removed)'
+          : _inPlace(c)
+              ? describeMergeChange(c.before, c.after)
+              : describeMergeValue(c.after),
       approved: !declined.contains(c.key),
     ),
   for (final c in preview.conflicts)
@@ -701,6 +734,9 @@ List<CombineHistoryItem> combineHistoryItems(
       conflict: true,
     ),
 ];
+
+bool _inPlace(MergeChange c) =>
+    (c.before is Map && c.after is Map) || (c.before is List && c.after is List);
 
 /// A catalog field's value as a person reads it; null is its default.
 String describeCatalogValue(Object? v) =>
@@ -900,18 +936,16 @@ Future<Set<String>?> showMergeReviewDialog(
   rateChange ??= taxChanges.firstOrNull;
   final yourRate = describeTaxRate(rateChange?.before);
   final theirRate = describeTaxRate(rateChange?.after);
+  // Each change's line by line description, worked out once.
+  final whats = <String, String>{};
   return showDialog<Set<String>>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setState) {
         final theme = Theme.of(ctx);
         final muted = theme.colorScheme.onSurfaceVariant;
-        String what(MergeChange c) {
-          if (c.added) return 'added: ${describeMergeValue(c.after)}';
-          if (c.removed) return 'removed (was ${describeMergeValue(c.before)})';
-          return 'was ${describeMergeValue(c.before)}, now '
-              '${describeMergeValue(c.after)}';
-        }
+        String what(MergeChange c) => whats.putIfAbsent(
+            c.key, () => describeMergeChange(c.before, c.after));
 
         return AlertDialog(
           key: const ValueKey('collab_review_dialog'),

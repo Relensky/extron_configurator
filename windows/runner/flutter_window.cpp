@@ -10,6 +10,7 @@
 #include <flutter/standard_method_codec.h>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "utils.h"
 
 // Keeps the "rcb/window_chrome" channel alive for the life of the process.
 // The project chat's own window (a second copy of this .exe) uses it to set
@@ -65,7 +66,9 @@ static void SetupWindowChrome(flutter::FlutterEngine* engine,
           auto wv = args->find(flutter::EncodableValue("width"));
           auto hv = args->find(flutter::EncodableValue("height"));
           if (wv != args->end() && hv != args->end()) {
-            const double scale = GetDpiForWindow(hwnd) / 96.0;
+            // App layout pixels - see AppFitScale.
+            const double scale = AppFitScale(
+                MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST));
             int pw = static_cast<int>(ReadInt(wv->second) * scale);
             int ph = static_cast<int>(ReadInt(hv->second) * scale);
             HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
@@ -153,6 +156,14 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   switch (message) {
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
+      break;
+    // A drag or resize begins and ends. Dart holds the app's scale between
+    // the two, so crossing monitors re-lays-out the app once, on release.
+    case WM_ENTERSIZEMOVE:
+      if (g_window_chrome) g_window_chrome->InvokeMethod("moveStarted", nullptr);
+      break;
+    case WM_EXITSIZEMOVE:
+      if (g_window_chrome) g_window_chrome->InvokeMethod("moveEnded", nullptr);
       break;
   }
 

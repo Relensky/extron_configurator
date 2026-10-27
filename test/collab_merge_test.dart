@@ -373,6 +373,25 @@ void main() {
       them.dispose();
     });
 
+    test('opening a project others already have says nothing', () async {
+      final them = CollabController(
+        identity: const CollabIdentity(user: 'jsmith', machine: 'PC-9'),
+        enabled: true,
+      )..register(_MapDoc(file));
+      await them.tick();
+      final me = controllerFor('me');
+      final heard = <String>[];
+      final sub = me.notices.listen((n) => heard.add(n.message));
+      await me.tick();
+      await Future<void>.delayed(Duration.zero);
+      expect(me.othersOn(CollabDocKind.project).map((p) => p.user),
+          ['jsmith']);
+      expect(heard, isEmpty);
+      await sub.cancel();
+      me.dispose();
+      them.dispose();
+    });
+
     test('our own save is not reported as somebody else\'s', () async {
       final me = controllerFor('me');
       await me.tick();

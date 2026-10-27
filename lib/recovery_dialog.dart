@@ -72,7 +72,7 @@ String recoveryAge(DateTime takenAt) {
 ///
 ///   * **Restore** loads the copy into the editor and leaves the room dirty,
 ///     so the next Save is a deliberate one.
-///   * **Keep the file** throws the copy away for good — the answer for
+///   * **Discard the unsaved work** throws the copy away for good — the answer for
 ///     somebody who knows the file is the version they want.
 ///   * **Not now** leaves both alone. The copy is still there next time, which
 ///     is the right default for a dialog somebody wants to think about.
@@ -153,7 +153,7 @@ Future<void> showRecoveryDialog(
         TextButton(
           key: const ValueKey('recovery_discard'),
           onPressed: () => Navigator.pop(ctx, 'discard'),
-          child: const Text('Keep the file'),
+          child: const Text('Discard the unsaved work'),
         ),
         FilledButton.icon(
           key: const ValueKey('recovery_restore'),

@@ -4,6 +4,7 @@
 #include <flutter_windows.h>
 
 #include "resource.h"
+#include "utils.h"
 
 namespace {
 
@@ -159,8 +160,11 @@ bool Win32Window::Create(const std::wstring& title,
   // edge out of sight. Fit it into the monitor's work area instead.
   int x = Scale(origin.x, scale_factor);
   int y = Scale(origin.y, scale_factor);
-  int width = Scale(size.width, scale_factor);
-  int height = Scale(size.height, scale_factor);
+  // The size is in app layout pixels, which follow the monitor's resolution
+  // rather than Windows' scaling - see AppFitScale.
+  const double fit_scale = AppFitScale(monitor);
+  int width = Scale(size.width, fit_scale);
+  int height = Scale(size.height, fit_scale);
   MONITORINFO monitor_info{};
   monitor_info.cbSize = sizeof(MONITORINFO);
   if (GetMonitorInfo(monitor, &monitor_info)) {

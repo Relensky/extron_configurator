@@ -60,6 +60,19 @@ void main() {
     baseCosts: p.baseCosts,
   );
 
+  test('a line already installed adds nothing and is not in kind', () {
+    final p = room();
+    p.addAvNode(device('D1', 'Display', 'Display X'));
+    p.addAvNode(device('S1', 'Switcher', 'Switcher Y'));
+    p.setAvCostFurnished('model:display x', kAlreadyInstalled);
+    final e = estimateOf(p);
+    final display = e.equipment.firstWhere((l) => l.model == 'Display X');
+    expect(e.grandTotal, 2500);
+    expect(display.furnished, isTrue);
+    expect(priceFromLabel(display), 'Already installed');
+    expect(e.inKind, isEmpty);
+  });
+
   group('equipment somebody else is furnishing', () {
     test('is listed at its price and adds nothing to the total', () {
       final p = room();

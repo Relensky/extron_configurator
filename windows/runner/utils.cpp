@@ -7,6 +7,22 @@
 
 #include <iostream>
 
+double AppFitScale(HMONITOR monitor) {
+  MONITORINFO info{};
+  info.cbSize = sizeof(MONITORINFO);
+  if (!monitor || !GetMonitorInfo(monitor, &info)) return 1.0;
+  const double w = info.rcMonitor.right - info.rcMonitor.left;
+  const double h = info.rcMonitor.bottom - info.rcMonitor.top;
+  if (w <= 0 || h <= 0) return 1.0;
+  // Either way up: a portrait monitor is as big as a landscape one.
+  const double long_side = w > h ? w : h;
+  const double short_side = w > h ? h : w;
+  const double fit = long_side / 1920.0 < short_side / 1080.0
+                         ? long_side / 1920.0
+                         : short_side / 1080.0;
+  return fit < 0.75 ? 0.75 : fit;
+}
+
 void CreateAndAttachConsole() {
   if (::AllocConsole()) {
     FILE *unused;

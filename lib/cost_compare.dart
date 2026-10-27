@@ -15,8 +15,9 @@ import 'labor_rates.dart';
 ///  matches lines by part number (else model, else name) and reports, per
 ///  part, what each room buys and at what price.
 ///
-///  The lines typed on a cost page (equipment not drawn, rack hardware, cable,
-///  other items, labor, fees) can be copied to another room, or saved as a
+///  A cost page's lines can be copied to another room. The whole page - the
+///  drawn devices, rack hardware and cable as well as the lines typed by
+///  hand, with the labor, fees, scope of work and notes - can be saved as a
 ///  cost preset under `<root>/cost_presets/` for anybody to apply.
 /// ============================================================================
 
@@ -248,6 +249,17 @@ class CostItemSet {
   final Map<String, double> spares;
   final Map<String, double> shipping;
 
+  /// Item or labor id -> who furnishes it instead of the job, and how many.
+  final Map<String, String> furnished;
+  final Map<String, double> furnishedQty;
+
+  /// Item ids quoted as optional.
+  final Set<String> optional;
+
+  /// The cost page's text: the scope of work and the estimate notes.
+  final String scopeOfWork;
+  final String notes;
+
   const CostItemSet({
     this.extraEquipment = const [],
     this.extraHardware = const [],
@@ -258,7 +270,54 @@ class CostItemSet {
     this.prices = const {},
     this.spares = const {},
     this.shipping = const {},
+    this.furnished = const {},
+    this.furnishedQty = const {},
+    this.optional = const {},
+    this.scopeOfWork = '',
+    this.notes = '',
   });
+
+  /// EVERYTHING on a room's cost page, as [estimate] lists it: the devices,
+  /// rack hardware and cable counted off the drawings as well as the lines
+  /// typed by hand, with the labor, fees, scope of work and notes. A drawn
+  /// line becomes a typed one at the quantity and room price it has here, so
+  /// the set stands on its own in a room with nothing drawn.
+  factory CostItemSet.wholePage(
+    RoomCostSettings settings,
+    CostEstimate estimate,
+  ) {
+    final b = _ItemBuilder(settings);
+    final sections = <(List<CostLine>, String)>[
+      (estimate.equipment, 'Equipment'),
+      (estimate.hardware, 'Rack hardware'),
+      (estimate.cabling, 'Cabling'),
+      (estimate.extras, 'Other items'),
+      for (final c in estimate.laborCharges) ([c.line], c.section),
+      (estimate.optional, ''),
+    ];
+    final seen = <String>{};
+    for (final (lines, section) in sections) {
+      for (final l in lines) {
+        // Nothing to buy, or already taken from another list.
+        if (l.qty <= 0 || !seen.add(l.key)) continue;
+        b.takeLine(l, section);
+      }
+    }
+    final labor = [
+      for (final l in settings.labor)
+        if (l.techs * l.hours > 0 || l.description.trim().isNotEmpty) l,
+    ];
+    for (final l in labor) {
+      final by = settings.furnishedLines[l.id];
+      if (by != null) b.furnished[l.id] = by;
+    }
+    return b.build(
+      labor: labor,
+      fees: [...settings.fees],
+      scopeOfWork: settings.scopeOfWork,
+      notes: settings.notes,
+    );
+  }
 
   /// The cost items on [settings]. Only what is keyed to those items is
   /// taken: a price typed on a drawn device belongs to that room.
@@ -286,6 +345,15 @@ class CostItemSet {
       prices: only(settings.priceOverrides),
       spares: only(settings.equipmentSpares),
       shipping: only(settings.shippingEach),
+      furnished: {
+        for (final e in settings.furnishedLines.entries)
+          if (ids.contains(e.key) || settings.labor.any((l) => l.id == e.key))
+            e.key: e.value,
+      },
+      furnishedQty: only(settings.furnishedQty),
+      optional: settings.optionalLines.where(ids.contains).toSet(),
+      scopeOfWork: settings.scopeOfWork,
+      notes: settings.notes,
     );
   }
 
@@ -297,7 +365,10 @@ class CostItemSet {
       labor.length +
       fees.length;
 
-  bool get isEmpty => lineCount == 0;
+  bool get hasText =>
+      scopeOfWork.trim().isNotEmpty || notes.trim().isNotEmpty;
+
+  bool get isEmpty => lineCount == 0 && !hasText;
 
   /// "3 equipment, 2 labor, 1 fee" - what applying it adds.
   String get summary {
@@ -308,9 +379,37 @@ class CostItemSet {
       if (items.isNotEmpty) '${items.length} other',
       if (labor.isNotEmpty) '${labor.length} labor',
       if (fees.isNotEmpty) '${fees.length} fee${fees.length == 1 ? '' : 's'}',
+      if (scopeOfWork.trim().isNotEmpty) 'scope of work',
+      if (notes.trim().isNotEmpty) 'notes',
     ];
     return parts.isEmpty ? 'nothing' : parts.join(', ');
   }
+
+  /// This set with [extraEquipment], [extraHardware], [extraCables], [items],
+  /// [labor] and [fees] swapped for the ones given.
+  CostItemSet withLines({
+    required List<CostLineItem> extraEquipment,
+    required List<CostLineItem> extraHardware,
+    required List<CostLineItem> extraCables,
+    required List<CostLineItem> items,
+    required List<LaborLine> labor,
+    required List<CostFee> fees,
+  }) => CostItemSet(
+    extraEquipment: extraEquipment,
+    extraHardware: extraHardware,
+    extraCables: extraCables,
+    items: items,
+    labor: labor,
+    fees: fees,
+    prices: prices,
+    spares: spares,
+    shipping: shipping,
+    furnished: furnished,
+    furnishedQty: furnishedQty,
+    optional: optional,
+    scopeOfWork: scopeOfWork,
+    notes: notes,
+  );
 
   Map<String, dynamic> toJson() => {
     if (extraEquipment.isNotEmpty)
@@ -325,6 +424,11 @@ class CostItemSet {
     if (prices.isNotEmpty) 'prices': prices,
     if (spares.isNotEmpty) 'spares': spares,
     if (shipping.isNotEmpty) 'shipping': shipping,
+    if (furnished.isNotEmpty) 'furnished': furnished,
+    if (furnishedQty.isNotEmpty) 'furnishedQty': furnishedQty,
+    if (optional.isNotEmpty) 'optional': optional.toList()..sort(),
+    if (scopeOfWork.trim().isNotEmpty) 'scopeOfWork': scopeOfWork,
+    if (notes.trim().isNotEmpty) 'notes': notes,
   };
 
   factory CostItemSet.fromJson(Map<String, dynamic> json) {
@@ -352,8 +456,114 @@ class CostItemSet {
       prices: amounts('prices'),
       spares: amounts('spares'),
       shipping: amounts('shipping'),
+      furnished: {
+        for (final e in ((json['furnished'] as Map?) ?? const {}).entries)
+          e.key.toString(): e.value.toString(),
+      },
+      furnishedQty: amounts('furnishedQty'),
+      optional: {
+        for (final e in (json['optional'] as List? ?? const [])) e.toString(),
+      },
+      scopeOfWork: json['scopeOfWork']?.toString() ?? '',
+      notes: json['notes']?.toString() ?? '',
     );
   }
+}
+
+/// Collects cost lines into a [CostItemSet], each as the line it is typed as
+/// on [source] or, for one counted off a drawing, as a new typed line.
+class _ItemBuilder {
+  final RoomCostSettings source;
+  _ItemBuilder(this.source);
+
+  final equipment = <CostLineItem>[];
+  final hardware = <CostLineItem>[];
+  final cables = <CostLineItem>[];
+  final items = <CostLineItem>[];
+  final prices = <String, double>{};
+  final spares = <String, double>{};
+  final shipping = <String, double>{};
+  final furnished = <String, String>{};
+  final furnishedQty = <String, double>{};
+  final optional = <String>{};
+  var _drawn = 0;
+
+  /// Adds [l], listed under [section] ('' for "wherever it was typed, else
+  /// equipment").
+  void takeLine(CostLine l, String section) {
+    for (final (typed, out) in [
+      (source.extraEquipment, equipment),
+      (source.extraHardware, hardware),
+      (source.extraCables, cables),
+      (source.items, items),
+    ]) {
+      final own = typed.where((i) => i.id == l.key).firstOrNull;
+      if (own != null) return _add(l, own, out);
+    }
+    final out = switch (section) {
+      'Equipment' || '' => equipment,
+      'Rack hardware' => hardware,
+      'Cabling' => cables,
+      _ => items,
+    };
+    final item = CostLineItem(
+      id: 'COPY_${++_drawn}',
+      description: l.description,
+      category: l.category,
+      qty: l.qty,
+      unitPrice: l.unitPrice,
+      taxable: l.taxable,
+      catalogModel: l.model,
+      manufacturer: l.manufacturer,
+      partNumber: l.partNumber,
+    );
+    _add(l, null, out, item: item);
+  }
+
+  void _add(
+    CostLine l,
+    CostLineItem? own,
+    List<CostLineItem> out, {
+    CostLineItem? item,
+  }) {
+    final line = own ?? item!;
+    out.add(line);
+    // A part typed off the catalog keeps the price it shows here.
+    final price =
+        source.priceOverrides[l.key] ?? (l.offCatalog ? l.unitPrice : null);
+    if (price != null) prices[line.id] = price;
+    final spare = source.equipmentSpares[l.key];
+    if (own != null && spare != null) spares[line.id] = spare;
+    final ship = source.shippingEach[l.key];
+    if (ship != null) shipping[line.id] = ship;
+    final by = source.furnishedLines[l.key];
+    if (by != null) furnished[line.id] = by;
+    final some = source.furnishedQty[l.key];
+    if (some != null) furnishedQty[line.id] = some;
+    if (source.optionalLines.contains(l.key)) optional.add(line.id);
+  }
+
+  CostItemSet build({
+    List<LaborLine> labor = const [],
+    List<CostFee> fees = const [],
+    String scopeOfWork = '',
+    String notes = '',
+  }) => CostItemSet(
+    extraEquipment: equipment,
+    extraHardware: hardware,
+    extraCables: cables,
+    items: items,
+    labor: labor,
+    fees: fees,
+    prices: prices,
+    spares: spares,
+    shipping: shipping,
+    furnished: furnished,
+    furnishedQty: furnishedQty,
+    optional: optional,
+    scopeOfWork: scopeOfWork,
+    notes: notes,
+  );
 }
 
 /// The cost items that copy [rows] out of the room whose settings are
@@ -369,67 +579,18 @@ CostItemSet costItemsFromRows(
   required RoomCostSettings source,
   required bool fromThere,
 }) {
-  final equipment = <CostLineItem>[];
-  final hardware = <CostLineItem>[];
-  final cables = <CostLineItem>[];
-  final items = <CostLineItem>[];
+  final b = _ItemBuilder(source);
   final labor = <LaborLine>[];
-  final prices = <String, double>{};
-  final spares = <String, double>{};
-  final shipping = <String, double>{};
-  var drawn = 0;
-
-  void take(CostLine l, List<CostLineItem> typedList, List<CostLineItem> out) {
-    final own = typedList.where((i) => i.id == l.key).firstOrNull;
-    final item = own ??
-        CostLineItem(
-          id: 'COPY_${++drawn}',
-          description: l.description,
-          category: l.category,
-          qty: l.qty,
-          unitPrice: l.unitPrice,
-          taxable: l.taxable,
-          catalogModel: l.model,
-          manufacturer: l.manufacturer,
-          partNumber: l.partNumber,
-        );
-    out.add(item);
-    final price = source.priceOverrides[l.key];
-    if (price != null) prices[item.id] = price;
-    final spare = source.equipmentSpares[l.key];
-    if (own != null && spare != null) spares[item.id] = spare;
-    final ship = source.shippingEach[l.key];
-    if (ship != null) shipping[item.id] = ship;
-  }
-
   for (final r in rows) {
     for (final l in fromThere ? r.linesThere : r.linesHere) {
-      switch (r.section) {
-        case 'Equipment':
-          take(l, source.extraEquipment, equipment);
-        case 'Rack hardware':
-          take(l, source.extraHardware, hardware);
-        case 'Cabling':
-          take(l, source.extraCables, cables);
-        default:
-          take(l, source.items, items);
-      }
+      b.takeLine(l, r.section);
     }
     for (final l in fromThere ? r.laborThere : r.laborHere) {
       final own = source.labor.where((x) => x.id == l.id).firstOrNull;
       if (own != null) labor.add(own);
     }
   }
-  return CostItemSet(
-    extraEquipment: equipment,
-    extraHardware: hardware,
-    extraCables: cables,
-    items: items,
-    labor: labor,
-    prices: prices,
-    spares: spares,
-    shipping: shipping,
-  );
+  return b.build(labor: labor);
 }
 
 /// The keys an item can be matched on - part number, model and name - in
@@ -516,6 +677,52 @@ String? drawnModelOfCostKey(String key) {
   return k.startsWith('model:') ? k.substring(6) : null;
 }
 
+/// What [from] says about its drawn lines - price, quantity, spares, who
+/// furnishes it, its name and part - put on [into] wherever [into] says
+/// nothing of its own about that line. A drawn line's key is its model, so
+/// it means the same device in any room.
+void mergeDrawnLineSettings(RoomCostSettings into, RoomCostSettings from) {
+  bool drawn(String key) => drawnModelOfCostKey(key) != null;
+  void merge<V>(Map<String, V> to, Map<String, V> src) {
+    for (final e in src.entries) {
+      if (drawn(e.key)) to.putIfAbsent(e.key, () => e.value);
+    }
+  }
+
+  merge(into.priceOverrides, from.priceOverrides);
+  merge(into.qtyOverrides, from.qtyOverrides);
+  merge(into.equipmentSpares, from.equipmentSpares);
+  merge(into.shippingEach, from.shippingEach);
+  merge(into.furnishedLines, from.furnishedLines);
+  merge(into.furnishedQty, from.furnishedQty);
+  merge(into.lineNames, from.lineNames);
+  merge(into.lineParts, from.lineParts);
+  into.optionalLines.addAll(from.optionalLines.where(drawn));
+}
+
+/// A cost page holding [set] and nothing else, keeping [settings]' look on
+/// paper (title, subtitle, wording, extra sections, shipping, sort order).
+RoomCostSettings costPageOf(CostItemSet set, RoomCostSettings settings) {
+  final json = settings.toJson();
+  final page = RoomCostSettings()
+    ..readJson({
+      for (final k in const [
+        'documentTitle',
+        'documentSubtitle',
+        'pdfWords',
+        'sections',
+        'showShipping',
+        'shippingTaxable',
+        'equipmentSort',
+        'includeCabling',
+      ])
+        if (json.containsKey(k)) k: json[k],
+    });
+  var n = 0;
+  addCostItems(page, set, (prefix) => '$prefix${++n}');
+  return page;
+}
+
 /// Takes the lines with [ids] off [settings], with the price, spares and
 /// shipping typed on them. Returns how many came off.
 int removeCostItems(RoomCostSettings settings, Set<String> ids) {
@@ -592,16 +799,13 @@ int removeCostItems(RoomCostSettings settings, Set<String> ids) {
       skipped++;
     }
   }
-  final kept = CostItemSet(
+  final kept = set.withLines(
     extraEquipment: keep('Equipment', set.extraEquipment),
     extraHardware: keep('Rack hardware', set.extraHardware),
     extraCables: keep('Cabling', set.extraCables),
     items: keep('Other items', set.items),
     labor: keptLabor,
     fees: keptFees,
-    prices: set.prices,
-    spares: set.spares,
-    shipping: set.shipping,
   );
   return (kept, skipped);
 }
@@ -641,6 +845,11 @@ Map<String, List<String>> costItemSections(
       'Fees': [
         for (final f in set.fees) '${f.name} (${formatPercent(f.percent)})',
       ],
+    if (set.hasText)
+      'Text': [
+        if (set.scopeOfWork.trim().isNotEmpty) 'Scope of work',
+        if (set.notes.trim().isNotEmpty) 'Estimate notes',
+      ],
   };
 }
 
@@ -662,6 +871,47 @@ int highestCostId(RoomCostSettings settings) {
   return n;
 }
 
+/// Gives a fresh id from [nextId] to every cost line whose id is blank or
+/// already used by an earlier line. Two lines under one id edit and remove
+/// each other: changing one landed on the other and looked like a revert.
+/// Returns how many lines were renumbered.
+int repairCostIds(
+  RoomCostSettings settings,
+  String Function(String prefix) nextId,
+) {
+  final seen = <String>{};
+  var fixed = 0;
+  void lines(List<CostLineItem> list, String prefix) {
+    for (var i = 0; i < list.length; i++) {
+      if (seen.add(list[i].id) && list[i].id.isNotEmpty) continue;
+      list[i] = CostLineItem.fromJson({...list[i].toJson(), 'id': nextId(prefix)});
+      seen.add(list[i].id);
+      fixed++;
+    }
+  }
+
+  for (var i = 0; i < settings.fees.length; i++) {
+    final f = settings.fees[i];
+    if (seen.add(f.id) && f.id.isNotEmpty) continue;
+    settings.fees[i] = CostFee.fromJson({...f.toJson(), 'id': nextId('FEE_')});
+    seen.add(settings.fees[i].id);
+    fixed++;
+  }
+  lines(settings.items, 'ITEM_');
+  lines(settings.extraEquipment, 'EQP_');
+  lines(settings.extraHardware, 'HW_');
+  lines(settings.extraCables, 'CBL_');
+  for (var i = 0; i < settings.labor.length; i++) {
+    final l = settings.labor[i];
+    if (seen.add(l.id) && l.id.isNotEmpty) continue;
+    settings.labor[i] =
+        LaborLine.fromJson({...l.toJson(), 'id': nextId('LABOR_')});
+    seen.add(settings.labor[i].id);
+    fixed++;
+  }
+  return fixed;
+}
+
 /// Adds [set] to [settings], every line under a fresh id from [nextId] so it
 /// cannot collide with a line the room already has. A fee the room already
 /// has by name is skipped rather than charged twice. Returns how many lines
@@ -672,6 +922,14 @@ int addCostItems(
   String Function(String prefix) nextId,
 ) {
   var added = 0;
+  void keyed(String from, String id) {
+    final by = set.furnished[from];
+    if (by != null) settings.furnishedLines[id] = by;
+    final some = set.furnishedQty[from];
+    if (some != null) settings.furnishedQty[id] = some;
+    if (set.optional.contains(from)) settings.optionalLines.add(id);
+  }
+
   CostLineItem copy(CostLineItem item, String prefix) {
     final id = nextId(prefix);
     final price = set.prices[item.id];
@@ -680,9 +938,20 @@ int addCostItems(
     if (price != null) settings.priceOverrides[id] = price;
     if (spare != null) settings.equipmentSpares[id] = spare;
     if (ship != null) settings.shippingEach[id] = ship;
+    keyed(item.id, id);
     added++;
     return CostLineItem.fromJson({...item.toJson(), 'id': id});
   }
+
+  // The text goes on under the room's own, unless the room already says it.
+  String joined(String mine, String theirs) {
+    final add = theirs.trim();
+    if (add.isEmpty || mine.contains(add)) return mine;
+    return mine.trim().isEmpty ? add : '${mine.trimRight()}\n\n$add';
+  }
+
+  settings.scopeOfWork = joined(settings.scopeOfWork, set.scopeOfWork);
+  settings.notes = joined(settings.notes, set.notes);
 
   settings.extraEquipment
       .addAll([for (final i in set.extraEquipment) copy(i, 'EQP_')]);
@@ -691,8 +960,9 @@ int addCostItems(
   settings.extraCables.addAll([for (final i in set.extraCables) copy(i, 'CBL_')]);
   settings.items.addAll([for (final i in set.items) copy(i, 'ITEM_')]);
   for (final l in set.labor) {
-    settings.labor
-        .add(LaborLine.fromJson({...l.toJson(), 'id': nextId('LABOR_')}));
+    final id = nextId('LABOR_');
+    settings.labor.add(LaborLine.fromJson({...l.toJson(), 'id': id}));
+    keyed(l.id, id);
     added++;
   }
   final feeNames = {

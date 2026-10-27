@@ -8,6 +8,8 @@
 /// ============================================================================
 library;
 
+import 'dart:convert';
+
 /// What the lists and fields of the project and room files are called on
 /// screen. Anything not here is turned from camelCase into words.
 const Map<String, String> _kNames = {
@@ -223,4 +225,97 @@ String describeMergeValue(Object? v) {
     return v.length > 120 ? '${v.substring(0, 119)}…' : v;
   }
   return '$v';
+}
+
+/// What one change did, line by line: each row added, removed or changed and
+/// each field's value before and after - never just "500 items, now 501".
+String describeMergeChange(Object? before, Object? after) {
+  if (before == null) return 'added: ${describeMergeValue(after)}';
+  if (after == null) return 'removed (was ${describeMergeValue(before)})';
+  final lines = <String>[];
+  _diff(before, after, '', lines);
+  if (lines.isEmpty) {
+    return 'was ${describeMergeValue(before)}, now '
+        '${describeMergeValue(after)}';
+  }
+  return lines.join('\n');
+}
+
+String _json(Object? v) {
+  try {
+    return jsonEncode(v);
+  } catch (_) {
+    return '$v';
+  }
+}
+
+void _diff(Object? a, Object? b, String at, List<String> out) {
+  if (_json(a) == _json(b)) return;
+  if (a is Map && b is Map) {
+    for (final k in {...a.keys, ...b.keys}) {
+      final name = '$at${_word('$k')}';
+      if (!a.containsKey(k)) {
+        out.add('$name: added ${describeMergeValue(b[k])}');
+      } else if (!b.containsKey(k)) {
+        out.add('$name: removed (was ${describeMergeValue(a[k])})');
+      } else {
+        _diff(a[k], b[k], '$name > ', out);
+      }
+    }
+    return;
+  }
+  if (a is List && b is List) {
+    _diffList(a, b, at, out);
+    return;
+  }
+  final where = at.isEmpty ? '' : '${at.substring(0, at.length - 3)}: ';
+  out.add('$where${describeMergeValue(a)} -> ${describeMergeValue(b)}');
+}
+
+/// Rows with an id are matched by it; anything else by value.
+void _diffList(List a, List b, String at, List<String> out) {
+  String? idOf(Object? v) => v is Map && v['id'] != null ? '${v['id']}' : null;
+  if (a.isNotEmpty &&
+      b.isNotEmpty &&
+      [...a, ...b].every((v) => idOf(v) != null)) {
+    final before = {for (final v in a) idOf(v)!: v as Map};
+    final after = {for (final v in b) idOf(v)!: v as Map};
+    for (final id in {...before.keys, ...after.keys}) {
+      final row = after[id] ?? before[id]!;
+      final name = _rowName(row, id);
+      if (!before.containsKey(id)) {
+        out.add('${at}added $name');
+      } else if (!after.containsKey(id)) {
+        out.add('${at}removed $name');
+      } else {
+        _diff(before[id], after[id], '$at$name > ', out);
+      }
+    }
+    final kept = [for (final v in b) idOf(v)!]
+      ..removeWhere((id) => !before.containsKey(id));
+    final was = [for (final v in a) idOf(v)!]
+      ..removeWhere((id) => !after.containsKey(id));
+    if (_json(kept) != _json(was)) out.add('${at}reordered');
+    return;
+  }
+  // What is left of [a] once each of [b] has taken its match is removed.
+  final removed = [...a];
+  final removedJson = [for (final v in a) _json(v)];
+  final added = <Object?>[];
+  for (final v in b) {
+    final i = removedJson.indexOf(_json(v));
+    if (i < 0) {
+      added.add(v);
+    } else {
+      removed.removeAt(i);
+      removedJson.removeAt(i);
+    }
+  }
+  for (final v in added) {
+    out.add('${at}added ${describeMergeValue(v)}');
+  }
+  for (final v in removed) {
+    out.add('${at}removed ${describeMergeValue(v)}');
+  }
+  if (added.isEmpty && removed.isEmpty) out.add('${at}reordered');
 }

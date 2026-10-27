@@ -2516,4 +2516,22 @@ const List<HelpTopic> kHelpTopics = [
         'the project together, whichever of them have unsaved changes. '
         'Ctrl+Alt+S is Save As, for the room or the project.',
   ),
+  HelpTopic(
+    title: 'Find on page',
+    section: 'The machinery',
+    where: 'Anywhere',
+    plain:
+        'Ctrl+F opens a find bar that highlights a word everywhere it shows '
+        'on the page and jumps to each one.',
+    keywords: ['ctrl f', 'find', 'search', 'search page', 'look for',
+      'keyword', 'f3'],
+    body:
+        'Type in the bar at the top right. Every match on screen is '
+        'highlighted and the current one is scrolled into view. Enter or F3 '
+        'goes to the next match, Shift+Enter or Shift+F3 to the one before, '
+        'and Esc closes the bar.\n\n'
+        'It searches the whole page you are on, long lists and tables '
+        'included, down to the last row. A tab you are not on is not '
+        'searched.',
+  ),
 ];

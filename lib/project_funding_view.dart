@@ -706,8 +706,9 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                     message: 'Line item',
                     child: Text(room.name, style: theme.textTheme.bodyMedium),
                   )
-                : Align(
-                    alignment: Alignment.centerLeft,
+                : Row(
+                    children: [
+                    Flexible(
                     child: Tooltip(
                       message: 'Open ${room.name} on its Cost tab',
                       child: InkWell(
@@ -729,6 +730,17 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                         ),
                       ),
                     ),
+                    ),
+                    // Its design options, beside its name - the same menu
+                    // as on its row in the room list.
+                    if (costed[room.roomId] case final r?
+                        when ProjectRoomDesignButton.shows(provider, r))
+                      ProjectRoomDesignButton(
+                        room: r,
+                        currency: cur,
+                        keyPrefix: 'funding_design',
+                      ),
+                    ],
                   ),
           ),
           // Who is editing or working on it, and its review marks.

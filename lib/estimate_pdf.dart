@@ -325,7 +325,9 @@ Future<Uint8List> buildEstimatePdf(
 
   String amountLabel(CostLine line) {
     if (line.furnished) {
-      return t(const {'stock', 'in kind'}.contains(line.furnishedBy)
+      return t(line.furnishedBy == kAlreadyInstalled
+          ? 'Installed'
+          : const {'stock', 'in kind'}.contains(line.furnishedBy)
           ? 'In kind'
           : 'By others');
     }

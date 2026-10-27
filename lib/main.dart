@@ -32,6 +32,7 @@ import 'recent_files_menu.dart';
 import 'campus_lifecycle_view.dart'
     show showCampusLifecycle, showCampusLifecycleFile, showNewCampus;
 import 'app_activity.dart';
+import 'app_scale.dart';
 import 'responsive.dart';
 import 'room_review.dart' show RoomReviewMenu;
 import 'app_state.dart';
@@ -74,6 +75,7 @@ import 'project_history_view.dart' show showHistoryDialog;
 import 'estimate_settings_section.dart';
 import 'display_watch.dart';
 import 'help_view.dart';
+import 'find_in_page.dart';
 import 'keyboard_shortcuts.dart';
 import 'keyboard_shortcuts_settings.dart';
 import 'project_view.dart';
@@ -133,6 +135,8 @@ void main(List<String> args) {
   // Minimized, hidden or locked: background polling pauses - see
   // app_activity.dart.
   AppActivity.instance.start();
+  // Holds the interface size through a window drag - see app_scale.dart.
+  AppScale.listenForWindowMoves();
   // Looks for a newer release just after launch, and again every half hour
   // once the user is not in the middle of an edit. See app_updates.dart.
   unawaited(appUpdater.start());
@@ -146,6 +150,10 @@ class RoomConfigApp extends StatelessWidget {
   /// a dialog inside it — see [_helpShortcuts].
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
+
+  /// The Ctrl+F find bar, opened from [_helpShortcuts].
+  static final GlobalKey<FindInPageState> findKey =
+      GlobalKey<FindInPageState>();
 
   /// The swatches offered by the Auris accent picker. Amber first (the
   /// package's canonical accent), then HUD-intensity alternates.
@@ -293,6 +301,8 @@ class RoomConfigApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       builder: (context, child) => AppScale(
         scale: theme.uiScale,
+        fitToMonitor: Platform.isWindows &&
+            !Platform.environment.containsKey('FLUTTER_TEST'),
         child: MediaQuery(
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.linear(theme.textScale),
@@ -306,13 +316,17 @@ class RoomConfigApp extends StatelessWidget {
           // moves to material_ui.
           child: _helpShortcuts(
             context.select((AppStateProvider p) => p.shortcuts),
-            // Away (locked or minimized): every animation stops.
-            ListenableBuilder(
-              listenable: AppActivity.instance,
-              builder: (context, child) =>
-                  TickerMode(enabled: !AppActivity.away, child: child!),
-              // ignore: deprecated_member_use
-              child: MaterialUiCompatibilityBridge(child: child!),
+            // Ctrl+F's bar sits over every page; see find_in_page.dart.
+            FindInPage(
+              key: findKey,
+              // Away (locked or minimized): every animation stops.
+              child: ListenableBuilder(
+                listenable: AppActivity.instance,
+                builder: (context, child) =>
+                    TickerMode(enabled: !AppActivity.away, child: child!),
+                // ignore: deprecated_member_use
+                child: MaterialUiCompatibilityBridge(child: child!),
+              ),
             ),
           ),
         ),
@@ -351,10 +365,15 @@ class RoomConfigApp extends StatelessWidget {
       ...textBoxShortcuts(keys),
       for (final k in keys.bindingsFor(Shortcut.help))
         k.activator: const _OpenHelpIntent(),
+      for (final k in keys.bindingsFor(Shortcut.find))
+        k.activator: const _OpenFindIntent(),
     },
     child: Actions(
       actions: {
         ...textBoxActions,
+        _OpenFindIntent: CallbackAction<_OpenFindIntent>(
+          onInvoke: (_) => findKey.currentState?.open(),
+        ),
         _OpenHelpIntent: CallbackAction<_OpenHelpIntent>(
           onInvoke: (_) {
             final context = navigatorKey.currentContext;
@@ -371,6 +390,11 @@ class RoomConfigApp extends StatelessWidget {
 /// Press F1 - see [RoomConfigApp._helpShortcuts].
 class _OpenHelpIntent extends Intent {
   const _OpenHelpIntent();
+}
+
+/// Press Ctrl+F - see [FindInPage].
+class _OpenFindIntent extends Intent {
+  const _OpenFindIntent();
 }
 
 class MainDashboard extends StatefulWidget {
@@ -993,11 +1017,13 @@ class _MainDashboardState extends State<MainDashboard> {
           // shared with the CTS Dashboard and Instructor Contact - the ONE
           // chat: each project is a thread in it (Projects in its sidebar,
           // and a button in its header for the project open here).
-          // The chat itself hovers in the page's corner (TeamChatHoverButton).
+          // The chat's button hovers in the page's corner
+          // (TeamChatHoverButton), or sits here with "Team chat in the top
+          // bar" on in App Config.
           TeamToolbarButtons(
             onTeam: () => showTeamPage(context),
             onChat: () => TeamChatPanel.instance.toggle(context),
-            showChat: false,
+            showChat: provider.teamChatInTopBar,
           ),
           // YOU, in the corner - and the way into Settings, Help and the
           // light/dark switch. See [ProfileButton].
@@ -3137,8 +3163,8 @@ class AppearanceSettings extends StatelessWidget {
         const SizedBox(height: 20),
 
         // --- INTERFACE SIZE ---
-        // The whole window's scale, set here rather than by Windows' display
-        // scaling. See [AppScale].
+        // The whole window's scale on top of the fit to the monitor, not
+        // Windows' display scaling. See [AppScale].
         Builder(builder: (context) {
           const Map<String, String> sizes = {
             '0': 'Follow Windows',
@@ -3162,8 +3188,9 @@ class AppearanceSettings extends StatelessWidget {
             key: const ValueKey('ui_scale'),
             decoration: const InputDecoration(
               labelText: 'Interface Size',
-              helperText: 'Scales the whole window, whatever the Windows '
-                  'display scaling is. 100% is the size at Windows 100%.',
+              helperText: 'The app fits itself to the screen, whatever the '
+                  'Windows display scaling is; this makes it smaller or '
+                  'larger on top of that.',
               border: OutlineInputBorder(),
             ),
             initialValue: (current.isNotEmpty) ? current : null,
@@ -4635,6 +4662,15 @@ class AppSettingsView extends StatelessWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         TeamFeaturesSwitch(onChanged: provider.startTeam),
+        SwitchListTile(
+          key: const ValueKey('team_chat_top_bar'),
+          title: const Text('Team chat in the top bar'),
+          subtitle: const Text(
+              'A chat button beside the team count, top right, instead of '
+              'the hover button at the bottom right.'),
+          value: provider.teamChatInTopBar,
+          onChanged: provider.setTeamChatInTopBar,
+        ),
         const SizedBox(height: 20),
 
         // GOOGLE SHEETS - see google_sheets_export.dart.
@@ -5603,7 +5639,7 @@ class _FileServerBoxState extends State<_FileServerBox> {
 /// What App Config's log viewer shows: the session logs, and the native
 /// crash log, which stays in the default folder whatever Settings names.
 LogViewerConfig configuratorLogViewerConfig() => LogViewerConfig(
-  appName: 'Extron Configurator',
+  appName: 'Room Config Builder',
   version: kAppVersion,
   sources: [
     LogSource.folder(
@@ -5622,6 +5658,7 @@ LogViewerConfig configuratorLogViewerConfig() => LogViewerConfig(
   chooseSavePath: (name) => saveFileCompat(
     dialogTitle: 'Export logs',
     fileName: name,
+    initialDirectory: desktopFolder(),
     type: FileType.custom,
     allowedExtensions: ['txt'],
   ),
@@ -6299,46 +6336,3 @@ class _GoogleSignInRowState extends State<_GoogleSignInRow> {
   }
 }
 
-
-/// Draws the app at [scale] physical pixels per logical pixel, whatever
-/// Windows' display scaling is, so the size is the one chosen in App Config.
-/// A [scale] of 0 or less leaves Windows' scaling in charge.
-class AppScale extends StatelessWidget {
-  final double scale;
-  final Widget child;
-
-  const AppScale({super.key, required this.scale, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    if (scale <= 0 || mq.devicePixelRatio <= 0) return child;
-    // How much bigger, in today's logical pixels, one of ours is.
-    final factor = scale / mq.devicePixelRatio;
-    if ((factor - 1).abs() < 0.001) return child;
-    final size = mq.size / factor;
-    return MediaQuery(
-      data: mq.copyWith(
-        size: size,
-        devicePixelRatio: scale,
-        padding: mq.padding / factor,
-        viewPadding: mq.viewPadding / factor,
-        viewInsets: mq.viewInsets / factor,
-      ),
-      child: ClipRect(
-        child: OverflowBox(
-          alignment: Alignment.topLeft,
-          minWidth: size.width,
-          maxWidth: size.width,
-          minHeight: size.height,
-          maxHeight: size.height,
-          child: Transform.scale(
-            scale: factor,
-            alignment: Alignment.topLeft,
-            child: SizedBox.fromSize(size: size, child: child),
-          ),
-        ),
-      ),
-    );
-  }
-}

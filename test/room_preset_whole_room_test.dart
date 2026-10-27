@@ -84,6 +84,18 @@ void main() {
     expect(back.summary, contains('control schematic'));
   });
 
+  test('a cost page saved without the AV flow keeps its drawn devices', () {
+    final preset = arts111().currentRoomAsPreset(
+      name: 'Money only',
+      include: {RoomPresetPart.cost},
+    );
+    final page = RoomCostSettings()..readJson(preset.cost);
+    expect(page.extraEquipment.map((i) => i.catalogModel),
+        contains('EB-PU2010B'));
+    expect(page.items.single.description, 'Projector mount');
+    expect(page.scopeOfWork, 'Replace the projector and screen.');
+  });
+
   test('a part left unticked stays out', () {
     final preset = arts111().currentRoomAsPreset(
       name: 'No money',
@@ -118,14 +130,15 @@ void main() {
         const Offset(10, 20));
   });
 
-  test('into a room with its own cost page, only the lines are added', () {
+  test('into a room with its own cost page, lines and words are added', () {
     final preset = arts111().currentRoomAsPreset(
       name: 'Standard classroom',
       include: {...RoomPresetPart.values},
     );
     final other = room('Arts 112')..avCost.scopeOfWork = 'Our own words';
     other.applyRoomPreset(preset);
-    expect(other.avCost.scopeOfWork, 'Our own words');
+    expect(other.avCost.scopeOfWork,
+        'Our own words\n\nReplace the projector and screen.');
     expect(other.avCost.items.single.description, 'Projector mount');
     // And the next line typed here cannot take the copied line's id.
     final next = other.addAvCostItem(description: 'Freight');

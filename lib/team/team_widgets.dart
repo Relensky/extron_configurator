@@ -344,7 +344,8 @@ class TeamToolbarButtons extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([presence, chat]),
       builder: (context, _) {
-        final online = presence.others.length;
+        // People, not sessions: one person in two apps is one.
+        final online = teamPeople(presence.others).length;
         final mentions = chat.mentionCount;
         final unread = chat.unreadCount;
         return Row(
@@ -1116,7 +1117,7 @@ class _ChatHostState extends State<_ChatHost> {
     return ListenableBuilder(
       listenable: presence ?? ValueNotifier(0),
       builder: (context, _) {
-        final online = presence?.others.length ?? 0;
+        final online = teamPeople(presence?.others ?? const []).length;
         return IconButton(
           key: const ValueKey('team_chat_members'),
           tooltip: online == 0
@@ -2012,6 +2013,7 @@ class _ChatBodyState extends State<_ChatBody> {
     final online = presence == null || !presence.active
         ? const <TeamPresence>[]
         : presence.others;
+    final onlinePeople = teamPeople(online);
     return SizedBox(
       width: 220,
       child: Material(
@@ -2088,7 +2090,7 @@ class _ChatBodyState extends State<_ChatBody> {
             if (presence != null && presence.active) ...[
               Divider(height: 1, color: scheme.outlineVariant),
               _sectionHeading(
-                  'online', 'ONLINE NOW · ${online.length}', theme),
+                  'online', 'ONLINE NOW · ${onlinePeople.length}', theme),
               if (!_folded.contains('online'))
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 180),
@@ -2103,7 +2105,7 @@ class _ChatBodyState extends State<_ChatBody> {
                         shrinkWrap: true,
                         padding: const EdgeInsets.only(bottom: 8),
                         children: [
-                          for (final sessions in teamPeople(online))
+                          for (final sessions in onlinePeople)
                             _onlinePerson(sessions, theme),
                         ],
                       ),

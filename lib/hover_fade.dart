@@ -52,6 +52,12 @@ class _HoverFadeState extends State<HoverFade> {
   }
 }
 
+/// True when the team chat's button is in the top bar instead of hovering in
+/// the corner - App Config's "Team chat in the top bar". Set by
+/// [AppStateProvider.setTeamChatInTopBar]; the hover button and its list
+/// padding watch it.
+final ValueNotifier<bool> teamChatInTopBar = ValueNotifier(false);
+
 /// [TEAM KIT]: the team chat's button, hovering in the bottom-right corner of
 /// the page as it does in the CTS Dashboard. Slides left with a slid-out chat
 /// so it is never under it, and stays full size while there is unread chat
@@ -88,11 +94,16 @@ class _TeamChatHoverButtonState extends State<TeamChatHoverButton> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: teamChatInTopBar,
+    builder: (context, inTopBar, _) => _button(context, inTopBar),
+  );
+
+  Widget _button(BuildContext context, bool inTopBar) {
     final chat = Team.chat;
     // Positioned even when off: a bare box in the page's Stack would size the
     // Stack to nothing.
-    if (chat == null) {
+    if (chat == null || inTopBar) {
       return const Positioned(right: 0, bottom: 0, child: SizedBox.shrink());
     }
     return ListenableBuilder(
@@ -172,18 +183,23 @@ class _ChatButtonClearanceState extends State<ChatButtonClearance> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (!_on) return widget.child;
-    final media = MediaQuery.of(context);
-    return MediaQuery(
-      data: media.copyWith(
-        padding: media.padding.copyWith(
-          bottom: media.padding.bottom + kChatButtonClearance,
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: teamChatInTopBar,
+    // Same child either way, so the page keeps its state when it flips.
+    child: widget.child,
+    builder: (context, inTopBar, child) {
+      if (!_on || inTopBar) return child!;
+      final media = MediaQuery.of(context);
+      return MediaQuery(
+        data: media.copyWith(
+          padding: media.padding.copyWith(
+            bottom: media.padding.bottom + kChatButtonClearance,
+          ),
         ),
-      ),
-      child: widget.child,
-    );
-  }
+        child: child!,
+      );
+    },
+  );
 }
 
 /// Grows [child] toward [anchor] while the pointer is over it - your own
