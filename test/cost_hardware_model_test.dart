@@ -45,11 +45,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Display Mount'), findsOneWidget);
-    expect(find.text('Chief Fusion Tilt Mount · XTM1U'), findsOneWidget);
+    // One line when it fits; the maker over the model when it does not.
+    final oneLine = find.text('Chief Fusion Tilt Mount · XTM1U');
+    final shown = oneLine.evaluate().isNotEmpty ? oneLine : find.text('Chief');
+    if (shown != oneLine) {
+      expect(find.text('Fusion Tilt Mount · XTM1U'), findsOneWidget);
+    }
+    expect(shown, findsOneWidget);
 
     // The caption sits directly over the text it names.
-    final textLeft =
-        tester.getTopLeft(find.text('Chief Fusion Tilt Mount · XTM1U')).dx;
+    final textLeft = tester.getTopLeft(shown).dx;
     final captionLefts = [
       for (final e in find.text('Model').evaluate())
         tester.getTopLeft(find.byWidget(e.widget)).dx,

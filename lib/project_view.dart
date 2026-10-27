@@ -21,6 +21,7 @@ import 'control_gaps.dart' show ControlGap;
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'manual_room_lines.dart';
+import 'project_fold.dart';
 import 'project_funding_view.dart';
 import 'project_room_options_button.dart';
 import 'responsive.dart' show ClearFieldButton, kFloatingButtonClearance;
@@ -1909,6 +1910,18 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
                 // one of the three that does anything.
                 const AddManualRoomLineButton(),
                 const PasteRoomListButton(),
+                TextButton.icon(
+                  key: const ValueKey('project_rooms_expand_all'),
+                  onPressed: () => ProjectFold.instance.setAll(true),
+                  icon: const Icon(Icons.unfold_more, size: 18),
+                  label: const Text('Expand all'),
+                ),
+                TextButton.icon(
+                  key: const ValueKey('project_rooms_collapse_all'),
+                  onPressed: () => ProjectFold.instance.setAll(false),
+                  icon: const Icon(Icons.unfold_less, size: 18),
+                  label: const Text('Collapse all'),
+                ),
                 // How the list below is ordered.
                 // A set width, so large text shortens the label rather than
                 // pushing the control off a narrow window.
@@ -2175,27 +2188,27 @@ class _RoomRow extends StatefulWidget {
   State<_RoomRow> createState() => _RoomRowState();
 }
 
-/// Rooms on the project list start collapsed; tests that read a row's
-/// figures and notes turn this on.
-@visibleForTesting
-bool roomRowsStartExpanded = false;
-
 class _RoomRowState extends State<_RoomRow> {
-  /// The project room ids opened out this session, so a row stays open
-  /// across rebuilds and pane switches.
-  static final Set<String> _opened = {};
-
+  /// Open or collapsed - see [ProjectFold].
   bool get _expanded =>
-      roomRowsStartExpanded || _opened.contains(widget.room.ref.id);
+      ProjectFold.instance.isOpen(ProjectFold.room(widget.room.ref.id));
 
-  void _toggleExpanded() => setState(() {
-    if (roomRowsStartExpanded) {
-      roomRowsStartExpanded = false;
-      _opened.clear();
-      return;
-    }
-    if (!_opened.remove(widget.room.ref.id)) _opened.add(widget.room.ref.id);
-  });
+  void _toggleExpanded() =>
+      ProjectFold.instance.toggle(ProjectFold.room(widget.room.ref.id));
+
+  void _refold() => setState(() {});
+
+  @override
+  void initState() {
+    super.initState();
+    ProjectFold.instance.addListener(_refold);
+  }
+
+  @override
+  void dispose() {
+    ProjectFold.instance.removeListener(_refold);
+    super.dispose();
+  }
 
   /// Whether the pointer is over the room's name.
   ///

@@ -33,6 +33,17 @@ void main() {
       expect(roomModeFromName(null), RoomMode.full);
     });
 
+    test('the next room with no diagram opens programmed', () {
+      // A config downloaded off a processor after an estimate was open.
+      final p = room();
+      expect(p.isEstimateRoom, isTrue);
+      p.roomConfig = {
+        'SYSTEM': {'ROOM': 'USB221'},
+      };
+      p.loadAvFlowForCurrentConfig();
+      expect(p.isEstimateRoom, isFalse);
+    });
+
     test('is written to the room file', () {
       final p = room();
       expect(p.avFlowAsJson()['roomMode'], 'estimate');

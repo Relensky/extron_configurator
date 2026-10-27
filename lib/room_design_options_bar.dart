@@ -19,6 +19,8 @@ class RoomDesignOptionsBar extends StatelessWidget {
     if (configPath.isEmpty) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final options = provider.roomDesignOptions;
+    // One design left is nothing to choose between.
+    final choosing = options.options.length > 1;
     final estimate = provider.roomCost;
     final currency = estimate.currency;
     final quiet = theme.textTheme.bodySmall?.copyWith(
@@ -45,7 +47,7 @@ class RoomDesignOptionsBar extends StatelessWidget {
               children: [
                 Text('Design options', style: theme.textTheme.titleSmall),
                 Text(
-                  options.options.isEmpty
+                  !choosing
                       ? 'one design - start an option to price another '
                             'build of this room'
                       : 'the chosen option is the room and goes to the '
@@ -60,6 +62,7 @@ class RoomDesignOptionsBar extends StatelessWidget {
               runSpacing: 6,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
+                if (choosing)
                 for (final o in options.options)
                   ChoiceChip(
                     key: ValueKey('design_option_${o.id}'),
@@ -78,7 +81,7 @@ class RoomDesignOptionsBar extends StatelessWidget {
                   label: const Text('New option'),
                   onPressed: () => _create(context, provider, options),
                 ),
-                if (options.options.isNotEmpty)
+                if (choosing)
                   PopupMenuButton<String>(
                     key: const ValueKey('design_option_menu'),
                     tooltip: 'Rename or remove options',

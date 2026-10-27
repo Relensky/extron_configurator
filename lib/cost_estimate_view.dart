@@ -6685,8 +6685,23 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           );
     final shown = [if (text.isNotEmpty) text, if (note.isNotEmpty) note]
         .join(' · ');
+    // The maker on one line and the rest on the next, when one will not fit.
+    final maker = line?.manufacturer.trim() ?? '';
+    final rest = line == null
+        ? ''
+        : [
+            partIdentity(
+              manufacturer: '',
+              model: line.model,
+              partNumber: line.partNumber,
+              description: line.description,
+            ),
+            if (note.isNotEmpty) note,
+          ].where((t) => t.isNotEmpty).join(' · ');
     final cell = _ModelCell(
       text: shown.isEmpty ? '-' : shown,
+      maker: maker,
+      rest: rest,
       hover: line == null ? null : _partHover(line),
       color: muted,
     );
@@ -9231,11 +9246,17 @@ String _partHover(CostLine line) => [
 /// The Model column's cell - the quiet half of a row's identity.
 class _ModelCell extends StatelessWidget {
   final String text;
+
+  /// [text] split for a narrow column: the maker, then model and part number.
+  final String maker;
+  final String rest;
   final String? hover;
   final Color color;
 
   const _ModelCell({
     required this.text,
+    this.maker = '',
+    this.rest = '',
     required this.hover,
     required this.color,
   });
@@ -9243,11 +9264,37 @@ class _ModelCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(fontSize: 12, color: color);
-    return hoverWhenClipped(
+    final oneLine = hoverWhenClipped(
       text: text,
       message: hover,
       style: style,
       child: Text(text, overflow: TextOverflow.ellipsis, style: style),
+    );
+    if (maker.isEmpty || rest.isEmpty) return oneLine;
+    return LayoutBuilder(
+      builder: (context, box) {
+        if (!box.maxWidth.isFinite) return oneLine;
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: style),
+          maxLines: 1,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(maxWidth: box.maxWidth);
+        final fits = !painter.didExceedMaxLines;
+        painter.dispose();
+        if (fits) return oneLine;
+        // Too narrow for one line: two, each wrapping rather than cut short.
+        final lines = Column(
+          key: const ValueKey('model_cell_two_lines'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(maker, style: style),
+            Text(rest, style: style),
+          ],
+        );
+        return hover == null ? lines : Tooltip(message: hover!, child: lines);
+      },
     );
   }
 }

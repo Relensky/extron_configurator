@@ -1438,6 +1438,10 @@ class _MainDashboardState extends State<MainDashboard> {
     if (result != true || !context.mounted) return;
     // Working copy on disk now — pick up any schematic beside it.
     await _syncDiagramsAfterLoad(context, provider);
+    if (!context.mounted) return;
+    // A processor's config is a programmed room, and it opens on the Wizard.
+    provider.setRoomMode(RoomMode.full);
+    provider.selectTab(AppTab.wizard.index);
     // Same as a local open: the download lands, and Convert offers the
     // migration when the user is ready for it.
     if (provider.lastLoadHadChanges && context.mounted) {

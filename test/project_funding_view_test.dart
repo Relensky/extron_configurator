@@ -3,10 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/project_fold.dart';
 import 'package:extron_configurator/project_funding_view.dart';
 
 /// The Priorities and funding card: folding, sorting and room totals.
 void main() {
+  // These read the rooms under each priority.
+  setUp(() => ProjectFold.instance.setAll(true));
   Future<AppStateProvider> pump(WidgetTester tester) async {
     final provider = AppStateProvider(autoLoadSettings: false);
     provider.newProject(name: 'Refresh');
@@ -42,6 +45,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Set aside for rooms'), findsNothing);
     // The rooms are still there.
+    expect(find.text('BSS 103'), findsOneWidget);
+  });
+
+  testWidgets('priorities start collapsed; Expand all opens them',
+      (tester) async {
+    ProjectFold.instance.setAll(false);
+    await pump(tester);
+    expect(find.text('BSS 103'), findsNothing);
+    ProjectFold.instance.setAll(true);
+    await tester.pumpAndSettle();
     expect(find.text('BSS 103'), findsOneWidget);
   });
 

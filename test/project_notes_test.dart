@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/building_project.dart';
+import 'package:extron_configurator/project_fold.dart';
 import 'package:extron_configurator/project_view.dart';
 
 /// Notes on the job, and notes on one room.
@@ -16,7 +17,7 @@ import 'package:extron_configurator/project_view.dart';
 /// no notes field, because somebody will put the asbestos warning in it.
 void main() {
   // These read each room row's figures and notes.
-  setUpAll(() => roomRowsStartExpanded = true);
+  setUp(() => ProjectFold.instance.setAll(true));
   late Directory dir;
 
   setUp(() => dir = Directory.systemTemp.createTempSync('notes_test_'));

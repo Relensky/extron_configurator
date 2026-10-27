@@ -9,6 +9,7 @@ import 'live_text_field.dart';
 import 'manual_room_lines.dart' show pasteRoomList, removeManualRoomLine;
 import 'project_breakdown.dart';
 import 'project_estimate.dart' show ProjectEstimate;
+import 'project_fold.dart';
 import 'project_room_options_button.dart';
 import 'project_view.dart' show openProjectRoomOn;
 import 'room_review.dart' show RoomStatusIcons, RoomToneHighlight;
@@ -177,8 +178,22 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
   /// The Maximum / Set aside / Free figures.
   bool _showFigures = true;
 
-  /// Priorities whose rooms are folded away.
-  final Set<int> _collapsed = {};
+  /// Whether priority [p]'s rooms are folded away - see [ProjectFold].
+  bool _folded(int p) => !ProjectFold.instance.isOpen(ProjectFold.priority(p));
+
+  void _refold() => setState(() {});
+
+  @override
+  void initState() {
+    super.initState();
+    ProjectFold.instance.addListener(_refold);
+  }
+
+  @override
+  void dispose() {
+    ProjectFold.instance.removeListener(_refold);
+    super.dispose();
+  }
 
   _RoomSort _sort = _RoomSort.added;
 
@@ -988,18 +1003,15 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                         children: [
                     InkWell(
                       key: ValueKey('funding_fold_$p'),
-                      onTap: () => setState(
-                        () => _collapsed.contains(p)
-                            ? _collapsed.remove(p)
-                            : _collapsed.add(p),
-                      ),
+                      onTap: () =>
+                          ProjectFold.instance.toggle(ProjectFold.priority(p)),
                       child: Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              _collapsed.contains(p)
+                              _folded(p)
                                   ? Icons.chevron_right
                                   : Icons.expand_more,
                               size: 20,
@@ -1078,7 +1090,7 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                     ),
                   ],
                 ),
-                if (!_collapsed.contains(p)) ...[
+                if (!_folded(p)) ...[
                   const SizedBox(height: 4),
                   _columnHeads(theme),
                   for (final r in rooms.where((r) => r.priority == p)) row(r),

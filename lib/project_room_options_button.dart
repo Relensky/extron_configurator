@@ -149,8 +149,9 @@ class ProjectRoomDesignButton extends StatelessWidget {
       );
 
   /// The room has more than one design to choose between.
+  /// Only while there is another design to choose.
   static bool shows(AppStateProvider provider, ProjectRoomCost room) =>
-      provider.designOptionsFor(_pathOf(provider, room)).options.isNotEmpty;
+      provider.designOptionsFor(_pathOf(provider, room)).options.length > 1;
 
   @override
   Widget build(BuildContext context) {

@@ -9000,6 +9000,9 @@ class AppStateProvider extends ChangeNotifier {
     _avUndoStack.clear();
     _avRedoStack.clear();
     _resetRoomSpine();
+    // The diagram says when a room is estimate only; without one it is a
+    // programmed room, not whatever the last room was.
+    roomMode = RoomMode.full;
   }
 
   /// Keeps the in-memory AV diagram for the working config, ignoring the

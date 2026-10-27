@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.174+184';
+const String kAppVersion = '0.5.175+185';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,18 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.175',
+    date: 'October 27, 2026',
+    title: 'Collapse all, and readable models',
+    changes: [
+      'Project, Rooms: Expand all and Collapse all beside the sort. They open or fold every room and every priority at once.',
+      'Project, Priorities and funding: each priority starts collapsed to its heading and subtotal. The arrow shows its rooms.',
+      'A room down to one design no longer offers a design to choose, on its Cost page or on the project. New option still starts another.',
+      'A config downloaded from a processor opens as a programmed room, on the Wizard. Before, it could open as a cost estimate when an estimate had been open just before it.',
+      'Cost: when the Model column is too narrow for one line, the manufacturer goes on one line and the model and part number on the next, wrapping rather than being cut short.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.174',
     date: 'October 27, 2026',

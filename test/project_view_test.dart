@@ -17,6 +17,7 @@ import 'package:extron_configurator/project_estimate.dart';
 import 'package:extron_configurator/procurement_log.dart';
 import 'package:extron_configurator/procurement_sync.dart';
 import 'package:extron_configurator/project_procurement_view.dart';
+import 'package:extron_configurator/project_fold.dart';
 import 'package:extron_configurator/project_view.dart';
 import 'package:extron_configurator/timeline_export_view.dart';
 
@@ -27,7 +28,7 @@ import 'package:extron_configurator/timeline_export_view.dart';
 /// tables — so the layout gets the same overflow check the Cost tab has.
 void main() {
   // These read each room row's figures and notes.
-  setUpAll(() => roomRowsStartExpanded = true);
+  setUp(() => ProjectFold.instance.setAll(true));
   late Directory dir;
 
   setUp(() => dir = Directory.systemTemp.createTempSync('rcb_project_view'));
