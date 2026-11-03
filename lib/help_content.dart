@@ -710,6 +710,30 @@ const List<HelpTopic> kHelpTopics = [
         'writes the file it has just shown you - there is no separate export '
         'step and no second copy that can drift from what is on screen.',
   ),
+  HelpTopic(
+    title: 'Building rooms for deployment',
+    section: 'The room',
+    where: 'File menu → Build for Deployment',
+    plain:
+        'Builds the whole control program for one or more rooms from the '
+        'ControlScript template, checks the Python in it, and puts each room '
+        'that passes in a folder ready to send out.',
+    keywords: [
+      'build', 'deploy', 'distribution', 'dist', 'local_build', 'template',
+      'platform check', 'python',
+    ],
+    body:
+        'Runs the template\'s own local_build.py, so it is the same build as '
+        'one from a terminal: base assets, the room\'s layout and files, '
+        'only the device drivers the room uses (switch that off to copy '
+        'every driver), and the check of every Python file against the '
+        'room\'s processor, Pro or Pro xi. The template folder is found from '
+        'the open room, or picked once.\n\n'
+        'Each room builds into the template\'s dist folder. Rooms that pass '
+        'are copied to the distribution folder when one is set. A room that '
+        'fails its check is not copied out; the output says why. The build '
+        'uses what is saved, so save the open room first.',
+  ),
 
   // ---------------------------------------------------------------------------
   //  THE DRAWINGS
@@ -782,12 +806,24 @@ const List<HelpTopic> kHelpTopics = [
         'Marks where things physically are in the room: screens, speakers, '
         'wall plates, the rack. Drop them onto the architect drawing, or '
         'onto a blank sheet if there is not one yet.',
-    keywords: ['plan', 'layout', 'location', 'room drawing', 'annotate'],
+    keywords: [
+      'plan', 'layout', 'location', 'room drawing', 'annotate',
+      'readable', 'viewing distance', 'content type',
+    ],
     body:
         'A picture of the room with the equipment placed on it. Locations '
         'defined here are what the cable schedule measures between and what '
         'the lifecycle report names a position by, so a box placed on the plan '
-        'stops being "Display 2" and starts being "Display 2, north wall".',
+        'stops being "Display 2" and starts being "Display 2, north wall".\n\n'
+        'Once the sheet has a scale, Readable from on a selected screen or '
+        'display checks a seat: click it on the plan or type a distance. '
+        'How far an image reads depends on what is on it, the same content '
+        'types as the CTS dashboard: video and photos to 8 image heights, '
+        'slides and large text 6, documents and web pages 5, spreadsheets '
+        'and CAD 4, all within 60° either side of straight on. The plan '
+        'shades where the content picked reads, marks where each other '
+        'type stops, and says which types a seat reads. Out to 8 image '
+        'heights an image can be watched but not read.',
   ),
   HelpTopic(
     title: 'Cabling and the cable schedule',

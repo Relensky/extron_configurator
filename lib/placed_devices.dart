@@ -311,6 +311,14 @@ double screenViewingReach(double width) =>
 double displayViewingReach(double width) =>
     farthestViewer(imageHeightFromWidth(width, 16 / 9)).clamp(20.0, 20000.0);
 
+/// Height of the image on a screen or display [width] wide, in the units of
+/// [width]. 0 for anything else.
+double planImageHeight(String shape, double width) => switch (shape) {
+  'screen' => imageHeightFromWidth(width, kPlanScreenAspect),
+  'display' => imageHeightFromWidth(width, 16 / 9),
+  _ => 0,
+};
+
 /// True for the shapes whose reach is worked out rather than set by hand -
 /// see [derivedReach].
 bool reachIsDerived(String shape) =>

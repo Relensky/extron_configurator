@@ -720,6 +720,12 @@ class AppStateProvider extends ChangeNotifier {
   String vendorListFilePath = '';
   String documentationPath = ''; // Folder of per-module PDF manuals (blank = <root>/documentation)
 
+  /// Build for Deployment: the ControlScript template folder (the one with
+  /// local_build.py; blank = found from the open room), and where built
+  /// rooms are copied to send out (blank = the template's dist folder).
+  String deployTemplatePath = '';
+  String deployOutputPath = '';
+
   /// The shared folder product spec sheets live in - one folder the whole
   /// department points at, so a spec sheet attached to a catalog entry on one
   /// machine opens on every other. Blank = `<root>/spec_sheets`. See
@@ -1805,6 +1811,8 @@ class AppStateProvider extends ChangeNotifier {
       'specSheetFolder': specSheetFolder,
       'manualsFolder': manualsFolder,
       'teamFolderPath': teamFolderPath,
+      'deployTemplatePath': deployTemplatePath,
+      'deployOutputPath': deployOutputPath,
       'sharedRoomsFolder': sharedRoomsFolder,
       'copyRoomsToShare': copyRoomsToShare,
       'classSchedulePath': classSchedulePath,
@@ -10691,6 +10699,8 @@ class AppStateProvider extends ChangeNotifier {
       specSheetFolder = str('specSheetFolder', '');
       manualsFolder = str('manualsFolder', '');
       teamFolderPath = str('teamFolderPath', '');
+      deployTemplatePath = str('deployTemplatePath', '');
+      deployOutputPath = str('deployOutputPath', '');
       sharedRoomsFolder = str('sharedRoomsFolder', '');
       copyRoomsToShare = saved['copyRoomsToShare'] != false;
       classSchedulePath = str('classSchedulePath', '');
@@ -11952,6 +11962,12 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'specSheetFolder':
         specSheetFolder = value; // resolved on demand, like the manuals
+        break;
+      case 'deployTemplatePath':
+        deployTemplatePath = value; // read when a build starts
+        break;
+      case 'deployOutputPath':
+        deployOutputPath = value;
         break;
       case 'teamFolderPath':
         teamFolderPath = value.trim();

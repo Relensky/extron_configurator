@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
@@ -272,6 +273,16 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// until the next click starts another.
   bool _measureDone = false;
 
+  /// Readable from: the screen or display being checked, and the seat
+  /// clicked on the plan or the distance typed in feet.
+  String _viewerFor = '';
+  Offset? _viewerSpot;
+  double _viewerTypedFt = 0;
+  final TextEditingController _viewerField = TextEditingController();
+
+  /// What is on the image being checked; kept for the session.
+  static ReadingContent _readingContent = ReadingContent.slides;
+
   /// A device mid-edit, drawn in place of the stored one so a slider moves
   /// the cone live. Written to the provider once, when the edit ends.
   PlanDevice? _devicePreview;
@@ -495,6 +506,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   void dispose() {
     _dragTick.dispose();
     _lensAt.dispose();
+    _viewerField.dispose();
     _snapshot?.image.dispose();
     unregisterDiagramCanvas(AppTab.floorPlan, _planKey);
     unregisterPlanSheetCapture(_captureSheets);
@@ -565,7 +577,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     if (action == Shortcut.delete) {
       if (device != null) {
         provider.removeAvPlanDevice(plan.id, device.id);
-        setState(() => _selectedDeviceId = '');
+        setState(() {
+          _selectedDeviceId = '';
+          _stopViewer();
+        });
       } else {
         provider.removeAvCallout(plan.id, callout!.id);
         setState(() => _selectedCalloutId = null);
@@ -2615,7 +2630,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             // reach the sheet's own handler above.
             if (_tool == _PlanTool.scale ||
                 _tool == _PlanTool.measure ||
-                _tool == _PlanTool.walls)
+                _tool == _PlanTool.walls ||
+                _tool == _PlanTool.viewer)
               const Positioned.fill(
                 key: ValueKey('plan_measure_cover'),
                 child: AbsorbPointer(),
@@ -2653,6 +2669,40 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   ),
                 ),
               ),
+            // Readable from: the readable range of the screen or display
+            // being checked for the content picked, where each other kind
+            // of content stops reading, and the seat picked.
+            if (_tool == _PlanTool.viewer)
+              if (_readableCheck(plan) case final c?)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      key: const ValueKey('plan_readable_range'),
+                      painter: _ReadablePainter(
+                        center: c.device.pos,
+                        rotation: c.device.rotation,
+                        readable: _readingContent.reach(c.heightFt) *
+                            plan.pixelsPerFoot,
+                        rings: [
+                          for (final r in ReadingContent.values)
+                            if (r != _readingContent)
+                              (
+                                r.reach(c.heightFt) * plan.pixelsPerFoot,
+                                r.short,
+                              ),
+                        ],
+                        watchable: farthestWatcher(c.heightFt) *
+                            plan.pixelsPerFoot,
+                        spot: _viewerSpot,
+                        label: c.result == null
+                            ? ''
+                            : '${feetAndCm(c.distanceFt)} · '
+                                '${c.result!.label}',
+                        ok: c.result?.ok ?? false,
+                      ),
+                    ),
+                  ),
+                ),
           ],
         ),
         ),
@@ -5820,6 +5870,201 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
   }
 
+  /// Readable from, for the screen or display being checked: its image
+  /// height, and how far the seat is and what it makes of the image once
+  /// one is picked or typed. Null without a scale or a device to check.
+  ({
+    PlanDevice device,
+    double heightFt,
+    double distanceFt,
+    double? offAxis,
+    Readability? result,
+  })?
+  _readableCheck(FloorPlan plan) {
+    final ppf = plan.pixelsPerFoot;
+    if (ppf <= 0) return null;
+    final device = _shownDevices(plan)
+        .where((d) => d.id == _viewerFor)
+        .firstOrNull;
+    if (device == null) return null;
+    final heightFt = planImageHeight(device.shape, device.width) / ppf;
+    if (heightFt <= 0) return null;
+    final spot = _viewerSpot;
+    final distanceFt = spot != null
+        ? (spot - device.pos).distance / ppf
+        : _viewerTypedFt;
+    final offAxis = spot == null
+        ? null
+        : offAxisAngle(device.pos, device.rotation, spot);
+    return (
+      device: device,
+      heightFt: heightFt,
+      distanceFt: distanceFt,
+      offAxis: offAxis,
+      result: distanceFt > 0
+          ? readabilityAt(
+              height: heightFt,
+              distance: distanceFt,
+              offAxis: offAxis ?? 0,
+              content: _readingContent,
+            )
+          : null,
+    );
+  }
+
+  /// Turns Readable from off.
+  void _stopViewer() {
+    if (_tool == _PlanTool.viewer) _tool = _PlanTool.none;
+    _viewerFor = '';
+    _viewerSpot = null;
+    _viewerTypedFt = 0;
+    _viewerField.clear();
+  }
+
+  /// The Readable from chip for a screen or display, and while it is on, the
+  /// distance field and what the seat makes of the image.
+  List<Widget> _readableControls(FloorPlan plan, PlanDevice device) {
+    if (planImageHeight(device.shape, device.width) <= 0 ||
+        plan.pixelsPerFoot <= 0) {
+      return const [];
+    }
+    final theme = Theme.of(context);
+    final on = _tool == _PlanTool.viewer && _viewerFor == device.id;
+    final check = on ? _readableCheck(plan) : null;
+    final result = check?.result;
+    return [
+      FilterChip(
+        key: const ValueKey('plan_device_readable'),
+        avatar: const Icon(Icons.visibility_outlined, size: 16),
+        label: const Text('Readable from'),
+        tooltip: 'Click a seat on the plan, or type a distance, to see '
+            'whether this image reads from there for the content on it: '
+            '4 to 8 image heights out, within '
+            '${kReadableHalfAngle.round()}° either side',
+        selected: on,
+        onSelected: (v) {
+          setState(() {
+            _stopViewer();
+            if (v) {
+              _tool = _PlanTool.viewer;
+              _viewerFor = device.id;
+            }
+          });
+          if (v) _snack('Click where the viewer sits, or type a distance.');
+        },
+      ),
+      if (check != null) ...[
+        PopupMenuButton<ReadingContent>(
+          key: const ValueKey('plan_device_readable_content'),
+          tooltip: 'What is on the image: the plan shades where it reads, '
+              'and marks where each other kind of content stops reading',
+          initialValue: _readingContent,
+          onSelected: (c) => setState(() => _readingContent = c),
+          itemBuilder: (_) => [
+            for (final c in ReadingContent.values)
+              CheckedPopupMenuItem(
+                key: ValueKey('plan_device_readable_content_${c.name}'),
+                value: c,
+                checked: c == _readingContent,
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(c.label),
+                  subtitle: Text(
+                    'Readable to ${c.heights.round()} x the image height, '
+                    '${feetAndCm(c.reach(check.heightFt))} here',
+                  ),
+                ),
+              ),
+          ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.article_outlined, size: 16),
+              const SizedBox(width: 4),
+              Text(_readingContent.label, style: theme.textTheme.bodySmall),
+              const Icon(Icons.arrow_drop_down, size: 18),
+            ],
+          ),
+        ),
+        SizedBox(
+          width: 130,
+          child: TextField(
+            key: const ValueKey('plan_device_readable_distance'),
+            controller: _viewerField,
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: 'or type 25\' 6"',
+            ),
+            style: theme.textTheme.bodySmall,
+            onChanged: (t) => setState(() {
+              _viewerSpot = null;
+              _viewerTypedFt = parseFeetInches(t) ?? 0;
+            }),
+          ),
+        ),
+        Tooltip(
+          message: '${_readingContent.label} reads out to '
+              '${_readingContent.heights.round()} image heights. Out to 8 '
+              'it can be watched but not read.',
+          child: Text(
+            [
+              'Image ${feetAndCm(check.heightFt)} high',
+              'readable to '
+                  '${feetAndCm(_readingContent.reach(check.heightFt))}',
+              if (result != null)
+                'viewer ${feetAndCm(check.distanceFt)}'
+                    '${check.offAxis == null ? '' : ', ${check.offAxis!.round()}° off center'}',
+            ].join(' · '),
+            key: const ValueKey('plan_device_readable_readout'),
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+        if (result != null)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                result.ok ? Icons.check_circle : Icons.cancel,
+                size: 16,
+                color: result.ok ? _kReadableOk : theme.colorScheme.error,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                result.label,
+                key: const ValueKey('plan_device_readable_result'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: result.ok ? null : theme.colorScheme.error,
+                ),
+              ),
+            ],
+          ),
+        // Every content type from this seat, not just the one picked.
+        if (result != null && result != Readability.offToSide)
+          Text(
+            _contentSummary(contentReadAt(
+              height: check.heightFt,
+              distance: check.distanceFt,
+              offAxis: check.offAxis ?? 0,
+            )),
+            key: const ValueKey('plan_device_readable_content_summary'),
+            style: theme.textTheme.bodySmall,
+          ),
+      ],
+    ];
+  }
+
+  /// "Reads video, slides; too far for documents, spreadsheets".
+  static String _contentSummary(List<ReadingContent> reads) {
+    String names(Iterable<ReadingContent> cs) =>
+        cs.map((c) => c.short.toLowerCase()).join(', ');
+    final not = ReadingContent.values.where((c) => !reads.contains(c));
+    if (not.isEmpty) return 'Reads all content';
+    if (reads.isEmpty) return 'Too far for any content';
+    return 'Reads ${names(reads)}; too far for ${names(not)}';
+  }
+
   /// The bar for the selected device: which way it faces and its cone.
   Widget _deviceBar(AppStateProvider provider, FloorPlan plan) {
     final theme = Theme.of(context);
@@ -6119,6 +6364,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               plan.devices.any((d) => d.shape == partnerShape(device.shape)))
             _pairMenu(provider, plan, device),
           // Right after the screen it is paired with: this pair's numbers.
+          ..._readableControls(plan, device),
           if (device.shape == 'projector' || device.shape == 'screen')
             FilledButton.tonalIcon(
               key: const ValueKey('plan_device_calculator'),
@@ -6157,14 +6403,20 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             'Take it off this sheet',
             () {
               provider.removeAvPlanDevice(plan.id, device.id);
-              setState(() => _selectedDeviceId = '');
+              setState(() {
+                _selectedDeviceId = '';
+                _stopViewer();
+              });
             },
             danger: true,
           ),
           TextButton.icon(
             icon: const Icon(Icons.close, size: 16),
             label: const Text('Done'),
-            onPressed: () => setState(() => _selectedDeviceId = ''),
+            onPressed: () => setState(() {
+              _selectedDeviceId = '';
+              _stopViewer();
+            }),
           ),
         ],
       ),
@@ -6730,6 +6982,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             _measureDone = true;
           });
         }
+      case _PlanTool.viewer:
+        _viewerField.clear();
+        setState(() {
+          _viewerSpot = at;
+          _viewerTypedFt = 0;
+        });
       case _PlanTool.location:
         _placeLocationAt(provider, at);
       case _PlanTool.callout:
@@ -7975,6 +8233,7 @@ enum _PlanTool {
   scale,
   measure,
   walls,
+  viewer,
 }
 
 /// Sentinels for [_FloorPlanViewState._cableLayer]. Not cable types, so they
@@ -8011,6 +8270,141 @@ const String _kOffSheetSuffix = '\u0000off-sheet';
 /// beside it: clicking between two runs picks the nearer, never the wrong one
 /// of a pair.
 const double kRunTapSlack = 7;
+
+/// Readable from, on the sheet: green where a seat reads the content picked,
+/// within [kReadableHalfAngle] either side; amber out to 8 image heights,
+/// where it can be watched but not read; a dashed arc, named, where each
+/// other content type stops reading; and the line to the seat picked.
+class _ReadablePainter extends CustomPainter {
+  final Offset center;
+  final double rotation;
+
+  /// Radii in plan pixels.
+  final double readable;
+  final double watchable;
+
+  /// The other content types: where each stops reading, and its name.
+  final List<(double, String)> rings;
+  final Offset? spot;
+  final String label;
+  final bool ok;
+
+  const _ReadablePainter({
+    required this.center,
+    required this.rotation,
+    required this.readable,
+    required this.watchable,
+    this.rings = const [],
+    this.spot,
+    this.label = '',
+    this.ok = false,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Rotation is clockwise from the top; canvas angles start at 3 o'clock.
+    final start = (rotation - kReadableHalfAngle - 90) * math.pi / 180;
+    final sweep = kReadableHalfAngle * 2 * math.pi / 180;
+    Rect circle(double r) => Rect.fromCircle(center: center, radius: r);
+    final near = Path()
+      ..moveTo(center.dx, center.dy)
+      ..arcTo(circle(readable), start, sweep, false)
+      ..close();
+    final far = Path()
+      ..arcTo(circle(watchable), start, sweep, true)
+      ..arcTo(circle(readable), start + sweep, -sweep, false)
+      ..close();
+    canvas.drawPath(
+        far, Paint()..color = _kReadableWatch.withValues(alpha: 0.12));
+    canvas.drawPath(
+        near, Paint()..color = _kReadableOk.withValues(alpha: 0.16));
+    final edge = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawPath(far, edge..color = _kReadableWatch);
+    canvas.drawPath(near, edge..color = _kReadableOk);
+
+    // Dashed, so they read as marks rather than more zones.
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = _kReadableRing;
+    for (final (r, name) in rings) {
+      if (r <= 0) continue;
+      final dash = 6 / r;
+      for (var a = 0.0; a < sweep; a += dash * 2) {
+        canvas.drawArc(
+            circle(r), start + a, math.min(dash, sweep - a), false, ring);
+      }
+      // Named a little in from one end, clear of the line to a seat.
+      final angle = start + sweep * 0.12;
+      final at = center + Offset(math.cos(angle), math.sin(angle)) * r;
+      final text = TextPainter(
+        text: TextSpan(
+          text: name,
+          style: const TextStyle(
+            fontSize: 10,
+            color: _kReadableRing,
+            backgroundColor: Color(0xCCFFFFFF),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      text.paint(canvas, at - Offset(text.width / 2, text.height / 2));
+    }
+
+    final at = spot;
+    if (at == null) return;
+    final color = ok ? _kReadableOk : _kReadableNo;
+    canvas.drawLine(
+      center,
+      at,
+      Paint()
+        ..color = color
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawCircle(at, 6, Paint()..color = color);
+    canvas.drawCircle(
+      at,
+      6,
+      Paint()
+        ..color = Colors.black
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    if (label.isEmpty) return;
+    final text = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          fontSize: 12,
+          color: ok ? Colors.black : Colors.white,
+          backgroundColor: color,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    text.paint(canvas, at - Offset(text.width / 2, text.height + 10));
+  }
+
+  @override
+  bool shouldRepaint(_ReadablePainter old) =>
+      old.center != center ||
+      old.rotation != rotation ||
+      old.readable != readable ||
+      old.watchable != watchable ||
+      !listEquals(old.rings, rings) ||
+      old.spot != spot ||
+      old.label != label ||
+      old.ok != ok;
+}
+
+const Color _kReadableOk = Color(0xFF43A047);
+const Color _kReadableWatch = Color(0xFFFFA000);
+const Color _kReadableNo = Color(0xFFE53935);
+const Color _kReadableRing = Color(0xFF1565C0);
 
 /// Which drawn run a click at [at] landed on: the id whose route passes
 /// nearest, or '' when nothing is within [slack].

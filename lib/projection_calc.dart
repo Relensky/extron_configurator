@@ -357,6 +357,98 @@ double imageHeightFromWidth(double width, [double aspect = 16 / 9]) =>
 /// rule of thumb for reading detail.
 double farthestViewer(double height) => height * 6;
 
+// --------------------------------------------------------------------------
+//  Readable from a distance
+// --------------------------------------------------------------------------
+//  The same test the CTS dashboard's campus map makes: a seat reads an image
+//  out to a number of image heights set by what is on it ([ReadingContent];
+//  6 for slides, [farthestViewer]), and within [kReadableHalfAngle] either
+//  side of straight on. Out to 8 image heights the image can still be
+//  watched but not read: the 8 of the old 4-6-8 rule (4 heights for
+//  detailed inspection, 6 for reading, 8 for general viewing).
+
+/// Either side of straight on, the widest a seat reads an image from.
+const double kReadableHalfAngle = 60;
+
+/// Farthest viewer who can still follow an image [height] high without
+/// reading it: 8 image heights.
+double farthestWatcher(double height) => height * 8;
+
+/// What is on the image, and how many image heights away it still reads.
+/// The CTS dashboard's content types, same names and numbers: video from
+/// farther, spreadsheets and CAD from closer than the 6 heights of slides.
+enum ReadingContent {
+  video('Video and photos', 'Video', 8),
+  slides('Slides and large text', 'Slides', 6),
+  documents('Documents and web pages', 'Documents', 5),
+  spreadsheets('Spreadsheets, Excel and CAD', 'Spreadsheets', 4);
+
+  final String label;
+  final String short;
+
+  /// Image heights out to the farthest reader.
+  final double heights;
+  const ReadingContent(this.label, this.short, this.heights);
+
+  /// Farthest reader of this content on an image [height] high.
+  double reach(double height) => height * heights;
+
+  static ReadingContent fromName(Object? name) => values.firstWhere(
+    (c) => c.name == name,
+    orElse: () => ReadingContent.slides,
+  );
+}
+
+/// What a seat makes of an image.
+enum Readability {
+  readable('Readable'),
+  watchOnly('Too far to read, close enough to watch'),
+  tooFar('Too far'),
+  offToSide('Too far off to the side');
+
+  final String label;
+  const Readability(this.label);
+
+  bool get ok => this == readable;
+}
+
+/// What a seat [distance] from an image [height] high, [offAxis] degrees off
+/// its center line, makes of it when it shows [content]. Any one unit for
+/// the two lengths.
+Readability readabilityAt({
+  required double height,
+  required double distance,
+  double offAxis = 0,
+  ReadingContent content = ReadingContent.slides,
+}) {
+  if (offAxis > kReadableHalfAngle) return Readability.offToSide;
+  if (distance <= content.reach(height)) return Readability.readable;
+  if (distance <= farthestWatcher(height)) return Readability.watchOnly;
+  return Readability.tooFar;
+}
+
+/// The content a seat reads, closest-reading last: video, slides... Empty
+/// when it reads none.
+List<ReadingContent> contentReadAt({
+  required double height,
+  required double distance,
+  double offAxis = 0,
+}) => [
+  for (final c in ReadingContent.values)
+    if (readabilityAt(
+          height: height,
+          distance: distance,
+          offAxis: offAxis,
+          content: c,
+        ) ==
+        Readability.readable)
+      c,
+];
+
+/// Feet with centimeters beside: 18' 4" (559 cm).
+String feetAndCm(double feet) =>
+    '${measureLabel(feet)} (${formatLength(feet, LengthUnit.centimeters)})';
+
 final _nitsText = RegExp(r'([\d][\d,]*)\s*(?:nits|cd\s*/\s*m)', caseSensitive: false);
 
 /// Nits as written in [text], or 0.

@@ -52,6 +52,7 @@ import 'cost_estimate_view.dart';
 import 'cost_estimate_actions.dart';
 import 'collab/collab_widgets.dart';
 import 'delivery_locations_dialog.dart';
+import 'deploy_build.dart';
 import 'vendor_book_dialog.dart';
 import 'device_editor_view.dart';
 import 'device_info_editor.dart';
@@ -5820,6 +5821,9 @@ class _FileMenu extends StatelessWidget {
           target.isEmpty ? 'Deployment Target...' : 'Deployment Target: $target',
           () => showDeploymentTargetDialog(context),
         ),
+        // The template's local_build.py, rooms built into a folder to send.
+        item('file_build_deployment', Icons.build_outlined,
+            'Build for Deployment...', () => showDeployBuildDialog(context)),
         const Divider(height: 8),
         item('file_use_shared_folder', Icons.folder_shared,
             'Use Shared Folder for All Settings',

@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.175+185';
+const String kAppVersion = '0.5.177+187';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,23 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.177',
+    date: 'November 3, 2026',
+    title: 'Content types and build for deployment',
+    changes: [
+      'Floor plan: Readable from checks the content on the image, with the CTS dashboard\'s content types: video and photos read to 8 image heights, slides and large text 6, documents and web pages 5, spreadsheets and CAD 4. The plan shades where the content picked reads, marks where each other type stops, and a seat says which types it reads.',
+      'File menu: Build for Deployment runs the ControlScript template\'s local_build.py for the open room or any rooms picked: base assets, layout, the room\'s own files, its device drivers and the Python check against its processor. Rooms that pass are copied to a distribution folder to send out, and any files in upload_to_root the program does not read are named. The template\'s builds (local_build.py and build-room.js) now leave the configurator\'s room_files and .editing folders and its loose room files out of upload_to_root.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.176',
+    date: 'October 29, 2026',
+    title: 'Readable from a distance',
+    changes: [
+      'Floor plan: Readable from, on a selected screen or display once the sheet has a scale. Click a seat on the plan or type a distance to see how far it is in feet and inches with centimeters, how far the image reads, and whether it is readable, too far or too far off to the side. The plan shades where it reads (out to 6 image heights, within 60 degrees either side, the same rule as the viewing angle reach and the CTS dashboard) and, past that out to 8 image heights, where it can be watched but not read.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.175',
     date: 'October 27, 2026',
