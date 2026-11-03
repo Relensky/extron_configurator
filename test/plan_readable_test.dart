@@ -73,6 +73,57 @@ void main() {
     });
   });
 
+  testWidgets('with no scale the chip stays and starts setting one', (
+    tester,
+  ) async {
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..roomConfig = {
+        'SYSTEM_SETUP': {'gui_full_room_name': 'Test Room'},
+      };
+    p.loadAvFlowForCurrentConfig();
+    p.addFloorPlanSheet(name: 'Level 1');
+    final plan = p.activeFloorPlan!;
+    expect(plan.pixelsPerFoot, 0);
+    p.addAvPlanDevice(
+      plan.id,
+      const PlanDevice(
+        id: '',
+        deviceKey: 'generic:display',
+        label: 'Display',
+        shape: 'display',
+        pos: Offset(300, 150),
+        width: 120,
+      ),
+    );
+    tester.view.physicalSize = const Size(1700, 1300);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: const MaterialApp(home: Scaffold(body: FloorPlanView())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byWidgetPredicate(
+      (w) => w is Tooltip && (w.message ?? '').startsWith('Display\n'),
+    ));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    final chip = find.byKey(const ValueKey('plan_device_readable'));
+    expect(chip, findsOneWidget);
+    await tester.tap(chip);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<FilterChip>(
+          find.byKey(const ValueKey('plan_set_scale'))).selected,
+      isTrue,
+    );
+    expect(find.byKey(const ValueKey('plan_readable_range')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a seat on the plan or a typed distance is checked', (
     tester,
   ) async {

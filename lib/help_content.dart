@@ -808,15 +808,20 @@ const List<HelpTopic> kHelpTopics = [
         'onto a blank sheet if there is not one yet.',
     keywords: [
       'plan', 'layout', 'location', 'room drawing', 'annotate',
-      'readable', 'viewing distance', 'content type',
+      'readable', 'viewing distance', 'content type', 'paste', 'ctrl+v',
+      'screenshot',
     ],
     body:
-        'A picture of the room with the equipment placed on it. Locations '
+        'A picture of the room with the equipment placed on it. Import the '
+        'drawing from a file, or copy it (a screenshot, or Copy image in a '
+        'browser or PDF viewer) and press Ctrl+V on the tab.\n\n'
+        'Locations '
         'defined here are what the cable schedule measures between and what '
         'the lifecycle report names a position by, so a box placed on the plan '
         'stops being "Display 2" and starts being "Display 2, north wall".\n\n'
-        'Once the sheet has a scale, Readable from on a selected screen or '
-        'display checks a seat: click it on the plan or type a distance. '
+        'Readable from on a selected screen or display checks a seat: click '
+        'it on the plan or type a distance. It needs the sheet\'s scale, and '
+        'starts setting one if there is none. '
         'How far an image reads depends on what is on it, the same content '
         'types as the CTS dashboard: video and photos to 8 image heights, '
         'slides and large text 6, documents and web pages 5, spreadsheets '

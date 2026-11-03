@@ -1347,13 +1347,8 @@ class _AvFlowViewState extends State<AvFlowView>
   Widget _buildToolbar(AppStateProvider provider, AvFlowModel model) {
     final theme = Theme.of(context);
     final folded = BarFolds.isFolded('av_toolbar');
-    // A thin rule between groups of buttons that belong together.
-    Widget rule() => SizedBox(
-      height: 28,
-      child: VerticalDivider(width: 12, color: theme.dividerColor),
-    );
-    // Each group's name folds it away, for room to work on the drawing. The
-    // same as the Floor Plan toolbar.
+    // Each group is boxed, and its name folds it away, for room to work on
+    // the drawing. The same as the Floor Plan toolbar.
     Widget header(String name, bool open) => Tooltip(
       message: open ? 'Collapse $name' : 'Expand $name',
       child: InkWell(
@@ -1370,14 +1365,9 @@ class _AvFlowViewState extends State<AvFlowView>
               Icon(
                 open ? Icons.expand_more : Icons.chevron_right,
                 size: 16,
-                color: theme.hintColor,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-              Text(
-                name,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.hintColor,
-                ),
-              ),
+              ToolGroupName(name),
             ],
           ),
         ),
@@ -1388,22 +1378,15 @@ class _AvFlowViewState extends State<AvFlowView>
     Widget groups(List<(String, List<Widget>)> parts) {
       final shown = parts.where((g) => g.$2.isNotEmpty).toList();
       return Wrap(
-        spacing: 4,
+        spacing: 10,
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          for (var i = 0; i < shown.length; i++) ...[
-            if (i > 0) rule(),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                header(shown[i].$1, !_collapsedGroups.contains(shown[i].$1)),
-                if (!_collapsedGroups.contains(shown[i].$1)) ...shown[i].$2,
-              ],
+          for (final (name, items) in shown)
+            ToolGroup(
+              header: header(name, !_collapsedGroups.contains(name)),
+              children: _collapsedGroups.contains(name) ? const [] : items,
             ),
-          ],
         ],
       );
     }

@@ -11,8 +11,10 @@ import 'package:provider/provider.dart';
 
 import 'collapsible_bar.dart';
 import 'file_dialogs.dart';
+import 'app_paths.dart' show userDataDirOrNull;
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'team/team_clipboard_image.dart';
 import 'av_device_library.dart' show AvDeviceTemplate;
 import 'av_flow_model.dart';
 import 'av_flow_overview.dart'
@@ -133,6 +135,12 @@ const double kPlanMaxScale = 4.0;
 
 class FloorPlanView extends StatefulWidget {
   const FloorPlanView({super.key});
+
+  /// Where Ctrl+V and Paste image get a picture from. Tests stand in for
+  /// the Windows clipboard here.
+  static bool Function() clipboardHasPicture = () => ClipboardImage.hasPicture;
+  static Future<List<ClipboardPicture>> Function() readClipboard =
+      ClipboardImage.read;
 
   @override
   State<FloorPlanView> createState() => _FloorPlanViewState();
@@ -365,6 +373,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_onPasteKey);
     registerDiagramCanvas(AppTab.floorPlan, _planKey);
     // How the rest of the app gets at the OTHER sheets. One canvas key only
     // ever yields the sheet on screen, and every export in the app wants the
@@ -504,6 +513,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onPasteKey);
     _dragTick.dispose();
     _lensAt.dispose();
     _viewerField.dispose();
@@ -643,6 +653,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       Shortcut.toggleCone => d.copyWith(showFov: !d.showFov),
       _ => d,
     };
+    _conesShownFor(next.showFov && !d.showFov);
     provider.updateAvPlanDevice(
       plan.id,
       next,
@@ -732,7 +743,101 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
     final picked = result?.files.single.path;
     if (picked == null) return;
+    await _usePlanImage(provider, picked);
+  }
 
+  /// Ctrl+V on the page: a screenshot, a picture copied from a browser or
+  /// a PDF viewer, or an image file copied in File Explorer becomes the
+  /// sheet's drawing, as if it had been imported. False when the clipboard
+  /// holds no picture, so the key carries on to whatever else wants it.
+  bool _onPasteKey(KeyEvent event) {
+    if (event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.keyV ||
+        !HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isShiftPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return false;
+    }
+    // Not over a dialog, and not while typing in a box: those paste text.
+    if (!mounted || ModalRoute.of(context)?.isCurrent == false) return false;
+    if (FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<EditableText>() !=
+        null) {
+      return false;
+    }
+    if (!FloorPlanView.clipboardHasPicture()) return false;
+    _pastePlan(context.read<AppStateProvider>());
+    return true;
+  }
+
+  /// The picture on the clipboard as the sheet's drawing. Asks first when
+  /// it would replace one.
+  Future<void> _pastePlan(AppStateProvider provider) async {
+    final List<ClipboardPicture> pictures;
+    try {
+      pictures = await FloorPlanView.readClipboard();
+    } catch (e) {
+      _snack('$e'.replaceFirst('Bad state: ', ''), error: true);
+      return;
+    }
+    if (!mounted) return;
+    if (pictures.isEmpty) {
+      _snack('There is no picture on the clipboard to paste. Copy one '
+          '(a screenshot, or Copy image in a browser or PDF viewer) first.');
+      return;
+    }
+    final picture = pictures.first;
+    final existing = provider.activeFloorPlan;
+    if (existing != null && existing.imageFile.isNotEmpty) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          key: const ValueKey('plan_paste_confirm'),
+          title: const Text('Replace the drawing?'),
+          content: Text(
+            'The pasted picture (${picture.width} x ${picture.height}) '
+            'replaces "${existing.name}"\'s drawing. Everything placed on '
+            'the sheet stays where it is. Undo puts the old drawing back.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('plan_paste_replace'),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Replace'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    // Written out first, so it is copied into the room's folder the same
+    // way an imported file is. A room not saved yet points at the file
+    // where it is, so then it is kept with the app's data, not in temp.
+    final String file;
+    try {
+      final base = provider.currentConfigPath.isNotEmpty
+          ? Directory.systemTemp.path
+          : userDataDirOrNull() ?? Directory.systemTemp.path;
+      final dir = Directory(p.join(base, 'pasted_images'))
+        ..createSync(recursive: true);
+      final stamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+      file = p.join(dir.path, 'floorplan_$stamp.${picture.ext}');
+      await File(file).writeAsBytes(picture.bytes);
+    } catch (e) {
+      _snack('Could not keep the pasted picture: $e', error: true);
+      return;
+    }
+    if (!mounted) return;
+    await _usePlanImage(provider, file);
+    if (mounted) _snack('Pasted the picture as the drawing.');
+  }
+
+  /// [picked] as the sheet's drawing, or a new sheet's when there is none.
+  Future<void> _usePlanImage(AppStateProvider provider, String picked) async {
     // The natural size is read here rather than assumed: markers are stored in
     // the image's own coordinates, so a plan that opens at a different size
     // than it was marked up at would move every one of them.
@@ -1800,13 +1905,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
 
     final theme = Theme.of(context);
-    // A thin rule between groups of buttons that belong together.
-    Widget rule() => SizedBox(
-      height: 28,
-      child: VerticalDivider(width: 12, color: theme.dividerColor),
-    );
-    // Each group has a header that folds it away to its name, for room to
-    // work on the sheet.
+    // Each group is boxed, with a header that folds it away to its name,
+    // for room to work on the sheet.
     Widget header(String name, bool open) => Tooltip(
       message: open ? 'Collapse $name' : 'Expand $name',
       child: InkWell(
@@ -1823,14 +1923,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               Icon(
                 open ? Icons.expand_more : Icons.chevron_right,
                 size: 16,
-                color: theme.hintColor,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-              Text(
-                name,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.hintColor,
-                ),
-              ),
+              ToolGroupName(name),
             ],
           ),
         ),
@@ -1841,22 +1936,15 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     Widget groups(List<(String, List<Widget>)> parts) {
       final shown = parts.where((g) => g.$2.isNotEmpty).toList();
       return Wrap(
-        spacing: 4,
+        spacing: 10,
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          for (var i = 0; i < shown.length; i++) ...[
-            if (i > 0) rule(),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                header(shown[i].$1, !_collapsedGroups.contains(shown[i].$1)),
-                if (!_collapsedGroups.contains(shown[i].$1)) ...shown[i].$2,
-              ],
+          for (final (name, items) in shown)
+            ToolGroup(
+              header: header(name, !_collapsedGroups.contains(name)),
+              children: _collapsedGroups.contains(name) ? const [] : items,
             ),
-          ],
         ],
       );
     }
@@ -1875,6 +1963,18 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         label: Text(plan == null ? 'Import a plan' : 'Replace the image'),
         onPressed: () => _importPlan(provider),
       ),
+      if (Platform.isWindows)
+        Tooltip(
+          message: 'Use the picture on the clipboard as the drawing: a '
+              'screenshot, or Copy image in a browser or PDF viewer. Ctrl+V '
+              'does the same.',
+          child: OutlinedButton.icon(
+            key: const ValueKey('plan_paste_image'),
+            icon: const Icon(Icons.content_paste, size: 18),
+            label: const Text('Paste image'),
+            onPressed: () => _pastePlan(provider),
+          ),
+        ),
     ];
 
     final look = <Widget>[
@@ -5780,14 +5880,18 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               if (plan == null || devices.isEmpty) {
                 return const Text('Nothing on this sheet has a cone.');
               }
-              void setAll(bool v) => provider.updateAvFloorPlan(
-                plan.copyWith(
-                  devices: [
-                    for (final d in plan.devices)
-                      deviceShapeHasFov(d.shape) ? d.copyWith(showFov: v) : d,
-                  ],
-                ),
-              );
+              void setAll(bool v) {
+                _conesShownFor(v);
+                provider.updateAvFloorPlan(
+                  plan.copyWith(
+                    devices: [
+                      for (final d in plan.devices)
+                        deviceShapeHasFov(d.shape) ? d.copyWith(showFov: v) : d,
+                    ],
+                  ),
+                );
+              }
+
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -5833,11 +5937,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                               Switch(
                                 key: ValueKey('plan_cone_show_${d.id}'),
                                 value: d.showFov,
-                                onChanged: (v) => provider.updateAvPlanDevice(
-                                  planId,
-                                  d.copyWith(showFov: v),
-                                  what: v ? 'Show the cone' : 'Hide the cone',
-                                ),
+                                onChanged: (v) {
+                                  _conesShownFor(v);
+                                  provider.updateAvPlanDevice(
+                                    planId,
+                                    d.copyWith(showFov: v),
+                                    what: v ? 'Show the cone' : 'Hide the cone',
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -5912,6 +6019,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
   }
 
+  /// A cone turned on is one somebody wants to see: Viewing angles comes
+  /// back on with it, or the switch would seem to do nothing.
+  void _conesShownFor(bool on) {
+    if (on && _conesOff && mounted) setState(() => _conesOff = false);
+  }
+
   /// Turns Readable from off.
   void _stopViewer() {
     if (_tool == _PlanTool.viewer) _tool = _PlanTool.none;
@@ -5924,9 +6037,30 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// The Readable from chip for a screen or display, and while it is on, the
   /// distance field and what the seat makes of the image.
   List<Widget> _readableControls(FloorPlan plan, PlanDevice device) {
-    if (planImageHeight(device.shape, device.width) <= 0 ||
-        plan.pixelsPerFoot <= 0) {
-      return const [];
+    if (planImageHeight(device.shape, device.width) <= 0) return const [];
+    // No scale, no distances: shown anyway, so it does not just vanish, and
+    // a click starts setting the scale.
+    if (plan.pixelsPerFoot <= 0) {
+      return [
+        FilterChip(
+          key: const ValueKey('plan_device_readable'),
+          avatar: const Icon(Icons.visibility_outlined, size: 16),
+          label: const Text('Readable from'),
+          tooltip: 'Needs the sheet\'s scale. Click to set it: draw a line '
+              'over something of known length.',
+          selected: false,
+          onSelected: (_) {
+            setState(() {
+              _stopViewer();
+              _tool = _PlanTool.scale;
+              _scaleStart = null;
+              _scaleHover = null;
+            });
+            _snack('Readable from needs the sheet\'s scale. Click one end of '
+                'something whose length you know, then the other end.');
+          },
+        ),
+      ];
     }
     final theme = Theme.of(context);
     final on = _tool == _PlanTool.viewer && _viewerFor == device.id;
@@ -6111,18 +6245,29 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       device.copyWith(rotation: normalizeDegrees(device.rotation + by)),
       what: 'Turn ${device.label}',
     );
+    // The bar's controls in named boxes; a box with nothing in it for this
+    // device is left out.
+    List<Widget> section(String name, List<Widget> items) => items.isEmpty
+        ? const []
+        : [
+            ToolGroup(
+              key: ValueKey('plan_device_group_$name'),
+              header: ToolGroupName(name),
+              children: items,
+            ),
+          ];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Wrap(
-        spacing: 8,
+        spacing: 10,
         runSpacing: 6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Icon(cablingDeviceIcon(device.shape), size: 18),
-          Text(device.label, style: theme.textTheme.bodySmall),
+          Text(device.label, style: theme.textTheme.titleSmall),
+          ...section('Aim', [
           if (deviceShapeHasFov(device.shape)) ...[
-            const SizedBox(width: 8),
             avRowIcon(Icons.rotate_left, 'Turn 15° left', () => turn(-15)),
             avRowIcon(Icons.rotate_right, 'Turn 15° right', () => turn(15)),
             slider(
@@ -6147,14 +6292,19 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 '${deviceFovLabel(device.shape)} ${device.fov.round()}°',
               ),
               selected: device.showFov,
-              onSelected: (v) => provider.updateAvPlanDevice(
-                plan.id,
-                device.copyWith(showFov: v),
-                what: v ? 'Show the cone' : 'Hide the cone',
-              ),
+              onSelected: (v) {
+                _conesShownFor(v);
+                provider.updateAvPlanDevice(
+                  plan.id,
+                  device.copyWith(showFov: v),
+                  what: v ? 'Show the cone' : 'Hide the cone',
+                );
+              },
             ),
           if (deviceShapeHasFov(device.shape))
             _coneColorDot(provider, plan.id, device),
+          ]),
+          ...section('Place', [
           if (plan.walls case final walls? when ppf > 0)
             Builder(builder: (context) {
               final d = walls.distancesFrom(device.pos);
@@ -6205,6 +6355,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 label: const Text('Lock in'),
                 onPressed: () => _lockInFromBar(provider, plan, device),
               ),
+          ]),
+          ...section('Cone and throw', [
           if (device.shape == 'projector' && device.approval == null) ...[
             FilterChip(
               key: const ValueKey('plan_device_auto_throw'),
@@ -6286,6 +6438,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 what: 'Edit ${device.label}',
               ),
           ],
+          ]),
+          ...section('Size', [
           if (device.shape == 'screen' && ppf > 0 && device.approval == null)
             TextButton.icon(
               key: const ValueKey('plan_device_screen_size'),
@@ -6339,6 +6493,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               apply: (v) => device.copyWith(width: ppf > 0 ? v * ppf : v),
               what: 'Resize ${device.label}',
             ),
+          ]),
+          ...section('Projection', [
           if (device.shape == 'projector')
             Tooltip(
               message: device.throwFt > 0
@@ -6363,8 +6519,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           if (partnerShape(device.shape).isNotEmpty &&
               plan.devices.any((d) => d.shape == partnerShape(device.shape)))
             _pairMenu(provider, plan, device),
-          // Right after the screen it is paired with: this pair's numbers.
-          ..._readableControls(plan, device),
           if (device.shape == 'projector' || device.shape == 'screen')
             FilledButton.tonalIcon(
               key: const ValueKey('plan_device_calculator'),
@@ -6376,6 +6530,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   _openProjectionCalculator(provider, plan, device),
             ),
           ..._squareControls(provider, plan, device),
+          ]),
+          ...section('Readable from', _readableControls(plan, device)),
           FilterChip(
             key: const ValueKey('plan_device_lock'),
             avatar: Icon(

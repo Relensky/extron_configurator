@@ -368,10 +368,18 @@ class RoomConfigApp extends StatelessWidget {
         k.activator: const _OpenHelpIntent(),
       for (final k in keys.bindingsFor(Shortcut.find))
         k.activator: const _OpenFindIntent(),
+      // Undo and redo for when nothing in the page has focus - after
+      // clicking a toolbar button like Tidy layout, which does not take it.
+      // The page's own binding answers first whenever it can.
+      for (final k in keys.bindingsFor(Shortcut.undo))
+        k.activator: const _UndoIntent(redo: false),
+      for (final k in keys.bindingsFor(Shortcut.redo))
+        k.activator: const _UndoIntent(redo: true),
     },
     child: Actions(
       actions: {
         ...textBoxActions,
+        _UndoIntent: _UndoAction(),
         _OpenFindIntent: CallbackAction<_OpenFindIntent>(
           onInvoke: (_) => findKey.currentState?.open(),
         ),
@@ -386,6 +394,35 @@ class RoomConfigApp extends StatelessWidget {
       child: child,
     ),
   );
+}
+
+/// Ctrl+Z / Ctrl+Y with nothing in the page focused - see
+/// [RoomConfigApp._helpShortcuts].
+class _UndoIntent extends Intent {
+  final bool redo;
+  const _UndoIntent({required this.redo});
+}
+
+class _UndoAction extends Action<_UndoIntent> {
+  /// Off in a text box (a dialog's, say), so the key goes on up to the
+  /// box's own undo of the typing.
+  @override
+  bool isEnabled(_UndoIntent intent) =>
+      FocusManager.instance.primaryFocus?.context
+          ?.findAncestorWidgetOfExactType<EditableText>() ==
+      null;
+
+  @override
+  Object? invoke(_UndoIntent intent) {
+    final context = RoomConfigApp.navigatorKey.currentContext;
+    if (context == null) return null;
+    _MainDashboardState._undoOnCurrentTab(
+      context,
+      context.read<AppStateProvider>(),
+      redo: intent.redo,
+    );
+    return null;
+  }
 }
 
 /// Press F1 - see [RoomConfigApp._helpShortcuts].

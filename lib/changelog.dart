@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.177+187';
+const String kAppVersion = '0.5.178+188';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,18 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.178',
+    date: 'November 3, 2026',
+    title: 'Paste a floor plan, grouped buttons, undo after Tidy',
+    changes: [
+      'Floor plan: Ctrl+V, or the new Paste image button, uses the picture on the clipboard as the drawing: a screenshot, a picture copied from a browser or PDF viewer, or an image file copied in File Explorer. It is stored with the room like an imported one. With a drawing already on the sheet it asks before replacing it, and Undo puts the old one back.',
+      'Floor plan: Readable from shows on every screen and display, scaled sheet or not. Without a scale it starts setting one, instead of not being there.',
+      'Floor plan: turning a cone, throw or viewing angle on while Viewing angles is off turns Viewing angles back on, so the switch no longer seems to do nothing.',
+      'Ctrl+Z and Ctrl+Y work right after a toolbar button such as Tidy layout. They used to do nothing until something on the page was clicked.',
+      'Floor plan and AV Flow: the toolbar buttons sit in boxed, named groups instead of one long row. On the floor plan, a selected device\'s bar is grouped the same way: Aim, Place, Cone and throw, Size, Projection and Readable from.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.177',
     date: 'November 3, 2026',

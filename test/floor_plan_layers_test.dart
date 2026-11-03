@@ -471,7 +471,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Lectern  \u2192  Rack'), findsOneWidget);
 
-      await tester.tapAt(origin + const Offset(60, 700));
+      // Read again: the run's bar above the sheet pushed it down.
+      final below = tester.getTopLeft(find.byType(InteractiveViewer));
+      await tester.tapAt(below + const Offset(60, 500));
       await tester.pumpAndSettle();
       expect(find.text('Lectern  \u2192  Rack'), findsNothing);
       expect(tester.takeException(), isNull);

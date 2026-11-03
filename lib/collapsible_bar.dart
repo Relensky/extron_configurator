@@ -132,6 +132,53 @@ class FoldButton extends StatelessWidget {
   }
 }
 
+/// Buttons that belong together, boxed with their name, so a long toolbar
+/// reads as a few groups rather than one row. The Floor Plan and AV Flow
+/// toolbars, and the Floor Plan's selected-device bar.
+class ToolGroup extends StatelessWidget {
+  final Widget header;
+  final List<Widget> children;
+  const ToolGroup({super.key, required this.header, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [header, ...children],
+      ),
+    );
+  }
+}
+
+/// A [ToolGroup]'s name.
+class ToolGroupName extends StatelessWidget {
+  final String name;
+  const ToolGroupName(this.name, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text(
+      name.toUpperCase(),
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 0.6,
+      ),
+    );
+  }
+}
+
 /// A row of controls with a chevron in front that folds it to [title].
 class CollapsibleBar extends StatelessWidget {
   final String id;

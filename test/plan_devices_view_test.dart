@@ -251,6 +251,8 @@ void main() {
     expect(find.byKey(const ValueKey('plan_device_calculator')), findsOneWidget);
 
     // Pair it with the screen by name, not just by nearness.
+    await tester.ensureVisible(find.byKey(const ValueKey('plan_pair_menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('plan_pair_menu')));
     await tester.pumpAndSettle();
     final screenId = p.activeFloorPlan!.devices
@@ -302,10 +304,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<FilterChip>(angles).selected, isFalse);
     expect(p.activeFloorPlan!.devices.any((d) => d.showFov), isTrue);
+    await tester.ensureVisible(find.byTooltip('Export the plan'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Export the plan'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('plan_export_plain')), findsOneWidget);
     expect(find.textContaining('with viewing angles'), findsOneWidget);
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+    // Turning a cone on while they are hidden shows them again: otherwise
+    // the switch seems to do nothing.
+    await tester.tap(find.byKey(const ValueKey('plan_cone_list')));
+    await tester.pumpAndSettle();
+    final shown = find.byKey(ValueKey('plan_cone_show_${projector.id}'));
+    if (tester.widget<Switch>(shown).value) {
+      await tester.tap(shown);
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(shown);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilterChip>(angles).selected, isTrue);
     await tester.tapAt(Offset.zero);
     await tester.pumpAndSettle();
     expect(projector.pos.dx, closeTo(300, 0.01));
@@ -385,6 +403,8 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.widgetWithText(TextButton, 'Edit'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(TextButton, 'Edit'));
     await tester.pumpAndSettle();
