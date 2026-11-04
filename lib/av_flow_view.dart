@@ -953,6 +953,43 @@ class _AvFlowViewState extends State<AvFlowView>
   //  CABLING
   // -------------------------------------------------------------------------
 
+  /// Right-click on a box: Edit mode on, the box picked, and its edit
+  /// dialog open.
+  void _editNodeFromRightClick(AppStateProvider provider, AvNode node) {
+    _selectCable(null);
+    setState(() {
+      _editMode = true;
+      _cableMode = false;
+      _pendingPort = null;
+      _shapeNodeId = null;
+      _selectedNodeId = node.id;
+    });
+    _showNodeDialog(provider, node);
+  }
+
+  /// Right-click on a connector: Draw Cable on, with this connector as the
+  /// first end. Mid-cable, it is the second end, as a click would be.
+  void _cableFromRightClick(
+    AppStateProvider provider,
+    AvNode node,
+    AvPort port,
+  ) {
+    if (_editMode && _cableMode && _pendingPort != null) {
+      _onPortTap(provider, node, port);
+      return;
+    }
+    _selectCable(null);
+    setState(() {
+      _editMode = true;
+      _cableMode = true;
+      _shapeNodeId = null;
+      _selectedNodeId = null;
+      _pendingPort = (node.id, port.id);
+    });
+    _snack('Drawing a cable from ${node.label} ${port.label}: click the '
+        'connector at the other end.');
+  }
+
   /// Two-tap connect: the first port arms, the second completes. Tapping the
   /// armed port again cancels.
   Future<void> _onPortTap(
@@ -2179,6 +2216,9 @@ class _AvFlowViewState extends State<AvFlowView>
                   locationName:
                       model.locationById(node.locationId)?.displayName ?? '',
                   onPortTap: (port) => _onPortTap(provider, node, port),
+                  onSecondary: () => _editNodeFromRightClick(provider, node),
+                  onPortSecondary: (port) =>
+                      _cableFromRightClick(provider, node, port),
                   // Dragging and cabling never compete: in cable mode the box
                   // is a click target only.
                   onDragStart: _editMode && !_cableMode
@@ -5422,6 +5462,10 @@ class _AvNodeBox extends StatelessWidget {
 
   final ValueChanged<AvPort> onPortTap;
 
+  /// Right-click on the box: edit it. On a connector: draw a cable from it.
+  final VoidCallback? onSecondary;
+  final ValueChanged<AvPort>? onPortSecondary;
+
   /// Null when this device can't be dragged (view mode, or cable mode).
   final VoidCallback? onDragStart;
   final ValueChanged<Offset> onDragUpdate;
@@ -5446,6 +5490,8 @@ class _AvNodeBox extends StatelessWidget {
     required this.pendingPortId,
     required this.pendingPort,
     required this.onPortTap,
+    this.onSecondary,
+    this.onPortSecondary,
     required this.onDragStart,
     required this.onDragUpdate,
     required this.onDragEnd,
@@ -5471,6 +5517,7 @@ class _AvNodeBox extends StatelessWidget {
           // The box itself, and the drag surface.
           GestureDetector(
             onTap: onSelect,
+            onSecondaryTap: onSecondary,
             onPanStart: _canDrag ? (_) => onDragStart!() : null,
             onPanUpdate: _canDrag ? (d) => onDragUpdate(d.delta) : null,
             onPanEnd: _canDrag ? (_) => onDragEnd() : null,
@@ -5808,6 +5855,8 @@ class _AvNodeBox extends StatelessWidget {
     // still connects instead of turning into a drag.
     return GestureDetector(
       onTap: cableMode ? () => onPortTap(port) : null,
+      onSecondaryTap:
+          onPortSecondary == null ? null : () => onPortSecondary!(port),
       onPanStart: !cableMode && _canDrag ? (_) => onDragStart!() : null,
       onPanUpdate: !cableMode && _canDrag ? (d) => onDragUpdate(d.delta) : null,
       onPanEnd: !cableMode && _canDrag ? (_) => onDragEnd() : null,
@@ -5868,6 +5917,8 @@ class _AvNodeBox extends StatelessWidget {
       height: size,
       child: GestureDetector(
         onTap: cableMode ? () => onPortTap(port) : null,
+        onSecondaryTap:
+            onPortSecondary == null ? null : () => onPortSecondary!(port),
         onPanStart: !cableMode && _canDrag ? (_) => onDragStart!() : null,
         onPanUpdate: !cableMode && _canDrag
             ? (d) => onDragUpdate(d.delta)

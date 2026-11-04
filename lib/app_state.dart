@@ -12983,6 +12983,35 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  /// Copies [keys] of device [from]'s settings onto device [to] - two
+  /// cameras set up alike. Model, module and connection go first, so the
+  /// defaults a new connection brings are then overwritten by what was
+  /// copied. One undo step, as the edits settle together. Returns how many
+  /// changed.
+  int copyDeviceSettings(String from, String to, Iterable<String> keys) {
+    final source = roomConfig[from];
+    if (source is! Map || roomConfig[to] is! Map || from == to) return 0;
+    const first = ['model', 'module', 'com_type'];
+    final ordered = [
+      for (final k in first)
+        if (keys.contains(k)) k,
+      for (final k in keys)
+        if (!first.contains(k)) k,
+    ];
+    var changed = 0;
+    for (final k in ordered) {
+      if (!source.containsKey(k)) continue;
+      final value = jsonDecode(jsonEncode(source[k]));
+      if (jsonEncode(roomConfig[to][k]) == jsonEncode(value)) continue;
+      updateDeviceValue(to, k, value);
+      changed++;
+    }
+    if (changed > 0) {
+      AppLogger.logInfo('Copied $changed setting(s) from $from to $to.');
+    }
+    return changed;
+  }
+
   /// Removes the properties of [sectionKey] that the schema's "hideWhen" rules
   /// out for the block as it now stands — the serial_port and baud a device
   /// keeps hold of after being switched from Serial to Network. Returns the

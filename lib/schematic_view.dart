@@ -824,6 +824,58 @@ class _SchematicViewState extends State<SchematicView> {
   //  EDIT MODE — drawing custom lines
   // -------------------------------------------------------------------------
 
+  /// Right-click on a box: Edit mode on, and the box's own editor - the
+  /// rename dialog for one added by hand. A config device's settings are on
+  /// the Devices tab, offered rather than jumped to.
+  void _onNodeSecondary(AppStateProvider provider, SchematicNode node) {
+    setState(() {
+      _editMode = true;
+      _linkMode = false;
+      _pendingLinkFrom = null;
+    });
+    if (node.related) {
+      _showRelatedDeviceDialog(provider, index: node.relatedIndex);
+      return;
+    }
+    final isDevice = provider.roomConfig[node.id] is Map;
+    final tab = isDevice ? AppTab.devices : AppTab.system;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        isDevice
+            ? '${node.title}\'s settings are on the Devices tab.'
+            : '${node.title} is set up on the System tab.',
+      ),
+      action: SnackBarAction(
+        label: 'Open',
+        onPressed: () {
+          if (isDevice) provider.requestDevice(node.id);
+          provider.selectTab(tab.index);
+        },
+      ),
+    ));
+  }
+
+  /// Right-click on a line: its edit dialog, to rename, recolor or
+  /// re-route it, as the list's pencil does.
+  void _onCanvasSecondary(
+    AppStateProvider provider,
+    SchematicModel model,
+    Offset at,
+  ) {
+    final edge = schematicEdgeAt(model, at);
+    if (edge == null) return;
+    setState(() => _editMode = true);
+    _showLineDialog(
+      provider,
+      fromId: edge.fromId,
+      toId: edge.toId,
+      initialColor: edge.color,
+      initialLabel: edge.label,
+      customIndex: edge.custom ? edge.customIndex : -1,
+      hideAutoId: edge.custom ? null : edge.autoId,
+    );
+  }
+
   void _onNodeTap(AppStateProvider provider, SchematicNode node) {
     if (!_editMode || !_linkMode) return;
     if (_pendingLinkFrom == null) {
@@ -1601,10 +1653,16 @@ class _SchematicViewState extends State<SchematicView> {
           // itself off the page for an export.
           if (provider.showDiagramGrid)
             const Positioned.fill(child: DiagramGrid()),
-          // Connection lines under everything.
+          // Connection lines under everything. Right-click on one edits it.
           Positioned.fill(
-            child: CustomPaint(
-              painter: _EdgePainter(model, theme.brightness),
+            child: GestureDetector(
+              key: const ValueKey('schematic_lines'),
+              behavior: HitTestBehavior.translucent,
+              onSecondaryTapUp: (d) =>
+                  _onCanvasSecondary(provider, model, d.localPosition),
+              child: CustomPaint(
+                painter: _EdgePainter(model, theme.brightness),
+              ),
             ),
           ),
           // Room title (part of the PNG export).
@@ -1626,6 +1684,7 @@ class _SchematicViewState extends State<SchematicView> {
               child: RepaintBoundary(
                 child: GestureDetector(
                   onTap: () => _onNodeTap(provider, node),
+                  onSecondaryTap: () => _onNodeSecondary(provider, node),
                   onPanStart: _canDrag
                       ? (_) => _onNodeDragStart(node.id, node.pos)
                       : null,
@@ -1785,8 +1844,9 @@ class _SchematicViewState extends State<SchematicView> {
         children: [
           Text(
             'Drag boxes to rearrange. "Draw Line" + tap two boxes adds a '
-            'line. Edit any line below to re-route or recolor it (editing an '
-            'auto line makes it yours); deleted auto lines can be restored. '
+            'line. Edit any line below, or right-click it on the drawing, to '
+            'rename, re-route or recolor it (editing an auto line makes it '
+            'yours); deleted auto lines can be restored. '
             '"Add device" draws equipment the control system does not talk to.',
             style: theme.textTheme.bodySmall,
           ),
@@ -2141,6 +2201,51 @@ Offset? schematicEdgeControl(
     perp = -perp; // push away from the obstacle, not into it
   }
   return mid + perp * (kNodeHeight * 2.4);
+}
+
+/// The line drawn nearest [at], within [slack], or null. Follows each line
+/// the way [_EdgePainter] draws it: straight, or curved around a box.
+SchematicEdge? schematicEdgeAt(
+  SchematicModel model,
+  Offset at, {
+  double slack = 8,
+}) {
+  double toSegment(Offset a, Offset b) {
+    final ab = b - a;
+    final len2 = ab.distanceSquared;
+    if (len2 == 0) return (at - a).distance;
+    final t = (((at - a).dx * ab.dx + (at - a).dy * ab.dy) / len2)
+        .clamp(0.0, 1.0);
+    return (at - (a + ab * t)).distance;
+  }
+
+  final rects = schematicNodeRects(model);
+  SchematicEdge? best;
+  var bestDistance = slack;
+  for (final edge in model.edges) {
+    final from = model.nodeById(edge.fromId);
+    final to = model.nodeById(edge.toId);
+    if (from == null || to == null) continue;
+    final a = from.center;
+    final b = to.center;
+    final control = schematicEdgeControl(model, edge, rects);
+    var d = double.infinity;
+    if (control == null) {
+      d = toSegment(a, b);
+    } else {
+      var prev = a;
+      for (var i = 1; i <= 24; i++) {
+        final p = _EdgePainter._bezier(a, control, b, i / 24);
+        d = math.min(d, toSegment(prev, p));
+        prev = p;
+      }
+    }
+    if (d <= bestDistance) {
+      bestDistance = d;
+      best = edge;
+    }
+  }
+  return best;
 }
 
 /// The lowest point anything drawn reaches: boxes, straight lines, and the

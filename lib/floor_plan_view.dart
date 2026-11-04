@@ -180,6 +180,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   String? _selectedCalloutId;
 
+  /// The location marker clicked, so Delete takes it off this sheet.
+  String _selectedLocationId = '';
+
   /// The run being worked on, by bundle id, or '' when none is.
   ///
   /// A run is picked up by clicking its line. While one is held the sheet
@@ -558,6 +561,31 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       return KeyEventResult.ignored;
     }
 
+    // A location marker: Delete takes it off this sheet, the location
+    // itself stays.
+    if (_selectedLocationId.isNotEmpty) {
+      final id = _selectedLocationId;
+      switch (keys.match(event, [Shortcut.delete, Shortcut.deselect])) {
+        case Shortcut.delete:
+          final name = provider.avLocations
+                  .where((l) => l.id == id)
+                  .firstOrNull
+                  ?.name ??
+              'The location';
+          provider.removeAvLocationMarker(plan.id, id);
+          setState(() => _selectedLocationId = '');
+          _snack(
+            '$name taken off ${plan.name}. The location itself is '
+            'untouched - undo, or click the sheet again to put it back.',
+          );
+          return KeyEventResult.handled;
+        case Shortcut.deselect:
+          setState(() => _selectedLocationId = '');
+          return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+
     final device = plan.devices
         .where((d) => d.id == _selectedDeviceId)
         .firstOrNull;
@@ -669,6 +697,18 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// Selects a device or callout and takes the keyboard, so the shortcuts
   /// land on it.
   void _focusSheet() => _planFocus.requestFocus();
+
+  /// One thing on the sheet selected, and the keyboard on it, so Delete
+  /// removes it.
+  void _select({String device = '', String? callout, String location = ''}) {
+    setState(() {
+      _selectedDeviceId = device;
+      _selectedCalloutId = callout;
+      _selectedLocationId = location;
+      _selectedRunId = '';
+    });
+    _focusSheet();
+  }
 
   /// [FLOOR PLANS - FIT]: things placed past the edge of the drawing - it was
   /// swapped for a smaller one - and the one-click way to reach them again.
@@ -4081,17 +4121,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           _markerDragId = '';
           _markerDrag = Offset.zero;
         }),
+        // Selected, Delete takes the marker off ONE sheet without deleting the
+        // location: the place is still where the gear is, it just does not
+        // belong on this drawing.
+        onTap: () => _select(location: location.id),
         onDoubleTap: () => showLocationEditor(context, provider, location),
-        // Taking a marker off ONE sheet without deleting the location: the
-        // place is still where the gear is, it just does not belong on this
-        // drawing. There was no way to say that while a marker was a property
-        // of the room.
         onSecondaryTap: () {
-          provider.removeAvLocationMarker(plan.id, location.id);
-          _snack(
-            '${location.name} taken off ${plan.name}. The location itself is '
-            'untouched - undo, or click the sheet again to put it back.',
-          );
+          _select(location: location.id);
+          showLocationEditor(context, provider, location);
         },
         child: Tooltip(
           message:
@@ -4100,8 +4137,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               '$devices device${devices == 1 ? '' : 's'}, '
               '$jacks jack${jacks == 1 ? '' : 's'}\n'
               'On ${plan.name}\n'
-              'Drag to move · double-click to edit · '
-              'right-click to take it off this sheet',
+              'Click to select, Delete takes it off this sheet · drag to '
+              'move · right-click or double-click for its details',
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -4111,7 +4148,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF1565C0),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
+                  border: Border.all(
+                    color: _selectedLocationId == location.id
+                        ? Colors.yellow
+                        : Colors.white,
+                    width: _selectedLocationId == location.id ? 3 : 2,
+                  ),
                 ),
                 alignment: Alignment.center,
                 child: Text(
@@ -4202,13 +4244,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       left: at.dx - r,
       top: at.dy - r,
       child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedCalloutId = callout.id;
-            _selectedDeviceId = '';
-          });
-          _focusSheet();
-        },
+        onTap: () => _select(callout: callout.id),
         onPanStart: (_) => setState(() {
           _calloutDragId = callout.id;
           _calloutDrag = Offset.zero;
@@ -4237,6 +4273,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           _calloutDrag = Offset.zero;
         }),
         onDoubleTap: () => _showCalloutEditor(provider, model, plan, callout),
+        onSecondaryTap: () {
+          _select(callout: callout.id);
+          _showCalloutEditor(provider, model, plan, callout);
+        },
         child: Tooltip(
           message: [
             'Callout ${callout.tag}',
@@ -4244,7 +4284,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             if (callout.workbookSheet.isNotEmpty)
               'Workbook: ${callout.workbookSheet}'
                   '${callout.workbookRef.isEmpty ? '' : ' · ${callout.workbookRef}'}',
-            'Drag to move · double-click to edit',
+            'Click to select, Delete removes it · drag to move · '
+                'right-click or double-click for its details',
           ].join('\n'),
           child: Container(
             width: r * 2,
@@ -4460,12 +4501,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       top: at.dy - box / 2,
       width: w,
       child: GestureDetector(
-        onTap: () => setState(() {
-          _selectedDeviceId = device.id;
-          _selectedRunId = '';
-          _selectedCalloutId = null;
-          _focusSheet();
-        }),
+        onTap: () => _select(device: device.id),
         // Locked: a drag pans the sheet instead.
         onPanStart: device.locked
             ? null
@@ -4501,22 +4537,23 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         onDoubleTap: () => device.approval != null
             ? _snack('${device.label} is locked in. Unlock it to edit it.')
             : _showDeviceEditor(provider, plan, device),
+        // Its details, as double-click. Removing it is select and Delete.
         onSecondaryTap: () {
-          if (device.locked) {
-            _snack('${device.label} is locked. Unlock it to remove it.');
-            return;
+          _select(device: device.id);
+          if (device.approval != null) {
+            _snack('${device.label} is locked in. Unlock it to edit it.');
+          } else {
+            _showDeviceEditor(provider, plan, device);
           }
-          provider.removeAvPlanDevice(plan.id, device.id);
-          if (selected) setState(() => _selectedDeviceId = '');
-          _snack('${device.label} taken off ${plan.name}.');
         },
         child: Tooltip(
           message: device.locked
               ? '${device.label}\n'
-                  'Locked · click to select · double-click to edit'
+                  'Locked · click to select · right-click or double-click '
+                  'for its details'
               : '${device.label}\n'
-                  'Click to select · drag to move · double-click to edit · '
-                  'right-click to remove',
+                  'Click to select, Delete removes it · drag to move · '
+                  'right-click or double-click for its details',
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -7091,6 +7128,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         setState(() {
           _selectedCalloutId = null;
           _selectedDeviceId = '';
+          _selectedLocationId = '';
           _selectedRunId = bundle?.id ?? '';
         });
       case _PlanTool.device:

@@ -108,6 +108,20 @@ Future<void> showDeviceManualsDialog(
         ),
       ),
       actions: [
+        // Where these came from, so a folder set wrong is seen, not guessed.
+        Tooltip(
+          message: 'App Config > Manuals Folder sets this',
+          child: TextButton.icon(
+            key: const ValueKey('device_manuals_folder'),
+            icon: const Icon(Icons.folder_open, size: 16),
+            label: Text(
+              'From ${provider.effectiveManualsFolder}',
+              overflow: TextOverflow.ellipsis,
+            ),
+            onPressed: () =>
+                provider.openInDesktop(provider.effectiveManualsFolder),
+          ),
+        ),
         TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Close')),

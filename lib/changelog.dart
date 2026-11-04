@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.179+189';
+const String kAppVersion = '0.5.180+190';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,19 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.180',
+    date: 'November 3, 2026',
+    title: 'Right-click for details, devices by type, copy settings',
+    changes: [
+      'Floor plan: right-click a device, location or callout to open its details, as double-click does. Right-click no longer removes anything: click to select, then Delete. Location markers can be selected now too, and Delete takes one off the sheet while keeping the location.',
+      'AV Flow: right-click a device to edit it, which turns Edit on. Right-click a connector to start a cable from it, then click or right-click the other end.',
+      'Control Schematic: right-click a line to rename, recolor or re-route it. Right-click a box to turn Edit on: a box added by hand opens its own editor, and a config device offers its page on the Devices tab.',
+      'Devices: By type breaks the devices down by type, with a chip for each to show or hide its tabs.',
+      'Devices: Copy settings from... copies another device of the same type\'s settings onto this one. Name, IP address and the panel and GVE ids start unticked, since they belong to each unit, and Ctrl+Z puts the copy back.',
+      'Devices: the device manuals window says which folder the manuals come from, with a button to open it.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.179',
     date: 'November 3, 2026',

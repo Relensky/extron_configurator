@@ -95,7 +95,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(camera(p).pos, at);
 
-    await tester.tap(marker(), buttons: kSecondaryButton);
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
     await tester.pumpAndSettle();
     expect(p.activeFloorPlan!.devices, hasLength(1));
 

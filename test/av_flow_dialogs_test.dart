@@ -1,5 +1,5 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/gestures.dart' show PointerDeviceKind;
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryButton;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -327,6 +327,51 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(provider.avCables.length, 1);
     expect(provider.avCables.single.toNodeId, 'PROJECTORDEVICE_1');
+  });
+
+  testWidgets('right-click on a device opens it for editing, in Edit mode', (
+    tester,
+  ) async {
+    final provider = seeded();
+    await pumpTab(tester, provider);
+    expect(
+      tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'Edit'))
+          .selected,
+      isFalse,
+    );
+
+    await tester.tap(find.text('Projector'), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Connectors'), findsOneWidget);
+    expect(find.text('Remove device'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'Edit'))
+          .selected,
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('right-click on a connector starts a cable from it', (
+    tester,
+  ) async {
+    final provider = seeded();
+    await pumpTab(tester, provider);
+
+    // From view mode, straight into Draw Cable with this end armed.
+    await tester.tap(find.text('HDMI OUT'), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Pick 2nd connector...'), findsOneWidget);
+
+    // The other end, by click or right-click alike.
+    await tester.tap(find.text('HDMI 1'), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    expect(provider.avCables.length, 1);
+    expect(provider.avCables.single.fromNodeId, 'SWITCHERDEVICE_1');
+    expect(provider.avCables.single.toNodeId, 'PROJECTORDEVICE_1');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('dragging a device only writes its position once, on release', (

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
@@ -52,6 +53,155 @@ List<String> getActiveDeviceKeys(
         Map<String, dynamic> config, Map<String, String> map) =>
     activeDeviceKeysIn(config, map);
 
+/// The room's other devices of [deviceKey]'s type: the same family in the
+/// UI schema.
+List<String> sameTypeDevices(AppStateProvider provider, String deviceKey) {
+  final type = provider.uiSchema.deviceTypeForSection(deviceKey);
+  if (type == null) return const [];
+  return [
+    for (final k in getActiveDeviceKeys(
+        provider.roomConfig, provider.uiSchema.deviceCountMap))
+      if (k != deviceKey && k.startsWith(type.prefix)) k,
+  ];
+}
+
+/// Settings that belong to one unit, not to how a type is set up: left
+/// unticked when copying from another device.
+const Set<String> kPerDeviceSettings = {
+  'name', 'ip_address', 'device_id', 'gve_id', 'btn_name', 'lbl_name',
+};
+
+/// Picks a device of [deviceKey]'s type and which of its settings to copy
+/// onto [deviceKey].
+Future<void> showCopyDeviceSettingsDialog(
+  BuildContext context,
+  AppStateProvider provider,
+  String deviceKey,
+) async {
+  final others = sameTypeDevices(provider, deviceKey);
+  if (others.isEmpty) return;
+  String nameOf(String k) =>
+      (provider.roomConfig[k] as Map?)?['name']?.toString() ?? k;
+  String show(Object? v) {
+    final s = v is String ? v : jsonEncode(v);
+    return s.length > 60 ? '${s.substring(0, 57)}...' : s;
+  }
+
+  var from = others.first;
+  Set<String> ticked(String source) => {
+        for (final k in (provider.roomConfig[source] as Map).keys)
+          if (!kPerDeviceSettings.contains(k.toString())) k.toString(),
+      };
+  var keys = ticked(from);
+
+  final copied = await showDialog<int>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) {
+        final source = provider.roomConfig[from] as Map;
+        final target = provider.roomConfig[deviceKey] as Map;
+        final all = source.keys.map((k) => k.toString()).toList()..sort();
+        return AlertDialog(
+          key: const ValueKey('copy_device_settings_dialog'),
+          title: Text('Copy settings to ${nameOf(deviceKey)}'),
+          content: SizedBox(
+            width: 620,
+            height: 460,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<String>(
+                  key: const ValueKey('copy_device_from'),
+                  initialValue: from,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'From',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    for (final k in others)
+                      DropdownMenuItem(value: k, child: Text(nameOf(k))),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setLocal(() {
+                      from = v;
+                      keys = ticked(v);
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Name, IP address and the panel and GVE ids start '
+                        'unticked: they belong to each unit.',
+                        style: Theme.of(ctx).textTheme.bodySmall,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => setLocal(() => keys = all.toSet()),
+                      child: const Text('All'),
+                    ),
+                    TextButton(
+                      onPressed: () => setLocal(() => keys = {}),
+                      child: const Text('None'),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      for (final k in all)
+                        CheckboxListTile(
+                          key: ValueKey('copy_device_key_$k'),
+                          dense: true,
+                          value: keys.contains(k),
+                          onChanged: (v) => setLocal(
+                              () => v == true ? keys.add(k) : keys.remove(k)),
+                          title: Text(k),
+                          subtitle: Text(
+                            jsonEncode(source[k]) == jsonEncode(target[k])
+                                ? '${show(source[k])}  (already the same)'
+                                : '${show(source[k])}  (now '
+                                    '${target.containsKey(k) ? show(target[k]) : 'not set'})',
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('copy_device_go'),
+              onPressed: keys.isEmpty
+                  ? null
+                  : () => Navigator.of(ctx).pop(
+                      provider.copyDeviceSettings(from, deviceKey, keys)),
+              child: Text('Copy ${keys.length} setting'
+                  '${keys.length == 1 ? '' : 's'}'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+  if (copied == null || !context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text(copied == 0
+        ? 'Nothing changed: those settings were already the same.'
+        : 'Copied $copied setting${copied == 1 ? '' : 's'} from '
+            '${nameOf(from)}. Ctrl+Z puts them back.'),
+  ));
+}
+
 class DynamicDevicesTabsView extends StatefulWidget {
   const DynamicDevicesTabsView({super.key});
 
@@ -60,15 +210,24 @@ class DynamicDevicesTabsView extends StatefulWidget {
 }
 
 class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
+  /// The device types broken out as chips, and the ones hidden. Kept for the
+  /// session.
+  static bool _byType = false;
+  static final Set<String> _hiddenTypes = {};
+
+  /// A device's type, as the UI schema names its family.
+  static String _typeOf(AppStateProvider provider, String key) =>
+      provider.uiSchema.deviceTypeForSection(key)?.label ?? 'Other';
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
     final config = provider.roomConfig;
     if (config.isEmpty) return const Center(child: Text("No configuration template loaded."));
 
-    final activeKeys =
+    final allKeys =
         getActiveDeviceKeys(config, provider.uiSchema.deviceCountMap);
-    if (activeKeys.isEmpty) return const Center(child: Text("No devices found based on dev_ parameters."));
+    if (allKeys.isEmpty) return const Center(child: Text("No devices found based on dev_ parameters."));
 
     // WHICH TAB THIS OPENS ON. A flag on the project tab, a row on the
     // undriven list, a device on the estimate: all of them name a device, and
@@ -76,10 +235,82 @@ class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
     // keyed on the request, so asking for another device rebuilds it there;
     // moving between tabs by hand does not rebuild it at all.
     final wanted = provider.requestedDeviceKey;
+    // A device asked for is shown, even when its type was hidden.
+    if (allKeys.contains(wanted)) _hiddenTypes.remove(_typeOf(provider, wanted));
+
+    // The types in family order, each with how many devices it has.
+    final types = <String, int>{};
+    for (final k in allKeys) {
+      final t = _typeOf(provider, k);
+      types[t] = (types[t] ?? 0) + 1;
+    }
+    final activeKeys = [
+      for (final k in allKeys)
+        if (!_hiddenTypes.contains(_typeOf(provider, k))) k,
+    ];
     final at = activeKeys.indexOf(wanted);
 
+    final typeChips = !_byType
+        ? null
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (final MapEntry(key: t, value: n) in types.entries)
+                  FilterChip(
+                    key: ValueKey('devices_type_$t'),
+                    label: Text('$t ($n)'),
+                    tooltip: _hiddenTypes.contains(t)
+                        ? 'Show the $t'
+                        : 'Hide the $t',
+                    selected: !_hiddenTypes.contains(t),
+                    onSelected: (v) => setState(() =>
+                        v ? _hiddenTypes.remove(t) : _hiddenTypes.add(t)),
+                  ),
+                TextButton(
+                  onPressed: _hiddenTypes.isEmpty
+                      ? null
+                      : () => setState(_hiddenTypes.clear),
+                  child: const Text('Show all'),
+                ),
+              ],
+            ),
+          );
+    final byTypeButton = FilterChip(
+      key: const ValueKey('devices_by_type'),
+      avatar: const Icon(Icons.category_outlined, size: 18),
+      label: Text(_hiddenTypes.isEmpty
+          ? 'By type'
+          : 'By type (${_hiddenTypes.length} hidden)'),
+      tooltip: 'Break the devices down by type, to show or hide each type',
+      selected: _byType,
+      onSelected: (v) => setState(() => _byType = v),
+    );
+
+    if (activeKeys.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: byTypeButton,
+          ),
+          ?typeChips,
+          const Expanded(
+            child: Center(
+              child: Text('Every device type is hidden. Show one above.'),
+            ),
+          ),
+        ],
+      );
+    }
+
     return DefaultTabController(
-      key: ValueKey('devices_tabs_${at < 0 ? '' : wanted}_${activeKeys.length}'),
+      key: ValueKey('devices_tabs_${at < 0 ? '' : wanted}_'
+          '${activeKeys.join(',')}'),
       initialIndex: at < 0 ? 0 : at,
       length: activeKeys.length,
       child: Builder(
@@ -108,6 +339,8 @@ class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
                         tabs: activeKeys.map((key) => Tab(text: config[key]['name'] ?? key)).toList(),
                       ),
                     ),
+                    byTypeButton,
+                    const SizedBox(width: 4),
                     // Every device's manuals, and what is missing.
                     TextButton.icon(
                       key: const ValueKey('room_manuals_button'),
@@ -119,6 +352,7 @@ class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
                   ],
                 ),
               ),
+              ?typeChips,
               Expanded(
                 child: TabBarView(
                   physics: const NeverScrollableScrollPhysics(), // Stops drag issues so scroll wheel wins
@@ -878,6 +1112,25 @@ class DeviceConfigurationForm extends StatelessWidget {
                   provider,
                   provider.roomConfig[deviceKey]?['model']?.toString().trim() ?? ''),
             ),
+            const SizedBox(width: 8),
+            // Another device of the same type's settings, onto this one.
+            Builder(builder: (context) {
+              final others = sameTypeDevices(provider, deviceKey);
+              return Tooltip(
+                message: others.isEmpty
+                    ? 'No other device of this type in the room to copy from'
+                    : 'Copy settings from another device of this type',
+                child: OutlinedButton.icon(
+                  key: const ValueKey('device_copy_from'),
+                  icon: const Icon(Icons.copy_all),
+                  label: const Text('Copy settings from...'),
+                  onPressed: others.isEmpty
+                      ? null
+                      : () => showCopyDeviceSettingsDialog(
+                          context, provider, deviceKey),
+                ),
+              );
+            }),
           ],
         )),
         const SizedBox(height: 20),
