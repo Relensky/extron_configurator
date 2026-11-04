@@ -6297,9 +6297,16 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ),
           ];
 
+    // Readable from gets its own row: it grows when turned on.
+    final readable = section('Readable from', _readableControls(plan, device));
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Wrap(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+      Wrap(
         spacing: 10,
         runSpacing: 6,
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -6571,7 +6578,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ),
           ..._squareControls(provider, plan, device),
           ]),
-          ...section('Readable from', _readableControls(plan, device)),
           FilterChip(
             key: const ValueKey('plan_device_lock'),
             avatar: Icon(
@@ -6614,6 +6620,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               _stopViewer();
             }),
           ),
+        ],
+      ),
+      if (readable.isNotEmpty) ...[
+        const SizedBox(height: 6),
+        ...readable,
+      ],
         ],
       ),
     );

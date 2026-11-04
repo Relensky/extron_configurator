@@ -453,7 +453,11 @@ class SchemaFieldBuilder {
           .toList(),
       onChanged: (val) {
         if (val == null) return;
-        provider.updateDeviceValue(sectionKey, fieldKey, val);
+        // "true"/"false" options save as JSON booleans (active_event_space
+        // is true, false or "test").
+        final Object saved =
+            val == 'true' ? true : (val == 'false' ? false : val);
+        provider.updateDeviceValue(sectionKey, fieldKey, saved);
         // Changing the connection style can pull the driver's own port,
         // protocol and baud in with it. That is the point of the blocks, and
         // it still has to be said out loud — values appearing in fields

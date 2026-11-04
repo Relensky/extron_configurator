@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.180+190';
+const String kAppVersion = '0.5.181+191';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,15 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.181',
+    date: 'November 4, 2026',
+    title: 'Readable from on its own row, event space test timer',
+    changes: [
+      'System setup: Event Space Timer (active_event_space) is a choice of Normal (3hr), Event (6hr) or Test (2min). Test shows the room\'s shutdown warning after 2 minutes so it can be checked quickly; set it back to Normal afterwards.',
+      'Floor plan: Readable from sits on its own row under a screen or display\'s other controls, so turning it on no longer pushes it onto a new line.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.180',
     date: 'November 3, 2026',

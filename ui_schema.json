@@ -1113,8 +1113,23 @@
       "description": "Run the processor's debug server, so a debug client can attach to the running room and watch its logs live. Nothing to do with the inactivity timer. The reboot listener (active_reboot_listener) is separate and works with this switched off."
     },
     "active_event_space": {
-      "type": "bool",
-      "description": "Put the room on the EVENT inactivity timer - 6 hours before it shuts itself down, against the normal 3. For a room that regularly hosts long sessions with no touch panel activity. The room's Timer button cycles normal / event / disabled and writes the choice back into config.json on the processor; disable_inactivity_timer (25hrs) outranks this flag."
+      "type": "dropdown",
+      "label": "Event Space Timer (active_event_space)",
+      "options": [
+        {
+          "value": "false",
+          "label": "Normal (3hr)"
+        },
+        {
+          "value": "true",
+          "label": "Event (6hr)"
+        },
+        {
+          "value": "test",
+          "label": "Test (2min)"
+        }
+      ],
+      "description": "Which inactivity timer the room runs: false is the normal 3 hours before it shuts itself down, true is the EVENT timer (6 hours) for a room that regularly hosts long sessions with no touch panel activity, and \"test\" shows the shutdown warning after 2 minutes so the warning and countdown can be checked quickly - set it back to false afterwards. The room's Timer button cycles normal / event / disabled / test and writes the choice back into config.json on the processor; disable_inactivity_timer (25hrs) outranks this setting."
     },
     "active_notifications": {
       "type": "bool",
@@ -1130,7 +1145,7 @@
       "type": "bool",
       "label": "Disable Inactivity Timer (disable_inactivity_timer)",
       "helperText": "Not a true disable - it pushes the shutdown out to 25hrs",
-      "description": "Selects the 'disabled' inactivity mode: the warning/shutdown timers move out past a full day (25hrs) so a multi-day event is never shut down on the presenter. Works with active_event_space (normal 3hr / event 6hr / disabled 25hr); this flag wins. The room's Timer button cycles the modes and saves both flags back into config.json on the processor."
+      "description": "Selects the 'disabled' inactivity mode: the warning/shutdown timers move out past a full day (25hrs) so a multi-day event is never shut down on the presenter. Works with active_event_space (normal 3hr / event 6hr / disabled 25hr / test 2min); this flag wins. The room's Timer button cycles the modes and saves both flags back into config.json on the processor."
     },
     "use_qos": {
       "type": "bool",
