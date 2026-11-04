@@ -27,6 +27,7 @@ import 'av_flow_overview.dart'
         snapshotDrawing,
         zoomAboutCenter;
 import 'av_flow_report.dart';
+import 'av_flow_view.dart' show drawRoomFromConfig;
 import 'av_port_editor.dart' show avRowIcon;
 import 'cable_colors_dialog.dart';
 import 'cabling_schematic.dart';
@@ -382,7 +383,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final provider = context.read<AppStateProvider>();
-      provider.ensureAvFlowForCurrentConfig();
+      // The room's devices from its config, as the AV Flow tab draws them,
+      // so they can be placed here with no estimate and no visit there.
+      drawRoomFromConfig(provider);
       _syncImage(provider);
     });
   }
@@ -4285,7 +4288,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final pending = _tool == _PlanTool.device ? _pendingDevice : null;
     return PopupMenuButton<RoomDeviceChoice>(
       key: const ValueKey('plan_add_device'),
-      tooltip: 'Place a device from the estimate',
+      tooltip: 'Place a device in the room',
       onSelected: (choice) async {
         // A screen by size, for a room whose screen model nobody knows.
         if (choice.key == kGenericScreenKey) {
@@ -4415,8 +4418,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
     if (placed == null) {
       _snack(
-        'All ${choice.qty} ${choice.name} on the estimate are already on '
-        'this sheet. Raise the quantity in the cost section to add more.',
+        'All ${choice.qty} ${choice.name} in the room are already on this '
+        'sheet. Add more on the Devices tab, the AV Flow or the estimate.',
         error: true,
       );
       setState(() {

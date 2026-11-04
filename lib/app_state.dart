@@ -4923,11 +4923,22 @@ class AppStateProvider extends ChangeNotifier {
     return stored;
   }
 
-  /// The estimate's equipment for placing on a floor plan, one entry per
-  /// unit on the AV Flow.
-  List<RoomDeviceChoice> get planDeviceChoices => roomDeviceChoices(
-    roomCost.equipment,
-    units: nodesByCostLine(avFlowModel),
+  /// The room's equipment for placing on a floor plan, one entry per unit on
+  /// the AV Flow: the estimate's, then what it does not list, so a room with
+  /// no estimate still has its Devices-tab devices to place.
+  List<RoomDeviceChoice> get planDeviceChoices => withUnpricedDevices(
+    roomDeviceChoices(
+      roomCost.equipment,
+      units: nodesByCostLine(avFlowModel),
+    ),
+    avFlowModel,
+  );
+
+  /// The same for the cabling drawing, which files devices by name.
+  List<RoomDeviceChoice> get cablingDeviceChoices => withUnpricedDevices(
+    roomDeviceChoices(roomCost.equipment),
+    avFlowModel,
+    byUnit: false,
   );
 
   /// How many of [deviceKey] the estimate buys, or null when it is not on

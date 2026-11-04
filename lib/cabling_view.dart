@@ -16,6 +16,7 @@ import 'av_flow_model.dart'
         latticeRoute,
         routeThrough;
 import 'av_flow_report.dart' show cablingSections;
+import 'av_flow_view.dart' show drawRoomFromConfig;
 import 'av_port_editor.dart' show avRowIcon;
 import 'cabling_schematic.dart';
 import 'collapsible_bar.dart';
@@ -147,7 +148,9 @@ class _CablingViewState extends State<CablingView> {
     registerDiagramCanvas(AppTab.cabling, _canvasKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<AppStateProvider>().ensureAvFlowForCurrentConfig();
+      // The room's devices and runs from its config, as the AV Flow tab
+      // draws them, with no estimate and no visit there.
+      drawRoomFromConfig(context.read<AppStateProvider>());
     });
   }
 
@@ -550,12 +553,12 @@ class _CablingViewState extends State<CablingView> {
           // can be pulled to "the ceiling mic" rather than to a location code.
           PopupMenuButton<RoomDeviceChoice>(
             key: const ValueKey('cabling_add_device'),
-            tooltip: 'Add a device from the estimate',
+            tooltip: 'Add a device in the room',
             onSelected: (choice) => _addDevice(provider, drawing, choice),
             itemBuilder: (ctx) => [
               ...roomDeviceMenuItems(
                 ctx,
-                roomDeviceChoices(provider.roomCost.equipment),
+                provider.cablingDeviceChoices,
                 provider.avCabling.extraBoxes.map((b) => b.deviceKey),
               ),
               const PopupMenuDivider(),
@@ -1431,8 +1434,8 @@ class _CablingViewState extends State<CablingView> {
     );
     if (placed >= choice.qty) {
       _snack(
-        'All ${choice.qty} ${choice.name} on the estimate are already on the '
-        'drawing. Raise the quantity in the cost section to add more.',
+        'All ${choice.qty} ${choice.name} in the room are already on the '
+        'drawing. Add more on the Devices tab, the AV Flow or the estimate.',
       );
       return;
     }

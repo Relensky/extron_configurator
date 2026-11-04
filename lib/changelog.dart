@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.178+188';
+const String kAppVersion = '0.5.179+189';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,15 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.179',
+    date: 'November 3, 2026',
+    title: 'Drawings without an estimate',
+    changes: [
+      'Floor plan and Cabling: opening either tab draws the room from its Devices tab the way the AV Flow tab does, so a room with no estimate gets its AV Flow, cabling and devices to place without a visit to the AV Flow first.',
+      'Floor plan and Cabling: Place a device lists every device in the room, not just the estimate\'s: devices left off the estimate, and Devices-tab devices not drawn yet.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.178',
     date: 'November 3, 2026',

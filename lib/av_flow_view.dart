@@ -147,6 +147,22 @@ AvFlowModel buildAvFlowModel(AppStateProvider provider) {
 /// Signal-flow reading order, left to right: sources feed the switcher, the
 /// switcher feeds processing, processing feeds the displays. Power and
 /// anything unrecognized go in the source column so they don't split a row.
+/// The room drawn from its config, on the first visit to any of the AV Flow,
+/// Floor Plan and Cabling tabs: its devices when nothing is drawn yet, then
+/// the cabling the config states. The estimate is worked out from these
+/// boxes, so this is also what gives a room with no estimate devices to
+/// place on its floor plan. Not in an estimate room, where every item is
+/// picked by hand. Safe to run every visit; see [autoDrawRoutingFromConfig].
+void drawRoomFromConfig(AppStateProvider provider) {
+  provider.ensureAvFlowForCurrentConfig();
+  if (provider.avNodes.isEmpty &&
+      provider.roomConfig.isNotEmpty &&
+      !provider.isEstimateRoom) {
+    seedAvFlowFromConfig(provider);
+  }
+  autoDrawRoutingFromConfig(provider);
+}
+
 /// Places every active config device not yet on the canvas, each in its
 /// column. [skipDismissed] leaves off boxes somebody removed by hand. Returns
 /// how many were added. The AV Flow tab's first visit, and a new room's save.
@@ -516,23 +532,15 @@ class _AvFlowViewState extends State<AvFlowView>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final provider = context.read<AppStateProvider>();
-      provider.ensureAvFlowForCurrentConfig();
-      // First visit to a room with nothing drawn yet: put its real equipment
-      // on the canvas so there is something to cable.
-      // Not in an estimate, where every item is picked by hand.
-      if (provider.avNodes.isEmpty &&
-          provider.roomConfig.isNotEmpty &&
-          !provider.isEstimateRoom) {
-        _seedFromConfig(provider, silent: true);
-      }
-      // Then the cabling the config already states: every source on the
-      // switcher input the System tab gives it, every display on the output
-      // that feeds it, and the boxes with no config block of their own — the
-      // PC, the doc cam, the DTP receivers — put in to carry it. Every visit,
-      // not just the first: a doc cam added to the config last week should be
-      // on the drawing this week. See [autoDrawRoutingFromConfig] for why it
-      // is safe to run repeatedly.
-      autoDrawRoutingFromConfig(provider);
+      // First visit to a room with nothing drawn yet: its real equipment on
+      // the canvas so there is something to cable. Then the cabling the
+      // config already states: every source on the switcher input the System
+      // tab gives it, every display on the output that feeds it, and the
+      // boxes with no config block of their own — the PC, the doc cam, the
+      // DTP receivers — put in to carry it. Every visit, not just the first:
+      // a doc cam added to the config last week should be on the drawing
+      // this week.
+      drawRoomFromConfig(provider);
       _syncBackgroundImage(provider);
     });
   }

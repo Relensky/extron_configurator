@@ -177,6 +177,44 @@ List<RoomDeviceChoice> roomDeviceChoices(
   return out;
 }
 
+/// [priced] with what the estimate does not list added: a unit on the AV
+/// Flow left off the estimate, and a Devices-tab device not drawn yet. So a
+/// room with no estimate can still be placed. [byUnit] files each under its
+/// unit ([nodeDeviceKey], as the floor plan does; a config device under its
+/// config key, the id its box gets when drawn), else under its name, as the
+/// cabling drawing does.
+List<RoomDeviceChoice> withUnpricedDevices(
+  List<RoomDeviceChoice> priced,
+  AvFlowModel model, {
+  bool byUnit = true,
+}) {
+  final out = {for (final c in priced) c.key: c};
+  final extra = <String, RoomDeviceChoice>{};
+  void add(String id, String label, String modelName) {
+    final name = label.trim().isEmpty ? id : label.trim();
+    final key = byUnit ? nodeDeviceKey(id) : roomDeviceKey(name);
+    if (out.containsKey(key)) return;
+    final had = extra[key];
+    extra[key] = RoomDeviceChoice(
+      key: key,
+      name: name,
+      qty: (had?.qty ?? 0) + 1,
+      shape: had?.shape ?? guessDeviceShape('$name $modelName'),
+    );
+  }
+
+  for (final n in model.nodes) {
+    add(n.id, n.label, n.model);
+  }
+  for (final u in model.unplaced) {
+    if (!u.dismissed) add(u.key, u.label, u.model);
+  }
+  return [...out.values, ...extra.values]..sort((a, b) {
+    final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    return byName != 0 ? byName : a.name.compareTo(b.name);
+  });
+}
+
 /// The icon a device most likely is, from its name, model and category.
 /// First match wins, so the specific words go before the general ones.
 String guessDeviceShape(String text) {
@@ -1144,9 +1182,9 @@ class PlanDeviceFovPainter extends CustomPainter {
       !mapEquals(old.nits, nits);
 }
 
-/// The add-device menu: every device on the estimate, A to Z, each once,
-/// with how many are placed out of how many are bought. A device that is
-/// all placed is shown but cannot be picked.
+/// The add-device menu: every device in the room, A to Z, each once, with
+/// how many are placed out of how many there are. A device that is all
+/// placed is shown but cannot be picked.
 List<PopupMenuEntry<RoomDeviceChoice>> roomDeviceMenuItems(
   BuildContext context,
   List<RoomDeviceChoice> choices,
@@ -1157,7 +1195,8 @@ List<PopupMenuEntry<RoomDeviceChoice>> roomDeviceMenuItems(
     return [
       const PopupMenuItem(
         enabled: false,
-        child: Text('No equipment on the estimate yet'),
+        child: Text('No devices yet. Add them on the Devices tab, the AV '
+            'Flow or the estimate.'),
       ),
     ];
   }
