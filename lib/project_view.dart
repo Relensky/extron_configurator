@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui show lerpDouble;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
@@ -40,6 +41,8 @@ import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
 import 'project_plans_view.dart';
 import 'project_pricing.dart';
+import 'procurement_log.dart' show kProcurementCompanies;
+import 'procurement_sync.dart' show liveProcurement;
 import 'project_procurement_view.dart'
     show ProcurementDateField, procurementSlivers;
 import 'project_responsibility_view.dart';
@@ -458,6 +461,10 @@ class _ProjectViewState extends State<ProjectView> {
   /// down a different list is disorienting.
   final ScrollController _scroll = ScrollController();
 
+  /// True while the tab is scrolled to its foot, so a pane whose grid fills
+  /// the window stays there when the window or the docked browser changes size.
+  bool _atEnd = false;
+
   /// The last pane request this tab acted on — see
   /// [AppStateProvider.projectPaneRequestId].
   ///
@@ -504,6 +511,36 @@ class _ProjectViewState extends State<ProjectView> {
   void _showPane(_ProjectPane pane) {
     setState(() => _pane = pane);
     if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
+  /// Keeps the procurement grid's sideways bar on the window's bottom edge.
+  ///
+  /// Its grid is a window tall, so scrolled to the end its bar sits at the
+  /// base. A resize - the window, or the built-in browser docking - left the
+  /// offset where it was, and the header wrapping to another line put the bar
+  /// off the bottom or partway up. Scrolled to the end, it stays at the end.
+  bool _onScrollNotice(ScrollNotification n) {
+    if (n.depth != 0) return false;
+    // A page with nowhere to scroll is not "at the end" - it is laid out
+    // that way before the grid has its height.
+    _atEnd = n.metrics.maxScrollExtent > 0 &&
+        n.metrics.pixels >= n.metrics.maxScrollExtent - 1;
+    return false;
+  }
+
+  bool _onMetricsNotice(ScrollMetricsNotification n) {
+    if (n.depth != 0) return false;
+    final m = n.metrics;
+    final atEnd = m.maxScrollExtent > 0 && m.pixels >= m.maxScrollExtent - 1;
+    if (_atEnd && !atEnd && _pane == _ProjectPane.procurement) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scroll.hasClients) return;
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      });
+    } else {
+      _atEnd = atEnd;
+    }
+    return false;
   }
 
   /// Switches the master list's filter, dropping the room narrowing with it.
@@ -651,6 +688,10 @@ class _ProjectViewState extends State<ProjectView> {
     // should not lay out two hundred cards to show the first six.
     // Every figure on the tab can be selected and copied.
     return SelectionArea(
+      child: NotificationListener<ScrollMetricsNotification>(
+      onNotification: _onMetricsNotice,
+      child: NotificationListener<ScrollNotification>(
+      onNotification: _onScrollNotice,
       child: Scrollbar(
       controller: _scroll,
       child: CustomScrollView(
@@ -712,11 +753,16 @@ class _ProjectViewState extends State<ProjectView> {
             _ProjectPane.todo => todoSlivers(context, estimate),
             _ProjectPane.notes => notesSlivers(context, estimate),
           },
-          // Clear of the floating Screenshot and Export buttons.
-          const SliverToBoxAdapter(
-            child: SizedBox(height: kFloatingButtonClearance),
-          ),
+          // Clear of the floating Screenshot and Export buttons. Not under
+          // the procurement grid: it keeps that space inside itself, and 150
+          // more here left its sideways bar that far above the window's base.
+          if (_pane != _ProjectPane.procurement)
+            const SliverToBoxAdapter(
+              child: SizedBox(height: kFloatingButtonClearance),
+            ),
         ],
+      ),
+      ),
       ),
       ),
     );
@@ -3277,6 +3323,23 @@ class _SettledProducts extends StatelessWidget {
 const String kSparedFilter = '<spared>';
 const String kNoSpareFilter = '<no-spare>';
 
+/// Where a part has got to: on an order or not, delivered in full or not.
+const String kOrderedFilter = '<ordered>';
+const String kNotOrderedFilter = '<not-ordered>';
+const String kDeliveredFilter = '<delivered>';
+const String kNotDeliveredFilter = '<not-delivered>';
+const String kInstalledFilter = '<installed>';
+const String kNotInstalledFilter = '<not-installed>';
+const String kNoQuoteOrderFilter = '<ordered-no-quote>';
+
+/// True when [line] has a recorded order date.
+bool partOrdered(BuildingProject project, MasterPartLine line) =>
+    project.orderForPart(line.key)?.isOrdered ?? false;
+
+/// True when every unit of [line] is on the delivery log.
+bool partDelivered(BuildingProject project, MasterPartLine line) =>
+    line.qty > 0 && project.deliveredOf(line.key, line.qty) >= line.qty;
+
 /// The core components list, as slivers for the tab's one scroll view.
 /// The Equipment pane room by room: a card per room, in the Rooms pane's
 /// order, with that room's share of each part [shown] and what it comes to.
@@ -3486,6 +3549,32 @@ List<Widget> partsSlivers(
     for (final c in estimate.unsparedParts) c.line.key: c.installed,
   };
 
+  // WHO BUYS EACH PART - OFCI, CFCI, CTS - off the procurement log, so the
+  // tag set there shows here and the one set here goes there.
+  final orderedCount = estimate.master
+      .where((l) => partOrdered(estimate.project, l))
+      .length;
+  final deliveredCount = estimate.master
+      .where((l) => partDelivered(estimate.project, l))
+      .length;
+  final installedCount = estimate.master
+      .where((l) => partInstalled(estimate.project, l))
+      .length;
+  final noQuoteCount = estimate.master
+      .where((l) => partOrderedWithoutQuote(estimate.project, l))
+      .length;
+
+  final companies = <String, Set<String>>{};
+  for (final e in liveProcurement(
+    context.read<AppStateProvider>().project,
+    estimate,
+  )) {
+    final c = e.company.trim();
+    if (e.partKey.isEmpty) continue;
+    final set = companies.putIfAbsent(e.partKey, () => <String>{});
+    if (c.isNotEmpty) set.add(c);
+  }
+
   bool matchesVendor(MasterPartLine line) {
     if (vendorFilter.isEmpty) return true;
     if (vendorFilter == untaggedFilter) return line.rfq == null;
@@ -3494,6 +3583,16 @@ List<Widget> partsSlivers(
     // two rows of chips would be two rows to read.
     if (vendorFilter == undrivenFilter) return line.hasControlGap;
     if (vendorFilter == unpricedFilter) return line.unpriced;
+    final job = estimate.project;
+    if (vendorFilter == kOrderedFilter) return partOrdered(job, line);
+    if (vendorFilter == kNotOrderedFilter) return !partOrdered(job, line);
+    if (vendorFilter == kDeliveredFilter) return partDelivered(job, line);
+    if (vendorFilter == kNotDeliveredFilter) return !partDelivered(job, line);
+    if (vendorFilter == kInstalledFilter) return partInstalled(job, line);
+    if (vendorFilter == kNotInstalledFilter) return !partInstalled(job, line);
+    if (vendorFilter == kNoQuoteOrderFilter) {
+      return partOrderedWithoutQuote(job, line);
+    }
     if (vendorFilter == kSparedFilter) {
       return room.isEmpty
           ? line.hasSpares
@@ -3515,6 +3614,9 @@ List<Widget> partsSlivers(
         .contains(needle);
   }
 
+  // The chip that is on, kept for the folded panel's one line.
+  Widget? activeChip;
+
   Widget filterChip(
     String label,
     String value, {
@@ -3525,8 +3627,10 @@ List<Widget> partsSlivers(
     Color? tint,
   }) {
     final selected = vendorFilter == value;
-
-    return FilterChip(
+    final chip = FilterChip(
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      showCheckmark: false,
       avatar: tint == null ? null : NameTintDot(color: tint, size: 12),
       label: Text(
         label,
@@ -3549,6 +3653,8 @@ List<Widget> partsSlivers(
       onSelected: (_) => onVendorFilter(value),
       backgroundColor: warn ? theme.colorScheme.errorContainer : null,
     );
+    if (selected) activeChip = chip;
+    return chip;
   }
 
   final lines = [
@@ -3580,6 +3686,10 @@ List<Widget> partsSlivers(
     key: sort,
     ascending: sortAscending,
     project: estimate.project,
+    companies: {
+      for (final e in companies.entries)
+        if (e.value.isNotEmpty) e.key: (e.value.toList()..sort()).join(' / '),
+    },
   );
   final shownKeys = [for (final l in shown) l.key];
   final selectedLines = [
@@ -3648,62 +3758,125 @@ List<Widget> partsSlivers(
                       ascending: sortAscending,
                       onChanged: onSortExact,
                     ),
-                  filterChip('All (${estimate.master.length})', ''),
-                  for (final p in estimate.packages)
-                    if (!p.isUntagged)
-                      filterChip(
-                        '${p.name} (${p.lines.length})',
-                        p.rfq!.id,
-                        tint: projectRfqColor(p.rfq),
-                      ),
-                  if (estimate.untaggedParts > 0)
-                    filterChip(
-                      'Untagged (${estimate.untaggedParts})',
-                      untaggedFilter,
-                      warn: true,
-                    ),
-                  // Counted ONCE. Asking whether there are any and then
-                  // asking how many is two walks of a two-hundred-part
-                  // list to label one chip.
-                  if (controlGapParts > 0)
-                    filterChip(
-                      'No control module ($controlGapParts)',
-                      undrivenFilter,
-                      warn: true,
-                    ),
-                  if (estimate.unpricedParts > 0)
-                    filterChip(
-                      'No price (${estimate.unpricedParts})',
-                      unpricedFilter,
-                      warn: true,
-                    ),
-                  // Both halves of the spares question, because they are two
-                  // different jobs: checking what was asked for, and deciding
-                  // about what was not. The second is the one nothing else in
-                  // the app would ever raise.
-                  //
-                  // ALWAYS OFFERED, even on a job with no spares on it. This
-                  // is the way in to the section where a spare is ADDED, and a
-                  // chip that appeared only once somebody had already added
-                  // one would be a door that opens from the inside.
-                  filterChip(
-                    estimate.sparedParts.isEmpty
-                        ? 'Spares'
-                        : 'Spares (${estimate.sparedParts.length})',
-                    kSparedFilter,
-                  ),
-                  // THE JOB'S RULE, AND THE ONLY SPARES CHIP THAT IS A
-                  // FAULT: one spare of everything the job installs, so a part
-                  // with none is a part somebody has to decide about rather
-                  // than a question to browse.
-                  if (estimate.partsWithoutSpares.isNotEmpty)
-                    filterChip(
-                      'No spare (${estimate.partsWithoutSpares.length})',
-                      kNoSpareFilter,
-                      warn: true,
-                    ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    ),
+    // THE FILTERS, on their own panel under the search, one labeled row per
+    // kind of question.
+    SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: _PartFilterPanel(
+          open: context.watch<AppStateProvider>().projectPartFiltersOpen,
+          onToggle: (v) =>
+              context.read<AppStateProvider>().setProjectPartFiltersOpen(v),
+          active: () => activeChip,
+          rows: [
+            ('Show', [filterChip('All (${estimate.master.length})', '')]),
+            (
+              'Quotes',
+              [
+                for (final p in estimate.packages)
+                  if (!p.isUntagged)
+                    filterChip(
+                      '${p.name} (${p.lines.length})',
+                      p.rfq!.id,
+                      tint: projectRfqColor(p.rfq),
+                    ),
+                if (estimate.untaggedParts > 0)
+                  filterChip(
+                    'Untagged (${estimate.untaggedParts})',
+                    untaggedFilter,
+                    warn: true,
+                  ),
+                // Counted ONCE: one walk of the list for the count.
+                if (controlGapParts > 0)
+                  filterChip(
+                    'No control module ($controlGapParts)',
+                    undrivenFilter,
+                    warn: true,
+                  ),
+                if (estimate.unpricedParts > 0)
+                  filterChip(
+                    'No price (${estimate.unpricedParts})',
+                    unpricedFilter,
+                    warn: true,
+                  ),
+              ],
+            ),
+            (
+              'Progress',
+              [
+                filterChip('Ordered ($orderedCount)', kOrderedFilter),
+                filterChip(
+                  'Not ordered (${estimate.master.length - orderedCount})',
+                  kNotOrderedFilter,
+                ),
+                filterChip('Delivered ($deliveredCount)', kDeliveredFilter),
+                filterChip(
+                  'Not delivered '
+                  '(${estimate.master.length - deliveredCount})',
+                  kNotDeliveredFilter,
+                ),
+                filterChip('Installed ($installedCount)', kInstalledFilter),
+                filterChip(
+                  'Not installed '
+                  '(${estimate.master.length - installedCount})',
+                  kNotInstalledFilter,
+                ),
+                if (noQuoteCount > 0)
+                  filterChip(
+                    'Ordered without a quote ($noQuoteCount)',
+                    kNoQuoteOrderFilter,
+                  ),
+              ],
+            ),
+            (
+              'Spare parts',
+              [
+                // ALWAYS OFFERED, even with no spares: it is the way in to
+                // the section where a spare is added.
+                filterChip(
+                  estimate.sparedParts.isEmpty
+                      ? 'Spares'
+                      : 'Spares (${estimate.sparedParts.length})',
+                  kSparedFilter,
+                ),
+                // The only spares chip that is a fault: the job's rule is one
+                // spare of everything it installs.
+                if (estimate.partsWithoutSpares.isNotEmpty)
+                  filterChip(
+                    'No spare (${estimate.partsWithoutSpares.length})',
+                    kNoSpareFilter,
+                    warn: true,
+                  ),
+                // The job's own switch, here where the red chip is: on, the
+                // No spare warnings go away.
+                FilterChip(
+                  key: const ValueKey('project_no_spares_chip'),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  avatar: Icon(
+                    estimate.project.noSpares
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
+                    size: 16,
+                  ),
+                  showCheckmark: false,
+                  label: const Text('No spares on this job'),
+                  tooltip: estimate.project.noSpares
+                      ? 'This job buys no spares. Press to ask for them again.'
+                      : 'This job buys no spares: stop flagging parts with none.',
+                  selected: estimate.project.noSpares,
+                  onSelected: (v) => context
+                      .read<AppStateProvider>()
+                      .setProjectNoSpares(v),
+                ),
+              ],
             ),
           ],
         ),
@@ -3793,6 +3966,8 @@ List<Widget> partsSlivers(
             estimate: estimate,
             roomNames: roomNames,
             locations: locations[shown[index].key] ?? const [],
+            companies: companies[shown[index].key]?.toList() ?? const [],
+            onProcurementLog: companies.containsKey(shown[index].key),
             spareRoom: room,
             sparesOnly: sparesOnly,
             installedUnspared: estimate.project.noSpares
@@ -4222,6 +4397,13 @@ class _PartsHeaderRow extends StatelessWidget {
           // it names.
           const SizedBox(width: 8),
           h('Vendor', 3, PartSortKey.vendor),
+          // Who buys it - OFCI, CFCI, CTS - the procurement log's Company.
+          if (_companyColumn(context)) const SizedBox(width: 8),
+          if (_companyColumn(context))
+          SizedBox(
+            width: kPartCompanyWidth,
+            child: label('Who buys', TextAlign.left, PartSortKey.company),
+          ),
           // When it has to be bought, beside who buys it — the two halves of
           // placing one order, and the reason the lead time lives on this list
           // rather than on a screen of its own. Fixed widths rather than flex,
@@ -4244,6 +4426,16 @@ class _PartsHeaderRow extends StatelessWidget {
 /// line up. A row whose first column is two pixels off the heading's is a
 /// table that reads as broken however right the figures on it are.
 const double kPartTickWidth = 34;
+
+/// The Who buys column's width, shared by the heading and every row.
+const double kPartCompanyWidth = 90;
+
+/// Below this window width the Who buys tag sits beside the part's name
+/// instead of in a column of its own, which the row has no room for.
+const double kPartCompanyColumnMinWidth = 1000;
+
+bool _companyColumn(BuildContext context) =>
+    MediaQuery.sizeOf(context).width >= kPartCompanyColumnMinWidth;
 
 /// The room a part-level flag is really about: the FIRST of [ids] that is
 /// still on the job.
@@ -4282,18 +4474,20 @@ Future<void> _openUnpricedOn(
       context,
       room.ref,
       AppTab.cost,
-      '${line.description} has no price - it is highlighted here',
+      line.unpriced
+          ? '${line.description} has no price - it is highlighted here'
+          : '${line.description} is highlighted here',
       roomName: room.name,
       costLineKey: _costLineIn(line, room.ref.id),
     );
 
-/// The rooms an unpriced part is in, each one a link to that room's Cost page
+/// The rooms a part is in, each one a link to that room's Cost page
 /// with the part's line centered and lit up - see [_openUnpricedOn].
 ///
 /// A SINGLE CLICK, unlike the double-click jumps elsewhere on this list: the
 /// room names had no click of their own to lose, and a link that needs two is
 /// a link nobody finds.
-class _UnpricedRoomLinks extends StatelessWidget {
+class _UnpricedRoomLinks extends StatefulWidget {
   final MasterPartLine line;
   final ProjectEstimate estimate;
   final Map<String, String> roomNames;
@@ -4305,43 +4499,68 @@ class _UnpricedRoomLinks extends StatelessWidget {
   });
 
   @override
+  State<_UnpricedRoomLinks> createState() => _UnpricedRoomLinksState();
+}
+
+class _UnpricedRoomLinksState extends State<_UnpricedRoomLinks> {
+  // One per linked room, rebuilt with the text and disposed with it.
+  final List<TapGestureRecognizer> _taps = [];
+
+  void _clearTaps() {
+    for (final t in _taps) {
+      t.dispose();
+    }
+    _taps.clear();
+  }
+
+  @override
+  void dispose() {
+    _clearTaps();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final line = widget.line;
     final plain = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
-    final link = theme.textTheme.bodySmall?.copyWith(
+    final link = plain?.copyWith(
       color: theme.colorScheme.primary,
       decoration: TextDecoration.underline,
       decorationColor: theme.colorScheme.primary,
     );
+    _clearTaps();
     final ids = line.roomIdsByQty();
-    return Wrap(
-      children: [
-        for (final (i, id) in ids.indexed)
-          Builder(builder: (context) {
-            final label =
-                '${roomNames[id] ?? id} ×${trimNumber(line.qtyByRoom[id] ?? 0)}';
-            final room = _flagRoom(estimate, [id]);
+    // One wrapping text, so a long room list breaks across lines like the
+    // plain list did, with each room name a link.
+    return Text.rich(
+      key: ValueKey('part_rooms_${line.key}'),
+      TextSpan(
+        style: plain,
+        children: [
+          for (final (i, id) in ids.indexed) ...() {
+            final label = '${widget.roomNames[id] ?? id} '
+                '×${trimNumber(line.qtyByRoom[id] ?? 0)}';
+            final room = _flagRoom(widget.estimate, [id]);
             final comma = i < ids.length - 1 ? ', ' : '';
-            if (room == null) return Text('$label$comma', style: plain);
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Tooltip(
-                  message: 'Open ${room.name} on its Cost page, at this part',
-                  child: InkWell(
-                    key: ValueKey('part_unpriced_room_${line.key}_$id'),
-                    borderRadius: BorderRadius.circular(3),
-                    onTap: () => _openUnpricedOn(context, room, line),
-                    child: Text(label, style: link),
-                  ),
-                ),
-                if (comma.isNotEmpty) Text(comma, style: plain),
-              ],
-            );
-          }),
-      ],
+            if (room == null) return [TextSpan(text: '$label$comma')];
+            final tap = TapGestureRecognizer()
+              ..onTap = () => _openUnpricedOn(context, room, line);
+            _taps.add(tap);
+            return [
+              TextSpan(
+                text: label,
+                style: link,
+                recognizer: tap,
+                mouseCursor: SystemMouseCursors.click,
+              ),
+              if (comma.isNotEmpty) TextSpan(text: comma),
+            ];
+          }(),
+        ],
+      ),
     );
   }
 }
@@ -4364,6 +4583,13 @@ class _PartRow extends StatelessWidget {
   ///
   /// Built for the whole list at once and handed down, like [roomNames].
   final List<PartLocation> locations;
+
+  /// Who buys this part, off the procurement log - 'OFCI', 'CFCI'. More than
+  /// one when rooms differ. Empty when none is set.
+  final List<String> companies;
+
+  /// True when the procurement log has lines for this part to tag.
+  final bool onProcurementLog;
 
   /// The room whose spares the list is narrowed to, '' for all of them.
   /// Only ever set while [sparesOnly] is.
@@ -4399,6 +4625,8 @@ class _PartRow extends StatelessWidget {
     required this.estimate,
     required this.roomNames,
     this.locations = const [],
+    this.companies = const [],
+    this.onProcurementLog = false,
     this.spareRoom = '',
     this.sparesOnly = false,
     this.installedUnspared = 0,
@@ -4413,16 +4641,13 @@ class _PartRow extends StatelessWidget {
     final theme = Theme.of(context);
     final currency = estimate.currency;
 
-    final rooms = [
-      for (final id in line.roomIdsByQty())
-        '${roomNames[id] ?? id} ×${trimNumber(line.qtyByRoom[id] ?? 0)}',
-    ].join(', ');
-
     final subtitle = [
       if (line.manufacturer.isNotEmpty) line.manufacturer,
       if (line.model.isNotEmpty) line.model,
       if (line.partNumber.isNotEmpty) 'PN ${line.partNumber}',
       kMasterPartKindLabels[line.kind]!,
+      // Typed on the AV procurement log, on no room: tracked, not quoted.
+      if (line.logOnly) 'On the procurement log only - not in the quote',
     ].join('  ·  ');
 
     // WHERE THE UNITS ARE, once anything has been logged against this part on
@@ -4555,29 +4780,40 @@ class _PartRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(line.description, style: theme.textTheme.bodyMedium),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(line.description, style: theme.textTheme.bodyMedium),
+                      // Ordered (with or without a quote) or installed,
+                      // pressed to mark it.
+                      _OrderedTag(line: line),
+                      // Delivered or not, pressed to log a delivery of it.
+                      _DeliveredTag(line: line, estimate: estimate),
+                      // Beside the name when the window is too narrow for
+                      // its own column.
+                      if (onProcurementLog && !_companyColumn(context))
+                        _CompanyTag(
+                          line: line,
+                          estimate: estimate,
+                          companies: companies,
+                        ),
+                    ],
+                  ),
                   Text(
                     subtitle,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  // A part with no price names its rooms as LINKS: the price
-                  // is set on a room's Cost page, and each link opens that
-                  // page with this part's line in the middle of it, lit up.
-                  if (line.unpriced)
-                    _UnpricedRoomLinks(
-                      line: line,
-                      estimate: estimate,
-                      roomNames: roomNames,
-                    )
-                  else
-                    Text(
-                      rooms,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                  // Every row's rooms are links: each opens that room's Cost
+                  // page with this part's line centered and lit up.
+                  _UnpricedRoomLinks(
+                    line: line,
+                    estimate: estimate,
+                    roomNames: roomNames,
+                  ),
                   // NOTHING AT ALL until something has been logged against
                   // this part. A job that does not track deliveries should not
                   // grow a line on every row of its master list saying so.
@@ -4962,6 +5198,23 @@ class _PartRow extends StatelessWidget {
               flex: 3,
               child: _VendorPicker(line: line, estimate: estimate),
             ),
+            if (_companyColumn(context)) const SizedBox(width: 8),
+            // WHO BUYS IT, the procurement log's Company column, set here for
+            // every room at once.
+            if (_companyColumn(context))
+            SizedBox(
+              width: kPartCompanyWidth,
+              child: onProcurementLog
+                  ? Align(
+                      alignment: Alignment.centerLeft,
+                      child: _CompanyTag(
+                        line: line,
+                        estimate: estimate,
+                        companies: companies,
+                      ),
+                    )
+                  : const SizedBox(),
+            ),
             _ScheduleCells(line: line, provider: provider),
             SizedBox(
               width: 40,
@@ -4998,8 +5251,8 @@ class _PartRow extends StatelessWidget {
               child: line.kind == MasterPartKind.equipment
                   ? IconButton(
                       key: ValueKey('project_swap_${line.key}'),
-                      tooltip: 'Swap this product in every room that has it',
-                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      tooltip: 'Change out this part in every room that has it',
+                      icon: const Icon(Icons.find_replace, size: 18),
                       onPressed: () =>
                           swapPartAcrossProject(context, provider, line),
                     )
@@ -5007,16 +5260,20 @@ class _PartRow extends StatelessWidget {
             ),
             SizedBox(
               width: 40,
-              child: line.kind == MasterPartKind.equipment
-                  ? IconButton(
-                      key: ValueKey('project_rename_${line.key}'),
-                      tooltip: 'Rename this product in every room that has it',
-                      icon: const Icon(Icons.drive_file_rename_outline,
-                          size: 18),
-                      onPressed: () =>
-                          renamePartAcrossProject(context, provider, line),
-                    )
-                  : const SizedBox(),
+              // EDIT IT ONCE FOR THE WHOLE JOB: its name, maker, part number
+              // and who buys it, in every room it is in.
+              child: IconButton(
+                key: ValueKey('project_edit_${line.key}'),
+                tooltip: 'Edit this part in every room that has it',
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                onPressed: () => editPartAcrossProject(
+                  context,
+                  provider,
+                  line,
+                  estimate,
+                  company: companies.length == 1 ? companies.single : '',
+                ),
+              ),
             ),
           ],
         ),
@@ -5293,7 +5550,7 @@ Future<void> swapPartAcrossProject(
   final template = await pickCatalogModel(
     context,
     provider,
-    title: 'Swap ${line.model} across the project',
+    title: 'Change out ${line.model} across the project',
     actionLabel: 'Continue',
     currentModel: line.model,
     note:
@@ -5474,6 +5731,717 @@ Future<void> renamePartAcrossProject(
       backgroundColor: result.disk.failures.isEmpty ? null : errorFill,
     ),
   );
+}
+
+/// Who buys a part - OFCI, CFCI, CTS - as a small tag on its Equipment row.
+/// Pressed, it sets that for the part on every room's procurement line.
+class _CompanyTag extends StatelessWidget {
+  final MasterPartLine line;
+  final ProjectEstimate estimate;
+  final List<String> companies;
+
+  const _CompanyTag({
+    required this.line,
+    required this.estimate,
+    required this.companies,
+  });
+
+  static MaterialColor _base(String company) {
+    final c = company.toUpperCase();
+    if (c.startsWith('CFCI')) return Colors.green;
+    if (c.startsWith('OFCI')) return Colors.amber;
+    if (c.contains('OFOI') || c.startsWith('CTS')) return Colors.indigo;
+    return Colors.blueGrey;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final label = companies.isEmpty
+        ? 'Set'
+        : companies.length == 1
+        ? companies.single
+        : companies.join(' / ');
+    final base = companies.length == 1 ? _base(companies.single) : null;
+    final fill = base == null
+        ? theme.colorScheme.surfaceContainerHighest
+        : (dark ? base.shade800 : base.shade100);
+    final ink = base == null
+        ? theme.colorScheme.onSurfaceVariant
+        : (dark ? Colors.white : base.shade900);
+    return MenuAnchor(
+      menuChildren: [
+        for (final c in kProcurementCompanies)
+          MenuItemButton(
+            key: ValueKey('part_company_${line.key}_$c'),
+            trailingIcon: companies.length == 1 && companies.single == c
+                ? const Icon(Icons.check, size: 16)
+                : null,
+            onPressed: () => context
+                .read<AppStateProvider>()
+                .setProcurementCompanyForPart(estimate, line.key, c),
+            child: Text(c),
+          ),
+        if (companies.isNotEmpty)
+          MenuItemButton(
+            onPressed: () => context
+                .read<AppStateProvider>()
+                .setProcurementCompanyForPart(estimate, line.key, ''),
+            child: const Text('Clear'),
+          ),
+      ],
+      builder: (context, controller, _) => Tooltip(
+        message: 'Who buys this part, on every room\'s procurement line',
+        child: InkWell(
+          key: ValueKey('part_company_${line.key}'),
+          borderRadius: BorderRadius.circular(10),
+          onTap: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: ink,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// True when [line] is marked installed.
+bool partInstalled(BuildingProject project, MasterPartLine line) =>
+    project.orderForPart(line.key)?.isInstalled ?? false;
+
+/// True when [line] is ordered with no quote behind it: marked so, or on no
+/// vendor's quote at all.
+bool partOrderedWithoutQuote(BuildingProject project, MasterPartLine line) {
+  final order = project.orderForPart(line.key);
+  if (order == null || !order.isOrdered) return false;
+  return order.withoutQuote || line.rfq == null;
+}
+
+/// Where a part stands - 'Not ordered', 'Ordered', 'Ordered, no quote' or
+/// 'Installed'. Pressed, a menu marks it ordered, ordered without a quote,
+/// or installed, in one click.
+class _OrderedTag extends StatelessWidget {
+  final MasterPartLine line;
+
+  const _OrderedTag({required this.line});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.read<AppStateProvider>();
+    final project = provider.project;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final order = project.orderForPart(line.key);
+    final ordered = order?.isOrdered ?? false;
+    final installed = order?.isInstalled ?? false;
+    final noQuote = partOrderedWithoutQuote(project, line);
+
+    final label = installed
+        ? 'Installed'
+        : !ordered
+        ? 'Not ordered'
+        : noQuote
+        ? 'Ordered, no quote'
+        : 'Ordered';
+    final MaterialColor? base = installed
+        ? Colors.teal
+        : !ordered
+        ? null
+        : noQuote
+        ? Colors.deepOrange
+        : Colors.blue;
+    final fill = base == null
+        ? Colors.transparent
+        : (dark ? base.shade800 : base.shade100);
+    final ink = base == null
+        ? theme.colorScheme.onSurfaceVariant
+        : (dark ? Colors.white : base.shade900);
+    final when = installed
+        ? order!.installedOn
+        : ordered
+        ? order!.orderedOn
+        : null;
+
+    return PopupMenuButton<String>(
+      key: ValueKey('part_ordered_${line.key}'),
+      tooltip: [
+        if (when != null) '$label ${formatScheduleDate(when)}',
+        'Press to mark it ordered or installed',
+      ].join('\n'),
+      onSelected: (v) {
+        final name = line.description;
+        switch (v) {
+          case 'ordered':
+            provider.setProjectPartOrdered(
+              line.key,
+              ordered: true,
+              partName: name,
+            );
+          case 'noquote':
+            provider.setProjectPartOrdered(
+              line.key,
+              ordered: true,
+              withoutQuote: true,
+              partName: name,
+            );
+          case 'unordered':
+            provider.setProjectPartOrdered(
+              line.key,
+              ordered: false,
+              partName: name,
+            );
+          case 'installed':
+            provider.setProjectPartInstalled(line.key, true, partName: name);
+          case 'uninstalled':
+            provider.setProjectPartInstalled(line.key, false, partName: name);
+        }
+      },
+      itemBuilder: (_) => [
+        CheckedPopupMenuItem(
+          value: 'ordered',
+          checked: ordered && !(order?.withoutQuote ?? false),
+          child: const Text('Ordered'),
+        ),
+        CheckedPopupMenuItem(
+          value: 'noquote',
+          checked: ordered && (order?.withoutQuote ?? false),
+          child: const Text('Ordered without a quote'),
+        ),
+        if (ordered)
+          const PopupMenuItem(value: 'unordered', child: Text('Not ordered')),
+        const PopupMenuDivider(),
+        CheckedPopupMenuItem(
+          value: installed ? 'uninstalled' : 'installed',
+          checked: installed,
+          child: const Text('Installed, ready to go'),
+        ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(10),
+          border: base == null
+              ? Border.all(color: theme.colorScheme.outlineVariant)
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              installed
+                  ? Icons.construction
+                  : !ordered
+                  ? Icons.shopping_cart_outlined
+                  : noQuote
+                  ? Icons.request_quote_outlined
+                  : Icons.shopping_cart,
+              size: 12,
+              color: ink,
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: ink,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Whether a part has arrived - 'Not delivered', '6 of 18 delivered',
+/// 'Delivered' - off the delivery log. Pressed, it opens the delivery form
+/// with this part already picked, to log what came.
+class _DeliveredTag extends StatelessWidget {
+  final MasterPartLine line;
+  final ProjectEstimate estimate;
+
+  const _DeliveredTag({required this.line, required this.estimate});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.read<AppStateProvider>();
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final got = provider.project.deliveredOf(line.key, line.qty);
+    final all = line.qty > 0 && got >= line.qty;
+    final label = got <= 0
+        ? 'Not delivered'
+        : all
+        ? 'Delivered'
+        : '${trimNumber(got)} of ${trimNumber(line.qty)} delivered';
+    final MaterialColor? base = got <= 0
+        ? null
+        : all
+        ? Colors.green
+        : Colors.orange;
+    final fill = base == null
+        ? Colors.transparent
+        : (dark ? base.shade800 : base.shade100);
+    final ink = base == null
+        ? theme.colorScheme.onSurfaceVariant
+        : (dark ? Colors.white : base.shade900);
+    return Tooltip(
+      message: all
+          ? 'Every unit is logged as arrived. Press to log another delivery.'
+          : 'Press to log a delivery of this part',
+      child: InkWell(
+        key: ValueKey('part_delivered_${line.key}'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => showDeliveryDialog(
+          context,
+          provider: provider,
+          estimate: estimate,
+          rooms: [
+            for (final r in estimate.rooms)
+              (id: r.ref.id, name: estimate.roomCodeNames[r.ref.id] ?? r.ref.label),
+          ],
+          partKey: line.key,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(10),
+            border: base == null
+                ? Border.all(color: theme.colorScheme.outlineVariant)
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                all
+                    ? Icons.check_circle
+                    : got > 0
+                    ? Icons.timelapse
+                    : Icons.local_shipping_outlined,
+                size: 12,
+                color: ink,
+              ),
+              const SizedBox(width: 4),
+              // Shortened, not overflowed, in a narrow part column.
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: ink,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Edits one part for the whole job: its name on every box (equipment), its
+/// manufacturer and part number in the catalog every room prices from, and
+/// who buys it on every room's procurement line.
+Future<void> editPartAcrossProject(
+  BuildContext context,
+  AppStateProvider provider,
+  MasterPartLine line,
+  ProjectEstimate estimate, {
+  String company = '',
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final errorFill = snackErrorFill(context);
+  // Each room the part is in, with what its boxes are called there.
+  final rooms = <_PartRoom>[];
+  for (final id in line.roomIdsByQty()) {
+    final room = estimate.rooms.where((r) => r.ref.id == id).firstOrNull;
+    if (room == null) continue;
+    final names = <String>{};
+    var roomKey = '';
+    if (room.ok) {
+      for (final l in [
+        ...room.estimate!.equipment,
+        ...room.estimate!.hardware,
+        ...room.estimate!.cabling,
+        ...room.estimate!.extras,
+      ]) {
+        final key = masterPartKey(
+          kind: line.kind.name,
+          partNumber: l.partNumber,
+          model: l.model,
+          manufacturer: l.manufacturer,
+          description: l.description,
+        );
+        if (key != line.key || l.qty <= 0) continue;
+        names.add(l.description.trim());
+        if (roomKey.isEmpty) roomKey = l.key;
+      }
+    }
+    rooms.add((
+      ref: room.ref,
+      name: estimate.roomCodeNames[id] ?? room.codeName,
+      title: names.join(' / '),
+      lineKey: roomKey,
+    ));
+  }
+  final edited = await showDialog<_PartEdit>(
+    context: context,
+    builder: (ctx) => _EditPartDialog(
+      line: line,
+      company: company,
+      rooms: rooms,
+      onOpenRoom: (room) => openProjectRoomOn(
+        context,
+        room.ref,
+        AppTab.cost,
+        line.description,
+        roomName: room.name,
+        costLineKey: room.lineKey,
+      ),
+    ),
+  );
+  if (edited == null || !context.mounted) return;
+
+  final done = <String>[];
+  final failed = <String>[];
+
+  if (edited.company != company) {
+    final n = provider.setProcurementCompanyForPart(
+      estimate,
+      line.key,
+      edited.company,
+    );
+    if (n > 0) {
+      done.add(edited.company.isEmpty
+          ? 'who buys it cleared'
+          : 'tagged ${edited.company}');
+    }
+  }
+
+  final model = line.model.trim();
+  if (model.isNotEmpty &&
+      (edited.manufacturer != line.manufacturer.trim() ||
+          edited.partNumber != line.partNumber.trim())) {
+    final saved = await editPartInCatalog(
+      provider: provider,
+      line: line,
+      manufacturer: edited.manufacturer,
+      partNumber: edited.partNumber,
+    );
+    if (saved.startsWith('Error')) {
+      failed.add(saved.replaceFirst('Error: ', ''));
+    } else if (saved.isNotEmpty) {
+      done.add('maker and part number saved to the catalog');
+      // A part number is part of the part's key: what was filed under the
+      // old one follows it.
+      provider.movePartKey(
+        line.key,
+        masterPartKey(
+          kind: line.kind.name,
+          partNumber: edited.partNumber,
+          model: line.model,
+          manufacturer: edited.manufacturer,
+          description: line.description,
+        ),
+        partName: line.description,
+      );
+    }
+  }
+
+  // The name for every room, then any room given a name of its own. Each
+  // group of rooms is one rename, so the procurement log reads the new names.
+  final renameAll =
+      edited.name.isNotEmpty && edited.name != line.description.trim();
+  final byName = <String, Set<String>>{
+    if (renameAll) edited.name: {for (final r in rooms) r.ref.id},
+  };
+  for (final e in edited.roomTitles.entries) {
+    for (final ids in byName.values) {
+      ids.remove(e.key);
+    }
+    byName.putIfAbsent(e.value, () => {}).add(e.key);
+  }
+  byName.removeWhere((_, ids) => ids.isEmpty);
+  if (model.isNotEmpty &&
+      line.kind == MasterPartKind.equipment &&
+      byName.isNotEmpty &&
+      context.mounted) {
+    final plan = await _withProgress(
+      context,
+      title: 'Finding $model in every room',
+      verb: 'Reading',
+      work: (report) => provider.planProjectRename(model, onProgress: report),
+    );
+    for (final MapEntry(key: name, value: ids) in byName.entries) {
+      if (plan == null || !context.mounted) break;
+      final result = await _withProgress(
+        context,
+        title: 'Renaming $model',
+        verb: 'Writing',
+        work: (report) => provider.applyProjectRename(
+          [
+            for (final r in plan)
+              if (ids.contains(r.ref.id)) r,
+          ],
+          model,
+          name,
+          onProgress: report,
+        ),
+      );
+      if (result == null) continue;
+      final boxes = result.disk.boxes + result.openRoomBoxes;
+      done.add('$boxes box(es) renamed "$name"');
+      if (result.openRoomBoxes > 0) {
+        done.add('the open room changed in memory - save it to keep it');
+      }
+      failed.addAll(result.disk.failures);
+    }
+  }
+
+  if (done.isEmpty && failed.isEmpty) return;
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      duration: const Duration(seconds: 8),
+      content: Text([
+        ...done,
+        if (failed.isNotEmpty) 'failed: ${failed.join('; ')}',
+      ].join('  ·  ')),
+      backgroundColor: failed.isEmpty ? null : errorFill,
+    ),
+  );
+}
+
+typedef _PartEdit = ({
+  String name,
+  String manufacturer,
+  String partNumber,
+  String company,
+
+  /// Room id -> the name its boxes take, for rooms changed one by one.
+  Map<String, String> roomTitles,
+});
+
+/// A room a part is in, and what its boxes are called there.
+typedef _PartRoom = ({
+  ProjectRoomRef ref,
+  String name,
+  String title,
+  String lineKey,
+});
+
+class _EditPartDialog extends StatefulWidget {
+  final MasterPartLine line;
+  final String company;
+  final List<_PartRoom> rooms;
+
+  /// Opens a room's Cost page on this part. The dialog closes first.
+  final void Function(_PartRoom room) onOpenRoom;
+
+  const _EditPartDialog({
+    required this.line,
+    required this.company,
+    required this.rooms,
+    required this.onOpenRoom,
+  });
+
+  @override
+  State<_EditPartDialog> createState() => _EditPartDialogState();
+}
+
+class _EditPartDialogState extends State<_EditPartDialog> {
+  late final _name = TextEditingController(text: widget.line.description);
+  late final _maker = TextEditingController(text: widget.line.manufacturer);
+  late final _part = TextEditingController(text: widget.line.partNumber);
+  late String _company = widget.company;
+  late final _titles = {
+    for (final r in widget.rooms)
+      r.ref.id: TextEditingController(text: r.title),
+  };
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _maker.dispose();
+    _part.dispose();
+    for (final c in _titles.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  /// Rooms whose name was changed here.
+  Map<String, String> get _changedTitles => {
+    for (final r in widget.rooms)
+      if (_titles[r.ref.id]!.text.trim() case final t
+          when t.isNotEmpty && t != r.title)
+        r.ref.id: t,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final line = widget.line;
+    final hasModel = line.model.trim().isNotEmpty;
+    final canRename = hasModel && line.kind == MasterPartKind.equipment;
+    InputDecoration box(String label, {String? helper}) => InputDecoration(
+      labelText: label,
+      helperText: helper,
+      helperMaxLines: 2,
+      border: const OutlineInputBorder(),
+      isDense: true,
+    );
+    return AlertDialog(
+      title: Text('Edit ${line.description}'),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "Changes this part in every room it is in. A room's own "
+                'name is set under In these rooms.',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('part_edit_name'),
+                controller: _name,
+                enabled: canRename,
+                decoration: box(
+                  'Name',
+                  helper: canRename
+                      ? 'Every box on ${line.model} is given this name.'
+                      : 'Named in its rooms - only equipment with a model '
+                            'can be renamed here.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('part_edit_maker'),
+                controller: _maker,
+                enabled: hasModel,
+                decoration: box('Manufacturer'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('part_edit_part_number'),
+                controller: _part,
+                enabled: hasModel,
+                decoration: box(
+                  'Part number',
+                  helper: hasModel
+                      ? 'Saved to the catalog entry for ${line.model}, which '
+                            'every room prices from.'
+                      : 'This part has no model, so its maker and part '
+                            'number are set in its rooms.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: const ValueKey('part_edit_company'),
+                initialValue: _company,
+                decoration: box(
+                  'Who buys it',
+                  helper: 'Set on every room\'s AV procurement line.',
+                ),
+                items: [
+                  const DropdownMenuItem(value: '', child: Text('Not set')),
+                  for (final c in {...kProcurementCompanies, _company})
+                    if (c.isNotEmpty)
+                      DropdownMenuItem(value: c, child: Text(c)),
+                ],
+                onChanged: (v) => setState(() => _company = v ?? ''),
+              ),
+              const SizedBox(height: 16),
+              Text('In these rooms', style: theme.textTheme.titleSmall),
+              for (final r in widget.rooms)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 150,
+                        child: Tooltip(
+                          message: 'Open ${r.name} on this part',
+                          child: TextButton.icon(
+                            key: ValueKey('part_edit_open_${r.ref.id}'),
+                            style: TextButton.styleFrom(
+                              alignment: Alignment.centerLeft,
+                            ),
+                            icon: const Icon(Icons.open_in_new, size: 16),
+                            label: Text(
+                              r.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              widget.onOpenRoom(r);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          key: ValueKey('part_edit_room_${r.ref.id}'),
+                          controller: _titles[r.ref.id],
+                          enabled: canRename,
+                          decoration: box('Name in ${r.name}'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('part_edit_save'),
+          onPressed: () => Navigator.pop<_PartEdit>(context, (
+            name: _name.text.trim(),
+            manufacturer: _maker.text.trim(),
+            partNumber: _part.text.trim(),
+            company: _company,
+            roomTitles: _changedTitles,
+          )),
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
 }
 
 /// Runs [work] behind a dialog with a bar that says how many rooms are done,
@@ -5756,7 +6724,7 @@ class _SwapPreviewDialogState extends State<_SwapPreviewDialog> {
         );
 
     return AlertDialog(
-      title: Text('Swap ${plan.fromModel} → ${plan.to.model}'),
+      title: Text('Change out ${plan.fromModel} → ${plan.to.model}'),
       content: SizedBox(
         width: 620,
         child: Column(
@@ -5892,7 +6860,7 @@ class _SwapPreviewDialogState extends State<_SwapPreviewDialog> {
             context,
             _name.text.trim() == _prefill ? '' : _name.text.trim(),
           ),
-          child: Text('Swap ${plan.boxes} box(es)'),
+          child: Text('Change out ${plan.boxes} box(es)'),
         ),
       ],
     );
@@ -6107,9 +7075,16 @@ class _VendorPicker extends StatelessWidget {
           // few confirming clicks would quietly pin half the list, and the
           // next rule change would skip every part somebody had "agreed" with.
           final chosen = id ?? '';
+          final rule = _ruleOnly(line);
           provider.pinProjectPart(
             line.key,
-            chosen == _ruleOnly(line) ? '' : chosen,
+            chosen == rule
+                ? ''
+                // Untagged where a rule would tag it: kept out on purpose,
+                // or the rule would only put it straight back.
+                : chosen.isEmpty
+                ? kRfqUntaggedPin
+                : chosen,
             partName: line.description,
           );
         },
@@ -8592,6 +9567,101 @@ class _RuleEditorState extends State<_RuleEditor> {
 }
 
 
+/// The Equipment page's filter chips, one labeled row per group. A row with
+/// no chips is left out.
+class _PartFilterPanel extends StatelessWidget {
+  const _PartFilterPanel({
+    required this.rows,
+    required this.open,
+    required this.onToggle,
+    required this.active,
+  });
+
+  final List<(String, List<Widget>)> rows;
+  final bool open;
+  final ValueChanged<bool> onToggle;
+
+  /// The chip that is on, shown alone while the panel is folded.
+  final Widget? Function() active;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final labelStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: scheme.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+    );
+    final shown = [
+      for (final r in rows)
+        if (r.$2.isNotEmpty) r,
+    ];
+    final current = active();
+    final header = InkWell(
+      key: const ValueKey('project_part_filters_toggle'),
+      borderRadius: BorderRadius.circular(6),
+      onTap: () => onToggle(!open),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Icon(
+              open ? Icons.expand_less : Icons.expand_more,
+              size: 20,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 4),
+            Text('Filters', style: labelStyle),
+            if (!open && current != null) ...[
+              const SizedBox(width: 12),
+              Flexible(child: current),
+            ],
+          ],
+        ),
+      ),
+    );
+    return Container(
+      key: const ValueKey('project_part_filters'),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          if (open) const SizedBox(height: 6),
+          if (open)
+          for (var i = 0; i < shown.length; i++) ...[
+            if (i > 0)
+              Divider(height: 12, thickness: 1, color: scheme.outlineVariant),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 72,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 7),
+                    child: Text(shown[i].$1, style: labelStyle),
+                  ),
+                ),
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: shown[i].$2,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// The Sort by menu on the Equipment page, and the arrow that reverses it.
 class _PartSortMenu extends StatelessWidget {
   final PartSortKey sort;
@@ -8613,6 +9683,9 @@ class _PartSortMenu extends StatelessWidget {
     PartSortKey.extended: 'Extended price',
     PartSortKey.leadTime: 'Lead time',
     PartSortKey.vendor: 'Package',
+    PartSortKey.company: 'Who buys',
+    PartSortKey.ordered: 'Ordered date',
+    PartSortKey.delivered: 'Delivered',
     PartSortKey.qty: 'Qty',
   };
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'team_app_launch.dart';
 import 'team_chat.dart';
 import 'team_claims.dart';
 import 'team_host.dart';
@@ -24,11 +25,18 @@ class TeamWorkingOn extends StatelessWidget {
     this.noun = 'this',
     this.size = 22,
     this.showButton = true,
+    this.file = '',
+    this.project = '',
   });
 
   /// 'ticket', 'room'...
   final String kind;
   final String id;
+
+  /// [TEAM KIT - PROJECTS]: the project file (and its name) the tag is made
+  /// on - the Room Config Builder's open job - so the tag links to it.
+  final String file;
+  final String project;
 
   /// What the tag names it, in the chat and in tooltips:
   /// 'Ticket #12345 - Projector out'.
@@ -89,6 +97,8 @@ Future<String> teamSetTag({
   required String who,
   String whoName = '',
   required bool on,
+  String file = '',
+  String project = '',
 }) async {
   final claims = Team.claims;
   if (claims == null) return 'The team folder cannot be reached.';
@@ -98,7 +108,14 @@ Future<String> teamSetTag({
       if (c.who.toLowerCase() != me.toLowerCase()) c,
   ];
   final error = await claims.set(
-      kind: kind, id: id, label: label, who: who, whoName: whoName, on: on);
+      kind: kind,
+      id: id,
+      label: label,
+      who: who,
+      whoName: whoName,
+      on: on,
+      file: file,
+      project: project);
   if (error.isNotEmpty) return error;
   final chat = Team.chat;
   if (chat == null) return '';
@@ -143,7 +160,9 @@ Future<String> teamTakeOff(TeamClaim c) => teamSetTag(
     label: c.label,
     who: c.who,
     whoName: c.whoName,
-    on: false);
+    on: false,
+    file: c.file,
+    project: c.project);
 
 /// Taking someone else off asks first: anyone may, but they are told and it
 /// stays in their history. Your own tags - whoever put them there - and the
@@ -182,17 +201,289 @@ Future<String> teamClearMyTags() async {
   return '';
 }
 
-/// [TEAM KIT - WORKING ON]: for the team page - what each person is tagged
-/// on, in every app, and the app each tag was made in. Every tag has an x:
-/// your own (whoever put them there) and the ones you placed come off
-/// straight away; anyone else's asks first, in place. The heading clears
-/// all of yours at once, and History lists every change to your tags -
-/// including who took you off what.
-class TeamWorkingOnList extends StatefulWidget {
-  const TeamWorkingOnList({super.key, this.onOpenRoom});
+/// A tag's kind as an icon: a ticket, a room, anything else.
+IconData teamTagKindIcon(String kind) => switch (kind.toLowerCase()) {
+      'ticket' => Icons.confirmation_number_outlined,
+      'room' => Icons.meeting_room_outlined,
+      'project' => Icons.construction,
+      _ => Icons.label_outline,
+    };
 
-  /// Opens a room tag's room (null: room tags are plain text).
-  final void Function(String room)? onOpenRoom;
+/// [TEAM KIT - WORKING ON]: whether this app can open what a [kind] tag is on
+/// ([TeamHost.openClaim]; a room also through [Team.openRoom]).
+bool teamCanOpenClaim(String kind) {
+  if (TeamHost.openClaim != null) {
+    return TeamHost.canOpenClaim?.call(kind) ?? true;
+  }
+  return kind.toLowerCase() == 'room' && Team.openRoom != null;
+}
+
+/// [TEAM KIT - PROJECTS]: the project file a tag is on - the file it was
+/// made on (TeamClaim.file), or a 'project' tag's id - else ''.
+String teamClaimFile(TeamClaim c) => c.file.isNotEmpty
+    ? c.file
+    : c.kind.toLowerCase() == 'project'
+        ? c.id
+        : '';
+
+/// The project's name for [c]: the one it was tagged with, else the file's.
+String teamClaimProjectName(TeamClaim c) {
+  if (c.project.trim().isNotEmpty) return c.project.trim();
+  final name = teamClaimFile(c).split(RegExp(r'[\\/]')).last;
+  final dot = name.lastIndexOf('.');
+  return dot > 0 ? name.substring(0, dot) : name;
+}
+
+/// Whether a link can open [c] - its project file, or what it is on.
+bool teamCanOpenTag(TeamClaim c) => c.kind.toLowerCase() == 'project'
+    ? teamClaimFile(c).isNotEmpty
+    : teamIsBuilderRoomTag(c) || teamCanOpenClaim(c.kind);
+
+/// [TEAM KIT - WORKING ON]: a room tag made in the Room Config Builder - its
+/// link opens the room there, from every app ([teamOpenBuilderRoom]).
+bool teamIsBuilderRoomTag(TeamClaim c) =>
+    c.kind.toLowerCase() == 'room' && c.app == 'configurator';
+
+/// Opens [c]'s room in the Room Config Builder ('openRoom' {room, file} -
+/// here when this is the Builder, else it is started or brought to the
+/// front): the project or room configuration file the tag was made on, or
+/// - an older tag with no file - the room found by name.
+Future<bool> teamOpenBuilderRoom(BuildContext? context, TeamClaim c) =>
+    teamOpenInApp(context, 'configurator', action: 'openRoom', args: {
+      'room': c.id,
+      if (c.file.isNotEmpty) 'file': c.file,
+    });
+
+/// Opens room [roomId] in the CTS Dashboard's Room Hub - here when this is
+/// the dashboard, else it is started or brought to the front.
+void teamOpenInRoomHub(BuildContext? context, String roomId) {
+  if (TeamHost.appId == 'dashboard') {
+    final open = TeamHost.openClaim;
+    if (open != null) {
+      open('room', roomId, roomId);
+    } else {
+      Team.openRoom?.call(roomId);
+    }
+    return;
+  }
+  teamOpenInApp(context, 'dashboard',
+      action: 'openRoom', args: {'room': roomId});
+}
+
+/// Whether a room tag also gets a Room Hub button: wherever its own link
+/// opens something else (the Builder, or another app's room).
+bool teamShowsRoomHubLink(TeamClaim c) =>
+    c.kind.toLowerCase() == 'room' &&
+    c.id.isNotEmpty &&
+    (TeamHost.appId != 'dashboard' || teamIsBuilderRoomTag(c));
+
+/// [TEAM KIT - PROJECTS]: opens [c]'s project file in the Room Config
+/// Builder ('openProject' - here when this is the Builder, else it is
+/// started or brought to the front with the file); [withRoom] and a room
+/// tag: that room in it too.
+Future<bool> teamOpenProject(BuildContext? context, TeamClaim c,
+    {bool withRoom = false}) {
+  final file = teamClaimFile(c);
+  if (file.isEmpty) return Future.value(false);
+  return teamOpenInApp(context, 'configurator', action: 'openProject', args: {
+    'file': file,
+    if (withRoom && c.kind.toLowerCase() == 'room') 'room': c.id,
+  });
+}
+
+/// [TEAM KIT - WORKING ON]: opens what [c] is on - see [teamCanOpenTag]. A
+/// project tag, and in the Room Config Builder a room tag made on a project
+/// file, open that file ([teamOpenProject]).
+void teamOpenClaim(TeamClaim c, [BuildContext? context]) {
+  final kind = c.kind.toLowerCase();
+  if (teamIsBuilderRoomTag(c)) {
+    teamOpenBuilderRoom(context, c);
+    return;
+  }
+  if (kind == 'project' ||
+      (kind == 'room' &&
+          c.file.isNotEmpty &&
+          TeamHost.appId == 'configurator')) {
+    teamOpenProject(context, c, withRoom: true);
+    return;
+  }
+  final open = TeamHost.openClaim;
+  if (open != null) {
+    open(c.kind, c.id, c.label);
+  } else if (c.kind.toLowerCase() == 'room') {
+    Team.openRoom?.call(c.id);
+  }
+}
+
+/// [TEAM KIT - WORKING ON]: what a tag is on, as a link to it when this app
+/// can open it ([teamCanOpenClaim]) - underlined under the pointer - else
+/// plain text. [beforeOpen] runs first (the team page closes itself).
+class TeamClaimLink extends StatefulWidget {
+  const TeamClaimLink(this.claim,
+      {super.key, this.style, this.beforeOpen});
+
+  final TeamClaim claim;
+  final TextStyle? style;
+  final VoidCallback? beforeOpen;
+
+  @override
+  State<TeamClaimLink> createState() => _TeamClaimLinkState();
+}
+
+class _TeamClaimLinkState extends State<TeamClaimLink> {
+  bool _hover = false;
+  bool _hoverProject = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.claim;
+    final scheme = Theme.of(context).colorScheme;
+    final base = widget.style ?? Theme.of(context).textTheme.bodySmall;
+    final kind = c.kind.toLowerCase();
+    final what = c.label.isNotEmpty
+        ? c.label
+        : kind == 'project'
+            ? teamClaimProjectName(c)
+            : c.id;
+    final Widget main;
+    if (!teamCanOpenTag(c)) {
+      main = Text(what,
+          overflow: TextOverflow.ellipsis,
+          style: base?.copyWith(color: scheme.onSurface));
+    } else {
+      main = _link(
+        key: ValueKey('working_on_link_${c.key}'),
+        text: what,
+        tooltip: switch (kind) {
+          'project' => TeamHost.appId == 'configurator'
+              ? 'Open the project ${teamClaimProjectName(c)}'
+              : 'Open the project ${teamClaimProjectName(c)} in the Room '
+                  'Config Builder',
+          'room' when teamIsBuilderRoomTag(c) =>
+            (TeamHost.appId == 'configurator'
+                    ? 'Open ${c.id}'
+                    : 'Open ${c.id} in the Room Config Builder') +
+                (c.file.isEmpty ? '' : '\n${c.file}'),
+          'room' when c.file.isNotEmpty && TeamHost.appId == 'configurator' =>
+            'Open ${c.id} in ${teamClaimProjectName(c)}',
+          'room' => 'Open ${c.id} in the Room Hub',
+          'ticket' => 'Open ticket #${c.id}',
+          _ => 'Open $what',
+        },
+        style: base,
+        hover: _hover,
+        onHover: (v) => setState(() => _hover = v),
+        onTap: (context) => teamOpenClaim(c, context),
+      );
+    }
+    // [TEAM KIT - PROJECTS]: a tag made on a project (a room in the Room
+    // Config Builder) also links to that project; a room configuration file
+    // has no project name and is the main link's already.
+    final projectLink = kind != 'project' &&
+        c.file.isNotEmpty &&
+        c.project.trim().isNotEmpty;
+    // [TEAM KIT - WORKING ON]: a room whose link opens elsewhere (the
+    // Builder, or a room tag in another app) also opens in the Room Hub.
+    final hubLink = teamShowsRoomHubLink(c);
+    if (!projectLink && !hubLink) return main;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Flexible(child: main),
+      if (projectLink) ...[
+        Text('  ·  ', style: base?.copyWith(color: scheme.outline)),
+        Icon(Icons.construction, size: 13, color: scheme.primary),
+        const SizedBox(width: 3),
+        Flexible(
+          child: _link(
+            key: ValueKey('working_on_project_link_${c.key}'),
+            text: teamClaimProjectName(c),
+            tooltip: TeamHost.appId == 'configurator'
+                ? 'Open the project ${teamClaimProjectName(c)}\n${c.file}'
+                : 'Open the project ${teamClaimProjectName(c)} in the Room '
+                    'Config Builder\n${c.file}',
+            style: base?.copyWith(fontWeight: FontWeight.normal),
+            hover: _hoverProject,
+            onHover: (v) => setState(() => _hoverProject = v),
+            onTap: (context) => teamOpenProject(context, c),
+          ),
+        ),
+      ],
+      if (hubLink) ...[
+        const SizedBox(width: 6),
+        Tooltip(
+          message: TeamHost.appId == 'dashboard'
+              ? 'Open ${c.id} in the Room Hub'
+              : 'Open ${c.id} in the CTS Dashboard Room Hub',
+          child: InkWell(
+            key: ValueKey('working_on_room_hub_link_${c.key}'),
+            borderRadius: BorderRadius.circular(4),
+            onTap: () {
+              final root =
+                  Navigator.maybeOf(context, rootNavigator: true)?.context;
+              widget.beforeOpen?.call();
+              teamOpenInRoomHub(root ?? context, c.id);
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(Icons.dashboard_outlined,
+                  size: 15, color: scheme.primary),
+            ),
+          ),
+        ),
+      ],
+    ]);
+  }
+
+  /// One underlined-under-the-pointer link. [onTap] gets a context that
+  /// outlives the team page ([beforeOpen] closes it): the root navigator's.
+  Widget _link({
+    required Key key,
+    required String text,
+    required String tooltip,
+    required TextStyle? style,
+    required bool hover,
+    required ValueChanged<bool> onHover,
+    required void Function(BuildContext context) onTap,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => onHover(true),
+        onExit: (_) => onHover(false),
+        child: GestureDetector(
+          key: key,
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            final root =
+                Navigator.maybeOf(context, rootNavigator: true)?.context;
+            widget.beforeOpen?.call();
+            onTap(root ?? context);
+          },
+          child: Text(text,
+              overflow: TextOverflow.ellipsis,
+              style: style?.copyWith(
+                  color: scheme.primary,
+                  decoration: hover ? TextDecoration.underline : null,
+                  decorationColor: scheme.primary)),
+        ),
+      ),
+    );
+  }
+}
+
+/// [TEAM KIT - WORKING ON]: for the team page - what each person is tagged
+/// on, in every app, and the app each tag was made in. Each tag is a link to
+/// what it is on ([TeamClaimLink]). Every tag has an x: your own (whoever
+/// put them there) and the ones you placed come off straight away; anyone
+/// else's asks first, in place. The heading clears all of yours at once, and
+/// History - folded at the bottom until clicked - lists every change to your
+/// tags by day, including who took you off what.
+class TeamWorkingOnList extends StatefulWidget {
+  const TeamWorkingOnList({super.key, this.beforeOpen});
+
+  /// Runs before a tag's link opens what it is on (the team page closes).
+  final VoidCallback? beforeOpen;
 
   @override
   State<TeamWorkingOnList> createState() => _TeamWorkingOnListState();
@@ -208,7 +499,7 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
   /// The tag (TeamClaim.key) whose take-off is waiting on a yes.
   String? _confirmKey;
 
-  /// History open under the heading.
+  /// History open at the bottom. Folded away to start with.
   bool _history = false;
 
   Future<void> _run(Future<String> Function() job) async {
@@ -226,21 +517,79 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
     });
   }
 
-  /// One line of [TeamClaims.historyFor], said from this person's side.
-  static String _historyLine(TeamClaim c, String me) {
-    final byMe = c.by.toLowerCase() == me;
-    final what = c.label.isEmpty ? c.id : c.label;
-    if (c.on) {
-      return byMe ? 'You tagged yourself on $what' : '${c.byLabel} tagged you on $what';
-    }
-    return byMe ? 'You took yourself off $what' : '${c.byLabel} took you off $what';
+  /// A history day's heading: Today, Yesterday, else 'Mon 3 Nov' (with the
+  /// year when it is not this one).
+  static String _dayHeading(DateTime day, DateTime today) {
+    final d = today.difference(day).inDays;
+    if (d == 0) return 'Today';
+    if (d == 1) return 'Yesterday';
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final text =
+        '${days[day.weekday - 1]} ${day.day} ${months[day.month - 1]}';
+    return day.year == today.year ? text : '$text ${day.year}';
   }
 
-  static IconData _kindIcon(String kind) => switch (kind.toLowerCase()) {
-        'ticket' => Icons.confirmation_number_outlined,
-        'room' => Icons.meeting_room_outlined,
-        _ => Icons.label_outline,
-      };
+  /// [TEAM KIT - WORKING ON]: one change to this person's tags - who did it,
+  /// what to (a link), the app and the time.
+  Widget _historyRow(TeamClaim c, String me, int index, ThemeData theme) {
+    final scheme = theme.colorScheme;
+    final byMe = c.by.toLowerCase() == me;
+    final forMe = c.who.toLowerCase() == me;
+    final actor = byMe ? 'You' : c.byLabel;
+    final target = forMe ? (byMe ? 'yourself' : 'you') : c.whoLabel;
+    final verb = c.on ? 'put $target on' : 'took $target off';
+    final removedByOther = !c.on && !byMe;
+    final muted =
+        theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant);
+    return Container(
+      key: ValueKey('working_on_history_${c.key}_${c.at.microsecondsSinceEpoch}'),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      color: index.isOdd
+          ? scheme.onSurface.withValues(alpha: 0.035)
+          : Colors.transparent,
+      child: Row(children: [
+        Icon(teamTagKindIcon(c.kind),
+            size: 16,
+            color: removedByOther ? scheme.error : scheme.onSurfaceVariant),
+        const SizedBox(width: 8),
+        Tooltip(message: actor, child: TeamAvatar(c.by, size: 20)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Row(children: [
+            Flexible(
+              flex: 2,
+              child: Text('$actor $verb ',
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: removedByOther ? scheme.error : null)),
+            ),
+            Flexible(
+              flex: 3,
+              child: TeamClaimLink(c,
+                  beforeOpen: widget.beforeOpen,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+            ),
+          ]),
+        ),
+        const SizedBox(width: 8),
+        TeamAppTag(c.app, short: true),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 64,
+          child: Tooltip(
+            message: c.at.toLocal().toString().substring(0, 16),
+            child: Text(teamAgo(c.at),
+                textAlign: TextAlign.right, style: muted),
+          ),
+        ),
+      ]),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -275,28 +624,18 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
 
         Widget tag(TeamClaim c) {
           final mine = c.by.toLowerCase() == me;
-          final room = c.kind.toLowerCase() == 'room' &&
-              widget.onOpenRoom != null;
-          final name = Text(c.label.isEmpty ? c.id : c.label,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: room ? scheme.primary : scheme.onSurface,
-                  fontWeight: FontWeight.w600));
           return Padding(
             key: ValueKey('working_on_tag_${c.key}'),
             padding: const EdgeInsets.only(left: 38, top: 2, bottom: 2),
             child: Row(children: [
-              Icon(_kindIcon(c.kind), size: 15, color: scheme.onSurfaceVariant),
+              Icon(teamTagKindIcon(c.kind),
+                  size: 15, color: scheme.onSurfaceVariant),
               const SizedBox(width: 6),
               Flexible(
-                child: room
-                    ? InkWell(
-                        onTap: () => widget.onOpenRoom!(c.id),
-                        child: Tooltip(
-                            message: 'Open ${c.id} in the Room Hub',
-                            child: name),
-                      )
-                    : name,
+                child: TeamClaimLink(c,
+                    beforeOpen: widget.beforeOpen,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
               ),
               const SizedBox(width: 8),
               TeamAppTag(c.app, short: true),
@@ -361,6 +700,30 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
               ),
             );
 
+        // History by day, newest first, a heading a day.
+        final shown = history.take(50).toList();
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final historyRows = <Widget>[];
+        DateTime? lastDay;
+        var row = 0;
+        for (final c in shown) {
+          final local = c.at.toLocal();
+          final day = DateTime(local.year, local.month, local.day);
+          if (day != lastDay) {
+            lastDay = day;
+            row = 0;
+            historyRows.add(Padding(
+              padding: EdgeInsets.fromLTRB(8, historyRows.isEmpty ? 4 : 10, 8, 4),
+              child: Text(_dayHeading(day, today),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700)),
+            ));
+          }
+          historyRows.add(_historyRow(c, me, row++, theme));
+        }
+
         return Column(
           key: const ValueKey('team_working_on_list'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -373,14 +736,6 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
                 Expanded(
                     child: Text('Working on',
                         style: theme.textTheme.titleMedium)),
-                if (history.isNotEmpty && !_confirming)
-                  TextButton.icon(
-                    key: const ValueKey('working_on_history'),
-                    icon: Icon(_history ? Icons.expand_less : Icons.history,
-                        size: 18),
-                    label: const Text('History'),
-                    onPressed: () => setState(() => _history = !_history),
-                  ),
                 if (placed > 0 && !_confirming)
                   TextButton.icon(
                     key: const ValueKey('working_on_clear_mine'),
@@ -421,50 +776,6 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: scheme.error)),
               ),
-            if (_history)
-              Container(
-                key: const ValueKey('working_on_history_list'),
-                margin: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('Your tag history',
-                        style: theme.textTheme.labelLarge),
-                    const SizedBox(height: 4),
-                    for (final c in history.take(30))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Row(children: [
-                          Icon(
-                              c.on
-                                  ? Icons.person_add_alt_1_outlined
-                                  : Icons.person_remove_outlined,
-                              size: 15,
-                              color: c.on || c.by.toLowerCase() == me
-                                  ? scheme.onSurfaceVariant
-                                  : scheme.error),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(_historyLine(c, me),
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall),
-                          ),
-                          const SizedBox(width: 6),
-                          TeamAppTag(c.app, short: true),
-                          const SizedBox(width: 6),
-                          Text(teamAgo(c.at),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                  color: scheme.onSurfaceVariant)),
-                        ]),
-                      ),
-                  ],
-                ),
-              ),
             if (people.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(4),
@@ -496,6 +807,71 @@ class _TeamWorkingOnListState extends State<TeamWorkingOnList> {
                 tag(c),
                 if (_confirmKey == c.key) confirm(c),
               ],
+            ],
+            // [TEAM KIT - WORKING ON]: History, folded at the bottom until
+            // clicked - your tag changes by day.
+            if (history.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Divider(height: 1, color: scheme.outlineVariant),
+              InkWell(
+                key: const ValueKey('working_on_history'),
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => setState(() => _history = !_history),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Row(children: [
+                    const Icon(Icons.history, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Your tag history',
+                        style: theme.textTheme.titleSmall),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: scheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text('${history.length}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.onSecondaryContainer,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                    const Spacer(),
+                    Text(_history ? 'Hide' : 'Show',
+                        style: theme.textTheme.labelMedium
+                            ?.copyWith(color: scheme.primary)),
+                    Icon(_history ? Icons.expand_less : Icons.expand_more,
+                        size: 20, color: scheme.primary),
+                  ]),
+                ),
+              ),
+              if (_history)
+                Container(
+                  key: const ValueKey('working_on_history_list'),
+                  margin: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: scheme.outlineVariant),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ...historyRows,
+                      if (history.length > shown.length)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
+                          child: Text(
+                              'and ${history.length - shown.length} older',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.onSurfaceVariant)),
+                        ),
+                    ],
+                  ),
+                ),
             ],
           ],
         );
@@ -610,6 +986,8 @@ class _WorkingOnMenu extends StatelessWidget {
       who: who,
       whoName: whoName,
       on: v,
+      file: owner.file,
+      project: owner.project,
     );
     if (error.isNotEmpty) {
       messenger?.showSnackBar(SnackBar(content: Text(error)));

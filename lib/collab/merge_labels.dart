@@ -32,6 +32,8 @@ const Map<String, String> _kNames = {
   'partOrders': 'Orders',
   'partRfqs': 'Package tags',
   'procurementColumnLabels': 'Procurement column titles',
+  'procurementColumnChoices': 'Procurement column choices',
+  'walkthroughs': 'Walkthroughs',
   'procurementCustomColumns': 'Procurement columns',
   'nodes': 'Drawing',
   'cables': 'Cables',

@@ -799,6 +799,46 @@ const List<HelpTopic> kHelpTopics = [
         'stop recording placements in.',
   ),
   HelpTopic(
+    title: 'Wall elevations',
+    section: 'The drawings',
+    where: 'Walls tab',
+    plain:
+        'A wall straight on, drawn to scale, for working out where a display, '
+        'its mount and everything around it go, and whether anything clashes.',
+    keywords: [
+      'wall', 'elevation', 'mount', 'display', 'vesa', 'clash', 'tv',
+      'protrude', 'ada', 'outlet', 'section', 'q pro',
+    ],
+    body:
+        'Add a wall (its length and ceiling can come from the floor plan), '
+        'then Add item. Drag things to move them, or pick one and type its '
+        'place and size on the right: a bare number is inches, and 3\' 6" '
+        'works too. Arrow keys nudge; Shift nudges 6".\n\n'
+        'A display sets its VESA pattern and where the holes are: the left '
+        'holes in from its left edge and the low holes up from its bottom, '
+        'the way a dimensional drawing gives them. It picks the mount it '
+        'hangs on, and the mount\'s size, VESA range, tilt and load can be '
+        'set from the display\'s panel. The mount sits on the display\'s '
+        'VESA holes and stands it off the wall by its own depth. A mount\'s '
+        'panel picks the display it holds, or drag a mount onto a display. '
+        'Its arm width and how far apart the arms go are checked against '
+        'the display\'s holes.\n\n'
+        'Add item, From the catalog puts on any product whose Wall mounting '
+        'section is filled in on the Catalog tab: its size, VESA and hole '
+        'location for a display, its plate and arms for a mount. '
+        'The section beside the wall shows how far everything sticks out.\n\n'
+        'The check lists: two things in the same place at the same depth; a '
+        'mount whose VESA, arms, weight or tilt the display is past; anything '
+        'over a door, a fire alarm or a thermostat; a switch hidden behind '
+        'something; anything that sticks out more than 4" with its bottom '
+        'between 27" and 80" and nothing under it a cane would find; touch '
+        'areas above 48"; and a display with no power or data box behind it.\n\n'
+        'Accessibility findings (ADA and California CBC 11B) are listed in '
+        'their own box with a recommendation. For something sticking out '
+        'too far, Add cane rail puts a rail under it with its bottom at 27" '
+        'or lower, reaching to within 4" of its face.',
+  ),
+  HelpTopic(
     title: 'Floor plan',
     section: 'The drawings',
     where: 'Floor Plan tab',

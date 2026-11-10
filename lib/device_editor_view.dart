@@ -23,6 +23,7 @@ import 'cost_estimate.dart' show trimNumber, formatMoney;
 import 'device_merge.dart';
 import 'equipment_lifecycle.dart' show kDefaultEquipmentLifeYears;
 import 'live_text_field.dart';
+import 'mount_spec.dart';
 import 'pdf_viewer_dialog.dart';
 import 'projection_calc.dart';
 import 'projection_calculator_dialog.dart';
@@ -400,6 +401,189 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           box('noise', 'Noise', num(entry.noiseDb),
               (v) => entry.copyWith(noiseDb: parse(v)),
               suffix: 'dB', numeric: true, width: 90),
+        ],
+      ),
+    );
+  }
+
+  /// What a product is like to hang on a wall, for the Walls tab: its size,
+  /// a display's VESA pattern and where its holes are, a mount's plate and
+  /// arms. Shown for displays and mounts; anything else can add it.
+  Widget _mountingRow(ThemeData theme, AvDeviceTemplate entry, String key) {
+    final text = '${entry.category} ${entry.model}'.toLowerCase();
+    final looksMount = text.contains('mount');
+    final looksDisplay = text.contains('display') ||
+        text.contains('monitor') ||
+        text.contains('flat panel');
+    final spec = entry.mounting ??
+        WallMountSpec(
+          role: looksMount
+              ? MountRole.mount
+              : looksDisplay
+                  ? MountRole.display
+                  : MountRole.other,
+        );
+    if (entry.mounting == null && !looksMount && !looksDisplay) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          key: const ValueKey('catalog_add_mounting'),
+          icon: const Icon(Icons.tv, size: 16),
+          label: const Text('Add wall mounting sizes'),
+          onPressed: () => setState(() => _apply(entry.copyWith(mounting: spec))),
+        ),
+      );
+    }
+    String num(double v) => v <= 0 ? '' : trimNumber(v);
+    double parse(String v) =>
+        double.tryParse(v.trim().replaceAll(',', '')) ?? 0;
+    void edit(WallMountSpec next) =>
+        setState(() => _apply(entry.copyWith(mounting: next)));
+    Widget box(
+      String id,
+      String label,
+      double value,
+      WallMountSpec Function(double v) apply, {
+      String suffix = 'in',
+      String? helper,
+      double width = 130,
+    }) => SizedBox(
+      width: width,
+      child: LiveTextField(
+        fieldId: 'mount_${id}_$key',
+        initial: num(value),
+        label: label,
+        suffix: suffix,
+        helper: helper,
+        numeric: true,
+        onChanged: (v) => edit(apply(parse(v))),
+      ),
+    );
+
+    final isDisplay = spec.role == MountRole.display;
+    final isMount = spec.role == MountRole.mount;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Wall mounting', style: theme.textTheme.titleSmall),
+              const SizedBox(width: 12),
+              DropdownButton<MountRole>(
+                key: const ValueKey('catalog_mount_role'),
+                value: spec.role,
+                items: [
+                  for (final r in MountRole.values)
+                    DropdownMenuItem(value: r, child: Text(r.label)),
+                ],
+                onChanged: (r) {
+                  if (r != null) edit(spec.copyWith(role: r));
+                },
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Draws it to scale on the Walls tab. Inches and mm, as the '
+                  "maker's dimensional drawing gives them.",
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              if (entry.mounting != null)
+                TextButton(
+                  key: const ValueKey('catalog_clear_mounting'),
+                  onPressed: () => setState(
+                    () => _apply(entry.copyWith(clearMounting: true)),
+                  ),
+                  child: const Text('Clear'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              box('w', isMount ? 'Plate width' : 'Width', spec.width,
+                  (v) => spec.copyWith(width: v)),
+              box('h', isMount ? 'Arm length' : 'Height', spec.height,
+                  (v) => spec.copyWith(height: v)),
+              box('d', isMount ? 'Off the wall' : 'Depth', spec.depth,
+                  (v) => spec.copyWith(depth: v)),
+              SizedBox(
+                width: 100,
+                child: LiveTextField(
+                  fieldId: 'mount_weight_$key',
+                  initial: num(entry.weightLbs),
+                  label: 'Weight',
+                  suffix: 'lbs',
+                  numeric: true,
+                  onChanged: (v) => setState(
+                    () => _apply(entry.copyWith(weightLbs: parse(v))),
+                  ),
+                ),
+              ),
+              if (isDisplay || isMount) ...[
+                box('vesaW', isMount ? 'Takes VESA wide' : 'VESA wide',
+                    spec.vesaW, (v) => spec.copyWith(vesaW: v),
+                    suffix: 'mm', helper: isMount ? 'largest' : null),
+                box('vesaH', isMount ? 'Takes VESA high' : 'VESA high',
+                    spec.vesaH, (v) => spec.copyWith(vesaH: v),
+                    suffix: 'mm', helper: isMount ? 'largest' : null),
+              ],
+              if (isDisplay) ...[
+                box('holeLeft', 'Left holes in', spec.holeLeft,
+                    (v) => spec.copyWith(holeLeft: v),
+                    helper: 'from its left edge'),
+                box('holeUp', 'Low holes up', spec.holeUp,
+                    (v) => spec.copyWith(holeUp: v),
+                    helper: 'from its bottom'),
+                box('activeW', 'Picture width', spec.activeW,
+                    (v) => spec.copyWith(activeW: v)),
+                box('activeH', 'Picture height', spec.activeH,
+                    (v) => spec.copyWith(activeH: v)),
+                box('activeUp', 'Picture bottom up', spec.activeUp,
+                    (v) => spec.copyWith(activeUp: v),
+                    helper: 'from its bottom'),
+                SizedBox(
+                  width: 110,
+                  child: CheckboxListTile(
+                    key: const ValueKey('catalog_mount_touch'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Touch'),
+                    value: spec.touch,
+                    onChanged: (v) => edit(spec.copyWith(touch: v ?? false)),
+                  ),
+                ),
+              ],
+              if (isMount) ...[
+                box('vesaMinW', 'Takes VESA wide', spec.vesaMinW,
+                    (v) => spec.copyWith(vesaMinW: v),
+                    suffix: 'mm', helper: 'smallest'),
+                box('vesaMinH', 'Takes VESA high', spec.vesaMinH,
+                    (v) => spec.copyWith(vesaMinH: v),
+                    suffix: 'mm', helper: 'smallest'),
+                box('plateH', 'Plate height', spec.plateHeight,
+                    (v) => spec.copyWith(plateHeight: v)),
+                box('armW', 'Arm width', spec.armWidth,
+                    (v) => spec.copyWith(armWidth: v)),
+                box('armMin', 'Arms apart, least', spec.armSpanMin,
+                    (v) => spec.copyWith(armSpanMin: v),
+                    helper: 'center to center'),
+                box('armMax', 'Arms apart, most', spec.armSpanMax,
+                    (v) => spec.copyWith(armSpanMax: v),
+                    helper: 'center to center'),
+                box('tilt', 'Tilts', spec.maxTilt,
+                    (v) => spec.copyWith(maxTilt: v),
+                    suffix: '°', helper: 'either way'),
+                box('capacity', 'Holds', spec.capacityLb,
+                    (v) => spec.copyWith(capacityLb: v),
+                    suffix: 'lbs'),
+              ],
+            ],
+          ),
         ],
       ),
     );
@@ -2149,6 +2333,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         if (entry.category.toLowerCase().contains('display'))
           _displayRow(theme, entry, key),
         if (templateIsCamera(entry)) _cameraRow(theme, entry, key),
+        if (!entry.isCable) _mountingRow(theme, entry, key),
         const SizedBox(height: 12),
         Row(
           children: [

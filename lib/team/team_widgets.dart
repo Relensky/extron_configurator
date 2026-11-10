@@ -17,6 +17,7 @@ import 'team_host.dart';
 import 'gif_search.dart';
 import 'team_chat.dart';
 import 'team_claims.dart';
+import 'team_app_launch.dart';
 import 'team_claims_widgets.dart';
 import 'team_presence.dart';
 
@@ -465,11 +466,18 @@ class _TeamPage extends StatelessWidget {
                     'Updates as soon as anyone moves.',
                     style: theme.textTheme.bodySmall,
                   ),
+                  const SizedBox(height: 8),
+                  // [TEAM KIT - APPS]: the other CTS programs,
+                  // started or brought to the front.
+                  const TeamAppLinks(),
                   const SizedBox(height: 12),
                   // [TEAM KIT - WHO IS WHERE]: everyone as a chart - a row a
                   // person, a column an app, the page and room in each.
                   Expanded(
+                    // [TEAM]: a gutter on the right for the scrollbar, so
+                    // it never sits over a row's buttons.
                     child: SingleChildScrollView(
+                      padding: const EdgeInsets.only(right: 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -495,15 +503,10 @@ class _TeamPage extends StatelessWidget {
                               },
                       ),
                       // [TEAM KIT - WORKING ON]: everyone's tags, in every
-                      // app; this person can clear the ones they placed.
-                      TeamWorkingOnList(
-                        onOpenRoom: Team.openRoom == null
-                            ? null
-                            : (room) {
-                                _close(context);
-                                Team.openRoom!(room);
-                              },
-                      ),
+                      // app, each a link to what it is on; this person can
+                      // clear the ones they placed. History is folded at
+                      // the bottom.
+                      TeamWorkingOnList(beforeOpen: () => _close(context)),
                         ],
                       ),
                     ),
@@ -2383,6 +2386,8 @@ class _ChatBodyState extends State<_ChatBody> {
                             style: theme.textTheme.labelSmall
                                 ?.copyWith(color: scheme.onSurfaceVariant)),
                       ]),
+                      if (p.activity.isNotEmpty)
+                        TeamActivityLine(p.activity, size: 12),
                       Text(
                           p.editing.isNotEmpty
                               ? 'Editing ${p.editing.first.label}'
@@ -2408,11 +2413,17 @@ class _ChatBodyState extends State<_ChatBody> {
     final where = editing
         ? 'Editing ${p.editing.first.label}'
         : '${TeamAppStyle.short(p.app)}: ${teamPlaceText(p)}';
+    // [TEAM - ACTIVITY]: what they are doing now, from any of their apps.
+    final activity = (apps ?? [p])
+        .map((a) => a.activity)
+        .firstWhere((a) => a.isNotEmpty, orElse: () => '');
     return InkWell(
       key: ValueKey('team_chat_online_${p.user}'),
       onTap: () => _openThread(dmChannel(chat.me.user, p.user)),
       child: Tooltip(
-        message: '${p.label}: $where\nClick to message them directly',
+        message: '${p.label}: '
+            '${activity.isEmpty ? '' : '$activity\n'}$where'
+            '\nClick to message them directly',
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           child: Row(children: [
@@ -2461,6 +2472,10 @@ class _ChatBodyState extends State<_ChatBody> {
                       ),
                     if (apps != null) const SizedBox(width: 24),
                   ]),
+                  if (activity.isNotEmpty)
+                    TeamActivityLine(activity,
+                        key: ValueKey('team_chat_online_activity_${p.user}'),
+                        size: 12),
                   Text(where,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -5378,6 +5393,10 @@ class TeamPresenceChart extends StatelessWidget {
       final first = sessions.first;
       final me = first.user.toLowerCase() == meUser.toLowerCase();
       final working = Team.claims?.forPerson(first.user).length ?? 0;
+      // [TEAM - ACTIVITY]: what they are doing now, from any of their apps.
+      final activity = sessions
+          .map((p) => p.activity)
+          .firstWhere((a) => a.isNotEmpty, orElse: () => '');
       TeamPresence? inApp(String a) {
         for (final p in sessions) {
           if (TeamAppStyle.key(p.app) == a) return p;
@@ -5392,6 +5411,7 @@ class TeamPresenceChart extends StatelessWidget {
                     color: scheme.outlineVariant.withValues(alpha: 0.5)))),
         children: [
           Padding(
+            key: ValueKey('team_person_${first.user.toLowerCase()}'),
             padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
             child: Row(children: [
               TeamAvatar(first.user, size: 30),
@@ -5410,6 +5430,11 @@ class TeamPresenceChart extends StatelessWidget {
                         '${working == 0 ? '' : ' · working on $working'}',
                         style: theme.textTheme.labelSmall
                             ?.copyWith(color: scheme.onSurfaceVariant)),
+                    if (activity.isNotEmpty)
+                      TeamActivityLine(activity,
+                          key: ValueKey(
+                              'team_person_activity_${first.user.toLowerCase()}'),
+                          size: 12),
                   ],
                 ),
               ),
@@ -5452,5 +5477,36 @@ class TeamPresenceChart extends StatelessWidget {
         for (final sessions in people) personRow(sessions),
       ],
     );
+  }
+}
+
+/// [TEAM - ACTIVITY]: an activity as an icon - an email for anything about
+/// one, a pencil for the rest.
+IconData teamActivityIcon(String activity) =>
+    activity.toLowerCase().contains('email')
+        ? Icons.email_outlined
+        : Icons.edit_note;
+
+/// [TEAM - ACTIVITY]: what someone is doing right now ([TeamPresence.activity],
+/// from [teamSetActivity]) - 'Composing a notification email' - with its icon.
+class TeamActivityLine extends StatelessWidget {
+  final String activity;
+  final double size;
+  const TeamActivityLine(this.activity, {super.key, this.size = 13});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colour = theme.colorScheme.tertiary;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(teamActivityIcon(activity), size: size, color: colour),
+      const SizedBox(width: 4),
+      Flexible(
+        child: Text(activity,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: colour, fontWeight: FontWeight.w600)),
+      ),
+    ]);
   }
 }

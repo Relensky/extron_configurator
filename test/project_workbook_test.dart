@@ -820,7 +820,9 @@ void main() {
 
       expect(sheet, contains('PO-1188'));
       expect(sheet, contains('Beta Supply'));
-      expect(sheet, contains('RoboSHOT 12E'));
+      // The delivery is named as the equipment list names its part today,
+      // not as it was typed when logged.
+      expect(sheet, contains('Room camera'));
       // Raised, promised, and what it was raised for.
       expect(sheet, contains('4000'));
       // And the commentary, signed - the reason a note is worth keeping.

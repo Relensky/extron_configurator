@@ -325,6 +325,19 @@ void main() {
       expect(find.text('Update available'), findsNothing);
       // Still installable from settings.
       expect(find.text('Close and Update to 2.0.0'), findsOneWidget);
+      // A newer release found later in the session waits for the next
+      // launch too.
+      u.debugSetAvailable(
+          AvailableUpdate(
+            version: const AppBuildVersion(3, 0, 0),
+            zipPath: r'C:\releases\test_app_3.zip',
+            sizeBytes: 1,
+            modified: DateTime(2026),
+            payloadRoot: '',
+          ),
+          const AppBuildVersion(1, 0, 0));
+      await tester.pump();
+      expect(find.text('Update available'), findsNothing);
       u.dispose();
     });
 

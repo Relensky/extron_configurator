@@ -17,6 +17,7 @@ import 'export_tools.dart';
 import 'project_estimate.dart' show roomCodeFromConfig;
 import 'report_tools.dart';
 import 'schematic_view.dart' show SchematicModel, reportSections;
+import 'wall_elevation.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -75,6 +76,7 @@ String tabExportLabel(AppTab tab) => switch (tab) {
   AppTab.schematic => 'Control report',
   AppTab.avFlow => 'AV report',
   AppTab.floorPlan => 'Locations',
+  AppTab.walls => 'Wall check',
   AppTab.cabling => 'Run schedule',
   AppTab.racks => 'Rack elevations',
   AppTab.cost => 'Cost estimate',
@@ -97,6 +99,7 @@ String _stem(AppTab tab) => switch (tab) {
   AppTab.schematic => 'control_report',
   AppTab.avFlow => 'av_report',
   AppTab.floorPlan => 'locations',
+  AppTab.walls => 'walls',
   AppTab.cabling => 'run_schedule',
   AppTab.racks => 'racks',
   AppTab.cost => 'cost_estimate',
@@ -153,6 +156,8 @@ List<ReportSection> tabReportSections(
       );
     case AppTab.floorPlan:
       return locationSections(av);
+    case AppTab.walls:
+      return wallReportSections(provider.avWallViews);
     case AppTab.cabling:
       return cablingSections(av);
     case AppTab.racks:
@@ -193,6 +198,103 @@ List<ReportSection> tabReportSections(
       return const [];
   }
 }
+
+/// Each wall's mounts and where they go, its items with their sizes and
+/// heights, then what the check found on it.
+List<ReportSection> wallReportSections(List<WallView> walls) => [
+  for (final w in walls) ...[
+    if (mountPlacements(w) case final mounts when mounts.isNotEmpty)
+      (
+        title: '${w.name} - mounting',
+        header: const [
+          'Tag',
+          'Mount',
+          'Display',
+          'Plate CL from left end',
+          'Plate CL from right end',
+          'Plate CL AFF',
+          'Plate bottom AFF',
+          'Plate top AFF',
+          'Plate width',
+          'VESA',
+          'Hole spacing',
+          'Display bottom AFF',
+          'Display top AFF',
+          'Display off wall',
+        ],
+        rows: [
+          for (final m in mounts)
+            [
+              m.tag,
+              m.mount.name,
+              m.display?.name ?? '',
+              inchesLabel(m.fromLeft),
+              inchesLabel(m.fromRight),
+              inchesLabel(m.centerY),
+              inchesLabel(m.plateBottom),
+              inchesLabel(m.plateTop),
+              inchesLabel(m.plateWidth),
+              vesaLabel(m.vesaWmm, m.vesaHmm),
+              m.vesaWmm > 0 && m.vesaHmm > 0
+                  ? '${inchesLabel(m.vesaWmm * kInPerMm)} x '
+                      '${inchesLabel(m.vesaHmm * kInPerMm)}'
+                  : '',
+              m.display == null ? '' : inchesLabel(m.display!.y),
+              m.display == null ? '' : inchesLabel(m.display!.top),
+              m.display == null ? '' : inchesLabel(m.offWall),
+            ],
+        ],
+      ),
+    (
+      title: '${w.name} - ${inchesLabel(w.widthIn)} wide'
+          '${w.heightIn > 0 ? ', ${inchesLabel(w.heightIn)} to the ceiling' : ''}',
+      header: const [
+        'Item',
+        'Model',
+        'Kind',
+        'From left',
+        'Bottom AFF',
+        'Top AFF',
+        'Width',
+        'Height',
+        'Off the wall',
+        'Note',
+      ],
+      rows: [
+        for (final i in [...w.items]..sort((a, b) => a.x.compareTo(b.x)))
+          [
+            i.name,
+            i.model,
+            i.kind.label,
+            inchesLabel(i.x),
+            inchesLabel(i.y),
+            inchesLabel(i.top),
+            inchesLabel(i.width),
+            inchesLabel(i.height),
+            inchesLabel(i.front),
+            i.note,
+          ],
+      ],
+    ),
+    (
+      title: '${w.name} - check',
+      header: const ['Level', 'Finding', 'Accessibility', 'Recommendation'],
+      rows: [
+        for (final issue in checkWall(w))
+          [
+            switch (issue.level) {
+              WallIssueLevel.problem => 'Problem',
+              WallIssueLevel.warning => 'Warning',
+              WallIssueLevel.note => 'Note',
+            },
+            issue.text,
+            issue.access ? 'Yes' : '',
+            issue.advice,
+          ],
+      ],
+    ),
+  ],
+];
 
 /// The equipment catalog as a table. Not a room document at all — it is the
 /// price list — which is exactly why it is worth being able to hand over: a

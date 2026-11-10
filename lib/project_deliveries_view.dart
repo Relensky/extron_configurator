@@ -61,11 +61,12 @@ class DeliveriesView {
   /// Matched against item names, PO numbers, vendors, locations and rooms.
   String search = '';
 
-  /// The delivery cards folded down to their heading, by id.
-  final Set<String> collapsed = <String>{};
+  /// The delivery cards OPENED, by id. Everything starts folded to its
+  /// heading, so a long log reads as a list first.
+  final Set<String> opened = <String>{};
 
-  /// Purchase orders folded to their heading line, by id.
-  final Set<String> poCollapsed = <String>{};
+  /// Purchase orders opened, by id. They start folded too.
+  final Set<String> poOpened = <String>{};
 
   bool ordersOpen = true;
   bool deliveredOpen = true;
@@ -128,7 +129,14 @@ List<Widget> deliveriesSlivers(
 
   // Newest arrival first: a delivery log is read from the top, and what landed
   // this week is what somebody is looking for.
-  final everyDelivery = [...project.deliveries]
+  // Each named the way the equipment list names its part today, so a rename
+  // or a change on the Equipment pane shows up here - see
+  // [ProjectDelivery.nameOn].
+  final partNames = {for (final m in estimate.master) m.key: m.description};
+  final everyDelivery = [
+    for (final d in project.deliveries)
+      d.copyWith(itemName: d.nameOn(partNames)),
+  ]
     ..sort((a, b) {
       final ad = a.deliveredOn;
       final bd = b.deliveredOn;
@@ -164,6 +172,45 @@ List<Widget> deliveriesSlivers(
   final searching = show.search.trim().isNotEmpty;
 
   return [
+    // LOGGING A DELIVERY IS WHAT THIS PAGE IS OPENED FOR, so it is the first
+    // thing on it rather than below every purchase order.
+    SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            FilledButton.tonalIcon(
+              key: const ValueKey('delivery_log_new'),
+              icon: const Icon(Icons.add_box_outlined, size: 18),
+              label: const Text('Log a delivery'),
+              onPressed: () => showDeliveryDialog(
+                context,
+                provider: provider,
+                estimate: estimate,
+                rooms: roomChoices,
+              ),
+            ),
+            // TWO WAYS IN, because a delivery is either one thing or a load.
+            // The second needs an equipment list to tick against.
+            if (estimate.master.isNotEmpty)
+              OutlinedButton.icon(
+                key: const ValueKey('delivery_log_many'),
+                icon: const Icon(Icons.playlist_add_check, size: 18),
+                label: const Text('Log several'),
+                onPressed: () => showBulkDeliveryDialog(
+                  context,
+                  provider: provider,
+                  estimate: estimate,
+                  rooms: roomChoices,
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
     SliverToBoxAdapter(child: _AddPoBar(provider: provider)),
     if (project.purchaseOrders.isNotEmpty || project.deliveries.isNotEmpty)
       SliverToBoxAdapter(
@@ -215,7 +262,7 @@ List<Widget> deliveriesSlivers(
                 padding: const EdgeInsets.only(right: 16),
                 child: () {
                   final allFolded =
-                      orders.every((po) => show.poCollapsed.contains(po.id));
+                      orders.every((po) => !show.poOpened.contains(po.id));
                   return TextButton.icon(
                     key: const ValueKey('po_collapse_all'),
                     icon: Icon(
@@ -226,9 +273,9 @@ List<Widget> deliveriesSlivers(
                     onPressed: () => changed(() {
                       final ids = [for (final po in orders) po.id];
                       if (allFolded) {
-                        show.poCollapsed.removeAll(ids);
+                        show.poOpened.addAll(ids);
                       } else {
-                        show.poCollapsed.addAll(ids);
+                        show.poOpened.removeAll(ids);
                       }
                     }),
                   );
@@ -246,10 +293,10 @@ List<Widget> deliveriesSlivers(
             po: orders[i],
             provider: provider,
             estimate: estimate,
-            collapsed: show.poCollapsed.contains(orders[i].id),
+            collapsed: !show.poOpened.contains(orders[i].id),
             onToggleCollapsed: () => changed(() {
               final id = orders[i].id;
-              if (!show.poCollapsed.remove(id)) show.poCollapsed.add(id);
+              if (!show.poOpened.remove(id)) show.poOpened.add(id);
             }),
           ),
         ),
@@ -307,7 +354,7 @@ List<Widget> deliveriesSlivers(
               padding: const EdgeInsets.only(right: 8),
               child: () {
                 final allFolded =
-                    deliveries.every((d) => show.collapsed.contains(d.id));
+                    deliveries.every((d) => !show.opened.contains(d.id));
                 return TextButton.icon(
                   key: const ValueKey('delivery_collapse_all'),
                   icon: Icon(
@@ -318,47 +365,14 @@ List<Widget> deliveriesSlivers(
                   onPressed: () => changed(() {
                     final ids = [for (final d in deliveries) d.id];
                     if (allFolded) {
-                      show.collapsed.removeAll(ids);
+                      show.opened.addAll(ids);
                     } else {
-                      show.collapsed.addAll(ids);
+                      show.opened.removeAll(ids);
                     }
                   }),
                 );
               }(),
             ),
-          // TWO WAYS IN, because a delivery is either one thing or a load.
-          // The second only appears when there is an equipment list to tick
-          // against - it has nothing to offer a job whose parts are not
-          // costed yet.
-          if (estimate.master.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: TextButton.icon(
-                key: const ValueKey('delivery_log_many'),
-                icon: const Icon(Icons.playlist_add_check, size: 18),
-                label: const Text('Log several'),
-                onPressed: () => showBulkDeliveryDialog(
-                  context,
-                  provider: provider,
-                  estimate: estimate,
-                  rooms: roomChoices,
-                ),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: FilledButton.tonalIcon(
-              key: const ValueKey('delivery_log_new'),
-              icon: const Icon(Icons.add_box_outlined, size: 18),
-              label: const Text('Log a delivery'),
-              onPressed: () => showDeliveryDialog(
-                context,
-                provider: provider,
-                estimate: estimate,
-                rooms: roomChoices,
-              ),
-            ),
-          ),
         ],
       ),
     ),
@@ -419,10 +433,10 @@ List<Widget> deliveriesSlivers(
             estimate: estimate,
             rooms: roomChoices,
             roomNames: roomNames,
-            collapsed: show.collapsed.contains(deliveries[i].id),
+            collapsed: !show.opened.contains(deliveries[i].id),
             onToggleCollapsed: () => changed(() {
               final id = deliveries[i].id;
-              if (!show.collapsed.remove(id)) show.collapsed.add(id);
+              if (!show.opened.remove(id)) show.opened.add(id);
             }),
             selected: selected.contains(deliveries[i].id),
             onSelect: onToggleSelected == null
@@ -2564,7 +2578,6 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
 
   /// Narrows the What arrived list by name, manufacturer, model or part
   /// number.
-  final TextEditingController _partSearch = TextEditingController();
   late DateTime? _delivered = widget.existing?.deliveredOn ?? today();
   late DateTime? _installed = widget.existing?.installedOn;
   late DeliveryState _state =
@@ -2593,7 +2606,6 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
     _po.dispose();
     _location.dispose();
     _note.dispose();
-    _partSearch.dispose();
     super.dispose();
   }
 
@@ -2660,7 +2672,12 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
 
   void _save() {
     final key = _partKey == _kOffList ? '' : _partKey;
-    final qty = double.tryParse(_qty.text.trim()) ?? 0;
+    // Left blank, the box means the number it shows: the job's quantity.
+    final typed = double.tryParse(_qty.text.trim());
+    final qty = typed ??
+        (key.isEmpty
+            ? 1.0
+            : _qtyOnJob(widget.estimate.master, key));
     final existing = widget.existing;
     if (existing == null) {
       widget.provider.addProjectDelivery(
@@ -2723,59 +2740,27 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (master.length > 8) ...[
-                TextField(
-                  key: const ValueKey('delivery_part_search'),
-                  controller: _partSearch,
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.search, size: 20),
-                    hintText: 'Search by name, manufacturer or part number',
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-              DropdownButtonFormField<String>(
-                // Rebuilt as the search narrows it, so the list it opens is
-                // the narrowed one.
-                key: ValueKey(
-                  _partSearch.text.isEmpty
-                      ? 'delivery_part'
-                      : 'delivery_part_${_partSearch.text}',
-                ),
-                initialValue: known ? _partKey : _kOffList,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'What arrived',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
+              // WHAT ARRIVED: one box. Typing into it drops down the parts
+              // that match, and picking one fills it in.
+              _PartPicker(
+                parts: [
                   for (final m in master)
-                    // The one already picked stays on the list whatever is
-                    // typed, or the box would have nothing to show.
+                    // The one picked always stays. A part whose every unit
+                    // is already logged is left off, so the same delivery is
+                    // not logged twice.
                     if (m.key == _partKey ||
-                        partMatchesSearch(
+                        !partFullyLogged(
+                          project,
                           m,
-                          _partSearch.text.trim().toLowerCase(),
+                          exceptId: widget.existing?.id ?? '',
                         ))
-                      DropdownMenuItem(
-                        value: m.key,
-                        child: Text(
-                          partIdentityLine(m).isEmpty
-                              ? m.description
-                              : '${m.description}  -  ${partIdentityLine(m)}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  const DropdownMenuItem(
-                    value: _kOffList,
-                    child: Text('Something not on the equipment list'),
-                  ),
+                      m,
                 ],
-                onChanged: (v) => setState(() {
-                  _partKey = v ?? _kOffList;
+                project: project,
+                picked: known ? _partKey : _kOffList,
+                offListKey: _kOffList,
+                onPick: (key) => setState(() {
+                  _partKey = key;
                   _fillPoForPart();
                 }),
               ),
@@ -3051,6 +3036,153 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
   }
 }
 
+/// One option on the What arrived box: a part, or (part null) something
+/// not on the equipment list.
+typedef _PartOption = ({String key, MasterPartLine? part});
+
+/// The What arrived box: typed into, it drops down the parts whose name,
+/// maker, model or part number match, each with how many are already logged.
+/// The last option is for something not on the equipment list.
+class _PartPicker extends StatelessWidget {
+  final List<MasterPartLine> parts;
+  final BuildingProject project;
+  final String picked;
+  final String offListKey;
+  final ValueChanged<String> onPick;
+
+  const _PartPicker({
+    required this.parts,
+    required this.project,
+    required this.picked,
+    required this.offListKey,
+    required this.onPick,
+  });
+
+  static const _kOffListLabel = 'Something not on the equipment list';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final pickedPart = parts.where((m) => m.key == picked).firstOrNull;
+    String labelOf(_PartOption o) => o.part?.description ?? _kOffListLabel;
+
+    String detailOf(MasterPartLine m) {
+      final got = project.deliveredQty(m.key);
+      return [
+        partIdentityLine(m),
+        if (got > 0) '${formatUnits(got)} of ${formatUnits(m.qty)} logged',
+      ].where((t) => t.isNotEmpty).join('  ·  ');
+    }
+
+    return LayoutBuilder(
+      builder: (context, box) => Autocomplete<_PartOption>(
+        key: const ValueKey('delivery_part'),
+        initialValue: TextEditingValue(
+          text: pickedPart?.description ??
+              (picked == offListKey ? _kOffListLabel : ''),
+        ),
+        displayStringForOption: labelOf,
+        optionsBuilder: (value) {
+          final typed = value.text.trim().toLowerCase();
+          // While the box shows what is picked, every part is offered.
+          final shown = (pickedPart?.description ?? _kOffListLabel)
+              .trim()
+              .toLowerCase();
+          final needle = typed == shown ? '' : typed;
+          return [
+            for (final m in parts)
+              if (partMatchesSearch(m, needle)) (key: m.key, part: m),
+            (key: offListKey, part: null),
+          ];
+        },
+        onSelected: (o) => onPick(o.key),
+        fieldViewBuilder: (context, controller, focus, submit) => TextField(
+          key: const ValueKey('delivery_part_search'),
+          controller: controller,
+          focusNode: focus,
+          onSubmitted: (_) => submit(),
+          // Selects what is there, so typing replaces it.
+          onTap: () => controller.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: controller.text.length,
+          ),
+          decoration: const InputDecoration(
+            labelText: 'What arrived',
+            hintText: 'Type a name, manufacturer or part number',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.search, size: 20),
+            suffixIcon: Icon(Icons.arrow_drop_down),
+          ),
+        ),
+        optionsViewBuilder: (context, select, options) => Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(6),
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: 280,
+                maxWidth: box.maxWidth,
+              ),
+              child: ListView(
+                key: const ValueKey('delivery_part_options'),
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                children: [
+                  for (final o in options)
+                    InkWell(
+                      key: ValueKey('delivery_part_option_${o.key}'),
+                      onTap: () => select(o),
+                      child: Container(
+                        width: box.maxWidth,
+                        color: o.key == picked ? scheme.primaryContainer : null,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(labelOf(o), style: theme.textTheme.bodyMedium),
+                            if (o.part != null &&
+                                detailOf(o.part!).isNotEmpty)
+                              Text(
+                                detailOf(o.part!),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// True when every unit of [m] the job buys is already logged as arrived
+/// (not counting the row [exceptId], the one being edited).
+bool partFullyLogged(
+  BuildingProject project,
+  MasterPartLine m, {
+  String exceptId = '',
+}) {
+  if (m.qty <= 0) return false;
+  var got = 0.0;
+  for (final d in project.deliveriesForPart(m.key)) {
+    if (d.id != exceptId && d.isOnHand) got += d.qty;
+  }
+  return got >= m.qty;
+}
+
 /// How many of a part the job is buying, for the "how many" hint.
 double _qtyOnJob(List<MasterPartLine> master, String key) {
   for (final m in master) {
@@ -3172,12 +3304,16 @@ class _BulkDeliveryDialogState extends State<_BulkDeliveryDialog> {
       });
 
   /// The equipment list, narrowed by whatever is in the search box.
+  /// Parts already logged in full are left off - see [partFullyLogged].
   List<MasterPartLine> get _shown {
     final needle = _search.text.trim().toLowerCase();
-    if (needle.isEmpty) return widget.estimate.master;
+    final project = widget.provider.project;
     return [
       for (final m in widget.estimate.master)
-        if (partMatchesSearch(m, needle)) m,
+        if (_checked.contains(m.key) ||
+            (!partFullyLogged(project, m) &&
+                (needle.isEmpty || partMatchesSearch(m, needle))))
+          m,
     ];
   }
 

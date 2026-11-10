@@ -163,6 +163,9 @@ void main() {
       );
       final row = p.addProjectDelivery(itemName: 'Wall plate', qty: 6);
       await pumpPane(tester, p);
+      // Cards start folded.
+      await tester.tap(find.byKey(ValueKey('delivery_fold_${row.id}')));
+      await tester.pumpAndSettle();
 
       await tester.tap(
         find.descendant(

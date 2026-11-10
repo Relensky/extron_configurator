@@ -482,19 +482,18 @@ Future<void> _publishToLiveSheet(
       liveSheetUrl(provider.project.onlineSheetId),
       title: 'Google Sheet',
     );
+    // The Sheet opening is the confirmation; no bar on top of it.
+    return;
   }
   showTimedSnackBar(
     messenger,
     SnackBar(
-      duration: Duration(seconds: ok ? 6 : 10),
+      duration: const Duration(seconds: 10),
       content: Text(
-        ok
-            ? 'The project\'s Google Sheet is up to date - it is open in your '
-                  'browser.'
-            : 'The Google Sheet could not be updated: '
-                  '${(sheetFailed.isEmpty ? result.failed : sheetFailed).join('; ')}',
+        'The Google Sheet could not be updated: '
+        '${(sheetFailed.isEmpty ? result.failed : sheetFailed).join('; ')}',
       ),
-      backgroundColor: ok ? null : snackErrorFillOn(messenger),
+      backgroundColor: snackErrorFillOn(messenger),
     ),
   );
 }

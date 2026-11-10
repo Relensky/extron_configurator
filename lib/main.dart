@@ -1,4 +1,6 @@
 import 'team/team_claims_widgets.dart';
+import 'team/team_app_launch.dart';
+import 'team/team_host.dart' show TeamHost;
 import 'team/team_notices.dart';
 import 'team/team_widgets.dart';
 import 'team_setup.dart';
@@ -23,6 +25,7 @@ import 'app_updates.dart';
 import 'log_viewer/log_viewer.dart';
 import 'log_viewer/log_viewer_platform.dart' show describeOperatingSystem;
 import 'settings_kit/settings_kit.dart';
+import 'settings_roaming_ui.dart';
 // The settings page's cards, for code and tests that reached them here.
 export 'settings_kit/settings_kit.dart' show SettingsSection;
 import 'updater/update_widgets.dart';
@@ -62,6 +65,7 @@ import 'device_start_wizard.dart';
 import 'cabling_view.dart';
 import 'color_wheel_picker.dart';
 import 'floor_plan_view.dart';
+import 'wall_elevation_view.dart';
 import 'model_defaults_dialog.dart';
 import 'online_copy_dialog.dart';
 import 'in_app_browser.dart';
@@ -110,6 +114,40 @@ void main(List<String> args) {
   // [TEAM KIT]: lib/team/ (shared with the CTS Dashboard and Instructor
   // Contact) plugged in - see team_setup.dart.
   setUpTeamKit();
+  // [TEAM KIT - WORKING ON]: a room tag on the team page opens that room
+  // when it is on the open project (see openTeamRoomTag); other kinds (the
+  // dashboard's tickets) stay plain text here.
+  TeamHost.canOpenClaim = (kind) => kind.toLowerCase() == 'room';
+  TeamHost.openClaim = (kind, id, label) {
+    final context = RoomConfigApp.navigatorKey.currentContext;
+    if (context == null || kind.toLowerCase() != 'room') return;
+    openTeamRoomTag(context, id);
+  };
+  // [TEAM KIT - APP REQUESTS]: the other CTS apps ask this one to open a
+  // project file - a project tag's link on their team page, or this app's
+  // own (teamOpenProject): 'openProject' {file, room}. Handed to the running
+  // copy, or this copy started with `--request` - or with a project file on
+  // its own on the command line.
+  // 'openRoom' {room, file}: a room tag made here, from the dashboard's
+  // "Working on" list - its project or room configuration file, or the room
+  // found by name (openTeamRoomRequest).
+  TeamHost.onAppRequest = (action, args) {
+    if (action == 'openRoom') {
+      _whenAppReady((context) => openTeamRoomRequest(
+          context, args['room'] ?? '',
+          file: args['file'] ?? ''));
+      return;
+    }
+    if (action != 'openProject') return;
+    _whenAppReady((context) => openTeamProjectFile(
+        context, args['file'] ?? '',
+        roomId: args['room'] ?? ''));
+  };
+  TeamAppLaunch.listen(startupArgs: args);
+  final startupFile = _projectFileArg(args);
+  if (startupFile != null) {
+    TeamHost.onAppRequest?.call('openProject', {'file': startupFile});
+  }
   // One log file per session, with a header, a heartbeat and an audit of the
   // last session. See app_logger.dart.
   AppLogger.startSession();
@@ -142,6 +180,39 @@ void main(List<String> args) {
   // once the user is not in the middle of an edit. See app_updates.dart.
   unawaited(appUpdater.start());
   UserActivityWatcher(appUpdater).start();
+}
+
+/// A project file named on its own on the command line (`room_config_builder
+/// <file>.json`), or null.
+String? _projectFileArg(List<String> args) {
+  for (var i = 0; i < args.length; i++) {
+    final a = args[i];
+    if (a.startsWith('--')) {
+      if (a == TeamAppRequest.flag) i++;
+      continue;
+    }
+    if (a.toLowerCase().endsWith('.json') && File(a).existsSync()) return a;
+  }
+  return null;
+}
+
+/// Runs [run] once the window is up and its settings read (no first-run or
+/// settings-sync question still to come) - for a request that arrives at
+/// start-up. Gives up after two minutes.
+void _whenAppReady(void Function(BuildContext context) run, [int tries = 0]) {
+  final context = RoomConfigApp.navigatorKey.currentContext;
+  if (context != null && context.mounted) {
+    final provider = context.read<AppStateProvider>();
+    if (provider.settingsLoaded &&
+        !provider.firstRunSetupNeeded &&
+        !provider.settingsRoamingChoicePending) {
+      run(context);
+      return;
+    }
+  }
+  if (tries >= 240) return;
+  Future.delayed(const Duration(milliseconds: 500),
+      () => _whenAppReady(run, tries + 1));
 }
 
 class RoomConfigApp extends StatelessWidget {
@@ -444,6 +515,7 @@ class MainDashboard extends StatefulWidget {
 
 class _MainDashboardState extends State<MainDashboard> {
   bool _setupDialogShown = false; // Prompt at most once per app session
+  bool _roamingDialogShown = false; // [SETTINGS ROAMING]: likewise
 
   /// Wraps the main content area so it can be captured to an image for the
   /// screenshot annotator.
@@ -860,8 +932,29 @@ class _MainDashboardState extends State<MainDashboard> {
     // FIRST-RUN CHECK: once the saved settings have been read, show the
     // one-time setup dialog asking where each file is located. When setup
     // was completed on an earlier launch this is bypassed entirely.
+    // [SETTINGS ROAMING]: settings for this login are on the share and this
+    // PC has never synced with them - asked before first-run setup, which
+    // taking them usually makes unnecessary.
+    if (provider.settingsLoaded &&
+        provider.settingsRoamingChoicePending &&
+        !_roamingDialogShown) {
+      _roamingDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final choice = await showSettingsRoamingChoice(
+            context, provider.settingsRoaming,
+            appName: 'Room Config Builder');
+        if (choice != null) {
+          await provider.applySettingsRoamingChoice(choice);
+        } else {
+          provider.settingsRoamingChoicePending = false;
+        }
+        if (mounted) setState(() {});
+      });
+    }
     if (provider.settingsLoaded &&
         provider.firstRunSetupNeeded &&
+        !provider.settingsRoamingChoicePending &&
         !_setupDialogShown) {
       _setupDialogShown = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1032,6 +1125,39 @@ class _MainDashboardState extends State<MainDashboard> {
                 id: provider.teamRoomId,
                 label: '${provider.teamRoomId} (room configuration)',
                 noun: 'this room',
+                // [TEAM KIT - PROJECTS]: the tag links to this job's file
+                // on everyone's team page - or, with no job open, to the
+                // room's own configuration file, which the CTS Dashboard's
+                // link then opens here (openTeamRoomRequest). A copy on
+                // this PC links to the shared room instead (team_tag_file).
+                file: provider.teamTagTarget.file,
+                project: provider.teamTagTarget.project,
+              ),
+              if (provider.teamTagTarget.note.isNotEmpty)
+                Tooltip(
+                  key: const ValueKey('team_tag_local_note'),
+                  message: provider.teamTagTarget.note,
+                  child: Icon(
+                    provider.teamTagTarget.file.isEmpty
+                        ? Icons.warning_amber
+                        : Icons.info_outline,
+                    size: 18,
+                    color: provider.teamTagTarget.file.isEmpty
+                        ? Colors.orange
+                        : null,
+                  ),
+                ),
+              // [TEAM KIT - APPS]: this room in the CTS Dashboard's Room
+              // Hub - started, or brought to the front.
+              IconButton(
+                key: const ValueKey('open_room_in_dashboard'),
+                tooltip: 'Open ${provider.teamRoomId} in the CTS Dashboard '
+                    'Room Hub',
+                visualDensity: VisualDensity.compact,
+                iconSize: 20,
+                icon: const Icon(Icons.dashboard_outlined),
+                onPressed: () => teamOpenInApp(context, 'dashboard',
+                    action: 'openRoom', args: {'room': provider.teamRoomId}),
               ),
               // Ready for review / review complete.
               RoomReviewMenu(roomId: provider.teamRoomId),
@@ -1609,6 +1735,8 @@ class _MainDashboardState extends State<MainDashboard> {
         return AvFlowView(key: key);
       case AppTab.floorPlan:
         return FloorPlanView(key: key);
+      case AppTab.walls:
+        return WallElevationView(key: key);
       case AppTab.cabling:
         return CablingView(key: key);
       case AppTab.racks:
@@ -4461,6 +4589,13 @@ class AppSettingsView extends StatelessWidget {
           _DefaultPasswordField(provider: provider),
         ],
           ],
+        ),
+
+        // [SETTINGS ROAMING]
+        SettingsRoamingSection(
+          roaming: provider.settingsRoaming,
+          appName: 'Room Config Builder',
+          applyChoice: provider.applySettingsRoamingChoice,
         ),
 
         SettingsSection(

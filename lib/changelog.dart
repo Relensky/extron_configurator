@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.181+191';
+const String kAppVersion = '0.5.199+209';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,222 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.199',
+    date: 'November 10, 2026',
+    title: 'Catalog: wall mounts with sizes from the drawings',
+    changes: [
+      'Catalog: built in with wall mounting sizes from the makers\' drawings - the Newline Q Pro 86" (TT-8624QPRO), the Newline tilt mount (EPR8A50600-000), the Chief Fusion XSM1U fixed and XTM1U tilt mounts, the Chief FCAV1U pullout and the Ergotron 60-612 Neo-Flex tilt mount. A catalog entry of the same model that has no wall mounting sizes takes these, keeping its own price and details.',
+      'Walls: Add item and Hangs on offer the Chief XSM1U, the Chief XTM1U and the Ergotron 60-612 beside the Newline mount.',
+      'Walls: a mount\'s panel opens with What it takes - the weight it holds, its tilt, and the largest VESA it takes (pick a standard size or type one), then the smallest. A display over the weight or outside the VESA range is a problem; a mount with no weight limit or VESA range set says so in the check.',
+      'Walls: problems and warnings are flagged on the drawing itself - a badge on the item with how many, and the first finding beside it. On the Mounting view they sit on the mount. Export PNG leaves the flags off.',
+      'Walls: From the catalog lists every product set as a display or wall mount, even before its sizes are filled in. One with no size yet is placed at a stand-in size to adjust.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.198',
+    date: 'November 9, 2026',
+    title: 'Walls: a mounting layout for placing wall mounts',
+    changes: [
+      'Walls: a Mounting view beside Elevation draws just where each wall mount goes. Mounts are tagged M1, M2 and so on, left to right, and called out in orange: the plate, its arms and the VESA holes it carries, with dimensions from both wall ends to the plate center line, from the floor to the plate bottom and center line, the plate width and the hole spacing. Displays show as a dashed outline; power and data boxes stay in color so the plate can miss them; everything else is faint.',
+      'Walls: the Mounting view lists a mounting schedule beside the wall - for each mount, the display it holds, its center line from each wall end and above the floor, plate bottom and top, plate width, VESA pattern and hole spacing, the display bottom and top, and how far the display stands off the wall. Export PNG saves the Mounting view as its own picture.',
+      'Walls: the Wall check spreadsheet starts each wall with a Mounting table of the same placements.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.197',
+    date: 'November 9, 2026',
+    title: 'Walls: mounts from the catalog, arms, and hanging a display',
+    changes: [
+      'Working on: a room open from a copy on this PC (the C: drive, or a drive only this PC maps) tags the shared room in the Projects folder instead, so the CTS Dashboard and the team page can open it. A mapped drive links by its network path. With no shared copy, the tag has no link and a warning beside it says the room is still marked as worked on for everyone.',
+      'Catalog: a product has a Wall mounting section. A display records its size, depth, VESA pattern and where the holes are - the left holes in from its left edge, the low holes up from its bottom - with its picture area and touch. A wall mount records its plate, arm length and width, how far apart the arms go, how far it stands off the wall, the smallest and largest VESA it takes, its tilt and the load it holds.',
+      'Walls: Add item, From the catalog lists every product with wall mounting sizes and puts it on the wall at those sizes. When the catalog\'s sizes change, the item says so and Use catalog sizes takes them.',
+      'Walls: a mount\'s panel has Holds, to pick the display it carries. Dragging a mount onto a display, or a display onto a mount, hangs one on the other.',
+      'Walls: a mount\'s arm width and how far apart its arms go can be set, and the arms are drawn at that width. The check says when the arms cannot spread or close to the display\'s holes, or the display\'s VESA is smaller than the mount takes.',
+      'Catalog merges offer the wall mounting sizes like any other field.',
+      'Walls: something sticking out more than 4" between 27" and 80" now cites ADA 307.2 and California CBC 11B-307.2, and recommends a cane rail under it - bottom at 27" or lower, reaching to within 4" of its face, as wide as it is. Add cane rail puts one there sized to fit, and Add item has a Cane rail too.',
+      'Walls: accessibility findings - things sticking out, and touch areas or controls above the 48" reach limit - are listed in their own Accessibility box under the check, each with what to do about it. The Wall check spreadsheet marks them and carries the recommendation.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.196',
+    date: 'November 9, 2026',
+    title: 'Walls: wall elevations for mounting a display',
+    changes: [
+      'New Walls tab: a wall straight on, with a side section beside it, drawn to scale. Add a display, its mount, power and data boxes, switches, doors, windows, a fire alarm, a credenza and more, then drag them or type exact sizes and heights. A wall can take its length and ceiling from the floor plan.',
+      'Walls: the Newline Q Pro 86" (TT-8624QPRO) and its tilt mount (EPR8A50600-000) are built in at their drawing sizes. The mount hangs on the display\'s VESA holes, moves with it, and stands it 2.9" off the wall.',
+      'Walls: a check lists what runs into what (a box under the mount plate), a mount too small or too weak for its display or tilted past its limit, anything over a door or fire alarm, a switch hidden behind a display, something sticking out more than 4" between 27" and 80" with nothing under it, touch areas above 48", and a display with no power or data box behind it.',
+      'Walls: a display sets its VESA pattern (pick a standard size or type one) and where the holes are on its back - the left holes in from its left edge, the low holes up from its bottom, as a dimensional drawing gives them. The holes are drawn on the display, and its mount hangs on them.',
+      'Walls: a display on a mount shows the mount\'s size, depth off the wall, plate height, VESA range, tilt and load on its own panel, or puts it on a new mount from the list.',
+      'Walls: saved with the floor plans, so they share, merge and undo with them. The tab exports a PNG and a Wall check spreadsheet.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.195',
+    date: 'November 9, 2026',
+    title: 'Working on tags open the room from the CTS Dashboard',
+    changes: [
+      'Working on: a room tag made here now keeps its room configuration file when no project is open (the project file when one is), so the CTS Dashboard\'s team page link opens exactly that room here.',
+      'Opened from the dashboard, an older tag with no file opens the room if it is open now, on the open project, or on this PC\'s recent rooms list - otherwise it says so. Tagging the room again records its file.',
+      'Working on: every room tag has a Room Hub button that opens the room in the CTS Dashboard.',
+      'Finding and focusing the CTS Dashboard or Instructor Contact goes straight through Windows instead of tasklist and PowerShell, and requests from them are picked up four times a second.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.194',
+    date: 'November 6, 2026',
+    title: 'Procurement rooms in alternating colors',
+    changes: [
+      'Procurement: rooms alternate between your accent color and your secondary color - the room header and a faint wash over its lines - so each room stands apart.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.193',
+    date: 'November 5, 2026',
+    title: 'Open the room in the CTS Dashboard; app links on the team page',
+    changes: [
+      'Title bar: a button beside the room\'s working-on tag opens the room you are working on in the CTS Dashboard\'s Room Hub.',
+      'Team: a button for the CTS Dashboard and for Instructor Contact - starts the app, or brings it to the front.',
+      'Team: a room tag remembers its project file. Pressing the project opens that file here (asking about unsaved changes first), then the room.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.192',
+    date: 'November 5, 2026',
+    title: 'Team page: all three apps, links to what people work on',
+    changes: [
+      'Team: Instructor Contact is listed again beside the CTS Dashboard and the Room Config Builder. Everyone is at the top again, with what people are working on below.',
+      'Team: what someone is working on is a link - press it to open that room on the open project.',
+      'Team: History is grouped by day, with an icon and the time for each change.',
+      'Team: someone writing a notification email in Instructor Contact shows Composing a notification email.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.191',
+    date: 'November 5, 2026',
+    title: 'Team page: working on in each person\'s row',
+    changes: [
+      'Team: the page lists only the Room Config Builder and the CTS Dashboard. Instructor Contact now lives inside the dashboard, so it is no longer its own column.',
+      'Team: what each person is working on sits in their own row, under their name. History is folded at the bottom - press it to open it below.',
+      'Team: when someone is writing a notification email in the dashboard, their row says "Composing a notification email".',
+      'Team: the scroll bar has its own space on the right, so it no longer covers the rows.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.190',
+    date: 'November 5, 2026',
+    title: 'Installed, walkthroughs and dropdown columns',
+    changes: [
+      'Equipment: the filter panel folds to one line showing the filter that is on. Press Filters to open it again.',
+      'Equipment: every part names its rooms as links. Each one opens that room\'s Cost page with the part highlighted.',
+      'Equipment: each part has an Ordered tag. Press it to mark the part Ordered, Ordered without a quote, or Installed, ready to go. A part ordered with no quote behind it says so in orange, and contractor kit can be marked installed without an order. New filters: Installed, Not installed and Ordered without a quote.',
+      'AV Procurement: any added column, and the built-in text columns, can be a dropdown. Tick Dropdown when adding a column, or press a column heading, and type the choices one per line. Its cells then pick from the list.',
+      'AV Procurement: room bands alternate between two shades, so folded rooms no longer read as one solid block. The picture does the same.',
+      'AV Procurement: the picture has a magnifier, like AV Flow. Press the magnifying glass and point at the picture to enlarge that part.',
+      'AV Procurement: the Ordered column notes an order with no quote and the day a part was installed.',
+      'Timeline: Walkthroughs. Add each walkthrough of the building with who went and what was checked or is being done. The card says when it was last walked through, and each one shows on the date rail.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.189',
+    date: 'November 5, 2026',
+    title: 'Tidier Equipment filters',
+    changes: [
+      'Equipment: the filter chips sit on their own panel under the search, in labeled rows: All at the top, then Quotes (each vendor, Untagged, No control module, No price), Progress (Ordered, Not ordered, Delivered, Not delivered) and Spare parts (Spares, No spare).',
+      'Equipment: No spares on this job sits on the Spare parts row of the filters. Turned on, nothing is marked red for having no spare.',
+      'Online copy: fewer popups. Publishing no longer asks before writing over a Google Sheet that has no new edits, a pull that finds nothing changed says nothing, and updating the Sheet from Export just opens it. You are only asked when somebody has changed something.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.188',
+    date: 'November 5, 2026',
+    title: 'Your settings follow you to any PC',
+    changes: [
+      'Settings sync (new section in Settings): your settings are kept on the share in a folder named after your Windows login (team\\users\\<login>), so any PC you sign in to picks them up when the app starts. The Google client secret and the saved processor password come too, encrypted so only your Windows account can open them. The team folder, logs folder, recent files and paths on a PC\'s own drives stay on that PC. The first time a PC finds your settings on the share it asks whether to use them, keep its own, or not sync.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.187',
+    date: 'November 4, 2026',
+    title: 'Sheets that look like the app, deliveries from the Equipment page',
+    changes: [
+      'Google Sheet and workbook: the AV Procurement Log tab is laid out like the Procurement page - the device column first and frozen, the headings in their colors, a band for each room, Company and Status as colored tags, banded rows, and the same column widths.',
+      'Google Sheet and workbook: the Responsibility tab is laid out like the Responsibility page - each scope item a column with Furnished by and Installed by under it, each room a row, and the totals along the bottom. The description of the work and what is still to be agreed follow underneath.',
+      'Equipment: each part shows whether it has been delivered (Not delivered, 6 of 18 delivered, or Delivered). Press it to log a delivery of that part.',
+      'Equipment: choosing Untagged keeps a part out of every package, even when a package rule would take it (a Display rule taking a Display back box). The pin next to it puts it back on the rules.',
+      'Equipment: a part typed in a room with a catalog model but no manufacturer or part number takes them from the catalog, so it can be found by its manufacturer (StarTech, for example).',
+      'Deliveries: purchase orders and deliveries start folded. Expand all opens them.',
+      'Log a delivery: What arrived is one box. Type a name, manufacturer or part number and the matching parts drop down under it.',
+      'AV procurement: the sideways scrollbar stays at the bottom of the window when the page is scrolled partway up.',
+      'AV procurement: Company is a dropdown on each line - CTS (OFOI), OFCI, CFCI or None.',
+      'Equipment: Edit lists every room the part is in. Each room has a link that opens it on that part, and a name box to rename the part in just that room. The new names show on the AV procurement log.',
+      'Equipment: the list can be sorted by Who buys, from its heading or the Sort menu.',
+      'Deliveries: a delivery logged with How many left blank counts the number the box showed (the job\'s quantity). It used to count as none, so the part still said Not delivered. Deliveries already logged that way now count as the whole lot.',
+      'Equipment and AV procurement: delivered is green and part delivered (1 of 2) is orange, on the Equipment tag and in the procurement Delivered column.',
+      'Equipment: filters for Ordered, Not ordered, Delivered and Not delivered, each with its count. The Sort menu can order the list by Ordered date or by how much has been delivered.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.186',
+    date: 'November 4, 2026',
+    title: 'Who buys it on the Equipment page, from the procurement log already there',
+    changes: [
+      'AV procurement: lines typed on the log (or copied in from the contractor\'s sheet) are matched to the room line they name - same room, same part by name or model - and count as that line. Their company (OFCI, CFCI, CTS) now shows on the Equipment page, and the room line is not listed a second time.',
+      'Equipment: a Who buys column shows each part\'s company from the procurement log. Press it to change it for every room. On a narrow window it sits beside the part name.',
+      'Equipment: a line on the procurement log that matches nothing in its room (a part the room has since changed) is listed as On the procurement log only - not in the quote. It adds no money to the job and no unpriced warning.',
+      'Updates: Later on the update notice hides it until the app is opened again, even if a newer release turns up in the meantime.',
+      'Updates: the update section in Settings shows again (it could fail to draw in 0.5.185).',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.185',
+    date: 'November 4, 2026',
+    title: 'Lines added on the AV procurement log are on the Equipment list',
+    changes: [
+      'Equipment: a line added by hand on the AV procurement log is on the Equipment list too, one unit per line, in the room it names. A name the catalog knows joins that part and takes its price; anything else is listed under Other items as unpriced until it has a price.',
+      'AV procurement: a line added by hand follows its part\'s orders and deliveries in the Ordered and Delivered columns, and its OFCI/CFCI tag can be set from the Equipment page.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.184',
+    date: 'November 4, 2026',
+    title: 'Every item on the AV procurement log, following orders and deliveries',
+    changes: [
+      'AV procurement: the sideways scroll bar stays at the bottom of the window when the window is resized or the built-in browser is docked or closed, instead of sitting partway up.',
+      'Built-in browser: Open in a new window opens the page in its own window of your default browser. The project\'s Google Sheet has the same button next to Open.',
+      'Deliveries: each delivery shows its part\'s current name from the Equipment list, so renaming or changing a part there shows up on the Deliveries pane and in the workbook too.',
+      'Equipment: Swap is now Change out. Changing out a part across the project keeps its procurement log lines, with their status and dates, on the new part.',
+      'AV procurement: every item the rooms buy is on the log now - equipment, rack hardware, cabling and other items.',
+      'AV procurement: new Ordered and Delivered columns fill in by themselves from the orders and the delivery log, so the log shows when each item was ordered (PO and date) and how many have arrived.',
+      'Equipment: each part shows who buys it (OFCI, CFCI, CTS (OFOI)). Press the tag to change it, and it is set on that part\'s procurement line in every room. A tag set on the procurement log shows here too.',
+      'Equipment: the Edit button (in place of Rename) changes a part in every room it is in: its name, manufacturer and part number (saved to the catalog), and who buys it. Its orders and deliveries stay with it.',
+      'Deliveries: Log a delivery and Log several are at the top of the page.',
+      'Deliveries: a part whose units have all been logged as arrived is left off the What arrived list (and Log several), so the same delivery is not logged twice.',
+      'Cost estimate: the add button on rack hardware says Add this line to the device catalog (not the parts list), and adding any line to the catalog fills in the manufacturer and part number already on it.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.183',
+    date: 'November 4, 2026',
+    title: 'Lock the zoom, aspect and every calculator setting per projector',
+    changes: [
+      'Projection calculator: the zoom, the projector or lens picked, the aspect, Size by, and From screen size or From distance each have a lock now, like the number boxes. A locked setting stays as it is.',
+      'Projection calculator: Lock all locks every number and choice at once (Unlock all frees them).',
+      'Projection calculator: Save keeps every setting and lock with that projector or screen in the project file, and it opens again the same way.',
+      'Projection calculator: closing with unsaved changes asks whether to save them with the device.',
+      'Projection calculator: the lens picked is kept by name, so it is still the right lens if the projector\'s lens list changes.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.182',
+    date: 'November 4, 2026',
+    title: 'Crash details from Windows in the log',
+    changes: [
+      'Logs: after the app closes unexpectedly, the next start adds what Windows recorded about it to the log: a crash with the module it happened in, the app being closed for not responding, a shutdown, sign-out or power loss, or low memory. It is written about 20 seconds after start, so it does not slow starting up.',
+      'Logs: a native crash record (and its crash dump file name) is copied into the next session\'s log too, instead of only the separate error log.',
+      'Starts a little faster: the Windows version for the log is read directly instead of by running a separate program.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.181',
     date: 'November 4, 2026',

@@ -107,6 +107,8 @@ const Map<RoomSidecarPart, List<String>> kRoomSidecarKeys = {
   // of unlabeled dots.
   RoomSidecarPart.floorPlans: [
     'floorPlans',
+    // Wall elevations: what is mounted where, straight on.
+    'wallViews',
     'locations',
     'throwDistanceFt',
     'roomLight',

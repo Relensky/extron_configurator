@@ -57,6 +57,13 @@ class TeamClaim {
   /// The app the change was made in.
   final String app;
 
+  /// [TEAM KIT - PROJECTS]: the project file the tag was made on - the Room
+  /// Config Builder's open job when a room there is tagged - and the
+  /// project's name. '' for tags made anywhere else (and for every tag
+  /// written before these were kept). A tag with a file links to it.
+  final String file;
+  final String project;
+
   const TeamClaim({
     required this.kind,
     required this.id,
@@ -68,6 +75,8 @@ class TeamClaim {
     required this.at,
     required this.on,
     this.app = '',
+    this.file = '',
+    this.project = '',
   });
 
   String get whoLabel => whoName.trim().isEmpty ? who : whoName.trim();
@@ -88,6 +97,8 @@ class TeamClaim {
         'by': by,
         if (byName.isNotEmpty) 'byName': byName,
         if (app.isNotEmpty) 'app': app,
+        if (file.isNotEmpty) 'file': file,
+        if (project.isNotEmpty) 'project': project,
       };
 
   static TeamClaim? fromJson(Object? json) {
@@ -108,6 +119,8 @@ class TeamClaim {
       at: at.toLocal(),
       on: json['on'] != false,
       app: json['app']?.toString() ?? '',
+      file: json['file']?.toString() ?? '',
+      project: json['project']?.toString() ?? '',
     );
   }
 }
@@ -306,6 +319,8 @@ class TeamClaims extends ChangeNotifier {
     required String who,
     String whoName = '',
     required bool on,
+    String file = '',
+    String project = '',
   }) async {
     if (_folder.isEmpty) return 'The team folder cannot be reached.';
     final c = TeamClaim(
@@ -319,6 +334,8 @@ class TeamClaims extends ChangeNotifier {
       at: DateTime.now(),
       on: on,
       app: TeamHost.appId,
+      file: file,
+      project: project,
     );
     try {
       final file = File('$_folder$_sep${me.fileStem}.jsonl');

@@ -135,6 +135,16 @@ class ProcurementEntry {
   /// [BuildingProject.procurementCustomColumns].
   final Map<String, String> custom;
 
+  /// The equipment-list part this line is, read off the job each time and
+  /// never saved - see procurement_sync.dart. '' for a line typed here.
+  final String partKey;
+
+  /// What the job's order record says - 'PO-1204, Mar 3, 2027' - and what
+  /// the delivery log says - '6 of 18 delivered, Mar 9, 2027'. Read off the
+  /// job each time, never saved, so the log follows orders and deliveries.
+  final String ordered;
+  final String delivered;
+
   const ProcurementEntry({
     required this.id,
     this.company = '',
@@ -157,6 +167,9 @@ class ProcurementEntry {
     this.lineKey = '',
     this.excluded = false,
     this.custom = const {},
+    this.partKey = '',
+    this.ordered = '',
+    this.delivered = '',
   });
 
   /// True when this entry follows a line on a room's estimate.
@@ -208,8 +221,14 @@ class ProcurementEntry {
     String? lineKey,
     bool? excluded,
     Map<String, String>? custom,
+    String? partKey,
+    String? ordered,
+    String? delivered,
   }) => ProcurementEntry(
     id: id ?? this.id,
+    partKey: partKey ?? this.partKey,
+    ordered: ordered ?? this.ordered,
+    delivered: delivered ?? this.delivered,
     roomId: roomId ?? this.roomId,
     lineKey: lineKey ?? this.lineKey,
     excluded: excluded ?? this.excluded,
@@ -385,6 +404,9 @@ const List<ProcurementColumnSpec> kProcurementColumnSpecs = [
     label: 'Estimated Delivery Date',
     group: ProcurementGroup.dates,
   ),
+  // Filled from the job's orders and delivery log, not typed.
+  (id: 'ordered', label: 'Ordered', group: ProcurementGroup.dates),
+  (id: 'delivered', label: 'Delivered', group: ProcurementGroup.dates),
   (id: 'notes', label: 'Notes/Comments', group: ProcurementGroup.notes),
 ];
 
@@ -481,6 +503,8 @@ Map<String, String> procurementValues(ProcurementEntry e) {
     'released': e.released ? 'Yes' : '',
     'releasedOn': date(e.releasedOn),
     'delivery': date(e.estimatedDelivery),
+    'ordered': e.ordered,
+    'delivered': e.delivered,
     'notes': e.notes,
     ...e.custom,
   };
@@ -525,8 +549,59 @@ List<ReportSection> procurementLogSections(
 /// The tab the log is written on, in its own file and in the workbook.
 const String kProcurementLogSheet = 'AV Procurement Log';
 
-/// The log as a spreadsheet for the contractor, its column headings in the
-/// colors chosen on the Procurement page.
+/// How wide each column is on the Procurement page, in pixels, until it is
+/// dragged - the sheet takes the same widths.
+const Map<String, double> kProcurementColumnWidthsPx = {
+  'device': 260,
+  'company': 110,
+  'room': 90,
+  'description': 210,
+  'status': 170,
+  'phase': 150,
+  'p6Id': 110,
+  'p6Description': 190,
+  'review': 90,
+  'lead': 100,
+  'p6Start': 120,
+  'onSite': 130,
+  'submitBy': 120,
+  'released': 80,
+  'releasedOn': 120,
+  'delivery': 120,
+  'ordered': 140,
+  'delivered': 150,
+  'notes': 240,
+};
+
+/// The wash and ink of a Company pill, as the page draws it.
+({String fill, String ink}) procurementCompanyTint(String company) {
+  final c = company.toUpperCase();
+  if (c.startsWith('CFCI')) return (fill: 'C8E6C9', ink: '1B5E20');
+  if (c.startsWith('OFCI')) return (fill: 'FFECB3', ink: 'FF6F00');
+  if (c.contains('OFOI') || c.startsWith('CTS')) {
+    return (fill: 'C5CAE9', ink: '1A237E');
+  }
+  return (fill: 'CFD8DC', ink: '263238');
+}
+
+/// The wash and ink of a Status pill, or null for no status.
+({String fill, String ink})? procurementStatusTint(ProcurementStatus s) =>
+    switch (s) {
+      ProcurementStatus.none => null,
+      ProcurementStatus.submitted => (fill: 'FFE0B2', ink: 'E65100'),
+      ProcurementStatus.approved => (fill: 'BBDEFB', ink: '0D47A1'),
+      ProcurementStatus.released => (fill: 'C8E6C9', ink: '1B5E20'),
+    };
+
+/// The band each room's lines sit under, as on the page.
+const String kProcurementRoomFill = 'D8E2FF';
+const String kProcurementRoomInk = '001A41';
+
+/// The log as a spreadsheet laid out LIKE THE PAGE, for whoever reads the
+/// Google Sheet: the device column first and frozen, the headings in their
+/// colors, a band per room, Company and Status as colored pills, the rows
+/// banded, and the columns at the page's widths ([widths] holds the ones
+/// dragged on this job, in pixels).
 XlsxSheet procurementLogSheet(
   String projectName,
   List<ProcurementEntry> entries, {
@@ -536,37 +611,117 @@ XlsxSheet procurementLogSheet(
   List<String> order = const [],
   Map<String, String> labels = const {},
   List<ProcurementColumnSpec>? columns,
+  Map<String, double> widths = const {},
 }) {
-  final shown = columns ?? orderedProcurementColumns(order);
-  final sheet = buildStackedReportSheet(
-    sheetName: sheetName,
-    title: projectName.trim().isEmpty
+  final all = columns ?? orderedProcurementColumns(order);
+  // The device column leads, as the page freezes it.
+  final shown = [
+    ...all.where((c) => c.id == kProcurementFixedColumn),
+    ...all.where((c) => c.id != kProcurementFixedColumn),
+  ];
+  final width = math.max(shown.length, 2);
+  List<dynamic> pad(List<dynamic> row) => [
+    ...row,
+    ...List.filled(math.max(0, width - row.length), ''),
+  ];
+
+  final rows = <List<dynamic>>[];
+  final styles = <int, int>{};
+  styles[0] = XlsxRowStyle.title;
+  rows.add(pad([
+    projectName.trim().isEmpty
         ? kProcurementLogSheet
         : '${projectName.trim()} - $kProcurementLogSheet',
-    sections: procurementLogSections(
-      entries,
-      labels: labels,
-      columns: shown,
-    ),
-    generated: generated,
-  );
-  final byLabel = {
-    for (final c in shown) procurementColumnLabel(c, labels): c,
-  };
-  for (var r = 0; r < sheet.rows.length; r++) {
-    if (sheet.rowStyles[r] != XlsxRowStyle.header) continue;
-    final row = sheet.rows[r];
-    for (var c = 0; c < row.length; c++) {
-      final spec = byLabel[row[c]];
-      if (spec == null) continue;
-      final fill = procurementColumnColor(spec, colors);
-      row[c] = XlsxTint(
-        text: procurementColumnLabel(spec, labels),
-        fillHex: _hex(fill),
-        inkHex: _hex(procurementInkFor(fill)),
+  ]));
+  rows.add(['Generated ${reportTimestamp(generated)}']);
+  rows.add([]);
+
+  // THE HEADINGS, each in its own color.
+  rows.add([
+    for (final c in shown)
+      () {
+        final fill = procurementColumnColor(c, colors);
+        return XlsxTint(
+          text: procurementColumnLabel(c, labels),
+          fillHex: _hex(fill),
+          inkHex: _hex(procurementInkFor(fill)),
+          bold: true,
+        );
+      }(),
+  ]);
+
+  for (final group in procurementByRoom(entries)) {
+    // The room's band, across the whole sheet.
+    final name = group.room.isEmpty ? 'No room' : group.room;
+    final n = group.entries.length;
+    rows.add([
+      XlsxTint(
+        text: '$name  ·  $n line${n == 1 ? '' : 's'}',
+        fillHex: kProcurementRoomFill,
+        inkHex: kProcurementRoomInk,
         bold: true,
-      );
+      ),
+      for (var i = 1; i < width; i++)
+        XlsxTint(
+          text: '',
+          fillHex: kProcurementRoomFill,
+          inkHex: kProcurementRoomInk,
+        ),
+    ]);
+    for (final (i, e) in group.entries.indexed) {
+      if (i.isOdd) styles[rows.length] = XlsxRowStyle.zebra;
+      final values = procurementValues(e);
+      rows.add(pad([
+        for (final c in shown)
+          switch (c.id) {
+            'device' => XlsxTint(
+              text: e.device,
+              fillHex: i.isOdd ? 'EFEFEF' : 'FFFFFF',
+              inkHex: '1F2933',
+              bold: true,
+            ),
+            'company' when e.company.trim().isNotEmpty => () {
+              final t = procurementCompanyTint(e.company);
+              return XlsxTint(
+                text: e.company,
+                fillHex: t.fill,
+                inkHex: t.ink,
+                bold: true,
+              );
+            }(),
+            'status' when procurementStatusTint(e.status) != null => () {
+              final t = procurementStatusTint(e.status)!;
+              return XlsxTint(
+                text: e.statusText,
+                fillHex: t.fill,
+                inkHex: t.ink,
+                bold: true,
+              );
+            }(),
+            'phase' when e.installPhase.trim().isNotEmpty => XlsxTint(
+              text: e.installPhase,
+              fillHex: 'FFF3E0',
+              inkHex: 'E65100',
+            ),
+            'released' => e.released ? '✓' : '',
+            _ => values[c.id] ?? '',
+          },
+      ]));
     }
   }
-  return sheet;
+
+  return XlsxSheet(
+    name: sheetName,
+    rows: rows,
+    rowStyles: styles,
+    columnWidths: {
+      for (final (i, c) in shown.indexed)
+        i:
+            ((widths[c.id] ?? kProcurementColumnWidthsPx[c.id] ?? 160) / 7)
+                .roundToDouble(),
+    },
+    // The title and the stamp run over the cells beside them.
+    overflowRows: const {0, 1},
+    freezeColumns: 1,
+  );
 }

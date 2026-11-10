@@ -272,6 +272,10 @@ class PinnedGrid extends StatefulWidget {
   /// floating over the bottom of the frame - see [kFloatingButtonClearance].
   final double trailingSpace;
 
+  /// How far the grid runs past the bottom of the window, so the sideways
+  /// bar is drawn where it can be seen.
+  final double barLift;
+
   /// Top-left: what the frozen column is. Never moves.
   final Widget corner;
 
@@ -370,6 +374,7 @@ class PinnedGrid extends StatefulWidget {
     this.maxHeight,
     this.fillHeight = false,
     this.trailingSpace = 0,
+    this.barLift = 0,
     this.dragging,
   }) : assert(
          (frozen != null && body != null) ||
@@ -533,6 +538,21 @@ class _PinnedGridState extends State<PinnedGrid> {
 
         final lazy = widget.rowCount != null;
 
+        // Explicit, so no inherited padding lifts the bars off their edges.
+        // Material bars read their padding off MediaQuery.
+        final mq = MediaQuery.of(context);
+        Widget barPad(Widget bars) => MediaQuery(
+          data: mq.copyWith(
+            padding: EdgeInsets.only(
+              bottom: widget.barLift.clamp(
+                0.0,
+                math.max(0.0, viewHeight - _kBar),
+              ),
+            ),
+          ),
+          child: bars,
+        );
+
         // THE FROZEN COLUMN'S BODY. Lazily, a list of fixed-height rows with
         // its own scrolling turned off - it is dragged along by the cells.
         final Widget frozenBody = lazy
@@ -565,7 +585,7 @@ class _PinnedGridState extends State<PinnedGrid> {
         // far edge of a sheet that is mostly off screen. Which of the two
         // scroll views is on the outside differs between the shapes, so the
         // notification depths do too.
-        final Widget cells = lazy
+        final Widget cells = barPad(lazy
             ? Scrollbar(
                 controller: _rows,
                 thumbVisibility: scrollsY,
@@ -625,7 +645,7 @@ class _PinnedGridState extends State<PinnedGrid> {
                     ),
                   ),
                 ),
-              );
+              ));
 
         // Hears the pointer for the whole of a drag that starts on a grip in
         // the header, wherever it goes - see [_pointerMoved].

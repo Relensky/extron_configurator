@@ -11,6 +11,10 @@
 // close normally, marks this one as running, and installs the handlers.
 void InstallCrashLogging();
 
+// Installs the filter again. Engine and plugin DLLs may set their own while
+// they load, and the last one set wins, so call this after window.Create.
+void ReinstallCrashFilter();
+
 // Call after a normal close. lib/crash_session.dart does the same for exits
 // that skip wWinMain's return, such as installing an update.
 void EndCrashLoggingSession();

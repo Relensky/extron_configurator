@@ -1820,6 +1820,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                     suggestedModel: line.model.isNotEmpty
                                         ? line.model
                                         : line.description,
+                                    manufacturer: line.manufacturer,
                                     partNumber: line.partNumber,
                                     category: line.category,
                                     price:
@@ -2125,8 +2126,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 ? Icons.library_add_outlined
                                 : _linkedIcon(line),
                             catalogPart.isEmpty
-                                ? 'Add this line to the parts list'
-                                : _linkedTip(line, catalogPart, 'parts list'),
+                                ? _addToCatalogTip(provider, line.description)
+                                : _linkedTip(line, catalogPart, 'catalog'),
                             catalogPart.isNotEmpty
                                 ? () => _editCatalogFromLine(
                                     context,
@@ -2145,6 +2146,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                     context,
                                     provider,
                                     suggestedModel: line.description,
+                                    manufacturer: line.manufacturer,
                                     partNumber: line.partNumber,
                                     category: line.category.isEmpty
                                         ? kCategoryRackHardware
@@ -2170,7 +2172,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           // rather than the one the trash can wants.
                           avRowIcon(
                             Icons.restart_alt,
-                            'Back to the parts list price',
+                            'Back to the catalog price',
                             line.source == PriceSource.override
                                 ? () => provider.setAvCostPrice(line.key, null)
                                 : null,
@@ -5683,6 +5685,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         context,
         provider,
         suggestedModel: item.description,
+        // The maker and part number already on the line come with it.
+        manufacturer: item.manufacturer,
+        partNumber: item.partNumber,
         category: item.category,
         // The figure typed in the Unit price box, else the one on the line —
         // the same order the estimate itself resolves the price in.

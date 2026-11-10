@@ -9,6 +9,7 @@ import 'safe_write.dart';
 import 'shared_json.dart';
 import 'av_flow_model.dart';
 import 'search_match.dart';
+import 'mount_spec.dart';
 
 /// ============================================================================
 ///  AV DEVICE LIBRARY
@@ -591,6 +592,9 @@ class AvDeviceTemplate {
   final double weightLbs;
   final double noiseDb;
 
+  /// Size, VESA and arms for drawing it on a wall; null when not recorded.
+  final WallMountSpec? mounting;
+
   final String notes;
 
   final List<AvPort> ports;
@@ -653,6 +657,7 @@ class AvDeviceTemplate {
     this.lensShiftSide = 0,
     this.weightLbs = 0,
     this.noiseDb = 0,
+    this.mounting,
     this.notes = '',
     required this.ports,
     this.custom = false,
@@ -755,6 +760,8 @@ class AvDeviceTemplate {
     double? lensShiftSide,
     double? weightLbs,
     double? noiseDb,
+    WallMountSpec? mounting,
+    bool clearMounting = false,
     String? notes,
     List<AvPort>? ports,
     bool? custom,
@@ -802,6 +809,7 @@ class AvDeviceTemplate {
     lensShiftSide: lensShiftSide ?? this.lensShiftSide,
     weightLbs: weightLbs ?? this.weightLbs,
     noiseDb: noiseDb ?? this.noiseDb,
+    mounting: clearMounting ? null : (mounting ?? this.mounting),
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
     custom: custom ?? this.custom,
@@ -852,6 +860,7 @@ class AvDeviceTemplate {
     if (lensShiftSide > 0) 'lensShiftSide': lensShiftSide,
     if (weightLbs > 0) 'weightLbs': weightLbs,
     if (noiseDb > 0) 'noiseDb': noiseDb,
+    if (mounting != null) 'mounting': mounting!.toJson(),
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
     if (addedBy.isNotEmpty) 'addedBy': addedBy,
@@ -962,6 +971,7 @@ class AvDeviceTemplate {
     lensShiftSide: _positive(json['lensShiftSide']),
     weightLbs: _positive(json['weightLbs']),
     noiseDb: _positive(json['noiseDb']),
+    mounting: WallMountSpec.fromJson(json['mounting']),
     notes: json['notes']?.toString() ?? '',
     ports: [
       for (final p in (json['ports'] as List? ?? []))
@@ -2209,7 +2219,12 @@ class AvDeviceLibrary {
           // A priced entry with no connectors is still worth keeping: a price
           // list is filled in long before anybody draws that model's ports.
           if (t.model.isEmpty) continue;
-          library._byModel[_norm(t.model)] = t;
+          // Wall mounting sizes the file lacks come from the built-in model.
+          final builtIn = library._byModel[_norm(t.model)];
+          library._byModel[_norm(t.model)] =
+              t.mounting == null && builtIn?.mounting != null
+                  ? t.copyWith(mounting: builtIn!.mounting)
+                  : t;
           added++;
         }
         library._readCategories(doc['categories']);
@@ -3004,6 +3019,9 @@ class AvDeviceLibrary {
       ],
     ),
 
+    // --- WALL MOUNTING ----------------------------------------------------
+    ..._wallMounting,
+
     // --- RACK HARDWARE -----------------------------------------------------
     //  The parts list the rack editor offers. No connectors and no power: a
     //  blank plate is a thing you buy and a thing that occupies a rail, and
@@ -3066,6 +3084,61 @@ class AvDeviceLibrary {
     _hardware('Lacing bar 1U', 'Cable management', 1),
     _hardware('Cable management panel 1U', 'Cable management', 1),
     _hardware('Rack rail screws (pack)', 'Rack hardware', 0),
+  ];
+
+  static AvDeviceTemplate _mount(
+    String model,
+    String manufacturer,
+    WallMountSpec spec,
+    String notes,
+  ) => AvDeviceTemplate(
+    model: model,
+    manufacturer: manufacturer,
+    partNumber: model,
+    category: 'Mount / bracket',
+    powerInput: PowerInput.none,
+    neverControlled: true,
+    mounting: spec,
+    notes: notes,
+    ports: const [],
+  );
+
+  /// Displays and wall mounts with sizes from the makers' drawings.
+  static final List<AvDeviceTemplate> _wallMounting = [
+    AvDeviceTemplate(
+      model: 'TT-8624QPRO',
+      manufacturer: 'Newline',
+      partNumber: 'TT-8624QPRO',
+      category: 'Display',
+      mounting: kSpecNewlineQPro86,
+      notes: 'Q Pro 86" interactive flat panel.',
+      ports: [
+        for (int i = 1; i <= 3; i++)
+          _videoIn('in_hdmi_$i', 'HDMI $i', SignalType.hdmi),
+        _lan(),
+      ],
+    ),
+    _mount(
+      'EPR8A50600-000',
+      'Newline',
+      kSpecNewlineTiltMount,
+      'Tilting wall mount for the Q Pro 86".',
+    ),
+    _mount('XSM1U', 'Chief', kSpecChiefXSM1U, 'Fusion fixed wall mount.'),
+    _mount('XTM1U', 'Chief', kSpecChiefXTM1U, 'Fusion tilting wall mount.'),
+    _mount(
+      'FCAV1U',
+      'Chief',
+      kSpecChiefFCAV1U,
+      'Fusion mount pullout accessory, two assemblies. Sizes are one '
+          'assembly, pulled out.',
+    ),
+    _mount(
+      '60-612',
+      'Ergotron',
+      kSpecErgotron60612,
+      'Neo-Flex tilting wall mount UHD.',
+    ),
   ];
 
   static AvDeviceTemplate _consumable(String model, String notes) =>

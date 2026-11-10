@@ -2,6 +2,7 @@
 // log_viewer_types.dart. Nothing here throws: a log viewer that crashes is no
 // help to somebody who opened it because something else already had.
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'log_viewer_types.dart';
@@ -118,26 +119,147 @@ String? _osDescription;
 
 /// The operating system as people know it: "Windows 11 Enterprise 25H2
 /// (build 26200.6899)", not the "Windows 10 Enterprise" Dart reports for every
-/// Windows 11 machine. See os_name.dart. Read once and kept: the registry is
-/// asked with one short `reg query`, and the answer does not change while the
-/// app runs.
+/// Windows 11 machine. See os_name.dart. Read once and kept: the answer does
+/// not change while the app runs.
+///
+/// The values come straight from the registry API. This used to run
+/// `reg query` with Process.runSync, and every logger asks for it while
+/// writing its session header - before the first frame. Starting reg.exe
+/// and waiting for it was ~0.45 s on a fast PC and seconds on a slow one;
+/// RegGetValueW takes microseconds. `reg query` is still the fallback.
 String describeOperatingSystem() => _osDescription ??= _describeOs();
 
+const List<String> _kCurrentVersionValues = [
+  'ProductName',
+  'CurrentBuildNumber',
+  'CurrentBuild',
+  'DisplayVersion',
+  'ReleaseId',
+  'UBR',
+];
+
 String _describeOs() {
-  final String raw = Platform.operatingSystemVersion;
-  if (!Platform.isWindows) return '${Platform.operatingSystem} $raw';
+  if (!Platform.isWindows) {
+    return '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
+  }
   Map<String, String> registry = const {};
   try {
-    final ProcessResult r = Process.runSync('reg', [
-      'query',
-      r'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion',
-    ]);
-    if (r.exitCode == 0) registry = parseRegQuery('${r.stdout}');
+    registry = _readCurrentVersion();
   } catch (_) {
-    // No reg.exe, or not allowed to run it: the build number still decides
-    // between 10 and 11.
+    // No usable advapi32 (should not happen on Windows): fall back below.
+  }
+  // Dart's own answer only when the registry gave nothing: on Windows it
+  // takes ~0.25 s the first time, and the registry holds all it would add.
+  if (registry.containsKey('ProductName') &&
+      registry.containsKey('CurrentBuildNumber')) {
+    return describeWindows('', registry);
+  }
+  final String raw = Platform.operatingSystemVersion;
+  if (registry.isEmpty) {
+    try {
+      final ProcessResult r = Process.runSync('reg', [
+        'query',
+        r'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion',
+      ]);
+      if (r.exitCode == 0) registry = parseRegQuery('${r.stdout}');
+    } catch (_) {
+      // No reg.exe, or not allowed to run it: the build number still decides
+      // between 10 and 11.
+    }
   }
   return describeWindows(raw, registry);
+}
+
+typedef _RegGetValueNative = Int32 Function(
+    IntPtr key,
+    Pointer<Uint16> subKey,
+    Pointer<Uint16> value,
+    Uint32 flags,
+    Pointer<Uint32> type,
+    Pointer<Uint8> data,
+    Pointer<Uint32> size);
+typedef _RegGetValueDart = int Function(int key, Pointer<Uint16> subKey,
+    Pointer<Uint16> value, int flags, Pointer<Uint32> type,
+    Pointer<Uint8> data, Pointer<Uint32> size);
+typedef _GetProcessHeapNative = IntPtr Function();
+typedef _GetProcessHeapDart = int Function();
+typedef _HeapAllocNative = Pointer<Uint8> Function(
+    IntPtr heap, Uint32 flags, IntPtr bytes);
+typedef _HeapAllocDart = Pointer<Uint8> Function(
+    int heap, int flags, int bytes);
+typedef _HeapFreeNative = Int32 Function(
+    IntPtr heap, Uint32 flags, Pointer<Uint8> block);
+typedef _HeapFreeDart = int Function(int heap, int flags, Pointer<Uint8> block);
+
+/// The values of [_kCurrentVersionValues] that exist, in the form
+/// `reg query` prints them (a DWORD as 0x1ae3), for [describeWindows].
+/// Plain dart:ffi with the process heap, so no app needs package:ffi.
+Map<String, String> _readCurrentVersion() {
+  final advapi = DynamicLibrary.open('advapi32.dll');
+  final kernel = DynamicLibrary.open('kernel32.dll');
+  final regGetValue =
+      advapi.lookupFunction<_RegGetValueNative, _RegGetValueDart>(
+          'RegGetValueW');
+  final int heap = kernel
+      .lookupFunction<_GetProcessHeapNative, _GetProcessHeapDart>(
+          'GetProcessHeap')();
+  final heapAlloc =
+      kernel.lookupFunction<_HeapAllocNative, _HeapAllocDart>('HeapAlloc');
+  final heapFree =
+      kernel.lookupFunction<_HeapFreeNative, _HeapFreeDart>('HeapFree');
+
+  // HKEY_LOCAL_MACHINE is ((HKEY)(LONG)0x80000002): sign-extended to 64 bits.
+  const int hkeyLocalMachine = 0x80000002 - 0x100000000;
+  const int rrfRtRegSz = 0x00000002;
+  const int rrfRtRegDword = 0x00000010;
+  const int regDword = 4;
+  const int dataBytes = 1024;
+  const String subKey = r'SOFTWARE\Microsoft\Windows NT\CurrentVersion';
+
+  // One block: sub-key name, value name, type, size, then the data.
+  const int nameBytes = 256;
+  final Pointer<Uint8> block = heapAlloc(
+      heap, 0x00000008 /* HEAP_ZERO_MEMORY */, nameBytes * 2 + 8 + dataBytes);
+  if (block.address == 0) return const {};
+  try {
+    final Pointer<Uint16> subKeyText = block.cast<Uint16>();
+    final Pointer<Uint16> valueText = (block + nameBytes).cast<Uint16>();
+    final Pointer<Uint32> type = (block + nameBytes * 2).cast<Uint32>();
+    final Pointer<Uint32> size = (block + nameBytes * 2 + 4).cast<Uint32>();
+    final Pointer<Uint8> data = block + nameBytes * 2 + 8;
+
+    void put(Pointer<Uint16> at, String s) {
+      final units = s.codeUnits;
+      for (int i = 0; i < units.length; i++) {
+        at[i] = units[i];
+      }
+      at[units.length] = 0;
+    }
+
+    put(subKeyText, subKey);
+    final Map<String, String> values = {};
+    for (final String name in _kCurrentVersionValues) {
+      put(valueText, name);
+      size.value = dataBytes;
+      final int status = regGetValue(hkeyLocalMachine, subKeyText, valueText,
+          rrfRtRegSz | rrfRtRegDword, type, data, size);
+      if (status != 0) continue;
+      if (type.value == regDword) {
+        values[name] = '0x${data.cast<Uint32>().value.toRadixString(16)}';
+      } else {
+        final Pointer<Uint16> text = data.cast<Uint16>();
+        final int length = size.value ~/ 2;
+        final units = <int>[];
+        for (int i = 0; i < length && text[i] != 0; i++) {
+          units.add(text[i]);
+        }
+        values[name] = String.fromCharCodes(units);
+      }
+    }
+    return values;
+  } finally {
+    heapFree(heap, 0, block);
+  }
 }
 
 /// Writes [text] to [path]. Returns why it failed, or null.

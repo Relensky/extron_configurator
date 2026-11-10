@@ -27,6 +27,7 @@ import 'project_estimate.dart';
 import 'project_history_view.dart' show ItemHistory;
 import 'project_reminders.dart';
 import 'project_schedule.dart';
+import 'project_walkthroughs.dart' show WalkthroughsCard;
 import 'stepped_date_picker.dart';
 import 'timeline_export_view.dart' show TimelineExportBar, TimelineJobList;
 import 'vendor_rfq_view.dart';
@@ -482,6 +483,7 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
       return [
         SliverToBoxAdapter(child: TimelineExportBar(estimate: estimate)),
         SliverToBoxAdapter(child: TimelineJobList(estimate: estimate)),
+        const SliverToBoxAdapter(child: WalkthroughsCard()),
         // Draws only once there is a date on it, e.g. an install window.
         SliverToBoxAdapter(
           child: ProjectDateGraph(
@@ -512,6 +514,7 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
     return [
       SliverToBoxAdapter(child: TimelineExportBar(estimate: estimate)),
       SliverToBoxAdapter(child: TimelineJobList(estimate: estimate)),
+      const SliverToBoxAdapter(child: WalkthroughsCard()),
       const SliverToBoxAdapter(child: InstallWindowsCard()),
       ..._lifecycleSlivers(context, estimate, schedule),
     ];
@@ -535,6 +538,8 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
     ),
     // Every note on the job list, dated or not.
     SliverToBoxAdapter(child: TimelineJobList(estimate: estimate)),
+    // When the building was last walked through, and what was found.
+    const SliverToBoxAdapter(child: WalkthroughsCard()),
     // WHEN EACH ROOM CAN BE WORKED ON, off the class schedule - see
     // install_window_finder.dart.
     const SliverToBoxAdapter(child: InstallWindowsCard()),
@@ -2367,6 +2372,9 @@ class _ProjectDateGraphState extends State<ProjectDateGraph>
       b.write('|${track.deadline}|${track.completion}');
     }
     b.write('|${schedule.deadline}|${project.rfqs.length}');
+    for (final walk in project.walkthroughs) {
+      b.write('|w${formatIsoDate(walk.date)}');
+    }
     for (final w in project.installWindows) {
       b.write('|${w.id}');
     }
@@ -2599,6 +2607,15 @@ class _ProjectDateGraphState extends State<ProjectDateGraph>
           color: theme.colorScheme.primary,
         ));
       }
+    }
+
+    // Each walkthrough of the building, on the day it was (or will be).
+    for (final walk in project.walkthroughs) {
+      out.add((
+        date: walk.date,
+        label: 'Walkthrough',
+        color: theme.colorScheme.secondary,
+      ));
     }
 
     final deadline = schedule.deadline;

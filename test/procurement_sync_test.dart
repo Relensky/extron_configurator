@@ -137,4 +137,82 @@ void main() {
     expect(back.procurement.single.excluded, isTrue);
     expect(back.procurement.single.linked, isTrue);
   });
+
+  test('a line typed on the log is on the equipment list too', () {
+    final project = BuildingProject(
+      procurement: [
+        const ProcurementEntry(
+          id: 'proc1',
+          room: 'HIL 101',
+          device: 'Wireless presenter',
+          company: 'OFCI',
+        ),
+      ],
+      partOrders: {
+        'other|desc:~wireless presenter': PartOrder(
+          poNumber: 'PO-7',
+          orderedOn: DateTime(2027, 1, 4),
+        ),
+      },
+    );
+    final estimate = job(project, 'Mic');
+    final part = estimate.master.firstWhere(
+      (m) => m.description == 'Wireless presenter',
+    );
+    expect(part.kind, MasterPartKind.other);
+    expect(part.qty, 1);
+    expect(part.logOnly, isTrue);
+    expect(part.total, 0, reason: 'tracked, not quoted');
+    expect(part.qtyByRoom.keys, contains('room1'),
+        reason: 'the typed room is matched to the room on the job');
+    expect(estimate.handLineKeys['proc1'], part.key);
+
+    final line = liveProcurement(project, estimate)
+        .firstWhere((e) => e.id == 'proc1');
+    expect(line.partKey, part.key);
+    expect(line.ordered, startsWith('PO-7'));
+  });
+
+  test('a typed line that names a room line becomes that line', () {
+    final project = BuildingProject(
+      procurement: [
+        const ProcurementEntry(
+          id: 'proc1',
+          room: 'HIL 101',
+          device: 'Shure MXA920 ceiling mic',
+          company: 'OFCI',
+          status: ProcurementStatus.submitted,
+        ),
+      ],
+    );
+    final estimate = job(project, 'MXA920 ceiling mic');
+    expect(estimate.procurementMatches.keys, contains('proc1'));
+    expect(estimate.master.where((m) => m.logOnly), isEmpty,
+        reason: 'not a second row on the equipment list');
+
+    final live = liveProcurement(project, estimate);
+    final mic = live.firstWhere((e) => e.id == 'proc1');
+    expect(mic.linked, isTrue);
+    expect(mic.company, 'OFCI');
+    expect(mic.status, ProcurementStatus.submitted);
+    expect(live.where((e) => e.lineKey == mic.lineKey), hasLength(1),
+        reason: 'the room line is not listed twice');
+    final part = estimate.master.firstWhere((m) => m.key == mic.partKey);
+    expect(part.description, contains('MXA920'));
+  });
+
+  test('a typed line naming nothing in its room is left unmatched', () {
+    final project = BuildingProject(
+      procurement: [
+        const ProcurementEntry(
+          id: 'proc1',
+          room: 'HIL 101',
+          device: 'Sharp PN-M432',
+        ),
+      ],
+    );
+    final estimate = job(project, 'MXA920 ceiling mic');
+    expect(estimate.procurementMatches, isEmpty);
+    expect(estimate.handLineKeys.keys, contains('proc1'));
+  });
 }

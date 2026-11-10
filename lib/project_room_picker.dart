@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
@@ -6,7 +10,14 @@ import 'app_state.dart';
 import 'building_project.dart';
 import 'pinned_grid.dart' show gridMetric;
 import 'room_review.dart';
-import 'save_actions.dart' show closeRoomFile, createProjectRoom;
+import 'save_actions.dart'
+    show
+        closeRoomFile,
+        confirmLeavingProject,
+        createProjectRoom,
+        isProjectFile,
+        openProjectAtPath;
+import 'recent_files.dart' show RecentKind;
 
 /// ============================================================================
 ///  THE ROOM PICKER IN THE TITLE BAR
@@ -594,6 +605,186 @@ class _RoomNames {
     ];
     return parts.isEmpty ? null : parts.join('  ·  ');
   }
+}
+
+/// [TEAM KIT - WORKING ON]: a room tag's link on the team page (see
+/// TeamHost.openClaim). [roomId] is the tag's id - the room's team id
+/// (AppStateProvider.teamRoomIdFor, the name the CTS Dashboard uses too).
+/// The open room just shows; a room on the open job opens like a pick from
+/// the room menu; anything else says it is not on this job.
+Future<void> openTeamRoomTag(BuildContext context, String roomId) async {
+  final provider = context.read<AppStateProvider>();
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final want = roomId.trim().toLowerCase();
+  if (want.isEmpty) return;
+  if (provider.teamRoomId.trim().toLowerCase() == want) {
+    showPickedRoom(provider);
+    return;
+  }
+  final estimate = provider.priceProject();
+  ProjectRoomRef? ref;
+  for (final room in estimate.rooms) {
+    if (!room.ok) continue;
+    if (provider.teamRoomIdFor(room.room.config).trim().toLowerCase() ==
+        want) {
+      ref = room.ref;
+      break;
+    }
+  }
+  if (ref == null) {
+    if (messenger != null) {
+      showTimedSnackBar(
+        messenger,
+        SnackBar(content: Text('$roomId is not a room on the open project.')),
+      );
+    }
+    return;
+  }
+  if (!await confirmLeavingRoom(context, provider)) return;
+  final error = await provider.openProjectRoomRef(ref);
+  if (error.isEmpty) return showPickedRoom(provider);
+  if (messenger != null) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 5),
+        content: Text(error),
+        backgroundColor: snackErrorFillOn(messenger),
+      ),
+    );
+  }
+}
+
+/// [TEAM KIT - PROJECTS]: a project tag's link - or another CTS app's
+/// 'openProject' request (TeamHost.onAppRequest) - opens the project [file]
+/// a tag was made on, and then [roomId] in it when given. The open project
+/// just shows; any other is opened like Open Project (asking about unsaved
+/// changes first).
+Future<void> openTeamProjectFile(
+  BuildContext context,
+  String file, {
+  String roomId = '',
+}) async {
+  final provider = context.read<AppStateProvider>();
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final want = file.trim();
+  if (want.isEmpty) return;
+  final open = provider.currentProjectPath;
+  final same = open.isNotEmpty &&
+      path.equals(path.normalize(open), path.normalize(want));
+  if (!same) {
+    if (!File(want).existsSync()) {
+      if (messenger != null) {
+        showTimedSnackBar(
+          messenger,
+          SnackBar(
+            duration: const Duration(seconds: 6),
+            content: Text('The project file $want cannot be found.'),
+            backgroundColor: snackErrorFillOn(messenger),
+          ),
+        );
+      }
+      return;
+    }
+    if (!await confirmLeavingProject(context, provider)) return;
+    if (!context.mounted) return;
+    if (!await openProjectAtPath(context, provider, want)) return;
+  }
+  if (!context.mounted) return;
+  if (roomId.trim().isNotEmpty) {
+    await openTeamRoomTag(context, roomId);
+  } else if (same) {
+    provider.selectTab(AppTab.project.index);
+  }
+}
+
+/// [TEAM KIT - WORKING ON]: a "working on" room tag made here, opened from
+/// any CTS app's team page - the CTS Dashboard sends 'openRoom' {room, file}
+/// (TeamHost.onAppRequest), this app's own link runs it directly.
+///
+/// [file] is what the tag was made on: a project (opened, then [roomId] in
+/// it) or a room configuration file (opened). Tags from before they kept a
+/// file have only [roomId]: the open room, a room on the open project, or a
+/// room on this PC's recent rooms list whose file names that room.
+Future<void> openTeamRoomRequest(
+  BuildContext context,
+  String roomId, {
+  String file = '',
+}) async {
+  final provider = context.read<AppStateProvider>();
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final room = roomId.trim();
+  var want = file.trim();
+
+  void say(String text) {
+    if (messenger == null) return;
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text(text),
+        backgroundColor: snackErrorFillOn(messenger),
+      ),
+    );
+  }
+
+  if (want.isNotEmpty && isProjectFile(want)) {
+    return openTeamProjectFile(context, want, roomId: room);
+  }
+  if (want.isEmpty && room.isNotEmpty) {
+    if (provider.teamRoomId.trim().toLowerCase() == room.toLowerCase()) {
+      showPickedRoom(provider);
+      return;
+    }
+    if (provider.currentProjectPath.isNotEmpty) {
+      return openTeamRoomTag(context, room);
+    }
+    want = await _recentRoomFileFor(provider, room);
+    if (want.isEmpty) {
+      say('$room has no room configuration file known on this PC - the tag '
+          'was made before tags kept their file. Open the room once and tag '
+          'it again.');
+      return;
+    }
+  }
+  if (want.isEmpty || !context.mounted) return;
+  if (provider.currentConfigPath.isNotEmpty &&
+      path.equals(path.normalize(provider.currentConfigPath),
+          path.normalize(want))) {
+    showPickedRoom(provider);
+    return;
+  }
+  if (!File(want).existsSync()) {
+    say('The room configuration file $want cannot be found.');
+    return;
+  }
+  if (!await confirmLeavingRoom(context, provider)) return;
+  if (!await provider.openConfigAtPath(want)) {
+    say(provider.lastOpenError.isNotEmpty
+        ? provider.lastOpenError
+        : 'Could not open $want.');
+    return;
+  }
+  showPickedRoom(provider);
+}
+
+/// The file on this PC's recent rooms list that is [roomId] (by its team
+/// id, AppStateProvider.teamRoomIdFor), or ''.
+Future<String> _recentRoomFileFor(
+    AppStateProvider provider, String roomId) async {
+  final want = roomId.trim().toLowerCase();
+  for (final recent in provider.recentFiles[RecentKind.room]) {
+    try {
+      final f = File(recent.file);
+      if (!await f.exists()) continue;
+      final config = jsonDecode(await f.readAsString());
+      if (config is! Map<String, dynamic>) continue;
+      if (provider.teamRoomIdFor(config).trim().toLowerCase() == want) {
+        return recent.file;
+      }
+    } catch (_) {}
+  }
+  return '';
 }
 
 /// Offers to save the open room before it is replaced.

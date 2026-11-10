@@ -14,6 +14,8 @@ import 'contrast.dart';
 import 'app_logger.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'av_flow_overview.dart'
+    show AvMagnifierLens, autoLensZoom, kLensSizes, snapshotDrawing;
 
 // ============================================================================
 // [FEATURE - SCREENSHOTS + ANNOTATION]
@@ -1787,11 +1789,16 @@ class ZoomablePicturePreview extends StatefulWidget {
   /// to be visible.
   final Color? backdrop;
 
+  /// Offers the AV Flow's magnifier: a lens at the pointer showing that part
+  /// of the picture enlarged.
+  final bool magnifier;
+
   const ZoomablePicturePreview({
     super.key,
     required this.child,
     this.keyPrefix = 'picture',
     this.backdrop,
+    this.magnifier = false,
   });
 
   @override
@@ -1820,11 +1827,94 @@ class _ZoomablePicturePreviewState extends State<ZoomablePicturePreview> {
 
   static const double _barRoom = _kBarRoom;
 
+  /// The picture, photographed for the magnifier.
+  final GlobalKey _shotKey = GlobalKey();
+
+  bool _lensOn = false;
+  ({ui.Image image, double ratio})? _shot;
+
+  /// The pointer, in the preview's frame; null off it.
+  final ValueNotifier<Offset?> _lensAt = ValueNotifier(null);
+
   @override
   void dispose() {
     _across.dispose();
     _down.dispose();
+    _lensAt.dispose();
+    _shot?.image.dispose();
     super.dispose();
+  }
+
+  void _setLens(bool on) {
+    setState(() => _lensOn = on);
+    if (!on) {
+      _lensAt.value = null;
+      _shot?.image.dispose();
+      _shot = null;
+      return;
+    }
+    _takeShot();
+  }
+
+  /// Photographs the picture after the frame, trying a few times while it
+  /// has not been painted yet.
+  void _takeShot([int attempt = 0]) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final shot = await snapshotDrawing(_shotKey);
+      if (!mounted || !_lensOn) {
+        shot?.image.dispose();
+        return;
+      }
+      if (shot == null) {
+        if (attempt < 8) {
+          Future<void>.delayed(const Duration(milliseconds: 250), () {
+            if (mounted && _lensOn) _takeShot(attempt + 1);
+          });
+        }
+        return;
+      }
+      final old = _shot;
+      setState(() => _shot = shot);
+      old?.image.dispose();
+    });
+  }
+
+  Widget _lens(double scale, BoxConstraints box) {
+    final side = kLensSizes[1].$1;
+    return ValueListenableBuilder<Offset?>(
+      valueListenable: _lensAt,
+      builder: (context, at, _) {
+        final shot = _shot;
+        if (at == null || shot == null) {
+          return const Positioned(left: 0, top: 0, child: SizedBox.shrink());
+        }
+        // The pointer on the picture, at full size.
+        final across = _across.hasClients ? _across.offset : 0.0;
+        final down = _down.hasClients ? _down.offset : 0.0;
+        final scene = Offset((at.dx + across) / scale, (at.dy + down) / scale);
+        var left = at.dx + 16, top = at.dy + 16;
+        if (left + side > box.maxWidth) {
+          left = (at.dx - 16 - side).clamp(0, double.infinity);
+        }
+        if (top + side > box.maxHeight) {
+          top = (at.dy - 16 - side).clamp(0, double.infinity);
+        }
+        return Positioned(
+          left: left,
+          top: top,
+          width: side,
+          height: side,
+          child: IgnorePointer(
+            child: AvMagnifierLens(
+              image: shot.image,
+              ratio: shot.ratio,
+              scene: scene,
+              zoom: autoLensZoom(scale),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   /// The scale that puts the whole picture inside [box].
@@ -1852,10 +1942,11 @@ class _ZoomablePicturePreviewState extends State<ZoomablePicturePreview> {
 
   Widget _plate(BoxConstraints box) {
     final natural = _natural;
+    final content = RepaintBoundary(key: _shotKey, child: widget.child);
     // First frame: nothing knows how big the child is yet, so it is laid out
     // unconstrained inside the scroll views and measured on the way past.
     if (natural == null || natural.width <= 0 || natural.height <= 0) {
-      return _MeasureSize(onChange: _measured, child: widget.child);
+      return _MeasureSize(onChange: _measured, child: content);
     }
     final double scale = _zoom ?? _fitScale(box);
     return SizedBox(
@@ -1866,7 +1957,7 @@ class _ZoomablePicturePreviewState extends State<ZoomablePicturePreview> {
       // to scroll a picture that already fits.
       child: FittedBox(
         fit: BoxFit.fill,
-        child: _MeasureSize(onChange: _measured, child: widget.child),
+        child: _MeasureSize(onChange: _measured, child: content),
       ),
     );
   }
@@ -1879,7 +1970,12 @@ class _ZoomablePicturePreviewState extends State<ZoomablePicturePreview> {
         return Stack(
           children: [
             Positioned.fill(
-              child: Container(
+              child: MouseRegion(
+                key: ValueKey('${widget.keyPrefix}_magnifier_tracker'),
+                cursor: _lensOn ? SystemMouseCursors.zoomIn : MouseCursor.defer,
+                onHover: _lensOn ? (e) => _lensAt.value = e.localPosition : null,
+                onExit: _lensOn ? (_) => _lensAt.value = null : null,
+                child: Container(
                 color: widget.backdrop,
                 child: Scrollbar(
                   controller: _down,
@@ -1907,21 +2003,45 @@ class _ZoomablePicturePreviewState extends State<ZoomablePicturePreview> {
                   ),
                 ),
               ),
+              ),
             ),
+            if (_lensOn) _lens(scale, box),
             // Over the picture rather than beside it: the dialogs this sits in
             // have their button row spoken for already, and a control that
             // moves the view belongs on the view.
             Positioned(
               top: 6,
               right: _barRoom + 6,
-              child: _ZoomBar(
-                keyPrefix: widget.keyPrefix,
-                scale: scale,
-                fitted: _zoom == null,
-                onOut: () => _step(1 / 1.25, box),
-                onIn: () => _step(1.25, box),
-                onFit: () => setState(() => _zoom = null),
-                onActual: () => setState(() => _zoom = 1.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.magnifier)
+                    Material(
+                      color: Theme.of(context).colorScheme.surface,
+                      elevation: 2,
+                      borderRadius: BorderRadius.circular(8),
+                      child: IconButton(
+                        key: ValueKey('${widget.keyPrefix}_magnifier'),
+                        tooltip: _lensOn
+                            ? 'Turn the magnifier off'
+                            : 'Magnifier: point at the picture to enlarge it',
+                        isSelected: _lensOn,
+                        icon: const Icon(Icons.search),
+                        selectedIcon: const Icon(Icons.search_off),
+                        onPressed: () => _setLens(!_lensOn),
+                      ),
+                    ),
+                  if (widget.magnifier) const SizedBox(width: 6),
+                  _ZoomBar(
+                    keyPrefix: widget.keyPrefix,
+                    scale: scale,
+                    fitted: _zoom == null,
+                    onOut: () => _step(1 / 1.25, box),
+                    onIn: () => _step(1.25, box),
+                    onFit: () => setState(() => _zoom = null),
+                    onActual: () => setState(() => _zoom = 1.0),
+                  ),
+                ],
               ),
             ),
           ],

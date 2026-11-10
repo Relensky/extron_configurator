@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 
 import 'app_paths.dart';
 import 'changelog.dart' show kAppVersion;
+import 'crash_evidence.dart';
 import 'log_viewer/log_viewer_platform.dart' show describeOperatingSystem;
 
 // ============================================================================
@@ -27,7 +28,9 @@ import 'log_viewer/log_viewer_platform.dart' show describeOperatingSystem;
 //     it died inside. A heartbeat records memory every minute, so a slow leak
 //     shows as a curve. Native crashes, which no Dart code sees, are still
 //     logged by windows/runner/crash_log.cpp into
-//     deployment_app_error_log.txt in the default folder.
+//     deployment_app_error_log.txt in the default folder. The audit copies
+//     those records in, and 20 s later what the Windows event log saw
+//     (crash_evidence.dart).
 //
 //  Categories: ACTION (default), NAV, UI, CONFIG, NET, DATA, PERF, SCOPE,
 //  ERROR, INFO.
@@ -140,6 +143,7 @@ class AppLogger {
   /// logs past [logRetention] and starts the heartbeat. Called from main().
   static void startSession({Duration heartbeat = const Duration(minutes: 1)}) {
     _ensureOpen();
+    _scheduleCrashEvidence();
     _heartbeat?.cancel();
     _heartbeat = Timer.periodic(heartbeat, (_) => logHeartbeat());
     logHeartbeat();
@@ -318,6 +322,15 @@ class AppLogger {
       );
       final scope = _lastUnclosedScope(lines);
       if (scope != null) _always('Died inside scope: $scope', category: 'ERROR');
+      // What the runner wrote down as the process went (crash_evidence.dart).
+      for (final line in CrashEvidence.nativeNotes(
+          Directory(defaultLogFolder), newest)) {
+        _always(truncate(line), category: 'ERROR');
+      }
+      final previousPid = _pidOf(previous);
+      if (previousPid != null) {
+        _uncleanPrevious = (pid: previousPid, lastWritten: newest);
+      }
       _always(
         'No clean-exit marker was written. Either that session crashed (a '
         'native crash runs no Dart handler) or it is a second copy of the app '
@@ -331,6 +344,65 @@ class AppLogger {
     } catch (e) {
       debugPrint('Failed to audit the previous session log: $e');
     }
+  }
+
+  /// The pid in a log's session header, from its first 2 KB.
+  static int? _pidOf(File log) {
+    try {
+      final raf = log.openSync();
+      try {
+        return CrashEvidence.pidFromLogHead(
+            utf8.decode(raf.readSync(2048), allowMalformed: true));
+      } finally {
+        raf.closeSync();
+      }
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Set by the audit when the previous session ended without its marker.
+  static ({int pid, DateTime lastWritten})? _uncleanPrevious;
+  static bool _crashEvidenceScheduled = false;
+
+  /// How long after start the event log is asked: clear of start-up.
+  static const Duration _eventLogDelay = Duration(seconds: 20);
+
+  // Asks Windows' event log what it saw of the previous session. A timer
+  // and a separate process, so start-up never waits on it.
+  static void _scheduleCrashEvidence() {
+    if (_crashEvidenceScheduled || runningUnderTest || !Platform.isWindows) {
+      return;
+    }
+    _crashEvidenceScheduled = true;
+    final previous = _uncleanPrevious;
+    if (previous == null) return;
+    Timer(_eventLogDelay, () async {
+      final String exe =
+          Platform.resolvedExecutable.split(RegExp(r'[\\/]')).last;
+      final lines = await CrashEvidence.windowsEvents(
+        pid: previous.pid,
+        exeName: exe,
+        from: previous.lastWritten.subtract(const Duration(minutes: 1)),
+        to: clock(),
+      );
+      _always(
+        'Windows event log for the previous session (pid ${previous.pid}, '
+        '${logTimestamp(previous.lastWritten)} to now):',
+        category: 'ERROR',
+      );
+      if (lines.isEmpty) {
+        _always(
+          '  Nothing: no crash, hang, shutdown or power loss recorded. Most '
+          'likely it was ended from outside (Task Manager, taskkill) or is a '
+          'window that is still open.',
+          category: 'ERROR',
+        );
+      }
+      for (final line in lines) {
+        _always(truncate('  $line'), category: 'ERROR');
+      }
+    });
   }
 
   static String? _lastUnclosedScope(List<String> lines) {

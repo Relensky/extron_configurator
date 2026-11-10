@@ -234,7 +234,7 @@ class FolderUpdater extends ChangeNotifier {
     _releaseFolder = v;
     platform.writeSavedReleaseFolder(v);
     _available = null;
-    _dismissedVersion = null;
+    _laterThisSession = false;
     notifyListeners();
     unawaited(checkNow());
   }
@@ -259,7 +259,7 @@ class FolderUpdater extends ChangeNotifier {
     }
     _releaseFolder = _builtInReleaseFolder;
     _available = null;
-    _dismissedVersion = null;
+    _laterThisSession = false;
     notifyListeners();
     unawaited(checkNow());
   }
@@ -298,7 +298,9 @@ class FolderUpdater extends ChangeNotifier {
   /// once, then cleared with [clearOutcome].
   UpdateOutcome? get lastOutcome => _lastOutcome;
 
-  AppBuildVersion? _dismissedVersion;
+  /// "Later": no corner notice again until the app is next launched - not
+  /// even for a newer release. The launch check looks for the newest first.
+  bool _laterThisSession = false;
   bool _confirming = false;
 
   /// True while the notice is asking "close and update now?".
@@ -319,7 +321,7 @@ class FolderUpdater extends ChangeNotifier {
       _confirming ||
       (_status == UpdateStatus.available &&
           _available != null &&
-          _available!.version != _dismissedVersion);
+          !_laterThisSession);
 
   Timer? _timer;
   Future<void>? _checking;
@@ -432,10 +434,10 @@ class FolderUpdater extends ChangeNotifier {
     _notify();
   }
 
-  /// Hides the notice for the version it is offering. A newer release shows
-  /// it again; the settings panel can still install this one.
+  /// Hides the notice until the app is launched again - a newer release
+  /// found meanwhile waits too. The settings panel can still install it.
   void dismissNotice() {
-    _dismissedVersion = _available?.version;
+    _laterThisSession = true;
     _confirming = false;
     _installFailed = false;
     _notify();
@@ -458,7 +460,7 @@ class FolderUpdater extends ChangeNotifier {
   /// Opens the notice at its "close and update now?" step.
   void requestInstall() {
     if (_available == null || _status == UpdateStatus.installing) return;
-    _dismissedVersion = null;
+    _laterThisSession = false;
     _installFailed = false;
     _confirming = true;
     _notify();

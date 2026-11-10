@@ -651,6 +651,11 @@ class MasterPartLine {
   /// other is that room's. Counted apart so the job can say which it has.
   final double buildingSpareQty;
 
+  /// True for a part only the AV procurement log names - typed there, on no
+  /// room. Listed so it can be tagged and tracked, but not quoted: no money,
+  /// and no unpriced warning. See [ProjectEstimate.handLineKeys].
+  final bool logOnly;
+
   /// The share of the installed units this part's spares would cover.
   ///
   /// 2 spare projectors against 40 installed is 0.05. THE FIGURE THE DECISION
@@ -754,6 +759,7 @@ class MasterPartLine {
     this.spareQty = 0,
     this.spareByRoom = const {},
     this.buildingSpareQty = 0,
+    this.logOnly = false,
     this.catalogLeadDays,
   });
 
@@ -1096,6 +1102,16 @@ class ProjectEstimate {
   /// exactly like a right one.
   final bool mixedCurrency;
 
+  /// Procurement entry id -> the equipment-list part a line typed on the AV
+  /// procurement log became. Lines that follow a room line are not here.
+  final Map<String, String> handLineKeys;
+
+  /// Procurement entry id -> the room line a line TYPED on the log turned out
+  /// to be about: same room, same part by name or model. A log copied in
+  /// from the contractor's sheet is all typed lines; matched, each one counts
+  /// as that room line (its company tags the part) instead of a second row.
+  final Map<String, ProcurementMatch> procurementMatches;
+
   /// NOT const any more. The rollup now HOLDS the lists it used to rebuild on
   /// every read - the cover table, the shelf list, the room codes - because
   /// each of them is a pass over the master list and several of them were
@@ -1127,6 +1143,8 @@ class ProjectEstimate {
     required this.untaggedParts,
     required this.mixedCurrency,
     this.controlGaps = const [],
+    this.handLineKeys = const {},
+    this.procurementMatches = const {},
   });
 
   /// Room id -> the code on its door, `BSS 101`.
@@ -1883,18 +1901,90 @@ ProjectEstimate computeProjectEstimate({
     acc[spare.partKey] = fresh;
   }
 
+  // --- lines typed on the AV procurement log -------------------------------
+  //
+  //  A line added by hand on the log is a piece of kit the job is tracking
+  //  that no room has drawn, so it goes on the equipment list too, to be
+  //  tagged and followed. NOT QUOTED: a log copied in from the contractor's
+  //  sheet carries lines for parts the rooms have since changed, and those
+  //  must not put money back on the job. A name a room already buys just
+  //  points at that part; anything else is its own row, one unit per line.
+  final procurementMatches = matchProcurementLines(project, included);
+  final handLineKeys = <String, String>{};
+  final roomIdByCode = {
+    for (final r in included) r.codeName.trim().toLowerCase(): r.ref.id,
+  };
+  for (final e in project.procurement) {
+    final name = e.device.trim();
+    if (e.linked || e.excluded || name.isEmpty) continue;
+    // About a line a room already has: it is that line, not another part.
+    if (procurementMatches.containsKey(e.id)) continue;
+    final template = library.templateForModel(name);
+    final kind = template == null
+        ? MasterPartKind.other
+        : MasterPartKind.equipment;
+    final key = template == null
+        ? masterPartKey(kind: kind.name, description: name)
+        : masterPartKey(
+            kind: kind.name,
+            partNumber: template.partNumber,
+            model: template.model,
+            manufacturer: template.manufacturer,
+            description: template.model,
+          );
+    handLineKeys[e.id] = key;
+    final room = e.room.trim();
+    final roomId = room.isEmpty
+        ? 'No room'
+        : roomIdByCode[room.toLowerCase()] ?? room;
+    final existing = acc[key];
+    if (existing != null) {
+      // A part the rooms buy: tagged and followed through it, not added to.
+      if (existing.logOnly) existing.addHandLine(roomId);
+      continue;
+    }
+    final fresh = _PartAccumulator.forHandLine(
+      key: key,
+      kind: kind,
+      description: template?.model ?? name,
+      model: template?.model ?? '',
+      partNumber: template?.partNumber ?? '',
+      manufacturer: template?.manufacturer ?? '',
+      category: template?.category ?? e.description.trim(),
+    );
+    fresh
+      ..logOnly = true
+      ..unpriced = false
+      ..catalogLeadDays = template?.leadTimeDays
+      ..addHandLine(roomId);
+    acc[key] = fresh;
+  }
+
   // --- tag and sort --------------------------------------------------------
   final master = <MasterPartLine>[];
   var unpricedParts = 0;
   var untaggedParts = 0;
 
   for (final a in acc.values) {
+    // A line typed in a room with a catalog model but no maker or part
+    // number ('Rolling rack', model 2POSTRACK42) takes them from the
+    // catalog, so it can be found by its maker and the maker's package
+    // rule can see it.
+    if (a.model.trim().isNotEmpty &&
+        (a.manufacturer.trim().isEmpty || a.partNumber.trim().isEmpty)) {
+      final t = library.templateForModel(a.model.trim());
+      if (t != null) {
+        if (a.manufacturer.trim().isEmpty) a.manufacturer = t.manufacturer;
+        if (a.partNumber.trim().isEmpty) a.partNumber = t.partNumber;
+      }
+    }
     final tag = project.rfqForPart(
       a.key,
       manufacturer: a.manufacturer,
       category: a.category,
     );
-    if (tag.rfq == null) untaggedParts++;
+    // Untagged on purpose is a decision, not a gap to warn about.
+    if (tag.rfq == null && tag.source != RfqTagSource.pinned) untaggedParts++;
     if (a.unpriced) unpricedParts++;
 
     master.add(MasterPartLine(
@@ -1922,6 +2012,7 @@ ProjectEstimate computeProjectEstimate({
       spareByRoom: a.spareByRoom,
       buildingSpareQty: a.buildingSpareQty,
       catalogLeadDays: a.catalogLeadDays,
+      logOnly: a.logOnly,
     ));
   }
 
@@ -1999,7 +2090,112 @@ ProjectEstimate computeProjectEstimate({
       for (final room in included)
         for (final gap in room.controlGaps) (room: room, gap: gap),
     ],
+    handLineKeys: handLineKeys,
+    procurementMatches: procurementMatches,
   );
+}
+
+/// A typed procurement line matched to a room line - see
+/// [ProjectEstimate.procurementMatches].
+typedef ProcurementMatch = ({String roomId, String lineKey, String partKey});
+
+/// The share of [words] that are also words of [other].
+double _wordOverlap(Set<String> words, String other) {
+  if (words.isEmpty) return 0;
+  final theirs = _matchText(other).split(' ').toSet();
+  return words.where(theirs.contains).length / words.length;
+}
+
+String _matchText(String s) =>
+    s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+
+/// Matches each typed (unlinked) line on [project]'s procurement log to the
+/// line in the same room it names: the room by its code ('HIL 101'), the
+/// line by its name, its maker and name, or its model inside the typed text.
+/// A room line is matched once, and a line with two equally good answers is
+/// left alone rather than guessed.
+Map<String, ProcurementMatch> matchProcurementLines(
+  BuildingProject project,
+  List<ProjectRoomCost> rooms,
+) {
+  final roomByCode = {
+    for (final r in rooms)
+      if (r.ok) _matchText(r.codeName): r,
+  };
+  final taken = <String>{
+    for (final e in project.procurement)
+      if (e.linked) '${e.roomId}|${e.lineKey}',
+  };
+  final out = <String, ProcurementMatch>{};
+  for (final e in project.procurement) {
+    if (e.linked || e.excluded) continue;
+    final typed = _matchText(e.device);
+    final room = roomByCode[_matchText(e.room)];
+    if (typed.isEmpty || room == null) continue;
+    final padded = ' $typed ';
+    final typedWords = typed.split(' ').toSet();
+    var best = 0.0;
+    ProcurementMatch? pick;
+    MasterPartKind? pickKind;
+    var tied = false;
+    for (final (kind, lines) in [
+      (MasterPartKind.equipment, room.estimate!.equipment),
+      (MasterPartKind.hardware, room.estimate!.hardware),
+      (MasterPartKind.cabling, room.estimate!.cabling),
+      (MasterPartKind.other, room.estimate!.extras),
+    ]) {
+      for (final line in lines) {
+        if (line.qty <= 0 || taken.contains('${room.ref.id}|${line.key}')) {
+          continue;
+        }
+        final desc = _matchText(line.description);
+        final maker = _matchText(line.manufacturer);
+        final model = _matchText(line.model);
+        final overlap = _wordOverlap(typedWords, '$maker $desc $model');
+        var score = 0.0;
+        if (typed == desc || (maker.isNotEmpty && typed == '$maker $desc')) {
+          score = 3;
+        } else if (model.length >= 3 && padded.contains(' $model ')) {
+          score = 2;
+        } else if (desc.length >= 6 &&
+            (padded.contains(' $desc ') || ' $desc '.contains(padded))) {
+          score = 1.5 + overlap / 10;
+        } else if (overlap >= 0.6) {
+          // Worded differently - 'Panasonic Projector - 1' against
+          // 'Projector - 1 (8k lumen)' - but most of the words are there.
+          // The more of them, the better the match.
+          score = 1 + overlap / 2;
+        }
+        if (score == 0 || score < best) continue;
+        final match = (
+          roomId: room.ref.id,
+          lineKey: line.key,
+          partKey: masterPartKey(
+            kind: kind.name,
+            partNumber: line.partNumber,
+            model: line.model,
+            manufacturer: line.manufacturer,
+            description: line.description,
+          ),
+        );
+        if (score > best) {
+          best = score;
+          pick = match;
+          pickKind = kind;
+          tied = false;
+        } else if (pick?.lineKey != line.key && kind == pickKind) {
+          // Equally good in the same section: no telling which. Across
+          // sections the device wins over its box or bracket, as it came
+          // first.
+          tied = true;
+        }
+      }
+    }
+    if (pick == null || tied) continue;
+    out[e.id] = pick;
+    taken.add('${pick.roomId}|${pick.lineKey}');
+  }
+  return out;
 }
 
 /// Master list order: section, then manufacturer, then description.
@@ -2067,6 +2263,17 @@ class _PartAccumulator {
           (spareByRoom[spare.roomId] ?? 0) + spare.qty;
     }
   }
+  /// Set on a part only the AV procurement log names - see
+  /// [MasterPartLine.logOnly].
+  bool logOnly = false;
+
+  /// Takes one line typed on the AV procurement log onto a log-only part:
+  /// one unit, in [roomId] (a room's id, or the room as typed). No money.
+  void addHandLine(String roomId) {
+    qty += 1;
+    qtyByRoom[roomId] = (qtyByRoom[roomId] ?? 0) + 1;
+  }
+
   final Map<String, int> undrivenByRoom = {};
   final Map<String, Set<String>> lineKeysByRoom = {};
 
@@ -2101,6 +2308,17 @@ class _PartAccumulator {
         partNumber = spare.partNumber,
         manufacturer = spare.manufacturer,
         category = '';
+
+  /// For a line typed on the AV procurement log that no room carries.
+  _PartAccumulator.forHandLine({
+    required this.key,
+    required this.kind,
+    required this.description,
+    required this.model,
+    required this.partNumber,
+    required this.manufacturer,
+    required this.category,
+  });
 
   void add(
     String roomId,

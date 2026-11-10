@@ -253,4 +253,49 @@ void main() {
       );
     });
   });
+
+  group('who buys', () {
+    test('sorts by company, unset last either way', () {
+      final a = part('Amp');
+      final b = part('Bracket');
+      final c = part('Camera');
+      final companies = {a.key: 'OFCI', c.key: 'CFCI'};
+      List<String> by(bool up) => [
+        for (final l in sortMasterParts(
+          [a, b, c],
+          key: PartSortKey.company,
+          ascending: up,
+          project: BuildingProject(),
+          companies: companies,
+        ))
+          l.description,
+      ];
+      expect(by(true), ['Camera', 'Amp', 'Bracket']);
+      expect(by(false), ['Amp', 'Camera', 'Bracket']);
+    });
+  });
+
+  group('ordered and delivered', () {
+    test('ordered sorts by date, delivered by share, the rest last', () {
+      final a = part('Amp', qty: 4);
+      final b = part('Bracket', qty: 4);
+      final c = part('Camera', qty: 4);
+      final project = BuildingProject(
+        partOrders: {
+          a.key: PartOrder(orderedOn: DateTime(2027, 3, 1)),
+          c.key: PartOrder(orderedOn: DateTime(2027, 1, 1)),
+        },
+        deliveries: [
+          ProjectDelivery(id: 'd1', partKey: a.key, qty: 1),
+          ProjectDelivery(id: 'd2', partKey: b.key, qty: 4),
+        ],
+      );
+      expect(namesOf([a, b, c], key: PartSortKey.ordered, project: project),
+          ['Camera', 'Amp', 'Bracket']);
+      expect(
+          namesOf([a, b, c],
+              key: PartSortKey.delivered, ascending: false, project: project),
+          ['Bracket', 'Amp', 'Camera']);
+    });
+  });
 }

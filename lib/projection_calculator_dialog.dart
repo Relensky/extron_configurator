@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
@@ -255,6 +256,14 @@ class _ProjectionCalculatorDialogState
   /// or dragging the projector.
   final Set<TextEditingController> _locked = {};
 
+  /// Choices locked by hand: the projector picked, zoom, aspect, size by and
+  /// the screen-size-or-distance mode.
+  final Set<String> _lockedOpts = {};
+  static const _optNames = ['spec', 'zoom', 'aspect', 'sizeBy', 'mode'];
+
+  /// The settings as last kept, to ask about unsaved changes on Close.
+  String _keptSnapshot = '';
+
   /// Who locked these numbers in. While set, nothing here can be changed.
   late SettingsApproval? _approval = widget.approval;
   bool get _frozen => _approval != null;
@@ -276,6 +285,9 @@ class _ProjectionCalculatorDialogState
   /// so a later change of units reads them right.
   Map<String, dynamic> get inputsJson => {
     'spec': _spec,
+    // By name too: the lens list can change order.
+    if (_spec >= 0 && _spec < widget.specs.length)
+      'specSource': widget.specs[_spec].source,
     for (final e in _boxes.entries) e.key: e.value.text,
     'fromDistance': _fromDistance,
     'aspect': _aspect.label,
@@ -297,8 +309,94 @@ class _ProjectionCalculatorDialogState
         'ceiling': _ceiling,
       }.entries)
         if (_locked.contains(e.value)) e.key,
+      ..._optNames.where(_lockedOpts.contains),
     ],
   };
+
+  bool _optLocked(String name) => _lockedOpts.contains(name) || _frozen;
+
+  /// Every box and choice, so Lock all can lock or unlock them together.
+  List<TextEditingController> get _allBoxes =>
+      [..._boxes.values, _size, _distance, _bottom, _ceiling];
+
+  bool get _allLocked =>
+      _allBoxes.every(_locked.contains) &&
+      _optNames.every(_lockedOpts.contains);
+
+  void _lockAll(bool lock) {
+    if (lock) {
+      _locked.addAll(_allBoxes);
+      _lockedOpts.addAll(_optNames);
+    } else {
+      _locked.clear();
+      _lockedOpts.clear();
+    }
+  }
+
+  /// Keeps the settings with the device and remembers them as saved.
+  void _keep(SettingsApproval? approval) {
+    final inputs = inputsJson;
+    widget.onKeep?.call(inputs, approval);
+    _keptSnapshot = jsonEncode(inputs);
+  }
+
+  bool get _unsaved =>
+      widget.onKeep != null && !_frozen && jsonEncode(inputsJson) != _keptSnapshot;
+
+  /// Close, asking first when there are unsaved changes.
+  Future<void> _close() async {
+    if (_unsaved) {
+      final save = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Save changes?'),
+          content: const Text(
+            'Save these settings with this device in the project?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              key: const ValueKey('projection_discard'),
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text("Don't save"),
+            ),
+            ElevatedButton(
+              key: const ValueKey('projection_close_save'),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      if (save == null || !mounted) return;
+      if (save) _keep(null);
+    }
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  /// A lock button for a choice that is not a text box.
+  Widget _optLock(String name, String what) {
+    final locked = _lockedOpts.contains(name);
+    return IconButton(
+      key: ValueKey('lock_opt_$name'),
+      iconSize: 15,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      style: const ButtonStyle(
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      tooltip: locked ? 'Unlock the $what' : 'Lock the $what',
+      icon: Icon(locked ? Icons.lock : Icons.lock_open_outlined),
+      onPressed: _frozen
+          ? null
+          : () => setState(() {
+              if (!_lockedOpts.remove(name)) _lockedOpts.add(name);
+            }),
+    );
+  }
 
   /// Puts [kept] back in the boxes.
   void _restore(Map<String, dynamic> kept) {
@@ -327,8 +425,16 @@ class _ProjectionCalculatorDialogState
     _bottom.text = _lengthText(was.b, _distanceUnit);
     _ceiling.text = _lengthText(was.c, _distanceUnit);
     _size.text = _lengthText(was.s, _sizeUnit, places: 1);
+    // The lens by name first, then by its place in the list.
+    final byName = widget.specs.indexWhere(
+      (s) => s.source == kept['specSource'],
+    );
     final spec = (kept['spec'] as num?)?.toInt() ?? -1;
-    _spec = spec < widget.specs.length ? spec : -1;
+    _spec = byName >= 0
+        ? byName
+        : kept['specSource'] == null && spec < widget.specs.length
+        ? spec
+        : -1;
     for (final e in _boxes.entries) {
       if (kept[e.key] is String) e.value.text = kept[e.key] as String;
     }
@@ -361,6 +467,7 @@ class _ProjectionCalculatorDialogState
     };
     for (final n in (kept['locked'] as List?) ?? const []) {
       if (names[n] case final c?) _locked.add(c);
+      if (_optNames.contains(n)) _lockedOpts.add(n as String);
     }
   }
 
@@ -392,6 +499,7 @@ class _ProjectionCalculatorDialogState
     if (widget.roomCeilingFt > 0) {
       _ceiling.text = _lengthText(widget.roomCeilingFt, _distanceUnit);
     }
+    _keptSnapshot = jsonEncode(inputsJson);
   }
 
   /// A box typed in [unit], in feet. In feet it takes feet and inches
@@ -664,7 +772,7 @@ class _ProjectionCalculatorDialogState
                 onChanged: (id) {
                   if (id == null || id == widget.currentId) return;
                   // This one as it stands, kept before the other opens.
-                  if (!_frozen) widget.onKeep?.call(inputsJson, null);
+                  if (!_frozen) _keep(null);
                   Navigator.of(context).pop();
                   widget.onSwitch!(id);
                 },
@@ -742,9 +850,9 @@ class _ProjectionCalculatorDialogState
             TextButton(
               key: const ValueKey('projection_keep'),
               onPressed: () {
-                widget.onKeep!(inputsJson, null);
+                _keep(null);
                 ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                  const SnackBar(content: Text('Kept with this device.')),
+                  const SnackBar(content: Text('Saved with this device in the project.')),
                 );
               },
               child: const Text('Save'),
@@ -758,7 +866,8 @@ class _ProjectionCalculatorDialogState
           ],
         ],
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          key: const ValueKey('projection_close'),
+          onPressed: _close,
           child: const Text('Close'),
         ),
         if (widget.applyLabel != null)
@@ -766,7 +875,7 @@ class _ProjectionCalculatorDialogState
             key: const ValueKey('projection_apply'),
             onPressed: canApply
                 ? () {
-                    widget.onKeep?.call(inputsJson, _approval);
+                    _keep(_approval);
                     Navigator.of(context).pop(
                       ProjectionResult(
                         distanceFt: distance,
@@ -815,7 +924,7 @@ class _ProjectionCalculatorDialogState
       email: widget.approverEmail.trim(),
       at: DateTime.now(),
     );
-    widget.onKeep!(inputsJson, approval);
+    _keep(approval);
     setState(() => _approval = approval);
   }
 
@@ -845,7 +954,7 @@ class _ProjectionCalculatorDialogState
       ),
     );
     if (ok != true || !mounted) return;
-    widget.onKeep!(inputsJson, null);
+    _keep(null);
     setState(() => _approval = null);
   }
 
@@ -921,9 +1030,30 @@ class _ProjectionCalculatorDialogState
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('Projector', style: theme.textTheme.titleSmall),
+        Row(
+          children: [
+            Expanded(
+              child: Text('Projector', style: theme.textTheme.titleSmall),
+            ),
+            // Every number and choice here at once.
+            TextButton.icon(
+              key: const ValueKey('projection_lock_all'),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+              ),
+              icon: Icon(
+                _allLocked ? Icons.lock_open_outlined : Icons.lock_outline,
+                size: 16,
+              ),
+              label: Text(_allLocked ? 'Unlock all' : 'Lock all'),
+              onPressed: () => setState(() => _lockAll(!_allLocked)),
+            ),
+          ],
+        ),
         const SizedBox(height: 6),
-        DropdownButtonFormField<int>(
+        Row(
+          children: [
+            Expanded(child: DropdownButtonFormField<int>(
           key: const ValueKey('projection_spec'),
           initialValue: _spec,
           isExpanded: true,
@@ -947,7 +1077,12 @@ class _ProjectionCalculatorDialogState
               ),
             const DropdownMenuItem(value: -1, child: Text('Typed in')),
           ],
-          onChanged: (v) => setState(() => _useSpec(v ?? -1)),
+          onChanged: _optLocked('spec')
+              ? null
+              : (v) => setState(() => _useSpec(v ?? -1)),
+        )),
+            _optLock('spec', 'projector and lens'),
+          ],
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -978,7 +1113,14 @@ class _ProjectionCalculatorDialogState
         if (zoomed) ...[
           const SizedBox(height: 8),
           // The ratio is typed; the slider runs the lens from short to long.
-          NumberDial(
+          Row(
+            children: [
+              Expanded(
+                child: AbsorbPointer(
+                  absorbing: _optLocked('zoom'),
+                  child: Opacity(
+                    opacity: _optLocked('zoom') ? 0.6 : 1,
+                    child: NumberDial(
             sliderKey: const ValueKey('projection_zoom'),
             label: 'Zoom',
             value: _zoom,
@@ -994,15 +1136,29 @@ class _ProjectionCalculatorDialogState
             sliderWidth: null,
             onChanged: (v) => setState(() => _zoom = v),
           ),
+                  ),
+                ),
+              ),
+              _optLock('zoom', 'zoom'),
+            ],
+          ),
         ],
         _heading(theme, 'Screen'),
-        SegmentedButton<bool>(
-          segments: const [
-            ButtonSegment(value: false, label: Text('From screen size')),
-            ButtonSegment(value: true, label: Text('From distance')),
+        Row(
+          children: [
+            Flexible(child: SegmentedButton<bool>(
+              key: const ValueKey('projection_mode'),
+              segments: const [
+                ButtonSegment(value: false, label: Text('From screen size')),
+                ButtonSegment(value: true, label: Text('From distance')),
+              ],
+              selected: {_fromDistance},
+              onSelectionChanged: _optLocked('mode')
+                  ? null
+                  : (s) => setState(() => _fromDistance = s.first),
+            )),
+            _optLock('mode', 'screen size or distance choice'),
           ],
-          selected: {_fromDistance},
-          onSelectionChanged: (s) => setState(() => _fromDistance = s.first),
         ),
         const SizedBox(height: 10),
         Wrap(
@@ -1010,9 +1166,13 @@ class _ProjectionCalculatorDialogState
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.end,
           children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
             SizedBox(
-              width: 110,
+              width: 100,
               child: DropdownButtonFormField<ScreenAspect>(
+                key: const ValueKey('projection_aspect'),
                 initialValue: _aspect,
                 isExpanded: true,
                 decoration: const InputDecoration(
@@ -1023,10 +1183,18 @@ class _ProjectionCalculatorDialogState
                   for (final a in kScreenAspects)
                     DropdownMenuItem(value: a, child: Text(a.label)),
                 ],
-                onChanged: (v) => setState(() => _aspect = v ?? _aspect),
+                onChanged: _optLocked('aspect')
+                    ? null
+                    : (v) => setState(() => _aspect = v ?? _aspect),
               ),
             ),
+                _optLock('aspect', 'aspect'),
+              ],
+            ),
             if (!_fromDistance) ...[
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
               SizedBox(
                 width: 120,
                 child: DropdownButtonFormField<_SizeBy>(
@@ -1047,8 +1215,13 @@ class _ProjectionCalculatorDialogState
                       child: Text('Height'),
                     ),
                   ],
-                  onChanged: (v) => setState(() => _sizeBy = v ?? _sizeBy),
+                  onChanged: _optLocked('sizeBy')
+                      ? null
+                      : (v) => setState(() => _sizeBy = v ?? _sizeBy),
                 ),
+              ),
+                  _optLock('sizeBy', 'size by'),
+                ],
               ),
               _field(
                 _size,
@@ -1086,7 +1259,7 @@ class _ProjectionCalculatorDialogState
         // the Aspect box.
         if (_fromDistance && (widget.distanceNote ?? '').isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 4, left: 122),
+            padding: const EdgeInsets.only(top: 4, left: 140),
             child: Text(
               widget.distanceNote!,
               style: theme.textTheme.bodySmall?.copyWith(
@@ -1475,7 +1648,7 @@ class _ProjectionCalculatorDialogState
                       widget.onSaveDistance!(distance);
                       // And everything else set up for it, so it opens
                       // again as it was.
-                      widget.onKeep?.call(inputsJson, _approval);
+                      _keep(_approval);
                       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                         SnackBar(
                           content: Text(

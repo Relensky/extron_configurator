@@ -4,6 +4,7 @@ import 'package:extron_configurator/team/chat_format.dart';
 import 'package:extron_configurator/team/team_chat.dart';
 import 'package:extron_configurator/team/team_claims.dart';
 import 'package:extron_configurator/team/team_claims_widgets.dart';
+import 'package:extron_configurator/team/team_host.dart';
 import 'package:extron_configurator/team/team_presence.dart';
 import 'package:extron_configurator/team/team_widgets.dart';
 import 'package:flutter/material.dart';
@@ -174,8 +175,16 @@ void main() {
         [('bob', false), ('alice', true)]);
     await tester.tap(find.byKey(const ValueKey('working_on_history')));
     await tester.pump();
-    expect(find.text('Alice tagged you on ARTS 209'), findsOneWidget);
-    expect(find.text('You took yourself off ARTS 209'), findsOneWidget);
+    // Each change a row: who, what they did, and the item.
+    final list = find.byKey(const ValueKey('working_on_history_list'));
+    expect(find.descendant(of: list, matching: find.text('Alice put you on ')),
+        findsOneWidget);
+    expect(
+        find.descendant(
+            of: list, matching: find.text('You took yourself off ')),
+        findsOneWidget);
+    expect(find.descendant(of: list, matching: find.text('ARTS 209')),
+        findsNWidgets(2));
 
     await tester.runAsync(() async => bobChat.dispose());
     a.dispose();
@@ -205,5 +214,99 @@ void main() {
         shown.whereType<TextSpan>().every((s) =>
             (s.text ?? '').isEmpty || s.style?.color == Colors.transparent),
         isTrue);
+  });
+
+  testWidgets('the team chart is a compact table with the activity under the '
+      'name; the list has every tag as a link; History folded by day',
+      (tester) async {
+    final a = TeamClaims(
+        identity: const TeamIdentity(user: 'alice', machine: 'pc1'),
+        myName: () => 'Alice',
+        watch: false);
+    await tester.runAsync(() async {
+      await a.attach(dir.path);
+      await a.set(
+          kind: 'room', id: 'ARTS 209', label: 'ARTS 209', who: 'alice',
+          whoName: 'Alice', on: true);
+      await a.set(
+          kind: 'ticket', id: '7', label: 'Ticket #7', who: 'carol',
+          whoName: 'Carol', on: true);
+      await a.refresh();
+    });
+    Team.claims = a;
+    final opened = <String>[];
+    TeamHost.openClaim = (kind, id, label) => opened.add('$kind|$id');
+    TeamHost.canOpenClaim = (kind) => kind == 'room';
+    addTearDown(() {
+      Team.claims = null;
+      TeamHost.openClaim = null;
+      TeamHost.canOpenClaim = null;
+    });
+
+    final now = DateTime.now();
+    final alice = TeamPresence(
+        user: 'alice', machine: 'pc1', since: now, heartbeat: now,
+        activity: 'Composing a notification email');
+    final dan = TeamPresence(
+        user: 'dan', machine: 'pc4', since: now, heartbeat: now,
+        app: 'configurator');
+    await tester.binding.setSurfaceSize(const Size(1100, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var closed = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: SingleChildScrollView(
+                child: Column(children: [
+      TeamPresenceChart(meUser: 'alice', people: [
+        [alice],
+        [dan],
+      ]),
+      TeamWorkingOnList(beforeOpen: () => closed++),
+    ])))));
+    expect(tester.takeException(), isNull);
+    // A table, a column for each of the three apps.
+    expect(find.byType(Table), findsOneWidget);
+    expect(find.text('CTS Dashboard'), findsOneWidget);
+    expect(find.text('Room Config Builder'), findsOneWidget);
+    expect(find.text('Instructor Contact'), findsOneWidget);
+    // The activity is under Alice's name; her tags are not in the chart.
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('team_person_alice')),
+            matching:
+                find.byKey(const ValueKey('team_person_activity_alice'))),
+        findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(Table), matching: find.text('ARTS 209')),
+        findsNothing);
+    // Everyone's tags are in the list, under 'Working on'.
+    expect(find.text('Working on'), findsOneWidget);
+    expect(find.text('ARTS 209'), findsOneWidget);
+    expect(find.text('Ticket #7'), findsOneWidget);
+    // A room is a link (this app opens rooms); a ticket is plain text here.
+    final room = a.current.firstWhere((c) => c.kind == 'room');
+    final ticket = a.current.firstWhere((c) => c.kind == 'ticket');
+    expect(find.byKey(ValueKey('working_on_link_${ticket.key}')), findsNothing);
+    await tester.tap(find.byKey(ValueKey('working_on_link_${room.key}')));
+    await tester.pump();
+    expect(opened, ['room|ARTS 209']);
+    expect(closed, 1);
+    // History is folded until clicked, then opens below, by day.
+    expect(find.byKey(const ValueKey('working_on_history_list')), findsNothing);
+    expect(find.text('Your tag history'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('working_on_history')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('working_on_history_list')),
+        findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('working_on_history_list')),
+            matching: find.text('Today')),
+        findsOneWidget);
+    expect(find.text('You put yourself on '), findsOneWidget);
+    expect(find.text('ARTS 209'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+    a.dispose();
   });
 }

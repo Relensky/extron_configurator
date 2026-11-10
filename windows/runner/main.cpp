@@ -35,6 +35,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
+  // Every plugin DLL has loaded by now; put the crash filter back on top.
+  ReinstallCrashFilter();
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {

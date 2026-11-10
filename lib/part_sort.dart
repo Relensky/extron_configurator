@@ -43,6 +43,15 @@ enum PartSortKey {
   unit,
   extended,
   vendor,
+
+  /// Who buys it - OFCI, CFCI, CTS - off the procurement log.
+  company,
+
+  /// When it was ordered; not ordered goes last.
+  ordered,
+
+  /// How much of it has arrived, as a share of what is needed.
+  delivered,
   leadTime,
   orderBy,
 }
@@ -55,6 +64,9 @@ const Map<PartSortKey, String> kPartSortLabels = {
   PartSortKey.unit: 'Unit',
   PartSortKey.extended: 'Extended',
   PartSortKey.vendor: 'Package',
+  PartSortKey.company: 'Who buys',
+  PartSortKey.ordered: 'Ordered',
+  PartSortKey.delivered: 'Delivered',
   PartSortKey.leadTime: 'Lead time',
   PartSortKey.orderBy: 'Order by',
 };
@@ -87,6 +99,9 @@ List<MasterPartLine> sortMasterParts(
   required bool ascending,
   required BuildingProject project,
   DateTime? asOf,
+
+  /// Part key -> who buys it, for [PartSortKey.company].
+  Map<String, String> companies = const {},
 }) {
   if (key == PartSortKey.natural) return List.of(lines);
 
@@ -115,6 +130,16 @@ List<MasterPartLine> sortMasterParts(
         // than an empty string that would sort first and look deliberate.
         final name = line.rfq?.name.trim() ?? '';
         return name.isEmpty ? null : name.toLowerCase();
+      case PartSortKey.company:
+        // Unset goes last, like an untagged package.
+        final c = companies[line.key]?.trim() ?? '';
+        return c.isEmpty ? null : c.toLowerCase();
+      case PartSortKey.ordered:
+        final on = project.orderForPart(line.key)?.orderedOn;
+        return on?.millisecondsSinceEpoch.toDouble();
+      case PartSortKey.delivered:
+        if (line.qty <= 0) return null;
+        return project.deliveredOf(line.key, line.qty) / line.qty;
       case PartSortKey.leadTime:
         final days = schedulePart(
           line: line,

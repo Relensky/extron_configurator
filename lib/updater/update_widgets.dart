@@ -3,7 +3,7 @@
 //
 //   * [UpdateNoticeHost] wraps the app (MaterialApp.builder) and shows a small
 //     card in the corner when a newer release is in the folder. It never
-//     blocks anything: "Later" hides it for that version, it waits to appear
+//     blocks anything: "Later" hides it until the next launch, it waits to appear
 //     while the updater is marked userBusy (once up, it stays), and nothing
 //     installs until the user presses Close and Update - one click.
 //   * [UserActivityWatcher] marks the updater busy while someone is typing or
@@ -204,9 +204,8 @@ class _UpdateCardState extends State<_UpdateCard> {
       title = 'Update available';
       body = '${u.appName} ${available.version} is ready to install. '
           'You have ${u.currentVersion}.';
-      // ONE CLICK: Close and Update downloads, closes and reopens on the new
-      // version straight away (unsaved work is still asked about first - see
-      // confirmClose). Shortcuts are in the settings section.
+      // One click installs: Close and Update goes straight to install().
+      // Shortcuts are in the settings section.
       actions = [
         TextButton(onPressed: u.dismissNotice, child: const Text('Later')),
         FilledButton(
@@ -560,8 +559,9 @@ class _UpdateSettingsSectionState extends State<UpdateSettingsSection> {
                     label: const Text('Check Now'),
                     onPressed: busy ? null : () => unawaited(u.checkNow()),
                   ),
+                  // One click: closes, installs and reopens. The options
+                  // step (shortcuts) stays one link away.
                   if (u.available != null) ...[
-                    // One click: closes, installs and reopens.
                     FilledButton.icon(
                       key: const ValueKey('settings_close_and_update'),
                       icon: const Icon(Icons.system_update_alt, size: 18),

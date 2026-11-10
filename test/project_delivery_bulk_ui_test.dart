@@ -130,9 +130,20 @@ void main() {
       .text;
 
   Future<void> pickPart(WidgetTester tester, String description) async {
-    await tester.tap(find.byKey(const ValueKey('delivery_part')));
+    // Typed into the What arrived box, then picked off its drop-down.
+    final box = find.byKey(const ValueKey('delivery_part_search'));
+    await tester.ensureVisible(box);
+    await tester.tap(box);
+    await tester.enterText(box, description);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(description).last);
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('delivery_part_options')),
+            matching: find.text(description),
+          )
+          .first,
+    );
     await tester.pumpAndSettle();
   }
 

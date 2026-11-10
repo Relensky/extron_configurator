@@ -1,8 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:path/path.dart' as path;
 
 import 'name_colors.dart' show nameSheetTint, normalizedName;
 import 'report_tools.dart';
-import 'xlsx_writer.dart' show XlsxSheet, XlsxTint;
+import 'xlsx_writer.dart' show XlsxRowStyle, XlsxSheet, XlsxTint;
 
 /// ============================================================================
 ///  WHO FURNISHES IT, WHO INSTALLS IT
@@ -737,6 +739,12 @@ List<ReportSection> responsibilityMatrixSections(
 /// The matrix as one workbook sheet - the same sheet whether it is exported
 /// from the Responsibility page or written into the project workbook. Null
 /// when there is nothing on the matrix.
+///
+/// LAID OUT LIKE THE PAGE, for whoever reads the Google Sheet: each scope
+/// item is a column with who furnishes and who installs it under its name,
+/// each room is a row (banded), words where a count would be are washed
+/// amber, and the totals run along the foot. The description of the work and
+/// what is still to be agreed follow as tables underneath.
 XlsxSheet? responsibilityMatrixSheet(
   List<ResponsibilityItem> items, {
   required String projectName,
@@ -745,18 +753,113 @@ XlsxSheet? responsibilityMatrixSheet(
   String sheetName = 'Responsibility',
   DateTime? generated,
 }) {
-  final sections = responsibilityMatrixSections(
-    items,
-    roomNames: roomNames,
-    partyColors: partyColors,
-  );
-  if (sections.isEmpty) return null;
-  return buildStackedReportSheet(
+  if (items.isEmpty) return null;
+  int? colorOf(String party) => partyColors[responsibilityPartyKey(party)];
+
+  // The rest of the document - the prose, and what is still open - as the
+  // stacked tables it always was, under the matrix.
+  final rest = buildStackedReportSheet(
     sheetName: sheetName,
-    title: projectName.trim().isEmpty
+    title: '',
+    sections: responsibilityMatrixSections(
+      items,
+      roomNames: roomNames,
+      partyColors: partyColors,
+    ).skip(1).toList(),
+    generated: generated,
+  );
+
+  final width = items.length + 2;
+  List<dynamic> pad(List<dynamic> row) => [
+    ...row,
+    ...List.filled(math.max(0, width - row.length), ''),
+  ];
+  final rows = <List<dynamic>>[];
+  final styles = <int, int>{};
+
+  styles[0] = XlsxRowStyle.title;
+  rows.add(pad([
+    projectName.trim().isEmpty
         ? 'Roles and responsibilities'
         : '${projectName.trim()} - roles and responsibilities',
-    sections: sections,
-    generated: generated,
+  ]));
+  rows.add(['Generated ${reportTimestamp(generated)}']);
+  rows.add([]);
+
+  // THE HEADS: the scope across the top, the two parties under it.
+  styles[rows.length] = XlsxRowStyle.header;
+  rows.add(['Scope', for (final i in items) i.scope, 'Total']);
+  rows.add([
+    'Furnished by',
+    for (final i in items)
+      responsibilityPartyCell(i.furnishedBy, color: colorOf(i.furnishedBy)),
+    '',
+  ]);
+  rows.add([
+    'Installed by',
+    for (final i in items)
+      responsibilityPartyCell(i.installedBy, color: colorOf(i.installedBy)),
+    '',
+  ]);
+  if (items.any((i) => i.neededBy.trim().isNotEmpty)) {
+    rows.add(['Equipment needed by', for (final i in items) i.neededBy, '']);
+  }
+
+  // THE ROOMS, one a row, banded.
+  if (roomNames.isNotEmpty) {
+    styles[rows.length] = XlsxRowStyle.header;
+    rows.add(pad(['Room']));
+    for (final (n, room) in roomNames.indexed) {
+      if (n.isOdd) styles[rows.length] = XlsxRowStyle.zebra;
+      rows.add([
+        room.name,
+        for (final i in items) responsibilityQtyCell(i, room.id),
+        responsibilityTotalText(
+          items.fold<double>(0, (sum, i) => sum + (i.qtyByRoom[room.id] ?? 0)),
+          responsibilityNotesInRoom(items, room.id),
+        ),
+      ]);
+    }
+    // THE TOTALS along the foot, each saying what it could not add.
+    final noted = items.fold<int>(0, (sum, i) => sum + i.noteCount);
+    styles[rows.length] = XlsxRowStyle.header;
+    rows.add([
+      noted > 0 ? 'Totals (+$noted noted)' : 'Totals',
+      for (final i in items) responsibilityTotalText(i.total, i.noteCount),
+      responsibilityTotalText(
+        items.fold<double>(0, (sum, i) => sum + i.total),
+        noted,
+      ),
+    ]);
+  }
+
+  // The stacked tables, moved down under the matrix: their title and stamp
+  // rows are dropped, and every row style and merge shifted with them.
+  const skip = 2;
+  final shift = rows.length - skip;
+  for (final e in rest.rowStyles.entries) {
+    if (e.key >= skip) styles[e.key + shift] = e.value;
+  }
+  rows.addAll(rest.rows.skip(skip));
+  final merges = [
+    for (final m in rest.merges)
+      m.replaceAllMapped(
+        RegExp(r'([A-Z]+)(\d+)'),
+        (x) => '${x[1]}${int.parse(x[2]!) + shift}',
+      ),
+  ];
+
+  return XlsxSheet(
+    name: sheetName,
+    rows: rows,
+    rowStyles: styles,
+    overflowRows: {
+      0,
+      1,
+      for (final r in rest.overflowRows)
+        if (r >= skip) r + shift,
+    },
+    merges: merges,
+    freezeColumns: 1,
   );
 }

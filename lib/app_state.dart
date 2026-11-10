@@ -47,6 +47,7 @@ import 'labor_rates.dart';
 import 'model_swap.dart' as swap;
 import 'av_flow_swap_dialogs.dart' show applyModelSwap, applyControlSwap;
 import 'procurement_log.dart';
+import 'procurement_sync.dart' show liveProcurement, swapProcurementModel;
 import 'project_estimate.dart';
 import 'project_budget.dart';
 import 'class_schedule.dart';
@@ -56,9 +57,12 @@ import 'project_swap.dart';
 import 'project_swap.dart' as project_swap
     show applyProjectRename, planProjectRename, swapModelInRoomFiles;
 import 'keyboard_shortcuts.dart';
+import 'settings_roaming.dart';
 import 'layout_tools.dart';
 import 'room_locations.dart';
 import 'placed_devices.dart';
+import 'wall_elevation.dart';
+import 'team_tag_file.dart';
 import 'unit_numbering.dart';
 import 'recent_files.dart';
 import 'room_presets.dart';
@@ -130,6 +134,8 @@ enum AppTab {
   schematic('schematic'),
   avFlow('av_flow'),
   floorPlan('floor_plan'),
+  // Walls straight on, with what is mounted on them.
+  walls('walls'),
   cabling('cabling'),
   racks('racks'),
   // Pictures of the room as it is, kept in the room's own folder.
@@ -777,6 +783,49 @@ class AppStateProvider extends ChangeNotifier {
   /// on" tag here is the same room there. '' with no room open.
   String get teamRoomId => teamRoomIdFor(roomConfig);
 
+  /// What a "working on" tag on the open room links to - see
+  /// team_tag_file.dart. A room open from this PC is looked up in the shared
+  /// Projects folder after the frame; until then its tag has no file.
+  TeamTagTarget get teamTagTarget {
+    final room = teamRoomId;
+    final key = '$room|$currentProjectPath|$currentConfigPath';
+    TeamTagTarget now(String sharedCopy) => teamTagTargetOf(
+      roomId: room,
+      projectPath: currentProjectPath,
+      projectName: projectDisplayName,
+      configPath: currentConfigPath,
+      sharedCopy: sharedCopy,
+    );
+    final quick = now('');
+    // On the share already, or nothing to look for.
+    if (quick.note.isEmpty || room.isEmpty) return quick;
+    if (_teamTagKey == key) return now(_teamTagCopy);
+    if (_teamTagLooking != key) {
+      _teamTagLooking = key;
+      () async {
+        // Never notify inside the build that asked.
+        await Future<void>.microtask(() {});
+        if (!runningUnderTest) await loadMappedDrives();
+        final copy = runningUnderTest
+            ? ''
+            : await findSharedRoomConfig(
+                path.dirname(kSharedRootFolder),
+                room,
+                teamRoomIdFor,
+              );
+        if (_teamTagLooking != key) return;
+        _teamTagKey = key;
+        _teamTagCopy = copy;
+        notifyListeners();
+      }();
+    }
+    return quick;
+  }
+
+  String _teamTagKey = '';
+  String _teamTagLooking = '';
+  String _teamTagCopy = '';
+
   /// [teamRoomId] for any room's config.
   String teamRoomIdFor(Map<String, dynamic> config) {
     if (config.isEmpty) return '';
@@ -1140,6 +1189,7 @@ class AppStateProvider extends ChangeNotifier {
     final result = Completer<bool>();
     _passwordWrites = _passwordWrites.then((_) async {
       result.complete(await _secrets.write(SecretKeys.processorPassword, value));
+      if (_roamingStarted) settingsRoaming.schedulePush();
     });
     return result.future;
   }
@@ -1881,10 +1931,109 @@ class AppStateProvider extends ChangeNotifier {
       // The per-user settings folder doesn't exist on a first launch.
       await file.parent.create(recursive: true);
       await writeFileSafely(file.path, encoder.convert(data));
+      // [SETTINGS ROAMING]: the change goes to the share in a moment.
+      if (_roamingStarted) settingsRoaming.schedulePush();
     } catch (e, stack) {
       AppLogger.logError(
           'Failed to save settings to $settingsFilePath', e, stack);
     }
+  }
+
+  // ---------------------------------------------------------------------
+  //  [SETTINGS ROAMING]: your settings on the share, under your Windows
+  //  login - <team folder>\users\<login>\room_config_builder_settings.json
+  //  (settings_roaming.dart, the same file as the dashboard's). Covers
+  //  app_config.json and the processor password in the keystore; the Google
+  //  client secret and the password are encrypted to your own account
+  //  there. Pulled at start-up before the file is read, pushed a few
+  //  seconds after each save.
+  // ---------------------------------------------------------------------
+
+  /// app_config.json keys that belong to this PC, never to the share.
+  static const Set<String> kMachineOnlySettingKeys = {
+    '__readme',
+    'initialSetupComplete', // this PC's own first-run setup
+    'teamFolderPath', // where the settings are kept - must be found first
+    'logFolderPath', // this PC's log folder
+    'recentFiles', // what this PC opened
+  };
+
+  static bool settingKeyRoams(String key, Object? value) =>
+      !kMachineOnlySettingKeys.contains(key) &&
+      !SettingsRoaming.isLocalDrivePath(value);
+
+  late final SettingsRoaming settingsRoaming = SettingsRoaming(
+    app: 'room_config_builder',
+    files: [
+      RoamingFile(
+        id: 'app_config',
+        path: _resolveSettingsFilePath(),
+        roams: settingKeyRoams,
+        plainSecretKeys: const {'googleClientSecret'},
+      ),
+      RoamingFile(
+        id: 'keystore',
+        path: 'keystore',
+        plainSecretKeys: const {'processorPassword'},
+        load: () async {
+          final pw = await _secrets.read(SecretKeys.processorPassword) ?? '';
+          return {if (pw.isNotEmpty) 'processorPassword': pw};
+        },
+        store: (set, remove) async {
+          final pw = set['processorPassword'];
+          if (pw is String) {
+            await _secrets.write(SecretKeys.processorPassword, pw);
+          }
+          if (remove.contains('processorPassword')) {
+            await _secrets.delete(SecretKeys.processorPassword);
+          }
+        },
+      ),
+    ],
+    statePath: path.join(_userSettingsDir(), 'settings_roaming_state.json'),
+    fileStoreDir: path.join(_userSettingsDir(), 'roamed_files'),
+    // app_config.json has no locally encrypted values.
+    protectLocal: (p) => p,
+    unprotectLocal: (s) => s,
+    isLocalSecret: (_) => false,
+    log: AppLogger.logInfo,
+  );
+
+  bool _roamingStarted = false;
+
+  /// Set when the share holds settings for this login that this PC has never
+  /// synced with; the window asks before first-run setup.
+  bool settingsRoamingChoicePending = false;
+
+  Future<void> _syncSettingsAtStartup() async {
+    if (!_persistenceEnabled || runningUnderTest) return;
+    String team = '';
+    try {
+      final f = File(_resolveSettingsFilePath());
+      if (await f.exists()) {
+        final d = jsonDecode(await f.readAsString());
+        if (d is Map) team = '${d['teamFolderPath'] ?? ''}'.trim();
+      }
+    } catch (_) {}
+    settingsRoaming.folder = team.isNotEmpty ? team : kDefaultTeamFolder;
+    final result = await settingsRoaming.sync(startup: true).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => const RoamingResult(
+            problem: 'The share took too long; settings not synced'));
+    settingsRoamingChoicePending = result.needsChoice;
+    if (!_roamingStarted) {
+      _roamingStarted = true;
+      settingsRoaming.startPeriodic();
+    }
+  }
+
+  /// The answer to "your settings are on the share": syncs with it, then
+  /// reads the settings again.
+  Future<void> applySettingsRoamingChoice(RoamingChoice choice) async {
+    settingsRoamingChoicePending = false;
+    final result = await settingsRoaming.sync(startup: true, choice: choice);
+    if (result.pulledFiles.isNotEmpty) await _loadSavedSettings();
+    notifyListeners();
   }
 
   // ---------------------------------------------------------------------
@@ -4336,6 +4485,10 @@ class AppStateProvider extends ChangeNotifier {
   /// Floor plans, with their callouts.
   final List<FloorPlan> avFloorPlans = [];
 
+  /// Walls seen straight on, with what is mounted on them. Saved with the
+  /// floor plans.
+  final List<WallView> avWallViews = [];
+
   /// Lens to screen for this room's projector, in feet. 0 when nobody has
   /// entered one. Typed in for now; meant to come off the room's document.
   double avThrowDistanceFt = 0;
@@ -4988,6 +5141,54 @@ class AppStateProvider extends ChangeNotifier {
     _pushAvUndo('Set the room light', _plansScope);
     avRoomLightFc = nextFc;
     avContrastTarget = nextContrast;
+    notifyListeners();
+  }
+
+  // --- wall elevations ------------------------------------------------------
+
+  /// Adds a wall and returns its id.
+  String addWallView({
+    String name = '',
+    double widthIn = 240,
+    double heightIn = 108,
+  }) {
+    var n = 0;
+    for (final w in avWallViews) {
+      final m = RegExp(r'^WALL_(\d+)$').firstMatch(w.id);
+      if (m != null) n = math.max(n, int.parse(m.group(1)!));
+    }
+    final id = 'WALL_${n + 1}';
+    _pushAvUndo('Add a wall', _plansScope);
+    avWallViews.add(WallView(
+      id: id,
+      name: name.trim().isEmpty ? 'Wall ${n + 1}' : name.trim(),
+      widthIn: math.max(12, widthIn),
+      heightIn: math.max(0, heightIn),
+    ));
+    notifyListeners();
+    return id;
+  }
+
+  /// Puts [next] in place of the wall with its id. [label] names the edit
+  /// for Undo; [coalesce] folds a run of typing or a drag into one step.
+  void updateWallView(WallView next, String label, {String coalesce = ''}) {
+    final at = avWallViews.indexWhere((w) => w.id == next.id);
+    if (at < 0) return;
+    final resolved = next.resolved();
+    if (jsonEncode(resolved.toJson()) ==
+        jsonEncode(avWallViews[at].toJson())) {
+      return;
+    }
+    _pushAvUndo(label, _plansScope, coalesce: coalesce);
+    avWallViews[at] = resolved;
+    notifyListeners();
+  }
+
+  void removeWallView(String id) {
+    final at = avWallViews.indexWhere((w) => w.id == id);
+    if (at < 0) return;
+    _pushAvUndo('Remove ${avWallViews[at].name}', _plansScope);
+    avWallViews.removeAt(at);
     notifyListeners();
   }
 
@@ -8949,6 +9150,7 @@ class AppStateProvider extends ChangeNotifier {
       avLocations.isNotEmpty ||
       avScreenSwitches.isNotEmpty ||
       avFloorPlans.isNotEmpty ||
+      avWallViews.isNotEmpty ||
       roomMode != RoomMode.full ||
       !avCost.isEmpty;
 
@@ -8983,6 +9185,7 @@ class AppStateProvider extends ChangeNotifier {
     avLocations.clear();
     avScreenSwitches.clear();
     avFloorPlans.clear();
+    avWallViews.clear();
     avThrowDistanceFt = 0;
     avRoomLightFc = 0;
     avContrastTarget = 15;
@@ -9240,6 +9443,12 @@ class AppStateProvider extends ChangeNotifier {
           if (plan.id.isNotEmpty) avFloorPlans.add(plan);
         }
       }
+      for (final w in (doc['wallViews'] as List? ?? [])) {
+        if (w is Map) {
+          final wall = WallView.fromJson(Map<String, dynamic>.from(w));
+          if (wall.id.isNotEmpty) avWallViews.add(wall.resolved());
+        }
+      }
       final throwFt = (doc['throwDistanceFt'] as num?)?.toDouble() ?? 0;
       avThrowDistanceFt = throwFt.isFinite && throwFt > 0 ? throwFt : 0;
       final light = doc['roomLight'];
@@ -9458,6 +9667,8 @@ class AppStateProvider extends ChangeNotifier {
           'flowBackground': avFlowBackground.toJson(),
         if (!avFlowLegend.isDefault) 'flowLegend': avFlowLegend.toJson(),
         'floorPlans': avFloorPlans.map((p) => p.toJson()).toList(),
+        if (avWallViews.isNotEmpty)
+          'wallViews': avWallViews.map((w) => w.toJson()).toList(),
         if (avThrowDistanceFt > 0) 'throwDistanceFt': avThrowDistanceFt,
         if (avRoomLightFc > 0)
           'roomLight': {'fc': avRoomLightFc, 'contrast': avContrastTarget},
@@ -10667,6 +10878,9 @@ class AppStateProvider extends ChangeNotifier {
       // Carry an older build's app-folder settings over the first time the
       // per-user location is used, so nothing is re-entered after an update.
       _migrateLegacySettingsFile(settingsFilePath);
+      // [SETTINGS ROAMING]: what you changed on another PC, into
+      // app_config.json and the keystore before either is read.
+      await _syncSettingsAtStartup();
       Map<String, dynamic> saved = {};
       final file = File(settingsFilePath);
       if (await file.exists()) {
@@ -16076,6 +16290,7 @@ class AppStateProvider extends ChangeNotifier {
     AppTab.lifecycle: AvUndoScope.flow,
     AppTab.racks: AvUndoScope.racks,
     AppTab.floorPlan: AvUndoScope.floorPlans,
+    AppTab.walls: AvUndoScope.floorPlans,
     AppTab.cabling: AvUndoScope.cabling,
     AppTab.cost: AvUndoScope.cost,
   };
@@ -17657,6 +17872,15 @@ class AppStateProvider extends ChangeNotifier {
   /// Whether Project > Equipment lists the parts room by room rather than
   /// merged across the job, for this session.
   bool projectPartsByRoom = false;
+
+  /// The Equipment page's filter panel, open or folded to one line.
+  bool projectPartFiltersOpen = true;
+
+  void setProjectPartFiltersOpen(bool open) {
+    if (open == projectPartFiltersOpen) return;
+    projectPartFiltersOpen = open;
+    notifyListeners();
+  }
 
   void setProjectPartsByRoom(bool byRoom) {
     if (byRoom == projectPartsByRoom) return;
@@ -19996,6 +20220,8 @@ class AppStateProvider extends ChangeNotifier {
       field: 'Package',
       summary: rfqId.isEmpty
           ? 'pin cleared - back to the package rules'
+          : rfqId == kRfqUntaggedPin
+          ? 'kept untagged - out of every package'
           : 'pinned to ${project.rfqById(rfqId)?.name ?? rfqId}',
     );
     _projectChanged();
@@ -20165,6 +20391,62 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
+  /// Keeps a part's order, deliveries, pin and dates with it when its
+  /// equipment-list key changes - see [BuildingProject.movePartKey].
+  void movePartKey(String from, String to, {String partName = ''}) {
+    if (!project.movePartKey(from, to)) return;
+    _logProjectEdit(
+      itemKey: to,
+      itemName: partName.isEmpty ? 'Part' : partName,
+      field: 'Part',
+      summary: 'orders and deliveries kept with the edited part',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Tags every procurement line for the equipment-list part [partKey], in
+  /// every room, with [company] - 'OFCI', 'CFCI', 'CTS (OFOI)', or '' to
+  /// clear it. Lines nobody has touched yet are stored by this. Returns how
+  /// many lines changed.
+  int setProcurementCompanyForPart(
+    ProjectEstimate estimate,
+    String partKey,
+    String company,
+  ) {
+    if (partKey.isEmpty) return 0;
+    final lines = [
+      for (final e in liveProcurement(project, estimate))
+        if (e.partKey == partKey && e.company.trim() != company.trim()) e,
+    ];
+    if (lines.isEmpty) return 0;
+    for (final e in lines) {
+      final changed = e.copyWith(company: company.trim());
+      final i = project.procurement.indexWhere((p) => p.id == e.id);
+      if (i >= 0) {
+        project.procurement[i] = changed;
+      } else {
+        project.procurement.add(
+          ProcurementEntry.fromJson({
+            ...changed.toJson(),
+            'id': project.nextProcurementId(),
+          }),
+        );
+      }
+    }
+    _logProjectEdit(
+      itemKey: 'procurement:company:$partKey',
+      itemName: lines.first.device.isEmpty
+          ? 'Procurement line'
+          : lines.first.device,
+      field: 'Procurement log',
+      summary: company.trim().isEmpty
+          ? 'company cleared on ${lines.length} line(s)'
+          : 'tagged ${company.trim()} on ${lines.length} line(s)',
+    );
+    _projectChanged(repricing: false);
+    return lines.length;
+  }
+
   /// Gives a procurement column its own heading color, or null for its band's.
   void setProcurementColumnColor(String columnId, int? argb) {
     final before = project.procurementColors[columnId];
@@ -20252,6 +20534,31 @@ class AppStateProvider extends ChangeNotifier {
       itemName: 'Procurement log',
       field: 'Procurement log',
       summary: 'column headings changed',
+      coalesce: true,
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Makes a procurement column a dropdown of [choices], or typed again when
+  /// [choices] is empty. Blank and repeated choices are dropped.
+  void setProcurementColumnChoices(String columnId, List<String> choices) {
+    final next = <String>[];
+    for (final c in choices) {
+      final t = c.trim();
+      if (t.isNotEmpty && !next.contains(t)) next.add(t);
+    }
+    final before = project.procurementColumnChoices[columnId] ?? const [];
+    if (next.join('\n') == before.join('\n')) return;
+    if (next.isEmpty) {
+      project.procurementColumnChoices.remove(columnId);
+    } else {
+      project.procurementColumnChoices[columnId] = next;
+    }
+    _logProjectEdit(
+      itemKey: 'procurement:choices',
+      itemName: 'Procurement log',
+      field: 'Procurement log',
+      summary: 'column choices changed',
       coalesce: true,
     );
     _projectChanged(repricing: false);
@@ -20451,6 +20758,7 @@ class AppStateProvider extends ChangeNotifier {
     }
     project.procurementColors.removeWhere((k, _) => ids.contains(k));
     project.procurementColumnLabels.removeWhere((k, _) => ids.contains(k));
+    project.procurementColumnChoices.removeWhere((k, _) => ids.contains(k));
     project.procurementColumnWidths.removeWhere((k, _) => ids.contains(k));
     project.procurementColumnOrder.removeWhere(ids.contains);
   }
@@ -20744,6 +21052,97 @@ class AppStateProvider extends ChangeNotifier {
     project.setPartOrder(
       partKey,
       existing.copyWith(orderedOn: dateOnly(on ?? DateTime.now())),
+    );
+    _projectChanged();
+  }
+
+  /// Marks a part ordered today, or [ordered] false to take the order date
+  /// off. [withoutQuote] says it was bought straight, not off a quote.
+  void setProjectPartOrdered(
+    String partKey, {
+    required bool ordered,
+    bool withoutQuote = false,
+    String partName = '',
+  }) {
+    final existing = project.orderForPart(partKey) ?? const PartOrder();
+    setProjectPartOrder(
+      partKey,
+      ordered
+          ? existing.copyWith(
+              orderedOn: existing.orderedOn ?? dateOnly(DateTime.now()),
+              withoutQuote: withoutQuote,
+            )
+          : existing.copyWith(clearOrderedOn: true, withoutQuote: false),
+      partName: partName,
+    );
+  }
+
+  // --- walkthroughs ----------------------------------------------------------
+
+  /// Records a walkthrough of the building, or replaces the one with the same
+  /// id.
+  void saveProjectWalkthrough(ProjectWalkthrough walk) {
+    final list = project.walkthroughs;
+    final i = list.indexWhere((w) => w.id == walk.id);
+    var saved = walk;
+    if (walk.id.isEmpty || i < 0) {
+      var best = 0;
+      for (final w in list) {
+        final n = int.tryParse(w.id.replaceFirst('walk', '')) ?? 0;
+        if (n > best) best = n;
+      }
+      saved = ProjectWalkthrough(
+        id: 'walk${best + 1}',
+        date: walk.date,
+        by: walk.by,
+        notes: walk.notes,
+      );
+      list.add(saved);
+    } else {
+      list[i] = walk;
+    }
+    _logProjectEdit(
+      itemKey: 'walkthrough:${saved.id}',
+      itemName: 'Walkthrough',
+      field: 'Walkthrough',
+      summary: '${i < 0 ? 'walkthrough added' : 'walkthrough changed'} for '
+          '${formatIsoDate(saved.date)}',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  void removeProjectWalkthrough(String id) {
+    final before = project.walkthroughs.length;
+    project.walkthroughs.removeWhere((w) => w.id == id);
+    if (project.walkthroughs.length == before) return;
+    _logProjectEdit(
+      itemKey: 'walkthrough:$id',
+      itemName: 'Walkthrough',
+      field: 'Walkthrough',
+      summary: 'walkthrough removed',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Marks a part installed and ready to go today, or not installed.
+  void setProjectPartInstalled(
+    String partKey,
+    bool installed, {
+    String partName = '',
+  }) {
+    final existing = project.orderForPart(partKey) ?? const PartOrder();
+    if (existing.isInstalled == installed) return;
+    project.setPartOrder(
+      partKey,
+      installed
+          ? existing.copyWith(installedOn: dateOnly(DateTime.now()))
+          : existing.copyWith(clearInstalledOn: true),
+    );
+    _logProjectEdit(
+      itemKey: projectPartItemKey(partKey),
+      itemName: partName,
+      field: 'Installed',
+      summary: installed ? 'installed' : 'marked not installed',
     );
     _projectChanged();
   }
@@ -22936,6 +23335,36 @@ class AppStateProvider extends ChangeNotifier {
         openBoxes++;
       }
       applyControlSwap(this, room.nodeIds, plan.to.model, name: label);
+    }
+
+    // The procurement log follows the swap, keeping each line's status and
+    // dates, in every room that took it.
+    final swapped = {
+      for (final room in plan.affectedRooms)
+        if (!disk.failures.any((f) => f.startsWith('${room.roomName} - ')))
+          room.ref.id,
+    };
+    final relinked = swapProcurementModel(
+      project.procurement,
+      swapped,
+      plan.fromModel,
+      plan.to.model,
+    );
+    var moved = 0;
+    for (var i = 0; i < relinked.length; i++) {
+      if (relinked[i].lineKey != project.procurement[i].lineKey) {
+        project.procurement[i] = relinked[i];
+        moved++;
+      }
+    }
+    if (moved > 0) {
+      _logProjectEdit(
+        itemKey: 'procurement:swap',
+        itemName: plan.to.model,
+        field: 'Procurement log',
+        summary: '$moved line(s) moved from ${plan.fromModel}',
+      );
+      _projectChanged(repricing: false);
     }
 
     // Whatever was just written is not what the cache holds.

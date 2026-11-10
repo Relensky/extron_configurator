@@ -22,6 +22,15 @@ import 'package:url_launcher/url_launcher.dart';
 //   log                 a line in the app's own log
 //   openLink            how a link in the chat opens (the app's in-app
 //                       browser); null opens the system browser
+//   openClaim /         opens what a "working on" tag is on (a room in
+//   canOpenClaim        the Room Hub, a ticket, a project); null leaves
+//                       the tags as plain text
+//   launchArgs          extra command-line arguments when this app starts
+//                       another CTS app (the dashboard hands Instructor
+//                       Contact its profile and data files) - see
+//                       team_app_launch.dart
+//   onAppRequest        what another CTS app asks this one to do (open a
+//                       room, a project, a room-issue message)
 //   reservedEdges       room taken at the window's top/bottom by something
 //                       docked there (the dashboard's browser), which a
 //                       slid-out or docked chat keeps clear of
@@ -76,6 +85,27 @@ class TeamHost {
 
   /// Opens a link from the chat. Null: the system browser.
   static Future<void> Function(String url)? openLink;
+
+  /// [TEAM KIT - WORKING ON]: opens what a tag is on - [kind] 'room' a room
+  /// (the dashboard's Room Hub), 'ticket' a ticket, anything else whatever
+  /// the app makes of it. Null: tags are plain text, not links.
+  static void Function(String kind, String id, String label)? openClaim;
+
+  /// Which kinds [openClaim] can open; null: every kind.
+  static bool Function(String kind)? canOpenClaim;
+
+  /// [TEAM KIT - APPS]: extra arguments for starting the app [appId] from
+  /// this one (TeamAppLaunch.open) - the dashboard hands Instructor Contact
+  /// its profile, look and data files. Null or empty: none.
+  static Future<List<String>> Function(String appId)? launchArgs;
+
+  /// [TEAM KIT - APP REQUESTS]: what another CTS app asked this one to do
+  /// (teamOpenInApp) - 'openRoom' {room} in the dashboard, 'openProject'
+  /// {file, room} in the Room Config Builder, 'notifyRoom' {room} in
+  /// Instructor Contact. Called for a request handed to this running copy
+  /// and for one this copy was started with (`--request`, see
+  /// TeamAppRequest.fromArgs). Null: requests are ignored.
+  static void Function(String action, Map<String, String> args)? onAppRequest;
 
   /// Window edges something else has docked to.
   static ValueListenable<EdgeInsets> reservedEdges =

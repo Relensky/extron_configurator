@@ -49,6 +49,7 @@ ToolbarUndoTarget? toolbarUndoTarget(AppTab tab) => switch (tab) {
       AppTab.schematic ||
       AppTab.avFlow ||
       AppTab.floorPlan ||
+      AppTab.walls ||
       AppTab.cabling ||
       AppTab.racks ||
       AppTab.cost ||

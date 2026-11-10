@@ -18,6 +18,7 @@ import 'package:extron_configurator/procurement_log.dart';
 import 'package:extron_configurator/procurement_sync.dart';
 import 'package:extron_configurator/project_procurement_view.dart';
 import 'package:extron_configurator/project_fold.dart';
+import 'package:extron_configurator/pinned_grid.dart' show PinnedGrid;
 import 'package:extron_configurator/project_view.dart';
 import 'package:extron_configurator/timeline_export_view.dart';
 
@@ -544,6 +545,76 @@ void main() {
     }
   });
 
+  testWidgets('a part is renamed in one room, with links to its rooms',
+      (tester) async {
+    final p = withProject();
+    await pump(tester, p, width: 2400);
+    await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
+    final line = p.priceProjectShown().master
+        .firstWhere((l) => l.model == 'DTP2 T 211');
+    final roomA = p.project.rooms[0].id;
+    final roomB = p.project.rooms[1].id;
+    await tester.tap(find.byKey(ValueKey('project_edit_${line.key}')));
+    await tester.pumpAndSettle();
+    for (final id in [roomA, roomB]) {
+      expect(find.byKey(ValueKey('part_edit_open_$id')), findsOneWidget);
+      final field = tester.widget<TextField>(
+          find.byKey(ValueKey('part_edit_room_$id')));
+      expect(field.controller!.text, 'Lectern TX');
+    }
+    await tester.enterText(
+        find.byKey(ValueKey('part_edit_room_$roomB')), 'Stage TX');
+    await tester.tap(find.byKey(const ValueKey('part_edit_save')));
+    // Real reads and writes on the rooms, outside the fake clock.
+    for (var i = 0; i < 60; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 40)),
+      );
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    String label(String stem) => readRoomFromDisk(
+          path.join(dir.path, '${stem}_config.json'),
+        ).model.nodes.firstWhere((n) => n.id == 'd1').label;
+    expect(label('b'), 'Stage TX');
+    expect(label('a'), 'Lectern TX');
+    // Let the snack bar run out.
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('the equipment filters by ordered and delivered', (tester) async {
+    final p = withProject();
+    final line = p.priceProjectShown().master
+        .firstWhere((l) => l.model == 'DTP2 T 211');
+    p.project.partOrders[line.key] = PartOrder(orderedOn: DateTime(2027, 1, 4));
+    p.project.deliveries.add(
+        ProjectDelivery(id: 'd1', partKey: line.key, qty: line.qty));
+    await pump(tester, p, width: 2400);
+    await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
+    expect(find.text('Ordered (1)'), findsOneWidget);
+    expect(find.text('Not ordered (1)'), findsOneWidget);
+    expect(find.text('Delivered (1)'), findsOneWidget);
+    await tester.tap(find.text('Not delivered (1)'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('project_edit_${line.key}')), findsNothing);
+    await tester.tap(find.text('Delivered (1)'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('project_edit_${line.key}')), findsOneWidget);
+  });
+
+  testWidgets('the equipment sorts by who buys it', (tester) async {
+    final p = withProject();
+    await pump(tester, p, width: 2400);
+    await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('project_parts_sort')));
+    await tester.pumpAndSettle();
+    expect(find.text('Who buys'), findsWidgets);
+  });
+
   group('the procurement log', () {
     Future<AppStateProvider> opened(WidgetTester tester) async {
       // Nothing is filled in: the rooms' own lines are on the log already.
@@ -561,6 +632,35 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('procurement_zoom_in')));
       await tester.pumpAndSettle();
       expect(find.text('125%'), findsOneWidget);
+    });
+
+    testWidgets('the sideways bar is drawn at the window base, scrolled or not',
+        (tester) async {
+      await opened(tester);
+      final grid = find.byKey(const ValueKey('procurement_grid'));
+      double lift() => tester.widget<PinnedGrid>(grid).barLift;
+      // Not scrolled: the grid hangs below the window by its header's height.
+      expect(lift(), closeTo(tester.getRect(grid).bottom - 1400, 0.5));
+      expect(lift(), greaterThan(0));
+      final outer =
+          tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+      outer.jumpTo(outer.maxScrollExtent);
+      await tester.pumpAndSettle();
+      expect(lift(), 0);
+    });
+
+    testWidgets('company is a dropdown of the companies', (tester) async {
+      final p = await opened(tester);
+      final first = liveProcurement(p.project, p.priceProjectShown()).first;
+      await tester.tap(find.byKey(ValueKey('procurement_company_${first.id}')));
+      await tester.pumpAndSettle();
+      expect(find.text('CFCI'), findsWidgets);
+      expect(find.text('None'), findsOneWidget);
+      await tester.tap(find.text('OFCI').last);
+      await tester.pumpAndSettle();
+      final after = liveProcurement(p.project, p.priceProjectShown())
+          .firstWhere((e) => e.roomId == first.roomId && e.lineKey == first.lineKey);
+      expect(after.company, 'OFCI');
     });
 
     testWidgets('a column heading takes a color of its own', (tester) async {

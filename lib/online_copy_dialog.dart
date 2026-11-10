@@ -335,6 +335,14 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
     ({OnlineImport read, List<OnlineChange> changes}) review,
     String source,
   ) async {
+    // Nothing changed: no box, no note.
+    if (review.changes.isEmpty) {
+      setState(() {
+        _failed = false;
+        _result = '';
+      });
+      return;
+    }
     final applied = await showDialog<int>(
       context: context,
       builder: (_) => _ImportReviewDialog(
@@ -354,8 +362,6 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
         if (listed > 0)
           '$listed edit${listed == 1 ? '' : 's'} in other tabs listed in the '
               'history file - make ${listed == 1 ? 'it' : 'them'} in the app.',
-        if (applied == 0 && listed == 0)
-          'Nothing to bring back - the copy matches the job.',
       ].join(' ');
     });
   }
@@ -376,7 +382,9 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
         if (!hasSheet) continue; // a new Sheet: nothing to write over
         final check = await provider.checkSheetForEdits(interactive: true);
         if (!mounted) return false;
+        // Asked only when it could not be read; nothing changed goes ahead.
         if (check.held == null &&
+            check.error.isNotEmpty &&
             !await _confirmSheetOverwrite(check.error)) {
           return false;
         }
@@ -610,6 +618,18 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
                             context,
                             liveSheetUrl(project.onlineSheetId),
                             title: 'Google Sheet',
+                          ),
+                  ),
+                  const SizedBox(width: 8),
+                  // In a window of its own, beside the app.
+                  IconButton(
+                    key: const ValueKey('online_copy_sheet_new_window'),
+                    tooltip: 'Open in a new window',
+                    icon: const Icon(Icons.launch, size: 18),
+                    onPressed: project.onlineSheetId.isEmpty
+                        ? null
+                        : () => openInNewBrowserWindow(
+                            liveSheetUrl(project.onlineSheetId),
                           ),
                   ),
                 ],

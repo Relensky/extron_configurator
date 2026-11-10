@@ -253,6 +253,10 @@ void InstallCrashLogging() {
   std::signal(SIGABRT, OnAbort);
 }
 
+void ReinstallCrashFilter() {
+  ::SetUnhandledExceptionFilter(OnUnhandledException);
+}
+
 void EndCrashLoggingSession() {
   if (!g_marker.empty()) ::DeleteFileW(g_marker.c_str());
 }

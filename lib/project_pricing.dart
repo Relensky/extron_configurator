@@ -236,6 +236,53 @@ Future<String> priceInCatalog({
   return saved;
 }
 
+/// Writes [manufacturer] and [partNumber] for [line]'s model into the catalog,
+/// which every room prices from, so the part changes in every room it is in.
+/// Keeps everything else on the entry. Returns the file written, '' when
+/// nothing changed, or a message beginning with 'Error'.
+Future<String> editPartInCatalog({
+  required AppStateProvider provider,
+  required MasterPartLine line,
+  required String manufacturer,
+  required String partNumber,
+}) async {
+  final model = line.model.trim();
+  if (model.isEmpty) {
+    return 'Error: this part has no model, so there is no catalog entry for '
+        'its manufacturer and part number.';
+  }
+  final existing = provider.avDeviceLibrary.templateForModel(model);
+  if (existing != null &&
+      existing.manufacturer.trim() == manufacturer.trim() &&
+      existing.partNumber.trim() == partNumber.trim()) {
+    return '';
+  }
+  provider.avDeviceLibrary.upsert(
+    existing != null
+        ? existing.copyWith(
+            manufacturer: manufacturer.trim(),
+            partNumber: partNumber.trim(),
+          )
+        : AvDeviceTemplate(
+            model: model,
+            manufacturer: manufacturer.trim(),
+            partNumber: partNumber.trim(),
+            category: line.category.trim(),
+            ports: const [],
+          ),
+  );
+  final saved = await provider.saveAvDeviceLibrary();
+  if (saved.isEmpty) {
+    return 'Error: the catalog could not be written - check the Catalog tab.';
+  }
+  provider.refreshProjectRooms();
+  AppLogger.logInfo(
+    'Catalog edit: "$model" maker "${manufacturer.trim()}", part number '
+    '"${partNumber.trim()}" from the project Equipment page.',
+  );
+  return saved;
+}
+
 /// The rooms on this project that carry [line], by name — what the confirm
 /// dialog lists before anything is written.
 List<String> roomsCarrying(AppStateProvider provider, MasterPartLine line) => [

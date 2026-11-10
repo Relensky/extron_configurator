@@ -1935,6 +1935,15 @@ List<ReportSection> projectPurchasingSections(ProjectEstimate estimate) {
   /// list is the single most useful thing this sheet can say.
   String partName(String key) => lines[key]?.description ?? key;
 
+  // The part's name on the list today, else the one stored when logged.
+  String deliveryName(ProjectDelivery d) {
+    final name = d.nameOn({
+      if (lines[d.partKey] case final l?) d.partKey: l.description,
+    });
+    if (name.isNotEmpty) return name;
+    return d.partKey.isEmpty ? 'not on the equipment list' : partName(d.partKey);
+  }
+
   final sections = <ReportSection>[];
 
   // Every PO number the job mentions anywhere, not just the rows somebody
@@ -2059,11 +2068,7 @@ List<ReportSection> projectPurchasingSections(ProjectEstimate estimate) {
         for (final d in deliveries)
           [
             d.deliveredOn == null ? '' : formatScheduleDate(d.deliveredOn!),
-            d.itemName.trim().isEmpty
-                ? (d.partKey.isEmpty
-                      ? 'not on the equipment list'
-                      : partName(d.partKey))
-                : d.itemName.trim(),
+            deliveryName(d),
             d.qty == 0 ? '' : trimNumber(d.qty),
             // WHAT BOUGHT IT, in one column with three answers. A PO number;
             // a card purchase that was never going to have one; or a row
@@ -2161,11 +2166,7 @@ List<ReportSection> projectPurchasingSections(ProjectEstimate estimate) {
         for (final d in oneOffs)
           [
             d.deliveredOn == null ? '' : formatScheduleDate(d.deliveredOn!),
-            d.itemName.trim().isEmpty
-                ? (d.partKey.isEmpty
-                      ? 'not on the equipment list'
-                      : partName(d.partKey))
-                : d.itemName.trim(),
+            deliveryName(d),
             d.qty == 0 ? '' : trimNumber(d.qty),
             d.state.label,
             d.location.trim(),
@@ -2193,11 +2194,7 @@ List<ReportSection> projectPurchasingSections(ProjectEstimate estimate) {
         for (final d in loose)
           [
             d.deliveredOn == null ? '' : formatScheduleDate(d.deliveredOn!),
-            d.itemName.trim().isEmpty
-                ? (d.partKey.isEmpty
-                      ? 'not on the equipment list'
-                      : partName(d.partKey))
-                : d.itemName.trim(),
+            deliveryName(d),
             d.qty == 0 ? '' : trimNumber(d.qty),
             d.whereText,
             'no PO, and not marked as a one-off purchase',
@@ -3184,6 +3181,7 @@ List<XlsxSheet> buildProjectWorkbookSheets({
           colors: estimate.project.procurementColors,
           labels: estimate.project.procurementColumnLabels,
           columns: estimate.project.procurementColumns,
+          widths: estimate.project.procurementColumnWidths,
         );
   if (procurement != null) sheets.add(procurement);
 

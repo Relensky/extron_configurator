@@ -143,6 +143,8 @@ void main() {
     // presses the other four and concludes that none of them do.
     for (final key in PartSortKey.values) {
       if (key == PartSortKey.natural) continue;
+      // No column of their own: on the Sort menu only.
+      if (key == PartSortKey.ordered || key == PartSortKey.delivered) continue;
       expect(
         find.byKey(ValueKey('parts_sort_${key.name}')),
         findsOneWidget,

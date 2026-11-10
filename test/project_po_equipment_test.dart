@@ -107,6 +107,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_deliveries')));
     await tester.pumpAndSettle();
+    // Purchase orders start folded; open them all.
+    final expand = find.byKey(const ValueKey('po_collapse_all'));
+    if (expand.evaluate().isNotEmpty) {
+      await tester.tap(expand);
+      await tester.pumpAndSettle();
+    }
   }
 
   /// The master keys, projector first — the order the parts list deals them.

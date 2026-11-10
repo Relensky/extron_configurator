@@ -408,6 +408,49 @@ class ProjectNote {
   );
 }
 
+/// One walkthrough of the building: when, who went, and what was checked or
+/// is being done.
+class ProjectWalkthrough {
+  final String id;
+  final DateTime date;
+  final String by;
+  final String notes;
+
+  const ProjectWalkthrough({
+    required this.id,
+    required this.date,
+    this.by = '',
+    this.notes = '',
+  });
+
+  ProjectWalkthrough copyWith({DateTime? date, String? by, String? notes}) =>
+      ProjectWalkthrough(
+        id: id,
+        date: date ?? this.date,
+        by: by ?? this.by,
+        notes: notes ?? this.notes,
+      );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'date': formatIsoDate(date),
+    if (by.trim().isNotEmpty) 'by': by.trim(),
+    if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+  };
+
+  /// Null when the date is unreadable: a walkthrough is its date.
+  static ProjectWalkthrough? fromJson(Map<String, dynamic> json) {
+    final date = parseIsoDate(json['date']);
+    if (date == null) return null;
+    return ProjectWalkthrough(
+      id: json['id']?.toString() ?? '',
+      date: date,
+      by: json['by']?.toString() ?? '',
+      notes: json['notes']?.toString() ?? '',
+    );
+  }
+}
+
 /// Signed notes off a hand-editable list, empty ones dropped.
 List<ProjectNote> notesFromJson(Object? raw) => [
   for (final n in (raw as List? ?? []))
@@ -463,6 +506,14 @@ class PartOrder {
 
   final String notes;
 
+  /// Ordered without a quote behind it - bought straight, not off a vendor's
+  /// quote.
+  final bool withoutQuote;
+
+  /// The day it was installed and ready to go, whoever bought it. Null while
+  /// it is not.
+  final DateTime? installedOn;
+
   const PartOrder({
     this.poNumber = '',
     this.orderedOn,
@@ -470,7 +521,11 @@ class PartOrder {
     this.receivedOn,
     this.qty = 0,
     this.notes = '',
+    this.withoutQuote = false,
+    this.installedOn,
   });
+
+  bool get isInstalled => installedOn != null;
 
   /// True when this is a real order rather than a half-filled record.
   ///
@@ -497,6 +552,9 @@ class PartOrder {
     bool clearReceivedOn = false,
     double? qty,
     String? notes,
+    bool? withoutQuote,
+    DateTime? installedOn,
+    bool clearInstalledOn = false,
   }) => PartOrder(
     poNumber: poNumber ?? this.poNumber,
     orderedOn: clearOrderedOn ? null : (orderedOn ?? this.orderedOn),
@@ -504,6 +562,8 @@ class PartOrder {
     receivedOn: clearReceivedOn ? null : (receivedOn ?? this.receivedOn),
     qty: qty ?? this.qty,
     notes: notes ?? this.notes,
+    withoutQuote: withoutQuote ?? this.withoutQuote,
+    installedOn: clearInstalledOn ? null : (installedOn ?? this.installedOn),
   );
 
   /// True when there is nothing on this record worth keeping — what an entry
@@ -514,7 +574,9 @@ class PartOrder {
       expectedOn == null &&
       receivedOn == null &&
       qty == 0 &&
-      notes.trim().isEmpty;
+      notes.trim().isEmpty &&
+      !withoutQuote &&
+      installedOn == null;
 
   Map<String, dynamic> toJson() => {
     if (poNumber.trim().isNotEmpty) 'poNumber': poNumber.trim(),
@@ -523,6 +585,8 @@ class PartOrder {
     if (receivedOn != null) 'receivedOn': formatIsoDate(receivedOn!),
     if (qty > 0) 'qty': qty,
     if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+    if (withoutQuote) 'withoutQuote': true,
+    if (installedOn != null) 'installedOn': formatIsoDate(installedOn!),
   };
 
   factory PartOrder.fromJson(Map<String, dynamic> json) => PartOrder(
@@ -532,6 +596,8 @@ class PartOrder {
     receivedOn: parseIsoDate(json['receivedOn']),
     qty: (json['qty'] as num?)?.toDouble() ?? 0,
     notes: json['notes']?.toString() ?? '',
+    withoutQuote: json['withoutQuote'] == true,
+    installedOn: parseIsoDate(json['installedOn']),
   );
 }
 
@@ -894,6 +960,14 @@ class ProjectDelivery {
         ? 'On site'
         : 'On site - ${location.trim()}',
   };
+
+  /// What this is called today: the part's current name on the equipment
+  /// list ([partNames], by part key) while it is still there, so a rename
+  /// shows up here too; otherwise the name stored when it was logged.
+  String nameOn(Map<String, String> partNames) {
+    final live = partKey.isEmpty ? '' : (partNames[partKey] ?? '').trim();
+    return live.isNotEmpty ? live : itemName.trim();
+  }
 
   ProjectDelivery copyWith({
     String? partKey,
@@ -2519,6 +2593,10 @@ class ProjectRoomRef {
 ///
 /// [kind] is part of the key so a cable and a device that happen to share a
 /// description never merge across the section boundary the quote is read by.
+/// A part pin that means NO package: the part stays untagged even when a
+/// package rule covers it (a 'Display' rule taking a 'Display back box').
+const String kRfqUntaggedPin = '-';
+
 String masterPartKey({
   required String kind,
   String partNumber = '',
@@ -3017,6 +3095,9 @@ class BuildingProject {
   /// on screen never rewrites the file.
   final List<ProjectTodo> todos;
 
+  /// The walkthroughs of the building, in no set order.
+  final List<ProjectWalkthrough> walkthroughs;
+
   /// Notes taken off the job list, newest last - see [ArchivedTodo]. What
   /// the history's finished-tasks tab reads.
   final List<ArchivedTodo> todoArchive;
@@ -3057,6 +3138,10 @@ class BuildingProject {
 
   /// Procurement column id -> the heading typed for it on this job.
   final Map<String, String> procurementColumnLabels;
+
+  /// Procurement column id -> the choices its cells pick from. A column with
+  /// choices is a dropdown; one without is typed.
+  final Map<String, List<String>> procurementColumnChoices;
 
   /// Procurement column id -> the width it was dragged to on the page.
   final Map<String, double> procurementColumnWidths;
@@ -3206,6 +3291,7 @@ class BuildingProject {
     Map<String, int>? partLeadTimes,
     Map<String, DateTime>? partNeedBy,
     List<ProjectTodo>? todos,
+    List<ProjectWalkthrough>? walkthroughs,
     List<ArchivedTodo>? todoArchive,
     List<ProjectTrack>? tracks,
     Map<String, String>? partTracks,
@@ -3218,6 +3304,7 @@ class BuildingProject {
     Map<String, int>? procurementColors,
     List<String>? procurementColumnOrder,
     Map<String, String>? procurementColumnLabels,
+    Map<String, List<String>>? procurementColumnChoices,
     Map<String, double>? procurementColumnWidths,
     List<String>? procurementHiddenColumns,
     List<ProcurementCustomColumn>? procurementCustomColumns,
@@ -3261,6 +3348,7 @@ class BuildingProject {
        partLeadTimes = partLeadTimes ?? {},
        partNeedBy = partNeedBy ?? {},
        todos = todos ?? [],
+       walkthroughs = walkthroughs ?? [],
        todoArchive = todoArchive ?? [],
        tracks = tracks ?? [],
        partTracks = partTracks ?? {},
@@ -3272,6 +3360,7 @@ class BuildingProject {
        procurementColors = procurementColors ?? {},
        procurementColumnOrder = procurementColumnOrder ?? [],
        procurementColumnLabels = procurementColumnLabels ?? {},
+       procurementColumnChoices = procurementColumnChoices ?? {},
        procurementColumnWidths = procurementColumnWidths ?? {},
        procurementHiddenColumns = procurementHiddenColumns ?? [],
        procurementCustomColumns = procurementCustomColumns ?? [],
@@ -3301,6 +3390,7 @@ class BuildingProject {
       partLeadTimes.isEmpty &&
       partNeedBy.isEmpty &&
       todos.isEmpty &&
+      walkthroughs.isEmpty &&
       tracks.isEmpty &&
       partTracks.isEmpty &&
       partOrders.isEmpty &&
@@ -3729,6 +3819,10 @@ class BuildingProject {
     String category = '',
   }) {
     final pinnedId = partRfqs[partKey];
+    // Kept out of every package on purpose, whatever the rules say.
+    if (pinnedId == kRfqUntaggedPin) {
+      return (rfq: null, source: RfqTagSource.pinned);
+    }
     if (pinnedId != null && pinnedId.isNotEmpty) {
       final r = rfqById(pinnedId);
       // A pin to a package that has been deleted is dead, not sticky: fall
@@ -3788,6 +3882,8 @@ class BuildingProject {
   }
 
   /// Pins [partKey] to [rfqId], or clears the pin when it is blank.
+  /// [rfqId] '' goes back to the rules; [kRfqUntaggedPin] keeps the part out
+  /// of every package.
   void pinPart(String partKey, String rfqId) {
     if (rfqId.isEmpty) {
       partRfqs.remove(partKey);
@@ -4174,6 +4270,44 @@ class BuildingProject {
   /// What has been bought against [partKey], or null when nothing has.
   PartOrder? orderForPart(String partKey) => partOrders[partKey];
 
+  /// Moves everything filed under the part key [from] to [to] - its vendor
+  /// pin, lead time, need-by, track, order, deliveries and spares - for when
+  /// a part's key changes (a part number added in the catalog). What [to]
+  /// already has is kept. Returns true when anything moved.
+  bool movePartKey(String from, String to) {
+    if (from.isEmpty || to.isEmpty || from == to) return false;
+    var moved = false;
+    void move<T>(Map<String, T> map) {
+      final value = map[from];
+      if (value == null) return;
+      map.remove(from);
+      map.putIfAbsent(to, () => value);
+      moved = true;
+    }
+
+    move(partRfqs);
+    move(partLeadTimes);
+    move(partNeedBy);
+    move(partTracks);
+    move(partOrders);
+    for (var i = 0; i < deliveries.length; i++) {
+      if (deliveries[i].partKey == from) {
+        deliveries[i] = deliveries[i].copyWith(partKey: to);
+        moved = true;
+      }
+    }
+    for (var i = 0; i < spares.length; i++) {
+      if (spares[i].partKey == from) {
+        spares[i] = ProjectSpare.fromJson({
+          ...spares[i].toJson(),
+          'partKey': to,
+        });
+        moved = true;
+      }
+    }
+    return moved;
+  }
+
   /// Records an order against [partKey]. An empty record removes the entry
   /// rather than leaving a blank one that would take the part off the
   /// schedule while saying nothing about when it was bought.
@@ -4403,7 +4537,8 @@ class BuildingProject {
           left.expectedOn == null &&
           left.receivedOn == null &&
           left.qty == 0 &&
-          left.notes.trim().isEmpty;
+          left.notes.trim().isEmpty &&
+          left.installedOn == null;
       setPartOrder(key, bare ? null : left);
       removed.add(key);
     }
@@ -4479,6 +4614,16 @@ class BuildingProject {
     partKey,
     (d) => d.isOnHand,
   );
+
+  /// How many of [needed] are on site. A lot logged with no count (an
+  /// older blank How many box) stands for the rest.
+  double deliveredOf(String partKey, double needed) {
+    final got = deliveredQty(partKey);
+    final uncounted = deliveries.any(
+      (d) => d.partKey == partKey && d.isOnHand && d.qty <= 0,
+    );
+    return uncounted && got < needed ? needed : got;
+  }
 
   /// How many are in the room.
   double installedQty(String partKey) => _qtyWhere(partKey, (d) => d.isInstalled);
@@ -4836,6 +4981,8 @@ class BuildingProject {
         for (final e in partNeedBy.entries) e.key: formatIsoDate(e.value),
       },
     if (todos.isNotEmpty) 'todos': [for (final t in todos) t.toJson()],
+    if (walkthroughs.isNotEmpty)
+      'walkthroughs': [for (final w in walkthroughs) w.toJson()],
     if (todoArchive.isNotEmpty)
       'todoArchive': [for (final a in todoArchive) a.toJson()],
     if (tracks.isNotEmpty) 'tracks': [for (final t in tracks) t.toJson()],
@@ -4865,6 +5012,11 @@ class BuildingProject {
       'procurementColumnLabels': Map<String, String>.of(
         procurementColumnLabels,
       ),
+    if (procurementColumnChoices.isNotEmpty)
+      'procurementColumnChoices': {
+        for (final e in procurementColumnChoices.entries)
+          e.key: List<String>.of(e.value),
+      },
     if (procurementColumnWidths.isNotEmpty)
       'procurementColumnWidths': Map<String, double>.of(
         procurementColumnWidths,
@@ -5285,6 +5437,11 @@ class BuildingProject {
       partLeadTimes: leadTimes,
       partNeedBy: needBy,
       todos: todos,
+      walkthroughs: [
+        for (final w in (json['walkthroughs'] as List? ?? []))
+          if (w is Map)
+            ?ProjectWalkthrough.fromJson(Map<String, dynamic>.from(w)),
+      ],
       todoArchive: [
         for (final a in (json['todoArchive'] as List? ?? []))
           if (a is Map) ?ArchivedTodo.fromJson(Map<String, dynamic>.from(a)),
@@ -5350,6 +5507,14 @@ class BuildingProject {
           for (final e in (json['procurementColumnLabels'] as Map).entries)
             if (e.value.toString().trim().isNotEmpty)
               e.key.toString(): e.value.toString(),
+      },
+      procurementColumnChoices: {
+        if (json['procurementColumnChoices'] is Map)
+          for (final e in (json['procurementColumnChoices'] as Map).entries)
+            if (e.value is List && (e.value as List).isNotEmpty)
+              e.key.toString(): [
+                for (final v in e.value as List) v.toString(),
+              ],
       },
       procurementColors: {
         if (json['procurementColors'] is Map)
@@ -5474,6 +5639,7 @@ class BuildingProject {
     partLeadTimes: Map<String, int>.from(partLeadTimes),
     partNeedBy: Map<String, DateTime>.from(partNeedBy),
     todos: List<ProjectTodo>.from(todos),
+    walkthroughs: List<ProjectWalkthrough>.from(walkthroughs),
     todoArchive: List<ArchivedTodo>.from(todoArchive),
     tracks: List<ProjectTrack>.from(tracks),
     partTracks: Map<String, String>.from(partTracks),
@@ -5489,6 +5655,10 @@ class BuildingProject {
     procurementColors: Map<String, int>.of(procurementColors),
     procurementColumnOrder: List<String>.of(procurementColumnOrder),
     procurementColumnLabels: Map<String, String>.of(procurementColumnLabels),
+    procurementColumnChoices: {
+      for (final e in procurementColumnChoices.entries)
+        e.key: List<String>.of(e.value),
+    },
     procurementColumnWidths: Map<String, double>.of(procurementColumnWidths),
     procurementHiddenColumns: List<String>.of(procurementHiddenColumns),
     procurementCustomColumns: List.of(procurementCustomColumns),

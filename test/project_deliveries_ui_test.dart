@@ -97,31 +97,34 @@ void main() {
     final mic = p.addProjectDelivery(itemName: 'Ceiling mic', qty: 2);
     await pumpPane(tester, p);
 
-    // Open: the where-it-is buttons are on the card.
+    // THEY START FOLDED: named on the heading line, the buttons out of sight.
     Finder where(String id) => find.descendant(
       of: find.byKey(ValueKey('delivery_card_$id')),
       matching: find.byType(SegmentedButton<DeliveryState>),
     );
-    final openCards = where(plate.id).evaluate().length;
+    double height(String id) =>
+        tester.getSize(find.byKey(ValueKey('delivery_card_$id'))).height;
+    expect(where(plate.id), findsNothing);
+    expect(find.text('6 x Wall plate'), findsOneWidget);
+    expect(find.text('Expand all'), findsOneWidget);
+    final foldedHeight = height(mic.id);
 
+    // One opened on its own.
     await tester.tap(find.byKey(ValueKey('delivery_fold_${plate.id}')));
     await tester.pumpAndSettle();
-    expect(where(plate.id).evaluate().length, lessThan(openCards + 1));
-    // Still named, on its heading line.
-    expect(find.text('6 x Wall plate'), findsOneWidget);
-    final foldedHeight =
-        tester.getSize(find.byKey(ValueKey('delivery_card_${plate.id}'))).height;
-    final openHeight =
-        tester.getSize(find.byKey(ValueKey('delivery_card_${mic.id}'))).height;
-    expect(foldedHeight, lessThan(openHeight));
+    expect(where(plate.id), findsWidgets);
+    expect(height(plate.id), greaterThan(foldedHeight));
+    expect(height(mic.id), closeTo(foldedHeight, 1));
 
+    // With one open the button folds them all; pressed again, opens all.
+    expect(find.text('Collapse all'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('delivery_collapse_all')));
     await tester.pumpAndSettle();
-    expect(
-      tester.getSize(find.byKey(ValueKey('delivery_card_${mic.id}'))).height,
-      closeTo(foldedHeight, 1),
-    );
+    expect(height(plate.id), closeTo(foldedHeight, 1));
     expect(find.text('Expand all'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('delivery_collapse_all')));
+    await tester.pumpAndSettle();
+    expect(height(mic.id), greaterThan(foldedHeight));
 
     // And the whole section folds away.
     await tester.tap(find.byKey(const ValueKey('delivery_delivered_toggle')));
@@ -139,23 +142,24 @@ void main() {
 
     double height(String id) =>
         tester.getSize(find.byKey(ValueKey('po_card_$id'))).height;
-    final open = height(second.id);
-    expect(find.byKey(ValueKey('po_parts_${first.id}')), findsOneWidget);
+    // THEY START FOLDED, still named.
+    expect(find.byKey(ValueKey('po_parts_${first.id}')), findsNothing);
+    expect(find.text('PO-1001'), findsOneWidget, reason: 'still named');
+    final folded = height(second.id);
 
     await tester.tap(find.byKey(ValueKey('po_fold_${first.id}')));
     await tester.pumpAndSettle();
-    expect(height(first.id), lessThan(open));
-    expect(find.byKey(ValueKey('po_parts_${first.id}')), findsNothing);
-    expect(find.text('PO-1001'), findsOneWidget, reason: 'still named');
-
-    await tester.tap(find.byKey(const ValueKey('po_collapse_all')));
-    await tester.pumpAndSettle();
-    expect(height(second.id), closeTo(height(first.id), 1));
-    expect(find.text('Expand all'), findsWidgets);
-
-    await tester.tap(find.byKey(const ValueKey('po_collapse_all')));
-    await tester.pumpAndSettle();
     expect(find.byKey(ValueKey('po_parts_${first.id}')), findsOneWidget);
+    expect(height(first.id), greaterThan(folded));
+
+    // With one open the button folds them all; pressed again, opens all.
+    await tester.tap(find.byKey(const ValueKey('po_collapse_all')));
+    await tester.pumpAndSettle();
+    expect(height(first.id), closeTo(folded, 1));
+    expect(find.text('Expand all'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('po_collapse_all')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('po_parts_${second.id}')), findsOneWidget);
   });
 
   testWidgets('a PO typed at the top is a PO the job keeps', (tester) async {
@@ -265,6 +269,9 @@ void main() {
     final row = p.project.deliveries.single;
     expect(row.itemName, 'Two boxes, no paperwork');
     expect(row.needsPaperwork, isTrue);
+    // Cards start folded; opened, it says so.
+    await tester.tap(find.byKey(ValueKey('delivery_fold_${row.id}')));
+    await tester.pumpAndSettle();
     expect(find.byKey(ValueKey('delivery_no_po_${row.id}')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('delivery_paperwork_line')),
@@ -329,6 +336,9 @@ void main() {
     final p = withProject();
     final row = p.addProjectDelivery(itemName: 'Wall plate', qty: 6);
     await pumpPane(tester, p);
+    // Cards start folded.
+    await tester.tap(find.byKey(ValueKey('delivery_fold_${row.id}')));
+    await tester.pumpAndSettle();
 
     // Into storage: the pane asks where, because "in storage" that cannot say
     // where is not an answer anybody can act on.
@@ -373,6 +383,9 @@ void main() {
     final p = withProject();
     final row = p.addProjectDelivery(itemName: 'Wall plate', qty: 6);
     await pumpPane(tester, p);
+    // Cards start folded.
+    await tester.tap(find.byKey(ValueKey('delivery_fold_${row.id}')));
+    await tester.pumpAndSettle();
 
     await tester.enterText(
       find.byKey(ValueKey('delivery_note_${row.id}')),

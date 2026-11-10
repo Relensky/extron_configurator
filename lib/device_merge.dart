@@ -32,6 +32,7 @@ enum DeviceField {
   lifeYears,
   projection,
   projectorSpecs,
+  mounting,
   notes,
   ports,
 }
@@ -49,6 +50,7 @@ const Map<DeviceField, String> kDeviceFieldLabels = {
   DeviceField.lifeYears: 'Average life (years)',
   DeviceField.projection: 'Throw ratio, lumens and nits',
   DeviceField.projectorSpecs: 'Projector specs (resolution, contrast, lens)',
+  DeviceField.mounting: 'Wall mounting (size, VESA, arms)',
   DeviceField.notes: 'Notes',
   DeviceField.ports: 'Connectors',
 };
@@ -131,6 +133,10 @@ class DeviceFieldDiff {
           weightLbs: theirs.weightLbs,
           noiseDb: theirs.noiseDb,
         );
+      case DeviceField.mounting:
+        return theirs.mounting == null
+            ? base.copyWith(clearMounting: true)
+            : base.copyWith(mounting: theirs.mounting);
       case DeviceField.notes:
         return base.copyWith(notes: theirs.notes);
       case DeviceField.ports:
@@ -331,6 +337,16 @@ List<DeviceFieldDiff> fieldDiffs(
       mine: projection(mine),
       theirs: projection(theirs),
       mineIsBlank: projection(mine) == '-',
+    ));
+  }
+  final theirMount = theirs.mounting?.summary ?? '';
+  final myMount = mine.mounting?.summary ?? '';
+  if (theirs.mounting != null && theirs.mounting != mine.mounting) {
+    out.add(DeviceFieldDiff(
+      field: DeviceField.mounting,
+      mine: myMount.isEmpty ? '-' : myMount,
+      theirs: theirMount,
+      mineIsBlank: myMount.isEmpty,
     ));
   }
   final theirSpecs = projectorSpecsSummary(theirs);

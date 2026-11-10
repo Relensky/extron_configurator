@@ -223,6 +223,90 @@ Future<bool> openWebLink(BuildContext context, String url,
   }
 }
 
+/// Opens [url] in a NEW WINDOW of the default browser, not a tab in one
+/// already open - so a Sheet can sit on its own beside the app. Edge, Chrome,
+/// Brave, Vivaldi and Firefox are asked for a new window; anything else, or a
+/// browser that cannot be found, gets an ordinary launch.
+Future<bool> openInNewBrowserWindow(String url) async {
+  final u = url.trim();
+  if (u.isEmpty) return false;
+  if (Platform.isWindows) {
+    final exe = await defaultBrowserExe();
+    if (exe != null) {
+      final flag = newWindowFlagFor(exe);
+      if (flag != null) {
+        try {
+          await Process.start(exe, [flag, u], mode: ProcessStartMode.detached);
+          return true;
+        } catch (_) {
+          // Fall through to the ordinary launch.
+        }
+      }
+    }
+  }
+  try {
+    return await launchUrl(Uri.parse(u), mode: LaunchMode.externalApplication);
+  } catch (_) {
+    return false;
+  }
+}
+
+/// The switch [exe] takes for a new window, or null when it is not known.
+String? newWindowFlagFor(String exe) {
+  final name = exe.replaceAll('\\', '/').split('/').last.toLowerCase();
+  const chromium = {
+    'msedge.exe',
+    'chrome.exe',
+    'brave.exe',
+    'vivaldi.exe',
+    'opera.exe',
+    'launcher.exe',
+  };
+  if (chromium.contains(name)) return '--new-window';
+  if (name == 'firefox.exe') return '-new-window';
+  return null;
+}
+
+/// The exe in a registry open command: '"C:\...\chrome.exe" --x "%1"' gives
+/// 'C:\...\chrome.exe'. Null when there is none.
+String? exeFromOpenCommand(String command) {
+  final c = command.trim();
+  if (c.isEmpty) return null;
+  if (c.startsWith('"')) {
+    final end = c.indexOf('"', 1);
+    return end > 1 ? c.substring(1, end) : null;
+  }
+  final i = c.toLowerCase().indexOf('.exe');
+  return i < 0 ? null : c.substring(0, i + 4);
+}
+
+/// The default browser's exe on Windows, read from the https association.
+Future<String?> defaultBrowserExe() async {
+  try {
+    final choice = await Process.run('reg', [
+      'query',
+      r'HKCU\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice',
+      '/v',
+      'ProgId',
+    ]);
+    final progId = RegExp(r'ProgId\s+REG_SZ\s+(\S+)')
+        .firstMatch('${choice.stdout}')
+        ?.group(1);
+    if (progId == null) return null;
+    final open = await Process.run('reg', [
+      'query',
+      'HKCR\\$progId\\shell\\open\\command',
+      '/ve',
+    ]);
+    final command = RegExp(r'REG_(?:EXPAND_)?SZ\s+(.+)')
+        .firstMatch('${open.stdout}')
+        ?.group(1);
+    return command == null ? null : exeFromOpenCommand(command);
+  } catch (_) {
+    return null;
+  }
+}
+
 /// One page in the browser: its own WebView2 and what it is showing.
 class _BrowserTab {
   final WebviewController web = WebviewController();
@@ -778,6 +862,15 @@ class _BrowserPanelState extends State<_BrowserPanel> {
                 ? null
                 : () => launchUrl(Uri.parse(tab.address.text),
                     mode: LaunchMode.externalApplication),
+          ),
+          IconButton(
+            key: const ValueKey('browser_new_window'),
+            tooltip: 'Open in a new window',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.open_in_new, size: 18),
+            onPressed: tab.address.text.trim().isEmpty
+                ? null
+                : () => openInNewBrowserWindow(tab.address.text),
           ),
         ],
       ),

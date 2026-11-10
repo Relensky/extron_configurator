@@ -59,6 +59,8 @@ const List<_Col> _kCols = [
   (id: 'released', label: 'Released', width: 80),
   (id: 'releasedOn', label: 'Actual Release Date', width: 120),
   (id: 'delivery', label: 'Estimated Delivery Date', width: 120),
+  (id: 'ordered', label: 'Ordered', width: 140),
+  (id: 'delivered', label: 'Delivered', width: 150),
   (id: 'notes', label: 'Notes/Comments', width: 240),
 ];
 
@@ -72,6 +74,47 @@ ProcurementColumnSpec _spec(BuildingProject project, String id) =>
       (c) => c.id == id,
       orElse: () => (id: id, label: id, group: ProcurementGroup.notes),
     );
+
+/// Built-in text columns that can be made a dropdown. Added columns always
+/// can.
+const Set<String> _kChoosableBuiltIns = {
+  'description',
+  'phase',
+  'p6Id',
+  'p6Description',
+  'review',
+  'lead',
+  'notes',
+};
+
+/// Whether column [id] can be given dropdown choices.
+bool procurementColumnCanChoose(String id) =>
+    procurementColumnIsCustom(id) || _kChoosableBuiltIns.contains(id);
+
+/// What [e] says in text column [id].
+String _cellText(ProcurementEntry e, String id) => switch (id) {
+  'description' => e.description,
+  'phase' => e.installPhase,
+  'p6Id' => e.p6ActivityId,
+  'p6Description' => e.p6ActivityDescription,
+  'review' => e.reviewTime,
+  'lead' => e.leadTime,
+  'notes' => e.notes,
+  _ => e.custom[id] ?? '',
+};
+
+/// [e] with text column [id] set to [v].
+ProcurementEntry _withCellText(ProcurementEntry e, String id, String v) =>
+    switch (id) {
+      'description' => e.copyWith(description: v),
+      'phase' => e.copyWith(installPhase: v),
+      'p6Id' => e.copyWith(p6ActivityId: v),
+      'p6Description' => e.copyWith(p6ActivityDescription: v),
+      'review' => e.copyWith(reviewTime: v),
+      'lead' => e.copyWith(leadTime: v),
+      'notes' => e.copyWith(notes: v),
+      _ => e.copyWith(custom: {...e.custom, id: v}),
+    };
 
 const double _kFrozen = 260;
 const double _kRow = 44;
@@ -121,14 +164,32 @@ List<Widget> procurementSlivers(
       // A whole window tall, not whatever is left under the headings: scrolled
       // to, the grid fills the screen with its sideways bar at the foot.
       SliverLayoutBuilder(
-        builder: (context, constraints) => SliverToBoxAdapter(
-          child: SizedBox(
-            height: math.max(360.0, constraints.viewportMainAxisExtent),
-            child: _LogGrid(entries: entries, orphans: orphans),
-          ),
-        ),
+        builder: (context, constraints) {
+          final height = math.max(360.0, constraints.viewportMainAxisExtent);
+          // Scrolled partway, the grid hangs below the window; its sideways
+          // bar is drawn at the window's base, not out of sight. Less the
+          // grid's own 8 of bottom padding.
+          final below = height -
+              constraints.scrollOffset -
+              constraints.remainingPaintExtent -
+              8;
+          return SliverToBoxAdapter(
+            child: SizedBox(
+              height: height,
+              child: _LogGrid(
+                entries: entries,
+                orphans: orphans,
+                barLift: math.max(0.0, below),
+              ),
+            ),
+          );
+        },
       ),
-    if (entries.isEmpty) const SliverToBoxAdapter(child: SizedBox(height: 24)),
+    // The tab adds no clearance after this pane - see project_view.dart.
+    if (entries.isEmpty)
+      const SliverToBoxAdapter(
+        child: SizedBox(height: kFloatingButtonClearance),
+      ),
   ];
 }
 
@@ -183,6 +244,17 @@ String _usualRecipient(List<ProcurementEntry> entries) {
   return dark
       ? (fill: base.shade800, ink: Colors.white)
       : (fill: base.shade100, ink: base.shade900);
+}
+
+/// The Delivered cell's tint: all of it, some of it, or a receipt.
+({Color fill, Color ink}) _deliveredColors(ThemeData theme, String text) {
+  final dark = theme.brightness == Brightness.dark;
+  final MaterialColor base =
+      text.contains(' of ') ? Colors.orange : Colors.green;
+  return (
+    fill: dark ? base.shade800 : base.shade100,
+    ink: dark ? Colors.white : base.shade900,
+  );
 }
 
 ({Color fill, Color ink}) _companyColors(ThemeData theme, String company) {
@@ -305,7 +377,13 @@ class _Toolbar extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 /// A row of the grid: a room's band, or one line under it.
-typedef _Row = ({String room, int count, ProcurementEntry? entry, int index});
+typedef _Row = ({
+  String room,
+  int count,
+  ProcurementEntry? entry,
+  int index,
+  int group,
+});
 
 class _LogGrid extends StatefulWidget {
   final List<ProcurementEntry> entries;
@@ -313,7 +391,14 @@ class _LogGrid extends StatefulWidget {
   /// The ids of entries whose room line has gone from the job.
   final Set<String> orphans;
 
-  const _LogGrid({required this.entries, this.orphans = const {}});
+  /// How far the grid runs past the window's bottom - see PinnedGrid.barLift.
+  final double barLift;
+
+  const _LogGrid({
+    required this.entries,
+    this.orphans = const {},
+    this.barLift = 0,
+  });
 
   @override
   State<_LogGrid> createState() => _LogGridState();
@@ -381,12 +466,14 @@ class _LogGridState extends State<_LogGrid> {
 
     final groups = procurementByRoom(widget.entries);
     final rows = <_Row>[
-      for (final g in groups) ...[
-        (room: g.room, count: g.entries.length, entry: null, index: 0),
+      for (final (gi, g) in groups.indexed) ...[
+        // A band's index is its room's place, so bands can alternate.
+        (room: g.room, count: g.entries.length, entry: null, index: gi,
+            group: gi),
         // A folded room is its band alone.
         if (!_foldedRooms.contains(g.room))
           for (final (i, e) in g.entries.indexed)
-            (room: g.room, count: 0, entry: e, index: i),
+            (room: g.room, count: 0, entry: e, index: i, group: gi),
       ],
     ];
     final allFolded =
@@ -455,6 +542,7 @@ class _LogGridState extends State<_LogGrid> {
             maxHeight: frame.maxHeight,
             fillHeight: true,
             trailingSpace: kFloatingButtonClearance,
+            barLift: widget.barLift,
             frozenWidth: w(frozenBase),
             headerHeight: w(_kHead),
             bodyWidth: bodyWidth,
@@ -662,11 +750,26 @@ class _LogGridState extends State<_LogGrid> {
     );
   }
 
+  // Rooms alternate between the accent and secondary colors, band and
+  // lines alike, so each room reads as its own block.
+  bool _secondaryRoom(_Row row) => row.group.isOdd;
+
+  Color _bandInk(ThemeData theme, _Row row) => _secondaryRoom(row)
+      ? theme.colorScheme.onSecondaryContainer
+      : theme.colorScheme.onPrimaryContainer;
+
   Color? _rowFill(ThemeData theme, _Row row) {
-    if (row.entry == null) return theme.colorScheme.primaryContainer;
-    return row.index.isOdd
-        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6)
-        : null;
+    final scheme = theme.colorScheme;
+    final secondary = _secondaryRoom(row);
+    if (row.entry == null) {
+      return secondary ? scheme.secondaryContainer : scheme.primaryContainer;
+    }
+    // A faint wash of the room's color, a touch deeper on every other line.
+    final hue = secondary ? scheme.secondary : scheme.primary;
+    return Color.alphaBlend(
+      hue.withValues(alpha: row.index.isOdd ? 0.12 : 0.05),
+      scheme.surface,
+    );
   }
 
   Border _rule(ThemeData theme) => Border(
@@ -743,7 +846,7 @@ class _LogGridState extends State<_LogGrid> {
               tooltip: _foldedRooms.contains(row.room) ? 'Expand' : 'Collapse',
               visualDensity: VisualDensity.compact,
               iconSize: w(18),
-              color: theme.colorScheme.onPrimaryContainer,
+              color: _bandInk(theme, row),
               icon: Icon(
                 _foldedRooms.contains(row.room)
                     ? Icons.chevron_right
@@ -761,7 +864,7 @@ class _LogGridState extends State<_LogGrid> {
                 overflow: TextOverflow.ellipsis,
                 style: zoomed.titleSmall?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onPrimaryContainer,
+                  color: _bandInk(theme, row),
                 ),
               ),
             ),
@@ -770,7 +873,7 @@ class _LogGridState extends State<_LogGrid> {
               tooltip: 'Remove this whole section',
               visualDensity: VisualDensity.compact,
               iconSize: w(18),
-              color: theme.colorScheme.onPrimaryContainer,
+              color: _bandInk(theme, row),
               icon: const Icon(Icons.delete_sweep_outlined),
               onPressed: () => _removeSection(row.room),
             ),
@@ -892,7 +995,7 @@ class _LogGridState extends State<_LogGrid> {
 
     final phaseColors = _groupColors(theme, _Group.status);
     final cells = <Widget>[
-      pill(entry.company, _companyColors(theme, entry.company)),
+      _CompanyCell(entry: entry, style: zoomed.labelSmall, w: w),
       text(entry.room, lines: 1),
       text(entry.description),
       _StatusCell(entry: entry, style: zoomed.labelSmall, w: w),
@@ -924,6 +1027,20 @@ class _LogGridState extends State<_LogGrid> {
                 estimatedDelivery: d,
                 clearEstimatedDelivery: d == null,
               )),
+      // Read off the job's orders and delivery log - see procurement_sync.
+      Tooltip(
+        message: 'From the order recorded on the Equipment or Deliveries page',
+        waitDuration: const Duration(milliseconds: 600),
+        child: text(entry.ordered),
+      ),
+      Tooltip(
+        message: 'From the delivery log',
+        waitDuration: const Duration(milliseconds: 600),
+        // Green when it has all arrived, orange while some is still to come.
+        child: entry.delivered.isEmpty
+            ? text('')
+            : pill(entry.delivered, _deliveredColors(theme, entry.delivered)),
+      ),
       text(entry.notes),
     ];
 
@@ -952,6 +1069,72 @@ class _LogGridState extends State<_LogGrid> {
         ),
       );
     }
+
+    // A column with choices: pressed, it drops down the list right there.
+    Widget choice(String id, List<String> choices) {
+      final value = _cellText(entry, id);
+      return Builder(
+        builder: (cellContext) => InkWell(
+          key: ValueKey('procurement_choice_${id}_${entry.id}'),
+          borderRadius: BorderRadius.circular(6),
+          onTap: () async {
+            final box = cellContext.findRenderObject() as RenderBox;
+            final overlay =
+                Overlay.of(cellContext).context.findRenderObject() as RenderBox;
+            final at = box.localToGlobal(
+              Offset(0, box.size.height),
+              ancestor: overlay,
+            );
+            final picked = await showMenu<String>(
+              context: cellContext,
+              position: RelativeRect.fromLTRB(
+                at.dx,
+                at.dy,
+                overlay.size.width - at.dx,
+                0,
+              ),
+              items: [
+                for (final c in choices)
+                  CheckedPopupMenuItem(
+                    value: c,
+                    checked: c == value,
+                    child: Text(c),
+                  ),
+                if (value.isNotEmpty) ...[
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(value: '', child: Text('Clear')),
+                ],
+              ],
+            );
+            if (picked == null || picked == value) return;
+            provider.updateProcurementEntry(_withCellText(entry, id, picked));
+          },
+          child: SizedBox.expand(
+            child: Row(
+              children: [
+                Expanded(child: text(value)),
+                Icon(
+                  Icons.arrow_drop_down,
+                  size: w(18),
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget cellFor(String id) {
+      final choices = provider.project.procurementColumnChoices[id];
+      if (choices != null &&
+          choices.isNotEmpty &&
+          procurementColumnCanChoose(id)) {
+        return choice(id, choices);
+      }
+      return byId[id] ?? custom(id);
+    }
+
     return Material(
       color: _rowFill(theme, row) ?? Colors.transparent,
       child: InkWell(
@@ -974,10 +1157,81 @@ class _LogGridState extends State<_LogGrid> {
                       ),
                     ),
                   ),
-                  child: byId[col.id] ?? custom(col.id),
+                  child: cellFor(col.id),
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Who buys it, as a colored pill with a dropdown of the companies.
+class _CompanyCell extends StatelessWidget {
+  final ProcurementEntry entry;
+  final TextStyle? style;
+  final double Function(double) w;
+
+  const _CompanyCell({
+    required this.entry,
+    required this.style,
+    required this.w,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.read<AppStateProvider>();
+    final now = entry.company.trim();
+    // A typed company not on the list stays offered.
+    final options = [
+      ...kProcurementCompanies,
+      if (now.isNotEmpty && !kProcurementCompanies.contains(now)) now,
+    ];
+    final c = now.isEmpty
+        ? (
+            fill: theme.colorScheme.surfaceContainerHighest,
+            ink: theme.colorScheme.onSurfaceVariant,
+          )
+        : _companyColors(theme, now);
+    return PopupMenuButton<String>(
+      key: ValueKey('procurement_company_${entry.id}'),
+      tooltip: 'Set who buys it',
+      onSelected: (v) =>
+          provider.updateProcurementEntry(entry.copyWith(company: v)),
+      itemBuilder: (ctx) => [
+        for (final o in options)
+          CheckedPopupMenuItem(value: o, checked: o == now, child: Text(o)),
+        const PopupMenuDivider(),
+        CheckedPopupMenuItem(
+          value: '',
+          checked: now.isEmpty,
+          child: const Text('None'),
+        ),
+      ],
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: w(8), vertical: w(3)),
+        decoration: BoxDecoration(
+          color: c.fill,
+          borderRadius: BorderRadius.circular(w(12)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                now.isEmpty ? 'Set company' : now,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style?.copyWith(
+                  color: c.ink,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_drop_down, size: w(16), color: c.ink),
+          ],
         ),
       ),
     );
@@ -1241,6 +1495,11 @@ Future<ProcurementEntry?> showProcurementEditor(
   final columns = project.procurementColumns;
   final shownIds = {for (final c in columns) c.id};
   bool shows(String id) => shownIds.contains(id);
+  // A dropdown column's choices, else [fallback].
+  List<String> picks(String id, [List<String> fallback = const []]) {
+    final c = project.procurementColumnChoices[id];
+    return c == null || c.isEmpty ? fallback : c;
+  }
   final custom = {
     for (final c in columns)
       if (procurementColumnIsCustom(c.id))
@@ -1334,7 +1593,12 @@ Future<ProcurementEntry?> showProcurementEditor(
                     field(device, 'Device', width: 536),
                   ],
                   if (shows('description'))
-                    field(description, 'Equipment description', width: 536),
+                    field(
+                      description,
+                      'Equipment description',
+                      width: 536,
+                      presets: picks('description'),
+                    ),
                   if (shows('status') || shows('released'))
                   SizedBox(
                     width: 260,
@@ -1367,13 +1631,21 @@ Future<ProcurementEntry?> showProcurementEditor(
                     field(
                       phase,
                       'Install before drywall or after paint?',
-                      presets: kProcurementInstallPhases,
+                      presets: picks('phase', kProcurementInstallPhases),
                     ),
-                  if (shows('lead')) field(lead, 'Lead time (weeks)'),
-                  if (shows('p6Id')) field(p6Id, 'P6 activity ID'),
-                  if (shows('review')) field(review, 'Review time'),
+                  if (shows('lead'))
+                    field(lead, 'Lead time (weeks)', presets: picks('lead')),
+                  if (shows('p6Id'))
+                    field(p6Id, 'P6 activity ID', presets: picks('p6Id')),
+                  if (shows('review'))
+                    field(review, 'Review time', presets: picks('review')),
                   if (shows('p6Description'))
-                    field(p6Desc, 'P6 activity description', width: 536),
+                    field(
+                      p6Desc,
+                      'P6 activity description',
+                      width: 536,
+                      presets: picks('p6Description'),
+                    ),
                   if (shows('p6Start') || shows('onSite'))
                     date('P6 start date', p6Start, (v) => p6Start = v),
                   if (shows('onSite'))
@@ -1399,17 +1671,20 @@ Future<ProcurementEntry?> showProcurementEditor(
                   if (shows('delivery'))
                     date('Estimated delivery', delivery, (v) => delivery = v),
                   if (shows('notes'))
-                    field(notes, 'Notes/comments', width: 536, maxLines: 3),
+                    field(
+                      notes,
+                      'Notes/comments',
+                      width: 536,
+                      maxLines: 3,
+                      presets: picks('notes'),
+                    ),
                   for (final c in custom.entries)
-                    SizedBox(
-                      width: 260,
-                      child: TextField(
-                        key: ValueKey('procurement_editor_${c.key}'),
-                        controller: c.value.text,
-                        decoration: InputDecoration(
-                          labelText: c.value.label,
-                          isDense: true,
-                        ),
+                    KeyedSubtree(
+                      key: ValueKey('procurement_editor_${c.key}'),
+                      child: field(
+                        c.value.text,
+                        c.value.label,
+                        presets: picks(c.key),
                       ),
                     ),
                 ],
@@ -1484,6 +1759,7 @@ Future<void> _exportSpreadsheet(BuildContext context) async {
           colors: project.procurementColors,
           labels: project.procurementColumnLabels,
           columns: project.procurementColumns,
+          widths: project.procurementColumnWidths,
         ),
       ]),
     );
@@ -1517,6 +1793,10 @@ Future<void> showProcurementColumnDialog(
       provider.project.procurementColumnLabels,
     ),
   );
+  final startChoices =
+      provider.project.procurementColumnChoices[column.id] ?? const <String>[];
+  final choices = TextEditingController(text: startChoices.join('\n'));
+  var dropdown = startChoices.isNotEmpty;
   return showDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(
@@ -1536,6 +1816,7 @@ Future<void> showProcurementColumnDialog(
           title: const Text('Column heading'),
           content: SizedBox(
             width: 420,
+            child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1563,6 +1844,42 @@ Future<void> showProcurementColumnDialog(
                     v.trim() == column.label ? '' : v,
                   ),
                 ),
+                if (procurementColumnCanChoose(column.id)) ...[
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    key: const ValueKey('procurement_column_dropdown'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Dropdown'),
+                    subtitle: const Text(
+                      'Cells pick from a list instead of being typed',
+                    ),
+                    value: dropdown,
+                    onChanged: (v) => setLocal(() {
+                      dropdown = v;
+                      provider.setProcurementColumnChoices(
+                        column.id,
+                        v ? choices.text.split('\n') : const [],
+                      );
+                    }),
+                  ),
+                  if (dropdown)
+                    TextField(
+                      key: const ValueKey('procurement_column_choices'),
+                      controller: choices,
+                      minLines: 3,
+                      maxLines: 6,
+                      decoration: const InputDecoration(
+                        labelText: 'Choices, one per line',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (v) => provider.setProcurementColumnChoices(
+                        column.id,
+                        v.split('\n'),
+                      ),
+                    ),
+                ],
                 const SizedBox(height: 16),
                 Text(
                   'The title and its color are used on the page, in the '
@@ -1612,6 +1929,7 @@ Future<void> showProcurementColumnDialog(
                   ],
                 ),
               ],
+            ),
             ),
           ),
           actions: [
@@ -1726,18 +2044,28 @@ class _ColumnsDialog extends StatefulWidget {
 
 class _ColumnsDialogState extends State<_ColumnsDialog> {
   final _name = TextEditingController();
+  final _choices = TextEditingController();
+
+  /// The new column is a dropdown of [_choices].
+  bool _dropdown = false;
 
   @override
   void dispose() {
     _name.dispose();
+    _choices.dispose();
     super.dispose();
   }
 
   void _add(AppStateProvider provider) {
     final name = _name.text.trim();
     if (name.isEmpty) return;
-    provider.addProcurementColumn(name);
+    final id = provider.addProcurementColumn(name);
+    if (_dropdown) {
+      provider.setProcurementColumnChoices(id, _choices.text.split('\n'));
+    }
     _name.clear();
+    _choices.clear();
+    setState(() => _dropdown = false);
   }
 
   Future<void> _deleteAll(AppStateProvider provider) async {
@@ -1860,6 +2188,33 @@ class _ColumnsDialogState extends State<_ColumnsDialog> {
                     label: const Text('Add'),
                   ),
                 ],
+              ),
+              CheckboxListTile(
+                key: const ValueKey('procurement_column_new_dropdown'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Dropdown: cells pick from a list'),
+                value: _dropdown,
+                onChanged: (v) => setState(() => _dropdown = v ?? false),
+              ),
+              if (_dropdown)
+                TextField(
+                  key: const ValueKey('procurement_column_new_choices'),
+                  controller: _choices,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    labelText: 'Choices, one per line',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Text(
+                'Press a column heading on the log to make an existing column '
+                'a dropdown or change its choices.',
+                style: theme.textTheme.bodySmall,
               ),
             ],
           ),
@@ -2064,6 +2419,7 @@ class _ProcurementImageDialogState extends State<_ProcurementImageDialog> {
         height: MediaQuery.of(context).size.height * 0.7,
         child: ZoomablePicturePreview(
           keyPrefix: 'procurement_image',
+          magnifier: true,
           backdrop: Theme.of(context).brightness == Brightness.dark
               ? Colors.black45
               : Colors.grey[350],
@@ -2232,12 +2588,15 @@ class ProcurementLogPicture extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [for (final c in columns) heading(c)],
           ),
-          for (final group in procurementByRoom(entries)) ...[
+          for (final (gi, group) in procurementByRoom(entries).indexed) ...[
             Container(
               width: total,
               margin: const EdgeInsets.only(top: 8),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              color: const Color(0xFFE8EAF6),
+              // Alternating shades of one hue, so the rooms stay apart.
+              color: gi.isOdd
+                  ? const Color(0xFFD1D6F0)
+                  : const Color(0xFFE8EAF6),
               child: Text(
                 group.room.isEmpty ? 'No room' : group.room,
                 style: const TextStyle(

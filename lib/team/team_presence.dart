@@ -31,6 +31,34 @@ import 'team_host.dart';
 const Duration kPresenceHeartbeat = Duration(seconds: 15);
 const Duration kPresenceStaleAfter = Duration(seconds: 75);
 
+/// [TEAM - ACTIVITY]: what this app's person is doing right now that the
+/// others should see - 'Composing a notification email' - '' for nothing.
+String _teamActivity = '';
+
+/// The boards that write a note and so carry [_teamActivity].
+final Set<TeamPresenceBoard> _activityBoards = {};
+
+/// [TEAM - ACTIVITY]: says (or, with null or '', stops saying) what this
+/// person is doing right now - 'Composing a notification email' - on their
+/// presence note, written at once rather than on the next heartbeat, so the
+/// others' "Online now" and team page show it. Transient: it is never saved,
+/// and a note that goes stale takes it with it.
+///
+/// Safe to call at any time: with the team features off or not started yet
+/// there is no note and nothing is written (a board started later picks the
+/// activity up on its first beat).
+void teamSetActivity(String? activity) {
+  final a = activity?.trim() ?? '';
+  if (a == _teamActivity) return;
+  _teamActivity = a;
+  for (final board in _activityBoards.toList()) {
+    board._activityChanged();
+  }
+}
+
+/// This app's activity, as [teamSetActivity] last set it ('' for none).
+String get teamActivity => _teamActivity;
+
 /// Who this copy of the app is: the Windows sign-in name and the machine.
 class TeamIdentity {
   final String user;
@@ -133,6 +161,11 @@ class TeamPresence {
   final String app;
   String get appName => teamAppName(app);
 
+  /// [TEAM - ACTIVITY]: what they are doing right now, in words -
+  /// 'Composing a notification email' ('' for nothing; notes from before
+  /// this carry none). See [teamSetActivity].
+  final String activity;
+
   const TeamPresence({
     required this.user,
     required this.machine,
@@ -144,6 +177,7 @@ class TeamPresence {
     this.room = '',
     this.editing = const [],
     this.app = '',
+    this.activity = '',
   });
 
   /// 'jsmith' or 'jsmith (GVE: john.smith)'.
@@ -173,6 +207,7 @@ class TeamPresence {
         if (room.isNotEmpty) 'room': room,
         if (editing.isNotEmpty) 'editing': [for (final e in editing) e.toJson()],
         if (app.isNotEmpty) 'app': app,
+        if (activity.isNotEmpty) 'activity': activity,
       };
 
   static TeamPresence? fromJson(Object? json) {
@@ -192,6 +227,7 @@ class TeamPresence {
       tab: json['tab']?.toString() ?? '',
       room: json['room']?.toString() ?? '',
       app: json['app']?.toString() ?? '',
+      activity: json['activity']?.toString().trim() ?? '',
       editing: [
         for (final e in (json['editing'] as List? ?? const []))
           if (TeamEdit.fromJson(e) case final edit?) edit,
@@ -268,6 +304,11 @@ class TeamPresenceBoard extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     _stopWatching();
+    if (f.isNotEmpty && !readOnly) {
+      _activityBoards.add(this);
+    } else {
+      _activityBoards.remove(this);
+    }
     if (f.isNotEmpty) {
       // Away: the heartbeat goes on, but nobody is reading the others.
       _timer = Timer.periodic(
@@ -331,6 +372,13 @@ class TeamPresenceBoard extends ChangeNotifier {
     unawaited(beat(readOthers: false));
   }
 
+  /// [TEAM - ACTIVITY]: [teamSetActivity] changed it - written at once.
+  void _activityChanged() {
+    if (_folder.isEmpty || readOnly) return;
+    unawaited(beat(readOthers: false));
+    notifyListeners();
+  }
+
   /// Says this person has [key] open to change. Pair with [endEditing].
   void beginEditing(String key, String label) {
     _editing[key] = TeamEdit(key: key, label: label, since: DateTime.now());
@@ -374,6 +422,7 @@ class TeamPresenceBoard extends ChangeNotifier {
         room: _room,
         editing: _editing.values.toList(),
         app: TeamHost.appId,
+        activity: _teamActivity,
       );
 
   /// Writes this note and (normally) reads the others. Never throws: a
@@ -476,6 +525,7 @@ class TeamPresenceBoard extends ChangeNotifier {
 
   /// Takes this note down (the app is closing).
   Future<void> withdraw() async {
+    _activityBoards.remove(this);
     _timer?.cancel();
     _timer = null;
     _stopWatching();
@@ -484,6 +534,7 @@ class TeamPresenceBoard extends ChangeNotifier {
 
   @override
   void dispose() {
+    _activityBoards.remove(this);
     _timer?.cancel();
     _stopWatching();
     super.dispose();
