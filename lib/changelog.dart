@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.199+209';
+const String kAppVersion = '0.5.205+215';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,70 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.205',
+    date: 'November 12, 2026',
+    title: 'Walls: save sizes to the catalog, zoom, a movable schedule',
+    changes: [
+      'Walls: a display or mount whose sizes differ from its catalog entry has Save sizes to catalog in its panel (Add to catalog when the model has no entry yet) - its size, VESA and hole position, and for a mount its plate, arms, VESA range, tilt and weight limit. The catalog file is backed up first; items already on walls keep their own sizes.',
+      'Walls: something just added - from Add item, the catalog, a cane rail or Duplicate - is washed and outlined in purple and tagged Added until you pick something else or move it.',
+      'Walls: the mounting schedule lists the mount center, the low and high holes and the display center above the floor; so does the exported schedule.',
+      'Walls: zoom with the mouse wheel or the Zoom buttons, drag empty wall to move around, and Fit to go back. Export PNG saves the drawing as it is on screen, zoomed in or not.',
+      'Walls: drag the mounting schedule to wherever it reads best, and put the key on the drawing (Key > Put the key on the drawing) and drag it too. Both stay where you put them.',
+      'Walls: All items on the mounting view dimensions every other item from the left end of the wall and the floor, each in its own faded color, behind the mounts.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.204',
+    date: 'November 12, 2026',
+    title: 'Walls: measure point to point',
+    changes: [
+      'Walls: Measure points in an item\'s panel measures between any two points on the wall - a display\'s edges, center, VESA hole rows and VESA center; a mount\'s holes, plate ends, plate top, bottom and center line, each arm\'s edges and center line, and the arm ends; the wall\'s ends, the floor and the ceiling. It gives the distance across and up and down, and the drawing shows it in teal. The selected item and the display or mount it pairs with come first in the lists.',
+      'Walls: the mounting layout dimensions the floor to the plate\'s top as well as to its bottom.',
+      'Walls: a mount\'s panel sets where its hooks seat - Hooks above the top holes, measured on the bracket from the top bolt hole it uses to where its hook sits on the plate\'s top, or Plate center above VESA center. The plate moves to match while the display stays put, so the plate\'s height on the wall and every measurement follow. A seat past the ends of the arms is a warning.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.203',
+    date: 'November 12, 2026',
+    title: 'Walls: any unit, conduit and Wiremold, measuring',
+    changes: [
+      'Walls: the notation key is a Key button beside Units, easier to find than the ? it was.',
+      'Walls: measure between two items - pick one, then choose Measure to in its panel or Shift+click the other on the drawing. The panel gives the clear space across and up and down, edge to edge, and center to center; the drawing shows the clear space dimensioned in orange.',
+      'Walls: Add item > Raceway puts surface conduit or Wiremold on the wall at its real size - Wiremold 500, 700, 2400 and 4000, and 1/2", 3/4", 1" and 1-1/4" EMT. A run starts up the wall; Turn lays it across. Running into a power or data box or another run is not flagged; across a door it is.',
+      'Walls: Add wall and Edit wall have a Units choice - feet and inches, inches, cm or mm. Switching it converts what is typed, and it is the same setting as the toolbar\'s, so the tab follows.',
+      'Walls: the length and ceiling boxes take any unit (20\', 19\' 6", 234", 594 cm, 5940 mm, 5.94 m) and show what you typed in every unit underneath, or say when it is not a length.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.202',
+    date: 'November 12, 2026',
+    title: 'Walls: plate height, cane rails that follow, notation key',
+    changes: [
+      'Walls: the side panel follows the Units choice too - feet and inches, inches, cm or mm - VESA sizes included (still saved as whole mm).',
+      'Walls: a mount\'s panel has Plate bottom above floor and Plate center above floor. Type a height and the plate moves there, the display on it with it, so you can see what that does to everything else.',
+      'Walls: a cane rail stays under the display it guards - as wide, and out to within 4" of its face (CBC 11B-307.2) - when the display or its mount moves or changes. Lock the rail, or move or size it yourself, and it stays where you put it; Untie lets it go for good.',
+      'Walls: Add item > Cane rail goes under the display that needs one, sized to it, instead of a generic 72" rail.',
+      'Walls: a ? button beside Units explains the drawing\'s shorthand - AFF, CL, CLG, the M1 tags, VESA and the rest.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.201',
+    date: 'November 12, 2026',
+    title: 'Walls: lengths in feet, inches, cm or mm',
+    changes: [
+      'Walls: a Units choice in the toolbar shows every size - the drawing, the mounting layout and schedule, the item panel - in feet and inches, inches alone, centimeters or millimeters. It is remembered with your settings.',
+      'Walls: size boxes take any of those: 3\' 6", 42", 106.7 cm, 1067 mm or 1.07 m. A bare number is in the unit shown when that is cm or mm, otherwise inches.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.200',
+    date: 'November 10, 2026',
+    title: 'Walls: Newline tilt mount at its current sizes',
+    changes: [
+      'Walls: the Newline tilt mount (EPR8A50600-000) takes its sizes from Newline\'s current drawing - 37.79" wide on a 9.76" plate, 2.67" off the wall, arms 3.93" to 31.49" apart, VESA 100 x 100 to 800 x 400, tilting +5/-10 degrees.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.199',
     date: 'November 10, 2026',

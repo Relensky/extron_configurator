@@ -39,6 +39,25 @@ void main() {
       expect(inchesLabel(7.6), '7.6"');
       expect(inchesLabel(36), "3'");
     });
+
+    test('lengths show and read back in the unit picked', () {
+      addTearDown(() => wallLengthUnit = LengthUnit.feet);
+      expect(inchesLabel(42, unit: LengthUnit.inches), '42"');
+      expect(inchesLabel(31.49, unit: LengthUnit.inches), '31.49"');
+      expect(inchesLabel(42, unit: LengthUnit.cm), '106.7 cm');
+      expect(inchesLabel(42, unit: LengthUnit.mm), '1067 mm');
+      expect(parseInchesText('1016 mm'), closeTo(40, 1e-9));
+      expect(parseInchesText('101.6cm'), closeTo(40, 1e-9));
+      expect(parseInchesText('1 m'), closeTo(39.370, 1e-3));
+      wallLengthUnit = LengthUnit.mm;
+      expect(inchesLabel(42), '1067 mm');
+      expect(parseInchesText('254'), closeTo(10, 1e-9));
+      expect(parseInchesText('10"'), 10);
+      expect(parseInchesText(lengthFieldText(37.79)), closeTo(37.79, 0.005));
+      wallLengthUnit = LengthUnit.cm;
+      expect(parseInchesText('25.4'), closeTo(10, 1e-9));
+      expect(parseInchesText(lengthFieldText(37.79)), closeTo(37.79, 0.005));
+    });
   });
 
   group('display on its mount', () {
@@ -46,8 +65,8 @@ void main() {
       final w = qpro();
       final d = display(w), m = mount(w);
       expect(d.mountId, m.id);
-      expect(d.standoff, closeTo(2.9, 1e-9));
-      expect(d.front, closeTo(2.9 + 4.7, 1e-9));
+      expect(d.standoff, closeTo(2.67, 1e-9));
+      expect(d.front, closeTo(2.67 + 4.7, 1e-9));
       // VESA center 22.175" above the display's bottom.
       expect(m.centerY, closeTo(d.y + 14.3 + 15.75 / 2, 1e-9));
       expect(m.centerX, closeTo(d.vesaCenterX, 1e-9));

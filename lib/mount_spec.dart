@@ -224,18 +224,23 @@ const WallMountSpec kSpecNewlineQPro86 = WallMountSpec(
   touch: true,
 );
 
-/// Newline tilt mount EPR8A50600-000: 34.6" wide, arms 16.9" on a 7.9" plate,
-/// 2.9" off the wall, 10 degrees, VESA to 800 x 400, 250 lb.
+/// Newline tilt mount EPR8A50600-000: 37.79" wide on a 9.76" plate, 2.67"
+/// off the wall; arms 3.93" to 31.49" apart, holes 3.93" to 15.74" up them
+/// (VESA 100 x 100 to 800 x 400); tilts +5/-10 degrees; 250 lb. Arm length
+/// and width read off the drawing.
 const WallMountSpec kSpecNewlineTiltMount = WallMountSpec(
   role: MountRole.mount,
-  width: 34.6,
-  height: 16.9,
-  depth: 2.9,
+  width: 37.79,
+  height: 16.5,
+  depth: 2.67,
   vesaW: 800,
   vesaH: 400,
-  plateHeight: 7.9,
-  armWidth: 1.1,
-  armSpanMax: 33.5,
+  vesaMinW: 100,
+  vesaMinH: 100,
+  plateHeight: 9.76,
+  armWidth: 1.45,
+  armSpanMin: 3.93,
+  armSpanMax: 31.49,
   maxTilt: 10,
   capacityLb: 250,
 );

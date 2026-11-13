@@ -38,6 +38,7 @@ enum WallItemKind {
   table('Table'),
   obstruction('Column / pipe / duct'),
   caneRail('Cane rail'),
+  raceway('Conduit / raceway'),
   other('Other');
 
   final String label;
@@ -85,6 +86,7 @@ enum WallItemKind {
     table => Icons.table_restaurant,
     obstruction => Icons.view_column,
     caneRail => Icons.horizontal_rule,
+    raceway => Icons.cable,
     other => Icons.crop_square,
   };
 
@@ -104,6 +106,7 @@ enum WallItemKind {
     credenza || table => const Color(0xFF795548),
     obstruction => const Color(0xFF9E9E9E),
     caneRail => const Color(0xFF6A1B9A),
+    raceway => const Color(0xFF3949AB),
     other => const Color(0xFF607D8B),
   };
 }
@@ -164,6 +167,11 @@ class WallItem {
   /// height. What clashes with boxes in the wall.
   final double plateHeight;
 
+  /// For a mount: the plate's center above the arms' middle, which sits on
+  /// the display's VESA center. Set by where the arms' hooks seat on the
+  /// plate; 0 is centered.
+  final double plateOffset;
+
   /// For a mount: how far it tilts either way, degrees.
   final double maxTiltDeg;
 
@@ -211,6 +219,7 @@ class WallItem {
     this.vesaUp = 0,
     this.vesaLeft = 0,
     this.plateHeight = 0,
+    this.plateOffset = 0,
     this.maxTiltDeg = 0,
     this.armWidth = 0,
     this.armSpanMin = 0,
@@ -271,7 +280,7 @@ class WallItem {
   /// The part that sits on the wall: a mount's plate, else the whole face.
   Rect get wallFootprint {
     if (kind == WallItemKind.mount && plateHeight > 0 && plateHeight < height) {
-      final mid = centerY;
+      final mid = centerY + plateOffset;
       return Rect.fromLTRB(x, mid - plateHeight / 2, right, mid + plateHeight / 2);
     }
     return face;
@@ -316,6 +325,7 @@ class WallItem {
     double? vesaUp,
     double? vesaLeft,
     double? plateHeight,
+    double? plateOffset,
     double? maxTiltDeg,
     double? armWidth,
     double? armSpanMin,
@@ -348,6 +358,7 @@ class WallItem {
     vesaUp: vesaUp ?? this.vesaUp,
     vesaLeft: vesaLeft ?? this.vesaLeft,
     plateHeight: plateHeight ?? this.plateHeight,
+    plateOffset: plateOffset ?? this.plateOffset,
     maxTiltDeg: maxTiltDeg ?? this.maxTiltDeg,
     armWidth: armWidth ?? this.armWidth,
     armSpanMin: armSpanMin ?? this.armSpanMin,
@@ -382,6 +393,7 @@ class WallItem {
     if (vesaUp > 0) 'vesaUp': vesaUp,
     if (vesaLeft > 0) 'vesaLeft': vesaLeft,
     if (plateHeight > 0) 'plateH': plateHeight,
+    if (plateOffset != 0) 'plateOff': plateOffset,
     if (maxTiltDeg > 0) 'maxTilt': maxTiltDeg,
     if (armWidth > 0) 'armW': armWidth,
     if (armSpanMin > 0) 'armSpanMin': armSpanMin,
@@ -424,6 +436,7 @@ class WallItem {
       vesaUp: plus('vesaUp'),
       vesaLeft: plus('vesaLeft'),
       plateHeight: plus('plateH'),
+      plateOffset: read('plateOff'),
       maxTiltDeg: plus('maxTilt'),
       armWidth: plus('armW'),
       armSpanMin: plus('armSpanMin'),
@@ -503,14 +516,23 @@ class WallView {
     return copyWith(items: next).resolved();
   }
 
-  /// This wall without [itemId]. A display on it lets go of the mount.
-  WallView withoutItem(String itemId) => copyWith(
-    items: [
-      for (final i in items)
-        if (i.id != itemId)
-          i.mountId == itemId ? i.copyWith(mountId: '', standoff: 0) : i,
-    ],
-  );
+  /// This wall without [itemId]. A display on it lets go of the mount; a cane
+  /// rail under it stays where it was drawn.
+  WallView withoutItem(String itemId) {
+    final r = resolved();
+    return copyWith(
+      items: [
+        for (final i in items)
+          if (i.id != itemId)
+            if (i.mountId != itemId)
+              i
+            else if (i.kind == WallItemKind.caneRail)
+              (r.item(i.id) ?? i).copyWith(mountId: '')
+            else
+              i.copyWith(mountId: '', standoff: 0),
+      ],
+    );
+  }
 
   /// Mounts moved to their displays, and displays stood off by their mounts.
   WallView resolved() {
@@ -540,7 +562,32 @@ class WallView {
       }
       out.add(i);
     }
+    // A cane rail keeps under what it guards: as wide, to within 4" of its
+    // face (CBC 11B-307.2). Its height stays the user's; locked, it stays.
+    final byOut = {for (final i in out) i.id: i};
+    for (var n = 0; n < out.length; n++) {
+      final r = out[n];
+      if (r.kind != WallItemKind.caneRail || r.mountId.isEmpty || r.locked) {
+        continue;
+      }
+      final g = byOut[r.mountId];
+      if (g == null) continue;
+      out[n] = r.copyWith(
+        x: g.x,
+        width: g.width,
+        depth: math.max(1.5, g.front - kMaxProtrusionIn),
+      );
+    }
     return copyWith(items: out);
+  }
+
+  /// The item [railId] guards, if it is a cane rail tied to one.
+  WallItem? guardedBy(String railId) {
+    final r = item(railId);
+    if (r == null || r.kind != WallItemKind.caneRail || r.mountId.isEmpty) {
+      return null;
+    }
+    return item(r.mountId);
   }
 
   /// The display hanging on [mountId], if any.
@@ -615,6 +662,15 @@ class MountPlacement {
     return mount.vesaHoles;
   }
 
+  /// The mount's center above the floor: the arms' middle, on its display's
+  /// VESA center.
+  double get mountCenterY => mount.centerY;
+
+  /// The low and high rows of holes the arms bolt to, above the floor; null
+  /// with no pattern.
+  double? get lowHolesY => holes.isEmpty ? null : holes.first.dy;
+  double? get highHolesY => holes.isEmpty ? null : holes.last.dy;
+
   /// The VESA pattern, mm.
   double get vesaWmm => display != null && display!.vesaW > 0 ? display!.vesaW : mount.vesaW;
   double get vesaHmm => display != null && display!.vesaH > 0 ? display!.vesaH : mount.vesaH;
@@ -622,6 +678,161 @@ class MountPlacement {
   /// The display's back off the wall face.
   double get offWall => mount.standoff + mount.depth;
 }
+
+/// [mountId]'s wall plate as drawn, y up: `top` is its bottom edge.
+Rect? plateOf(WallView wall, String mountId) {
+  final m = wall.resolved().item(mountId);
+  return m == null || m.kind != WallItemKind.mount ? null : m.wallFootprint;
+}
+
+/// [wall] with [mountId]'s plate bottom [bottom] above the floor. A display
+/// hanging on it moves, and the mount with it.
+WallView withPlateBottom(WallView wall, String mountId, double bottom) {
+  final plate = plateOf(wall, mountId);
+  if (plate == null) return wall;
+  final dy = bottom - plate.top;
+  if (dy.abs() < 1e-9) return wall;
+  final moved = wall.displayOn(mountId) ?? wall.item(mountId)!;
+  return wall.withItem(moved.copyWith(y: moved.y + dy));
+}
+
+/// A line on the wall to measure from: up and down at [x], level at [y], or
+/// a point with both.
+@immutable
+class WallMark {
+  final String id, label;
+  final double? x, y;
+  const WallMark(this.id, this.label, {this.x, this.y});
+}
+
+/// The holes [m]'s arms bolt to: its display's, else its own pattern.
+WallItem _holesFor(WallItem m, WallItem? d) =>
+    d != null && d.vesaW > 0 && d.vesaH > 0 ? d : m;
+
+/// How high [m]'s hook seat (the plate's top) is above the top VESA holes
+/// its arms bolt to.
+double hookAboveTopHoles(WallItem m, WallItem? d) {
+  final h = _holesFor(m, d);
+  return m.plateOffset + m.plateHeight / 2 - h.vesaHIn / 2;
+}
+
+/// [m] with its hooks [above] the top VESA holes.
+WallItem withHookAboveTopHoles(WallItem m, WallItem? d, double above) {
+  final h = _holesFor(m, d);
+  return m.copyWith(
+    plateOffset: above - m.plateHeight / 2 + h.vesaHIn / 2,
+  );
+}
+
+/// Where [m]'s arms run along the wall: on [d]'s VESA holes when it hangs
+/// one, else on its own largest pattern.
+List<double> armCenters(WallItem m, WallItem? d) {
+  final span = d != null && d.vesaW > 0
+      ? d.vesaWIn
+      : math.min(m.width - 2, m.vesaWIn);
+  return [m.centerX - span / 2, m.centerX + span / 2];
+}
+
+/// The wall's own lines: its ends, the floor and the ceiling.
+List<WallMark> wallMarks(WallView wall) => [
+  const WallMark('wall:left', 'Wall: left end', x: 0),
+  WallMark('wall:right', 'Wall: right end', x: wall.widthIn),
+  const WallMark('wall:floor', 'Floor', y: 0),
+  if (wall.heightIn > 0)
+    WallMark('wall:ceiling', 'Ceiling', y: wall.heightIn),
+];
+
+/// What can be measured from on [i]: its edges and center; a display's VESA
+/// hole lines; a mount's plate and each arm.
+List<WallMark> marksOf(WallView wall, WallItem i) {
+  final n = i.name, p = '${i.id}:';
+  if (i.kind == WallItemKind.mount) {
+    final plate = i.wallFootprint;
+    final hung = wall.displayOn(i.id);
+    final arms = armCenters(i, hung);
+    final half = i.armDrawWidth / 2;
+    // The holes it carries: its display's, else its own largest pattern.
+    final h = hung != null && hung.vesaW > 0 ? hung : i;
+    final holes = h.vesaW > 0 && h.vesaH > 0;
+    return [
+      if (holes) ...[
+        WallMark('${p}hL', '$n: left holes',
+            x: h.vesaCenterX - h.vesaWIn / 2),
+        WallMark('${p}hR', '$n: right holes',
+            x: h.vesaCenterX + h.vesaWIn / 2),
+        WallMark('${p}hB', '$n: low holes',
+            y: h.vesaCenterY - h.vesaHIn / 2),
+        WallMark('${p}hT', '$n: high holes',
+            y: h.vesaCenterY + h.vesaHIn / 2),
+        WallMark('${p}hC', '$n: holes center',
+            x: h.vesaCenterX, y: h.vesaCenterY),
+      ],
+      WallMark('${p}plateL', '$n: plate left end', x: plate.left),
+      WallMark('${p}plateR', '$n: plate right end', x: plate.right),
+      WallMark('${p}plateB', '$n: plate bottom', y: plate.top),
+      WallMark('${p}plateT', '$n: plate top', y: plate.bottom),
+      WallMark('${p}plateC', '$n: plate center line',
+          x: plate.center.dx, y: plate.center.dy),
+      WallMark('${p}armLo', '$n: left arm, outer edge', x: arms[0] - half),
+      WallMark('${p}armLc', '$n: left arm, center line', x: arms[0]),
+      WallMark('${p}armLi', '$n: left arm, inner edge', x: arms[0] + half),
+      WallMark('${p}armRi', '$n: right arm, inner edge', x: arms[1] - half),
+      WallMark('${p}armRc', '$n: right arm, center line', x: arms[1]),
+      WallMark('${p}armRo', '$n: right arm, outer edge', x: arms[1] + half),
+      WallMark('${p}armB', '$n: arm bottom ends', y: i.y),
+      WallMark('${p}armT', '$n: arm top ends', y: i.top),
+    ];
+  }
+  final holes = i.vesaW > 0 && i.vesaH > 0;
+  return [
+    WallMark('${p}L', '$n: left edge', x: i.x),
+    WallMark('${p}R', '$n: right edge', x: i.right),
+    WallMark('${p}B', '$n: bottom', y: i.y),
+    WallMark('${p}T', '$n: top', y: i.top),
+    WallMark('${p}C', '$n: center', x: i.centerX, y: i.centerY),
+    if (holes) ...[
+      WallMark('${p}vL', '$n: VESA left holes',
+          x: i.vesaCenterX - i.vesaWIn / 2),
+      WallMark('${p}vR', '$n: VESA right holes',
+          x: i.vesaCenterX + i.vesaWIn / 2),
+      WallMark('${p}vB', '$n: VESA low holes',
+          y: i.vesaCenterY - i.vesaHIn / 2),
+      WallMark('${p}vT', '$n: VESA high holes',
+          y: i.vesaCenterY + i.vesaHIn / 2),
+      WallMark('${p}vC', '$n: VESA center',
+          x: i.vesaCenterX, y: i.vesaCenterY),
+    ],
+  ];
+}
+
+/// The mark with [id] on [wall], or null.
+WallMark? markById(WallView wall, String id) {
+  if (id.isEmpty) return null;
+  if (id.startsWith('wall:')) {
+    return wallMarks(wall).where((m) => m.id == id).firstOrNull;
+  }
+  final item = wall.item(id.substring(0, math.max(0, id.indexOf(':'))));
+  if (item == null) return null;
+  return marksOf(wall, item).where((m) => m.id == id).firstOrNull;
+}
+
+/// From [a] to [b]: across when both have a place along the wall, up and
+/// down when both have a height; null each way they cannot be compared.
+({double? across, double? upDown}) markDistance(WallMark a, WallMark b) => (
+  across: a.x != null && b.x != null ? (a.x! - b.x!).abs() : null,
+  upDown: a.y != null && b.y != null ? (a.y! - b.y!).abs() : null,
+);
+
+/// The space between [a] and [b] on the wall face: clear across and clear
+/// up and down, edge to edge (0 where they overlap that way), and center
+/// to center each way.
+({double across, double upDown, double centersAcross, double centersUpDown})
+    gapBetween(WallItem a, WallItem b) => (
+  across: math.max(0, math.max(b.x - a.right, a.x - b.right)),
+  upDown: math.max(0, math.max(b.y - a.top, a.y - b.top)),
+  centersAcross: (a.centerX - b.centerX).abs(),
+  centersUpDown: (a.centerY - b.centerY).abs(),
+);
 
 /// Every mount on [wall], left to right, tagged M1, M2...
 List<MountPlacement> mountPlacements(WallView wall) {
@@ -682,10 +893,64 @@ class WallIssue {
 }
 
 /// Inches as 4' 6", or 7.6" under a foot.
-String inchesLabel(double inches) {
+/// How the Walls tab shows a length.
+enum LengthUnit {
+  feet('Feet', "ft-in"),
+  inches('Inches', 'in'),
+  cm('Centimeters', 'cm'),
+  mm('Millimeters', 'mm');
+
+  final String label, short;
+  const LengthUnit(this.label, this.short);
+
+  static LengthUnit fromName(String? name) =>
+      values.where((u) => u.name == name).firstOrNull ?? feet;
+}
+
+/// The unit [inchesLabel] shows; set from the user's settings.
+LengthUnit wallLengthUnit = LengthUnit.feet;
+
+/// [inches] in [wallLengthUnit]: 3' 6", 42", 106.7 cm or 1067 mm.
+String inchesLabel(double inches, {LengthUnit? unit}) {
   if (!inches.isFinite) return '-';
   final neg = inches < 0;
   final v = inches.abs();
+  String body;
+  switch (unit ?? wallLengthUnit) {
+    case LengthUnit.inches:
+      body = '${_trim2(v)}"';
+    case LengthUnit.cm:
+      body = '${_trim(v * 2.54)} cm';
+    case LengthUnit.mm:
+      body = '${(v * 25.4).round()} mm';
+    case LengthUnit.feet:
+      body = _feetBody(v);
+  }
+  return neg ? '-$body' : body;
+}
+
+/// [inches] for a text box to edit, in [wallLengthUnit], with its mark so
+/// [parseInchesText] reads it back the same.
+String lengthFieldText(double inches) {
+  String t(double v, int places) =>
+      v.toStringAsFixed(places).replaceFirst(RegExp(r'\.?0+$'), '');
+  return switch (wallLengthUnit) {
+    LengthUnit.cm => '${t(inches * 2.54, 2)} cm',
+    LengthUnit.mm => '${t(inches * 25.4, 1)} mm',
+    LengthUnit.feet when inches.abs() >= 12 => _feetField(inches, t),
+    _ => '${t(inches, 3)}"',
+  };
+}
+
+String _feetField(double inches, String Function(double, int) t) {
+  final v = double.parse(inches.abs().toStringAsFixed(3));
+  final ft = (v / 12).floor();
+  final rest = double.parse((v - ft * 12).toStringAsFixed(3));
+  final body = rest == 0 ? "$ft'" : "$ft' ${t(rest, 3)}\"";
+  return inches < 0 ? '-$body' : body;
+}
+
+String _feetBody(double v) {
   String body;
   if (v < 12) {
     body = '${_trim(v)}"';
@@ -698,14 +963,18 @@ String inchesLabel(double inches) {
     }
     body = rest == 0 ? "$ft'" : "$ft' ${_trim(rest)}\"";
   }
-  return neg ? '-$body' : body;
+  return body;
 }
 
 String _trim(double v) =>
     v.toStringAsFixed(1).replaceFirst(RegExp(r'\.0$'), '');
 
-/// A length typed in inches: 36, 36.5, 36", 3', 3' 6" or 3ft 6in. A bare
-/// number is inches. Null when it does not read as one.
+String _trim2(double v) =>
+    v.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+
+/// A length typed in: 36, 36.5, 36", 3', 3' 6", 3ft 6in, 91.4 cm, 914 mm or
+/// 0.9 m. A bare number is inches, or cm or mm when that is the unit shown.
+/// Null when it does not read as one.
 double? parseInchesText(String text) {
   var s = text.trim().toLowerCase();
   if (s.isEmpty) return null;
@@ -720,8 +989,28 @@ double? parseInchesText(String text) {
     final inch = feet.group(2) == null ? 0.0 : double.tryParse(feet.group(2)!);
     if (ft != null && inch != null) v = ft * 12 + inch;
   } else {
-    final m = RegExp(r'^([\d.]+)\s*(?:"|in|inch|inches)?$').firstMatch(s);
-    if (m != null) v = double.tryParse(m.group(1)!);
+    final metric = RegExp(r'^([\d.]+)\s*(mm|cm|m)$').firstMatch(s);
+    final m = RegExp(r'^([\d.]+)\s*("|in|inch|inches)?$').firstMatch(s);
+    if (metric != null) {
+      final n = double.tryParse(metric.group(1)!);
+      if (n != null) {
+        v = switch (metric.group(2)) {
+          'mm' => n / 25.4,
+          'cm' => n / 2.54,
+          _ => n / 0.0254,
+        };
+      }
+    } else if (m != null) {
+      final n = double.tryParse(m.group(1)!);
+      // A bare number is in the unit shown, when that is metric.
+      v = n == null || m.group(2) != null
+          ? n
+          : switch (wallLengthUnit) {
+              LengthUnit.cm => n / 2.54,
+              LengthUnit.mm => n / 25.4,
+              _ => n,
+            };
+    }
   }
   if (v == null || !v.isFinite) return null;
   return neg ? -v : v;
@@ -802,6 +1091,20 @@ List<WallIssue> checkWall(WallView wall) {
   for (final i in items) {
     final p = _protrusion(i, items);
     if (p != null) out.add(p);
+  }
+
+  // A hook seat that puts the plate past the arms' ends.
+  for (final m in items) {
+    if (m.kind != WallItemKind.mount || m.plateHeight <= 0) continue;
+    final room = (m.height - m.plateHeight) / 2;
+    if (m.plateOffset.abs() > room + _kTouch) {
+      out.add(WallIssue(
+        WallIssueLevel.warning,
+        '${m.name}\'s plate sits past the ends of its arms: check where '
+        'the hooks seat.',
+        [m.id],
+      ));
+    }
   }
 
   // Reach.
@@ -891,6 +1194,16 @@ WallIssue? _pairIssue(WallItem a, WallItem b) {
       '($size).',
       ids,
     );
+  }
+
+  // Raceway meets the boxes it feeds and the raceway it joins.
+  for (final (r, other) in [(a, b), (b, a)]) {
+    if (r.kind != WallItemKind.raceway) continue;
+    if (other.kind == WallItemKind.raceway ||
+        other.kind == WallItemKind.outlet ||
+        other.kind == WallItemKind.recessedBox) {
+      return null;
+    }
   }
 
   final od = _overlap(a.back, a.front, b.back, b.front);
@@ -1084,12 +1397,14 @@ WallIssue? _protrusion(WallItem i, List<WallItem> all) {
   );
 }
 
-/// A cane rail that guards [i]: as wide, its bottom at 25.5" so its 1.5"
-/// rail tops out at 27", reaching to within 4" of [i]'s face.
+/// A cane rail that guards [i] (a resolved item): as wide, its bottom at
+/// 25.5" so its 1.5" rail tops out at 27", reaching to within 4" of [i]'s
+/// face. Tied to [i], it follows it.
 WallItem caneRailFor(WallItem i, {String id = ''}) => WallItem(
   id: id,
   kind: WallItemKind.caneRail,
   label: 'Cane rail',
+  mountId: i.id,
   x: i.x,
   y: kCaneDetectIn - 1.5,
   width: i.width,
@@ -1100,9 +1415,22 @@ WallItem caneRailFor(WallItem i, {String id = ''}) => WallItem(
 
 /// [wall] with a cane rail under [itemId].
 WallView withCaneRail(WallView wall, String itemId) {
-  final i = wall.item(itemId);
+  final i = wall.resolved().item(itemId);
   if (i == null) return wall;
   return wall.withItem(caneRailFor(i, id: wall.nextItemId()));
+}
+
+/// The item on [wall] that most needs a cane rail, nearest [atX] (else the
+/// wall's middle); null when none does.
+WallItem? railTarget(WallView wall, {double? atX}) {
+  final r = wall.resolved();
+  final x = atX ?? wall.widthIn / 2;
+  final needs = [
+    for (final issue in checkWall(wall))
+      if (issue.railFor.isNotEmpty) ?r.item(issue.railFor),
+  ]..sort((a, b) =>
+      (a.centerX - x).abs().compareTo((b.centerX - x).abs()));
+  return needs.firstOrNull;
 }
 
 // ---------------------------------------------------------------------------
@@ -1126,6 +1454,38 @@ const List<(double, double)> kVesaPatterns = [
   (800, 400),
   (800, 600),
 ];
+
+/// Surface raceway and conduit, face width and depth off the wall, inches.
+/// Wiremold from Legrand's and distributors' listings; EMT by its outside
+/// diameter, strapped tight to the wall.
+const List<({String name, String label, String model, double across, double deep})>
+    kRacewaySizes = [
+  (name: 'Wiremold 500 (3/4" x 17/32")', label: 'Wiremold 500',
+      model: 'V500', across: 0.75, deep: 0.53),
+  (name: 'Wiremold 700 (3/4" x 21/32")', label: 'Wiremold 700',
+      model: 'V700', across: 0.75, deep: 0.66),
+  (name: 'Wiremold 2400 (1-29/32" x 7/8")', label: 'Wiremold 2400',
+      model: 'V2400', across: 1.91, deep: 0.88),
+  (name: 'Wiremold 4000 (4-3/4" x 1-3/4")', label: 'Wiremold 4000',
+      model: 'V4000', across: 4.75, deep: 1.75),
+  (name: 'Conduit, 1/2" EMT (0.706" OD)', label: '1/2" EMT',
+      model: '', across: 0.706, deep: 0.706),
+  (name: 'Conduit, 3/4" EMT (0.922" OD)', label: '3/4" EMT',
+      model: '', across: 0.922, deep: 0.922),
+  (name: 'Conduit, 1" EMT (1.163" OD)', label: '1" EMT',
+      model: '', across: 1.163, deep: 1.163),
+  (name: 'Conduit, 1-1/4" EMT (1.510" OD)', label: '1-1/4" EMT',
+      model: '', across: 1.51, deep: 1.51),
+];
+
+/// [i] turned a quarter about its center: a run up the wall laid across, or
+/// back.
+WallItem turned(WallItem i) => i.copyWith(
+  x: i.centerX - i.height / 2,
+  y: math.max(0, i.centerY - i.width / 2),
+  width: i.height,
+  height: i.width,
+);
 
 /// A ready-made item for the add menu.
 @immutable
@@ -1157,22 +1517,25 @@ const WallItem kNewlineQPro86 = WallItem(
   activeUp: 3.4,
 );
 
-/// Newline's tilting mount EPR8A50600-000: 34.6" wide, arms 16.9" tall on a
-/// 7.9" plate, 2.9" off the wall, ±10°, VESA up to 800 x 400, 250 lb.
+/// Newline's tilting mount EPR8A50600-000: 37.79" wide on a 9.76" plate,
+/// 2.67" off the wall, +5/-10°, VESA 100 x 100 to 800 x 400, 250 lb.
 const WallItem kNewlineTiltMount = WallItem(
   id: '',
   kind: WallItemKind.mount,
   label: 'Newline tilt mount',
   model: 'EPR8A50600-000',
-  width: 34.6,
-  height: 16.9,
-  depth: 2.9,
-  plateHeight: 7.9,
-  // Arm width read off the drawing; the arms spread to 33.5" at most.
-  armWidth: 1.1,
-  armSpanMax: 33.5,
+  width: 37.79,
+  height: 16.5,
+  depth: 2.67,
+  plateHeight: 9.76,
+  // Arm length and width read off the drawing; arms 3.93" to 31.49" apart.
+  armWidth: 1.45,
+  armSpanMin: 3.93,
+  armSpanMax: 31.49,
   vesaW: 800,
   vesaH: 400,
+  vesaMinW: 100,
+  vesaMinH: 100,
   maxTiltDeg: 10,
   capacityLb: 250,
 );
@@ -1438,6 +1801,21 @@ final List<WallItemPreset> kWallItemPresets = [
       y: 25.5,
     ),
   ),
+  for (final r in kRacewaySizes)
+    WallItemPreset(
+      'Raceway',
+      r.name,
+      WallItem(
+        id: '',
+        kind: WallItemKind.raceway,
+        label: r.label,
+        model: r.model,
+        // A run up the wall to start; Turn lays it across.
+        width: r.across,
+        height: 48,
+        depth: r.deep,
+      ),
+    ),
   WallItemPreset(
     'Room',
     'Something else',
@@ -1448,6 +1826,11 @@ final List<WallItemPreset> kWallItemPresets = [
 /// [preset] placed on [wall]: given an id, centered along the wall unless
 /// it has a place, and a display at a usual 36" off the floor.
 WallItem placePreset(WallView wall, WallItem preset, {double? atX}) {
+  // A cane rail goes under what needs one, sized to it.
+  if (preset.kind == WallItemKind.caneRail) {
+    final target = railTarget(wall, atX: atX);
+    if (target != null) return caneRailFor(target, id: wall.nextItemId());
+  }
   var y = preset.y;
   if (y == 0 && !preset.kind.onFloor && !preset.kind.isOpening) {
     y = switch (preset.kind) {
@@ -1537,6 +1920,45 @@ WallItem withSpecSizes(WallItem item, WallMountSpec spec, {double weightLb = 0})
     maxTiltDeg: spec.maxTilt,
     capacityLb: spec.capacityLb,
     weightLb: weightLb > 0 ? weightLb : item.weightLb,
+  );
+}
+
+/// [item]'s sizes as a catalog product's wall mounting sizes: the reverse
+/// of [withSpecSizes]. Where it hangs and how its hooks seat stay on the
+/// wall; they are about one installation, not the product.
+WallMountSpec specFromWallItem(WallItem item) {
+  final display = item.kind == WallItemKind.display;
+  final mount = item.kind == WallItemKind.mount;
+  final vw = item.vesaWIn, vh = item.vesaHIn;
+  return WallMountSpec(
+    role: display
+        ? MountRole.display
+        : mount
+            ? MountRole.mount
+            : MountRole.other,
+    width: item.width,
+    height: item.height,
+    depth: item.depth,
+    vesaW: item.vesaW,
+    vesaH: item.vesaH,
+    vesaMinW: mount ? item.vesaMinW : 0,
+    vesaMinH: mount ? item.vesaMinH : 0,
+    holeLeft: display && item.vesaLeft > 0 && item.vesaW > 0
+        ? math.max(0, item.vesaLeft - vw / 2)
+        : 0,
+    holeUp: display && item.vesaUp > 0 && item.vesaH > 0
+        ? math.max(0, item.vesaUp - vh / 2)
+        : 0,
+    activeW: display ? item.activeW : 0,
+    activeH: display ? item.activeH : 0,
+    activeUp: display ? item.activeUp : 0,
+    touch: display && item.touch,
+    plateHeight: mount ? item.plateHeight : 0,
+    armWidth: mount ? item.armWidth : 0,
+    armSpanMin: mount ? item.armSpanMin : 0,
+    armSpanMax: mount ? item.armSpanMax : 0,
+    maxTilt: mount ? item.maxTiltDeg : 0,
+    capacityLb: mount ? item.capacityLb : 0,
   );
 }
 

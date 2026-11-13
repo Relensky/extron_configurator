@@ -1883,6 +1883,7 @@ class AppStateProvider extends ChangeNotifier {
       'useDefaultProcessorPassword': useDefaultProcessorPassword,
       'isDarkMode': isDarkMode,
       'roomMenuByPriority': roomMenuByPriority,
+      'wallLengthUnit': wallLengthUnit.name,
       'themeStyle': themeStyle,
       'classicColor': classicColor,
       'aurisColor': aurisColor,
@@ -2282,6 +2283,14 @@ class AppStateProvider extends ChangeNotifier {
 
   /// The title bar's room menu lists rooms by priority rather than A to Z.
   bool roomMenuByPriority = false;
+
+  /// How the Walls tab shows lengths; the setting itself is [wallLengthUnit].
+  void setWallLengthUnit(LengthUnit unit) {
+    if (wallLengthUnit == unit) return;
+    wallLengthUnit = unit;
+    notifyListeners();
+    unawaited(_persistSettings());
+  }
 
   void setRoomMenuByPriority(bool value) {
     if (roomMenuByPriority == value) return;
@@ -10964,6 +10973,7 @@ class AppStateProvider extends ChangeNotifier {
       await _loadProcessorPassword(saved);
       isDarkMode = saved['isDarkMode'] is bool ? saved['isDarkMode'] : true;
       roomMenuByPriority = saved['roomMenuByPriority'] == true;
+      wallLengthUnit = LengthUnit.fromName(saved['wallLengthUnit']?.toString());
       themeStyle = str('themeStyle', 'classic');
       classicColor = str('classicColor', '2196F3');
       aurisColor = str('aurisColor', 'F0A500');
@@ -12480,6 +12490,91 @@ class AppStateProvider extends ChangeNotifier {
               'stops reporting it as missing a driver.'
           : '"$name" expects a control module again, so rooms will report it '
               'when it has none.',
+    );
+  }
+
+  /// A copy of the catalog file as it is on disk, before a write from
+  /// outside the Catalog tab: into the shared history when there is one,
+  /// else a dated .bak beside it. '' when there was nothing to copy.
+  Future<String> backupCatalogFile() async {
+    final file = effectiveAvDevicesPath;
+    if (file.isEmpty || !File(file).existsSync()) return '';
+    final kept = await combineHistory?.backupDocument(file) ?? '';
+    if (kept.isNotEmpty) return kept;
+    try {
+      final stamp = DateTime.now()
+          .toIso8601String()
+          .split('.')
+          .first
+          .replaceAll(':', '-');
+      final to = '$file.bak_$stamp';
+      await File(file).copy(to);
+      return to;
+    } catch (e) {
+      AppLogger.logError('Could not back up the catalog before saving', e);
+      return '';
+    }
+  }
+
+  /// Saves a Walls tab item's sizes - size, VESA and holes, and for a mount
+  /// its plate, arms and limits - to the catalog entry for its model,
+  /// keeping that entry's price and everything else. With [create] and no
+  /// entry, adds a plain one. The catalog file is backed up first.
+  Future<({bool ok, String message})> saveWallItemToCatalog(
+    WallItem item, {
+    bool create = false,
+  }) async {
+    final name = item.model.trim();
+    if (name.isEmpty) {
+      return (
+        ok: false,
+        message: 'Give it a Model first: the catalog keeps sizes by model.',
+      );
+    }
+    final existing = avDeviceLibrary.templateForModel(name);
+    if (existing == null && !create) {
+      return (ok: false, message: '"$name" is not in the catalog yet.');
+    }
+    final backup = await backupCatalogFile();
+    final spec = specFromWallItem(item);
+    final mount = item.kind == WallItemKind.mount;
+    avDeviceLibrary.upsert(
+      existing == null
+          ? AvDeviceTemplate(
+              model: name,
+              partNumber: name,
+              category: mount ? 'Mount / bracket' : 'Display',
+              powerInput: mount ? PowerInput.none : PowerInput.mains,
+              neverControlled: mount,
+              weightLbs: item.weightLb,
+              mounting: spec,
+              ports: const [],
+            )
+          : existing.copyWith(
+              mounting: spec,
+              weightLbs: item.weightLb > 0 ? item.weightLb : existing.weightLbs,
+            ),
+    );
+    final file = await saveAvDeviceLibrary();
+    avDeviceLibraryChanged();
+    AppLogger.logInfo(
+      'Walls: ${item.name} sizes saved to catalog entry "$name"'
+      '${file.isEmpty ? ' in memory only (the file could not be written)' : ' in $file'}'
+      '${backup.isEmpty ? '' : ', backup at $backup'}.',
+    );
+    if (file.isEmpty) {
+      return (
+        ok: false,
+        message: '"$name" was changed in memory, but the catalog file could '
+            'not be written - check the Catalog tab.',
+      );
+    }
+    return (
+      ok: true,
+      message: existing == null
+          ? '"$name" added to the catalog with these sizes. Fill in its '
+              'maker and price on the Catalog tab.'
+          : '"$name" in the catalog now has these sizes.',
     );
   }
 

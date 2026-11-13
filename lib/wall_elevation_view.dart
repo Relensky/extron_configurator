@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
@@ -37,6 +38,57 @@ class _WallElevationViewState extends State<WallElevationView> {
 
   String _wallId = '';
   String _itemId = '';
+
+  /// Zoom and pan of the drawing; 1 and zero fit the wall.
+  double _zoom = 1;
+  Offset _pan = Offset.zero;
+  Size _canvasSize = Size.zero;
+
+  /// Where the schedule and the key have been dragged to, and whether the
+  /// key is on the drawing; kept across visits to the tab.
+  static Offset _scheduleShift = Offset.zero;
+  static Offset _keyShift = Offset.zero;
+  static bool _keyOnDrawing = false;
+
+  /// On the mounting layout, every other item dimensioned behind the mounts.
+  static bool _referenceDims = false;
+
+  /// Where the painter last put the schedule and the key, for dragging.
+  final _Boxes _boxes = _Boxes();
+
+  /// What a drag is moving: an item, the view, the schedule or the key.
+  String _dragWhat = '';
+
+  /// Zooms by [factor] keeping the point [at] (pixels) still.
+  void _zoomAt(Offset at, double factor) {
+    final z = (_zoom * factor).clamp(0.5, 12.0);
+    setState(() {
+      _pan = at - (at - _pan) * (z / _zoom);
+      _zoom = z;
+    });
+  }
+
+  void _zoomFit() => setState(() {
+    _zoom = 1;
+    _pan = Offset.zero;
+  });
+
+  /// What was just added, highlighted until something else is picked.
+  Set<String> _addedIds = const {};
+
+  /// Selects [id], just added, with [others] added alongside it.
+  void _selectAdded(String id, [Iterable<String> others = const []]) =>
+      setState(() {
+        _itemId = id;
+        _addedIds = {id, ...others};
+      });
+
+  /// The item measured to from the selected one; '' for none.
+  String _measureId = '';
+
+  /// Point to point: a mark on the selected item, and one anywhere.
+  String _markFrom = '';
+  String _markTo = '';
 
   /// The item being dragged, and how far, in inches.
   String _dragId = '';
@@ -194,6 +246,70 @@ class _WallElevationViewState extends State<WallElevationView> {
         selected: {_mounting},
         onSelectionChanged: (v) => setState(() => _mounting = v.first),
       ),
+    if (wall != null && _mounting)
+      FilterChip(
+        key: const ValueKey('wall_reference_dims'),
+        label: const Text('All items'),
+        tooltip: 'Dimension every other item from the left end of the wall and '
+            'the floor, faded, behind the mounts',
+        selected: _referenceDims,
+        onSelected: (v) => setState(() => _referenceDims = v),
+      ),
+    ToolGroup(
+      header: const ToolGroupName('Units'),
+      children: [
+        DropdownButton<LengthUnit>(
+          key: const ValueKey('wall_units'),
+          value: wallLengthUnit,
+          underline: const SizedBox.shrink(),
+          items: [
+            for (final u in LengthUnit.values)
+              DropdownMenuItem(value: u, child: Text(u.label)),
+          ],
+          onChanged: (u) {
+            if (u != null) p.setWallLengthUnit(u);
+          },
+        ),
+        Tooltip(
+          message: 'What AFF, CL, CLG and the rest mean',
+          child: TextButton.icon(
+            key: const ValueKey('wall_notation'),
+            icon: const Icon(Icons.help_outline, size: 18),
+            label: const Text('Key'),
+            onPressed: () => _showNotation(
+              context,
+              onDrawing: _keyOnDrawing,
+              onToggle: () => setState(() => _keyOnDrawing = !_keyOnDrawing),
+            ),
+          ),
+        ),
+      ],
+    ),
+    if (wall != null)
+      ToolGroup(
+        header: const ToolGroupName('Zoom'),
+        children: [
+          IconButton(
+            key: const ValueKey('wall_zoom_out'),
+            tooltip: 'Zoom out (or the mouse wheel)',
+            icon: const Icon(Icons.zoom_out, size: 18),
+            onPressed: () => _zoomAt(_canvasSize.center(Offset.zero), 1 / 1.25),
+          ),
+          Text('${(_zoom * 100).round()}%'),
+          IconButton(
+            key: const ValueKey('wall_zoom_in'),
+            tooltip: 'Zoom in (or the mouse wheel); drag empty wall to move '
+                'around',
+            icon: const Icon(Icons.zoom_in, size: 18),
+            onPressed: () => _zoomAt(_canvasSize.center(Offset.zero), 1.25),
+          ),
+          TextButton(
+            key: const ValueKey('wall_zoom_fit'),
+            onPressed: _zoom == 1 && _pan == Offset.zero ? null : _zoomFit,
+            child: const Text('Fit'),
+          ),
+        ],
+      ),
     if (wall != null)
       ElevatedButton.icon(
         key: const ValueKey('wall_export_png'),
@@ -227,11 +343,14 @@ class _WallElevationViewState extends State<WallElevationView> {
             orElse: () => next.items.last,
           );
           _save(p, next, 'Add ${added.name} on its mount');
-          setState(() => _itemId = added.id);
+          _selectAdded(added.id, [
+            for (final i in next.items)
+              if (wall.item(i.id) == null) i.id,
+          ]);
         } else if (v is WallItemPreset) {
           final item = placePreset(wall, v.item);
           _save(p, wall.withItem(item), 'Add ${item.name}');
-          setState(() => _itemId = item.id);
+          _selectAdded(item.id);
         }
       },
       itemBuilder: (context) => [
@@ -335,6 +454,14 @@ class _WallElevationViewState extends State<WallElevationView> {
                   onRemove: () => _removeItem(p, wall, selected),
                   onDuplicate: () => _duplicate(p, wall, selected),
                   onWall: (next, label) => _save(p, next, label),
+                  measureId: _measureId,
+                  onMeasure: (id) => setState(() => _measureId = id),
+                  markFrom: _markFrom,
+                  markTo: _markTo,
+                  onMarks: (from, to) => setState(() {
+                    _markFrom = from;
+                    _markTo = to;
+                  }),
                   catalog: selected.model.trim().isEmpty
                       ? null
                       : p.avDeviceLibrary.templateForModel(selected.model),
@@ -359,10 +486,19 @@ class _WallElevationViewState extends State<WallElevationView> {
 
   double _snapTo(double v) => (v / _snap).round() * _snap;
 
-  WallItem _moved(WallItem i, Offset by, WallView wall) => i.copyWith(
-    x: _snapTo(i.x + by.dx),
-    y: math.max(0, _snapTo(i.y + by.dy)),
-  );
+  WallItem _moved(WallItem i, Offset by, WallView wall) {
+    final x = _snapTo(i.x + by.dx);
+    // A tied cane rail dragged sideways stays where it is put. Up and
+    // down it keeps following.
+    final untie = i.kind == WallItemKind.caneRail &&
+        i.mountId.isNotEmpty &&
+        (x - i.x).abs() > 1e-9;
+    return i.copyWith(
+      x: x,
+      y: math.max(0, _snapTo(i.y + by.dy)),
+      mountId: untie ? '' : null,
+    );
+  }
 
   Widget _canvas(
     AppStateProvider p,
@@ -372,21 +508,53 @@ class _WallElevationViewState extends State<WallElevationView> {
   ) {
     return LayoutBuilder(
       builder: (context, box) {
-        final layout = _WallLayout.fit(shown, box.biggest, mounting: _mounting);
+        _canvasSize = box.biggest;
+        final layout = _WallLayout.fit(shown, box.biggest, mounting: _mounting)
+            .zoomed(_zoom, _pan);
         return Focus(
           focusNode: _canvasFocus,
           onKeyEvent: (_, e) => _onKey(p, wall, e),
-          child: GestureDetector(
+          child: Listener(
+            // The wheel zooms about the pointer.
+            onPointerSignal: (e) {
+              if (e is PointerScrollEvent && e.scrollDelta.dy != 0) {
+                _zoomAt(e.localPosition, e.scrollDelta.dy < 0 ? 1.15 : 1 / 1.15);
+              }
+            },
+            child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTapDown: (d) {
               _canvasFocus.requestFocus();
               final hit = layout.hit(shown, d.localPosition);
+              // Shift+click measures from the selected item to another.
+              if (HardwareKeyboard.instance.isShiftPressed &&
+                  _itemId.isNotEmpty &&
+                  hit != null &&
+                  hit.id != _itemId) {
+                setState(() => _measureId = hit.id);
+                return;
+              }
               setState(() => _itemId = hit?.id ?? '');
             },
             onPanStart: (d) {
               _canvasFocus.requestFocus();
-              var hit = layout.hit(shown, d.localPosition);
-              if (hit == null) return;
+              final at = d.localPosition;
+              // The key and the schedule sit on top: they move first.
+              if (_keyOnDrawing && _boxes.key.contains(at)) {
+                _dragWhat = 'key';
+                return;
+              }
+              if (_mounting && _boxes.schedule.contains(at)) {
+                _dragWhat = 'schedule';
+                return;
+              }
+              var hit = layout.hit(shown, at);
+              if (hit == null) {
+                // Empty wall: the view pans.
+                _dragWhat = 'view';
+                return;
+              }
+              _dragWhat = 'item';
               // A mount on a display moves with it.
               if (hit.kind == WallItemKind.mount) {
                 hit = shown.displayOn(hit.id) ?? hit;
@@ -402,6 +570,17 @@ class _WallElevationViewState extends State<WallElevationView> {
               });
             },
             onPanUpdate: (d) {
+              switch (_dragWhat) {
+                case 'view':
+                  setState(() => _pan += d.delta);
+                  return;
+                case 'schedule':
+                  setState(() => _scheduleShift += d.delta);
+                  return;
+                case 'key':
+                  setState(() => _keyShift += d.delta);
+                  return;
+              }
               if (_dragId.isEmpty) return;
               setState(() {
                 _drag += Offset(
@@ -411,6 +590,7 @@ class _WallElevationViewState extends State<WallElevationView> {
               });
             },
             onPanEnd: (_) {
+              _dragWhat = '';
               final i = wall.item(_dragId);
               if (i != null && _drag != Offset.zero) {
                 final moved = _moved(i, _drag, wall);
@@ -424,6 +604,7 @@ class _WallElevationViewState extends State<WallElevationView> {
               setState(() {
                 _dragId = '';
                 _drag = Offset.zero;
+                _addedIds = const {};
               });
             },
             child: RepaintBoundary(
@@ -438,6 +619,17 @@ class _WallElevationViewState extends State<WallElevationView> {
                     wall: shown,
                     issues: issues,
                     selectedId: _itemId,
+                    measureId: _measureId,
+                    markFrom: _markFrom,
+                    markTo: _markTo,
+                    addedIds: _addedIds.contains(_itemId)
+                        ? _addedIds
+                        : const {},
+                    scheduleShift: _scheduleShift,
+                    keyShift: _keyShift,
+                    showKey: _keyOnDrawing,
+                    referenceDims: _referenceDims,
+                    boxes: _boxes,
                     layout: layout,
                     mounting: _mounting,
                     flags: !capturing,
@@ -445,6 +637,7 @@ class _WallElevationViewState extends State<WallElevationView> {
                 ),
               ),
             ),
+          ),
           ),
         );
       },
@@ -585,7 +778,7 @@ class _WallElevationViewState extends State<WallElevationView> {
                         final next = withCaneRail(wall, issue.railFor);
                         final rail = next.items.last;
                         _save(p, next, 'Add a cane rail');
-                        setState(() => _itemId = rail.id);
+                        _selectAdded(rail.id);
                       },
                     ),
                 ],
@@ -753,7 +946,7 @@ class _WallElevationViewState extends State<WallElevationView> {
       ),
     );
     _save(p, wall.withItem(item), 'Add ${item.name}');
-    setState(() => _itemId = item.id);
+    _selectAdded(item.id);
   }
 
   void _removeItem(AppStateProvider p, WallView wall, WallItem i) {
@@ -770,12 +963,104 @@ class _WallElevationViewState extends State<WallElevationView> {
       locked: false,
     );
     _save(p, wall.withItem(copy), 'Copy ${i.name}');
-    setState(() => _itemId = copy.id);
+    _selectAdded(copy.id);
   }
 }
 
 /// A VESA pattern as a dropdown value.
 String _vesaKey(double w, double h) => '${w.round()}x${h.round()}';
+
+/// A VESA length typed in inches, as whole mm the way patterns are named.
+double _vesaMm(double inches) => (inches / kInPerMm).roundToDouble();
+
+/// Where the painter last drew the schedule and the key, pixels.
+class _Boxes {
+  Rect schedule = Rect.zero;
+  Rect key = Rect.zero;
+}
+
+/// The key as printed on the drawing: terms only, nothing about the app.
+const List<(String, String)> kDrawingKey = [
+  ('AFF', 'Above finished floor'),
+  ('CL', 'Center line'),
+  ('CLG', 'Ceiling height'),
+  ('M1, M2', 'Mount tags, as in the schedule'),
+  ('VESA', 'Display hole pattern, mm'),
+  ('\' / "', 'Feet / inches'),
+];
+
+/// The drawing's shorthand, for the Notation key.
+const List<(String, String)> kWallNotation = [
+  ('AFF', 'Above finished floor: a height measured up from the floor.'),
+  ('CL', 'Center line: the middle of an item or a mount plate.'),
+  ('CLG', 'Ceiling: the ceiling height above the finished floor.'),
+  ('M1, M2...', 'Mount tags, left to right; the schedule uses the same tags.'),
+  ('VESA', 'The standard hole pattern on a display\'s back, named in mm '
+      '(800 x 400 is 800 mm across, 400 mm up and down).'),
+  ('Plate', 'The part of a mount fixed to the wall.'),
+  ('Arms', 'The uprights that bolt to the display\'s VESA holes and hook '
+      'onto the plate.'),
+  ('Cane rail', 'A rail low enough (27" or less) for a white cane to find, '
+      'under anything that sticks out more than 4" into a walkway '
+      '(CBC 11B-307.2).'),
+  ('\' and "', 'Feet and inches; the Units choice switches to inches, cm '
+      'or mm.'),
+];
+
+void _showNotation(
+  BuildContext context, {
+  required bool onDrawing,
+  required VoidCallback onToggle,
+}) => showDialog<void>(
+  context: context,
+  builder: (context) => AlertDialog(
+    title: const Text('Notation'),
+    content: SizedBox(
+      width: 460,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (term, meaning) in kWallNotation)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 90,
+                      child: Text(
+                        term,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    Expanded(child: Text(meaning)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        key: const ValueKey('wall_key_toggle'),
+        onPressed: () {
+          onToggle();
+          Navigator.of(context).pop();
+        },
+        child: Text(
+          onDrawing ? 'Take the key off the drawing' : 'Put the key on the drawing',
+        ),
+      ),
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Close'),
+      ),
+    ],
+  ),
+);
 
 Map<String, WallIssueLevel> _worstByItem(List<WallIssue> issues) {
   final out = <String, WallIssueLevel>{};
@@ -834,6 +1119,15 @@ List<_PlanWall> _planWalls(AppStateProvider p) {
   return out;
 }
 
+const String _unitHint =
+    'Type any unit: 20\', 19\' 6", 234", 594 cm, 5940 mm or 5.94 m. A bare '
+    'number is in the unit picked (inches for Feet).';
+
+/// [inches] in every unit, for the line under a length box.
+String _allUnits(double inches) => [
+  for (final u in LengthUnit.values) inchesLabel(inches, unit: u),
+].join('  =  ');
+
 Future<_WallSize?> _wallDialog(
   BuildContext context,
   AppStateProvider p, {
@@ -842,13 +1136,13 @@ Future<_WallSize?> _wallDialog(
 }) {
   final name = TextEditingController(text: wall?.name ?? 'Front wall');
   final width = TextEditingController(
-    text: wall == null ? "20'" : inchesLabel(wall.widthIn),
+    text: lengthFieldText(wall?.widthIn ?? 240),
   );
   final height = TextEditingController(
     text: wall == null
-        ? "9'"
+        ? lengthFieldText(108)
         : wall.heightIn > 0
-            ? inchesLabel(wall.heightIn)
+            ? lengthFieldText(wall.heightIn)
             : '',
   );
   final fromPlan = _planWalls(p);
@@ -886,9 +1180,9 @@ Future<_WallSize?> _wallDialog(
                       final pw = fromPlan[i];
                       setState(() {
                         name.text = pw.name;
-                        width.text = inchesLabel(pw.widthIn);
+                        width.text = lengthFieldText(pw.widthIn);
                         height.text =
-                            pw.heightIn > 0 ? inchesLabel(pw.heightIn) : '';
+                            pw.heightIn > 0 ? lengthFieldText(pw.heightIn) : '';
                       });
                     },
                   ),
@@ -899,24 +1193,60 @@ Future<_WallSize?> _wallDialog(
                   controller: name,
                   decoration: const InputDecoration(labelText: 'Name'),
                 ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<LengthUnit>(
+                  key: const ValueKey('wall_dialog_units'),
+                  isExpanded: true,
+                  initialValue: wallLengthUnit,
+                  decoration: const InputDecoration(labelText: 'Units'),
+                  items: [
+                    for (final u in LengthUnit.values)
+                      DropdownMenuItem(value: u, child: Text(u.label)),
+                  ],
+                  onChanged: (u) {
+                    if (u == null || u == wallLengthUnit) return;
+                    // What is typed keeps its length in the new unit.
+                    final wNow = parseInchesText(width.text);
+                    final hNow = height.text.trim().isEmpty
+                        ? null
+                        : parseInchesText(height.text);
+                    p.setWallLengthUnit(u);
+                    setState(() {
+                      if (wNow != null) width.text = lengthFieldText(wNow);
+                      if (hNow != null) height.text = lengthFieldText(hNow);
+                    });
+                  },
+                ),
                 TextField(
                   key: const ValueKey('wall_width'),
                   controller: width,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Length',
-                    helperText: 'Inches, or feet and inches: 240, 20\', 19\' 6"',
+                    errorText: w == null && width.text.trim().isNotEmpty
+                        ? 'Not a length'
+                        : w != null && w < 12
+                            ? 'At least 1\''
+                            : null,
+                    helperText: w == null ? null : _allUnits(w),
+                    helperMaxLines: 2,
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
                 TextField(
                   key: const ValueKey('wall_height'),
                   controller: height,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Floor to ceiling',
-                    helperText: 'Blank when not known',
+                    errorText: h == null ? 'Not a length' : null,
+                    helperText: h != null && h > 0
+                        ? _allUnits(h)
+                        : 'Blank when not known',
+                    helperMaxLines: 2,
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
+                const SizedBox(height: 8),
+                Text(_unitHint, style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
           ),
@@ -960,6 +1290,14 @@ class _ItemEditor extends StatelessWidget {
   /// The catalog product it was added from, when there is one.
   final AvDeviceTemplate? catalog;
 
+  /// The item measured to, and picking another ('' for none).
+  final String measureId;
+  final ValueChanged<String> onMeasure;
+
+  /// Point to point marks, and picking them.
+  final String markFrom, markTo;
+  final void Function(String from, String to) onMarks;
+
   const _ItemEditor({
     super.key,
     required this.wall,
@@ -969,6 +1307,11 @@ class _ItemEditor extends StatelessWidget {
     required this.onDuplicate,
     required this.onWall,
     this.catalog,
+    this.measureId = '',
+    required this.onMeasure,
+    this.markFrom = '',
+    this.markTo = '',
+    required this.onMarks,
   });
 
   /// [m]'s own settings: on a display's panel with its size too, on the
@@ -996,6 +1339,22 @@ class _ItemEditor extends StatelessWidget {
         'wall_${wall.id}_${m.id}_$field',
       ),
     );
+
+    // Moves the plate, and the display on it, to a height. [below] is how
+    // far the plate's bottom is under the line typed.
+    final held = wall.displayOn(m.id);
+    final fixed = m.locked || (held?.locked ?? false);
+    Widget plateAt(String field, String label, double value, double below) =>
+        _NumField(
+          key: ValueKey('wall_mount_$field'),
+          label: label,
+          value: value,
+          enabled: !fixed,
+          onCommit: (v) => onWall(
+            withPlateBottom(wall, m.id, math.max(0, v - below)),
+            'Set ${m.name} plate height',
+          ),
+        );
 
     // The largest pattern it takes, from the standard sizes.
     final largest = _vesaKey(m.vesaW, m.vesaH);
@@ -1049,23 +1408,62 @@ class _ItemEditor extends StatelessWidget {
             inches: false),
       ),
       vesaPicker,
+      // VESA is kept in mm and shown in the unit picked.
       pair(
-        num('vesaW', 'Largest VESA wide, mm', m.vesaW,
-            (v) => m.copyWith(vesaW: v),
-            inches: false),
-        num('vesaH', 'Largest VESA high, mm', m.vesaH,
-            (v) => m.copyWith(vesaH: v),
-            inches: false),
+        num('vesaW', 'Largest VESA wide', m.vesaW * kInPerMm,
+            (v) => m.copyWith(vesaW: _vesaMm(v))),
+        num('vesaH', 'Largest VESA high', m.vesaH * kInPerMm,
+            (v) => m.copyWith(vesaH: _vesaMm(v))),
       ),
       pair(
-        num('vesaMinW', 'Smallest VESA wide, mm', m.vesaMinW,
-            (v) => m.copyWith(vesaMinW: v),
-            inches: false),
-        num('vesaMinH', 'Smallest VESA high, mm', m.vesaMinH,
-            (v) => m.copyWith(vesaMinH: v),
-            inches: false),
+        num('vesaMinW', 'Smallest VESA wide', m.vesaMinW * kInPerMm,
+            (v) => m.copyWith(vesaMinW: _vesaMm(v))),
+        num('vesaMinH', 'Smallest VESA high', m.vesaMinH * kInPerMm,
+            (v) => m.copyWith(vesaMinH: _vesaMm(v))),
       ),
       heading('Plate and arms'),
+      if (plateOf(wall, m.id) case final plate?)
+        pair(
+          plateAt('plateBottom', 'Plate bottom above floor', plate.top, 0),
+          plateAt('plateCenter', 'Plate center above floor',
+              plate.center.dy, plate.height / 2),
+        ),
+      // Where the arms' hooks seat on the plate, from the holes they bolt
+      // to: this sets the display's height on the plate.
+      if (m.plateHeight > 0) ...[
+        pair(
+          _NumField(
+            key: const ValueKey('wall_mount_hook'),
+            label: 'Hooks above the top holes',
+            value: hookAboveTopHoles(m, held),
+            enabled: !m.locked,
+            onCommit: (v) => onChanged(
+              withHookAboveTopHoles(m, held, v),
+              'Set ${m.name} hook seat',
+              'wall_${wall.id}_${m.id}_hook',
+            ),
+          ),
+          _NumField(
+            key: const ValueKey('wall_mount_plateOff'),
+            label: 'Plate center above VESA center',
+            value: m.plateOffset,
+            enabled: !m.locked,
+            onCommit: (v) => onChanged(
+              m.copyWith(plateOffset: v),
+              'Set ${m.name} plate offset',
+              'wall_${wall.id}_${m.id}_plateOff',
+            ),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text(
+            'Measure on the bracket: from the top bolt hole it uses up to '
+            'where its hook sits on the plate\'s top.',
+            style: TextStyle(fontSize: 12),
+          ),
+        ),
+      ],
       if (onDisplay) ...[
         pair(
           num('w', 'Mount width', m.width, (v) => m.copyWith(width: math.max(0.1, v))),
@@ -1092,6 +1490,159 @@ class _ItemEditor extends StatelessWidget {
     ];
   }
 
+  /// Asks, then saves [i]'s sizes to its model's catalog entry, or adds one.
+  Future<void> _saveToCatalog(BuildContext context, WallItem i) async {
+    final p = context.read<AppStateProvider>();
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final create = catalog == null;
+    final model = i.model.trim();
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(
+          create ? 'Add $model to the catalog?' : 'Save to the catalog?',
+        ),
+        content: SizedBox(
+          width: 420,
+          child: Text(
+            '${create ? 'A new catalog entry for $model' : 'The catalog\'s $model'} '
+            'gets these sizes: ${specFromWallItem(i).summary}.\n\n'
+            'Anything placed from the catalog from now on, and Use catalog '
+            'sizes in any room, uses them. Items already on walls keep '
+            'theirs. The catalog file is backed up first.'
+            '${create ? '\n\nFill in its maker and price on the Catalog tab.' : ''}',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('wall_save_catalog_ok'),
+            onPressed: () => Navigator.pop(c, true),
+            child: Text(create ? 'Add' : 'Save'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true) return;
+    final r = await p.saveWallItemToCatalog(i, create: create);
+    messenger?.showSnackBar(SnackBar(content: Text(r.message)));
+  }
+
+  /// Pick a mark on this item (or the display or mount it pairs with) and
+  /// any mark on the wall, and read the distance between them.
+  List<Widget> _measurePoints(ThemeData theme) {
+    final partner = item.kind == WallItemKind.mount
+        ? wall.displayOn(item.id)
+        : item.mountId.isEmpty
+            ? null
+            : wall.item(item.mountId);
+    // Either end can be anything on the wall: this item and its partner
+    // first, then the wall's ends, floor and ceiling, then the rest.
+    final to = [
+      ...marksOf(wall, item),
+      if (partner != null) ...marksOf(wall, partner),
+      ...wallMarks(wall),
+      for (final o in wall.items)
+        if (o.id != item.id && o.id != partner?.id) ...marksOf(wall, o),
+    ];
+    final from = to;
+    final a = from.where((m) => m.id == markFrom).firstOrNull;
+    final b = to.where((m) => m.id == markTo).firstOrNull;
+    final d = a == null || b == null ? null : markDistance(a, b);
+    DropdownMenuItem<String> entry(WallMark m) =>
+        DropdownMenuItem(value: m.id, child: Text(m.label));
+    return [
+      const SizedBox(height: 8),
+      Text('Measure points', style: theme.textTheme.labelLarge),
+      DropdownButtonFormField<String>(
+        key: ValueKey('wall_mark_from_${a?.id ?? ''}'),
+        isExpanded: true,
+        initialValue: a?.id ?? '',
+        decoration: const InputDecoration(labelText: 'From'),
+        items: [
+          const DropdownMenuItem(value: '', child: Text('Pick a point')),
+          for (final m in from) entry(m),
+        ],
+        onChanged: (v) => onMarks(v ?? '', markTo),
+      ),
+      DropdownButtonFormField<String>(
+        key: ValueKey('wall_mark_to_${b?.id ?? ''}'),
+        isExpanded: true,
+        initialValue: b?.id ?? '',
+        decoration: const InputDecoration(labelText: 'To'),
+        items: [
+          const DropdownMenuItem(value: '', child: Text('Pick a point')),
+          for (final m in to) entry(m),
+        ],
+        onChanged: (v) => onMarks(markFrom, v ?? ''),
+      ),
+      if (d != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            [
+              if (d.across != null) 'Across: ${inchesLabel(d.across!)}',
+              if (d.upDown != null) 'Up and down: ${inchesLabel(d.upDown!)}',
+              if (d.across == null && d.upDown == null)
+                'One runs up and down, the other across: pick two of a kind.',
+            ].join('\n'),
+            key: const ValueKey('wall_mark_result'),
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+    ];
+  }
+
+  /// Pick another item and read the space between them.
+  List<Widget> _measure(ThemeData theme) {
+    final others = [
+      for (final o in wall.items)
+        if (o.id != item.id) o,
+    ];
+    if (others.isEmpty) return const [];
+    final target = others.where((o) => o.id == measureId).firstOrNull;
+    final g = target == null ? null : gapBetween(item, target);
+    return [
+      DropdownButtonFormField<String>(
+        // Rebuilt when Shift+click picks another target.
+        key: ValueKey('wall_measure_to_${target?.id ?? ''}'),
+        isExpanded: true,
+        initialValue: target?.id ?? '',
+        decoration: const InputDecoration(
+          labelText: 'Measure to',
+          helperText: 'Or Shift+click it on the drawing',
+        ),
+        items: [
+          const DropdownMenuItem(value: '', child: Text('Nothing')),
+          for (final o in others)
+            DropdownMenuItem(value: o.id, child: Text(o.name)),
+        ],
+        onChanged: (v) => onMeasure(v ?? ''),
+      ),
+      if (g != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            [
+              g.across > 0
+                  ? 'Clear across: ${inchesLabel(g.across)}'
+                  : 'They overlap side to side',
+              g.upDown > 0
+                  ? 'Clear up and down: ${inchesLabel(g.upDown)}'
+                  : 'They overlap up and down',
+              'Centers: ${inchesLabel(g.centersAcross)} across, '
+                  '${inchesLabel(g.centersUpDown)} up and down',
+            ].join('\n'),
+            key: const ValueKey('wall_measure_result'),
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1100,6 +1651,11 @@ class _ItemEditor extends StatelessWidget {
         i.mountId.isNotEmpty &&
         wall.item(i.mountId) != null;
     final hungOn = i.kind == WallItemKind.mount ? wall.displayOn(i.id) : null;
+    final guards = wall.guardedBy(i.id);
+    final follows = hungOn != null;
+    // A hand edit to where a tied rail goes or how big it is unties it.
+    WallItem own(WallItem next) =>
+        guards == null ? next : next.copyWith(mountId: '');
     void set(WallItem next, String field) => onChanged(
       next,
       'Set ${i.name} $field',
@@ -1210,6 +1766,24 @@ class _ItemEditor extends StatelessWidget {
               ],
             ),
           ),
+        // The other way: this item's sizes into the catalog.
+        if ((i.kind == WallItemKind.display || i.kind == WallItemKind.mount) &&
+            i.model.trim().isNotEmpty &&
+            (catalog?.mounting == null ||
+                !catalog!.mounting!.hasSize ||
+                differsFromSpec(i, catalog!.mounting!,
+                    weightLb: catalog!.weightLbs)))
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('wall_save_catalog'),
+              icon: const Icon(Icons.save_alt, size: 18),
+              label: Text(
+                catalog == null ? 'Add to catalog' : 'Save sizes to catalog',
+              ),
+              onPressed: () => _saveToCatalog(context, i),
+            ),
+          ),
         DropdownButtonFormField<WallItemKind>(
           key: const ValueKey('wall_field_kind'),
           isExpanded: true,
@@ -1234,14 +1808,14 @@ class _ItemEditor extends StatelessWidget {
         const SizedBox(height: 8),
         Text('Where', style: theme.textTheme.labelLarge),
         pair(
-          num('x', 'From the left end', i.x, (v) => i.copyWith(x: v),
-              enabled: hungOn == null, min: -10000),
+          num('x', 'From the left end', i.x, (v) => own(i.copyWith(x: v)),
+              enabled: !follows, min: -10000),
           num(
             'right',
             'From the right end',
             wall.widthIn - i.right,
-            (v) => i.copyWith(x: wall.widthIn - v - i.width),
-            enabled: hungOn == null,
+            (v) => own(i.copyWith(x: wall.widthIn - v - i.width)),
+            enabled: !follows,
             min: -10000,
           ),
         ),
@@ -1270,7 +1844,7 @@ class _ItemEditor extends StatelessWidget {
               key: const ValueKey('wall_item_center'),
               icon: const Icon(Icons.align_horizontal_center, size: 18),
               label: const Text('Center on wall'),
-              onPressed: hungOn != null || i.locked
+              onPressed: follows || i.locked
                   ? null
                   : () => onChanged(
                         i.copyWith(x: (wall.widthIn - i.width) / 2),
@@ -1288,14 +1862,60 @@ class _ItemEditor extends StatelessWidget {
               style: theme.textTheme.bodySmall,
             ),
           ),
+        if (guards != null)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  i.locked
+                      ? 'Under ${guards.name}, locked where it is: it does '
+                          'not follow ${guards.name} while locked.'
+                      : 'Follows ${guards.name}: as wide, and out to within '
+                          '4" of its face (CBC 11B-307.2). Keep its bottom '
+                          'at 27" or lower. Lock it, or move or size it '
+                          'yourself, to stop it following.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              TextButton(
+                key: const ValueKey('wall_rail_untie'),
+                onPressed: i.locked
+                    ? null
+                    : () => onChanged(
+                          i.copyWith(mountId: ''),
+                          'Untie ${i.name}',
+                          '',
+                        ),
+                child: const Text('Untie'),
+              ),
+            ],
+          ),
+        const SizedBox(height: 8),
+        ..._measure(theme),
+        ..._measurePoints(theme),
         const SizedBox(height: 8),
         Text('Size', style: theme.textTheme.labelLarge),
         pair(
-          num('w', 'Width', i.width, (v) => i.copyWith(width: v), min: 0.1),
+          num('w', 'Width', i.width, (v) => own(i.copyWith(width: v)),
+              min: 0.1),
           num('h', 'Height', i.height, (v) => i.copyWith(height: v), min: 0.1),
         ),
+        if (i.kind == WallItemKind.raceway)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('wall_raceway_turn'),
+              icon: const Icon(Icons.rotate_90_degrees_ccw, size: 18),
+              label: Text(
+                i.height >= i.width ? 'Turn to run across' : 'Turn to run up',
+              ),
+              onPressed: i.locked
+                  ? null
+                  : () => onChanged(turned(i), 'Turn ${i.name}', ''),
+            ),
+          ),
         pair(
-          num('d', 'Depth', i.depth, (v) => i.copyWith(depth: v)),
+          num('d', 'Depth', i.depth, (v) => own(i.copyWith(depth: v))),
           num(
             'standoff',
             'Back off the wall',
@@ -1348,10 +1968,10 @@ class _ItemEditor extends StatelessWidget {
                   },
           ),
           pair(
-            num('vesaW', 'Wide, mm', i.vesaW, (v) => i.copyWith(vesaW: v),
-                inches: false),
-            num('vesaH', 'High, mm', i.vesaH, (v) => i.copyWith(vesaH: v),
-                inches: false),
+            num('vesaW', 'VESA wide', i.vesaWIn,
+                (v) => i.copyWith(vesaW: _vesaMm(v))),
+            num('vesaH', 'VESA high', i.vesaHIn,
+                (v) => i.copyWith(vesaH: _vesaMm(v))),
           ),
           pair(
             num(
@@ -1638,13 +2258,13 @@ class _NumFieldState extends State<_NumField> {
       TextEditingController(text: _show(widget.value));
   final FocusNode _focus = FocusNode();
   bool _bad = false;
+  LengthUnit _unit = wallLengthUnit;
 
   String _show(double v) {
     if (!widget.inches) {
       return v.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
     }
-    final s = v.toStringAsFixed(3).replaceFirst(RegExp(r'\.?0+$'), '');
-    return '$s"';
+    return lengthFieldText(v);
   }
 
   @override
@@ -1658,7 +2278,9 @@ class _NumFieldState extends State<_NumField> {
   @override
   void didUpdateWidget(_NumField old) {
     super.didUpdateWidget(old);
-    if (!_focus.hasFocus && old.value != widget.value) {
+    final unitChanged = widget.inches && _unit != wallLengthUnit;
+    _unit = wallLengthUnit;
+    if (!_focus.hasFocus && (old.value != widget.value || unitChanged)) {
       _text.text = _show(widget.value);
       _bad = false;
     }
@@ -1673,6 +2295,11 @@ class _NumFieldState extends State<_NumField> {
 
   void _commit() {
     final raw = _text.text;
+    // Untouched: a metric round trip must not nudge the stored inches.
+    if (raw == _show(widget.value)) {
+      if (_bad) setState(() => _bad = false);
+      return;
+    }
     final v = widget.inches
         ? parseInchesText(raw)
         : double.tryParse(raw.trim().replaceAll(RegExp(r'[^0-9.\-]'), ''));
@@ -1785,6 +2412,10 @@ class _WallLayout {
   /// The side area holds the mounting schedule instead of the section.
   final bool mounting;
 
+  /// Where the schedule starts, pixels: the unzoomed section line, so it
+  /// stays put on screen while the drawing zooms.
+  final double panelX;
+
   const _WallLayout({
     required this.scale,
     required this.origin,
@@ -1792,7 +2423,22 @@ class _WallLayout {
     required this.sectionDepth,
     required this.tallest,
     this.mounting = false,
-  });
+    double? panelX,
+  }) : panelX = panelX ?? sectionX;
+
+  /// This layout magnified [zoom] times and moved by [pan], pixels.
+  _WallLayout zoomed(double zoom, Offset pan) =>
+      zoom == 1 && pan == Offset.zero
+          ? this
+          : _WallLayout(
+              scale: scale * zoom,
+              origin: origin * zoom + pan,
+              sectionX: sectionX * zoom + pan.dx,
+              sectionDepth: sectionDepth,
+              tallest: tallest,
+              mounting: mounting,
+              panelX: panelX,
+            );
 
   /// The mounting schedule's width, pixels.
   static const double scheduleWidth = 280;
@@ -1880,9 +2526,40 @@ class _WallElevationPainter extends CustomPainter {
     required this.issues,
     required this.selectedId,
     required this.layout,
+    this.measureId = '',
+    this.markFrom = '',
+    this.markTo = '',
+    this.addedIds = const {},
+    this.scheduleShift = Offset.zero,
+    this.keyShift = Offset.zero,
+    this.showKey = false,
+    this.referenceDims = false,
+    required this.boxes,
     this.mounting = false,
     this.flags = true,
-  });
+  }) : unit = wallLengthUnit;
+
+  /// Point to point marks to dimension; '' for none.
+  final String markFrom, markTo;
+
+  /// Just added: highlighted so it is plain what came onto the wall.
+  final Set<String> addedIds;
+
+  /// Where the schedule and the key have been dragged, and the key shown.
+  final Offset scheduleShift, keyShift;
+  final bool showKey;
+
+  /// On the mounting layout: every other item dimensioned, faded.
+  final bool referenceDims;
+
+  /// Filled in while painting: where the schedule and key went.
+  final _Boxes boxes;
+
+  /// Measured to from [selectedId]; '' for none.
+  final String measureId;
+
+  /// The unit the labels were drawn in, so a change repaints.
+  final LengthUnit unit;
 
   static const Color _paper = Color(0xFFFFFFFF);
   static const Color _ink = Color(0xFF37474F);
@@ -1907,6 +2584,10 @@ class _WallElevationPainter extends CustomPainter {
             ..strokeWidth = 2,
         );
       }
+      _paintAdded(canvas);
+      _paintMeasure(canvas);
+      _paintMarks(canvas);
+      _paintKey(canvas, size);
       if (flags) _paintFlags(canvas, size);
       return;
     }
@@ -1935,7 +2616,11 @@ class _WallElevationPainter extends CustomPainter {
     }
     _paintSection(canvas, worst);
     final sel = wall.item(selectedId);
+    _paintAdded(canvas);
     if (sel != null) _paintSelected(canvas, sel);
+    _paintMeasure(canvas);
+    _paintMarks(canvas);
+    _paintKey(canvas, size);
     if (flags) _paintFlags(canvas, size);
     _caption(canvas);
   }
@@ -2280,6 +2965,7 @@ class _WallElevationPainter extends CustomPainter {
           _label(canvas, i, r, _ghost, below: r.height < 14);
       }
     }
+    if (referenceDims) _paintReferenceDims(canvas);
     final placements = mountPlacements(wall);
     for (final m in placements) {
       _paintPlacement(canvas, m);
@@ -2363,6 +3049,10 @@ class _WallElevationPainter extends CustomPainter {
         color: _callout, labelLeft: true, bold: true);
     _dimV(canvas, m.plateBottom, m.plateTop, left, inchesLabel(m.plateHeight),
         color: _callout, labelLeft: true);
+    // Floor to the plate's top, outside the stack so the labels clear.
+    _dimV(canvas, 0, m.plateTop, left - 80 / layout.scale,
+        'Top ${inchesLabel(m.plateTop)} AFF',
+        color: _callout, labelLeft: true, bold: true);
     _dimV(canvas, 0, m.centerY, m.plateRight + 4,
         'CL ${inchesLabel(m.centerY)} AFF', color: _callout, bold: true);
     // Hole spacing across the top pair.
@@ -2390,10 +3080,58 @@ class _WallElevationPainter extends CustomPainter {
   }
 
   /// The mounts as a list beside the wall, one block each.
+  /// One mount's lines in the schedule.
+  List<(String, String)> _scheduleRows(MountPlacement m) {
+    final d = m.display;
+    final vesa = vesaLabel(m.vesaWmm, m.vesaHmm);
+    return <(String, String)>[
+      if (d != null) ('Holds', d.name),
+      ('Plate CL from left end', inchesLabel(m.fromLeft)),
+      ('Plate CL from right end', inchesLabel(m.fromRight)),
+      ('Plate CL AFF', inchesLabel(m.centerY)),
+      (
+        'Plate bottom / top AFF',
+        '${inchesLabel(m.plateBottom)} / ${inchesLabel(m.plateTop)}',
+      ),
+      ('Mount center AFF', inchesLabel(m.mountCenterY)),
+      if (m.lowHolesY != null)
+        (
+          'Low / high holes AFF',
+          '${inchesLabel(m.lowHolesY!)} / ${inchesLabel(m.highHolesY!)}',
+        ),
+      if (d != null) ('Display center AFF', inchesLabel(d.centerY)),
+      ('Plate width', inchesLabel(m.plateWidth)),
+      if (vesa.isNotEmpty) ('VESA', vesa),
+      if (vesa.isNotEmpty)
+        (
+          'Hole spacing',
+          '${inchesLabel(m.vesaWmm * kInPerMm)} x '
+              '${inchesLabel(m.vesaHmm * kInPerMm)}',
+        ),
+      if (d != null)
+        (
+          'Display bottom / top AFF',
+          '${inchesLabel(d.y)} / ${inchesLabel(d.top)}',
+        ),
+      if (d != null) ('Display off wall', inchesLabel(m.offWall)),
+    ];
+  }
+
   void _paintSchedule(Canvas canvas, List<MountPlacement> placements) {
-    final x0 = layout.sectionX;
+    final x0 = layout.panelX + scheduleShift.dx;
     final x1 = x0 + _WallLayout.scheduleWidth;
-    var y = 36.0;
+    final y0 = 36.0 + scheduleShift.dy;
+    var y = y0;
+    final rowsOf = {for (final m in placements) m.tag: _scheduleRows(m)};
+    // A paper box behind it, sized first, so it reads wherever it is moved.
+    var bottom = y0 + 18 + (placements.isEmpty ? 14 : 0);
+    for (final m in placements) {
+      bottom += 6 + 18 + rowsOf[m.tag]!.length * 15 + 12;
+    }
+    final box = Rect.fromLTRB(x0 - 8, y0 - 14, x1 + 8, bottom - 4);
+    boxes.schedule = box;
+    canvas.drawRect(box, Paint()..color = _paper);
+    _stroke(canvas, box, _faint, 1);
     _text(canvas, 'MOUNTING SCHEDULE', Offset(x0, y),
         align: TextAlign.left, size: 11, bold: true);
     y += 18;
@@ -2419,32 +3157,7 @@ class _WallElevationPainter extends CustomPainter {
         maxWidth: x1 - x0 - 28,
       );
       y += 18;
-      final d = m.display;
-      final vesa = vesaLabel(m.vesaWmm, m.vesaHmm);
-      final rows = <(String, String)>[
-        if (d != null) ('Holds', d.name),
-        ('Plate CL from left end', inchesLabel(m.fromLeft)),
-        ('Plate CL from right end', inchesLabel(m.fromRight)),
-        ('Plate CL AFF', inchesLabel(m.centerY)),
-        (
-          'Plate bottom / top AFF',
-          '${inchesLabel(m.plateBottom)} / ${inchesLabel(m.plateTop)}',
-        ),
-        ('Plate width', inchesLabel(m.plateWidth)),
-        if (vesa.isNotEmpty) ('VESA', vesa),
-        if (vesa.isNotEmpty)
-          (
-            'Hole spacing',
-            '${inchesLabel(m.vesaWmm * kInPerMm)} x '
-                '${inchesLabel(m.vesaHmm * kInPerMm)}',
-          ),
-        if (d != null)
-          (
-            'Display bottom / top AFF',
-            '${inchesLabel(d.y)} / ${inchesLabel(d.top)}',
-          ),
-        if (d != null) ('Display off wall', inchesLabel(m.offWall)),
-      ];
+      final rows = rowsOf[m.tag]!;
       for (final (label, value) in rows) {
         _text(canvas, label, Offset(x0 + 6, y),
             align: TextAlign.left, size: 10, maxWidth: 150);
@@ -2663,6 +3376,144 @@ class _WallElevationPainter extends CustomPainter {
       ..strokeWidth = w,
   );
 
+  static const Color _marks = Color(0xFF00897B);
+  static const Color _added = Color(0xFF8E24AA);
+
+  /// The drawing's shorthand in a box, bottom right unless moved.
+  void _paintKey(Canvas canvas, Size size) {
+    boxes.key = Rect.zero;
+    if (!showKey) return;
+    const w = 260.0;
+    final h = 30.0 + kDrawingKey.length * 15;
+    final x0 = size.width - w - 16 + keyShift.dx;
+    final y0 = size.height - h - 16 + keyShift.dy;
+    final box = Rect.fromLTWH(x0, y0, w, h);
+    boxes.key = box;
+    canvas.drawRect(box, Paint()..color = _paper);
+    _stroke(canvas, box, _ink, 1);
+    _text(canvas, 'KEY', Offset(x0 + 8, y0 + 12),
+        align: TextAlign.left, size: 11, bold: true);
+    var y = y0 + 30;
+    for (final (term, meaning) in kDrawingKey) {
+      _text(canvas, term, Offset(x0 + 8, y),
+          align: TextAlign.left, size: 10, bold: true);
+      _text(canvas, meaning, Offset(x0 + 78, y),
+          align: TextAlign.left, size: 10, maxWidth: w - 86);
+      y += 15;
+    }
+  }
+
+  /// Faded colors, one per item, for the reference dimensions.
+  static const List<Color> _refColors = [
+    Color(0xFF1E88E5),
+    Color(0xFF43A047),
+    Color(0xFF8E24AA),
+    Color(0xFFF4511E),
+    Color(0xFF00ACC1),
+    Color(0xFF6D4C41),
+    Color(0xFFC0CA33),
+    Color(0xFFD81B60),
+  ];
+
+  /// Every item other than a mount, outlined in its own faded color with
+  /// how far it is from the wall's left end and up from the floor - for
+  /// reference behind the mounts.
+  void _paintReferenceDims(Canvas canvas) {
+    final items = [
+      for (final i in wall.items)
+        if (i.kind != WallItemKind.mount) i,
+    ]..sort((a, b) => a.x.compareTo(b.x));
+    for (var n = 0; n < items.length; n++) {
+      final i = items[n];
+      final c = _refColors[n % _refColors.length].withValues(alpha: 0.55);
+      _stroke(canvas, layout.rectOf(i.face).inflate(2), c, 1.5);
+      // Each a little higher than the last, so the lines do not stack.
+      final across = i.top + 3 + (n % 4) * 3;
+      if (i.x > 0.05) {
+        _dimH(canvas, 0, i.x, across, inchesLabel(i.x), color: c);
+      }
+      if (i.y > 0.05) {
+        _dimV(canvas, 0, i.y, i.x + 2 + (n % 3) * 2, inchesLabel(i.y),
+            color: c);
+      }
+    }
+  }
+
+  /// What was just added: a purple wash and outline, tagged Added.
+  void _paintAdded(Canvas canvas) {
+    for (final id in addedIds) {
+      final i = wall.item(id);
+      if (i == null) continue;
+      final r = layout.rectOf(
+        i.kind == WallItemKind.mount ? i.wallFootprint : i.face,
+      );
+      canvas.drawRect(r, Paint()..color = _added.withValues(alpha: 0.18));
+      canvas.drawRect(
+        r.inflate(4),
+        Paint()
+          ..color = _added
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+      if (i.kind != WallItemKind.mount || addedIds.length == 1) {
+        _text(canvas, 'Added', r.topLeft + const Offset(18, -12),
+            color: _added, bold: true, paper: true);
+      }
+    }
+  }
+
+  /// The distance between [markFrom] and [markTo], each way they share. A
+  /// line with no place along the wall is dimensioned beside the selected
+  /// item; with no height, under it.
+  void _paintMarks(Canvas canvas) {
+    final a = markById(wall, markFrom), b = markById(wall, markTo);
+    if (a == null || b == null) return;
+    final sel = wall.item(selectedId);
+    final d = markDistance(a, b);
+    if (d.across != null && d.across! > 0.01) {
+      final y = a.y ?? b.y ?? (sel == null ? 0.0 : math.max(0.0, sel.y - 4));
+      _dimH(canvas, a.x!, b.x!, y, inchesLabel(d.across!),
+          color: _marks, bold: true);
+    }
+    if (d.upDown != null && d.upDown! > 0.01) {
+      final x = a.x ?? b.x ?? (sel == null ? 0.0 : sel.right + 4);
+      _dimV(canvas, a.y!, b.y!, x, inchesLabel(d.upDown!),
+          color: _marks, bold: true);
+    }
+  }
+
+  /// The clear space from the selected item to [measureId]: across where
+  /// they are apart side to side, up and down where they are apart that way.
+  void _paintMeasure(Canvas canvas) {
+    final a = wall.item(selectedId), b = wall.item(measureId);
+    if (a == null || b == null || a.id == b.id) return;
+    final g = gapBetween(a, b);
+    for (final i in [a, b]) {
+      canvas.drawRect(
+        layout.rectOf(i.face).inflate(3),
+        Paint()
+          ..color = _callout
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
+    final (left, right) = a.x <= b.x ? (a, b) : (b, a);
+    final (low, high) = a.y <= b.y ? (a, b) : (b, a);
+    if (g.across > 0) {
+      // Level with where they overlap up and down, else between centers.
+      final lo = math.max(a.y, b.y), hi = math.min(a.top, b.top);
+      final y = hi > lo ? (lo + hi) / 2 : (a.centerY + b.centerY) / 2;
+      _dimH(canvas, left.right, right.x, y, inchesLabel(g.across),
+          color: _callout, bold: true);
+    }
+    if (g.upDown > 0) {
+      final lo = math.max(a.x, b.x), hi = math.min(a.right, b.right);
+      final x = hi > lo ? (lo + hi) / 2 : (a.centerX + b.centerX) / 2;
+      _dimV(canvas, low.top, high.y, x, inchesLabel(g.upDown),
+          color: _callout, bold: true);
+    }
+  }
+
   void _dimH(
     Canvas canvas,
     double x0,
@@ -2780,10 +3631,19 @@ class _WallElevationPainter extends CustomPainter {
   bool shouldRepaint(_WallElevationPainter old) =>
       old.wall != wall ||
       old.selectedId != selectedId ||
+      old.measureId != measureId ||
+      old.markFrom != markFrom ||
+      old.markTo != markTo ||
+      old.addedIds.join(',') != addedIds.join(',') ||
+      old.scheduleShift != scheduleShift ||
+      old.keyShift != keyShift ||
+      old.showKey != showKey ||
+      old.referenceDims != referenceDims ||
       old.layout.scale != layout.scale ||
       old.layout.origin != layout.origin ||
       old.mounting != mounting ||
       old.flags != flags ||
+      old.unit != unit ||
       old.issues.map((i) => i.text).join('\n') !=
           issues.map((i) => i.text).join('\n');
 }
