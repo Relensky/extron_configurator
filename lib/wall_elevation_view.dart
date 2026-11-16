@@ -613,7 +613,9 @@ class _WallElevationViewState extends State<WallElevationView> {
               // them off.
               child: ValueListenableBuilder<bool>(
                 valueListenable: capturingDiagram,
-                builder: (context, capturing, _) => CustomPaint(
+                // Clipped so a zoomed drawing stays out of the side panel.
+                builder: (context, capturing, _) => ClipRect(
+                  child: CustomPaint(
                   size: box.biggest,
                   painter: _WallElevationPainter(
                     wall: shown,
@@ -633,6 +635,7 @@ class _WallElevationViewState extends State<WallElevationView> {
                     layout: layout,
                     mounting: _mounting,
                     flags: !capturing,
+                  ),
                   ),
                 ),
               ),
@@ -1587,7 +1590,9 @@ class _ItemEditor extends StatelessWidget {
               if (d.across != null) 'Across: ${inchesLabel(d.across!)}',
               if (d.upDown != null) 'Up and down: ${inchesLabel(d.upDown!)}',
               if (d.across == null && d.upDown == null)
-                'One runs up and down, the other across: pick two of a kind.',
+                'One is an up and down line, the other a level one, so '
+                    'there is no distance between them. Pick a point, such '
+                    'as a single hole or a center, to measure to either.',
             ].join('\n'),
             key: const ValueKey('wall_mark_result'),
             style: theme.textTheme.bodySmall,

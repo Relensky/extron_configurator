@@ -766,6 +766,7 @@ List<WallMark> marksOf(WallView wall, WallItem i) {
             y: h.vesaCenterY + h.vesaHIn / 2),
         WallMark('${p}hC', '$n: holes center',
             x: h.vesaCenterX, y: h.vesaCenterY),
+        ..._holeMarks(p, '$n:', h),
       ],
       WallMark('${p}plateL', '$n: plate left end', x: plate.left),
       WallMark('${p}plateR', '$n: plate right end', x: plate.right),
@@ -801,7 +802,21 @@ List<WallMark> marksOf(WallView wall, WallItem i) {
           y: i.vesaCenterY + i.vesaHIn / 2),
       WallMark('${p}vC', '$n: VESA center',
           x: i.vesaCenterX, y: i.vesaCenterY),
+      ..._holeMarks(p, '$n: VESA', i),
     ],
+  ];
+}
+
+/// [h]'s four corner holes, each a point, so a single hole can be measured
+/// to the floor, the ceiling or a wall end.
+List<WallMark> _holeMarks(String p, String n, WallItem h) {
+  final l = h.vesaCenterX - h.vesaWIn / 2, r = h.vesaCenterX + h.vesaWIn / 2;
+  final b = h.vesaCenterY - h.vesaHIn / 2, t = h.vesaCenterY + h.vesaHIn / 2;
+  return [
+    WallMark('${p}pTL', '$n top left hole', x: l, y: t),
+    WallMark('${p}pTR', '$n top right hole', x: r, y: t),
+    WallMark('${p}pBL', '$n bottom left hole', x: l, y: b),
+    WallMark('${p}pBR', '$n bottom right hole', x: r, y: b),
   ];
 }
 

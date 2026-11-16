@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.205+215';
+const String kAppVersion = '0.5.206+216';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,15 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.206',
+    date: 'November 16, 2026',
+    title: 'Walls: measure a single VESA hole',
+    changes: [
+      'Walls: Measure points lists each VESA hole on its own - top left, top right, bottom left and bottom right - for a display and for a mount, so a single hole measures to the ceiling, the floor or a wall end. Picking a hole row with the floor or ceiling now says to pick a point instead.',
+      'Walls: a zoomed-in drawing no longer spills over the item panel.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.205',
     date: 'November 12, 2026',

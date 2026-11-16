@@ -401,6 +401,24 @@ void main() {
       g = markDistance(mark('${m.id}:plateT'), mark('wall:floor'));
       expect(g.upDown, closeTo(plateOf(w, m.id)!.bottom, 1e-9));
     });
+
+    test('a single hole measures to the ceiling, floor and wall end', () {
+      final w = withDisplayOnMount(wall, kNewlineQPro86, kNewlineTiltMount)
+          .resolved();
+      final d = w.items.firstWhere((i) => i.kind == WallItemKind.display);
+      final m = w.items.firstWhere((i) => i.kind == WallItemKind.mount);
+      WallMark mark(String id) => markById(w, id)!;
+      final tl = mark('${d.id}:pTL');
+      expect(tl.label, '${d.name}: VESA top left hole');
+      expect(tl.x, mark('${d.id}:vL').x);
+      expect(tl.y, mark('${d.id}:vT').y);
+      var g = markDistance(tl, mark('wall:ceiling'));
+      expect(g.upDown, closeTo(w.heightIn - tl.y!, 1e-9));
+      g = markDistance(mark('${d.id}:pBR'), mark('wall:floor'));
+      expect(g.upDown, closeTo(mark('${d.id}:vB').y!, 1e-9));
+      g = markDistance(mark('${m.id}:pBL'), mark('wall:left'));
+      expect(g.across, closeTo(mark('${d.id}:vL').x!, 1e-9));
+    });
   });
 
   group('measuring', () {
