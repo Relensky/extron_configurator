@@ -3475,15 +3475,43 @@ class _WallElevationPainter extends CustomPainter {
     if (a == null || b == null) return;
     final sel = wall.item(selectedId);
     final d = markDistance(a, b);
+    // Each point picked: a dot, or a dashed guide for a line across or up
+    // and down, so both ends show even where other dimensions crowd them.
+    final guide = Paint()
+      ..color = _marks
+      ..strokeWidth = 1.5;
+    final top = math.max(layout.tallest - 6, wall.heightIn);
+    for (final m in [a, b]) {
+      if (m.x != null && m.y != null) {
+        final at = layout.at(m.x!, m.y!);
+        canvas.drawCircle(at, 5, Paint()..color = _paper);
+        canvas.drawCircle(at, 3.5, Paint()..color = _marks);
+      } else if (m.x != null) {
+        _dashed(canvas, layout.at(m.x!, 0), layout.at(m.x!, top), guide);
+      } else if (m.y != null) {
+        _dashed(canvas, layout.at(0, m.y!), layout.at(wall.widthIn, m.y!),
+            guide);
+      }
+    }
+    // With no place of its own, clear of the selected item's blue ones.
     if (d.across != null && d.across! > 0.01) {
-      final y = a.y ?? b.y ?? (sel == null ? 0.0 : math.max(0.0, sel.y - 4));
+      final y = a.y ?? b.y ?? (sel == null ? 0.0 : math.max(0.0, sel.y - 8));
       _dimH(canvas, a.x!, b.x!, y, inchesLabel(d.across!),
-          color: _marks, bold: true);
+          color: _marks, bold: true, width: 2);
     }
     if (d.upDown != null && d.upDown! > 0.01) {
-      final x = a.x ?? b.x ?? (sel == null ? 0.0 : sel.right + 4);
+      final x = a.x ?? b.x ?? (sel == null ? 0.0 : sel.right + 10);
+      // The label off the selected item's row of blue dimensions.
+      final lo = math.min(a.y!, b.y!), hi = math.max(a.y!, b.y!);
+      var at = (lo + hi) / 2;
+      if (sel != null) {
+        final row = sel.top + 4;
+        if ((at - row).abs() < 5 && row > lo && row < hi) {
+          at = hi - row > row - lo ? (row + hi) / 2 : (lo + row) / 2;
+        }
+      }
       _dimV(canvas, a.y!, b.y!, x, inchesLabel(d.upDown!),
-          color: _marks, bold: true);
+          color: _marks, bold: true, width: 2, labelY: at);
     }
   }
 
@@ -3528,10 +3556,11 @@ class _WallElevationPainter extends CustomPainter {
     bool elevation = true,
     Color color = _select,
     bool bold = false,
+    double width = 1,
   }) {
     final ink = Paint()
       ..color = color
-      ..strokeWidth = 1;
+      ..strokeWidth = width;
     final a = layout.at(x0, y), b = layout.at(x1, y);
     canvas.drawLine(a, b, ink);
     canvas.drawLine(a + const Offset(0, -4), a + const Offset(0, 4), ink);
@@ -3556,18 +3585,21 @@ class _WallElevationPainter extends CustomPainter {
     Color color = _select,
     bool labelLeft = false,
     bool bold = false,
+    double width = 1,
+    double? labelY,
   }) {
     final ink = Paint()
       ..color = color
-      ..strokeWidth = 1;
+      ..strokeWidth = width;
     final a = layout.at(x, y0), b = layout.at(x, y1);
+    final mid = labelY == null ? Offset.lerp(a, b, 0.5)! : layout.at(x, labelY);
     canvas.drawLine(a, b, ink);
     canvas.drawLine(a + const Offset(-4, 0), a + const Offset(4, 0), ink);
     canvas.drawLine(b + const Offset(-4, 0), b + const Offset(4, 0), ink);
     _text(
       canvas,
       label,
-      Offset.lerp(a, b, 0.5)! + Offset(labelLeft ? -5 : 5, 0),
+      mid + Offset(labelLeft ? -5 : 5, 0),
       align: labelLeft ? TextAlign.right : TextAlign.left,
       size: 10,
       color: color,

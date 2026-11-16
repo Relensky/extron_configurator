@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.206+216';
+const String kAppVersion = '0.5.207+217';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.207',
+    date: 'November 16, 2026',
+    title: 'Walls: measure points stand out',
+    changes: [
+      'Walls: measure points stand out on the drawing - a teal dot on each point picked, a dashed teal line for a hole row, the floor or the ceiling, and a heavier teal dimension set clear of the selected item\'s blue ones.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.206',
     date: 'November 16, 2026',
