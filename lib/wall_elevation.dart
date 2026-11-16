@@ -1543,6 +1543,8 @@ const WallItem kNewlineTiltMount = WallItem(
   height: 16.5,
   depth: 2.67,
   plateHeight: 9.76,
+  // Top holes 3.96" above the plate top: 800 x 400 centers 0.97" above it.
+  plateOffset: 400 * kInPerMm / 2 - 3.96 - 9.76 / 2,
   // Arm length and width read off the drawing; arms 3.93" to 31.49" apart.
   armWidth: 1.45,
   armSpanMin: 3.93,
@@ -1914,7 +1916,12 @@ WallMountSpec withStandInSize(WallMountSpec spec) {
 WallItem withSpecSizes(WallItem item, WallMountSpec spec, {double weightLb = 0}) {
   final vw = spec.vesaW * kInPerMm, vh = spec.vesaH * kInPerMm;
   final display = spec.role == MountRole.display;
+  final mount = spec.role == MountRole.mount;
   return item.copyWith(
+    // Hooks seated where the maker draws them, on its largest pattern.
+    plateOffset: mount && spec.holesAboveHook > 0 && spec.plateHeight > 0
+        ? vh / 2 - spec.holesAboveHook - spec.plateHeight / 2
+        : item.plateOffset,
     width: spec.width > 0 ? spec.width : item.width,
     height: spec.height > 0 ? spec.height : item.height,
     depth: spec.depth > 0 ? spec.depth : item.depth,
@@ -1939,8 +1946,8 @@ WallItem withSpecSizes(WallItem item, WallMountSpec spec, {double weightLb = 0})
 }
 
 /// [item]'s sizes as a catalog product's wall mounting sizes: the reverse
-/// of [withSpecSizes]. Where it hangs and how its hooks seat stay on the
-/// wall; they are about one installation, not the product.
+/// of [withSpecSizes]. Where it hangs stays on the wall; a mount's hook seat
+/// goes with it, measured on its own largest pattern.
 WallMountSpec specFromWallItem(WallItem item) {
   final display = item.kind == WallItemKind.display;
   final mount = item.kind == WallItemKind.mount;
@@ -1972,6 +1979,12 @@ WallMountSpec specFromWallItem(WallItem item) {
     armWidth: mount ? item.armWidth : 0,
     armSpanMin: mount ? item.armSpanMin : 0,
     armSpanMax: mount ? item.armSpanMax : 0,
+    holesAboveHook: mount &&
+            item.plateOffset != 0 &&
+            item.plateHeight > 0 &&
+            item.vesaH > 0
+        ? math.max(0, -hookAboveTopHoles(item, null))
+        : 0,
     maxTilt: mount ? item.maxTiltDeg : 0,
     capacityLb: mount ? item.capacityLb : 0,
   );

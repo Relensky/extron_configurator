@@ -47,6 +47,10 @@ class WallMountSpec {
   /// far apart the arms go, center to center; 0 is not recorded.
   final double plateHeight, armWidth, armSpanMin, armSpanMax;
 
+  /// For a mount: how far its arms' top holes sit above where their hooks
+  /// seat on the plate's top; 0 is not recorded (the plate centered).
+  final double holesAboveHook;
+
   /// For a mount: tilt either way, degrees, and the load it holds, lb.
   final double maxTilt, capacityLb;
 
@@ -69,6 +73,7 @@ class WallMountSpec {
     this.armWidth = 0,
     this.armSpanMin = 0,
     this.armSpanMax = 0,
+    this.holesAboveHook = 0,
     this.maxTilt = 0,
     this.capacityLb = 0,
   });
@@ -95,6 +100,7 @@ class WallMountSpec {
     double? armWidth,
     double? armSpanMin,
     double? armSpanMax,
+    double? holesAboveHook,
     double? maxTilt,
     double? capacityLb,
   }) => WallMountSpec(
@@ -116,6 +122,7 @@ class WallMountSpec {
     armWidth: armWidth ?? this.armWidth,
     armSpanMin: armSpanMin ?? this.armSpanMin,
     armSpanMax: armSpanMax ?? this.armSpanMax,
+    holesAboveHook: holesAboveHook ?? this.holesAboveHook,
     maxTilt: maxTilt ?? this.maxTilt,
     capacityLb: capacityLb ?? this.capacityLb,
   );
@@ -139,6 +146,7 @@ class WallMountSpec {
     if (armWidth > 0) 'armW': armWidth,
     if (armSpanMin > 0) 'armSpanMin': armSpanMin,
     if (armSpanMax > 0) 'armSpanMax': armSpanMax,
+    if (holesAboveHook > 0) 'holesAboveHook': holesAboveHook,
     if (maxTilt > 0) 'maxTilt': maxTilt,
     if (capacityLb > 0) 'capacityLb': capacityLb,
   };
@@ -171,6 +179,7 @@ class WallMountSpec {
       armWidth: read('armW'),
       armSpanMin: read('armSpanMin'),
       armSpanMax: read('armSpanMax'),
+      holesAboveHook: read('holesAboveHook'),
       maxTilt: read('maxTilt'),
       capacityLb: read('capacityLb'),
     );
@@ -227,7 +236,9 @@ const WallMountSpec kSpecNewlineQPro86 = WallMountSpec(
 /// Newline tilt mount EPR8A50600-000: 37.79" wide on a 9.76" plate, 2.67"
 /// off the wall; arms 3.93" to 31.49" apart, holes 3.93" to 15.74" up them
 /// (VESA 100 x 100 to 800 x 400); tilts +5/-10 degrees; 250 lb. Arm length
-/// and width read off the drawing.
+/// and width read off the drawing. The arms' top holes are 3.96" above the
+/// plate's top and the 15.74" holes 2.02" below its bottom, so an 800 x 400
+/// pattern centers 0.97" above the plate's center line.
 const WallMountSpec kSpecNewlineTiltMount = WallMountSpec(
   role: MountRole.mount,
   width: 37.79,
@@ -241,6 +252,7 @@ const WallMountSpec kSpecNewlineTiltMount = WallMountSpec(
   armWidth: 1.45,
   armSpanMin: 3.93,
   armSpanMax: 31.49,
+  holesAboveHook: 3.96,
   maxTilt: 10,
   capacityLb: 250,
 );

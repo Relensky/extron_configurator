@@ -301,6 +301,17 @@ void main() {
       expect(back.role, MountRole.display);
       final m = wallItemFromSpec(mountSpec, model: 'EPR8A50600-000');
       expect(specFromWallItem(m).toJson(), mountSpec.toJson());
+      // The hook seat goes with the product, and matches the built-in one.
+      final hooked = wallItemFromSpec(kSpecNewlineTiltMount,
+          model: 'EPR8A50600-000');
+      expect(hooked.plateOffset, closeTo(kNewlineTiltMount.plateOffset, 1e-9));
+      expect(specFromWallItem(hooked).holesAboveHook, closeTo(3.96, 1e-9));
+      expect(differsFromSpec(kNewlineTiltMount, kSpecNewlineTiltMount),
+          isFalse);
+      expect(
+        WallMountSpec.fromJson(kSpecNewlineTiltMount.toJson()),
+        kSpecNewlineTiltMount,
+      );
     });
 
     test('Save to catalog writes the sizes and backs the file up first',
@@ -340,11 +351,12 @@ void main() {
           .resolved();
       final d = w.items.firstWhere((i) => i.kind == WallItemKind.display);
       var m = w.items.firstWhere((i) => i.kind == WallItemKind.mount);
-      // Centered: the plate's top is half the plate over the VESA center.
-      expect(
-        hookAboveTopHoles(m, d),
-        closeTo(9.76 / 2 - 400 / 25.4 / 2, 1e-9),
-      );
+      // As Newline draws it: the top holes 3.96" over the plate's top, the
+      // 15.74" holes 2.02" under its bottom, the plate 0.97" low.
+      expect(hookAboveTopHoles(m, d), closeTo(-3.96, 1e-9));
+      final p0 = plateOf(w, m.id)!;
+      expect(d.vesaCenterY - 400 / 25.4 / 2 - p0.top, closeTo(-2.02, 0.01));
+      expect(d.vesaCenterY - p0.center.dy, closeTo(0.97, 0.01));
       final displayY = d.y;
       m = withHookAboveTopHoles(m, d, 3);
       w = w.withItem(m).resolved();

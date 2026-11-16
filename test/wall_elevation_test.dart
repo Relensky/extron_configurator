@@ -270,7 +270,9 @@ void main() {
       expect(p.display?.id, d.id);
       expect(p.fromLeft, closeTo(m.wallFootprint.center.dx, 1e-9));
       expect(p.fromLeft + p.fromRight, closeTo(240, 1e-9));
-      expect(p.centerY, closeTo(d.vesaCenterY, 1e-9));
+      // Newline's plate sits 0.97" under the 800 x 400 center.
+      expect(p.centerY, closeTo(d.vesaCenterY + m.plateOffset, 1e-9));
+      expect(d.vesaCenterY - p.centerY, closeTo(0.97, 0.01));
       expect(p.plateBottom, lessThan(p.plateTop));
       expect(p.holes, d.vesaHoles);
       expect(p.vesaWmm, d.vesaW);

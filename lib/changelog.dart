@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.207+217';
+const String kAppVersion = '0.5.208+218';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,15 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.208',
+    date: 'November 16, 2026',
+    title: 'Walls: Newline mount plate where the drawing has it',
+    changes: [
+      'Walls: the Newline tilt mount (EPR8A50600-000) seats its plate where Newline\'s drawing has it - the arms\' top holes 3.96" above the plate\'s top, so an 800 x 400 display\'s holes center 0.97" above the plate\'s center line instead of on it. A Newline mount already on a wall shows Use catalog sizes to move its plate.',
+      'Catalog: a wall mount records how far its arms\' top holes sit above where the hooks seat on the plate (Top holes above hook), and Save sizes to catalog keeps it.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.207',
     date: 'November 16, 2026',
