@@ -80,6 +80,9 @@ class EditorPresence {
   final String user;
   final String machine;
 
+  /// The name they go by in the app; '' when it is just their login.
+  final String name;
+
   /// When they opened the document.
   final DateTime since;
 
@@ -100,6 +103,7 @@ class EditorPresence {
   const EditorPresence({
     required this.user,
     required this.machine,
+    this.name = '',
     required this.since,
     required this.heartbeat,
     this.unsaved = false,
@@ -116,10 +120,14 @@ class EditorPresence {
 
   CollabIdentity get identity => CollabIdentity(user: user, machine: machine);
 
+  /// Their name, else their login.
+  String get who => name.trim().isNotEmpty ? name.trim() : user;
+
   bool isStale(DateTime now) => now.difference(heartbeat) > kPresenceStaleAfter;
 
   Map<String, dynamic> toJson() => {
         'user': user,
+        if (name.isNotEmpty) 'name': name,
         'machine': machine,
         'since': since.toUtc().toIso8601String(),
         'heartbeat': heartbeat.toUtc().toIso8601String(),
@@ -139,6 +147,7 @@ class EditorPresence {
     return EditorPresence(
       user: user,
       machine: json['machine']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
       since: time('since') ?? heartbeat,
       heartbeat: heartbeat,
       unsaved: json['unsaved'] == true,

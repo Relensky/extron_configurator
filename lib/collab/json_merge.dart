@@ -497,18 +497,17 @@ class _Merger {
   /// A log both sides only appended to - a history, a list of notes - keeps
   /// both sides' new entries, theirs after mine. Null for anything else.
   List? _mergeAppendOnly(List base, List mine, List theirs, [String at = '']) {
-    bool startsWithBase(List l) {
-      if (l.length < base.length) return false;
-      for (var i = 0; i < base.length; i++) {
-        if (!jsonEquals(l[i], base[i])) return false;
-      }
-      return true;
-    }
-
-    if (!startsWithBase(mine) || !startsWithBase(theirs)) return null;
+    // A history kept to 500 entries drops its oldest as it grows, so each
+    // side may start part way into base. Only a timestamped log may.
+    final log = base.isNotEmpty && [...base, ...mine, ...theirs].every(_isLogEntry);
+    final km = _logStart(base, mine, log);
+    final kt = _logStart(base, theirs, log);
+    if (km == null || kt == null) return null;
     final place = at.isEmpty ? '(whole document)' : at;
-    final added = theirs.sublist(base.length);
-    final out = [...mine];
+    final added = theirs.sublist(base.length - kt);
+    final mineAdded = mine.sublist(base.length - km);
+    // Both sides' drops stand: the oldest entries fall off once.
+    final out = [...base.sublist(km > kt ? km : kt), ...mineAdded];
     for (var i = 0; i < added.length; i++) {
       final key = '$place#${i + 1}';
       if (declined.contains(key)) {
@@ -518,8 +517,32 @@ class _Merger {
       out.add(added[i]);
       changes.add(MergeChange(place, null, added[i], key));
     }
-    if (out.length > mine.length) taken++;
+    if (out.length > mine.length || kt > km) taken++;
     return out;
+  }
+
+  /// A row of a job's or a room's history: it says when it was written.
+  static bool _isLogEntry(Object? e) =>
+      e is Map && e['at'] is String && (e['at'] as String).isNotEmpty;
+
+  /// How many of [base]'s first entries [l] dropped before carrying on with
+  /// the rest of base: 0 when it starts with all of base. Null when [l] is
+  /// not base's tail with new entries after. Only a [log] drops any.
+  int? _logStart(List base, List l, bool log) {
+    final last = log ? base.length - 1 : 0;
+    for (var k = 0; k <= last; k++) {
+      final kept = base.length - k;
+      if (l.length < kept) continue;
+      var ok = true;
+      for (var i = 0; i < kept; i++) {
+        if (!jsonEquals(l[i], base[k + i])) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return k;
+    }
+    return base.isEmpty ? 0 : null;
   }
 
   String? _identityKey(List base, List mine, List theirs) {

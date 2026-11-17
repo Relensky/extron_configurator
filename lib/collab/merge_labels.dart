@@ -56,6 +56,31 @@ const Map<String, String> _kNames = {
   'budget': 'Budget',
 };
 
+/// The tab each part of a room's drawing document is on, as the room's
+/// history names it (see kAvUndoScopeLabels).
+const Map<String, String> _kRoomDocs = {
+  'nodes': 'AV Flow',
+  'cables': 'AV Flow',
+  'dismissedDevices': 'AV Flow',
+  'dismissedCables': 'AV Flow',
+  'signalColors': 'AV Flow',
+  'roomMode': 'AV Flow',
+  'flowBackground': 'AV Flow',
+  'flowLegend': 'AV Flow',
+  'racks': 'Racks',
+  'rackItems': 'Racks',
+  'rackSlots': 'Racks',
+  'floorPlans': 'Floor Plan',
+  'locations': 'Floor Plan',
+  'throwDistanceFt': 'Floor Plan',
+  'roomLight': 'Floor Plan',
+  'wallViews': 'Walls',
+  'screenSwitches': 'Cabling',
+  'cablingSchematic': 'Cabling',
+  'cost': 'Cost',
+  'roomHistory': 'Room history',
+};
+
 /// The fields a row is best known by, first choice first.
 const List<String> _kRowNames = [
   'text',
@@ -67,6 +92,7 @@ const List<String> _kRowNames = [
   'description',
   'model',
   'item',
+  'itemName',
   'roomCode',
   'code',
 ];
@@ -78,7 +104,27 @@ String describeMergePlace(String path, Object? doc) {
   final parts = <String>[];
   Object? at = doc;
   var first = true;
-  for (final step in _steps(path)) {
+  final steps = _steps(path);
+  // A room's drawings are named by the tab they are on: AV Flow, Cost.
+  var tab = '';
+  if (steps.length > 1 && steps.first == 'av' && at is Map) {
+    final key = RegExp(r'^(\w+)').firstMatch(steps[1])?.group(1) ?? '';
+    tab = _kRoomDocs[key] ?? '';
+    if (tab.isNotEmpty) {
+      parts.add(tab);
+      at = at['av'];
+      steps.removeAt(0);
+      first = false;
+    }
+  }
+  for (final step in steps) {
+    // The tab already says it: Cost, not Cost > Cost.
+    if (tab.isNotEmpty && _word(step) == tab) {
+      at = at is Map ? at[step] : null;
+      tab = '';
+      continue;
+    }
+    tab = '';
     final row = RegExp(r'^(.*)\[(\w+)=(.*)\]$').firstMatch(step);
     if (row == null) {
       // A map keyed by room id (roomSnapshots.room10) is named by the room.
@@ -176,6 +222,80 @@ String? _roomName(Object? doc, String id) {
   return null;
 }
 
+/// True for a row of a job's or a room's history: who changed what, when.
+bool isHistoryEntry(Object? v) =>
+    v is Map &&
+    v['itemKey'] is String &&
+    v['field'] is String &&
+    v['at'] is String &&
+    (v['user'] is String || v['name'] is String);
+
+/// Who wrote a history entry: their name, else their login, and the PC.
+String historyEntryWho(Map e) {
+  final name = '${e['name'] ?? ''}'.trim();
+  final user = '${e['user'] ?? ''}'.trim();
+  final who = name.isNotEmpty ? name : user.isNotEmpty ? user : 'Someone';
+  final pc = '${e['machine'] ?? ''}'.trim();
+  return pc.isEmpty ? who : '$who on $pc';
+}
+
+/// What a history entry says was done: a drawing edit is its own sentence
+/// ("Add MXW neXt 2"); anything else leads with its field ("Saved to disk").
+String historyEntryWhat(Map e) {
+  final field = '${e['field'] ?? ''}'.trim();
+  final summary = '${e['summary'] ?? ''}'.trim();
+  if (field.isEmpty || field == 'Drawing') return summary;
+  if (summary.isEmpty) return field;
+  return '$field: $summary';
+}
+
+/// The thing a history entry is about - a room's document ("Cost", "AV
+/// Flow") or a job's room ("PAC 134 - Config") - for grouping under.
+String historyEntryThing(Map e) {
+  final name = '${e['itemName'] ?? ''}'.trim();
+  return name.isNotEmpty ? name : _word('${e['itemKey'] ?? ''}'.split(':').first);
+}
+
+/// One history entry as a line: who and what. `Derek Stanley on DSNPC3:
+/// Add MXW neXt 2 Classroom Kit`.
+String describeHistoryEntry(Map e) =>
+    '${historyEntryWho(e)}: ${historyEntryWhat(e)}';
+
+/// The place of one change for the combine window: [describeMergePlace],
+/// and for a history entry added or removed, the thing it is about and then
+/// who did what - so a job's log is grouped by room, a room's by document,
+/// and each entry is its own line.
+String describeMergeChangePlace(
+  String path,
+  Object? before,
+  Object? after,
+  Object? doc,
+) {
+  final place = describeMergePlace(path, doc);
+  final entry = after ?? before;
+  if (entry is! Map || !isHistoryEntry(entry)) return place;
+  // Kept off the group's ' > ' so a summary cannot split it.
+  final thing = historyEntryThing(entry).replaceAll(' > ', ' / ');
+  final line = describeHistoryEntry(entry).replaceAll(' > ', ' / ');
+  return '$place > $thing > $line';
+}
+
+/// What one change did, for its line in the combine window: a history entry
+/// says when it was written; anything else is [describeMergeChange].
+String describeMergeChangeLine(Object? before, Object? after) {
+  final entry = after ?? before;
+  if (entry is Map && isHistoryEntry(entry) && (before == null || after == null)) {
+    final at = DateTime.tryParse('${entry['at']}');
+    String two(int n) => n.toString().padLeft(2, '0');
+    final when = at == null
+        ? ''
+        : ' ${at.year}-${two(at.month)}-${two(at.day)} '
+            '${two(at.hour)}:${two(at.minute)}';
+    return '${before == null ? 'added' : 'removed'} to the history$when';
+  }
+  return describeMergeChange(before, after);
+}
+
 /// A field's key in words: `partNumber` -> `Part number`.
 String describeMergeField(String key) => _word(key);
 
@@ -220,7 +340,9 @@ String describeTaxRate(Object? v) {
 /// says what it is, text is shown as typed.
 String describeMergeValue(Object? v) {
   if (v == null) return 'deleted';
-  if (v is Map) return _rowName(v, 'an entry');
+  if (v is Map) {
+    return isHistoryEntry(v) ? describeHistoryEntry(v) : _rowName(v, 'an entry');
+  }
   if (v is List) return '${v.length} item${v.length == 1 ? '' : 's'}';
   if (v is String) {
     if (v.trim().isEmpty) return '(blank)';

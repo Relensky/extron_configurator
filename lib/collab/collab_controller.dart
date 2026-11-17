@@ -179,6 +179,15 @@ class CollabController extends ChangeNotifier {
   CollabController({CollabIdentity? identity, this.enabled = false})
       : me = identity ?? CollabIdentity.current();
 
+  /// The name this person goes by in the app, so others' copies can say
+  /// "Derek Stanley" rather than a login. Set by the app.
+  String Function()? myName;
+
+  String _myName() {
+    final n = myName?.call().trim() ?? '';
+    return n.toLowerCase() == me.user.toLowerCase() ? '' : n;
+  }
+
   Stream<CollabNotice> get notices => _notices.stream;
 
   void register(CollabDocument doc) => _docs[doc.kind] = doc;
@@ -318,9 +327,9 @@ class CollabController extends ChangeNotifier {
       _notices.add(CollabNotice(
         doc.kind,
         catalog
-            ? '${o.user} (${o.machine}) is editing the catalog too. Their '
+            ? '${o.who} (${o.machine}) is editing the catalog too. Their '
                 'saves will be merged with yours.'
-            : '${o.user} (${o.machine}) has opened ${_named(doc)} too. '
+            : '${o.who} (${o.machine}) has opened ${_named(doc)} too. '
                 'Their saves will be merged with yours.',
       ));
     }
@@ -416,6 +425,7 @@ class CollabController extends ChangeNotifier {
     final w = whereAmI?.call();
     return EditorPresence(
       user: me.user,
+      name: _myName(),
       machine: me.machine,
       since: s.since,
       heartbeat: now,
@@ -669,7 +679,8 @@ class CollabController extends ChangeNotifier {
           a[i].unsaved != b[i].unsaved ||
           a[i].savedAt != b[i].savedAt ||
           a[i].room != b[i].room ||
-          a[i].tab != b[i].tab) {
+          a[i].tab != b[i].tab ||
+          a[i].name != b[i].name) {
         return false;
       }
     }
@@ -685,18 +696,21 @@ class CollabController extends ChangeNotifier {
       f.parent.createSync(recursive: true);
       f.writeAsStringSync(jsonEncode({
         'user': me.user,
+        if (_myName().isNotEmpty) 'name': _myName(),
         'machine': me.machine,
         'at': DateTime.now().toUtc().toIso8601String(),
       }));
     } catch (_) {}
   }
 
-  /// Who most likely wrote the file, as "user on PC": the last-save note
-  /// beside it, else the present editor with the latest save, else the only
-  /// other person who has it open.
+  /// Who most likely wrote the file, as "name on PC" (their login when they
+  /// gave no name): the last-save note beside it, else the present editor
+  /// with the latest save, else the only other person who has it open.
   String _latestSaver(List<EditorPresence> others, String documentPath) {
-    String named(String user, String machine) =>
-        machine.trim().isEmpty ? user : '$user on $machine';
+    String named(String user, String machine, [String name = '']) {
+      final who = name.trim().isNotEmpty ? name.trim() : user;
+      return machine.trim().isEmpty ? who : '$who on $machine';
+    }
     try {
       final f = File(_lastSaveFile(documentPath));
       if (f.existsSync()) {
@@ -707,7 +721,7 @@ class CollabController extends ChangeNotifier {
             machine: '${j['machine'] ?? ''}',
           );
           if (who != me && who.user.isNotEmpty) {
-            return named(who.user, who.machine);
+            return named(who.user, who.machine, '${j['name'] ?? ''}');
           }
         }
       }
@@ -718,6 +732,6 @@ class CollabController extends ChangeNotifier {
       if (best == null || o.savedAt!.isAfter(best.savedAt!)) best = o;
     }
     if (best == null && others.length == 1) best = others.single;
-    return best == null ? '' : named(best.user, best.machine);
+    return best == null ? '' : named(best.user, best.machine, best.name);
   }
 }

@@ -301,6 +301,24 @@ void main() {
       them.dispose();
     });
 
+    test('a save says whose by the name they go by', () async {
+      final me = controllerFor('me');
+      await me.tick();
+      final them = CollabController(
+        identity: const CollabIdentity(user: 'jsmith', machine: 'PC-9'),
+        enabled: true,
+      )
+        ..myName = (() => 'Jane Smith')
+        ..register(_MapDoc(file));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await File(file).writeAsString(jsonEncode({'name': 'Job', 'n': 4}));
+      them.noteInSync(CollabDocKind.project, saved: true);
+      await me.tick();
+      expect(me.incomingOn(CollabDocKind.project)!.who, 'Jane Smith on PC-9');
+      me.dispose();
+      them.dispose();
+    });
+
     test('unsaved work of mine is merged with their save, not replaced',
         () async {
       final me = controllerFor('me');

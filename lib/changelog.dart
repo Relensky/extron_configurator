@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.210+220';
+const String kAppVersion = '0.5.211+221';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.211',
+    date: 'November 17, 2026',
+    title: 'Combine: who changed what, line by line',
+    changes: [
+      'Combine: says who saved by the name they go by ("Derek Stanley on DSNPC3") rather than a login. A job\'s or a room\'s history that has reached 500 entries no longer comes up as "500 items - kept yours": each new entry is its own line, naming who did what - a job\'s grouped by room, a room\'s by Cost, AV Flow, Floor Plan and the other tabs. Changes in a room\'s drawings are listed under the tab they are on rather than "AV drawing", and deliveries by their item instead of "an entry".',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.210',
     date: 'November 17, 2026',

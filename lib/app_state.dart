@@ -10588,6 +10588,8 @@ class AppStateProvider extends ChangeNotifier {
       appDataReplaced(doc);
     }
     collab = CollabController(enabled: false, identity: collabIdentity)
+      // Others' copies say whose save it was by name, not login.
+      ..myName = (() => userDisplayName)
       ..register(_RoomCollabDoc(this))
       ..register(_ProjectCollabDoc(this))
       ..register(_CatalogCollabDoc(this))

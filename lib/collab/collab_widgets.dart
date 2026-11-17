@@ -708,7 +708,7 @@ List<CombineHistoryItem> combineHistoryItems(
   for (final c in preview.changes)
     if (!isBookkeepingMergePath(c.path))
     CombineHistoryItem(
-      place: describeMergePlace(c.path, doc),
+      place: describeMergeChangePlace(c.path, c.before, c.after, doc),
       path: c.path,
       // A row or list changed in place says what in it changed.
       before: c.before == null || _inPlace(c) ? '' : describeMergeValue(c.before),
@@ -907,7 +907,8 @@ Future<Set<String>?> showMergeReviewDialog(
   final noun = collabDocNoun(kind);
   // Grouped under the thing each belongs to, in the file's order.
   final places = {
-    for (final c in preview.changes) c.key: describeMergePlace(c.path, doc),
+    for (final c in preview.changes)
+      c.key: describeMergeChangePlace(c.path, c.before, c.after, doc),
   };
   // THE TAX RATE IS ASKED ON ITS OWN, at the top: taking it reprices
   // everything, so it is a choice made on purpose rather than one tick
@@ -918,11 +919,17 @@ Future<Set<String>?> showMergeReviewDialog(
   ];
   var takeTheirTax = true;
   // Re-priced room totals are taken without a line each.
+  // Sorted by group but kept in the file's order inside one - a history
+  // reads oldest first.
+  final order = {for (final (i, c) in preview.changes.indexed) c.key: i};
   final changes = [
     for (final c in preview.changes)
       if (!isTaxMergePath(c.path) && !isBookkeepingMergePath(c.path)) c,
-  ]..sort((a, b) =>
-      mergePlaceGroup(places[a.key]!).compareTo(mergePlaceGroup(places[b.key]!)));
+  ]..sort((a, b) {
+      final g = mergePlaceGroup(places[a.key]!)
+          .compareTo(mergePlaceGroup(places[b.key]!));
+      return g != 0 ? g : order[a.key]!.compareTo(order[b.key]!);
+    });
   final approved = {for (final c in changes) c.key};
   final open = <String>{};
   // The rate on each side, read off the change that carries it.
@@ -945,7 +952,7 @@ Future<Set<String>?> showMergeReviewDialog(
         final theme = Theme.of(ctx);
         final muted = theme.colorScheme.onSurfaceVariant;
         String what(MergeChange c) => whats.putIfAbsent(
-            c.key, () => describeMergeChange(c.before, c.after));
+            c.key, () => describeMergeChangeLine(c.before, c.after));
 
         return AlertDialog(
           key: const ValueKey('collab_review_dialog'),
