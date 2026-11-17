@@ -85,6 +85,22 @@ void main() {
     });
   });
 
+  test('two models under one name are two rows, each with its own key', () {
+    CostLineItem switcher(String id, String model) => CostLineItem(
+          id: id,
+          description: 'Switcher',
+          catalogModel: model,
+          qty: 1,
+        );
+    final here = RoomCostSettings()
+      ..extraEquipment.add(switcher('EQP_1', 'Crosspoint 84 4K Q SA'));
+    final there = RoomCostSettings()
+      ..extraEquipment.add(switcher('EQP_1', 'Crosspoint 84 Q MA'));
+    final c = compareRoomCosts(priced(here), priced(there));
+    expect(c.rows, hasLength(2));
+    expect(c.rows.map((r) => r.key).toSet(), hasLength(2));
+  });
+
   group('cost items', () {
     RoomCostSettings source() => RoomCostSettings()
       ..extraEquipment.add(part('EQP_1', 'Mount', price: 300))
@@ -245,6 +261,78 @@ void main() {
       expect(skipped, 2);
     });
 
+    test('a different model with the same box name is not already there', () {
+      // Arts 107 has a Crosspoint 84 4K Q SA drawn as "Switcher"; Arts 105's
+      // Crosspoint 84 Q MA is drawn under the same name.
+      const target = AvFlowModel(
+        nodes: [
+          AvNode(
+            id: 'AVNODE_1',
+            label: 'Switcher',
+            model: 'Crosspoint 84 4K Q SA',
+            pos: Offset.zero,
+            ports: [],
+          ),
+        ],
+        cables: [],
+        racks: [],
+        rackSlots: {},
+        canvasSize: Size(0, 0),
+        roomTitle: '',
+        unplaced: [],
+      );
+      final settings = RoomCostSettings();
+      final estimate = computeRoomCost(
+          model: target, library: AvDeviceLibrary.empty(), settings: settings);
+      CostLineItem switcher(String id, String model, {String pn = ''}) =>
+          CostLineItem(
+            id: id,
+            description: 'Switcher',
+            catalogModel: model,
+            partNumber: pn,
+            qty: 1,
+          );
+      final set = CostItemSet(extraEquipment: [
+        switcher('COPY_1', 'Crosspoint 84 Q MA', pn: '60-1'),
+        // The same model again is one part.
+        switcher('COPY_2', 'Crosspoint 84 Q MA'),
+        // The model the target has is still a duplicate.
+        switcher('COPY_3', 'crosspoint 84 4k q sa'),
+      ]);
+      final (kept, skipped) =
+          withoutExisting(set, target: settings, targetEstimate: estimate);
+      expect(kept.extraEquipment.map((i) => i.id), ['COPY_1']);
+      expect(skipped, 2);
+    });
+
+    test('Copy anyway keeps what the target has, but not a fee twice', () {
+      final lib = library();
+      final target = RoomCostSettings()
+        ..fees.add(const CostFee(id: 'FEE_9', name: 'freight', percent: 5))
+        ..labor.add(const LaborLine(id: 'LABOR_9', rateId: 'tech', hours: 2));
+      final targetEstimate = computeRoomCost(
+          model: withProjector(), library: lib, settings: target);
+      final set = CostItemSet(
+        extraEquipment: [
+          part('EQP_1', 'Projector', pn: 'V11HA94020'),
+          part('EQP_2', 'Screen', pn: 'SC-1'),
+        ],
+        labor: const [LaborLine(id: 'LABOR_1', rateId: 'tech', hours: 2)],
+        fees: const [CostFee(id: 'FEE_1', name: 'Freight', percent: 3)],
+      );
+      final (kept, skipped) = withoutExisting(
+        set,
+        target: target,
+        targetEstimate: targetEstimate,
+        copyAnyway: true,
+      );
+      expect(kept.extraEquipment.map((i) => i.description),
+          ['Projector', 'Screen']);
+      expect(kept.labor, hasLength(1));
+      expect(kept.fees, isEmpty);
+      expect(skipped, 1);
+    });
+
     test('copying into a room that is not open writes its cost file',
         () async {
       final dir = await Directory.systemTemp.createTemp('copy_into');
@@ -316,7 +404,7 @@ void main() {
     testWidgets('ticked parts copy in, with the new wording', (tester) async {
       final p = await open(tester);
       await tester.tap(find.byKey(
-          const ValueKey('compare_pick_Equipment|Ceiling speaker|42-1')));
+          const ValueKey('compare_pick_Equipment|pn:421')));
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('compare_copy')));
       await tester.pumpAndSettle();
@@ -338,7 +426,7 @@ void main() {
       await open(tester);
       expect(
         find.byKey(const ValueKey(
-            'compare_pick_Equipment|DTP HDMI 4K 330 Tx|60-1331-12')),
+            'compare_pick_Equipment|pn:60133112')),
         findsNothing,
       );
       await tester.tap(find.byKey(const ValueKey('compare_pick_all')));
@@ -358,7 +446,7 @@ void main() {
         (tester) async {
       await open(tester);
       const speaker =
-          ValueKey('compare_pick_Equipment|Ceiling speaker|42-1');
+          ValueKey('compare_pick_Equipment|pn:421');
       await tester.tap(find.byKey(speaker));
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('compare_copy')));
@@ -375,7 +463,7 @@ void main() {
         (tester) async {
       final p = await open(tester);
       const dtp =
-          ValueKey('compare_pick_Equipment|DTP HDMI 4K 330 Tx|60-1331-12');
+          ValueKey('compare_pick_Equipment|pn:60133112');
       expect(find.byKey(dtp), findsNothing);
       await tester.tap(find.byKey(const ValueKey('compare_replace')));
       await tester.pump();
@@ -395,10 +483,46 @@ void main() {
       expect(find.text('Arts 111 vs Arts 112'), findsOneWidget);
     });
 
+    testWidgets('Copy anyway adds a part both rooms have alongside',
+        (tester) async {
+      final p = await open(tester);
+      const dtp = ValueKey('compare_pick_Equipment|pn:60133112');
+      expect(find.byKey(dtp), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('compare_copy_anyway')));
+      await tester.pump();
+      await tester.tap(find.byKey(dtp));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('compare_copy')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('without replacing any items'),
+          findsOneWidget);
+      expect(find.textContaining('added alongside as new lines'),
+          findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('copy_items_go')));
+      await tester.pumpAndSettle();
+      final dtps = p.avCost.extraEquipment
+          .where((i) => i.partNumber == '60-1331-12')
+          .toList();
+      expect(dtps, hasLength(2));
+      expect(dtps.map((i) => i.id).toSet(), hasLength(2));
+      expect(dtps.map((i) => i.unitPrice), [11948, 700]);
+    });
+
+    testWidgets('Replace and Copy anyway turn each other off', (tester) async {
+      await open(tester);
+      Checkbox box(String k) => tester.widget<Checkbox>(find.byKey(ValueKey(k)));
+      await tester.tap(find.byKey(const ValueKey('compare_replace')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('compare_copy_anyway')));
+      await tester.pump();
+      expect(box('compare_copy_anyway').value, isTrue);
+      expect(box('compare_replace').value, isFalse);
+    });
+
     testWidgets('a part only the other room has goes in place of one here',
         (tester) async {
       final p = await open(tester, projector: true);
-      const swap = ValueKey('compare_swap_Equipment|Ceiling speaker|42-1');
+      const swap = ValueKey('compare_swap_Equipment|pn:421');
       expect(find.byKey(swap), findsNothing);
       await tester.tap(find.byKey(const ValueKey('compare_replace')));
       await tester.pump();
@@ -516,7 +640,7 @@ void main() {
     final swap = find.byWidgetPredicate((w) =>
         w.key is ValueKey &&
         '${(w.key as ValueKey).value}'.startsWith('compare_swap_') &&
-        '${(w.key as ValueKey).value}'.contains('TR311HW'));
+        '${(w.key as ValueKey).value}'.toLowerCase().contains('tr311hw'));
     await tester.tap(swap);
     await tester.pumpAndSettle();
     final choice = find.textContaining('swapped on the AV Flow');

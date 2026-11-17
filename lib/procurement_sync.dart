@@ -24,6 +24,9 @@ typedef ProcurementLine = ({
   String room,
   String key,
   String device,
+  String manufacturer,
+  String model,
+  String partNumber,
   String category,
   String partKey,
 });
@@ -60,6 +63,9 @@ List<ProcurementLine> procurementLinesOf(ProjectEstimate estimate) => [
               room: room.codeName,
               key: line.key,
               device: procurementDeviceName(line),
+              manufacturer: line.manufacturer.trim(),
+              model: line.model.trim(),
+              partNumber: line.partNumber.trim(),
               category: line.category,
               partKey: masterPartKey(
                 kind: kind.name,
@@ -212,7 +218,13 @@ List<ProcurementEntry> liveProcurement(
       line == null
           ? (hand == null ? e : follow(e, hand))
           : follow(
-              e.copyWith(room: line.room, device: line.device),
+              e.copyWith(
+                room: line.room,
+                device: line.device,
+                manufacturer: line.manufacturer,
+                model: line.model,
+                partNumber: line.partNumber,
+              ),
               line.partKey,
             ),
     );
@@ -225,6 +237,9 @@ List<ProcurementEntry> liveProcurement(
           id: autoProcurementId(l.roomId, l.key),
           room: l.room,
           device: l.device,
+          manufacturer: l.manufacturer,
+          model: l.model,
+          partNumber: l.partNumber,
           description: l.category,
           roomId: l.roomId,
           lineKey: l.key,

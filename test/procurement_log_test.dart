@@ -14,6 +14,9 @@ void main() {
     company: 'OFCI',
     room: 'HIL 101',
     device: 'Shure MXA920',
+    manufacturer: 'Shure',
+    model: 'MXA920-S',
+    partNumber: 'MXA920W-S',
     description: 'Ceiling microphone array',
     status: ProcurementStatus.submitted,
     statusTo: 'DPR',
@@ -44,6 +47,8 @@ void main() {
     final project = BuildingProject(procurement: [entry]);
     final back = BuildingProject.fromJson(project.toJson()).procurement.single;
     expect(back.toJson(), entry.toJson());
+    expect([back.manufacturer, back.model, back.partNumber],
+        ['Shure', 'MXA920-S', 'MXA920W-S']);
     expect(BuildingProject.fromJson(project.toJson()).nextProcurementId(),
         'proc2');
   });
@@ -58,7 +63,10 @@ void main() {
     expect(sections.map((s) => s.title), ['HIL 101', 'HIL 208']);
     expect(sections.first.header, kProcurementColumns);
     expect(sections.first.rows, hasLength(2));
-    expect(sections.first.rows.first[4], 'Submitted to DPR');
+    expect(
+      sections.first.rows.first[kProcurementColumns.indexOf('Status')],
+      'Submitted to DPR',
+    );
     expect(buildXlsx([procurementLogSheet('HIL', [entry])]), isNotEmpty);
   });
 
@@ -105,11 +113,36 @@ void main() {
   });
 
   test('the columns go in the order the job keeps them', () {
-    final ids = [
-      for (final c in orderedProcurementColumns(['status', 'device'])) c.id,
-    ];
-    expect(ids.take(3), ['status', 'device', 'company']);
+    final ids = [for (final c in orderedProcurementColumns([])) c.id];
+    expect(ids.take(6), [
+      'device',
+      'manufacturer',
+      'model',
+      'partNumber',
+      'company',
+      'room',
+    ]);
     expect(ids, hasLength(kProcurementColumnSpecs.length));
+
+    // A job ordered before these were built in gets them by the frozen
+    // device column, ahead of the rest as the page and sheet show them.
+    final saved = [
+      'status',
+      'company',
+      'room',
+      'device',
+      for (final c in kProcurementColumnSpecs)
+        if (!{'status', 'company', 'room', 'device', 'manufacturer', 'model',
+            'partNumber'}.contains(c.id))
+          c.id,
+    ];
+    final placed = [
+      for (final c in orderedProcurementColumns(saved))
+        if (c.id != kProcurementFixedColumn) c.id,
+    ];
+    expect(placed.take(5),
+        ['manufacturer', 'model', 'partNumber', 'status', 'company']);
+    expect(placed, hasLength(kProcurementColumnSpecs.length - 1));
 
     final sections = procurementLogSections([entry], order: ['status']);
     expect(sections.single.header.first, 'Status');
@@ -193,7 +226,11 @@ void main() {
 
     test('an added column can be moved among the built-in ones', () {
       final project = BuildingProject(
-        procurementColumnOrder: ['custom1', 'device'],
+        // Moving a column saves every column's place.
+        procurementColumnOrder: [
+          'custom1',
+          for (final c in kProcurementColumnSpecs) c.id,
+        ],
         procurementCustomColumns: [(id: 'custom1', label: 'Quote #')],
       );
       expect(

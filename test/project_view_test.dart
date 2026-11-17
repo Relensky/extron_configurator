@@ -737,12 +737,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
       await gesture.up();
       await tester.pumpAndSettle();
-      expect(
-        orderedProcurementColumns(p.project.procurementColumnOrder)
-            .map((c) => c.id)
-            .take(2),
-        ['status', 'company'],
-      );
+      final ids = [
+        for (final c
+            in orderedProcurementColumns(p.project.procurementColumnOrder))
+          c.id,
+      ];
+      expect(ids.indexOf('status'), ids.indexOf('company') - 1);
     });
 
     testWidgets('a column is widened by dragging its edge', (tester) async {
@@ -899,10 +899,17 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('procurement_columns')));
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('procurement_column_new')),
+      );
       await tester.enterText(
         find.byKey(const ValueKey('procurement_column_new')),
         'Quote #',
       );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('procurement_column_add')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('procurement_column_add')));
       await tester.pumpAndSettle();
       expect(p.project.procurementCustomColumns.single.label, 'Quote #');

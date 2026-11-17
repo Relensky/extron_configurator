@@ -103,6 +103,12 @@ class ProcurementEntry {
   final String company;
   final String room;
   final String device;
+
+  /// Who makes it, its model and part number. Read off the room line on a
+  /// linked entry - see procurement_sync.dart - typed on one added here.
+  final String manufacturer;
+  final String model;
+  final String partNumber;
   final String description;
   final ProcurementStatus status;
 
@@ -150,6 +156,9 @@ class ProcurementEntry {
     this.company = '',
     this.room = '',
     this.device = '',
+    this.manufacturer = '',
+    this.model = '',
+    this.partNumber = '',
     this.description = '',
     this.status = ProcurementStatus.none,
     this.statusTo = '',
@@ -199,6 +208,9 @@ class ProcurementEntry {
     String? company,
     String? room,
     String? device,
+    String? manufacturer,
+    String? model,
+    String? partNumber,
     String? description,
     ProcurementStatus? status,
     String? statusTo,
@@ -236,6 +248,9 @@ class ProcurementEntry {
     company: company ?? this.company,
     room: room ?? this.room,
     device: device ?? this.device,
+    manufacturer: manufacturer ?? this.manufacturer,
+    model: model ?? this.model,
+    partNumber: partNumber ?? this.partNumber,
     description: description ?? this.description,
     status: status ?? this.status,
     statusTo: statusTo ?? this.statusTo,
@@ -260,6 +275,9 @@ class ProcurementEntry {
       if (company.trim().isNotEmpty) 'company': company.trim(),
       if (room.trim().isNotEmpty) 'room': room.trim(),
       if (device.trim().isNotEmpty) 'device': device.trim(),
+      if (manufacturer.trim().isNotEmpty) 'manufacturer': manufacturer.trim(),
+      if (model.trim().isNotEmpty) 'model': model.trim(),
+      if (partNumber.trim().isNotEmpty) 'partNumber': partNumber.trim(),
       if (description.trim().isNotEmpty) 'description': description.trim(),
       if (status != ProcurementStatus.none) 'status': status.name,
       if (statusTo.trim().isNotEmpty) 'statusTo': statusTo.trim(),
@@ -293,6 +311,9 @@ class ProcurementEntry {
       company: text('company'),
       room: text('room'),
       device: text('device'),
+      manufacturer: text('manufacturer'),
+      model: text('model'),
+      partNumber: text('partNumber'),
       description: text('description'),
       status: ProcurementStatus.fromName(json['status']),
       statusTo: text('statusTo'),
@@ -354,11 +375,15 @@ typedef ProcurementColumnSpec = ({
   ProcurementGroup group,
 });
 
-/// The log's columns, in the order the contractor's sheet has them.
+/// The log's columns: the device and what it is, then the rest in the order
+/// the contractor's sheet has them.
 const List<ProcurementColumnSpec> kProcurementColumnSpecs = [
+  (id: 'device', label: 'Device', group: ProcurementGroup.item),
+  (id: 'manufacturer', label: 'Manufacturer', group: ProcurementGroup.item),
+  (id: 'model', label: 'Model', group: ProcurementGroup.item),
+  (id: 'partNumber', label: 'Part Number', group: ProcurementGroup.item),
   (id: 'company', label: 'Company', group: ProcurementGroup.item),
   (id: 'room', label: 'Room #', group: ProcurementGroup.item),
-  (id: 'device', label: 'Device', group: ProcurementGroup.item),
   (
     id: 'description',
     label: 'Equipment Description',
@@ -477,8 +502,21 @@ List<ProcurementColumnSpec> orderedProcurementColumns(
     for (final id in order)
       if (byId.containsKey(id)) byId.remove(id)!,
   ];
-  for (final c in all) {
-    if (byId.containsKey(c.id)) out.add(c);
+  // One the order does not name goes after the column it usually follows,
+  // so a newly built-in one lands where it belongs on a job already ordered.
+  // After the device column is next to it as the page shows it, frozen first.
+  for (final (i, c) in all.indexed) {
+    if (!byId.containsKey(c.id)) continue;
+    byId.remove(c.id);
+    final prev = i == 0 || procurementColumnIsCustom(c.id) ? null : all[i - 1].id;
+    final at = prev == null
+        ? out.length
+        : prev == kProcurementFixedColumn && order.contains(prev)
+        ? (out.firstOrNull?.id == prev ? 1 : 0)
+        : out.indexWhere((o) => o.id == prev) + 1;
+    at < 0 || (at == 0 && prev != kProcurementFixedColumn)
+        ? out.add(c)
+        : out.insert(at, c);
   }
   return out;
 }
@@ -490,6 +528,9 @@ Map<String, String> procurementValues(ProcurementEntry e) {
     'company': e.company,
     'room': e.room,
     'device': e.device,
+    'manufacturer': e.manufacturer,
+    'model': e.model,
+    'partNumber': e.partNumber,
     'description': e.description,
     'status': e.statusText,
     'phase': e.installPhase,
@@ -553,6 +594,9 @@ const String kProcurementLogSheet = 'AV Procurement Log';
 /// dragged - the sheet takes the same widths.
 const Map<String, double> kProcurementColumnWidthsPx = {
   'device': 260,
+  'manufacturer': 130,
+  'model': 140,
+  'partNumber': 140,
   'company': 110,
   'room': 90,
   'description': 210,

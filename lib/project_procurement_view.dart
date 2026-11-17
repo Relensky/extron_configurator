@@ -42,6 +42,9 @@ typedef _Col = ({String id, String label, double width});
 const List<_Col> _kCols = [
   (id: 'company', label: 'Company', width: 110),
   (id: 'room', label: 'Room #', width: 90),
+  (id: 'manufacturer', label: 'Manufacturer', width: 130),
+  (id: 'model', label: 'Model', width: 140),
+  (id: 'partNumber', label: 'Part Number', width: 140),
   (id: 'description', label: 'Equipment Description', width: 210),
   (id: 'status', label: 'Status', width: 170),
   (id: 'phase', label: 'Install Before Drywall or After Paint?', width: 150),
@@ -997,6 +1000,9 @@ class _LogGridState extends State<_LogGrid> {
     final cells = <Widget>[
       _CompanyCell(entry: entry, style: zoomed.labelSmall, w: w),
       text(entry.room, lines: 1),
+      text(entry.manufacturer, lines: 1),
+      text(entry.model, lines: 1),
+      text(entry.partNumber, lines: 1),
       text(entry.description),
       _StatusCell(entry: entry, style: zoomed.labelSmall, w: w),
       pill(entry.installPhase, (
@@ -1479,6 +1485,9 @@ Future<ProcurementEntry?> showProcurementEditor(
   final company = TextEditingController(text: entry.company);
   final room = TextEditingController(text: entry.room);
   final device = TextEditingController(text: entry.device);
+  final manufacturer = TextEditingController(text: entry.manufacturer);
+  final model = TextEditingController(text: entry.model);
+  final partNumber = TextEditingController(text: entry.partNumber);
   final description = TextEditingController(text: entry.description);
   final statusTo = TextEditingController(
     text: entry.statusTo.isEmpty ? recipient : entry.statusTo,
@@ -1591,6 +1600,11 @@ Future<ProcurementEntry?> showProcurementEditor(
                   else ...[
                     field(room, 'Room #'),
                     field(device, 'Device', width: 536),
+                    if (shows('manufacturer'))
+                      field(manufacturer, 'Manufacturer'),
+                    if (shows('model')) field(model, 'Model'),
+                    if (shows('partNumber'))
+                      field(partNumber, 'Part number'),
                   ],
                   if (shows('description'))
                     field(
@@ -1704,6 +1718,9 @@ Future<ProcurementEntry?> showProcurementEditor(
                   company: company.text.trim(),
                   room: room.text.trim(),
                   device: device.text.trim(),
+                  manufacturer: manufacturer.text.trim(),
+                  model: model.text.trim(),
+                  partNumber: partNumber.text.trim(),
                   description: description.text.trim(),
                   status: status,
                   statusTo: statusTo.text.trim(),

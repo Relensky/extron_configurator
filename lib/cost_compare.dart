@@ -27,6 +27,8 @@ enum CostDiffKind { same, onlyHere, onlyThere, qty, price, qtyAndPrice }
 /// One part, as each room buys it. "Here" is the open room, "there" the room
 /// it is compared with.
 class CostDiffRow {
+  /// What the row is matched on: section plus [costPartKey]. Unique per row.
+  final String key;
   final String section;
   final String name;
   final String manufacturer;
@@ -45,6 +47,7 @@ class CostDiffRow {
   final List<LaborCostLine> laborThere;
 
   const CostDiffRow({
+    this.key = '',
     required this.section,
     required this.name,
     this.manufacturer = '',
@@ -186,8 +189,9 @@ CostComparison compareRoomCosts(CostEstimate here, CostEstimate there) {
   }
 
   final rows = [
-    for (final p in parts.values)
+    for (final MapEntry(key: key, value: p) in parts.entries)
       CostDiffRow(
+        key: key,
         section: p.section,
         name: p.name,
         manufacturer: p.manufacturer,
@@ -593,18 +597,32 @@ CostItemSet costItemsFromRows(
   return b.build(labor: labor);
 }
 
-/// The keys an item can be matched on - part number, model and name - in
-/// [section].
-Set<String> _matchKeys(String section, String pn, String model, String name) =>
-    {
-      if (pn.trim().isNotEmpty) '$section|${costPartKey(pn, '', '')}',
-      if (model.trim().isNotEmpty) '$section|${costPartKey('', model, '')}',
-      if (name.trim().isNotEmpty) '$section|${costPartKey('', '', name)}',
-    };
+/// A part as "already there" sees it: part number, model and name, folded.
+typedef PartId = ({String pn, String model, String name});
 
-/// Every key a line in [estimate] can be matched on, per section. Lines
-/// whose key is in [except] are left out.
-Set<String> existingPartKeys(
+PartId partId(String pn, String model, String name) {
+  String fold(String s) => s.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  return (
+    pn: pn.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), ''),
+    model: fold(model),
+    name: fold(name),
+  );
+}
+
+/// [a] and [b] are one part: the part numbers when both have one, else the
+/// models when both have one, else each one's model or name. A shared name
+/// alone never makes two models one part - a drawn box's name is its label,
+/// and two rooms' switchers are both "Switcher".
+bool samePart(PartId a, PartId b) {
+  if (a.pn.isNotEmpty && b.pn.isNotEmpty) return a.pn == b.pn;
+  if (a.model.isNotEmpty && b.model.isNotEmpty) return a.model == b.model;
+  String id(PartId p) => p.model.isNotEmpty ? p.model : p.name;
+  return id(a).isNotEmpty && id(a) == id(b);
+}
+
+/// Every part in [estimate], by section. Lines whose key is in [except] are
+/// left out.
+Map<String, List<PartId>> existingParts(
   CostEstimate estimate, {
   Set<String> except = const {},
 }) => {
@@ -614,9 +632,11 @@ Set<String> existingPartKeys(
     ('Cabling', estimate.cabling),
     ('Other items', estimate.extras),
   ])
-    for (final l in lines)
-      if (!except.contains(l.key))
-        ..._matchKeys(section, l.partNumber, l.model, l.description),
+    section: [
+      for (final l in lines)
+        if (!except.contains(l.key))
+          partId(l.partNumber, l.model, l.description),
+    ],
 };
 
 /// The ids of [lines] and [labor] as typed on [settings]' cost page, for
@@ -750,27 +770,30 @@ int removeCostItems(RoomCostSettings settings, Set<String> ids) {
 /// [set] less what the target already has: a part matching a line on
 /// [targetEstimate], labor on the same rate with the same description, a fee
 /// of the same name. Lines whose id is in [replacing] are about to come off
-/// the target, so they do not count. Returns what is left and how many were
-/// skipped.
+/// the target, so they do not count. With [copyAnyway] every part and labor
+/// line goes on alongside what the target has; only a fee is still never
+/// charged twice. Returns what is left and how many were skipped.
 (CostItemSet, int) withoutExisting(
   CostItemSet set, {
   required RoomCostSettings target,
   required CostEstimate targetEstimate,
   Set<String> replacing = const {},
+  bool copyAnyway = false,
 }) {
-  final existing = existingPartKeys(targetEstimate, except: replacing);
+  final existing = existingParts(targetEstimate, except: replacing);
   var skipped = 0;
   List<CostLineItem> keep(String section, List<CostLineItem> list) {
+    if (copyAnyway) return list;
+    final have = existing[section] ?? <PartId>[];
     final out = <CostLineItem>[];
     for (final i in list) {
-      final keys =
-          _matchKeys(section, i.partNumber, i.catalogModel, i.description);
-      if (keys.any(existing.contains)) {
+      final id = partId(i.partNumber, i.catalogModel, i.description);
+      if (have.any((h) => samePart(h, id))) {
         skipped++;
       } else {
         out.add(i);
         // Two of one part in the set are one part.
-        existing.addAll(keys);
+        have.add(id);
       }
     }
     return out;
@@ -784,7 +807,7 @@ int removeCostItems(RoomCostSettings settings, Set<String> ids) {
   };
   final keptLabor = <LaborLine>[];
   for (final l in set.labor) {
-    if (labors.add(laborKey(l))) {
+    if (labors.add(laborKey(l)) || copyAnyway) {
       keptLabor.add(l);
     } else {
       skipped++;

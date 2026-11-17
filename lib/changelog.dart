@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.208+218';
+const String kAppVersion = '0.5.210+220';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,22 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.210',
+    date: 'November 17, 2026',
+    title: 'Procurement: manufacturer, model and part number',
+    changes: [
+      'AV procurement log: Manufacturer, Model and Part Number columns sit next to Device on the page and in the spreadsheet. A line that follows a room line takes them from the room; a line added on the log has them typed in Edit line. A job whose columns were already moved gets the three by Device too.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.209',
+    date: 'November 16, 2026',
+    title: 'Compare: copy a similar model between rooms',
+    changes: [
+      'Compare and copy between rooms: a different model is no longer skipped as "already in" the room just because its box has the same name - a Crosspoint 84 Q MA drawn as Switcher copies into a room whose Crosspoint 84 4K Q SA is also Switcher. Parts match on part number, else model. Copy anyway ticks parts the other room already has and adds them alongside as new lines. Two parts with one name no longer tick together, and Tick all picks only the rows shown.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.208',
     date: 'November 16, 2026',

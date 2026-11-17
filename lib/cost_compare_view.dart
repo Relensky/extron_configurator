@@ -528,6 +528,9 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
   /// Parts both rooms have can be ticked, and replace the target's.
   bool _replace = false;
 
+  /// Parts the target already has can be ticked, and go on alongside.
+  bool _copyAnyway = false;
+
   /// With [_replace] on: a part only the source has, by row key, and the
   /// different part in the target it goes in place of.
   final Map<String, String> _swaps = {};
@@ -540,8 +543,11 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
   RoomCostSettings get _targetSettings =>
       _intoHere ? widget.hereSettings : _thereSettings;
 
-  static String _rowKey(CostDiffRow r) =>
-      '${r.section}|${r.name}|${r.partNumber}';
+  // Name and part number alone are not unique: two models both labeled
+  // "Switcher" with no part number would tick together.
+  static String _rowKey(CostDiffRow r) => r.key.isNotEmpty
+      ? r.key
+      : '${r.section}|${r.name}|${r.partNumber}';
 
   bool _inSource(CostDiffRow r) => _intoHere ? r.inThere : r.inHere;
   bool _inTarget(CostDiffRow r) => _intoHere ? r.inHere : r.inThere;
@@ -659,7 +665,7 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
   /// and is being replaced.
   bool _canCopy(CostDiffRow r) {
     if (!_inSource(r)) return false;
-    if (!_inTarget(r)) return true;
+    if (!_inTarget(r) || _copyAnyway) return true;
     return _replace && r.kind != CostDiffKind.same && _replaceIds(r) != null;
   }
 
@@ -720,9 +726,10 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
       for (final r in _pickedRows)
         if (!onDrawing.any((p) => identical(p.$1, r))) r,
     ];
+    // Copy anyway adds alongside: nothing the target has comes off.
     final taken = <CostDiffRow>[
       for (final r in rows)
-        if (_inTarget(r)) r else ?_swapFor(r),
+        if (_inTarget(r)) ...[if (!_copyAnyway) r] else ?_swapFor(r),
     ];
     final replacing = <String>{for (final t in taken) ...?_replaceIds(t)};
     final set = costItemsFromRows(
@@ -735,6 +742,7 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
       target: _targetSettings,
       targetEstimate: _intoHere ? _hereEstimate : _thereEstimate,
       replacing: replacing,
+      copyAnyway: _copyAnyway,
     );
     if (kept.isEmpty && onDrawing.isEmpty) {
       setState(() => _done = 'Everything picked is already in $_targetName.');
@@ -746,6 +754,7 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
       to: _targetName,
       items: kept,
       skipped: skipped,
+      copyAnyway: _copyAnyway,
       canUndo: _intoHere,
       replacing: replacing.length,
       takenOff: [
@@ -813,6 +822,8 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
     final bold = small?.copyWith(fontWeight: FontWeight.w600);
     final flag = bold?.copyWith(color: theme.colorScheme.error);
     final copyable = [for (final r in c.rows) if (_canCopy(r)) r];
+    // Tick all picks what is shown, not rows Differences only hides.
+    final tickable = [for (final r in rows) if (_canCopy(r)) r];
     final picked = _pickedRows.length;
 
     Widget cell(String text, {TextStyle? style, bool right = true}) => Padding(
@@ -841,7 +852,8 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
         message: !_inSource(r)
             ? 'Not in ${_intoHere ? widget.thereName : widget.hereName}'
             : !_replace
-            ? 'Already in $_targetName - tick Replace to copy over it'
+            ? 'Already in $_targetName - tick Replace to copy over it, or '
+                  'Copy anyway to add it alongside'
             : r.kind == CostDiffKind.same
             ? 'The same in both rooms'
             : 'Drawn on $_targetName\'s diagram - change it there',
@@ -1037,8 +1049,8 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
               '${c.differences.length} of ${c.rows.length} differ. Both '
               'rooms are priced at today\'s catalog prices plus any price '
               'typed in each room. Tick the parts to copy; a part the other '
-              'room already has can be ticked only with Replace on. The '
-              'window stays open to copy either way.',
+              'room already has can be ticked only with Replace or Copy '
+              'anyway on. The window stays open to copy either way.',
               style: small,
             ),
             const SizedBox(height: 8),
@@ -1078,6 +1090,7 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
                       value: _replace,
                       onChanged: (v) => setState(() {
                         _replace = v ?? false;
+                        if (_replace) _copyAnyway = false;
                         _swaps.clear();
                         _picked.removeWhere((k) => !copyable
                             .any((r) => _rowKey(r) == k && !_inTarget(r)));
@@ -1093,16 +1106,38 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
                     ),
                   ],
                 ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Checkbox(
+                      key: const ValueKey('compare_copy_anyway'),
+                      value: _copyAnyway,
+                      onChanged: (v) => setState(() {
+                        _copyAnyway = v ?? false;
+                        if (_copyAnyway) _replace = false;
+                        _swaps.clear();
+                        _picked.removeWhere((k) => !copyable
+                            .any((r) => _rowKey(r) == k && !_inTarget(r)));
+                      }),
+                    ),
+                    Tooltip(
+                      message: 'Parts the other room already has can be '
+                          'ticked too, and are added alongside the ones it '
+                          'has as new lines.',
+                      child: Text('Copy anyway', style: small),
+                    ),
+                  ],
+                ),
                 TextButton(
                   key: const ValueKey('compare_pick_all'),
-                  onPressed: copyable.isEmpty
+                  onPressed: tickable.isEmpty
                       ? null
                       : () => setState(() => _picked
                         ..clear()
-                        ..addAll(copyable.map(_rowKey))),
-                  child: Text(_replace
-                      ? 'Tick all ${copyable.length}'
-                      : 'Tick all ${copyable.length} missing'),
+                        ..addAll(tickable.map(_rowKey))),
+                  child: Text(_replace || _copyAnyway
+                      ? 'Tick all ${tickable.length}'
+                      : 'Tick all ${tickable.length} missing'),
                 ),
                 TextButton(
                   key: const ValueKey('compare_qty_all'),
@@ -1218,6 +1253,9 @@ Future<bool> confirmCopyItems(
   int replacing = 0,
   List<String> takenOff = const [],
 
+  /// Parts the target has already go on alongside, not skipped.
+  bool copyAnyway = false,
+
   /// Boxes on [to]'s AV Flow that take a new model, cables kept.
   List<String> swapped = const [],
 }) async {
@@ -1292,8 +1330,11 @@ Future<bool> confirmCopyItems(
                             ? 'They are added without replacing any items.'
                             : 'They replace $replacing '
                                   'line${replacing == 1 ? '' : 's'} in $to.',
-                        'Items that already exist are skipped'
-                            '${skipped > 0 ? ' ($skipped here)' : ''}.',
+                        copyAnyway
+                            ? 'Items that already exist are added alongside '
+                                  'as new lines.'
+                            : 'Items that already exist are skipped'
+                                  '${skipped > 0 ? ' ($skipped here)' : ''}.',
                         canUndo
                             ? (replacing == 0
                                 ? 'Undo removes them.'

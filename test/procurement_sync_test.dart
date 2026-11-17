@@ -48,6 +48,7 @@ void main() {
               id: 'EQP_1',
               description: micName,
               manufacturer: 'Shure',
+              partNumber: 'MXA920W-S',
               qty: 5,
               unitPrice: 4000,
             ),
@@ -76,6 +77,25 @@ void main() {
     expect(live.every(procurementIsAuto), isTrue);
     expect(live.every((e) => e.linked), isTrue);
     expect(project.procurement, isEmpty, reason: 'looking stores nothing');
+  });
+
+  test('a linked line shows the room line maker and part number', () {
+    final project = BuildingProject(
+      procurement: const [
+        ProcurementEntry(
+          id: 'proc1',
+          manufacturer: 'Old maker',
+          partNumber: 'OLD-1',
+          roomId: 'room1',
+          lineKey: 'EQP_1',
+        ),
+      ],
+    );
+    final live = liveProcurement(project, job(project, 'MXA920 ceiling mic'));
+    final mic = live.firstWhere((e) => e.id == 'proc1');
+    expect(mic.manufacturer, 'Shure');
+    expect(mic.partNumber, 'MXA920W-S');
+    expect(procurementValues(mic)['manufacturer'], 'Shure');
   });
 
   test('a linked line takes the name the room has now', () {

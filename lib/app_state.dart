@@ -7063,6 +7063,9 @@ class AppStateProvider extends ChangeNotifier {
     _pushAvUndo(replacing.isEmpty ? 'Add $from' : 'Replace with $from',
         _costScope);
     removeCostItems(avCost, replacing);
+    // Past every id on the page, so a line copied alongside its twin
+    // never takes the twin's id.
+    _avCostCounter = math.max(_avCostCounter, highestCostId(avCost));
     final added = addCostItems(avCost, set, _nextCostId);
     notifyListeners();
     return added;
