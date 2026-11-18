@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.215+225';
+const String kAppVersion = '0.5.216+226';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,16 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.216',
+    date: 'November 18, 2026',
+    title: 'iPad: more room for the page',
+    changes: [
+      'iOS: the top bar no longer leaves a blank band over its buttons, and it and the project bar are the height of their buttons; the bottom of every page is no longer cut off under the home indicator.',
+      'iOS: the page toolbars - Floor Plan, Walls, Cabling, Schematic, AV Flow, Racks - start folded to their names, and the panes beside a drawing start closed, so the plan is readable as soon as it opens. A tap opens either.',
+      'iOS: the cost tables fit the screen. Each line\'s buttons are behind its ... button, Price from is left off (it is still in the PDF) and the figures are narrower.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.215',
     date: 'November 18, 2026',

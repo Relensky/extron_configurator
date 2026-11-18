@@ -149,6 +149,10 @@ Future<void> main(List<String> args) async {
       ));
     };
     ShareSync.start();
+    // The page toolbars start folded to their names on a tablet: open, they
+    // filled the top half of the screen and the floor plan under them could
+    // not be read. Each opens with a tap, and stays open while the app runs.
+    BarFolds.setAll(kMobileStartFolded, true);
     _syncOnResume = AppLifecycleListener(onResume: ShareSync.resumed);
   }
   // [TEAM KIT]: lib/team/ (shared with the CTS Dashboard and Instructor
@@ -442,8 +446,15 @@ class RoomConfigApp extends StatelessWidget {
         fitToMonitor: Platform.isWindows &&
             !Platform.environment.containsKey('FLUTTER_TEST'),
         followDevice: Platform.isIOS || Platform.isAndroid,
-        child: MediaQuery(
-        data: MediaQuery.of(context).copyWith(
+        child: Builder(builder: (scaled) => MediaQuery(
+        // iPad / iPhone: read from INSIDE the scaler and the safe area, so the
+        // pages see the scaled size and no status-bar inset - the outer
+        // context's copy put the inset back, and the top bar grew a blank
+        // band over its buttons. The desktop keeps reading the outer one, as
+        // it always has.
+        data: MediaQuery.of(
+                Platform.isIOS || Platform.isAndroid ? scaled : context)
+            .copyWith(
           textScaler: TextScaler.linear(theme.textScale),
         ),
         // The "update available" card sits over every tab and never blocks
@@ -454,7 +465,7 @@ class RoomConfigApp extends StatelessWidget {
           // this hands it the app's colors and text. Drop it once fl_chart
           // moves to material_ui.
           child: _helpShortcuts(
-            context.select((AppStateProvider p) => p.shortcuts),
+            scaled.select((AppStateProvider p) => p.shortcuts),
             // Ctrl+F's bar sits over every page; see find_in_page.dart.
             FindInPage(
               key: findKey,
@@ -470,7 +481,7 @@ class RoomConfigApp extends StatelessWidget {
           ),
         ),
       ),
-      )),
+      ))),
       home: const MainDashboard(),
     );
   }
@@ -481,9 +492,30 @@ class RoomConfigApp extends StatelessWidget {
   /// no such insets, so it is left exactly as it was.
   static Widget _mobileSafeArea(BuildContext context, Widget child) {
     if (!Platform.isIOS && !Platform.isAndroid) return child;
+    // SafeArea takes the insets off the padding but leaves the size at the
+    // whole screen, and [AppScale] lays the app out at that size - so the
+    // bottom of every page ran under the home indicator and was clipped. The
+    // size handed down is the space actually left.
+    final mq = MediaQuery.of(context);
+    final inset = mq.padding;
     return ColoredBox(
       color: Theme.of(context).colorScheme.surface,
-      child: SafeArea(child: child),
+      child: SafeArea(
+        child: MediaQuery(
+          data: MediaQuery.of(context).removePadding(
+            removeLeft: true,
+            removeTop: true,
+            removeRight: true,
+            removeBottom: true,
+          ).copyWith(
+            size: Size(
+              (mq.size.width - inset.horizontal).clamp(0, double.infinity),
+              (mq.size.height - inset.vertical).clamp(0, double.infinity),
+            ),
+          ),
+          child: child,
+        ),
+      ),
     );
   }
 
@@ -1247,6 +1279,9 @@ class _MainDashboardState extends State<MainDashboard> {
           ],
         ),
         titleSpacing: 4,
+        // A tablet's bar is the height of its buttons, not a desktop
+        // window's title bar.
+        toolbarHeight: _isMobile ? 44 : null,
         actions: [
           if (!provider.settingsOpen)
             _ScreenshotButton(
@@ -2148,8 +2183,13 @@ class TopLevelBar extends StatelessWidget {
       // IconButton already carries its own margin, so twelve more pixels only
       // left it floating short of the edge.
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
-        child: Row(
+        padding: EdgeInsets.fromLTRB(0, _isMobile ? 0 : 4, 0, _isMobile ? 0 : 4),
+        child: Theme(
+          // Tablet: the strip shrinks to its buttons' compact size.
+          data: _isMobile
+              ? theme.copyWith(visualDensity: VisualDensity.compact)
+              : theme,
+          child: Row(
           children: [
             // Hides this bar for more room; Save keeps the right corner.
             IconButton(
@@ -2177,8 +2217,8 @@ class TopLevelBar extends StatelessWidget {
                 icon: const Icon(Icons.apartment, size: 22),
                 label: const Text('Project'),
                 style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  minimumSize: const Size(0, 44),
+                  padding: EdgeInsets.symmetric(horizontal: _isMobile ? 14 : 24),
+                  minimumSize: Size(0, _isMobile ? 34 : 44),
                   textStyle: theme.textTheme.titleMedium,
                 ),
                 onPressed: () => onSelect(AppTab.project.index),
@@ -2260,7 +2300,8 @@ class TopLevelBar extends StatelessWidget {
                 key: const ValueKey('banner_room'),
                 avatar: const Icon(Icons.meeting_room_outlined, size: 22),
                 label: Text('Room', style: theme.textTheme.titleMedium),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: EdgeInsets.symmetric(
+                    horizontal: 10, vertical: _isMobile ? 2 : 8),
               ),
               // THE WAY OUT OF A ROOM, beside the way it is named - the same
               // place, and the same shape, as the job's own close one mode up.
@@ -2373,13 +2414,24 @@ class TopLevelBar extends StatelessWidget {
             ),
           ],
         ),
+        ),
       ),
     );
   }
 }
 
+/// iPad or iPhone.
+bool get _isMobile => Platform.isIOS || Platform.isAndroid;
+
 /// The [BarFolds] id of the project bar.
 const String kTopBarFoldId = 'top_bar';
+
+/// The page toolbars that start folded on iPad and iPhone - see main().
+const List<String> kMobileStartFolded = [
+  'plan_toolbar', 'plan_sheets', 'plan_off_sheet', 'plan_cable_runs',
+  'plan_locations', 'cabling_toolbar', 'schematic_toolbar', 'rack_header',
+  'walls_header', 'av_toolbar', 'flow_rules_toolbar', 'schema_toolbar',
+];
 
 /// The project bar folded: a thin strip that brings it back.
 class _TopBarFolded extends StatelessWidget {

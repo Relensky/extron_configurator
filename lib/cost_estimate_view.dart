@@ -254,16 +254,45 @@ List<_Col> _withShipping(List<_Col> columns, bool shipping) => !shipping
 /// the name and model columns stay readable on a narrow window.
 const double _kMinFlexWidth = 60;
 
+/// iPad / iPhone: the tables are laid out to fit the screen rather than a
+/// desktop window - the row buttons fold into one "more" button, "Price from"
+/// is left off (it is in the PDF and on the desktop) and the figures get the
+/// narrower widths the equipment table already uses. Without it every table
+/// ran a third of its width off the right-hand edge.
+final bool _compactCost = Platform.isIOS || Platform.isAndroid;
+
+/// The least a flex column gets in the compact layout.
+const double _kCompactFlexWidth = 36;
+
+/// [columns] as the compact layout draws them - see [_compactCost]. The
+/// desktop gets them unchanged.
+List<_Col> _fitColumns(List<_Col> columns) {
+  if (!_compactCost) return columns;
+  return [
+    for (final c in columns)
+      if (c.text == 'Price from')
+        null
+      else
+        c.compact(),
+  ].whereType<_Col>().toList();
+}
+
+/// True for the column that holds a row's cluster of buttons.
+bool _isButtonColumn(_Col c) =>
+    c.text.isEmpty && c.flex == 0 && c.width > kRowIconWidth * 1.5;
+
 /// The list padding, card margin and card padding around every table.
 const double _kTableChrome = 2 * 16 + 2 * 4 + 2 * 12;
 
 /// The narrowest [columns] can lay out with every flex column at its least.
 double _tableMinWidth(List<_Col> columns) {
+  columns = _fitColumns(columns);
   final flex = columns.fold(0, (n, c) => n + c.flex);
+  final perFlex = _compactCost ? _kCompactFlexWidth : _kMinFlexWidth;
   // Flex space big enough that each flex column's share reaches its least.
   final flexSpace = columns
       .where((c) => c.flex > 0)
-      .map((c) => math.max(c.minWidth, c.flex * _kMinFlexWidth) * flex / c.flex)
+      .map((c) => math.max(c.minWidth, c.flex * perFlex) * flex / c.flex)
       .fold(0.0, math.max);
   return columns.fold(
         0.0,
@@ -8431,7 +8460,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
           ),
         );
-        return _gridRow(columns, [for (final c in columns) caption(c)]);
+        return _gridRow(
+          columns,
+          [for (final c in columns) caption(c)],
+          caption: true,
+        );
       },
     );
   }
@@ -8518,12 +8551,32 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     /// against the caption row above it and has to be able to tell one from
     /// the other. Cheap here, and the invariant is worth being able to check.
     Key? rowKey,
+
+    /// The caption row: its button column is a blank, never a "more" button.
+    bool caption = false,
   }) {
     assert(
       cells.length == columns.length,
       'the grid needs one cell per column: ${cells.length} for '
       '${columns.length}',
     );
+    if (_compactCost) {
+      // The same cells, fitted to the screen - see [_fitColumns].
+      final fitCols = <_Col>[];
+      final fitCells = <Widget>[];
+      for (int i = 0; i < columns.length; i++) {
+        final c = columns[i];
+        if (c.text == 'Price from') continue;
+        fitCols.add(c.compact());
+        fitCells.add(
+          _isButtonColumn(c) && !caption
+              ? _RowButtonsMenu(child: cells[i])
+              : cells[i],
+        );
+      }
+      columns = fitCols;
+      cells = fitCells;
+    }
     return Row(
       key: rowKey,
       crossAxisAlignment: align,
@@ -8606,6 +8659,47 @@ class _Col {
     this.minWidth = 0,
   }) : align = numeric ? TextAlign.right : TextAlign.left,
        inset = kFieldTextInset + extraInset;
+
+  const _Col._raw({
+    required this.text,
+    required this.gap,
+    required this.width,
+    required this.flex,
+    required this.align,
+    required this.inset,
+    required this.minWidth,
+    required this.keepsBox,
+    required this.stepper,
+  });
+
+  /// This column in the compact (iPad / iPhone) layout - see [_compactCost].
+  _Col compact() {
+    double w = width;
+    if (_isButtonColumn(this)) {
+      w = kRowIconWidth;
+    } else if (text == 'Unit price') {
+      w = math.min(width, 108);
+    } else if (text == 'Extended') {
+      w = math.min(width, 94);
+    } else if (text == 'Taxable') {
+      w = math.min(width, 64);
+    } else if (text == 'Job type') {
+      w = math.min(width, 140);
+    } else if (text == 'Crew hours' || text == 'Total hours') {
+      w = math.min(width, 72);
+    }
+    return _Col._raw(
+      text: text,
+      gap: math.min(gap, 8),
+      width: w,
+      flex: flex,
+      align: align,
+      inset: inset,
+      minWidth: minWidth > 0 ? math.min(minWidth, 80) : 0,
+      keepsBox: keepsBox,
+      stepper: stepper,
+    );
+  }
 
   /// The inset as padding on whichever side the caption is drawn against.
   EdgeInsets padding(bool printing) {
@@ -9453,6 +9547,39 @@ class _EstimateRoomBar extends StatelessWidget {
         ),
         const ConvertToProgrammedRoomButton(),
       ],
+    );
+  }
+}
+
+/// A row's cluster of buttons folded into one, for the compact layout - see
+/// [_compactCost]. Pressing it shows the same buttons, so every one of them
+/// still does exactly what it does on the desktop.
+class _RowButtonsMenu extends StatelessWidget {
+  final Widget child;
+
+  const _RowButtonsMenu({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    // A row with nothing in its button slots keeps the blank.
+    final c = child;
+    if (c is SizedBox && c.child == null) return child;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: MenuAnchor(
+        menuChildren: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: child,
+          ),
+        ],
+        builder: (context, controller, _) => IconButton(
+          tooltip: 'More for this line',
+          icon: const Icon(Icons.more_horiz),
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+        ),
+      ),
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:material_ui/material_ui.dart';
 
 /// ============================================================================
@@ -176,7 +178,12 @@ class SidePane extends StatefulWidget {
 
 class _SidePaneState extends State<SidePane> {
   late double _width = widget.initialWidth;
-  late bool _open = widget.initiallyOpen;
+  // iPad / iPhone: a pane beside a drawing starts folded - on a tablet held
+  // upright it took a third of the screen off the sheet it is about. One tap
+  // on the strip opens it, and that is kept.
+  late bool _open = widget.initiallyOpen &&
+      !(widget.side == PaneSide.right &&
+          (Platform.isIOS || Platform.isAndroid));
 
   /// Restored on the first build, once there is a [PageStorage] to read.
   bool _restored = false;
