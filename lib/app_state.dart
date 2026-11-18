@@ -1260,6 +1260,11 @@ class AppStateProvider extends ChangeNotifier {
   ///      executable path can't be resolved.
   static String _appBaseDir() {
     if (_cachedAppBaseDir != null) return _cachedAppBaseDir!;
+    // iOS: the working directory is / and the executable's folder is the
+    // read-only app bundle, so neither will do. Documents is writable and
+    // reachable from the Files app; ios_seed.dart fills it on first launch.
+    final iosDocs = iosDocumentsDirOrNull();
+    if (iosDocs != null) return _cachedAppBaseDir = iosDocs;
 
     final List<String> candidates = [Directory.current.path];
     try {
@@ -1746,6 +1751,13 @@ class AppStateProvider extends ChangeNotifier {
     if (explicit.isNotEmpty) return explicit;
     if (rootFolderPath.isNotEmpty) {
       final candidate = path.join(effectiveRootFolder, filename);
+      if (File(candidate).existsSync()) return candidate;
+    }
+    // iOS: the loaders' own fallbacks (working directory, executable's folder)
+    // are / and the read-only app bundle, so the copy in the app's Documents
+    // folder - put there by ios_seed.dart - is the one to read.
+    if (Platform.isIOS) {
+      final candidate = path.join(_appBaseDir(), filename);
       if (File(candidate).existsSync()) return candidate;
     }
     return '';

@@ -18,6 +18,7 @@ import 'package:path/path.dart' as path;
 /// ============================================================================
 
 /// The per-user folder this app owns: `%APPDATA%\RoomConfigBuilder` on Windows,
+/// `Library/Application Support/RoomConfigBuilder` in the iOS sandbox,
 /// `$XDG_CONFIG_HOME/.room_config_builder` (or `$HOME/...`) elsewhere.
 ///
 /// Null when the environment names no home at all, which leaves it to the
@@ -25,6 +26,14 @@ import 'package:path/path.dart' as path;
 /// things, and neither wants a path built on an empty string.
 String? userDataDirOrNull() {
   final env = Platform.environment;
+  // iOS: HOME is the app's sandbox container, whose top level cannot be
+  // written. Library/Application Support is the place for the app's own
+  // files, and the Files app does not show it.
+  if (Platform.isIOS) {
+    final home = _iosContainerOrNull();
+    if (home == null) return null;
+    return path.join(home, 'Library', 'Application Support', 'RoomConfigBuilder');
+  }
   final String base = Platform.isWindows
       ? (env['APPDATA'] ?? env['LOCALAPPDATA'] ?? '')
       : (env['XDG_CONFIG_HOME'] ?? env['HOME'] ?? '');
@@ -40,3 +49,30 @@ String? userDataDirOrNull() {
 /// they used to, in three checked-in files at the root of the repository that
 /// every test run left modified.
 bool get runningUnderTest => Platform.environment['FLUTTER_TEST'] == 'true';
+
+/// iOS only: the app's Documents folder - writable, and shown in the Files
+/// app under "On My iPad" (Info.plist turns that on). It is
+/// the app's own folder on iOS, where the executable's folder is on the
+/// desktop: the app bundle beside the executable is read-only. Null elsewhere.
+String? iosDocumentsDirOrNull() {
+  if (!Platform.isIOS) return null;
+  final home = _iosContainerOrNull();
+  return home == null ? null : path.join(home, 'Documents');
+}
+
+/// The app's sandbox container on iOS, the folder that holds Documents,
+/// Library and tmp. A Flutter app on iOS gets no HOME in
+/// [Platform.environment], so it comes from the temp folder, which iOS puts at
+/// `<container>/tmp`. Cached: it cannot change during a run.
+String? _iosContainerOrNull() => _iosContainer ??= () {
+      final home = Platform.environment['HOME'] ?? '';
+      if (home.isNotEmpty) return home;
+      try {
+        final tmp = path.normalize(Directory.systemTemp.path);
+        if (path.basename(tmp) != 'tmp') return null;
+        return path.dirname(tmp);
+      } catch (_) {
+        return null;
+      }
+    }();
+String? _iosContainer;

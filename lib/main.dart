@@ -70,6 +70,7 @@ import 'model_defaults_dialog.dart';
 import 'online_copy_dialog.dart';
 import 'in_app_browser.dart';
 import 'app_paths.dart' show userDataDirOrNull;
+import 'ios_seed.dart';
 import 'project_search.dart';
 import 'google_sheets_export.dart' show kBuiltInGoogleClientId;
 import 'undo_bar.dart'
@@ -111,6 +112,9 @@ void main(List<String> args) {
   // double-clicked .exe does not have, and the log this app asks people to send
   // in never hears about it.
   installGlobalErrorHandlers();
+  // iOS: the shipped data files go into the app's Documents folder before
+  // anything reads them - see ios_seed.dart. Does nothing on the desktop.
+  seedIosDocuments();
   // [TEAM KIT]: lib/team/ (shared with the CTS Dashboard and Instructor
   // Contact) plugged in - see team_setup.dart.
   setUpTeamKit();
@@ -371,7 +375,7 @@ class RoomConfigApp extends StatelessWidget {
       // App-wide text size (App Config > Text Size): scale every text style
       // by wrapping the whole app in a MediaQuery text scaler.
       navigatorKey: navigatorKey,
-      builder: (context, child) => AppScale(
+      builder: (context, child) => _mobileSafeArea(context, AppScale(
         scale: theme.uiScale,
         fitToMonitor: Platform.isWindows &&
             !Platform.environment.containsKey('FLUTTER_TEST'),
@@ -403,8 +407,20 @@ class RoomConfigApp extends StatelessWidget {
           ),
         ),
       ),
-      ),
+      )),
       home: const MainDashboard(),
+    );
+  }
+
+  /// iPad and iPhone: keeps the whole app clear of the status bar, the camera
+  /// housing and the home indicator, which the top bar otherwise sits under.
+  /// The strip it leaves takes the page's own background. A desktop window has
+  /// no such insets, so it is left exactly as it was.
+  static Widget _mobileSafeArea(BuildContext context, Widget child) {
+    if (!Platform.isIOS && !Platform.isAndroid) return child;
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.surface,
+      child: SafeArea(child: child),
     );
   }
 
