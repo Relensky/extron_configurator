@@ -1054,7 +1054,7 @@ Future<bool> restoreProjectFromWorkbookFile(
   );
   final book = picked?.files.single.path;
   if (book == null || !context.mounted) return false;
-  final folder = await FilePicker.getDirectoryPath(
+  final folder = await getDirectoryPathCompat(
     dialogTitle: 'The folder the project goes back into',
   );
   if (folder == null || !context.mounted) return false;
@@ -1315,7 +1315,7 @@ Future<void> saveAllToRoomFolder(
     if (!context.mounted) return;
   }
 
-  final parent = await FilePicker.getDirectoryPath(
+  final parent = await getDirectoryPathCompat(
     dialogTitle: rooms.isEmpty
         ? 'Where should the room folder go?'
         : 'Where should the room folders go?',
@@ -2011,7 +2011,7 @@ Future<int> attachDrawnRooms(
       ? ''
       : path.dirname(provider.currentProjectPath);
   if (folder.isEmpty) {
-    folder = await FilePicker.getDirectoryPath(
+    folder = await getDirectoryPathCompat(
           dialogTitle: 'Where are the room configs?',
         ) ??
         '';

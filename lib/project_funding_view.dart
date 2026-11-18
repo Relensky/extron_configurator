@@ -204,6 +204,28 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
   double _parse(String v) =>
       double.tryParse(v.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
 
+  /// What the room table needs across: its fixed columns (see
+  /// [_columnHeads]) and room for a room's name. Narrower than this - an
+  /// iPad beside the tab rail - the name column was squeezed to a letter a
+  /// line ("A / R / T / S") and the prices ran off the right.
+  static const double _tableMinWidth = 736 + 200;
+
+  /// [rows] at full width when the page has it, else at [_tableMinWidth],
+  /// scrolled sideways.
+  Widget _wideTable(List<Widget> rows) => LayoutBuilder(
+    builder: (context, box) {
+      final table = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: rows,
+      );
+      if (box.maxWidth >= _tableMinWidth) return table;
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(width: _tableMinWidth, child: table),
+      );
+    },
+  );
+
   /// Labels over the room rows, sized to their cells.
   Widget _columnHeads(ThemeData theme) {
     Widget head(String text, double width, {bool right = false}) => SizedBox(
@@ -1092,8 +1114,10 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                 ),
                 if (!_folded(p)) ...[
                   const SizedBox(height: 4),
-                  _columnHeads(theme),
-                  for (final r in rooms.where((r) => r.priority == p)) row(r),
+                  _wideTable([
+                    _columnHeads(theme),
+                    for (final r in rooms.where((r) => r.priority == p)) row(r),
+                  ]),
                 ],
               ],
             if (_expanded) ...[

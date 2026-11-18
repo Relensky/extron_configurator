@@ -1466,7 +1466,7 @@ Future<void> saveCostPresetFromRoom(
         name: name.text.trim(),
         description: description.text.trim(),
         items: items,
-        savedBy: Platform.environment['USERNAME'] ?? '',
+        savedBy: currentUserName(),
         savedAt: DateTime.now().toIso8601String(),
       ),
     );

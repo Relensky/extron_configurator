@@ -20,12 +20,17 @@ import 'app_logger.dart';
 // windows/runner/utils.cpp AppFitScale must match [AppScale.scaleFor].
 // ============================================================================
 
+/// How much smaller than the device's own points the app draws on a phone or
+/// tablet - see [AppScale.followDevice].
+const double kMobileDensity = 0.85;
+
 class AppScale extends StatefulWidget {
   const AppScale({
     super.key,
     required this.scale,
     required this.child,
     this.fitToMonitor = true,
+    this.followDevice = false,
   });
 
   /// Interface Size: 1.0 is the reference layout. 0 or less follows Windows.
@@ -35,6 +40,13 @@ class AppScale extends StatefulWidget {
   /// False draws at [scale] physical pixels per layout pixel, whatever the
   /// monitor (tests, and any platform that does not report its monitor).
   final bool fitToMonitor;
+
+  /// True on a phone or tablet: the layout is in the device's own points (an
+  /// iPad's 820 x 1180, not a 1920 x 1080 monitor), and Interface Size zooms
+  /// that. Drawing at [scale] physical pixels per layout pixel, as a desktop
+  /// window without a monitor size does, halved everything on a 2x iPad screen
+  /// and left the text too small to read.
+  final bool followDevice;
 
   static const Size referenceSize = Size(1920, 1080);
 
@@ -113,7 +125,13 @@ class _AppScaleState extends State<AppScale> {
     if (widget.scale <= 0 || mq.devicePixelRatio <= 0) return child;
 
     double target = widget.scale;
-    if (widget.fitToMonitor) {
+    if (widget.followDevice) {
+      // A notch under the device's own size: the app's bars, tab rail and
+      // buttons are laid out for a desktop window, and at full iPad size they
+      // took a third of the screen. Text stays easily read; Interface Size
+      // still zooms from here.
+      target = widget.scale * mq.devicePixelRatio * kMobileDensity;
+    } else if (widget.fitToMonitor) {
       Size screen = Size.zero;
       try {
         screen = View.of(context).display.size;

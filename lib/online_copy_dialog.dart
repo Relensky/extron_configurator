@@ -68,7 +68,7 @@ Future<String> ensureOnlineFolder(
 ) async {
   final known = provider.onlineFolder.trim();
   if (known.isNotEmpty) return known;
-  final picked = await FilePicker.getDirectoryPath(
+  final picked = await getDirectoryPathCompat(
     dialogTitle: 'Which folder does OneDrive or Google Drive sync?',
   );
   if (picked == null) return '';
@@ -219,7 +219,7 @@ class _OnlineCopyDialogState extends State<_OnlineCopyDialog> {
   bool _failed = false;
 
   Future<void> _pickFolder() async {
-    final picked = await FilePicker.getDirectoryPath(
+    final picked = await getDirectoryPathCompat(
       dialogTitle: 'Which folder does OneDrive or Google Drive sync?',
       initialDirectory: _startFolder,
     );

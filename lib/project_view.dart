@@ -611,7 +611,7 @@ class _ProjectViewState extends State<ProjectView> {
       return;
     }
 
-    final folder = await FilePicker.getDirectoryPath(
+    final folder = await getDirectoryPathCompat(
       dialogTitle: 'Where should the quote requests go?',
     );
     if (folder == null) return;

@@ -54,6 +54,7 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart' show ValueNotifier;
 
 import 'dpapi_ng.dart';
+import 'team/team_presence.dart' show TeamIdentity;
 
 /// One local JSON file whose settings roam.
 class RoamingFile {
@@ -172,8 +173,12 @@ class SettingsRoaming {
     Uint8List Function(Uint8List data, String sid)? ngProtect,
     Uint8List Function(Uint8List blob)? ngUnprotect,
     Future<String> Function()? userSid,
-  })  : login = login ?? _env(const ['USERNAME', 'USER'], 'unknown'),
-        machine = machine ?? _env(const ['COMPUTERNAME', 'HOSTNAME'], 'pc'),
+  })  : login = login ??
+            _nonEmpty(TeamIdentity.userOverride) ??
+            _env(const ['USERNAME', 'USER'], 'unknown'),
+        machine = machine ??
+            _nonEmpty(TeamIdentity.machineOverride) ??
+            _env(const ['COMPUTERNAME', 'HOSTNAME'], 'pc'),
         _ngProtect = ngProtect ?? DpapiNg.protect,
         _ngUnprotect = ngUnprotect ?? DpapiNg.unprotect,
         _userSid = userSid ?? currentUserSid;
@@ -215,6 +220,14 @@ class SettingsRoaming {
   Timer? _periodic;
   Future<RoamingResult>? _running;
   String? _sid;
+
+  /// [v] trimmed, or null when there is nothing in it - for the iPhone /
+  /// iPad sign-in (TeamIdentity, mobile_sign_in.dart), which stands in for
+  /// the Windows one there.
+  static String? _nonEmpty(String? v) {
+    final t = v?.trim() ?? '';
+    return t.isEmpty ? null : t;
+  }
 
   static String _env(List<String> keys, String fallback) {
     for (final k in keys) {

@@ -1114,7 +1114,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final what = monochrome ? 'Floor plan (black & white)' : 'Floor plan';
 
     if (sheetsWorthDrawing(provider).length > 1) {
-      final folder = await FilePicker.getDirectoryPath(
+      final folder = await getDirectoryPathCompat(
         dialogTitle: monochrome
             ? 'Where should the sheets for printing go?'
             : 'Where should the sheet images go?',
@@ -3886,7 +3886,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       return;
     }
 
-    final folder = await FilePicker.getDirectoryPath(
+    final folder = await getDirectoryPathCompat(
       dialogTitle: 'Where should the layer images go?',
     );
     if (folder == null) return;

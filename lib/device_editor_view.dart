@@ -718,7 +718,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   }
 
   Future<void> _pickSpecSheetFolder(AppStateProvider provider) async {
-    final picked = await FilePicker.getDirectoryPath(
+    final picked = await getDirectoryPathCompat(
       dialogTitle: 'Choose the shared spec sheet folder',
       initialDirectory: provider.effectiveSpecSheetFolder,
     );

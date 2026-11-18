@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'team_host.dart';
 import 'team_widgets.dart' show TeamAppStyle;
 import 'team_win32.dart';
+import '../services/platform_support.dart';
 
 // ============================================================================
 // [TEAM KIT - APPS]: the other CTS programs, opened from this one.
@@ -482,6 +483,8 @@ class TeamAppLinks extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // [iOS STREAMLINED]: the other CTS apps are Windows programs.
+    if (!kCanRunProcesses) return const SizedBox.shrink();
     final theme = Theme.of(context);
     return Wrap(
       key: const ValueKey('team_app_links'),

@@ -8,47 +8,60 @@ import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 
+import 'services/ios_share.dart' show uncPath;
 import 'settings_roaming.dart';
 import 'settings_kit/settings_kit.dart';
 
 /// Asks what to do with the settings found on the share for this login.
 /// Null when the dialog was dismissed (ask again next start).
 Future<RoamingChoice?> showSettingsRoamingChoice(
-    BuildContext context, SettingsRoaming roaming,
-    {required String appName}) {
+  BuildContext context,
+  SettingsRoaming roaming, {
+  required String appName,
+}) {
   return showDialog<RoamingChoice>(
     context: context,
     barrierDismissible: false,
-    builder: (context) => AlertDialog(
-      icon: const Icon(Icons.sync),
-      title: const Text('Your settings are on the share'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Text(
-          '$appName settings saved by ${roaming.login} on another PC were '
-          'found in:\n${roaming.userFolder}\n\n'
-          'Use them here? Saved passwords and sign-ins come too; they are '
-          'encrypted so only your Windows account can open them.\n\n'
-          'Keep this PC\'s settings puts this PC\'s settings on the share '
-          'instead. Either way, changes you make from now on are saved to the '
-          'share and reach your other PCs the next time the app starts there.',
+    builder: (context) {
+      // iPhone / iPad: a device, not a PC, and Windows-encrypted passwords
+      // can't be opened there - they stay on the share for the PCs.
+      final here = Platform.isIOS ? 'device' : 'PC';
+      final where = uncPath(roaming.userFolder);
+      return AlertDialog(
+        icon: const Icon(Icons.sync),
+        title: const Text('Your settings are on the share'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Text(
+            '$appName settings saved by ${roaming.login} on another computer '
+            'were found in:\n$where\n\n'
+            '${Platform.isIOS ? 'Use them here? Saved passwords are encrypted '
+                      'for Windows, so they stay on the share for your PCs - sign in '
+                      'again here where one is needed.' : 'Use them here? Saved '
+                      'passwords and sign-ins come too; they are encrypted so only '
+                      'your Windows account can open them.'}\n\n'
+            'Keep this $here\'s settings puts this $here\'s settings on the '
+            'share instead. Either way, changes you make from now on are saved '
+            'to the share and reach your other computers the next time the app '
+            'starts there.',
+          ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, RoamingChoice.off),
-          child: const Text('Don\'t sync on this PC'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, RoamingChoice.keepThisPc),
-          child: const Text('Keep this PC\'s settings'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, RoamingChoice.useShared),
-          child: const Text('Use my saved settings'),
-        ),
-      ],
-    ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, RoamingChoice.off),
+            child: Text('Don\'t sync on this $here'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, RoamingChoice.keepThisPc),
+            child: Text('Keep this $here\'s settings'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, RoamingChoice.useShared),
+            child: const Text('Use my saved settings'),
+          ),
+        ],
+      );
+    },
   );
 }
 
@@ -90,8 +103,10 @@ class _SettingsRoamingSectionState extends State<SettingsRoamingSection> {
       final result = await widget.roaming.sync();
       if (result.needsChoice && mounted) {
         final choice = await showSettingsRoamingChoice(
-            context, widget.roaming,
-            appName: widget.appName);
+          context,
+          widget.roaming,
+          appName: widget.appName,
+        );
         if (choice != null) await widget.applyChoice(choice);
       }
     } finally {
@@ -132,9 +147,11 @@ class _SettingsRoamingSectionState extends State<SettingsRoamingSection> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Keep my settings on the share'),
-          subtitle: Text(folder.isEmpty
-              ? 'No team folder is set, so there is nowhere to keep them'
-              : folder),
+          subtitle: Text(
+            folder.isEmpty
+                ? 'No team folder is set, so there is nowhere to keep them'
+                : folder,
+          ),
           value: _enabled ?? true,
           onChanged: _enabled == null || folder.isEmpty
               ? null

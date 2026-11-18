@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.214+224';
+const String kAppVersion = '0.5.215+225';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,19 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.215',
+    date: 'November 18, 2026',
+    title: 'iPad: the CTS share, offline',
+    changes: [
+      'iOS: the CTS share. Connect doit-files in the Files app (on campus or the VPN), then pick the Classroom Technology folder once; every \\\\doit-files path the app holds - the Root Folder, the team folder, rooms in a job - is that folder on the iPad.',
+      'iOS: offline. Configurator_Files and every job opened on the iPad are kept on it, and the app works from that copy when the share does not answer. Edits made offline go up when it answers again. A file changed on the iPad and on the share is never combined on its own: it waits, untouched on both sides, until it is reviewed - a JSON file through the same Combine screens as two people saving at once, anything else kept as one side or both.',
+      'iOS: sign in with your campus username once; your settings, picture, presence and chat come from it, and it goes on everything you save. Team chat and presence work as in the CTS Dashboard.',
+      'iOS: open, save and folder dialogs browse the share and the iPad in place, so a room opens with its walls, racks and drawings, and a room opens from a job.',
+      'iOS: text and controls sized for the screen; the tab rail starts as icons. Room in the CTS Dashboard opens the dashboard app, or says how to get there.',
+      'Funding: the room table scrolls sideways on a narrow screen instead of squeezing room names to a letter a line.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.214',
     date: 'November 18, 2026',

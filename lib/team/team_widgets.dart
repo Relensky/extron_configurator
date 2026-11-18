@@ -1152,7 +1152,7 @@ class _ChatHostState extends State<_ChatHost> {
         },
       );
 
-  Widget _maxButton() => IconButton(
+  Widget _maxButton() => _narrow(context) ? const SizedBox.shrink() : IconButton(
         key: const ValueKey('team_chat_maximize'),
         tooltip: panel.maximized.value ? 'Restore' : 'Maximize',
         visualDensity: VisualDensity.compact,
@@ -1188,10 +1188,26 @@ class _ChatHostState extends State<_ChatHost> {
     );
   }
 
+  // [iOS SAFE AREA]: the chat lives in the app's top layer, which reaches
+  // under the iPhone/iPad status bar and Home indicator - its close button
+  // sat beneath the clock. Laid out inside the safe area; on a desktop
+  // window that is the whole window, so nothing moves there.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Stack(children: [
+        Positioned.fill(
+          // A Stack of its own inside the safe area: _host positions its
+          // frame with Positioned, which needs a Stack directly above it.
+          child: SafeArea(child: Stack(children: [_host(context)])),
+        ),
+      ]);
+
+  /// [NARROW SCREEN]: under 600 wide (an iPhone) no chat layout fits - the
+  /// floating panel's smallest is 560 - so the chat fills the screen there.
+  bool _narrow(BuildContext context) => MediaQuery.sizeOf(context).width < 600;
+
+  Widget _host(BuildContext context) {
     final mode = panel.mode.value;
-    if (panel.maximized.value) {
+    if (panel.maximized.value || _narrow(context)) {
       // Over the whole app (inside a docked browser), with the page left as
       // it is underneath - restoring puts it back where it was.
       _publish(EdgeInsets.zero);
@@ -1390,6 +1406,12 @@ class _ChatBody extends StatefulWidget {
 const List<String> _kQuickReactions = ['👍', '❤️', '😂', '🎉', '✅', '👀'];
 
 class _ChatBodyState extends State<_ChatBody> {
+  /// [NARROW SCREEN]: the chat is under 600 wide; the channel list then
+  /// shows on its own ([_showChannelList]) instead of beside the messages.
+  bool _narrowBody = false;
+  bool _showChannelList = false;
+  String? _listChannel;
+
   final _text = ChatFormatController();
   final _focus = FocusNode();
   // Not kept per thread: a thread always opens on its newest message.
@@ -1886,16 +1908,39 @@ class _ChatBodyState extends State<_ChatBody> {
             .take(6)
             .toList();
 
+    // [NARROW SCREEN]: under 600 wide (an iPhone) the 220-wide channel list
+    // left the messages and message bar too little room. One at a time
+    // there: the messages, with a button for the channels; picking one goes
+    // back to its messages.
+    _narrowBody = MediaQuery.sizeOf(context).width < 600;
+    if (chat.channel != _listChannel) {
+      _listChannel = chat.channel;
+      _showChannelList = false;
+    }
+    if (_narrowBody && _showChannelList) return _sidebar(theme);
     final body = Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _sidebar(theme),
-        VerticalDivider(width: 1, color: scheme.outlineVariant),
+        if (!_narrowBody) ...[
+          _sidebar(theme),
+          VerticalDivider(width: 1, color: scheme.outlineVariant),
+        ],
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _paneHeader(theme),
+              if (_narrowBody)
+                Row(children: [
+                  IconButton(
+                    key: const ValueKey('team_chat_channels'),
+                    tooltip: 'Channels and threads',
+                    icon: const Icon(Icons.menu, size: 20),
+                    onPressed: () => setState(() => _showChannelList = true),
+                  ),
+                  Expanded(child: _paneHeader(theme)),
+                ])
+              else
+                _paneHeader(theme),
               Expanded(
                   child: _newOpen
                       ? _newConversation(theme)
@@ -2018,7 +2063,8 @@ class _ChatBodyState extends State<_ChatBody> {
         : presence.others;
     final onlinePeople = teamPeople(online);
     return SizedBox(
-      width: 220,
+      // [NARROW SCREEN]: the whole width when it's shown on its own.
+      width: _narrowBody ? double.infinity : 220,
       child: Material(
         color: scheme.surfaceContainerLow,
         child: Column(

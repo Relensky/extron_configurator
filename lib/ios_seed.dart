@@ -28,7 +28,8 @@ void seedIosDocuments() {
   if (docs == null) return;
   try {
     final seed = Directory(
-        path.join(File(Platform.resolvedExecutable).parent.path, 'seed_data'));
+      path.join(File(Platform.resolvedExecutable).parent.path, 'seed_data'),
+    );
     if (!seed.existsSync()) return;
     Directory(docs).createSync(recursive: true);
     for (final entity in seed.listSync(recursive: true)) {

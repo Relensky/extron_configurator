@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
@@ -10,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import 'app_logger.dart';
 import 'app_state.dart';
+import 'file_dialogs.dart';
 
 /// ============================================================================
 ///  BUILD FOR DEPLOYMENT
@@ -302,7 +302,7 @@ class _DeployBuildDialogState extends State<DeployBuildDialog> {
       : path.join(_root, 'dist');
 
   Future<void> _pickRoot(AppStateProvider p) async {
-    final dir = await FilePicker.getDirectoryPath(
+    final dir = await getDirectoryPathCompat(
       dialogTitle: 'The ControlScript template folder (with local_build.py)',
       initialDirectory: _root.isEmpty ? null : _root,
     );
@@ -318,7 +318,7 @@ class _DeployBuildDialogState extends State<DeployBuildDialog> {
   }
 
   Future<void> _pickDest(AppStateProvider p) async {
-    final dir = await FilePicker.getDirectoryPath(
+    final dir = await getDirectoryPathCompat(
       dialogTitle: 'Where built rooms are copied to send out',
       initialDirectory: _dest(p),
     );

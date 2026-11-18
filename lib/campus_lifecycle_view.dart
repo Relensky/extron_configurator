@@ -374,7 +374,7 @@ class _CampusViewState extends State<_CampusView> {
   }
 
   Future<void> _addFolder() async {
-    final folder = await FilePicker.getDirectoryPath(
+    final folder = await getDirectoryPathCompat(
       dialogTitle: 'Which folder holds the campus?',
     );
     if (folder == null) return;

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +9,7 @@ import 'app_state.dart';
 import 'device_info_source.dart';
 import 'search_match.dart';
 import 'responsive.dart';
+import 'file_dialogs.dart';
 
 /// ============================================================================
 ///  THE DRIVER'S OWN ANSWER, EDITED IN THE APP
@@ -594,7 +594,7 @@ class _DeviceInfoEditorDialogState extends State<DeviceInfoEditorDialog> {
                 icon: const Icon(Icons.folder, size: 18),
                 tooltip: 'Select Directory',
                 onPressed: () async {
-                  final picked = await FilePicker.getDirectoryPath();
+                  final picked = await getDirectoryPathCompat();
                   if (picked == null) return;
                   _pathCtl.text = picked;
                   await _applyPath(provider, picked);

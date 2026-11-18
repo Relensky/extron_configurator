@@ -1,11 +1,11 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_state.dart';
+import 'file_dialogs.dart';
 import 'project_schedule.dart' show formatScheduleDate;
 import 'project_timeline_view.dart' show showProjectDatePicker;
 import 'room_sidecar.dart' show isRoomFolder, roomConfigDisplayName;
@@ -271,7 +271,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
   }
 
   Future<void> _findRooms() async {
-    final folder = await FilePicker.getDirectoryPath(
+    final folder = await getDirectoryPathCompat(
       dialogTitle: 'Where do this building\'s room configs live?',
     );
     if (folder == null || !mounted) return;

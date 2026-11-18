@@ -10,6 +10,8 @@ import 'av_device_library.dart' show AvDeviceLibrary;
 import 'procurement_log.dart';
 import 'responsibility_matrix.dart';
 import 'safe_write.dart';
+import 'services/ios_share.dart' show sharePath, uncPath;
+import 'team/team_presence.dart' show TeamIdentity;
 
 /// ============================================================================
 ///  THE BUILDING PROJECT
@@ -206,6 +208,10 @@ DateTime addDays(DateTime when, int days) =>
 /// 'unknown' as if it were a name would put a user called Unknown in the
 /// filter list beside the real ones.
 String currentUserName() {
+  // iPhone / iPad: no Windows sign-in - the campus username given on this
+  // device (mobile_sign_in.dart).
+  final signedIn = TeamIdentity.userOverride?.trim() ?? '';
+  if (signedIn.isNotEmpty) return signedIn;
   final env = Platform.environment;
   final name = (Platform.isWindows ? env['USERNAME'] : env['USER']) ?? '';
   return name.trim();
@@ -4870,6 +4876,14 @@ class BuildingProject {
   /// kept somewhere else still resolves.
   static String resolvePath(String stored, String projectPath) {
     if (stored.isEmpty) return '';
+    // A job saved on Windows holds `\\doit-files\...` paths and relative
+    // ones with backslashes. Off Windows the first is the CTS share as this
+    // device reaches it (services/ios_share.dart) and the backslashes are
+    // folder separators - neither is a file name.
+    stored = sharePath(stored);
+    if (!Platform.isWindows && !stored.startsWith(r'\\')) {
+      stored = stored.replaceAll('\\', '/');
+    }
     if (path.isAbsolute(stored)) return path.normalize(stored);
     if (projectPath.isEmpty) return path.normalize(stored);
     return path.normalize(
@@ -4885,10 +4899,12 @@ class BuildingProject {
   /// unreadable and fragile — it breaks the moment the project file moves,
   /// which is the exact thing relative paths were supposed to survive.
   static String storePath(String absolute, String projectPath) {
-    if (absolute.isEmpty || projectPath.isEmpty) return absolute;
+    if (absolute.isEmpty || projectPath.isEmpty) return uncPath(absolute);
     final root = path.dirname(projectPath);
     final rel = path.relative(absolute, from: root);
-    if (rel.startsWith('..') || path.isAbsolute(rel)) return absolute;
+    // Absolute on the share: written as the \\doit-files path, so a job saved
+    // on an iPad still opens on a desktop.
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return uncPath(absolute);
     return rel;
   }
 
@@ -4907,11 +4923,11 @@ class BuildingProject {
   /// which is the exact thing a relative path is for. Those store absolute,
   /// which still opens; it simply does not survive the folder being copied.
   static String storeCampusPath(String absolute, String projectPath) {
-    if (absolute.isEmpty || projectPath.isEmpty) return absolute;
+    if (absolute.isEmpty || projectPath.isEmpty) return uncPath(absolute);
     final rel = path.relative(absolute, from: path.dirname(projectPath));
-    if (path.isAbsolute(rel)) return absolute;
+    if (path.isAbsolute(rel)) return uncPath(absolute);
     final up = path.split(rel).where((s) => s == '..').length;
-    return up > 3 ? absolute : rel;
+    return up > 3 ? uncPath(absolute) : rel;
   }
 
   /// This project's rooms as absolute config paths, in project order.

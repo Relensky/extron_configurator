@@ -66,6 +66,15 @@ class TeamIdentity {
 
   const TeamIdentity({required this.user, required this.machine});
 
+  /// [iOS]: who this is when the system can't say. A phone has no Windows
+  /// login, so the dashboard sets this from the GVE sign-in (the campus
+  /// username) before it joins the team folder.
+  static String? userOverride;
+
+  /// [iOS]: this device's name when the system's is no use (iOS says
+  /// "localhost" on every iPhone and iPad). Set at startup.
+  static String? machineOverride;
+
   factory TeamIdentity.current() {
     final env = Platform.environment;
     String pick(List<String> keys, String fallback) {
@@ -76,16 +85,22 @@ class TeamIdentity {
       return fallback;
     }
 
-    String host;
-    try {
-      host = Platform.localHostname;
-    } catch (_) {
-      host = '';
+    // The OS host name only when the environment does not say: it is a
+    // system call, and COMPUTERNAME is always there on Windows.
+    String machine = (machineOverride ?? '').trim().isNotEmpty
+        ? machineOverride!.trim()
+        : pick(const ['COMPUTERNAME', 'HOSTNAME'], '');
+    if (machine.isEmpty) {
+      try {
+        machine = Platform.localHostname;
+      } catch (_) {}
+      if (machine.isEmpty) machine = 'pc';
     }
     return TeamIdentity(
-      user: pick(const ['USERNAME', 'USER', 'LOGNAME'], 'unknown'),
-      machine: pick(const ['COMPUTERNAME', 'HOSTNAME'],
-          host.isEmpty ? 'pc' : host),
+      user: (userOverride ?? '').trim().isNotEmpty
+          ? userOverride!.trim()
+          : pick(const ['USERNAME', 'USER', 'LOGNAME'], 'unknown'),
+      machine: machine,
     );
   }
 

@@ -15,6 +15,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as path;
 
@@ -70,7 +71,12 @@ import 'model_defaults_dialog.dart';
 import 'online_copy_dialog.dart';
 import 'in_app_browser.dart';
 import 'app_paths.dart' show userDataDirOrNull;
+import 'ios_file_browser.dart';
+import 'ios_share_button.dart';
 import 'ios_seed.dart';
+import 'mobile_sign_in.dart';
+import 'services/ios_share.dart';
+import 'services/share_sync.dart';
 import 'project_search.dart';
 import 'google_sheets_export.dart' show kBuiltInGoogleClientId;
 import 'undo_bar.dart'
@@ -106,7 +112,7 @@ import 'system_settings_view.dart';
 import 'tab_export.dart';
 import 'workbook_export.dart';
 
-void main(List<String> args) {
+Future<void> main(List<String> args) async {
   // FIRST, before anything that could throw. See error_reporting.dart: without
   // these, an unhandled error in a release build goes to a console that a
   // double-clicked .exe does not have, and the log this app asks people to send
@@ -115,6 +121,36 @@ void main(List<String> args) {
   // iOS: the shipped data files go into the app's Documents folder before
   // anything reads them - see ios_seed.dart. Does nothing on the desktop.
   seedIosDocuments();
+  // iOS: the CTS share picked on an earlier run (or its offline copy), then
+  // who is using the device - both before the app state is made, which takes
+  // its paths and its identity when it is created. See services/ios_share.dart
+  // and mobile_sign_in.dart.
+  if (Platform.isIOS) {
+    WidgetsFlutterBinding.ensureInitialized();
+    await IosShare.restore();
+    await ensureMobileSignIn();
+    IosFileBrowser.contextOf = () => RoomConfigApp.navigatorKey.currentContext;
+    // Files changed here and on the share are held, not combined: say so,
+    // with the way to review them.
+    ShareSync.onSynced = (result) {
+      if (result.held.isEmpty) return;
+      final context = RoomConfigApp.navigatorKey.currentContext;
+      if (context == null || !context.mounted) return;
+      final n = result.held.length;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+        duration: const Duration(seconds: 12),
+        content: Text('$n file${n == 1 ? ' was' : 's were'} changed on this '
+            'device and on the share. Nothing was combined - review '
+            '${n == 1 ? 'it' : 'them'} to decide.'),
+        action: SnackBarAction(
+          label: 'Review',
+          onPressed: () => showIosSharePanel(context),
+        ),
+      ));
+    };
+    ShareSync.start();
+    _syncOnResume = AppLifecycleListener(onResume: ShareSync.resumed);
+  }
   // [TEAM KIT]: lib/team/ (shared with the CTS Dashboard and Instructor
   // Contact) plugged in - see team_setup.dart.
   setUpTeamKit();
@@ -185,6 +221,32 @@ void main(List<String> args) {
   unawaited(appUpdater.start());
   UserActivityWatcher(appUpdater).start();
 }
+
+/// iOS: [room] in the CTS Dashboard app's Room Hub. On Windows the button
+/// starts the dashboard's program, which an iPad can't do; there it is the
+/// dashboard app's link, `ctsdashboard://openRoom?room=<id>`. A dashboard that
+/// doesn't answer that link yet says so instead of the button doing nothing.
+Future<void> _openRoomInDashboardIos(BuildContext context, String room) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final link = Uri(
+    scheme: 'ctsdashboard',
+    host: 'openRoom',
+    queryParameters: {'room': room},
+  );
+  var opened = false;
+  try {
+    opened = await launchUrl(link, mode: LaunchMode.externalApplication);
+  } catch (_) {}
+  if (opened) return;
+  messenger.showSnackBar(SnackBar(
+    content: Text('The CTS Dashboard on this device can\'t be opened at a '
+        'room yet. Open the dashboard and go to Room Hub > $room.'),
+  ));
+}
+
+/// iOS: syncs the offline copy when the app comes back to the front.
+// ignore: unused_element
+AppLifecycleListener? _syncOnResume;
 
 /// A project file named on its own on the command line (`room_config_builder
 /// <file>.json`), or null.
@@ -379,6 +441,7 @@ class RoomConfigApp extends StatelessWidget {
         scale: theme.uiScale,
         fitToMonitor: Platform.isWindows &&
             !Platform.environment.containsKey('FLUTTER_TEST'),
+        followDevice: Platform.isIOS || Platform.isAndroid,
         child: MediaQuery(
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.linear(theme.textScale),
@@ -1172,8 +1235,11 @@ class _MainDashboardState extends State<MainDashboard> {
                 visualDensity: VisualDensity.compact,
                 iconSize: 20,
                 icon: const Icon(Icons.dashboard_outlined),
-                onPressed: () => teamOpenInApp(context, 'dashboard',
-                    action: 'openRoom', args: {'room': provider.teamRoomId}),
+                onPressed: () => Platform.isIOS
+                    ? _openRoomInDashboardIos(context, provider.teamRoomId)
+                    : teamOpenInApp(context, 'dashboard',
+                        action: 'openRoom',
+                        args: {'room': provider.teamRoomId}),
               ),
               // Ready for review / review complete.
               RoomReviewMenu(roomId: provider.teamRoomId),
@@ -1205,6 +1271,9 @@ class _MainDashboardState extends State<MainDashboard> {
             onChat: () => TeamChatPanel.instance.toggle(context),
             showChat: provider.teamChatInTopBar,
           ),
+          // iOS: the CTS share, the offline copy and its sync - see
+          // ios_share_button.dart. Nothing on the desktop.
+          const IosShareButton(),
           // YOU, in the corner - and the way into Settings, Help and the
           // light/dark switch. See [ProfileButton].
           const ProfileButton(),
@@ -1243,7 +1312,10 @@ class _MainDashboardState extends State<MainDashboard> {
             side: PaneSide.left,
             title: 'Tabs',
             storageKey: 'nav_rail',
-            initialWidth: 108,
+            // iPad / iPhone: icons only to start with - the screen is too
+            // narrow to give a column of labels the room. Widened by hand,
+            // the width is kept.
+            initialWidth: Platform.isIOS || Platform.isAndroid ? 72 : 108,
             minWidth: 72,
             maxWidth: 220,
             // Its own layer, so the rail's animations repaint only the rail.
@@ -3207,7 +3279,8 @@ class _ProfileDialogState extends State<_ProfileDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Signed in to Windows as ${provider.collab.me.user} on '
+                '${Platform.isIOS ? 'Signed in' : 'Signed in to Windows'} as '
+                '${provider.collab.me.user} on '
                 '${provider.collab.me.machine}.',
                 style: theme.textTheme.bodySmall,
               ),
@@ -3477,7 +3550,7 @@ class AppSettingsView extends StatelessWidget {
         // release folder on the file share; see app_updates.dart.
         AppUpdatesSettingsSection(
           updater: appUpdater,
-          pickFolder: () => FilePicker.getDirectoryPath(
+          pickFolder: () => getDirectoryPathCompat(
             dialogTitle: 'Select the release folder',
           ),
         ),
@@ -3508,7 +3581,7 @@ class AppSettingsView extends StatelessWidget {
               icon: const Icon(Icons.folder_open),
               tooltip: 'Choose the log folder',
               onPressed: () async {
-                final picked = await FilePicker.getDirectoryPath(
+                final picked = await getDirectoryPathCompat(
                   dialogTitle: 'Choose where the logs are written',
                   initialDirectory: AppLogger.logFolder,
                 );
@@ -4166,7 +4239,7 @@ class AppSettingsView extends StatelessWidget {
                     tooltip: 'Select Directory',
                     onPressed: () async {
                       String? selectedDirectory =
-                          await FilePicker.getDirectoryPath();
+                          await getDirectoryPathCompat();
                       if (selectedDirectory != null) {
                         provider.updateSetting(
                             'modulesPath', selectedDirectory);
@@ -4232,7 +4305,7 @@ class AppSettingsView extends StatelessWidget {
               icon: const Icon(Icons.folder),
               tooltip: 'Select Directory',
               onPressed: () async {
-                String? selectedDirectory = await FilePicker.getDirectoryPath();
+                String? selectedDirectory = await getDirectoryPathCompat();
                 if (selectedDirectory != null) {
                   provider.updateSetting('documentationPath', selectedDirectory);
                 }
@@ -4259,7 +4332,7 @@ class AppSettingsView extends StatelessWidget {
               icon: const Icon(Icons.folder_shared),
               tooltip: 'Select Directory',
               onPressed: () async {
-                final dir = await FilePicker.getDirectoryPath();
+                final dir = await getDirectoryPathCompat();
                 if (dir != null) provider.updateSetting('specSheetFolder', dir);
               },
             ),
@@ -4284,7 +4357,7 @@ class AppSettingsView extends StatelessWidget {
               icon: const Icon(Icons.menu_book),
               tooltip: 'Select Directory',
               onPressed: () async {
-                final dir = await FilePicker.getDirectoryPath();
+                final dir = await getDirectoryPathCompat();
                 if (dir != null) provider.updateSetting('manualsFolder', dir);
               },
             ),
@@ -4320,7 +4393,7 @@ class AppSettingsView extends StatelessWidget {
               icon: const Icon(Icons.folder_shared),
               tooltip: 'Select Directory',
               onPressed: () async {
-                final dir = await FilePicker.getDirectoryPath();
+                final dir = await getDirectoryPathCompat();
                 if (dir != null) provider.updateSetting('teamFolderPath', dir);
               },
             ),
@@ -4345,7 +4418,7 @@ class AppSettingsView extends StatelessWidget {
               icon: const Icon(Icons.folder_shared),
               tooltip: 'Select Directory',
               onPressed: () async {
-                final dir = await FilePicker.getDirectoryPath();
+                final dir = await getDirectoryPathCompat();
                 if (dir != null) {
                   provider.updateSetting('sharedRoomsFolder', dir);
                 }
@@ -4997,7 +5070,7 @@ class AppSettingsView extends StatelessWidget {
         icon: const Icon(Icons.folder),
         tooltip: 'Select Directory',
         onPressed: () async {
-          final selectedDirectory = await FilePicker.getDirectoryPath();
+          final selectedDirectory = await getDirectoryPathCompat();
           if (selectedDirectory != null) {
             provider.updateSetting('rootFolderPath', selectedDirectory);
           }
@@ -5667,7 +5740,7 @@ class FirstRunSetupDialog extends StatelessWidget {
             label: const Text('Browse'),
             onPressed: () async {
               if (isDirectory) {
-                String? dir = await FilePicker.getDirectoryPath();
+                String? dir = await getDirectoryPathCompat();
                 if (dir != null) {
                   // Persisted immediately; updateSetting also reloads
                   // whatever depends on this path.

@@ -10,6 +10,8 @@ import 'package:path/path.dart' as path;
 import 'file_dialogs.dart';
 import 'app_logger.dart';
 import 'app_paths.dart';
+import 'services/ios_share.dart' show IosShare, sharePath;
+import 'services/share_sync.dart' show ShareSync;
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'device_info_source.dart'
@@ -760,13 +762,13 @@ class AppStateProvider extends ChangeNotifier {
   /// Whether each room save also leaves a copy in the shared rooms folder.
   bool copyRoomsToShare = true;
 
-  String get effectiveTeamFolder => teamFolderPath.trim().isNotEmpty
+  String get effectiveTeamFolder => sharePath(teamFolderPath.trim().isNotEmpty
       ? teamFolderPath.trim()
-      : kDefaultTeamFolder;
+      : kDefaultTeamFolder);
 
-  String get effectiveSharedRoomsFolder => sharedRoomsFolder.trim().isNotEmpty
+  String get effectiveSharedRoomsFolder => sharePath(sharedRoomsFolder.trim().isNotEmpty
       ? sharedRoomsFolder.trim()
-      : path.join(kSharedProjectsFolder, 'Rooms');
+      : path.join(kSharedProjectsFolder, 'Rooms'));
 
   late final TeamPresenceBoard teamPresence =
       TeamPresenceBoard(version: kAppVersion);
@@ -809,7 +811,7 @@ class AppStateProvider extends ChangeNotifier {
         final copy = runningUnderTest
             ? ''
             : await findSharedRoomConfig(
-                path.dirname(kSharedRootFolder),
+                sharePath(path.dirname(kSharedRootFolder)),
                 room,
                 teamRoomIdFor,
               );
@@ -1012,11 +1014,32 @@ class AppStateProvider extends ChangeNotifier {
           ? navTabLabel(AppTab.values[selectedTabIndex])
           : '';
 
+  /// iOS: the share went offline or came back - join or leave the team
+  /// folder to match.
+  void _shareChanged() {
+    unawaited(startTeam());
+    // Settings roam again once the share answers.
+    if (_roamingTeamFolder != null) {
+      final folder = _roamingFolderNow();
+      if (folder != settingsRoaming.folder) {
+        settingsRoaming.folder = folder;
+        if (folder.isNotEmpty) unawaited(settingsRoaming.sync());
+      }
+    }
+  }
+
   /// Joins (or moves to) the team folder. Never under a test.
   Future<void> startTeam() async {
     if (runningUnderTest || !_persistenceEnabled) return;
     // [TEAM KIT - OPTIONAL]: switched off, join nothing (leaves the folder).
-    final folder = teamFeaturesOn ? effectiveTeamFolder : '';
+    // iOS working offline: nothing either - the team folder is live chat and
+    // presence, not part of the offline copy - and joined again as soon as
+    // the share answers.
+    final offline = Platform.isIOS && IosShare.active && IosShare.offline;
+    final folder = teamFeaturesOn && !offline ? effectiveTeamFolder : '';
+    IosShare.changes
+      ..removeListener(_shareChanged)
+      ..addListener(_shareChanged);
     Team.presence = teamPresence;
     Team.chat = teamChat;
     Team.claims = teamClaims;
@@ -1310,7 +1333,7 @@ class AppStateProvider extends ChangeNotifier {
   static bool get _sharedRootAvailable => _sharedRootReachable ??= () {
         if (runningUnderTest) return false;
         try {
-          return Directory(kSharedRootFolder).existsSync();
+          return Directory(sharePath(kSharedRootFolder)).existsSync();
         } catch (_) {
           return false;
         }
@@ -1324,7 +1347,7 @@ class AppStateProvider extends ChangeNotifier {
   static bool get _sharedCalendarAvailable => _sharedCalendarReachable ??= () {
         if (runningUnderTest) return false;
         try {
-          return Directory(kSharedCalendarFolder).existsSync();
+          return Directory(sharePath(kSharedCalendarFolder)).existsSync();
         } catch (_) {
           return false;
         }
@@ -1332,9 +1355,9 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Root Folder setting, else the file server's Configurator_Files when it
   /// can be reached, else the app's own folder.
-  String get effectiveRootFolder => rootFolderPath.isNotEmpty
+  String get effectiveRootFolder => sharePath(rootFolderPath.isNotEmpty
       ? rootFolderPath
-      : (_sharedRootAvailable ? kSharedRootFolder : _appBaseDir());
+      : (_sharedRootAvailable ? kSharedRootFolder : _appBaseDir()));
 
   // --- avatars ---------------------------------------------------------------
   //
@@ -1350,7 +1373,7 @@ class AppStateProvider extends ChangeNotifier {
   /// under test.
   String get avatarFolder => runningUnderTest
       ? path.join(effectiveRootFolder, 'assets', 'avatars')
-      : kDefaultAvatarsFolder;
+      : sharePath(kDefaultAvatarsFolder);
 
   /// The file name an avatar is kept under: the login, safe for a file name.
   static String _avatarStem(String user) =>
@@ -1670,9 +1693,8 @@ class AppStateProvider extends ChangeNotifier {
     if (recentFiles.isNotEmpty) return null;
     if (runningUnderTest) return null;
     try {
-      return Directory(kSharedProjectsFolder).existsSync()
-          ? kSharedProjectsFolder
-          : null;
+      final projects = sharePath(kSharedProjectsFolder);
+      return Directory(projects).existsSync() ? projects : null;
     } catch (_) {
       return null;
     }
@@ -1693,62 +1715,61 @@ class AppStateProvider extends ChangeNotifier {
   /// Python modules folder: explicit choice, else `<root>/devices`.
   /// Out of the box this is the Root Folder's (the app's own) - the file
   /// server's once the Root Folder is set to it on First-Time Setup.
-  String get effectiveModulesPath =>
-      modulesPath.isNotEmpty ? modulesPath : _inRootOrApp('devices');
+  String get effectiveModulesPath => sharePath(modulesPath.isNotEmpty ? modulesPath : _inRootOrApp('devices'));
 
   /// PDF manuals folder: explicit choice, else `<root>/documentation`.
   /// Each module's manual is `<module file name>.pdf` in this folder.
   /// Where spec sheets are kept: the chosen shared folder, else
   /// `<root>/spec_sheets`.
-  String get effectiveSpecSheetFolder => specSheetFolder.trim().isNotEmpty
+  String get effectiveSpecSheetFolder => sharePath(specSheetFolder.trim().isNotEmpty
       ? specSheetFolder.trim()
-      : path.join(effectiveRootFolder, 'spec_sheets');
+      : path.join(effectiveRootFolder, 'spec_sheets'));
 
   /// Where device manuals come from: the chosen folder, else the file share's
   /// copy, else - a fresh install off the network - `<root>\manuals`. Never a
   /// clone of the Manuals repo unless somebody picks one: the build reads
   /// what everybody reads.
-  String get effectiveManualsFolder => manualsFolder.trim().isNotEmpty
+  String get effectiveManualsFolder => sharePath(manualsFolder.trim().isNotEmpty
       ? manualsFolder.trim()
       : _sharedManualsAvailable
       ? kDashboardManualsFolder
-      : path.join(effectiveRootFolder, 'manuals');
+      : path.join(effectiveRootFolder, 'manuals'));
 
   /// Looked up once a run, like [_sharedRootAvailable]. Never under test.
   static bool? _sharedManualsReachable;
   static bool get _sharedManualsAvailable => _sharedManualsReachable ??= () {
         if (runningUnderTest) return false;
         try {
-          return Directory(kDashboardManualsFolder).existsSync();
+          return Directory(sharePath(kDashboardManualsFolder)).existsSync();
         } catch (_) {
           return false;
         }
       }();
 
-  String get effectiveDocumentationPath => documentationPath.isNotEmpty
+  String get effectiveDocumentationPath => sharePath(documentationPath.isNotEmpty
       ? documentationPath
-      : _inRootOrApp('documentation');
+      : _inRootOrApp('documentation'));
 
   /// processors.json: explicit choice, else `<root>/processors.json`.
-  String get effectiveProcessorsFilePath => processorsFilePath.isNotEmpty
+  String get effectiveProcessorsFilePath => sharePath(processorsFilePath.isNotEmpty
       ? processorsFilePath
-      : _inRootOrApp('processors.json');
+      : _inRootOrApp('processors.json'));
 
   /// buildings.json: explicit choice, else `<root>/buildings.json`.
-  String get effectiveBuildingsFilePath => buildingsFilePath.isNotEmpty
+  String get effectiveBuildingsFilePath => sharePath(buildingsFilePath.isNotEmpty
       ? buildingsFilePath
-      : _inRootOrApp('buildings.json');
+      : _inRootOrApp('buildings.json'));
 
   /// Template config: explicit choice, else `<root>/config.json`.
-  String get effectiveTemplateFilePath => templateFilePath.isNotEmpty
+  String get effectiveTemplateFilePath => sharePath(templateFilePath.isNotEmpty
       ? templateFilePath
-      : _inRootOrApp('config.json');
+      : _inRootOrApp('config.json'));
 
   /// ui_schema.json / key_map.json: use the root-folder copy only when it
   /// actually exists there, so the loaders' own working-dir / executable
   /// search still applies otherwise (returns '' to trigger that search).
   String _resolveOptionalFile(String explicit, String filename) {
-    if (explicit.isNotEmpty) return explicit;
+    if (explicit.isNotEmpty) return sharePath(explicit);
     if (rootFolderPath.isNotEmpty) {
       final candidate = path.join(effectiveRootFolder, filename);
       if (File(candidate).existsSync()) return candidate;
@@ -1765,12 +1786,12 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Display-oriented resolved locations for the setup dialog / App Config
   /// hints (explicit choice, else the root-folder default location).
-  String get effectiveUiSchemaPath => uiSchemaPath.isNotEmpty
+  String get effectiveUiSchemaPath => sharePath(uiSchemaPath.isNotEmpty
       ? uiSchemaPath
-      : _inRootOrApp('ui_schema.json');
-  String get effectiveKeyMapPath => keyMapPath.isNotEmpty
+      : _inRootOrApp('ui_schema.json'));
+  String get effectiveKeyMapPath => sharePath(keyMapPath.isNotEmpty
       ? keyMapPath
-      : _inRootOrApp('key_map.json');
+      : _inRootOrApp('key_map.json'));
 
   // ---------------------------------------------------------------------
   //  SETTINGS PERSISTENCE (app_config.json)
@@ -2018,6 +2039,19 @@ class AppStateProvider extends ChangeNotifier {
   /// synced with; the window asks before first-run setup.
   bool settingsRoamingChoicePending = false;
 
+  /// The team folder settings roam through, as the settings name it.
+  String? _roamingTeamFolder;
+
+  /// Where settings roam to now: the team folder as this device reaches it,
+  /// or nowhere while an iPad works offline - the team folder is not part of
+  /// the offline copy, so a push there would never reach the share.
+  String _roamingFolderNow() {
+    final team = _roamingTeamFolder;
+    if (team == null) return '';
+    if (Platform.isIOS && IosShare.active && IosShare.offline) return '';
+    return sharePath(team);
+  }
+
   Future<void> _syncSettingsAtStartup() async {
     if (!_persistenceEnabled || runningUnderTest) return;
     String team = '';
@@ -2028,7 +2062,8 @@ class AppStateProvider extends ChangeNotifier {
         if (d is Map) team = '${d['teamFolderPath'] ?? ''}'.trim();
       }
     } catch (_) {}
-    settingsRoaming.folder = team.isNotEmpty ? team : kDefaultTeamFolder;
+    _roamingTeamFolder = team.isNotEmpty ? team : kDefaultTeamFolder;
+    settingsRoaming.folder = _roamingFolderNow();
     final result = await settingsRoaming.sync(startup: true).timeout(
         const Duration(seconds: 10),
         onTimeout: () => const RoamingResult(
@@ -6500,7 +6535,7 @@ class AppStateProvider extends ChangeNotifier {
       description: description,
       sourceName: sourceName,
       jackPrefix: jackPrefix ?? _dominantJackPrefix(),
-      savedBy: Platform.environment['USERNAME'] ?? '',
+      savedBy: currentUserName(),
       savedAt: DateTime.now().toIso8601String(),
       systemSetup: has(RoomPresetPart.setup) && setup is Map
           ? presetSystemSetupFrom(setup)
@@ -11153,6 +11188,10 @@ class AppStateProvider extends ChangeNotifier {
   /// what the list is for.
   Future<bool> openConfigAtPath(String file, {bool remember = true}) async {
     lastOpenError = '';
+    // iOS: a remembered share path is the share now, or its offline copy.
+    file = sharePath(file);
+    // iOS: the room's folder is kept on the device from now on.
+    ShareSync.keepFolderOf(file);
     try {
       // A link saved before the room moved into its own folder.
       if (!File(file).existsSync()) {
@@ -12414,11 +12453,11 @@ class AppStateProvider extends ChangeNotifier {
   /// The chosen path wins even when nothing has been read from it yet — a
   /// catalog pointed at a share that does not have the file in it yet is a
   /// first save into the share, not a stray copy left in the root folder.
-  String get effectiveAvDevicesPath => avDevicesFilePath.isNotEmpty
+  String get effectiveAvDevicesPath => sharePath(avDevicesFilePath.isNotEmpty
       ? avDevicesFilePath
       : avDeviceLibrary.filePath.isNotEmpty
           ? avDeviceLibrary.filePath
-          : path.join(effectiveRootFolder, 'av_devices.json');
+          : path.join(effectiveRootFolder, 'av_devices.json'));
 
   /// Records in the CATALOG that a product has no control interface at all —
   /// [AvDeviceTemplate.neverControlled] — and writes the catalog straight away.
@@ -12610,12 +12649,11 @@ class AppStateProvider extends ChangeNotifier {
   /// av_flow_rules.json: the file it was read from when there is one, else
   /// `<root>/av_flow_rules.json` — beside ui_schema.json and av_devices.json,
   /// which is where the rest of the app's shared documents live.
-  String get effectiveFlowRulesPath =>
-      flowRulesFilePath.isNotEmpty
+  String get effectiveFlowRulesPath => sharePath(flowRulesFilePath.isNotEmpty
           ? flowRulesFilePath
           : (flowRules.source.startsWith('Built-in')
               ? path.join(effectiveRootFolder, 'av_flow_rules.json')
-              : flowRules.source);
+              : flowRules.source));
 
   /// (Re)reads the rule book. A room with no rule file draws exactly as it
   /// always did — the built-ins ARE the shipped behavior.
@@ -12655,10 +12693,9 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// labor_rates.json: explicit choice, else `<root>/labor_rates.json`.
-  String get effectiveLaborRatesPath =>
-      laborRates.filePath.isNotEmpty
+  String get effectiveLaborRatesPath => sharePath(laborRates.filePath.isNotEmpty
           ? laborRates.filePath
-          : path.join(effectiveRootFolder, 'labor_rates.json');
+          : path.join(effectiveRootFolder, 'labor_rates.json'));
 
   /// (Re)loads the rate card. [explicitPath] opens somebody else's card —
   /// rates are per contract as often as they are per year.
@@ -12686,9 +12723,9 @@ class AppStateProvider extends ChangeNotifier {
   // --- base costs: one typical price per device category -------------------
 
   /// base_costs.json: explicit choice, else `<root>/base_costs.json`.
-  String get effectiveBaseCostsPath => baseCosts.filePath.isNotEmpty
+  String get effectiveBaseCostsPath => sharePath(baseCosts.filePath.isNotEmpty
       ? baseCosts.filePath
-      : path.join(effectiveRootFolder, 'base_costs.json');
+      : path.join(effectiveRootFolder, 'base_costs.json'));
 
   Future<void> loadBaseCosts({String explicitPath = ''}) async {
     baseCosts = await BaseCostBook.load(
@@ -12714,12 +12751,11 @@ class AppStateProvider extends ChangeNotifier {
   /// delivery_locations.json: explicit choice, else
   /// `<root>/delivery_locations.json` — beside the catalog and the rate cards,
   /// which is where the rest of the app's shared documents live.
-  String get effectiveDeliveryLocationsPath =>
-      deliveryLocationsFilePath.isNotEmpty
+  String get effectiveDeliveryLocationsPath => sharePath(deliveryLocationsFilePath.isNotEmpty
           ? deliveryLocationsFilePath
           : (deliveryLocations.filePath.isNotEmpty
               ? deliveryLocations.filePath
-              : path.join(effectiveRootFolder, 'delivery_locations.json'));
+              : path.join(effectiveRootFolder, 'delivery_locations.json')));
 
   /// (Re)reads the places. [explicitPath] opens somebody else's list, which is
   /// how a second site's docks get looked at without adopting them.
@@ -12760,11 +12796,11 @@ class AppStateProvider extends ChangeNotifier {
   /// vendor_list.json: explicit choice, else `<root>/vendor_list.json` -
   /// beside the catalog, the rate cards and the delivery locations, which is
   /// where the rest of the app's shared documents live.
-  String get effectiveVendorListPath => vendorListFilePath.isNotEmpty
+  String get effectiveVendorListPath => sharePath(vendorListFilePath.isNotEmpty
       ? vendorListFilePath
       : (vendorBook.filePath.isNotEmpty
             ? vendorBook.filePath
-            : path.join(effectiveRootFolder, 'vendor_list.json'));
+            : path.join(effectiveRootFolder, 'vendor_list.json')));
 
   /// (Re)reads the directory. [explicitPath] opens somebody else's list, which
   /// is how another site's suppliers get looked at without adopting them.
@@ -16987,6 +17023,10 @@ class AppStateProvider extends ChangeNotifier {
   final ValueNotifier<(int, int)?> projectOpenProgress = ValueNotifier(null);
 
   Future<String> openProject(String file) async {
+    // iOS: a remembered share path is the share now, or its offline copy;
+    // and the job's folder is kept on the device from now on.
+    file = sharePath(file);
+    ShareSync.keepFolderOf(file);
     try {
       final loaded = await BuildingProject.load(file);
       final followed = await _followMovedRooms(loaded, file);
@@ -17385,11 +17425,11 @@ class AppStateProvider extends ChangeNotifier {
   /// Where the schedule is read from.
   /// Blank = the file in the file server's Calendar folder when it can be
   /// reached, else in the Root Folder.
-  String get effectiveClassSchedulePath => classSchedulePath.trim().isNotEmpty
+  String get effectiveClassSchedulePath => sharePath(classSchedulePath.trim().isNotEmpty
       ? classSchedulePath.trim()
       : path.join(
           _sharedCalendarAvailable ? kSharedCalendarFolder : effectiveRootFolder,
-          'FacilitiesLinkClassScheduleDaily.csv');
+          'FacilitiesLinkClassScheduleDaily.csv'));
 
   /// Reads the schedule (again). Returns the error to show, or ''.
   Future<String> loadClassSchedule() async {
@@ -19648,9 +19688,9 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Where a publish should go when nothing more specific was asked for: the
   /// job's own folder if it has one, else the app's.
-  String get effectiveOnlineFolder => project.onlineFolder.trim().isNotEmpty
+  String get effectiveOnlineFolder => sharePath(project.onlineFolder.trim().isNotEmpty
       ? project.onlineFolder.trim()
-      : onlineFolder.trim();
+      : onlineFolder.trim());
 
   /// Publishes a campus sheet: the refresh plan as a workbook, and the campus
   /// file itself beside it.

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import '../team/team_presence.dart' show TeamIdentity;
 
 import 'package:path/path.dart' as path;
 
@@ -54,8 +55,14 @@ class CollabIdentity {
       host = '';
     }
     return CollabIdentity(
-      user: pick(const ['USERNAME', 'USER', 'LOGNAME'], 'unknown'),
-      machine: pick(const ['COMPUTERNAME', 'HOSTNAME'], host.isEmpty ? 'pc' : host),
+      // iPhone / iPad: the sign-in given on the device and its own name -
+      // the same as the team kit's (TeamIdentity, mobile_sign_in.dart).
+      user: (TeamIdentity.userOverride ?? '').trim().isNotEmpty
+          ? TeamIdentity.userOverride!.trim()
+          : pick(const ['USERNAME', 'USER', 'LOGNAME'], 'unknown'),
+      machine: (TeamIdentity.machineOverride ?? '').trim().isNotEmpty
+          ? TeamIdentity.machineOverride!.trim()
+          : pick(const ['COMPUTERNAME', 'HOSTNAME'], host.isEmpty ? 'pc' : host),
     );
   }
 
