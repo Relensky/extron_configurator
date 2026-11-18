@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.211+221';
+const String kAppVersion = '0.5.213+223';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,23 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.213',
+    date: 'November 17, 2026',
+    title: 'AV Procurement: rooms in order, Room # opens the room',
+    changes: [
+      'AV Procurement: rooms are listed by name. A room whose lines had never been edited used to come last on the page, the spreadsheet and the picture.',
+      'AV Procurement: a line\'s Room # is a link. It opens that room\'s Cost page with the line\'s item centered and highlighted, ready to edit.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.212',
+    date: 'November 17, 2026',
+    title: 'AV Procurement: sort by room, device and more',
+    changes: [
+      'AV Procurement: a Sort by menu groups the lines by Room, Device, Manufacturer, Model, Company or Status. Each group gets its own band, which folds the same way. Pressing anywhere on a band, not just its arrow, folds or opens it.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.211',
     date: 'November 17, 2026',

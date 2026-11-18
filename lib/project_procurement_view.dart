@@ -18,6 +18,7 @@ import 'procurement_log.dart';
 import 'procurement_sync.dart';
 import 'project_estimate.dart';
 import 'project_schedule.dart' show formatScheduleDate;
+import 'project_view.dart' show openProjectRoomOn;
 import 'responsive.dart' show kFloatingButtonClearance;
 import 'screenshot_tools.dart';
 import 'xlsx_writer.dart';
@@ -425,8 +426,15 @@ class _LogGridState extends State<_LogGrid> {
   /// The column being dragged by its grip, or null.
   final ValueNotifier<String?> _columnDrag = ValueNotifier(null);
 
-  /// Room sections folded to their heading band, by room.
+  /// Sections folded to their heading band, by what they are grouped under.
   final Set<String> _foldedRooms = {};
+
+  /// What the lines are grouped and sorted by.
+  ProcurementSort _sort = ProcurementSort.room;
+
+  void _toggleFold(String group) => setState(() {
+    if (!_foldedRooms.remove(group)) _foldedRooms.add(group);
+  });
 
   @override
   void dispose() {
@@ -467,7 +475,7 @@ class _LogGridState extends State<_LogGrid> {
     final zoomed = zoomedTextTheme(theme, zoom);
     double w(double base) => gridMetric(context, base) * zoom;
 
-    final groups = procurementByRoom(widget.entries);
+    final groups = procurementGrouped(widget.entries, _sort);
     final rows = <_Row>[
       for (final (gi, g) in groups.indexed) ...[
         // A band's index is its room's place, so bands can alternate.
@@ -497,14 +505,34 @@ class _LogGridState extends State<_LogGrid> {
               Expanded(
                 child: Text(
                   'Press a line to edit it. Press a status or a date to '
-                  'change just that. Drag a heading by its grip to move the '
-                  'column, or press it to rename, recolor or delete it. Shift '
-                  'and the mouse wheel scroll sideways.',
+                  'change just that. Press a section\'s band to fold or open '
+                  'it. Drag a heading by its grip to move the column, or press '
+                  'it to rename, recolor or delete it. Shift and the mouse '
+                  'wheel scroll sideways.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
+              Text('Sort by', style: theme.textTheme.bodyMedium),
+              const SizedBox(width: 8),
+              DropdownButton<ProcurementSort>(
+                key: const ValueKey('procurement_sort'),
+                value: _sort,
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                items: [
+                  for (final s in ProcurementSort.values)
+                    DropdownMenuItem(value: s, child: Text(s.label)),
+                ],
+                onChanged: (s) => setState(() {
+                  if (s == null || s == _sort) return;
+                  _sort = s;
+                  // Folds name groups of the old sort.
+                  _foldedRooms.clear();
+                }),
+              ),
+              const SizedBox(width: 8),
               TextButton.icon(
                 key: const ValueKey('procurement_fold_all'),
                 icon: Icon(
@@ -834,53 +862,56 @@ class _LogGridState extends State<_LogGrid> {
     final provider = context.read<AppStateProvider>();
     final entry = row.entry;
     if (entry == null) {
-      return Container(
-        decoration: BoxDecoration(
-          color: _rowFill(theme, row),
-          border: _rule(theme),
-        ),
-        padding: EdgeInsets.only(left: w(2)),
-        alignment: Alignment.centerLeft,
-        child: Row(
-          children: [
-            // The room folds to this band, and opens again.
-            IconButton(
-              key: ValueKey('procurement_fold_${row.room}'),
-              tooltip: _foldedRooms.contains(row.room) ? 'Expand' : 'Collapse',
-              visualDensity: VisualDensity.compact,
-              iconSize: w(18),
-              color: _bandInk(theme, row),
-              icon: Icon(
-                _foldedRooms.contains(row.room)
-                    ? Icons.chevron_right
-                    : Icons.expand_more,
-              ),
-              onPressed: () => setState(() {
-                if (!_foldedRooms.remove(row.room)) _foldedRooms.add(row.room);
-              }),
-            ),
-            Expanded(
-              child: Text(
-                '${row.room.isEmpty ? 'No room' : row.room}  ·  ${row.count} '
-                'line${row.count == 1 ? '' : 's'}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: zoomed.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
+      final folded = _foldedRooms.contains(row.room);
+      final name = row.room.isEmpty
+          ? 'No ${_sort.label.toLowerCase()}'
+          : row.room;
+      // Pressed anywhere, the section folds to this band, and opens again.
+      return Material(
+        color: _rowFill(theme, row) ?? Colors.transparent,
+        child: InkWell(
+          key: ValueKey('procurement_band_${row.room}'),
+          onTap: () => _toggleFold(row.room),
+          child: Container(
+            decoration: BoxDecoration(border: _rule(theme)),
+            padding: EdgeInsets.only(left: w(2)),
+            alignment: Alignment.centerLeft,
+            child: Row(
+              children: [
+                IconButton(
+                  key: ValueKey('procurement_fold_${row.room}'),
+                  tooltip: folded ? 'Expand' : 'Collapse',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: w(18),
                   color: _bandInk(theme, row),
+                  icon: Icon(folded ? Icons.chevron_right : Icons.expand_more),
+                  onPressed: () => _toggleFold(row.room),
                 ),
-              ),
+                Expanded(
+                  child: Text(
+                    '$name  ·  ${row.count} line${row.count == 1 ? '' : 's'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: zoomed.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: _bandInk(theme, row),
+                    ),
+                  ),
+                ),
+                // A section is a room only when sorted by room.
+                if (_sort == ProcurementSort.room)
+                  IconButton(
+                    key: ValueKey('procurement_remove_section_${row.room}'),
+                    tooltip: 'Remove this whole section',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: w(18),
+                    color: _bandInk(theme, row),
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    onPressed: () => _removeSection(row.room),
+                  ),
+              ],
             ),
-            IconButton(
-              key: ValueKey('procurement_remove_section_${row.room}'),
-              tooltip: 'Remove this whole section',
-              visualDensity: VisualDensity.compact,
-              iconSize: w(18),
-              color: _bandInk(theme, row),
-              icon: const Icon(Icons.delete_sweep_outlined),
-              onPressed: () => _removeSection(row.room),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -935,6 +966,60 @@ class _LogGridState extends State<_LogGrid> {
     );
   }
 
+  /// The Room # cell: a link to the room's Cost page with this line lit, or
+  /// plain text for a line added by hand or a room gone from the job.
+  Widget _roomCell(
+    BuildContext context,
+    ProcurementEntry entry,
+    TextStyle? style,
+  ) {
+    final plain = Text(
+      entry.room,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    final ref = context.read<AppStateProvider>().project.roomById(
+      entry.roomId,
+    );
+    if (entry.room.isEmpty || ref == null) return plain;
+    final primary = Theme.of(context).colorScheme.primary;
+    // An orphan's line is gone from the room, so only the room opens.
+    final lineKey = widget.orphans.contains(entry.id) ? '' : entry.lineKey;
+    return Tooltip(
+      message: lineKey.isEmpty
+          ? 'Open ${entry.room}\'s Cost page'
+          : 'Open ${entry.room}\'s Cost page on this line',
+      waitDuration: const Duration(milliseconds: 600),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          key: ValueKey('procurement_room_link_${entry.id}'),
+          onTap: () => openProjectRoomOn(
+            context,
+            ref,
+            AppTab.cost,
+            lineKey.isEmpty
+                ? 'opened from AV Procurement'
+                : '${entry.device} is highlighted here',
+            roomName: entry.room,
+            costLineKey: lineKey,
+          ),
+          child: Text(
+            entry.room,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style?.copyWith(
+              color: primary,
+              decoration: TextDecoration.underline,
+              decorationColor: primary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _bodyRow(
     BuildContext context,
     TextTheme zoomed,
@@ -944,10 +1029,12 @@ class _LogGridState extends State<_LogGrid> {
     final theme = Theme.of(context);
     final entry = row.entry;
     if (entry == null) {
-      return Container(
-        decoration: BoxDecoration(
-          color: _rowFill(theme, row),
-          border: _rule(theme),
+      // The band's run across the columns folds it too.
+      return Material(
+        color: _rowFill(theme, row) ?? Colors.transparent,
+        child: InkWell(
+          onTap: () => _toggleFold(row.room),
+          child: Container(decoration: BoxDecoration(border: _rule(theme))),
         ),
       );
     }
@@ -999,7 +1086,7 @@ class _LogGridState extends State<_LogGrid> {
     final phaseColors = _groupColors(theme, _Group.status);
     final cells = <Widget>[
       _CompanyCell(entry: entry, style: zoomed.labelSmall, w: w),
-      text(entry.room, lines: 1),
+      _roomCell(context, entry, zoomed.bodySmall),
       text(entry.manufacturer, lines: 1),
       text(entry.model, lines: 1),
       text(entry.partNumber, lines: 1),

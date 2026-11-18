@@ -239,4 +239,43 @@ void main() {
       );
     });
   });
+  group('sorting', () {
+    const a = ProcurementEntry(id: 'a', room: 'Rm 10', device: 'Switcher');
+    const b = ProcurementEntry(
+      id: 'b',
+      room: 'Rm 9',
+      device: 'Switcher',
+      status: ProcurementStatus.released,
+    );
+    const c = ProcurementEntry(
+      id: 'c',
+      room: 'Rm 9',
+      device: 'Display',
+      status: ProcurementStatus.submitted,
+    );
+    const d = ProcurementEntry(id: 'd', room: 'Rm 10', device: '');
+
+    test('by room runs A-Z, however late a room first appears', () {
+      const e = ProcurementEntry(id: 'e', room: 'Rm 9A', device: 'Mic');
+      expect(
+        [
+          for (final g
+              in procurementGrouped([e, a, b, c, d], ProcurementSort.room))
+            g.room,
+        ],
+        ['Rm 9', 'Rm 9A', 'Rm 10'],
+      );
+    });
+
+    test('by device runs A-Z, blanks last, rooms in number order', () {
+      final g = procurementGrouped([a, b, c, d], ProcurementSort.device);
+      expect([for (final x in g) x.room], ['Display', 'Switcher', '']);
+      expect([for (final e in g[1].entries) e.id], ['b', 'a']);
+    });
+
+    test('by status goes in workflow order', () {
+      final g = procurementGrouped([a, b, c], ProcurementSort.status);
+      expect([for (final x in g) x.room], ['Submitted', 'Released', '']);
+    });
+  });
 }

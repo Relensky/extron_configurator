@@ -814,6 +814,62 @@ void main() {
       expect(row(lines.first.id), findsOneWidget);
     });
 
+    testWidgets('pressing a band\'s name folds it, and sort regroups lines',
+        (tester) async {
+      final p = await opened(tester);
+      final lines = liveProcurement(p.project, p.priceProject());
+      final first =
+          lines.firstWhere((e) => e.room == 'Bessey 101' && e.device != '');
+      Finder row(String id) => find.byKey(ValueKey('procurement_row_$id'));
+
+      // The band's text, not its arrow.
+      await tester.tap(find.textContaining('Bessey 101  ·').first);
+      await tester.pumpAndSettle();
+      expect(row(first.id), findsNothing);
+      await tester.tap(find.textContaining('Bessey 101  ·').first);
+      await tester.pumpAndSettle();
+      expect(row(first.id), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('procurement_sort')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Device').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(ValueKey('procurement_band_${first.device.trim()}')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('procurement_remove_section_Bessey 101')),
+        findsNothing,
+        reason: 'a device band is not a room',
+      );
+    });
+
+    testWidgets('a line\'s Room # opens that room\'s Cost page on the line',
+        (tester) async {
+      final p = await opened(tester);
+      final first = liveProcurement(p.project, p.priceProject())
+          .firstWhere((e) => e.linked);
+
+      await tester.tap(
+        find.byKey(ValueKey('procurement_room_link_${first.id}')),
+      );
+      // Opening reads the room off disk, in real time.
+      for (var i = 0; i < 10 && p.openProjectRoom == null; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+      }
+      expect(find.byKey(const ValueKey('procurement_editor_save')),
+          findsNothing, reason: 'the link, not the row\'s editor');
+      expect(p.openProjectRoom?.id, first.roomId);
+      expect(p.selectedTabIndex, AppTab.cost.index);
+
+      await tester.pump(const Duration(seconds: 7));
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('the page can be taken as a picture', (tester) async {
       await opened(tester);
       await tester.tap(find.byKey(const ValueKey('procurement_export_image')));

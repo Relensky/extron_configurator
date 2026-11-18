@@ -470,7 +470,10 @@ int procurementInkFor(int argb) {
 String _hex(int argb) =>
     (argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
 
-/// The entries grouped by room, rooms in the order they first appear.
+/// The entries grouped by room, rooms A-Z ('HIL 201' before 'HIL 201D'),
+/// lines with no room last, and lines within a room as kept. Not the order
+/// rooms first appear: a room none of whose lines has been edited would
+/// otherwise always come last.
 List<({String room, List<ProcurementEntry> entries})> procurementByRoom(
   List<ProcurementEntry> entries,
 ) {
@@ -478,8 +481,86 @@ List<({String room, List<ProcurementEntry> entries})> procurementByRoom(
   for (final e in entries) {
     groups.putIfAbsent(e.room.trim(), () => []).add(e);
   }
+  final rooms = groups.keys.toList()
+    ..sort((a, b) {
+      if (a.isEmpty != b.isEmpty) return a.isEmpty ? 1 : -1;
+      return compareProcurementText(a, b);
+    });
+  return [for (final r in rooms) (room: r, entries: groups[r]!)];
+}
+
+/// What the procurement grid can sort its lines by.
+enum ProcurementSort {
+  room('Room'),
+  device('Device'),
+  manufacturer('Manufacturer'),
+  model('Model'),
+  company('Company'),
+  status('Status');
+
+  final String label;
+  const ProcurementSort(this.label);
+
+  /// What [e] is filed under.
+  String keyOf(ProcurementEntry e) => switch (this) {
+    room => e.room.trim(),
+    device => e.device.trim(),
+    manufacturer => e.manufacturer.trim(),
+    model => e.model.trim(),
+    company => e.company.trim(),
+    status => e.status.label,
+  };
+}
+
+/// [a] against [b], ignoring case, digit runs by value: 'Rm 9' before 'Rm 10'.
+int compareProcurementText(String a, String b) {
+  final re = RegExp(r'\d+|\D+');
+  final pa = re.allMatches(a.toLowerCase()).map((m) => m[0]!).toList();
+  final pb = re.allMatches(b.toLowerCase()).map((m) => m[0]!).toList();
+  for (var i = 0; i < pa.length && i < pb.length; i++) {
+    final na = int.tryParse(pa[i]);
+    final nb = int.tryParse(pb[i]);
+    final c = na != null && nb != null
+        ? na.compareTo(nb)
+        : pa[i].compareTo(pb[i]);
+    if (c != 0) return c;
+  }
+  return pa.length.compareTo(pb.length);
+}
+
+/// The entries grouped by [sort]. By room: see [procurementByRoom].
+/// Otherwise groups run A-Z (statuses in workflow
+/// order), blanks last, and lines
+/// within one run by room, then device.
+List<({String room, List<ProcurementEntry> entries})> procurementGrouped(
+  List<ProcurementEntry> entries,
+  ProcurementSort sort,
+) {
+  if (sort == ProcurementSort.room) return procurementByRoom(entries);
+  final groups = <String, List<ProcurementEntry>>{};
+  for (final e in entries) {
+    groups.putIfAbsent(sort.keyOf(e), () => []).add(e);
+  }
+  final keys = groups.keys.toList()
+    ..sort((a, b) {
+      if (a.isEmpty != b.isEmpty) return a.isEmpty ? 1 : -1;
+      // Statuses in the order a submittal goes through them.
+      if (sort == ProcurementSort.status) {
+        int at(String l) =>
+            ProcurementStatus.values.indexWhere((s) => s.label == l);
+        return at(a).compareTo(at(b));
+      }
+      return compareProcurementText(a, b);
+    });
   return [
-    for (final g in groups.entries) (room: g.key, entries: g.value),
+    for (final k in keys)
+      (
+        room: k,
+        entries: [...groups[k]!]..sort((a, b) {
+          final r = compareProcurementText(a.room.trim(), b.room.trim());
+          return r != 0 ? r : compareProcurementText(a.device, b.device);
+        }),
+      ),
   ];
 }
 
