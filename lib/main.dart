@@ -6,6 +6,8 @@ import 'team/team_widgets.dart';
 import 'team_setup.dart';
 import 'hover_fade.dart';
 import 'collapsible_bar.dart';
+import 'form_factor.dart';
+import 'phone_tab_bar.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -1146,6 +1148,7 @@ class _MainDashboardState extends State<MainDashboard> {
       const SaveToolbar(),
     ];
 
+    final phone = isPhone(context);
     final page = Scaffold(
       appBar: AppBar(
         // THE FILE MENU AND THE STEPS AT THE LEFT, THE APP AT THE RIGHT.
@@ -1185,6 +1188,8 @@ class _MainDashboardState extends State<MainDashboard> {
                     // [toolbarUndoTarget].
                     ToolbarUndoButtons(tab: currentTab),
                     // WHO CHANGED WHAT, from wherever you are standing.
+                    // (Not on a phone: the bar has room for the essentials.)
+                    if (!phone)
                     IconButton(
                       key: const ValueKey('show_history'),
                       icon: const Icon(Icons.history),
@@ -1196,6 +1201,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     // '<name>_previous.json' copy the save took of the file
                     // beforehand. Not Undo - it reads a FILE off disk and
                     // replaces the room with it.
+                    if (!phone)
                     IconButton(
                       key: const ValueKey('revert_to_backup'),
                       icon: const Icon(Icons.settings_backup_restore),
@@ -1217,7 +1223,7 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
             ),
             const SizedBox(width: 12),
-            if (!projectIsOpen(provider)) ...const [
+            if (!projectIsOpen(provider) && !phone) ...const [
               Flexible(
                 child: Text(
                   'Room Config Builder',
@@ -1283,11 +1289,12 @@ class _MainDashboardState extends State<MainDashboard> {
         // window's title bar.
         toolbarHeight: _isMobile ? 44 : null,
         actions: [
-          if (!provider.settingsOpen)
+          if (!provider.settingsOpen && !phone)
             _ScreenshotButton(
               onCost: onCost,
               onScreen: () => _takeScreenshot(context, selectedIndex),
             ),
+          if (!phone)
           IconButton(
             key: const ValueKey('global_search'),
             tooltip: 'Search every chat and project',
@@ -1343,6 +1350,8 @@ class _MainDashboardState extends State<MainDashboard> {
           // column of labels, and the tab you are on is the only one you are
           // reading. The scrolling and the label sizing that make that
           // survivable live in [AppNavRail].
+          // iPhone: no rail at all - the tabs are the bar along the bottom.
+          if (!phone)
           SidePane(
             side: PaneSide.left,
             title: 'Tabs',
@@ -1383,7 +1392,8 @@ class _MainDashboardState extends State<MainDashboard> {
               // A floor under every page: narrower than this and the page
               // scrolls sideways with a scrollbar instead of being cut off.
               child: MinWidthScroll(
-                minWidth: 640,
+                // iPhone: the page is laid out to the phone's own width.
+                minWidth: phone ? 0 : 640,
                 // Lists scroll clear of the hovering chat button.
                 child: ChatButtonClearance(
                   child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
@@ -1407,6 +1417,14 @@ class _MainDashboardState extends State<MainDashboard> {
         ],
       ),
           ),
+          // iPhone: the tabs, along the bottom where a thumb reaches them.
+          if (phone)
+            PhoneTabBar(
+              selectedIndex: selectedIndex,
+              onSelect: provider.selectTab,
+              hasConfig: hasConfig,
+              estimateOnly: provider.isEstimateRoom,
+            ),
         ],
       ),
     );
@@ -2215,7 +2233,8 @@ class TopLevelBar extends StatelessWidget {
               (onProject ? FilledButton.icon : FilledButton.tonalIcon)(
                 key: const ValueKey('banner_project'),
                 icon: const Icon(Icons.apartment, size: 22),
-                label: const Text('Project'),
+                // iPhone: the icon says it; the word took a third of the bar.
+                label: Text(isPhone(context) ? '' : 'Project'),
                 style: FilledButton.styleFrom(
                   padding: EdgeInsets.symmetric(horizontal: _isMobile ? 14 : 24),
                   minimumSize: Size(0, _isMobile ? 34 : 44),
@@ -2299,7 +2318,8 @@ class TopLevelBar extends StatelessWidget {
               Chip(
                 key: const ValueKey('banner_room'),
                 avatar: const Icon(Icons.meeting_room_outlined, size: 22),
-                label: Text('Room', style: theme.textTheme.titleMedium),
+                label: Text(isPhone(context) ? '' : 'Room',
+                    style: theme.textTheme.titleMedium),
                 padding: EdgeInsets.symmetric(
                     horizontal: 10, vertical: _isMobile ? 2 : 8),
               ),
@@ -2431,6 +2451,7 @@ const List<String> kMobileStartFolded = [
   'plan_toolbar', 'plan_sheets', 'plan_off_sheet', 'plan_cable_runs',
   'plan_locations', 'cabling_toolbar', 'schematic_toolbar', 'rack_header',
   'walls_header', 'av_toolbar', 'flow_rules_toolbar', 'schema_toolbar',
+  'rack_tools', 'catalog_filters',
 ];
 
 /// The project bar folded: a thin strip that brings it back.

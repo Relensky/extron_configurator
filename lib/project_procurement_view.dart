@@ -12,6 +12,7 @@ import 'building_project.dart';
 import 'color_wheel_picker.dart';
 import 'column_drag.dart';
 import 'file_dialogs.dart';
+import 'form_factor.dart' show isMobileDevice;
 import 'name_colors.dart' show kNameTintWheel;
 import 'pinned_grid.dart';
 import 'procurement_log.dart';
@@ -297,6 +298,8 @@ class _Toolbar extends StatelessWidget {
       final c = _statusColors(theme, s);
       return Chip(
         visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: isMobileDevice ? EdgeInsets.zero : null,
         backgroundColor: c.fill,
         side: BorderSide.none,
         label: Text(
@@ -306,14 +309,47 @@ class _Toolbar extends StatelessWidget {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+    // iPad / iPhone: the same buttons, slimmer - the three that are about the
+    // sheet rather than a line are icons, and every one is the compact height.
+    final slim = isMobileDevice;
+    Widget sheetButton({
+      required Key key,
+      required IconData icon,
+      required String label,
+      required VoidCallback onPressed,
+    }) =>
+        slim
+            ? IconButton.outlined(
+                key: key,
+                tooltip: label,
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                onPressed: onPressed,
+                icon: Icon(icon),
+              )
+            : OutlinedButton.icon(
+                key: key,
+                onPressed: onPressed,
+                icon: Icon(icon, size: 18),
+                label: Text(label),
+              );
+
+    final toolbar = Padding(
+      padding: slim
+          ? const EdgeInsets.fromLTRB(16, 6, 16, 4)
+          : const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Wrap(
-        spacing: 12,
-        runSpacing: 8,
+        spacing: slim ? 6 : 12,
+        runSpacing: slim ? 4 : 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           FilledButton.tonalIcon(
+            style: slim
+                ? FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  )
+                : null,
             key: const ValueKey('procurement_add'),
             onPressed: () async {
               final added = await showProcurementEditor(
@@ -326,40 +362,40 @@ class _Toolbar extends StatelessWidget {
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Add a line'),
           ),
-          OutlinedButton.icon(
+          sheetButton(
             key: const ValueKey('procurement_columns'),
             onPressed: () => showDialog<void>(
               context: context,
               builder: (_) => const _ColumnsDialog(),
             ),
-            icon: const Icon(Icons.view_column_outlined, size: 18),
-            label: const Text('Columns'),
+            icon: Icons.view_column_outlined,
+            label: 'Columns',
           ),
           if (provider.hiddenProcurementCount > 0)
-            OutlinedButton.icon(
+            sheetButton(
               key: const ValueKey('procurement_restore'),
               onPressed: () => showDialog<void>(
                 context: context,
                 builder: (_) => const _RestoreRoomsDialog(),
               ),
-              icon: const Icon(Icons.playlist_add, size: 18),
-              label: const Text('Add rooms back'),
+              icon: Icons.playlist_add,
+              label: 'Add rooms back',
             ),
           if (entries.isNotEmpty) ...[
-            OutlinedButton.icon(
+            sheetButton(
               key: const ValueKey('procurement_export_xlsx'),
               onPressed: () => _exportSpreadsheet(context),
-              icon: const Icon(Icons.table_view, size: 18),
-              label: const Text('Spreadsheet'),
+              icon: Icons.table_view,
+              label: 'Spreadsheet',
             ),
-            OutlinedButton.icon(
+            sheetButton(
               key: const ValueKey('procurement_export_image'),
               onPressed: () => showDialog<void>(
                 context: context,
                 builder: (_) => const _ProcurementImageDialog(),
               ),
-              icon: const Icon(Icons.image_outlined, size: 18),
-              label: const Text('Image'),
+              icon: Icons.image_outlined,
+              label: 'Image',
             ),
             Text(
               '${entries.length} line${entries.length == 1 ? '' : 's'}',
@@ -373,6 +409,7 @@ class _Toolbar extends StatelessWidget {
         ],
       ),
     );
+    return toolbar;
   }
 }
 
@@ -465,7 +502,9 @@ class _LogGridState extends State<_LogGrid> {
             return (id: c.id, label: c.label, width: _baseWidth(c.id, c.width));
           }(),
     ];
-    final frozenBase = _baseWidth('device', _kFrozen);
+    // iPad / iPhone: the device column gives up a third of its width - the
+    // names still fit in two lines, and the columns beside it come on screen.
+    final frozenBase = _baseWidth('device', isMobileDevice ? 180 : _kFrozen);
     final natural =
         gridMetric(context, frozenBase) +
         _cols.fold<double>(0, (s, c) => s + gridMetric(context, c.width));
@@ -500,8 +539,29 @@ class _LogGridState extends State<_LogGrid> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
+          // iPad / iPhone: the help is behind the (i), and the controls wrap
+          // onto a second line rather than run off a phone's edge.
+          (isMobileDevice
+              ? (List<Widget> c) => Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: c,
+                  )
+              : (List<Widget> c) => Row(children: c))([
+              if (isMobileDevice)
+                Tooltip(
+                  triggerMode: TooltipTriggerMode.tap,
+                  showDuration: const Duration(seconds: 8),
+                  message: 'Tap a line to edit it. Tap a status or a date to '
+                      'change just that. Tap a section\'s band to fold or '
+                      'open it. Drag a heading by its grip to move the '
+                      'column, or tap it to rename, recolor or delete it.',
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Icon(Icons.info_outline,
+                        size: 20, color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              if (!isMobileDevice)
               Expanded(
                 child: Text(
                   'Press a line to edit it. Press a status or a date to '
@@ -514,6 +574,7 @@ class _LogGridState extends State<_LogGrid> {
                   ),
                 ),
               ),
+              if (!isMobileDevice)
               Text('Sort by', style: theme.textTheme.bodyMedium),
               const SizedBox(width: 8),
               DropdownButton<ProcurementSort>(
@@ -523,7 +584,10 @@ class _LogGridState extends State<_LogGrid> {
                 underline: const SizedBox.shrink(),
                 items: [
                   for (final s in ProcurementSort.values)
-                    DropdownMenuItem(value: s, child: Text(s.label)),
+                    DropdownMenuItem(
+                      value: s,
+                      child: Text(isMobileDevice ? 'By ${s.label}' : s.label),
+                    ),
                 ],
                 onChanged: (s) => setState(() {
                   if (s == null || s == _sort) return;
@@ -539,7 +603,11 @@ class _LogGridState extends State<_LogGrid> {
                   allFolded ? Icons.unfold_more : Icons.unfold_less,
                   size: 18,
                 ),
-                label: Text(allFolded ? 'Expand all' : 'Collapse all'),
+                // iPad / iPhone: the icon alone; the words took a quarter of
+                // the row.
+                label: isMobileDevice
+                    ? const SizedBox.shrink()
+                    : Text(allFolded ? 'Expand all' : 'Collapse all'),
                 onPressed: () => setState(() {
                   if (allFolded) {
                     _foldedRooms.clear();
@@ -562,8 +630,7 @@ class _LogGridState extends State<_LogGrid> {
                   _fit = !_fit;
                 }),
               ),
-            ],
-          ),
+            ]),
           const SizedBox(height: 4),
           Expanded(
             child: LayoutBuilder(
@@ -889,7 +956,11 @@ class _LogGridState extends State<_LogGrid> {
                 ),
                 Expanded(
                   child: Text(
-                    '$name  ·  ${row.count} line${row.count == 1 ? '' : 's'}',
+                    // iPad / iPhone: the count as a bare number, so the room
+                    // name keeps the narrower column.
+                    isMobileDevice
+                        ? '$name (${row.count})'
+                        : '$name  ·  ${row.count} line${row.count == 1 ? '' : 's'}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: zoomed.titleSmall?.copyWith(

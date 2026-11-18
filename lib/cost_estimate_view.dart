@@ -1,4 +1,5 @@
 import 'file_dialogs.dart';
+import 'form_factor.dart' show isPhone;
 import 'cost_estimate_actions.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -264,6 +265,12 @@ final bool _compactCost = Platform.isIOS || Platform.isAndroid;
 /// The least a flex column gets in the compact layout.
 const double _kCompactFlexWidth = 36;
 
+/// iPhone: no table at all. Each line is a card - its name and model across
+/// the top, and every figure under them with its own small caption - so the
+/// estimate reads down the phone instead of off its right-hand edge. Set by
+/// the page as it builds; read by [_CostEstimateViewState._gridRow].
+bool _phoneCost = false;
+
 /// [columns] as the compact layout draws them - see [_compactCost]. The
 /// desktop gets them unchanged.
 List<_Col> _fitColumns(List<_Col> columns) {
@@ -304,8 +311,9 @@ double _tableMinWidth(List<_Col> columns) {
 /// How wide the page has to be before it scrolls sideways instead. Measured
 /// off the widest table, so a narrow window scrolls rather than squeezing
 /// Device and Model down to nothing.
-double _costPageMinWidth(bool shipping) =>
-    _kTableChrome +
+double _costPageMinWidth(bool shipping) => _phoneCost
+    ? 0
+    : _kTableChrome +
     [
       _withShipping(_kEquipmentCols, shipping),
       _withShipping(_kHardwareCols, shipping),
@@ -837,6 +845,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
 
   @override
   Widget build(BuildContext context) {
+    // iPhone: every line a card - see [_phoneCost].
+    _phoneCost = isPhone(context);
     final provider = context.watch<AppStateProvider>();
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
@@ -8560,6 +8570,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       'the grid needs one cell per column: ${cells.length} for '
       '${columns.length}',
     );
+    if (_phoneCost) return _phoneCard(columns, cells, caption: caption);
     if (_compactCost) {
       // The same cells, fitted to the screen - see [_fitColumns].
       final fitCols = <_Col>[];
@@ -8591,6 +8602,80 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       ],
     );
   }
+}
+
+/// One line of a table as a card, for the iPhone - see [_phoneCost].
+///
+/// The name-like (flex) cells share the top line; every fixed cell goes under
+/// them with its caption over it, wrapping onto as many lines as the phone
+/// needs. The row's buttons sit behind its "more" button at the end. The
+/// caption row itself is not drawn: each figure carries its own.
+Widget _phoneCard(
+  List<_Col> columns,
+  List<Widget> cells, {
+  required bool caption,
+}) {
+  if (caption) return const SizedBox.shrink();
+  final top = <Widget>[];
+  final figures = <Widget>[];
+  Widget? buttons;
+  for (int i = 0; i < columns.length; i++) {
+    final c = columns[i];
+    if (c.text == 'Price from') continue;
+    if (_isButtonColumn(c) || (c.text.isEmpty && c.flex == 0)) {
+      buttons = _RowButtonsMenu(child: cells[i]);
+      continue;
+    }
+    if (c.flex > 0) {
+      top.add(Expanded(flex: c.flex, child: cells[i]));
+      continue;
+    }
+    figures.add(
+      SizedBox(
+        width: c.compact().width,
+        child: Builder(
+          builder: (context) => Column(
+            crossAxisAlignment: c.align == TextAlign.right
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                c.text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              cells[i],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (top.isNotEmpty || buttons != null)
+          Row(children: [...top, ?buttons]),
+        if (figures.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.end,
+              children: figures,
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 /// One column of a table caption, mirroring the cell under it.
@@ -9011,6 +9096,29 @@ class _CardHeading extends StatelessWidget {
       ],
     );
     if (actions.isEmpty) return heading;
+
+    // iPhone: the heading on its own line and the buttons under it, compact,
+    // rather than a column of them down the right with the words squeezed to
+    // the left.
+    if (isPhone(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          heading,
+          const SizedBox(height: 6),
+          Theme(
+            data: theme.copyWith(visualDensity: VisualDensity.compact),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 4,
+              children: actions,
+            ),
+          ),
+        ],
+      );
+    }
 
     // A ROW, NOT A WRAP. Wrapping put the buttons where the eye does not look
     // for them: the subtitle is a whole sentence and takes what it is given,

@@ -5,6 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import 'form_factor.dart' show isMobileDevice;
+
 import 'app_state.dart';
 import 'collapsible_bar.dart';
 import 'contrast.dart';
@@ -67,6 +69,25 @@ class AvRackView extends StatefulWidget {
 
 class _AvRackViewState extends State<AvRackView> {
   final TransformationController _transform = TransformationController();
+
+  @override
+  void initState() {
+    super.initState();
+    // iPad / iPhone: the whole elevation on screen when the tab opens, front
+    // and rear together, instead of the rear half off the right-hand edge.
+    if (isMobileDevice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final provider = context.read<AppStateProvider>();
+        if (provider.avRacks.isEmpty) return;
+        fitToViewport(
+          controller: _transform,
+          contentKey: widget.captureKey,
+          viewportKey: _viewportKey,
+        );
+      });
+    }
+  }
 
   /// The window the elevations are looked at through, so "Fit to view" can
   /// measure it. The canvas itself is measured through [widget.captureKey],

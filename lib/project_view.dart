@@ -41,6 +41,7 @@ import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
 import 'project_plans_view.dart';
 import 'project_pricing.dart';
+import 'form_factor.dart' show isPhone;
 import 'procurement_log.dart' show kProcurementCompanies;
 import 'procurement_sync.dart' show liveProcurement;
 import 'project_procurement_view.dart'
@@ -1370,6 +1371,25 @@ class _ProjectViewState extends State<ProjectView> {
         const SizedBox(height: 8),
         stakeholder,
         const SizedBox(height: 8),
+        // iPhone: two to a row - four fields across a phone left each a
+        // letter or two wide.
+        if (isPhone(context)) ...[
+          Row(
+            children: [
+              Expanded(child: building),
+              const SizedBox(width: 8),
+              Expanded(child: job),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              SizedBox(width: 100, child: tax),
+              const SizedBox(width: 8),
+              Expanded(child: buildDate),
+            ],
+          ),
+        ] else
         Row(
           children: [
             Expanded(child: building),

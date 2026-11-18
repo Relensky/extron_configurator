@@ -37,7 +37,8 @@ import '../app_paths.dart';
 
 /// [path] as this device reaches it: a \\doit-files path under the picked
 /// share folder (or its offline copy) on iOS; anything else as it was.
-String sharePath(String path) => IosShare.translate(path);
+String sharePath(String path) =>
+    IosShare.translate(rehomeIosContainerPath(path));
 
 /// The reverse of [sharePath]: a path under the picked folder or the offline
 /// copy as the \\doit-files path the Windows apps use, so what is written into

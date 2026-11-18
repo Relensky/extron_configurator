@@ -60,6 +60,29 @@ String? iosDocumentsDirOrNull() {
   return home == null ? null : path.join(home, 'Documents');
 }
 
+/// [p] moved into this run's app container when it names an older one.
+///
+/// iOS gives the app a new container folder (a new UUID in
+/// `.../Data/Application/<UUID>/`) whenever it is reinstalled or updated, so an
+/// absolute path remembered last week - a recent file, a project's room -
+/// points into a folder that no longer exists. The file is still there, under
+/// the new UUID. Anything else is returned as it was.
+String rehomeIosContainerPath(String p) {
+  if (!Platform.isIOS) return p;
+  final home = _iosContainerOrNull();
+  if (home == null) return p;
+  final m = _kContainerPath.firstMatch(p);
+  if (m == null) return p;
+  final old = p.substring(0, m.end);
+  if (old == home) return p;
+  return '$home${p.substring(m.end)}';
+}
+
+final RegExp _kContainerPath = RegExp(
+  r'^/.*/Data/Application/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-'
+  r'[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}(?=/|$)',
+);
+
 /// The app's sandbox container on iOS, the folder that holds Documents,
 /// Library and tmp. A Flutter app on iOS gets no HOME in
 /// [Platform.environment], so it comes from the temp folder, which iOS puts at

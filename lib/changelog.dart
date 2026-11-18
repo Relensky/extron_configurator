@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.216+226';
+const String kAppVersion = '0.5.217+227';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,20 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.217',
+    date: 'November 18, 2026',
+    title: 'iPhone, and a slimmer procurement log',
+    changes: [
+      'iPhone: a slimmer app. The tabs are a bar along the bottom - Cost, Lifecycle, Wizard, Floor Plan, Walls, Racks and Photos, with Project first when a job is open - and every page is laid out to the phone\'s width instead of scrolling sideways.',
+      'iPhone: each cost line is a card - its name and model on top, every figure under them with its own caption - with its buttons behind the ... button. The cost headings put their buttons under the title, and the job\'s fields go two to a row.',
+      'iPhone: the top bar keeps the file menu, undo, redo, the share and you; History, Revert, Screenshot and Search stay on the iPad and the desktop. Project and Room in the bar are their icons.',
+      'iPad and iPhone: AV procurement is slimmer - Columns, Spreadsheet and Image are icon buttons, the help is behind the (i), the room bands read "ARTS 105 (4)" and the device column is narrower, so more of the log is on screen.',
+      'iPad and iPhone: the rack elevation fits the screen when its tab opens, and the rack tools start folded like the other toolbars.',
+      'The "Tabs" heading over the tab rail shrinks to fit instead of reading "T...".',
+      'iPad and iPhone: recent files and rooms saved before an app update open again - iOS moves the app\'s folder on every update, and the old paths are followed to the new one.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.216',
     date: 'November 18, 2026',

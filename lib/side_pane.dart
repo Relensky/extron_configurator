@@ -282,12 +282,18 @@ class _SidePaneState extends State<SidePane> {
         height: 30,
         child: Row(
           children: [
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
+            // Shrunk to fit rather than cut to "T..." - the tab rail at its
+            // narrowest left only a letter of "Tabs".
             Expanded(
-              child: Text(
-                widget.title,
-                style: theme.textTheme.labelMedium,
-                overflow: TextOverflow.ellipsis,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  widget.title,
+                  style: theme.textTheme.labelMedium,
+                  maxLines: 1,
+                ),
               ),
             ),
             IconButton(

@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+
+import 'app_paths.dart' show rehomeIosContainerPath;
 import 'room_sidecar.dart' show roomStem;
 
 /// ============================================================================
@@ -122,7 +124,9 @@ class RecentFile {
     final file = raw['file']?.toString().trim() ?? '';
     if (file.isEmpty) return null;
     return RecentFile(
-      file: file,
+      // iOS: the app's folder moves on every update - see
+      // [rehomeIosContainerPath]. Nothing anywhere else.
+      file: rehomeIosContainerPath(file),
       name: raw['name']?.toString() ?? '',
       touchedAt: DateTime.tryParse(raw['touchedAt']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
