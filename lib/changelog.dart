@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.222+232';
+const String kAppVersion = '0.5.224+234';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,29 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.224',
+    date: 'November 19, 2026',
+    title: 'Project sections across the top, phone fixes',
+    changes: [
+      'Project: the sections - Rooms, Labor, Equipment, Plans, Timeline, Deliveries, Lifecycle and the rest - run across the full width under the project bar and stay there while the page scrolls, each an icon over its name, on the desktop, the iPad and the iPhone. Where they would be squeezed - an iPhone, a large Interface Size - the strip scrolls sideways instead of shrinking the words.',
+      'iPhone: Floor Plan\'s Sheet and Look groups sit under the title instead of being squeezed to lines beside it, and the sheets have a row of their own with Add sheet and the sheet\'s buttons under them.',
+      'iPhone: messages pop up above the tab bar instead of over it.',
+      'iPad and iPhone: a folded side pane - AV Flow\'s Devices, Floor Plan\'s Sheet & locations - is a plain tab at the edge, not the selected color.',
+      'Quotes: on a narrow screen each vendor\'s boxes stack, so its trash can stays on screen.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.223',
+    date: 'November 19, 2026',
+    title: 'Every tab on the iPhone, a whole job offline, landscape',
+    changes: [
+      'iPhone: the bar along the bottom scrolls sideways to every tab - Schematic, AV Flow, Cabling, Devices and the rest after the everyday ones - and keeps the tab you are on in view.',
+      'iPad and iPhone: Download all of a job, in the share panel, keeps the job, every room and every building plan on the device, wherever on the share they are, and keeps them syncing.',
+      'iPhone on its side: the top bar is slimmer, the project bar folds to a strip (tap it to bring it back) and the tabs are icons only.',
+      'iPhone: Floor Plan\'s folded bars share one row of chips instead of a full line each, and the Sheet & locations panel is a blue tab on the right edge that opens across the screen.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.222',
     date: 'November 19, 2026',

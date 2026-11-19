@@ -374,3 +374,67 @@ class _ScrollingHeaderState extends State<ScrollingHeader> {
     );
   }
 }
+
+/// Several [CollapsibleBar]s, one under another - except that on an iPad or
+/// iPhone the folded ones share ONE row as small chips, instead of each
+/// taking a full-width line to say its name. An open bar keeps its own row.
+class CollapsibleBarGroup extends StatelessWidget {
+  final List<CollapsibleBar> bars;
+
+  /// Line the folded chips up in a row. Off, this is a plain column - the
+  /// desktop, where there is room.
+  final bool compact;
+
+  const CollapsibleBarGroup({
+    super.key,
+    required this.bars,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: bars,
+      );
+    }
+    final theme = Theme.of(context);
+    return ValueListenableBuilder<int>(
+      valueListenable: BarFolds.changes,
+      builder: (context, _, _) {
+        final folded = [for (final b in bars) if (BarFolds.isFolded(b.id)) b];
+        final open = [for (final b in bars) if (!BarFolds.isFolded(b.id)) b];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (folded.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    for (final b in folded)
+                      ActionChip(
+                        key: ValueKey('collapse_${b.id}'),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
+                        avatar: Icon(Icons.chevron_right,
+                            size: 16, color: theme.hintColor),
+                        label: Text(b.title,
+                            style: theme.textTheme.labelSmall),
+                        tooltip: 'Show ${b.title}',
+                        onPressed: () => BarFolds.toggle(b.id),
+                      ),
+                  ],
+                ),
+              ),
+            ...open,
+          ],
+        );
+      },
+    );
+  }
+}

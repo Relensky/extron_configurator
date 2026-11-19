@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import 'collapsible_bar.dart';
+import 'form_factor.dart' show isMobileDevice, isPhone;
 import 'file_dialogs.dart';
 import 'app_paths.dart' show userDataDirOrNull;
 import 'app_snack.dart';
@@ -1266,6 +1267,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
         _toolbar(provider, plan),
+        // iPad / iPhone: folded bars share one row of chips - see
+        // [CollapsibleBarGroup].
+        CollapsibleBarGroup(
+          compact: isMobileDevice,
+          bars: [
         if (provider.avFloorPlans.isNotEmpty)
           CollapsibleBar(
             id: 'plan_sheets',
@@ -1302,11 +1308,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             title: 'Notation',
             child: _notationBar(provider, plan),
           ),
-        const Divider(height: 1),
         CollapsibleBar(
           id: 'plan_locations',
           title: 'Locations',
           child: _CountStrip(model: model),
+        ),
+          ],
         ),
         const Divider(height: 1),
         ],
@@ -1658,14 +1665,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     if (sheets.isEmpty) return const SizedBox.shrink();
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Row(
-        children: [
-          Icon(Icons.layers_outlined, size: 16, color: theme.disabledColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: SingleChildScrollView(
+    final chips = SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
@@ -1700,9 +1700,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                     ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
+            );
+    final actions = <Widget>[
           TextButton.icon(
             icon: const Icon(Icons.add, size: 16),
             label: const Text('Add sheet'),
@@ -1746,6 +1745,37 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                       ),
             ),
           ],
+    ];
+    final layers =
+        Icon(Icons.layers_outlined, size: 16, color: theme.disabledColor);
+
+    // iPhone: the sheets on a row of their own, and Add sheet and the sheet's
+    // own buttons on the row under them - one row of both left the sheets a
+    // sliver between the icon and the buttons.
+    if (isPhone(context)) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [layers, const SizedBox(width: 8), Expanded(child: chips)]),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: actions,
+            ),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          layers,
+          const SizedBox(width: 8),
+          Expanded(child: chips),
+          const SizedBox(width: 8),
+          ...actions,
         ],
       ),
     );
@@ -1938,6 +1968,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   }
 
   Widget _toolbar(AppStateProvider provider, FloorPlan? plan) {
+    final phone = isPhone(context);
     // The sheet and what comes off it on the first line; what goes on it,
     // and what measures it, on the second.
     Widget line(List<Widget> children) => Wrap(
@@ -2438,17 +2469,26 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 ),
               ),
               const SizedBox(width: 4),
+              // iPhone: the groups go UNDER the title, full width - beside it
+              // they were squeezed to a few pixels and drew as bare lines.
+              if (!phone)
               Expanded(
                 child: _toolbarCollapsed
                     ? const SizedBox.shrink()
                     : groups([('Sheet', sheet), ('Look', look)]),
               ),
-              if (!_toolbarCollapsed) ...[
+              if (!_toolbarCollapsed && !phone) ...[
                 const SizedBox(width: 16),
                 line(output),
               ],
             ],
           ),
+          if (!_toolbarCollapsed && phone) ...[
+            const SizedBox(height: 4),
+            groups([('Sheet', sheet), ('Look', look)]),
+            const SizedBox(height: 8),
+            line(output),
+          ],
           if (!_toolbarCollapsed) ...[
             const SizedBox(height: 8),
             groups([

@@ -41,7 +41,7 @@ import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
 import 'project_plans_view.dart';
 import 'project_pricing.dart';
-import 'form_factor.dart' show isPhone;
+import 'form_factor.dart' show isPhone, phoneLandscape;
 import 'procurement_log.dart' show kProcurementCompanies;
 import 'procurement_sync.dart' show liveProcurement;
 import 'project_procurement_view.dart'
@@ -648,6 +648,20 @@ class _ProjectViewState extends State<ProjectView> {
       child: CustomScrollView(
         controller: _scroll,
         slivers: [
+          // The sections across the top of the page, pinned under the
+          // project bar - see [_PaneStrip]. Desktop, iPad and iPhone alike.
+          if (kPaneStrip)
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _PaneStripHeader(
+                height: _PaneStrip.heightFor(context),
+                child: _PaneStrip(
+                  selected: _pane,
+                  openTodos: openTodosForStrip(provider),
+                  onSelect: _showPane,
+                ),
+              ),
+            ),
           SliverToBoxAdapter(child: _header(context, provider, estimate)),
           const SliverToBoxAdapter(child: Divider(height: 1)),
           ...switch (_pane) {
@@ -1079,12 +1093,14 @@ class _ProjectViewState extends State<ProjectView> {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          if (!kPaneStrip) const SizedBox(height: 10),
           // The pane switcher on its own line now that the file actions have
           // gone up to the top of the tab. Still a Wrap rather than a bare
           // button: it keeps its natural width instead of being stretched to
           // the header's, and a switcher that has grown an eighth pane drops
           // onto a second line on a narrow window rather than overflowing it.
+          // (Replaced by the strip pinned across the top - [kPaneStrip].)
+          if (!kPaneStrip)
           Wrap(
             spacing: 12,
             runSpacing: 8,
@@ -8984,76 +9000,91 @@ class _VendorCard extends StatelessWidget {
     final bidding = estimate.project.rfqsFor(vendor.id);
     final won = estimate.project.rfqsAwardedTo(vendor.id);
 
+    final nameField = LiveTextField(
+      fieldId: 'vendor_name_${vendor.id}',
+      initial: vendor.name,
+      label: 'Vendor',
+      onChanged: (v) => provider.updateProjectVendor(vendor.copyWith(name: v)),
+    );
+    final contactField = LiveTextField(
+      fieldId: 'vendor_contact_${vendor.id}',
+      initial: vendor.contact,
+      label: 'Contact',
+      hint: 'who the request goes to',
+      onChanged: (v) =>
+          provider.updateProjectVendor(vendor.copyWith(contact: v)),
+    );
+    final notesField = LiveTextField(
+      fieldId: 'vendor_notes_${vendor.id}',
+      initial: vendor.notes,
+      label: 'Notes',
+      hint: 'account number, how they are to deal with',
+      onChanged: (v) => provider.updateProjectVendor(vendor.copyWith(notes: v)),
+    );
+    // WHERE THIS COMPANY STANDS ON THE JOB, in one line. Bidding two and
+    // holding one is the whole answer, and it is the only thing a vendor row
+    // can now say that the packages above do not.
+    final standing = Text(
+      bidding.isEmpty
+          ? 'not on any package'
+          : won.isEmpty
+          ? 'bidding ${bidding.length}'
+          : 'bidding ${bidding.length}, won ${won.length}',
+      textAlign: TextAlign.right,
+      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+    );
+    final remove = IconButton(
+      key: ValueKey('vendor_delete_${vendor.id}'),
+      tooltip: won.isEmpty
+          ? 'Remove this company and every bid it has on this job'
+          : 'Remove this company. Its ${won.length} award'
+                '${won.length == 1 ? '' : 's'} '
+                '${won.length == 1 ? 'is' : 'are'} taken back; the '
+                'purchase orders stay.',
+      icon: const Icon(Icons.delete_outline, size: 18),
+      onPressed: () => provider.removeProjectVendor(vendor.id),
+    );
+
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              flex: 2,
-              child: LiveTextField(
-                fieldId: 'vendor_name_${vendor.id}',
-                initial: vendor.name,
-                label: 'Vendor',
-                onChanged: (v) =>
-                    provider.updateProjectVendor(vendor.copyWith(name: v)),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 2,
-              child: LiveTextField(
-                fieldId: 'vendor_contact_${vendor.id}',
-                initial: vendor.contact,
-                label: 'Contact',
-                hint: 'who the request goes to',
-                onChanged: (v) =>
-                    provider.updateProjectVendor(vendor.copyWith(contact: v)),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 2,
-              child: LiveTextField(
-                fieldId: 'vendor_notes_${vendor.id}',
-                initial: vendor.notes,
-                label: 'Notes',
-                hint: 'account number, how they are to deal with',
-                onChanged: (v) =>
-                    provider.updateProjectVendor(vendor.copyWith(notes: v)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            // WHERE THIS COMPANY STANDS ON THE JOB, in one line. Bidding two
-            // and holding one is the whole answer, and it is the only thing a
-            // vendor row can now say that the packages above do not.
-            SizedBox(
-              width: 150,
-              child: Text(
-                bidding.isEmpty
-                    ? 'not on any package'
-                    : won.isEmpty
-                    ? 'bidding ${bidding.length}'
-                    : 'bidding ${bidding.length}, won ${won.length}',
-                textAlign: TextAlign.right,
-                style: theme.textTheme.bodySmall?.copyWith(color: muted),
-              ),
-            ),
-            IconButton(
-              key: ValueKey('vendor_delete_${vendor.id}'),
-              tooltip: won.isEmpty
-                  ? 'Remove this company and every bid it has on this job'
-                  : 'Remove this company. Its ${won.length} award'
-                        '${won.length == 1 ? '' : 's'} '
-                        '${won.length == 1 ? 'is' : 'are'} taken back; the '
-                        'purchase orders stay.',
-              icon: const Icon(Icons.delete_outline, size: 18),
-              onPressed: () => provider.removeProjectVendor(vendor.id),
-            ),
-          ],
-        ),
+        // NARROW - an iPad held upright, a phone: the three boxes one under
+        // another and the standing and trash can on a line of their own. In
+        // one row the trash can was pushed off the right-hand edge.
+        child: LayoutBuilder(builder: (context, box) {
+          if (box.maxWidth < 720) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                nameField,
+                const SizedBox(height: 6),
+                contactField,
+                const SizedBox(height: 6),
+                notesField,
+                Row(
+                  children: [
+                    Expanded(child: standing),
+                    remove,
+                  ],
+                ),
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(flex: 2, child: nameField),
+              const SizedBox(width: 8),
+              Expanded(flex: 2, child: contactField),
+              const SizedBox(width: 8),
+              Expanded(flex: 2, child: notesField),
+              const SizedBox(width: 12),
+              SizedBox(width: 150, child: standing),
+              remove,
+            ],
+          );
+        }),
       ),
     );
   }
@@ -9734,4 +9765,170 @@ class _PartSortMenu extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// The project's sections are a strip pinned across the top of the page
+/// ([_PaneStrip]) rather than a segmented button inside the header.
+const bool kPaneStrip = true;
+
+/// The open to-do count the pane strip shows on To do.
+int openTodosForStrip(AppStateProvider provider) =>
+    provider.project.openTodos.length;
+
+/// The project's sections - Rooms, Labor, Equipment, Plans, Timeline and the
+/// rest - as one strip across the full width of an iPad or iPhone, pinned
+/// under the project bar so it is always in reach.
+///
+/// On an iPad every section shares the width, each an icon over its name at a
+/// size that reads. Where they would be squeezed past that - an iPhone, a
+/// large Interface Size - each keeps a fixed width and the strip scrolls
+/// sideways, with the section that is open kept in view.
+class _PaneStrip extends StatefulWidget {
+  final _ProjectPane selected;
+  final int openTodos;
+  final ValueChanged<_ProjectPane> onSelect;
+
+  const _PaneStrip({
+    required this.selected,
+    required this.openTodos,
+    required this.onSelect,
+  });
+
+  /// The narrowest a section may be before the strip scrolls instead.
+  static const double _minTile = 72;
+
+  static double heightFor(BuildContext context) =>
+      phoneLandscape(context) ? 40 : (isPhone(context) ? 52 : 58);
+
+  @override
+  State<_PaneStrip> createState() => _PaneStripState();
+}
+
+class _PaneStripState extends State<_PaneStrip> {
+  final _keys = <_ProjectPane, GlobalKey>{};
+
+  @override
+  void didUpdateWidget(_PaneStrip old) {
+    super.didUpdateWidget(old);
+    if (old.selected != widget.selected) _reveal();
+  }
+
+  void _reveal() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _keys[widget.selected]?.currentContext;
+      if (ctx == null || !mounted) return;
+      Scrollable.ensureVisible(ctx,
+          alignment: 0.5, duration: const Duration(milliseconds: 200));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final flat = phoneLandscape(context);
+    return Material(
+      color: theme.colorScheme.surfaceContainerLow,
+      child: LayoutBuilder(builder: (context, box) {
+        final panes = _ProjectPane.values;
+        final share = box.maxWidth / panes.length;
+        final scrolls = share < _PaneStrip._minTile;
+        Widget tile(_ProjectPane pane) {
+          final on = pane == widget.selected;
+          final ink = on
+              ? theme.colorScheme.onSecondaryContainer
+              : theme.colorScheme.onSurfaceVariant;
+          final label = pane == _ProjectPane.todo && widget.openTodos > 0
+              ? '${pane.label} (${widget.openTodos})'
+              : pane.label;
+          return Tooltip(
+            message: label,
+            child: InkWell(
+              key: _keys.putIfAbsent(pane, GlobalKey.new),
+              onTap: () => widget.onSelect(pane),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: on
+                      ? theme.colorScheme.secondaryContainer
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                // Scaled down as a whole when a large Interface or Text Size
+                // makes icon and name taller than the strip.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      pane.icon,
+                      size: flat ? 18 : 20,
+                      color: ink,
+                      key: flat ? ValueKey('project_pane_${pane.name}') : null,
+                    ),
+                    if (!flat)
+                      Text(
+                        label,
+                        key: ValueKey('project_pane_${pane.name}'),
+                        maxLines: 1,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: ink,
+                          fontWeight: on ? FontWeight.w600 : null,
+                        ),
+                      ),
+                  ],
+                ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        if (!scrolls) {
+          return Row(
+            children: [
+              for (final pane in panes) Expanded(child: tile(pane)),
+            ],
+          );
+        }
+        return ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            for (final pane in panes)
+              SizedBox(width: _PaneStrip._minTile, child: tile(pane)),
+          ],
+        );
+      }),
+    );
+  }
+}
+
+/// Pins [_PaneStrip] under the project bar while the page scrolls.
+class _PaneStripHeader extends SliverPersistentHeaderDelegate {
+  final double height;
+  final Widget child;
+
+  _PaneStripHeader({required this.height, required this.child});
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+          BuildContext context, double shrinkOffset, bool overlapsContent) =>
+      Column(
+        children: [
+          Expanded(child: child),
+          const Divider(height: 1),
+        ],
+      );
+
+  @override
+  bool shouldRebuild(_PaneStripHeader old) =>
+      old.child != child || old.height != height;
 }

@@ -1153,7 +1153,23 @@ class _MainDashboardState extends State<MainDashboard> {
     ];
 
     final phone = isPhone(context);
-    final page = Scaffold(
+    // A phone on its side: the screen is about 400 high, so the bars give
+    // their height back to the page - see [phoneLandscape].
+    final flat = phoneLandscape(context);
+    final page = Theme(
+      data: flat
+          ? Theme.of(context).copyWith(
+              visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+              iconButtonTheme: IconButtonThemeData(
+                style: IconButton.styleFrom(
+                  iconSize: 20,
+                  padding: const EdgeInsets.all(4),
+                  minimumSize: const Size(32, 32),
+                ),
+              ),
+            )
+          : Theme.of(context),
+      child: Scaffold(
       appBar: AppBar(
         // THE FILE MENU AND THE STEPS AT THE LEFT, THE APP AT THE RIGHT.
         //
@@ -1293,7 +1309,7 @@ class _MainDashboardState extends State<MainDashboard> {
         titleSpacing: 4,
         // A tablet's bar is the height of its buttons, not a desktop
         // window's title bar.
-        toolbarHeight: _isMobile ? 44 : null,
+        toolbarHeight: flat ? 34 : (_isMobile ? 44 : null),
         actions: [
           if (!provider.settingsOpen && !phone)
             _ScreenshotButton(
@@ -1351,7 +1367,7 @@ class _MainDashboardState extends State<MainDashboard> {
           // Folds to a thin strip for room at a large Interface Size.
           ValueListenableBuilder<int>(
             valueListenable: BarFolds.changes,
-            builder: (context, _, _) => BarFolds.isFolded(kTopBarFoldId)
+            builder: (context, _, _) => BarFolds.isFolded(topBarFoldId(context))
                 ? const _TopBarFolded()
                 : TopLevelBar(
                     selectedIndex: selectedIndex,
@@ -1450,16 +1466,20 @@ class _MainDashboardState extends State<MainDashboard> {
         ],
       ),
           ),
-          // iPhone: the tabs, along the bottom where a thumb reaches them.
-          if (phone)
-            PhoneTabBar(
+        ],
+      ),
+      // iPhone: the tabs, along the bottom where a thumb reaches them - as
+      // the Scaffold's own bottom bar, so a message pops up ABOVE it rather
+      // than over the tabs.
+      bottomNavigationBar: phone
+          ? PhoneTabBar(
               selectedIndex: selectedIndex,
               onSelect: provider.selectTab,
               hasConfig: hasConfig,
               estimateOnly: provider.isEstimateRoom,
-            ),
-        ],
-      ),
+            )
+          : null,
+    ),
     );
 
     // The keys come from the shortcut list (App Config > Keyboard
@@ -2237,7 +2257,16 @@ class TopLevelBar extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(0, _isMobile ? 0 : 4, 0, _isMobile ? 0 : 4),
         child: Theme(
           // Tablet: the strip shrinks to its buttons' compact size.
-          data: _isMobile
+          data: phoneLandscape(context)
+              ? theme.copyWith(
+                  visualDensity:
+                      const VisualDensity(horizontal: -4, vertical: -4),
+                  iconTheme: theme.iconTheme.copyWith(size: 18),
+                  textTheme: theme.textTheme.copyWith(
+                    titleMedium: theme.textTheme.titleSmall,
+                  ),
+                )
+              : _isMobile
               ? theme.copyWith(visualDensity: VisualDensity.compact)
               : theme,
           child: Row(
@@ -2249,7 +2278,7 @@ class TopLevelBar extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               color: actionInk,
               icon: const Icon(Icons.keyboard_arrow_up),
-              onPressed: () => BarFolds.setFolded(kTopBarFoldId, true),
+              onPressed: () => BarFolds.setFolded(topBarFoldId(context), true),
             ),
             // THE WAY UP AND OUT OF THE ROOM — only when there is somewhere to
             // go. Pushed out rather than flat: it should read as a different
@@ -2479,12 +2508,21 @@ bool get _isMobile => Platform.isIOS || Platform.isAndroid;
 /// The [BarFolds] id of the project bar.
 const String kTopBarFoldId = 'top_bar';
 
+/// The project bar's fold on a phone turned on its side - kept apart from
+/// the upright one and folded to start with, since in landscape the screen
+/// is about 400 high. Unfolding it there leaves it open until it is folded.
+const String kTopBarFlatFoldId = 'top_bar_flat';
+
+/// Which fold the project bar follows right now - see [kTopBarFlatFoldId].
+String topBarFoldId(BuildContext context) =>
+    phoneLandscape(context) ? kTopBarFlatFoldId : kTopBarFoldId;
+
 /// The page toolbars that start folded on iPad and iPhone - see main().
 const List<String> kMobileStartFolded = [
   'plan_toolbar', 'plan_sheets', 'plan_off_sheet', 'plan_cable_runs',
   'plan_locations', 'cabling_toolbar', 'schematic_toolbar', 'rack_header',
   'walls_header', 'av_toolbar', 'flow_rules_toolbar', 'schema_toolbar',
-  'rack_tools', 'catalog_filters',
+  'rack_tools', 'catalog_filters', kTopBarFlatFoldId,
 ];
 
 /// The project bar folded: a thin strip that brings it back.
@@ -2500,7 +2538,7 @@ class _TopBarFolded extends StatelessWidget {
         message: 'Show the project bar',
         child: InkWell(
           key: const ValueKey('top_bar_show'),
-          onTap: () => BarFolds.setFolded(kTopBarFoldId, false),
+          onTap: () => BarFolds.setFolded(topBarFoldId(context), false),
           // Named, so the strip says what it brings back.
           child: SizedBox(
             width: double.infinity,

@@ -1737,6 +1737,22 @@ class AppStateProvider extends ChangeNotifier {
       ? kDashboardManualsFolder
       : path.join(effectiveRootFolder, 'manuals'));
 
+  /// Every file the open job is made of, as this device reaches them: the
+  /// job itself, each room's config and each building plan - for keeping the
+  /// whole job on an iPad or iPhone ([ShareSync.keepJobOffline]).
+  List<String> get openJobFiles {
+    if (!hasOpenProject || currentProjectPath.isEmpty) return const [];
+    return [
+      currentProjectPath,
+      for (final ref in project.rooms)
+        if (ref.configPath.trim().isNotEmpty)
+          BuildingProject.resolvePath(ref.configPath, currentProjectPath),
+      for (final plan in project.plans)
+        if (plan.filePath.trim().isNotEmpty)
+          BuildingProject.resolvePath(plan.filePath, currentProjectPath),
+    ];
+  }
+
   /// [manualsFolder] as this device can use it. Settings roam from the
   /// Windows PCs, and a manuals folder picked there is often a clone on that
   /// PC's own drive (C:\...) - a folder an iPad can never reach. On iOS that

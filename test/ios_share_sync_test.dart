@@ -263,6 +263,26 @@ void main() {
       expect(ShareSync.keptFolders, ['$ctUnc\\Projects\\BMU']);
     });
 
+    test('a whole job comes down, rooms in other folders too', () async {
+      write(share('BMU/BMU_project.json'), '{"rooms":[]}');
+      write(share('BMU/plans/level1.pdf'), 'pdf');
+      // A room kept beside another job, not in the job's own folder.
+      write(share('Shared Rooms/BMU 210/BMU210_config.json'), '{}');
+      write(share('Elsewhere/untouched.json'), '{}');
+      final added = await ShareSync.keepJobOffline([
+        sharePath('$ctUnc\\Projects\\BMU\\BMU_project.json'),
+        sharePath('$ctUnc\\Projects\\Shared Rooms\\BMU 210\\BMU210_config.json'),
+        sharePath('$ctUnc\\Projects\\BMU\\plans\\level1.pdf'),
+      ]);
+      // The plans folder is inside the job's, so two folders, not three.
+      expect(added, 2);
+      expect(File(copy('BMU/BMU_project.json')).existsSync(), isTrue);
+      expect(File(copy('BMU/plans/level1.pdf')).existsSync(), isTrue);
+      expect(File(copy('Shared Rooms/BMU 210/BMU210_config.json')).existsSync(),
+          isTrue);
+      expect(File(copy('Elsewhere/untouched.json')).existsSync(), isFalse);
+    });
+
     test('the device manuals come down, and are never sent back', () async {
       final manuals = p.join(classroomTech, 'Dashboard', 'manuals');
       final copyManuals = p.join(IosShare.mirrorRoot, 'CTS', 'StaffFiles',

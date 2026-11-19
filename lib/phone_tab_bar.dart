@@ -6,9 +6,10 @@ import 'form_factor.dart';
 import 'nav_rail.dart';
 
 /// The iPhone's tabs, along the bottom of the screen in place of the side
-/// rail - see [isPhone]. The same tabs the rail holds, cut to [kPhoneTabs],
-/// with Project first when a job is open.
-class PhoneTabBar extends StatelessWidget {
+/// rail - see [isPhone]. Every tab the rail holds, with Project first when a
+/// job is open: the ones used most in a room ([kPhoneTabs]) first, then the
+/// rest - Schematic, AV Flow, Cabling and so on - a swipe sideways away.
+class PhoneTabBar extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
   final bool hasConfig;
@@ -23,35 +24,86 @@ class PhoneTabBar extends StatelessWidget {
   });
 
   @override
+  State<PhoneTabBar> createState() => _PhoneTabBarState();
+}
+
+class _PhoneTabBarState extends State<PhoneTabBar> {
+  final _scroll = ScrollController();
+  final _keys = <AppTab, GlobalKey>{};
+  int _shown = -1;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Brings the selected tab on screen when it is picked from somewhere
+  /// other than the bar - a link, Undo, the start screen.
+  void _reveal(int index) {
+    if (index == _shown) return;
+    _shown = index;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final tab = index >= 0 && index < AppTab.values.length
+          ? AppTab.values[index]
+          : null;
+      final ctx = tab == null ? null : _keys[tab]?.currentContext;
+      if (ctx == null || !mounted) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final selectedIndex = widget.selectedIndex;
+    final onSelect = widget.onSelect;
     final theme = Theme.of(context);
     final hasProject =
         context.select((AppStateProvider p) => p.hasOpenProject);
+    final all = visibleNavTabs(estimateOnly: widget.estimateOnly);
     final tabs = <NavTab>[
       if (hasProject)
         const NavTab(AppTab.project, Icons.apartment, 'Project'),
-      if (!hasConfig)
-        kStartNavTab
-      else
-        for (final t in visibleNavTabs(estimateOnly: estimateOnly))
+      if (!widget.hasConfig) ...[
+        kStartNavTab,
+        // The catalog, schema and rules work with no room open.
+        for (final t in all)
+          if (t.tab.worksWithoutConfig) t,
+      ] else ...[
+        for (final t in all)
           if (kPhoneTabs.contains(t.tab)) t,
+        for (final t in all)
+          if (!kPhoneTabs.contains(t.tab)) t,
+      ],
     ];
+    _reveal(selectedIndex);
     return Material(
       color: theme.colorScheme.surfaceContainer,
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 54,
+          // On its side, icons only: the labels cost a third of the bar's
+          // height on a screen with little to spare.
+          height: phoneLandscape(context) ? 40 : 54,
           child: LayoutBuilder(
             builder: (context, box) {
-              // Every tab on screen at once when they fit; a long row scrolls.
-              final each = (box.maxWidth / tabs.length).clamp(64.0, 120.0);
+              // Every tab on screen at once when they fit; otherwise the row
+              // scrolls, with the edge of the next tab showing so it is
+              // plain there is more.
+              final fit = box.maxWidth / tabs.length;
+              final each = fit >= 64 ? fit.clamp(64.0, 120.0) : 66.0;
               return ListView(
+                controller: _scroll,
                 scrollDirection: Axis.horizontal,
                 children: [
                   for (final t in tabs)
                     _PhoneTab(
-                      key: ValueKey('phone_tab_${t.tab.name}'),
+                      key: _keys.putIfAbsent(t.tab, GlobalKey.new),
                       tab: t,
                       width: each,
                       selected: t.tab.index == selectedIndex,
@@ -89,7 +141,9 @@ class _PhoneTab extends StatelessWidget {
         : theme.colorScheme.onSurfaceVariant;
     return SizedBox(
       width: width,
-      child: InkWell(
+      child: Tooltip(
+        message: tab.label,
+        child: InkWell(
         onTap: onTap,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -108,6 +162,7 @@ class _PhoneTab extends StatelessWidget {
                 color: selected ? theme.colorScheme.onSecondaryContainer : ink,
               ),
             ),
+            if (!phoneLandscape(context)) ...[
             const SizedBox(height: 2),
             FittedBox(
               fit: BoxFit.scaleDown,
@@ -120,8 +175,10 @@ class _PhoneTab extends StatelessWidget {
                 ),
               ),
             ),
+            ],
           ],
         ),
+      ),
       ),
     );
   }

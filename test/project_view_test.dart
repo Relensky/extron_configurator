@@ -468,15 +468,16 @@ void main() {
       );
     });
 
-    testWidgets('a window that cannot hold them drops to icons with the name '
-        'on a tooltip', (tester) async {
+    testWidgets('a narrow window keeps the names and scrolls the strip',
+        (tester) async {
       await pump(tester, withProject(), width: 900);
 
-      // The key follows the pane, not the label - a segment is findable in
-      // either shape, and here the shape is an icon.
+      // The strip across the top keeps every section's name - it scrolls
+      // sideways rather than dropping to bare icons - and the name is on a
+      // tooltip as well.
       expect(
         tester.widget(find.byKey(const ValueKey('project_pane_responsibility'))),
-        isA<Icon>(),
+        isA<Text>(),
       );
       expect(find.byTooltip('Responsibility'), findsOneWidget);
     });
@@ -1618,8 +1619,8 @@ void main() {
         expect(r.bottom, lessThanOrEqualTo(name.top),
             reason: 'the row sits above the project name');
       }
-      expect(name.bottom, lessThanOrEqualTo(panes.top),
-          reason: 'the pane switcher is still below the name');
+      expect(panes.bottom, lessThanOrEqualTo(refresh.top),
+          reason: 'the section strip is pinned across the top, above it all');
 
       // WHAT YOU DO TO THE JOB ON THE LEFT, what you get OUT of it on the
       // right. Refresh is hard against the header's own left edge.

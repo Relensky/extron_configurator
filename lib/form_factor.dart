@@ -61,3 +61,9 @@ String get deviceSettingSuffix {
 
 /// The three kinds of screen the size settings are kept for.
 const List<String> kDeviceSettingSuffixes = ['', '_ipad', '_iphone'];
+
+/// A phone turned on its side: about 400 points high, so the bars across the
+/// top and the tab bar along the bottom shrink to give the page the height.
+bool phoneLandscape(BuildContext context) =>
+    isPhone(context) &&
+    MediaQuery.orientationOf(context) == Orientation.landscape;

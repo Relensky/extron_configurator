@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
 
+import 'app_state.dart';
 import 'collab/collab_controller.dart' show CollabDocKind;
 import 'collab/collab_widgets.dart'
     show showMergeConflictDialog, showMergeReviewDialog;
@@ -86,6 +88,32 @@ class _SharePanel extends StatefulWidget {
 class _SharePanelState extends State<_SharePanel> {
   String _message = '';
   bool _busy = false;
+
+  /// Keeps the open job's every room and plan on this device and brings them
+  /// down now - see [ShareSync.keepJobOffline].
+  Future<void> _keepJob() async {
+    final provider = context.read<AppStateProvider>();
+    final files = provider.openJobFiles;
+    setState(() {
+      _busy = true;
+      _message = 'Downloading ${provider.projectDisplayName}...';
+    });
+    try {
+      final added = await ShareSync.keepJobOffline(files);
+      if (!mounted) return;
+      final rooms = provider.project.rooms.length;
+      setState(() => _message = IosShare.offline
+          ? 'Kept $added more folder${added == 1 ? '' : 's'} for this job; '
+              'they come down when the share answers.'
+          : '${provider.projectDisplayName} is on this device: the job, '
+              '$rooms room${rooms == 1 ? '' : 's'} and its plans. Changes '
+              'keep syncing.');
+    } catch (e) {
+      if (mounted) setState(() => _message = 'Could not download the job: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _connect() async {
     setState(() => _busy = true);
@@ -343,6 +371,23 @@ class _SharePanelState extends State<_SharePanel> {
                         fontSize: 13,
                       ),
                     ),
+                    // THE OPEN JOB, ALL OF IT: its rooms and plans may be
+                    // in other folders than the job's own, and only the
+                    // job's folder is kept by opening it.
+                    if (context.read<AppStateProvider>().hasOpenProject)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: FilledButton.tonalIcon(
+                          key: const ValueKey('ios_keep_job'),
+                          icon: const Icon(Icons.download_for_offline_outlined),
+                          label: Text(
+                            'Download all of '
+                            '${context.read<AppStateProvider>().projectDisplayName}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onPressed: _busy ? null : _keepJob,
+                        ),
+                      ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Keep every job offline'),

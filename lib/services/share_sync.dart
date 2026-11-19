@@ -250,6 +250,42 @@ class ShareSync {
     if (!IosShare.offline) unawaited(syncNow());
   }
 
+  /// Keeps every folder a job's files are in - the job's own, each room's and
+  /// each building plan's, wherever on the share they are - and brings them
+  /// down now when the share answers. Returns how many folders are newly
+  /// kept. [files] are the job's files as this device reaches them.
+  static Future<int> keepJobOffline(Iterable<String> files) async {
+    if (!_on || !IosShare.active) return 0;
+    final before = keptFolders.length;
+    final wasAll = keepEveryJob;
+    for (final f in files) {
+      if (f.trim().isNotEmpty) _keepQuietly(f);
+    }
+    final added = keptFolders.length - before;
+    if (!IosShare.offline && !wasAll) await syncNow();
+    return added;
+  }
+
+  /// [keepFolderOf] without starting a sync per folder.
+  static void _keepQuietly(String file) {
+    final String unc = uncPath(p.dirname(file));
+    if (!unc.startsWith(r'\\')) return;
+    if (unc.length <= IosShare.projectsUnc.length) return;
+    final s = _settings();
+    final folders = ((s['folders'] as List?) ?? []).map((e) => '$e').toList();
+    final key = unc.toLowerCase();
+    if (folders.any(
+      (f) => key == f.toLowerCase() || key.startsWith('${f.toLowerCase()}\\'),
+    )) {
+      return;
+    }
+    // A folder inside the new one is covered by it from now on.
+    folders.removeWhere((f) => f.toLowerCase().startsWith('$key\\'));
+    folders.add(unc);
+    s['folders'] = folders;
+    _saveSettings(s);
+  }
+
   /// Stops keeping [unc] (its files stay until the next sync removes them).
   static void forgetFolder(String unc) {
     final s = _settings();

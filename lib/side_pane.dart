@@ -232,8 +232,16 @@ class _SidePaneState extends State<SidePane> {
     final theme = Theme.of(context);
     if (!_open) return _folded(theme);
 
+    // iPhone: a pane beside the drawing opens across nearly the whole
+    // screen - at its desktop width it left the drawing a sliver and itself
+    // a column of words. Its chevron (or the drawing's edge) puts it away.
+    final phone = widget.side == PaneSide.right &&
+        (Platform.isIOS || Platform.isAndroid) &&
+        MediaQuery.sizeOf(context).shortestSide < 600;
     final pane = SizedBox(
-      width: _width,
+      width: phone
+          ? (MediaQuery.sizeOf(context).width - 24).clamp(200.0, 2000.0)
+          : _width,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -317,8 +325,13 @@ class _SidePaneState extends State<SidePane> {
 
   /// What is left when the pane is folded: a strip the width of a scrollbar,
   /// with the way back on it.
-  Widget _folded(ThemeData theme) => SizedBox(
-        width: kFoldedPaneWidth,
+  Widget _folded(ThemeData theme) {
+    // iPad / iPhone: a strip that reads as a button - tinted, a little wider
+    // and its name in full ink - rather than a hairline at the screen's edge
+    // nobody finds.
+    final touch = Platform.isIOS || Platform.isAndroid;
+    final strip = SizedBox(
+        width: touch ? kFoldedPaneWidth + 6 : kFoldedPaneWidth,
         child: Column(
           children: [
             IconButton(
@@ -348,7 +361,10 @@ class _SidePaneState extends State<SidePane> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.hintColor,
+                        color: touch
+                            ? theme.colorScheme.onSurface
+                            : theme.hintColor,
+                        fontWeight: touch ? FontWeight.w600 : null,
                       ),
                     ),
                   ),
@@ -358,4 +374,16 @@ class _SidePaneState extends State<SidePane> {
           ],
         ),
       );
+    if (!touch) return strip;
+    // A neutral fill with an outline, so a folded pane reads as a tab to pull
+    // out - not as something selected.
+    return Material(
+      color: theme.colorScheme.surfaceContainerHigh,
+      shape: Border(
+        left: BorderSide(color: theme.colorScheme.outlineVariant),
+        right: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: strip,
+    );
+  }
 }
