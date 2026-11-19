@@ -34,6 +34,7 @@ import 'cost_compare_view.dart';
 import 'cost_estimate.dart';
 import 'cost_line_ties.dart';
 import 'estimate_pdf.dart';
+import 'pdf_preview_dialog.dart';
 import 'estimate_settings_section.dart' show showEstimateNoticeDialog;
 import 'export_tools.dart';
 import 'labor_rates.dart';
@@ -6334,6 +6335,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (what == 'pdf') {
       return _exportPdf(context, provider, estimate, model);
     }
+    if (what == 'preview') {
+      return _previewPdf(context, provider, estimate, model);
+    }
     final messenger = ScaffoldMessenger.of(context);
     final theme = Theme.of(context);
     final title = model.roomTitle.isEmpty ? 'Cost estimate' : model.roomTitle;
@@ -6419,6 +6423,72 @@ class _CostEstimateViewState extends State<CostEstimateView> {
 
   /// Writes the client-facing PDF: logo and preparer from App Config, scope
   /// and notes from this page.
+  /// The estimate PDF, as the Save and Preview both make it.
+  Future<Uint8List> _estimatePdfBytes(
+    AppStateProvider provider,
+    CostEstimate estimate,
+    AvFlowModel model,
+  ) {
+    final settings = provider.avCost;
+    return buildEstimatePdf(
+      estimate,
+      EstimatePdfInfo(
+        roomName: model.roomTitle.isNotEmpty
+            ? model.roomTitle
+            : roomFolderName(provider),
+        projectName: estimateProjectName(provider),
+        preparedBy: provider.estimatePreparedBy.trim(),
+        preparerContact: provider.estimatePreparerContact.trim(),
+        date: DateTime.now(),
+        logo: readEstimateLogo(provider.estimateLogoForExport),
+        logoOnLeft: provider.estimateLogoSide == 'left',
+        accent: estimateAccentColor(provider.estimateAccent),
+        scopeOfWork: settings.scopeOfWork,
+        notes: stripStandardEstimateNotes(
+          settings.notes,
+          notice: provider.estimateNotice,
+        ),
+        // Every estimate goes out with the notice from Settings.
+        notice: provider.estimateNotice,
+        title: settings.pdfTitle,
+        subtitle: settings.documentSubtitle,
+        words: Map.of(settings.pdfWords),
+        sections: List.of(settings.sections),
+      ),
+      theme: loadEstimatePdfTheme(),
+    );
+  }
+
+  /// The estimate PDF full screen, with Save to write it.
+  Future<void> _previewPdf(
+    BuildContext context,
+    AppStateProvider provider,
+    CostEstimate estimate,
+    AvFlowModel model,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await _estimatePdfBytes(provider, estimate, model);
+      if (!context.mounted) return;
+      await showPdfBytesPreview(
+        context,
+        key: const ValueKey('cost_pdf_preview'),
+        bytes: bytes,
+        title: model.roomTitle.isNotEmpty
+            ? model.roomTitle
+            : roomFolderName(provider),
+        onSave: () => _exportPdf(context, provider, estimate, model),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Could not preview the estimate PDF: $e'),
+          backgroundColor: snackErrorFillOn(messenger),
+        ),
+      );
+    }
+  }
+
   Future<void> _exportPdf(
     BuildContext context,
     AppStateProvider provider,
@@ -6427,7 +6497,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     final theme = Theme.of(context);
-    final settings = provider.avCost;
     final logoPath = provider.estimateLogoForExport;
     final logo = readEstimateLogo(logoPath);
 
@@ -6441,33 +6510,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (!outputFile.toLowerCase().endsWith('.pdf')) outputFile += '.pdf';
 
     try {
-      final bytes = await buildEstimatePdf(
-        estimate,
-        EstimatePdfInfo(
-          roomName: model.roomTitle.isNotEmpty
-              ? model.roomTitle
-              : roomFolderName(provider),
-          projectName: estimateProjectName(provider),
-          preparedBy: provider.estimatePreparedBy.trim(),
-          preparerContact: provider.estimatePreparerContact.trim(),
-          date: DateTime.now(),
-          logo: logo,
-          logoOnLeft: provider.estimateLogoSide == 'left',
-          accent: estimateAccentColor(provider.estimateAccent),
-          scopeOfWork: settings.scopeOfWork,
-          notes: stripStandardEstimateNotes(
-            settings.notes,
-            notice: provider.estimateNotice,
-          ),
-          // Every estimate goes out with the notice from Settings.
-          notice: provider.estimateNotice,
-          title: settings.pdfTitle,
-          subtitle: settings.documentSubtitle,
-          words: Map.of(settings.pdfWords),
-          sections: List.of(settings.sections),
-        ),
-        theme: loadEstimatePdfTheme(),
-      );
+      final bytes = await _estimatePdfBytes(provider, estimate, model);
       await File(outputFile).writeAsBytes(bytes);
       showSavedSnackBar(
         messenger: messenger,

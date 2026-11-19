@@ -119,6 +119,7 @@ void main() {
       'room_workbook',
       'sheets_room',
       'publish_room',
+      'cost_preview',
       'cost_pdf',
       'cost_xlsx',
       'cost_txt',
@@ -130,6 +131,26 @@ void main() {
     // The generic "this tab" lines would repeat the estimate's own.
     expect(find.byKey(const ValueKey('export_item_tab_xlsx')), findsNothing);
     expect(find.text('Room to Google Sheets'), findsOneWidget);
+  });
+
+  testWidgets('Preview shows the estimate PDF full screen', (tester) async {
+    final p = room();
+    p.selectTab(AppTab.cost.index);
+    await pumpApp(tester, p);
+    await tester.pumpAndSettle();
+
+    await openExport(tester);
+    await tester.tap(find.byKey(const ValueKey('export_item_cost_preview')));
+    // The PDF is built off the frame; let it land.
+    await tester.runAsync(() => Future<void>.delayed(
+          const Duration(milliseconds: 500),
+        ));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('cost_pdf_preview')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pdf_preview_save')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('pdf_preview_close')));
+    await tester.pump();
   });
 
   testWidgets('switching to the Cost tab puts the PDF on the export menu',

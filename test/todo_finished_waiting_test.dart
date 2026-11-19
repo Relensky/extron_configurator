@@ -28,6 +28,23 @@ void main() {
       expect(p.todos.first.completedBy, isEmpty);
     });
 
+    test('a finished note keeps how it was settled', () {
+      final p = job();
+      p.setTodoState('todo1', ProjectTodoState.done, by: 'jsmith');
+      p.setTodoResolution(
+        'todo1',
+        ' Steph confirmed DPR painters can paint the hardware white ',
+      );
+      expect(
+        p.todos.first.resolution,
+        'Steph confirmed DPR painters can paint the hardware white',
+      );
+      final back = BuildingProject.fromJson(p.toJson());
+      expect(back.todos.first.resolution, p.todos.first.resolution);
+      // None written for a note without one.
+      expect(p.todos[1].toJson().containsKey('resolution'), isFalse);
+    });
+
     test('deleted and cleared notes are kept, under who finished them', () {
       final p = job();
       p.setTodoState('todo1', ProjectTodoState.done, by: 'jsmith');

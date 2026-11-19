@@ -9795,11 +9795,17 @@ class _PaneStrip extends StatefulWidget {
     required this.onSelect,
   });
 
-  /// The narrowest a section may be before the strip scrolls instead.
-  static const double _minTile = 72;
+  /// The narrowest a section is: near square against the strip's height.
+  static const double _minTile = 84;
 
-  static double heightFor(BuildContext context) =>
-      phoneLandscape(context) ? 40 : (isPhone(context) ? 52 : 58);
+  /// Tall enough for the icon and its name at the size they are read at,
+  /// so neither is ever scaled down.
+  static double heightFor(BuildContext context) {
+    if (phoneLandscape(context)) return 40;
+    final base = isPhone(context) ? 52.0 : 58.0;
+    final extra = MediaQuery.textScalerOf(context).scale(16) - 16;
+    return base + math.max(0, extra);
+  }
 
   @override
   State<_PaneStrip> createState() => _PaneStripState();
@@ -9841,7 +9847,7 @@ class _PaneStripState extends State<_PaneStrip> {
         // the size they are meant to be read at, and when they do not all fit
         // the strip scrolls sideways instead.
         double natural(_ProjectPane pane) {
-          if (flat) return 48;
+          if (flat) return 56;
           final tp = TextPainter(
             text: TextSpan(
               text: labelOf(pane),
@@ -9856,8 +9862,6 @@ class _PaneStripState extends State<_PaneStrip> {
           return math.max(_PaneStrip._minTile, w);
         }
         final widths = {for (final p in panes) p: natural(p)};
-        final total = widths.values.fold<double>(0, (a, b) => a + b);
-        final scrolls = total > box.maxWidth;
         Widget tile(_ProjectPane pane) {
           final on = pane == widget.selected;
           final ink = on
@@ -9880,10 +9884,9 @@ class _PaneStripState extends State<_PaneStrip> {
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                // Only ever scaled down for HEIGHT - a very large Interface
-                // Size - never to squeeze a name into a narrow tile.
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
+                // Never scaled down: the strip is as tall as the text needs
+                // and scrolls when the tiles do not fit across.
+                child: Center(
                   child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -9911,29 +9914,28 @@ class _PaneStripState extends State<_PaneStrip> {
           );
         }
 
-        if (!scrolls) {
-          return Row(
-            children: [
-              for (final pane in panes)
-                Expanded(flex: widths[pane]!.round(), child: tile(pane)),
-            ],
-          );
-        }
-        // Every tile built, not lazily: twelve are cheap, and the open one
-        // can then always be scrolled to. Its scrolling is its own - kept
-        // from the page, which sizes its panes off its own scroll metrics.
+        // Fixed, near-square tiles, never stretched across a wide window:
+        // centered when they all fit, scrolled sideways when they do not,
+        // as on the iPad. Every tile built, not lazily: twelve are cheap,
+        // and the open one can then always be scrolled to. Its scrolling is
+        // its own - kept from the page, which sizes its panes off its own
+        // scroll metrics.
         return NotificationListener<Notification>(
           onNotification: (n) =>
               n is ScrollNotification || n is ScrollMetricsNotification,
           child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final pane in panes)
-                SizedBox(width: widths[pane], child: tile(pane)),
-            ],
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: box.maxWidth),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (final pane in panes)
+                    SizedBox(width: widths[pane], child: tile(pane)),
+                ],
+              ),
+            ),
           ),
-        ),
         );
       }),
     );

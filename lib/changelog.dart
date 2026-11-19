@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.227+237';
+const String kAppVersion = '0.5.228+238';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,21 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.228',
+    date: 'November 19, 2026',
+    title: 'Quote requests: rooms, header and footer; to-do resolutions; square section tiles; estimate preview',
+    changes: [
+      'Quote request edit screen: wider, with each quote folding open and shut. A single quote opens unfolded.',
+      'Each quote has Check all and Uncheck all for its items.',
+      'Rooms on a quote: untick a room to take its units off the request - an item left with none is off too. Show rooms on the request adds a Rooms column with each room and its count.',
+      'Header and footer on the quote request: a title, a subtitle (the package name when blank) and a footer line. The PDF carries the logo, color and Prepared by from App Config, as the estimate PDF does.',
+      'Preview opens the quote request full screen.',
+      'Job list: a finished note has a Resolved box for how it was settled - "Steph confirmed DPR painters can paint the hardware white". Optional, kept with the note, in the history, and on the timeline export after Done.',
+      'Project: the section buttons along the top (Rooms, Labor, Equipment and the rest) are near-square tiles with their names at full size. When they do not all fit across, the strip scrolls sideways, as on the iPad, instead of shrinking the text.',
+      'Cost page: Preview the cost estimate, on the Export menu, shows the estimate PDF full screen with a Save button.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.227',
     date: 'November 19, 2026',

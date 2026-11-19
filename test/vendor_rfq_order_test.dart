@@ -776,6 +776,21 @@ void main() {
       // Only this package, with its preview.
       expect(find.byKey(ValueKey('rfq_edit_package_$rfqId')), findsOneWidget);
       expect(find.byKey(ValueKey('rfq_preview_$rfqId')), findsOneWidget);
+
+      // One quote opens expanded, with its rooms and check-all buttons.
+      expect(find.byKey(ValueKey('rfq_show_rooms_$rfqId')), findsOneWidget);
+      final save = find.byKey(const ValueKey('rfq_edit_save'));
+      await tester.tap(find.byKey(ValueKey('rfq_uncheck_all_$rfqId')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+      await tester.tap(find.byKey(ValueKey('rfq_check_all_$rfqId')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+
+      // Folds away.
+      await tester.tap(find.byKey(ValueKey('rfq_edit_package_$rfqId')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey('rfq_show_rooms_$rfqId')), findsNothing);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
     });

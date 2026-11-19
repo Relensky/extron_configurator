@@ -18,7 +18,8 @@ class CostEstimateActions {
   /// Renders the whole estimate as a picture, light or dark.
   final Future<void> Function(Brightness brightness) screenshot;
 
-  /// Exports the estimate: 'pdf', 'xlsx', 'txt' or 'copy'.
+  /// Exports the estimate: 'pdf', 'xlsx', 'txt' or 'copy'; 'preview' shows
+  /// the PDF first.
   final Future<void> Function(BuildContext context, String what) export;
 
   const CostEstimateActions({required this.screenshot, required this.export});

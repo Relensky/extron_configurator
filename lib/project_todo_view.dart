@@ -698,7 +698,7 @@ class _TodoRow extends StatelessWidget {
                   // Finished notes are plain text: they are a record of what
                   // was decided, and a record with an edit box around it
                   // invites somebody to rewrite history by accident.
-                  if (todo.isDone)
+                  if (todo.isDone) ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 8, 0, 0),
                       child: Text(
@@ -709,8 +709,23 @@ class _TodoRow extends StatelessWidget {
                           decorationColor: muted,
                         ),
                       ),
-                    )
-                  else
+                    ),
+                    // How it was settled, when that is worth keeping.
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12, top: 4),
+                      child: LiveTextField(
+                        key: ValueKey('todo_resolution_${todo.id}'),
+                        fieldId: 'todo_resolution_${todo.id}',
+                        initial: todo.resolution,
+                        label: 'Resolved',
+                        hint: 'Optional - how it was settled',
+                        maxLines: 4,
+                        minLines: 1,
+                        onChanged: (v) =>
+                            provider.setProjectTodoResolution(todo.id, v),
+                      ),
+                    ),
+                  ] else
                     LiveTextField(
                       fieldId: 'todo_text_${todo.id}',
                       initial: todo.text,

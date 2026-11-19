@@ -1063,6 +1063,45 @@ void main() {
     });
   });
 
+  group('the section strip', () {
+    testWidgets('tiles stay near square on a wide window, never stretched',
+        (tester) async {
+      final p = withProject();
+      await pump(tester, p, width: 2400);
+      Size tileOf(String pane) => tester.getSize(
+        find
+            .ancestor(
+              of: find.byKey(ValueKey('project_pane_$pane')),
+              matching: find.byType(Tooltip),
+            )
+            .first,
+      );
+      final rooms = tileOf('rooms');
+      expect(rooms.width, lessThan(rooms.height * 2.2));
+      expect(tileOf('labor').width, rooms.width,
+          reason: 'short names get the same tile');
+      // Names at their own size: nothing scales them down.
+      expect(
+        find.ancestor(
+          of: find.byKey(const ValueKey('project_pane_rooms')),
+          matching: find.byType(FittedBox),
+        ),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a narrow window scrolls the strip', (tester) async {
+      final p = withProject();
+      await pump(tester, p, width: 700);
+      final strip = find.ancestor(
+        of: find.byKey(const ValueKey('project_pane_rooms')),
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(strip, findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('the job list', () {
     testWidgets('Add lights up with the first letter typed', (tester) async {
       final p = withProject();
@@ -1150,6 +1189,30 @@ void main() {
       expect(find.byKey(ValueKey('timeline_remind_$first')), findsOneWidget);
       expect(find.byKey(ValueKey('timeline_remind_$done')), findsNothing);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a finished note takes a Resolved note', (tester) async {
+      final p = withProject();
+      p.addProjectTodo('Notify DPR some mounting hardware is black');
+      p.addProjectTodo('still open');
+      final done = p.project.todos.first.id;
+      final open = p.project.todos.last.id;
+      p.setProjectTodoState(done, ProjectTodoState.done);
+      await pump(tester, p);
+      await tester.tap(find.byKey(const ValueKey('project_pane_todo')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(ValueKey('todo_resolution_$open')), findsNothing);
+      final field = find.descendant(
+        of: find.byKey(ValueKey('todo_resolution_$done')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(field, 'Steph confirmed DPR can paint it white');
+      await tester.pump();
+      expect(
+        p.project.todos.first.resolution,
+        'Steph confirmed DPR can paint it white',
+      );
     });
   });
 

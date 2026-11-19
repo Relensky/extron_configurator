@@ -22527,6 +22527,21 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
+  /// Says how finished note [id] was settled.
+  void setProjectTodoResolution(String id, String note) {
+    final todo = project.todos.where((t) => t.id == id).firstOrNull;
+    if (todo == null || todo.resolution == note.trim()) return;
+    project.setTodoResolution(id, note);
+    _logProjectEdit(
+      itemKey: 'todo:$id',
+      itemName: _todoTextOf(id),
+      field: 'Resolved',
+      summary: note.trim().isEmpty ? 'cleared' : note.trim(),
+      coalesce: true,
+    );
+    _projectChanged(repricing: false);
+  }
+
   /// Where the files kept with note [todoId] are copied: a folder beside the
   /// project file, so they travel with the job. '' for a job never saved.
   String todoAttachmentFolder(String todoId) {

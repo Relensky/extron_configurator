@@ -6635,6 +6635,8 @@ class _ExportButton extends StatelessWidget {
         ],
         if (estimate) ...[
           const PopupMenuDivider(),
+          item('cost_preview', Icons.visibility_outlined,
+              'Preview the cost estimate', 'The PDF full screen, then save'),
           item('cost_pdf', Icons.picture_as_pdf_outlined,
               'Cost estimate as PDF', 'The quote, ready to send'),
           item('cost_xlsx', Icons.grid_on, 'Cost estimate as Excel (.xlsx)',
@@ -6693,6 +6695,7 @@ class _ExportButton extends StatelessWidget {
           case 'tab_txt':
           case 'tab_copy':
             await exportTabReport(context, provider, tab, v.substring(4));
+          case 'cost_preview':
           case 'cost_pdf':
           case 'cost_xlsx':
           case 'cost_txt':

@@ -2770,6 +2770,36 @@ List<ReportSection> packageQuoteSections(
   ];
 }
 
+/// What the quote request edit screen changed on one package's request.
+class RfqEdits {
+  /// Master line keys left off.
+  final Set<String> leaveOut;
+
+  /// Room ids whose quantities are left off.
+  final Set<String> leaveOutRooms;
+
+  /// A Rooms column on the request: each room and its quantity.
+  final bool showRooms;
+
+  const RfqEdits({
+    this.leaveOut = const {},
+    this.leaveOutRooms = const {},
+    this.showRooms = false,
+  });
+}
+
+/// A line's quantity once [RfqEdits.leaveOutRooms] are off: the rooms still
+/// on. Every room on keeps the line's own quantity, building spares and all.
+double rfqLineQty(MasterPartLine line, Set<String> leaveOutRooms) {
+  if (leaveOutRooms.isEmpty ||
+      !line.qtyByRoom.keys.any(leaveOutRooms.contains)) {
+    return line.qty;
+  }
+  return line.qtyByRoom.entries
+      .where((e) => !leaveOutRooms.contains(e.key))
+      .fold(0.0, (sum, e) => sum + e.value);
+}
+
 /// One package's quote request, addressed to one vendor: what they are being
 /// asked to price, under what terms, and by when.
 ///
@@ -2792,19 +2822,29 @@ List<ReportSection> vendorPackageSections(
   VendorPackage package, {
   ProjectVendor? vendor,
 
-  /// Master line keys edited out of this request.
-  Set<String> leaveOut = const {},
+  /// What the edit screen left off or added.
+  RfqEdits edits = const RfqEdits(),
 }) {
   final currency = estimate.currency;
   XlsxMoney cash(double v) => money(v, currency);
   final project = estimate.project;
   final rfq = package.rfq;
   final showEstimate = rfq?.sendsEstimate ?? true;
+  final offRooms = edits.leaveOutRooms;
+  double qty(MasterPartLine l) => rfqLineQty(l, offRooms);
+  // A line left with no units once rooms are off is off too.
   final lines = [
     for (final l in package.lines)
-      if (!leaveOut.contains(l.key)) l,
+      if (!edits.leaveOut.contains(l.key) && qty(l) > 0) l,
   ];
-  final units = lines.fold<double>(0, (sum, l) => sum + l.qty);
+  final units = lines.fold<double>(0, (sum, l) => sum + qty(l));
+  // The code: what will be on the label when it arrives.
+  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
+  String rooms(MasterPartLine line) => [
+    for (final id in line.roomIdsByQty())
+      if (!offRooms.contains(id))
+        '${roomNames[id] ?? id} x${trimNumber(line.qtyByRoom[id] ?? 0)}',
+  ].join(', ');
 
   final sections = <ReportSection>[
     (
@@ -2829,8 +2869,8 @@ List<ReportSection> vendorPackageSections(
   ];
 
   // One list, cabling included, in the master list's kind order. Model
-  // first, no item description, no rooms and no columns for the vendor's
-  // prices: they answer with their own quote.
+  // first, no item description and no columns for the vendor's prices: they
+  // answer with their own quote. Rooms only when asked for.
   final ordered = [
     for (final kind in MasterPartKind.values)
       for (final l in lines)
@@ -2849,6 +2889,7 @@ List<ReportSection> vendorPackageSections(
         // see the note on this function.
         if (showEstimate) 'Our estimate (unit)',
         if (showEstimate) 'Our estimate (ext)',
+        if (edits.showRooms) 'Rooms',
       ],
       rows: [
         for (final l in ordered)
@@ -2856,9 +2897,19 @@ List<ReportSection> vendorPackageSections(
             l.model,
             l.manufacturer,
             l.partNumber,
-            l.qty,
+            qty(l),
             if (showEstimate) l.unpriced ? '' : cash(l.unitPrice),
-            if (showEstimate) l.unpriced ? '' : cash(l.total),
+            // The line's own figure while every room is on; scaled by the
+            // units left once some are off.
+            if (showEstimate)
+              l.unpriced
+                  ? ''
+                  : cash(
+                      qty(l) == l.qty || l.qty == 0
+                          ? l.total
+                          : l.total * qty(l) / l.qty,
+                    ),
+            if (edits.showRooms) rooms(l),
           ],
       ],
     ));
@@ -3286,18 +3337,21 @@ Uint8List buildVendorRfqBytes({
   required VendorPackage package,
   ProjectVendor? vendor,
   DateTime? generated,
-  Set<String> leaveOut = const {},
+  RfqEdits edits = const RfqEdits(),
+  String? title,
 }) => buildXlsx([
   buildStackedReportSheet(
     sheetName: xlsxSheetName(
       package.isUntagged ? 'Untagged' : package.packageName,
     ),
-    title: vendorRfqTitle(estimate.project),
+    title: (title ?? '').trim().isEmpty
+        ? vendorRfqTitle(estimate.project)
+        : title!.trim(),
     sections: vendorPackageSections(
       estimate,
       package,
       vendor: vendor,
-      leaveOut: leaveOut,
+      edits: edits,
     ),
     generated: generated ?? DateTime.now(),
   ),
@@ -3309,19 +3363,25 @@ Future<Uint8List> buildVendorRfqPdf({
   required VendorPackage package,
   ProjectVendor? vendor,
   DateTime? generated,
-  Set<String> leaveOut = const {},
+  RfqEdits edits = const RfqEdits(),
   pw.ThemeData? theme,
+  ReportPdfDress dress = const ReportPdfDress(),
+  String? title,
   bool compress = true,
 }) => buildReportSectionsPdf(
-  title: vendorRfqTitle(estimate.project),
+  // A typed title wins; blank is the project's.
+  title: (title ?? '').trim().isEmpty
+      ? vendorRfqTitle(estimate.project)
+      : title!.trim(),
   sections: vendorPackageSections(
     estimate,
     package,
     vendor: vendor,
-    leaveOut: leaveOut,
+    edits: edits,
   ),
   generated: generated ?? DateTime.now(),
   theme: theme,
+  dress: dress,
   compress: compress,
 );
 

@@ -1311,6 +1311,10 @@ class ProjectTodo {
   /// that has to come back. Stored like [attachments].
   final List<String> waitingAttachments;
 
+  /// How a finished note was settled - "Steph confirmed DPR's painters can
+  /// paint the hardware white". '' when nobody said.
+  final String resolution;
+
   const ProjectTodo({
     required this.id,
     required this.text,
@@ -1324,6 +1328,7 @@ class ProjectTodo {
     this.completedBy = '',
     this.waitingNote = '',
     this.waitingAttachments = const [],
+    this.resolution = '',
   });
 
   /// True when this note is about the job as a whole — neither a room nor a
@@ -1365,6 +1370,7 @@ class ProjectTodo {
     String? completedBy,
     String? waitingNote,
     List<String>? waitingAttachments,
+    String? resolution,
   }) => ProjectTodo(
     id: id,
     text: text ?? this.text,
@@ -1378,6 +1384,7 @@ class ProjectTodo {
     completedBy: completedBy ?? this.completedBy,
     waitingNote: waitingNote ?? this.waitingNote,
     waitingAttachments: waitingAttachments ?? this.waitingAttachments,
+    resolution: resolution ?? this.resolution,
   );
 
   Map<String, dynamic> toJson() => {
@@ -1394,6 +1401,7 @@ class ProjectTodo {
     if (waitingNote.trim().isNotEmpty) 'waitingNote': waitingNote.trim(),
     if (waitingAttachments.isNotEmpty)
       'waitingAttachments': List<String>.of(waitingAttachments),
+    if (resolution.trim().isNotEmpty) 'resolution': resolution.trim(),
   };
 
   factory ProjectTodo.fromJson(Map<String, dynamic> json) => ProjectTodo(
@@ -1417,6 +1425,7 @@ class ProjectTodo {
       for (final a in (json['waitingAttachments'] as List? ?? []))
         if (a.toString().trim().isNotEmpty) a.toString(),
     ],
+    resolution: json['resolution']?.toString() ?? '',
   );
 }
 
@@ -3711,6 +3720,12 @@ class BuildingProject {
   void setTodoWaitingNote(String id, String note) {
     final i = todos.indexWhere((t) => t.id == id);
     if (i >= 0) todos[i] = todos[i].copyWith(waitingNote: note.trim());
+  }
+
+  /// Says how a finished note was settled.
+  void setTodoResolution(String id, String note) {
+    final i = todos.indexWhere((t) => t.id == id);
+    if (i >= 0) todos[i] = todos[i].copyWith(resolution: note.trim());
   }
 
   /// Replaces the files kept with one note - or, when [waiting], with what

@@ -32,6 +32,7 @@ String todoTimelineStatus(ProjectTodo t, DateTime asOf) => switch (t.state) {
     'Done',
     if (t.completed != null) formatIsoDate(t.completed!),
     if (t.completedBy.isNotEmpty) 'by ${t.completedBy}',
+    if (t.resolution.trim().isNotEmpty) '- Resolved: ${t.resolution.trim()}',
   ].join(' '),
 };
 

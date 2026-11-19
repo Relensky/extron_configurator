@@ -13,6 +13,7 @@ import 'package:extron_configurator/labor_rates.dart';
 import 'package:extron_configurator/procurement_log.dart';
 import 'package:extron_configurator/project_estimate.dart';
 import 'package:extron_configurator/project_workbook.dart';
+import 'package:extron_configurator/report_pdf.dart';
 
 /// The two documents a project produces: the workbook that holds everything,
 /// and the per-vendor quote request that holds exactly one vendor's parts and
@@ -553,11 +554,61 @@ void main() {
         ZipDecoder().decodeBytes(buildVendorRfqBytes(
           estimate: estimate,
           package: package,
-          leaveOut: {gone.key},
+          edits: RfqEdits(leaveOut: {gone.key}),
         )),
         1,
       );
       expect(sheet, isNot(contains('60-1439-13')));
+    });
+
+    test('a room left off takes its units with it', () {
+      final estimate = job();
+      final package = estimate.packageFor('v1')!;
+      final line = package.lines.firstWhere(
+        (l) => l.partNumber == '60-1439-13',
+      );
+      final room = line.qtyByRoom.keys.first;
+      expect(
+        rfqLineQty(line, {room}),
+        line.qty - line.qtyByRoom[room]!,
+      );
+      expect(rfqLineQty(line, const {}), line.qty);
+
+      // Every room off: the line is off.
+      final sections = vendorPackageSections(
+        estimate,
+        package,
+        edits: RfqEdits(leaveOutRooms: {...line.qtyByRoom.keys}),
+      );
+      final items = sections.where((s) => s.title == 'Items');
+      expect(
+        items.expand((s) => s.rows).any((r) => r.contains('60-1439-13')),
+        isFalse,
+      );
+    });
+
+    test('the rooms column is there only when asked for', () {
+      final estimate = job();
+      final package = estimate.packageFor('v1')!;
+      List<String> header(bool show) => vendorPackageSections(
+        estimate,
+        package,
+        edits: RfqEdits(showRooms: show),
+      ).firstWhere((s) => s.title == 'Items').header;
+      expect(header(false), isNot(contains('Rooms')));
+      expect(header(true), contains('Rooms'));
+    });
+
+    test('the PDF carries a typed title, subtitle and footer', () async {
+      final estimate = job();
+      final bytes = await buildVendorRfqPdf(
+        estimate: estimate,
+        package: estimate.packageFor('v1')!,
+        title: 'Spring refresh',
+        dress: const ReportPdfDress(subtitle: 'Displays', footer: 'Thanks'),
+        compress: false,
+      );
+      expect(String.fromCharCodes(bytes), startsWith('%PDF'));
     });
 
     test('is headed with the project name, not the buildings', () {
