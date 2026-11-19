@@ -909,6 +909,22 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                     style: theme.textTheme.titleMedium,
                   ),
                 ),
+                // The priority groups, all at once.
+                TextButton.icon(
+                  key: const ValueKey('funding_expand_all'),
+                  onPressed: () =>
+                      ProjectFold.instance.setAllPriorities(true),
+                  icon: const Icon(Icons.unfold_more, size: 18),
+                  label: const Text('Expand all'),
+                ),
+                TextButton.icon(
+                  key: const ValueKey('funding_collapse_all'),
+                  onPressed: () =>
+                      ProjectFold.instance.setAllPriorities(false),
+                  icon: const Icon(Icons.unfold_less, size: 18),
+                  label: const Text('Collapse all'),
+                ),
+                const SizedBox(width: 8),
                 // Locked, it is a figure, not a box.
                 if (project.budgetLocked)
                   Text(

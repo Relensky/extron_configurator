@@ -55,6 +55,11 @@ class LiveTextField extends StatefulWidget {
   /// A colored outline round the box, e.g. a name nobody typed.
   final Color? outlineColor;
 
+  /// [outlineColor] and [hintStyle] only while the box is empty - showing
+  /// its hint - so they go the moment something is typed and come back if
+  /// it is cleared.
+  final bool outlineOnlyWhenEmpty;
+
   /// Laid over the theme's hint style.
   final TextStyle? hintStyle;
 
@@ -106,6 +111,7 @@ class LiveTextField extends StatefulWidget {
     this.hintIsValue = false,
     this.outlineColor,
     this.hintStyle,
+    this.outlineOnlyWhenEmpty = false,
     this.helper,
     this.prefix,
     this.suffix,
@@ -242,7 +248,15 @@ class _LiveTextFieldState extends State<LiveTextField> {
     borderSide: BorderSide(color: Theme.of(context).colorScheme.error, width: 2),
   );
 
-  Widget _field() => TextField(
+  Widget _field() => widget.outlineOnlyWhenEmpty && widget.outlineColor != null
+      ? ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _controller,
+          builder: (context, value, _) =>
+              _textField(outlined: value.text.trim().isEmpty),
+        )
+      : _textField(outlined: widget.outlineColor != null);
+
+  Widget _textField({required bool outlined}) => TextField(
     controller: _controller,
     focusNode: _focus,
     autofocus: widget.autofocus,
@@ -261,7 +275,7 @@ class _LiveTextFieldState extends State<LiveTextField> {
       border: const OutlineInputBorder(),
       enabledBorder: widget.warn
           ? _warnBorder
-          : widget.outlineColor == null
+          : !outlined
           ? null
           : OutlineInputBorder(
               borderSide: BorderSide(color: widget.outlineColor!, width: 1.5),
@@ -274,7 +288,7 @@ class _LiveTextFieldState extends State<LiveTextField> {
           ? FloatingLabelBehavior.always
           : null,
       hintText: widget.hint,
-      hintStyle: widget.hintStyle == null
+      hintStyle: widget.hintStyle == null || !outlined
           ? null
           : (Theme.of(context).inputDecorationTheme.hintStyle ??
                     const TextStyle())

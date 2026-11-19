@@ -18087,6 +18087,16 @@ class AppStateProvider extends ChangeNotifier {
   /// How Project > Rooms is sorted, for this session.
   ProjectRoomSort projectRoomSort = ProjectRoomSort.added;
 
+  /// Project > Rooms shows the priority list (true) or every room (false),
+  /// one at a time, for this session.
+  bool projectRoomsByPriority = true;
+
+  void setProjectRoomsByPriority(bool byPriority) {
+    if (byPriority == projectRoomsByPriority) return;
+    projectRoomsByPriority = byPriority;
+    notifyListeners();
+  }
+
   /// Whether Project > Equipment lists the parts room by room rather than
   /// merged across the job, for this session.
   bool projectPartsByRoom = false;
@@ -23069,12 +23079,21 @@ class AppStateProvider extends ChangeNotifier {
   /// [_refreshDesignOptionTotals].
   bool _switchingDesign = false;
 
+  /// The option the room is being switched to, '' when none: its button
+  /// shows a spinner until the switch is done.
+  String get designSwitchingTo => _designSwitchingTo;
+  String _designSwitchingTo = '';
+
   Future<String> chooseRoomDesignOption(String id) async {
     _switchingDesign = true;
+    _designSwitchingTo = id;
+    notifyListeners();
     try {
       return await _chooseRoomDesignOption(id);
     } finally {
       _switchingDesign = false;
+      _designSwitchingTo = '';
+      notifyListeners();
     }
   }
 

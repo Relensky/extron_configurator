@@ -2781,10 +2781,16 @@ class RfqEdits {
   /// A Rooms column on the request: each room and its quantity.
   final bool showRooms;
 
+  /// Our prices on the request - unit, extended and the estimated total.
+  /// Null follows the package's own setting (the workbook's package tabs);
+  /// the edit screen sets it, off unless switched on.
+  final bool? showPricing;
+
   const RfqEdits({
     this.leaveOut = const {},
     this.leaveOutRooms = const {},
     this.showRooms = false,
+    this.showPricing,
   });
 }
 
@@ -2831,7 +2837,7 @@ List<ReportSection> vendorPackageSections(
   XlsxMoney cash(double v) => money(v, currency);
   final project = estimate.project;
   final rfq = package.rfq;
-  final showEstimate = rfq?.sendsEstimate ?? true;
+  final showEstimate = edits.showPricing ?? rfq?.sendsEstimate ?? true;
   final offRooms = edits.leaveOutRooms;
   double qty(MasterPartLine l) => rfqLineQty(l, offRooms);
   // A line left with no units once rooms are off is off too.
@@ -2840,6 +2846,15 @@ List<ReportSection> vendorPackageSections(
       if (!edits.leaveOut.contains(l.key) && qty(l) > 0) l,
   ];
   final units = lines.fold<double>(0, (sum, l) => sum + qty(l));
+  // What one line comes to on this request: its own figure while every room
+  // is on, scaled by the units left once some are off.
+  double ext(MasterPartLine l) => qty(l) == l.boughtQty || l.boughtQty <= 0
+      ? l.total
+      : l.total * qty(l) / l.boughtQty;
+  final estimated = lines.fold<double>(
+    0,
+    (sum, l) => sum + (l.unpriced ? 0 : ext(l)),
+  );
   // The code: what will be on the label when it arrives.
   final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
   String rooms(MasterPartLine line) => [
@@ -2862,6 +2877,7 @@ List<ReportSection> vendorPackageSections(
           ['Project number', project.projectNumber],
         ['Line items', lines.length],
         ['Total units', trimNumber(units)],
+        if (showEstimate) ['Estimated total', cash(estimated)],
         // The date is ON THE PAPER rather than in a diary on this end: a due
         // date the vendor never saw is not a due date.
         if (rfq?.dueBy != null) ['Quotes due by', formatIsoDate(rfq!.dueBy!)],
@@ -2901,16 +2917,7 @@ List<ReportSection> vendorPackageSections(
             l.partNumber,
             qty(l),
             if (showEstimate) l.unpriced ? '' : cash(l.unitPrice),
-            // The line's own figure while every room is on; scaled by the
-            // units left once some are off.
-            if (showEstimate)
-              l.unpriced
-                  ? ''
-                  : cash(
-                      qty(l) == l.boughtQty || l.boughtQty <= 0
-                          ? l.total
-                          : l.total * qty(l) / l.boughtQty,
-                    ),
+            if (showEstimate) l.unpriced ? '' : cash(ext(l)),
             if (edits.showRooms) rooms(l),
           ],
       ],

@@ -305,6 +305,11 @@ class _RfqEditDialogState extends State<_RfqEditDialog> {
     for (final p in widget.packages)
       p.id: _lastEdits[p.id]?.showRooms ?? false,
   };
+  // Our prices on the request: off unless switched on.
+  late final Map<String, bool> _showPricing = {
+    for (final p in widget.packages)
+      p.id: _lastEdits[p.id]?.showPricing ?? false,
+  };
   // One quote opens expanded; several start folded.
   late final Set<String> _open = {
     if (widget.packages.length == 1) widget.packages.single.id,
@@ -339,6 +344,7 @@ class _RfqEditDialogState extends State<_RfqEditDialog> {
     leaveOut: _out[p.id]!,
     leaveOutRooms: _roomsOff[p.id]!,
     showRooms: _showRooms[p.id]!,
+    showPricing: _showPricing[p.id]!,
   );
 
   int _left(VendorPackage p) => p.lines
@@ -656,6 +662,17 @@ class _RfqEditDialogState extends State<_RfqEditDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SwitchListTile(
+            key: ValueKey('rfq_show_pricing_${p.id}'),
+            dense: true,
+            title: const Text('Show pricing'),
+            subtitle: const Text(
+              'Our unit and extended prices, and the estimated total. Off: '
+              'unit counts only.',
+            ),
+            value: _showPricing[p.id]!,
+            onChanged: (v) => setState(() => _showPricing[p.id] = v),
+          ),
           SwitchListTile(
             key: ValueKey('rfq_show_rooms_${p.id}'),
             dense: true,

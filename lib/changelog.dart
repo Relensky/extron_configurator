@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.232+242';
+const String kAppVersion = '0.5.233+243';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,17 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.233',
+    date: 'November 19, 2026',
+    title: 'Priority list or all rooms; quote requests without prices',
+    changes: [
+      'Design options: the design being switched to shows a small spinner on its button until it is the room, and the others wait until the switch is done.',
+      'Project > Rooms: a Priority list | All rooms switch above them shows one list at a time. The priority groups start open, with Expand all and Collapse all on the Priorities and funding card; the room list has its sort and its own Expand all and Collapse all right above it.',
+      'Quote requests: a Show pricing switch on each quote, off by default - the request lists unit counts only. Switched on, it adds our unit and extended prices and the estimated total for the quote.',
+      'Cost page: the Device box is outlined only while it shows a name the app made up - a model, a category or a config device number. Typing a name makes it a normal box at once, and the name is kept on the line; blanking it puts an automatic name back on the device and the outline returns.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.232',
     date: 'November 19, 2026',

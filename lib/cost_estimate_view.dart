@@ -6820,19 +6820,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // A config device says what kind it is - Switcher device 1.
     final type =
         units.length == 1 ? configDeviceTypeLabel(units.single.id) : '';
-    // NAMED BY NOBODY: no name typed here and no device in the room config
-    // behind it, so the name is the one the app made up. Outlined and in
-    // italics, so it is not mistaken for one somebody chose.
-    final tied = units.any((u) => configDeviceTypeLabel(u.id).isNotEmpty);
+    // NAMED BY NOBODY: nothing typed here and every box behind the line
+    // still carries a name the app made up. Outlined and in italics while the
+    // box is empty, so it is not mistaken for one somebody chose; typing a
+    // name clears it at once, and blanking the name brings it back.
     final typedName = (provider.avCost.lineNames[line.key] ?? '').trim();
-    final auto = typedName.isEmpty && !tied;
+    final auto = typedName.isEmpty &&
+        (units.isEmpty || units.every((u) => _isAutoName(u, line)));
     final theme = Theme.of(context);
     final field = hoverWhenClipped(
       // The box holds the text a field's inset in from each edge.
       text: '${line.description}    ',
       message: [
         if (type.isNotEmpty) type,
-        if (auto) 'Named automatically - not a device in the room config',
+        if (auto) 'Named automatically - type a name to give it one',
         _rowIdentity(line),
       ].join('\n'),
       style: const TextStyle(fontSize: 13),
@@ -6844,6 +6845,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         hint: line.defaultName,
         hintIsValue: true,
         outlineColor: auto ? theme.colorScheme.tertiary : null,
+        outlineOnlyWhenEmpty: true,
         hintStyle: auto
             ? TextStyle(
                 fontStyle: FontStyle.italic,
@@ -6851,11 +6853,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               )
             : null,
         onChanged: (v) {
+          // Kept on the line as typed, so the box shows it as a name somebody
+          // chose; the box behind a single-unit line takes it too.
+          provider.setAvCostLineName(line.key, v);
           if (units.length == 1 && v.trim().isNotEmpty) {
             provider.renameAvDevice(units.single.id, v);
-            provider.setAvCostLineName(line.key, '');
-          } else {
-            provider.setAvCostLineName(line.key, v);
+          } else if (v.trim().isEmpty && typedName.isNotEmpty) {
+            // A name blanked: back to one the app makes up.
+            for (final (i, u) in units.indexed) {
+              final base = _autoBaseName(line);
+              provider.renameAvDevice(
+                u.id,
+                units.length == 1 ? base : '$base ${i + 1}',
+              );
+            }
           }
         },
       ),
@@ -6867,6 +6878,34 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         PrintHide(child: _unitNamesMenu(provider, line, units)),
       ],
     );
+  }
+
+  /// The name the app gives a unit nobody named: the line's category, or its
+  /// model when it has none.
+  static String _autoBaseName(CostLine line) {
+    final category = line.category.trim();
+    if (category.isNotEmpty) return category;
+    final model = line.model.trim();
+    return model.isNotEmpty ? model : line.description.trim();
+  }
+
+  /// True when [unit]'s name is one the app made up - its model or category,
+  /// numbered or not, the config's own "Switcher device 1", or nothing.
+  static bool _isAutoName(AvNode unit, CostLine line) {
+    final name = unit.label.trim().toLowerCase();
+    if (name.isEmpty) return true;
+    final bases = {
+      unit.model.trim().toLowerCase(),
+      line.model.trim().toLowerCase(),
+      line.category.trim().toLowerCase(),
+      configDeviceTypeLabel(unit.id).toLowerCase(),
+    }..remove('');
+    for (final base in bases) {
+      if (name == base) return true;
+      final n = name.startsWith('$base ') ? name.substring(base.length + 1) : '';
+      if (n.isNotEmpty && int.tryParse(n) != null) return true;
+    }
+    return false;
   }
 
   /// The names of each unit on a line, and a way in to rename them.

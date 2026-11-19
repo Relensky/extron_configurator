@@ -23,6 +23,7 @@ class RoomDesignOptionsBar extends StatelessWidget {
     final choosing = options.options.length > 1;
     final estimate = provider.roomCost;
     final currency = estimate.currency;
+    final switchingTo = provider.designSwitchingTo;
     final quiet = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
@@ -67,13 +68,32 @@ class RoomDesignOptionsBar extends StatelessWidget {
                   ChoiceChip(
                     key: ValueKey('design_option_${o.id}'),
                     selected: o.id == options.active,
+                    // A spinner on the one being switched to, until it is
+                    // the room.
+                    avatar: o.id == switchingTo
+                        ? SizedBox(
+                            key: ValueKey('design_option_busy_${o.id}'),
+                            width: 14,
+                            height: 14,
+                            child: const CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : null,
+                    showCheckmark: switchingTo.isEmpty,
                     label: Text('${o.name}  ${totalOf(o)}'),
-                    tooltip: o.id == options.active
+                    tooltip: o.id == switchingTo
+                        ? 'Switching to ${o.name}...'
+                        : o.id == options.active
                         ? 'The room as it is now'
                         : 'Switch the room to ${o.name}',
-                    onSelected: (_) => o.id == options.active
+                    // Held while a switch is under way, so a second click
+                    // does not start another.
+                    onSelected: switchingTo.isNotEmpty
                         ? null
-                        : _choose(context, provider, o, options),
+                        : (_) => o.id == options.active
+                              ? null
+                              : _choose(context, provider, o, options),
                   ),
                 TextButton.icon(
                   key: const ValueKey('design_option_new'),

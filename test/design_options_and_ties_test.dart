@@ -12,6 +12,7 @@ import 'package:extron_configurator/cost_estimate.dart';
 import 'package:extron_configurator/cost_estimate_view.dart';
 import 'package:extron_configurator/project_estimate.dart';
 import 'package:extron_configurator/room_design_options.dart';
+import 'package:extron_configurator/room_design_options_bar.dart';
 import 'package:extron_configurator/room_sidecar.dart';
 import 'package:extron_configurator/ui_schema.dart';
 
@@ -293,6 +294,56 @@ void main() {
       expect(onDisk.active, camera);
       expect(onDisk.byId(base)!.total, 1000);
       expect(p.roomCost.grandTotal, 1500);
+    });
+
+    testWidgets('the design being switched to spins until it is the room',
+        (tester) async {
+      final dir = Directory.systemTemp.createTempSync('rcb_design_spin');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final p = AppStateProvider(autoLoadSettings: false)
+        ..uiSchema = schema
+        ..avDeviceLibrary = library
+        ..roomConfig = {
+          'SYSTEM_SETUP': {'gui_full_room_name': 'Room 1'},
+        }
+        ..currentConfigPath = path.join(dir.path, 'R1', 'config.json');
+      Directory(path.join(dir.path, 'R1')).createSync(recursive: true);
+      await tester.runAsync(() async {
+        p.loadAvFlowForCurrentConfig();
+        p.addAvCostExtraEquipment(description: 'Projector', unitPrice: 1000);
+        await p.saveCurrentConfigToFile();
+        p.markRoomSaved();
+        await p.createRoomDesignOption('Camera', firstName: 'Base');
+      });
+      final base = p.roomDesignOptions.options.first.id;
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(
+            home: Scaffold(body: RoomDesignOptionsBar()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(ValueKey('design_option_$base')));
+      await tester.pump();
+      // No question first, and the spinner is on Base straight away.
+      expect(find.byKey(const ValueKey('design_option_choose_confirm')),
+          findsNothing);
+      expect(find.byKey(ValueKey('design_option_busy_$base')), findsOneWidget);
+
+      for (var i = 0; i < 200 && p.designSwitchingTo.isNotEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+      await tester.pump();
+      expect(p.roomDesignOptions.active, base);
+      expect(find.byKey(ValueKey('design_option_busy_$base')), findsNothing);
+      // The message's own timer, run out.
+      await tester.pump(const Duration(seconds: 30));
     });
   });
 }

@@ -7,13 +7,20 @@ class ProjectFold extends ChangeNotifier {
   ProjectFold._();
   static final ProjectFold instance = ProjectFold._();
 
-  /// What a row is until it is toggled. Tests that read row details set it.
+  /// What a room row is until it is toggled. Tests that read row details
+  /// set it.
   bool defaultOpen = false;
 
-  /// Rows toggled away from [defaultOpen].
+  /// What a priority group is until it is toggled: open, so the rooms under
+  /// each priority show without a click.
+  bool defaultPriorityOpen = true;
+
+  /// Rows toggled away from their default.
   final Set<String> _flipped = {};
 
-  bool isOpen(String key) => defaultOpen != _flipped.contains(key);
+  bool isOpen(String key) =>
+      (key.startsWith('priority:') ? defaultPriorityOpen : defaultOpen) !=
+      _flipped.contains(key);
 
   void toggle(String key) {
     if (!_flipped.remove(key)) _flipped.add(key);
@@ -23,7 +30,22 @@ class ProjectFold extends ChangeNotifier {
   /// Opens or closes every row.
   void setAll(bool open) {
     defaultOpen = open;
+    defaultPriorityOpen = open;
     _flipped.clear();
+    notifyListeners();
+  }
+
+  /// Opens or closes every priority group, leaving the room rows.
+  void setAllPriorities(bool open) {
+    defaultPriorityOpen = open;
+    _flipped.removeWhere((k) => k.startsWith('priority:'));
+    notifyListeners();
+  }
+
+  /// Opens or closes every room row, leaving the priority groups.
+  void setAllRooms(bool open) {
+    defaultOpen = open;
+    _flipped.removeWhere((k) => k.startsWith('room:'));
     notifyListeners();
   }
 

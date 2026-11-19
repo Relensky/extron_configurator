@@ -14,6 +14,7 @@ import 'package:extron_configurator/procurement_log.dart';
 import 'package:extron_configurator/project_estimate.dart';
 import 'package:extron_configurator/project_workbook.dart';
 import 'package:extron_configurator/report_pdf.dart';
+import 'package:extron_configurator/report_tools.dart';
 
 /// The two documents a project produces: the workbook that holds everything,
 /// and the per-vendor quote request that holds exactly one vendor's parts and
@@ -613,6 +614,28 @@ void main() {
       expect(rfqLineQty(line, const {}), 3);
       expect(rfqLineQty(line, {'a'}), 0, reason: 'B buys none');
       expect(rfqLineQty(line, {'b'}), 3);
+    });
+
+    test('pricing is off unless switched on, and then has a total', () {
+      final estimate = job();
+      final package = estimate.packageFor('v1')!;
+      List<ReportSection> sheet(bool pricing) => vendorPackageSections(
+        estimate,
+        package,
+        edits: RfqEdits(showPricing: pricing),
+      );
+      List<String> header(bool pricing) =>
+          sheet(pricing).firstWhere((s) => s.title == 'Items').header;
+      bool hasTotal(bool pricing) => sheet(pricing)
+          .first
+          .rows
+          .any((r) => r.first == 'Estimated total');
+
+      expect(header(false), isNot(contains('Our estimate (unit)')));
+      expect(hasTotal(false), isFalse);
+      expect(header(true), contains('Our estimate (unit)'));
+      expect(header(true), contains('Our estimate (ext)'));
+      expect(hasTotal(true), isTrue);
     });
 
     test('the rooms column is there only when asked for', () {

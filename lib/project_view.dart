@@ -1855,6 +1855,11 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
       });
   }
   final movable = sort == ProjectRoomSort.added;
+  // ONE LIST AT A TIME: the priority list or every room, switched above
+  // them. A job with no priorities has only the one.
+  final hasPriorities = projectHasFunding(provider);
+  final showPriorities = hasPriorities &&
+      context.watch<AppStateProvider>().projectRoomsByPriority;
 
   return [
     SliverToBoxAdapter(
@@ -1942,43 +1947,6 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
                 // one of the three that does anything.
                 const AddManualRoomLineButton(),
                 const PasteRoomListButton(),
-                TextButton.icon(
-                  key: const ValueKey('project_rooms_expand_all'),
-                  onPressed: () => ProjectFold.instance.setAll(true),
-                  icon: const Icon(Icons.unfold_more, size: 18),
-                  label: const Text('Expand all'),
-                ),
-                TextButton.icon(
-                  key: const ValueKey('project_rooms_collapse_all'),
-                  onPressed: () => ProjectFold.instance.setAll(false),
-                  icon: const Icon(Icons.unfold_less, size: 18),
-                  label: const Text('Collapse all'),
-                ),
-                // How the list below is ordered.
-                // A set width, so large text shortens the label rather than
-                // pushing the control off a narrow window.
-                SizedBox(
-                  width: 190,
-                  child: DropdownButton<ProjectRoomSort>(
-                    key: const ValueKey('project_room_sort'),
-                    value: sort,
-                    isExpanded: true,
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      for (final s in ProjectRoomSort.values)
-                        DropdownMenuItem(
-                          value: s,
-                          child: Text(
-                            'Sort: ${s.label}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                    onChanged: (s) {
-                      if (s != null) provider.setProjectRoomSort(s);
-                    },
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -2012,9 +1980,36 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
         ),
       ),
     ),
+    if (hasPriorities)
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        sliver: SliverToBoxAdapter(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<bool>(
+              key: const ValueKey('project_rooms_view'),
+              segments: const [
+                ButtonSegment(
+                  value: true,
+                  label: Text('Priority list'),
+                  icon: Icon(Icons.format_list_numbered),
+                ),
+                ButtonSegment(
+                  value: false,
+                  label: Text('All rooms'),
+                  icon: Icon(Icons.meeting_room_outlined),
+                ),
+              ],
+              selected: {showPriorities},
+              onSelectionChanged: (v) =>
+                  provider.setProjectRoomsByPriority(v.first),
+            ),
+          ),
+        ),
+      ),
     // Which rooms go first and what each is allowed. See
     // project_funding_view.dart.
-    if (projectHasFunding(provider))
+    if (showPriorities)
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
         sliver: SliverToBoxAdapter(
@@ -2044,7 +2039,59 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
         ),
       )
     else ...[
-      if (estimate.rooms.isNotEmpty)
+      // THE LIST'S OWN CONTROLS, beside it: how it is sorted, and every row
+      // open or shut.
+      if (!showPriorities && (estimate.rooms.isNotEmpty || lines.isNotEmpty))
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+          sliver: SliverToBoxAdapter(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                TextButton.icon(
+                  key: const ValueKey('project_rooms_expand_all'),
+                  onPressed: () => ProjectFold.instance.setAllRooms(true),
+                  icon: const Icon(Icons.unfold_more, size: 18),
+                  label: const Text('Expand all'),
+                ),
+                TextButton.icon(
+                  key: const ValueKey('project_rooms_collapse_all'),
+                  onPressed: () => ProjectFold.instance.setAllRooms(false),
+                  icon: const Icon(Icons.unfold_less, size: 18),
+                  label: const Text('Collapse all'),
+                ),
+                // How the list below is ordered.
+                // A set width, so large text shortens the label rather than
+                // pushing the control off a narrow window.
+                SizedBox(
+                  width: 190,
+                  child: DropdownButton<ProjectRoomSort>(
+                    key: const ValueKey('project_room_sort'),
+                    value: sort,
+                    isExpanded: true,
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      for (final s in ProjectRoomSort.values)
+                        DropdownMenuItem(
+                          value: s,
+                          child: Text(
+                            'Sort: ${s.label}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (s) {
+                      if (s != null) provider.setProjectRoomSort(s);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      if (!showPriorities && estimate.rooms.isNotEmpty)
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           sliver: SliverList.separated(
@@ -2069,7 +2116,7 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
       // interleaving them would put an estimate and a quote under the same
       // heading. Below rather than above, because on a job that has both, the
       // drawn rooms are the ones with something to check.
-      if (lines.isNotEmpty) ...[
+      if (!showPriorities && lines.isNotEmpty) ...[
         SliverPadding(
           padding: EdgeInsets.fromLTRB(
             16,

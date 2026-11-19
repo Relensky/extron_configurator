@@ -209,10 +209,14 @@ void main() {
       'Display surge protectors',
     );
 
-    // Cleared, it goes back to the diagram's names, which kept the title.
+    // Cleared, the units go back to names the app makes up - the model,
+    // numbered - and the box is outlined as auto-named again.
     await tester.enterText(box, '');
     await tester.pump(LiveTextField.lazyPause * 2);
-    expect(p.roomCost.equipment.single.description, titled.defaultName);
+    expect(
+      p.roomCost.equipment.single.description,
+      'SX-DPP-102 1, SX-DPP-102 2, SX-DPP-102 3',
+    );
   });
 
   testWidgets('a name is not committed until the typing pauses', (tester) async {

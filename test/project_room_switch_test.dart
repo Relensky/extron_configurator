@@ -512,8 +512,9 @@ void main() {
       // to load one.
       // And for the open to finish: it checks the job's other rooms last,
       // then says so.
+      // Up to 30 s: a full parallel run slows the room open past 8 s.
       for (var i = 0;
-          i < 400 &&
+          i < 1500 &&
               (p.currentConfigPath.isEmpty ||
                   p.avNodes.isEmpty ||
                   find.textContaining('its cost').evaluate().isEmpty);
