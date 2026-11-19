@@ -236,6 +236,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_plans')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_plans')));
       await tester.pumpAndSettle();
     }

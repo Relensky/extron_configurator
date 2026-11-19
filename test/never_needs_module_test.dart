@@ -239,6 +239,8 @@ void main() {
         (tester) async {
       final p = withProject();
       await pump(tester, p);
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
@@ -250,6 +252,8 @@ void main() {
         (tester) async {
       final p = withProject();
       await pump(tester, p);
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
@@ -276,6 +280,8 @@ void main() {
     testWidgets('confirming retires the row', (tester) async {
       final p = withProject();
       await pump(tester, p);
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
@@ -326,6 +332,8 @@ void main() {
       p.refreshProjectRooms();
 
       await pump(tester, p);
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 

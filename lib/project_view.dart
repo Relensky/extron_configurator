@@ -9919,14 +9919,21 @@ class _PaneStripState extends State<_PaneStrip> {
             ],
           );
         }
-        return Scrollbar(
-          child: ListView(
-            scrollDirection: Axis.horizontal,
+        // Every tile built, not lazily: twelve are cheap, and the open one
+        // can then always be scrolled to. Its scrolling is its own - kept
+        // from the page, which sizes its panes off its own scroll metrics.
+        return NotificationListener<Notification>(
+          onNotification: (n) =>
+              n is ScrollNotification || n is ScrollMetricsNotification,
+          child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
             children: [
               for (final pane in panes)
                 SizedBox(width: widths[pane], child: tile(pane)),
             ],
           ),
+        ),
         );
       }),
     );

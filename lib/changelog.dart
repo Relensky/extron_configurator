@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.226+236';
+const String kAppVersion = '0.5.227+237';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.227',
+    date: 'November 19, 2026',
+    title: 'Section strip fix',
+    changes: [
+      'Project: the section strip\'s own sideways scrolling no longer disturbs the page under it (the Lifecycle replacement sheet opened at the wrong size on a narrow window), and every section is built so the one that is open can always be scrolled to.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.226',
     date: 'November 19, 2026',

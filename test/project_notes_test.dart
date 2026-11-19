@@ -51,6 +51,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_notes')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_notes')));
     await tester.pumpAndSettle();
   }
@@ -198,6 +200,8 @@ void main() {
 
     // ONE field in two places, not two fields that drift: what is typed on
     // the room list is what the Notes pane shows.
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_notes')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_notes')));
     await tester.pumpAndSettle();
     expect(

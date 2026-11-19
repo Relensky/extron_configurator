@@ -178,6 +178,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_vendors')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
       await tester.pumpAndSettle();
 
@@ -234,6 +236,8 @@ void main() {
           child: const MaterialApp(home: Scaffold(body: ProjectView())),
         ),
       );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_vendors')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
       await tester.pumpAndSettle();

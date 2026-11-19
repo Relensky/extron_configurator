@@ -105,6 +105,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_deliveries')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_deliveries')));
     await tester.pumpAndSettle();
     // Purchase orders start folded; open them all.

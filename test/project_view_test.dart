@@ -159,6 +159,10 @@ void main() {
     final p = withProject();
     await pump(tester, p);
 
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
 
@@ -198,6 +202,8 @@ void main() {
 
     Future<void> openSpares(WidgetTester tester, AppStateProvider p) async {
       await pump(tester, p);
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
       await tester.tap(find.textContaining('Spares'));
@@ -274,6 +280,8 @@ void main() {
       // that appeared only once somebody had already added a spare would be a
       // door that opens from the inside.
       await pump(tester, withProject());
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
@@ -423,6 +431,8 @@ void main() {
         'part', (tester) async {
       final p = withProject();
       await pump(tester, p);
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
@@ -485,6 +495,8 @@ void main() {
 
   testWidgets('the equipment list has a Sort by menu', (tester) async {
     await pump(tester, withProject());
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
 
@@ -550,6 +562,8 @@ void main() {
       (tester) async {
     final p = withProject();
     await pump(tester, p, width: 2400);
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
     final line = p.priceProjectShown().master
@@ -593,6 +607,8 @@ void main() {
     p.project.deliveries.add(
         ProjectDelivery(id: 'd1', partKey: line.key, qty: line.qty));
     await pump(tester, p, width: 2400);
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
     expect(find.text('Ordered (1)'), findsOneWidget);
@@ -609,6 +625,8 @@ void main() {
   testWidgets('the equipment sorts by who buys it', (tester) async {
     final p = withProject();
     await pump(tester, p, width: 2400);
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_parts_sort')));
@@ -621,6 +639,8 @@ void main() {
       // Nothing is filled in: the rooms' own lines are on the log already.
       final p = withProject();
       await pump(tester, p, width: 3000);
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_procurement')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_procurement')));
       await tester.pumpAndSettle();
       return p;
@@ -1047,6 +1067,8 @@ void main() {
     testWidgets('Add lights up with the first letter typed', (tester) async {
       final p = withProject();
       await pump(tester, p);
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_todo')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_todo')));
       await tester.pumpAndSettle();
 
@@ -1076,6 +1098,8 @@ void main() {
       p.addProjectTodo('ring the dean');
       p.addProjectTodo('order mounts');
       await pump(tester, p);
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_timeline')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_timeline')));
       await tester.pumpAndSettle();
 
@@ -1103,6 +1127,8 @@ void main() {
       await pump(tester, p);
 
       // The To do pane.
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_todo')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_todo')));
       await tester.pumpAndSettle();
       expect(find.text('Calendar invite'), findsNWidgets(2));
@@ -1117,6 +1143,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // The timeline's job list.
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_timeline')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_timeline')));
       await tester.pumpAndSettle();
       expect(find.byKey(ValueKey('timeline_remind_$first')), findsOneWidget);
@@ -1176,6 +1204,8 @@ void main() {
       (tester) async {
     final p = withProject();
     await pump(tester, p);
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
 
@@ -1200,6 +1230,8 @@ void main() {
       (tester) async {
     final p = withProject();
     await pump(tester, p);
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
 
@@ -1226,6 +1258,10 @@ void main() {
     final p = withProject();
     await pump(tester, p);
 
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_vendors')));
+
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
     await tester.pumpAndSettle();
 
@@ -1242,6 +1278,8 @@ void main() {
   testWidgets('the package list opens one card at a time', (tester) async {
     final p = withProject();
     await pump(tester, p);
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_vendors')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
     await tester.pumpAndSettle();
 
@@ -1268,6 +1306,8 @@ void main() {
     expect(before, hasLength(greaterThan(1)));
 
     await pump(tester, p);
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_vendors')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
     await tester.pumpAndSettle();
 

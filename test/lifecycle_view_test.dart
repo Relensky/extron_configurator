@@ -272,6 +272,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_lifecycle')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_lifecycle')));
     await tester.pumpAndSettle();
 
@@ -468,6 +470,8 @@ void main() {
           child: const MaterialApp(home: Scaffold(body: ProjectView())),
         ),
       );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_lifecycle')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_lifecycle')));
       await tester.pumpAndSettle();
@@ -685,7 +689,11 @@ void main() {
       await tester.pumpAndSettle();
       // By icon, not by label: the pane rail drops its labels on a window
       // this narrow and the key rides on the label.
-      await tester.tap(find.byIcon(Icons.history_toggle_off));
+      // The section strip scrolls sideways on a narrow window: bring the
+      // section on screen first, as a person would.
+      await tester.ensureVisible(find.byIcon(Icons.history_toggle_off).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.history_toggle_off).first);
       await tester.pumpAndSettle();
     }
 
@@ -1018,7 +1026,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.history_toggle_off));
+      // The section strip scrolls sideways on a narrow window: bring the
+      // section on screen first, as a person would.
+      await tester.ensureVisible(find.byIcon(Icons.history_toggle_off).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.history_toggle_off).first);
       await tester.pumpAndSettle();
     }
 

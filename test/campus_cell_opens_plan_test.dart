@@ -201,6 +201,8 @@ void main() {
       // [AppStateProvider.projectPaneRequestId].
       // By its key: the pane switcher keys whichever half is on screen, and
       // 'Rooms' is also a column heading on the list underneath.
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_rooms')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_rooms')));
       await tester.pumpAndSettle();
       expect(find.textContaining('Rooms are references'), findsOneWidget);

@@ -140,6 +140,10 @@ void main() {
       await tester.tap(find.byKey(ValueKey('rfq_package_parts_$epson')));
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_vendors')));
+
+      await tester.pumpAndSettle();
+
       await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(ValueKey('rfq_package_parts_$epson')));
