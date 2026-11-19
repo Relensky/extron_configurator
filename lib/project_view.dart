@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import 'estimate_pdf.dart' show loadEstimatePdfTheme;
 import 'file_dialogs.dart';
+import 'rfq_edit_dialog.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_device_library.dart'
@@ -341,6 +342,9 @@ class ProjectView extends StatefulWidget {
 }
 
 class _ProjectViewState extends State<ProjectView> {
+  // The quote request edit screen's last choices.
+  RfqFormat _rfqFormat = RfqFormat.xlsx;
+  final Map<String, Set<String>> _rfqLeaveOut = {};
   _ProjectPane _pane = _ProjectPane.rooms;
 
   /// Whether the Lifecycle pane is showing what the building would be bought
@@ -583,7 +587,8 @@ class _ProjectViewState extends State<ProjectView> {
   //  EXPORTS
   // -------------------------------------------------------------------------
 
-  /// One .xlsx PER BIDDER, into a folder the user picks.
+  /// One request PER BIDDER (Excel, PDF or both), into a folder the user
+  /// picks.
   ///
   /// A folder rather than a file, because the whole point is that these are
   /// several documents going to several companies. Writing them one at a time
@@ -613,38 +618,21 @@ class _ProjectViewState extends State<ProjectView> {
       return;
     }
 
-    // Excel, PDF or both.
-    final format = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        key: const ValueKey('rfq_format_dialog'),
-        title: const Text('Quote requests as'),
-        children: [
-          for (final (id, label, icon) in const [
-            ('xlsx', 'Excel', Icons.grid_on_outlined),
-            ('pdf', 'PDF', Icons.picture_as_pdf_outlined),
-            ('both', 'Both', Icons.library_books_outlined),
-          ])
-            SimpleDialogOption(
-              key: ValueKey('rfq_format_$id'),
-              onPressed: () => Navigator.of(ctx).pop(id),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Icon(icon, size: 20),
-                    const SizedBox(width: 12),
-                    Text(label),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
+    // The edit screen: format, and any items left out. Remembered until the
+    // app closes, so a second export starts where the first left off.
+    final choice = await showRfqEditDialog(
+      context,
+      packages: packages,
+      format: _rfqFormat,
+      leaveOut: _rfqLeaveOut,
     );
-    if (format == null || !mounted) return;
-    final wantXlsx = format != 'pdf';
-    final wantPdf = format != 'xlsx';
+    if (choice == null || !mounted) return;
+    _rfqFormat = choice.format;
+    _rfqLeaveOut
+      ..clear()
+      ..addAll(choice.leaveOut);
+    final wantXlsx = choice.format != RfqFormat.pdf;
+    final wantPdf = choice.format != RfqFormat.xlsx;
 
     final folder = await getDirectoryPathCompat(
       dialogTitle: 'Where should the quote requests go?',
@@ -655,6 +643,9 @@ class _ProjectViewState extends State<ProjectView> {
     final written = <String>[];
     final failed = <String>[];
     for (final package in packages) {
+      final leaveOut = choice.leaveOut[package.id] ?? const <String>{};
+      // Every item edited out: no request for this package.
+      if (leaveOut.length >= package.lines.length) continue;
       // Null for a package with no bidders: one unaddressed draft.
       final bidders = <ProjectVendor?>[
         for (final b in package.rfq?.bids ?? const <RfqBid>[])
@@ -674,6 +665,7 @@ class _ProjectViewState extends State<ProjectView> {
                 estimate: estimate,
                 package: package,
                 vendor: vendor,
+                leaveOut: leaveOut,
               ),
             );
             written.add(name);
@@ -689,6 +681,7 @@ class _ProjectViewState extends State<ProjectView> {
                 estimate: estimate,
                 package: package,
                 vendor: vendor,
+                leaveOut: leaveOut,
                 theme: pdfTheme,
               ),
             );

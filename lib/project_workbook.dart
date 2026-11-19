@@ -2791,12 +2791,20 @@ List<ReportSection> vendorPackageSections(
   ProjectEstimate estimate,
   VendorPackage package, {
   ProjectVendor? vendor,
+
+  /// Master line keys edited out of this request.
+  Set<String> leaveOut = const {},
 }) {
   final currency = estimate.currency;
   XlsxMoney cash(double v) => money(v, currency);
   final project = estimate.project;
   final rfq = package.rfq;
   final showEstimate = rfq?.sendsEstimate ?? true;
+  final lines = [
+    for (final l in package.lines)
+      if (!leaveOut.contains(l.key)) l,
+  ];
+  final units = lines.fold<double>(0, (sum, l) => sum + l.qty);
 
   final sections = <ReportSection>[
     (
@@ -2810,8 +2818,8 @@ List<ReportSection> vendorPackageSections(
         if (project.building.trim().isNotEmpty) ['Building', project.building],
         if (project.projectNumber.trim().isNotEmpty)
           ['Project number', project.projectNumber],
-        ['Line items', package.lines.length],
-        ['Total units', trimNumber(package.qty)],
+        ['Line items', lines.length],
+        ['Total units', trimNumber(units)],
         // The date is ON THE PAPER rather than in a diary on this end: a due
         // date the vendor never saw is not a due date.
         if (rfq?.dueBy != null) ['Quotes due by', formatIsoDate(rfq!.dueBy!)],
@@ -2820,13 +2828,17 @@ List<ReportSection> vendorPackageSections(
     ),
   ];
 
-  for (final kind in MasterPartKind.values) {
-    final lines = [for (final l in package.lines) if (l.kind == kind) l];
-    if (lines.isEmpty) continue;
+  // One list, cabling included, in the master list's kind order. Model
+  // first, no item description, no rooms and no columns for the vendor's
+  // prices: they answer with their own quote.
+  final ordered = [
+    for (final kind in MasterPartKind.values)
+      for (final l in lines)
+        if (l.kind == kind) l,
+  ];
+  if (ordered.isNotEmpty) {
     sections.add((
-      title: kMasterPartKindLabels[kind]!,
-      // Model first, no item description and no rooms: the vendor prices
-      // the part, not where it goes.
+      title: 'Items',
       header: [
         'Model',
         'Manufacturer',
@@ -2837,13 +2849,9 @@ List<ReportSection> vendorPackageSections(
         // see the note on this function.
         if (showEstimate) 'Our estimate (unit)',
         if (showEstimate) 'Our estimate (ext)',
-        // Left empty on purpose: this is where the vendor writes.
-        'Your unit price',
-        'Your extended',
-        'Lead time',
       ],
       rows: [
-        for (final l in lines)
+        for (final l in ordered)
           [
             l.model,
             l.manufacturer,
@@ -2851,9 +2859,6 @@ List<ReportSection> vendorPackageSections(
             l.qty,
             if (showEstimate) l.unpriced ? '' : cash(l.unitPrice),
             if (showEstimate) l.unpriced ? '' : cash(l.total),
-            '',
-            '',
-            '',
           ],
       ],
     ));
@@ -3281,13 +3286,19 @@ Uint8List buildVendorRfqBytes({
   required VendorPackage package,
   ProjectVendor? vendor,
   DateTime? generated,
+  Set<String> leaveOut = const {},
 }) => buildXlsx([
   buildStackedReportSheet(
     sheetName: xlsxSheetName(
       package.isUntagged ? 'Untagged' : package.packageName,
     ),
     title: vendorRfqTitle(estimate.project),
-    sections: vendorPackageSections(estimate, package, vendor: vendor),
+    sections: vendorPackageSections(
+      estimate,
+      package,
+      vendor: vendor,
+      leaveOut: leaveOut,
+    ),
     generated: generated ?? DateTime.now(),
   ),
 ]);
@@ -3298,11 +3309,17 @@ Future<Uint8List> buildVendorRfqPdf({
   required VendorPackage package,
   ProjectVendor? vendor,
   DateTime? generated,
+  Set<String> leaveOut = const {},
   pw.ThemeData? theme,
   bool compress = true,
 }) => buildReportSectionsPdf(
   title: vendorRfqTitle(estimate.project),
-  sections: vendorPackageSections(estimate, package, vendor: vendor),
+  sections: vendorPackageSections(
+    estimate,
+    package,
+    vendor: vendor,
+    leaveOut: leaveOut,
+  ),
   generated: generated ?? DateTime.now(),
   theme: theme,
   compress: compress,

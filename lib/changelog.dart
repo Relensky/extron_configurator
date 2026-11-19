@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.220+230';
+const String kAppVersion = '0.5.221+231';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,16 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.221',
+    date: 'November 19, 2026',
+    title: 'Edit a quote request before it goes out',
+    changes: [
+      'Quote requests open an edit screen first: pick Excel, PDF or both, and untick any item that should not be on the request. A package with every item unticked is skipped. The choices are kept until the app closes.',
+      'Quote requests list every item in one table - cabling no longer has its own section.',
+      'Quote requests no longer have Your unit price, Your extended or Lead time columns. The vendor sends back their own quote.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.220',
     date: 'November 19, 2026',

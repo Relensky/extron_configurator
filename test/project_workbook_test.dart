@@ -534,9 +534,30 @@ void main() {
       expect(sheet, isNot(contains('Bessey 101 ×1')));
       expect(sheet, isNot(contains('>Rooms<')));
       expect(sheet, isNot(contains('>Item<')));
-      // Somewhere for the supplier to write, which is the point of the sheet.
-      expect(sheet, contains('Your unit price'));
-      expect(sheet, contains('Lead time'));
+      // The vendor answers with their own quote: nothing for them to fill in.
+      expect(sheet, isNot(contains('Your unit price')));
+      expect(sheet, isNot(contains('Your extended')));
+      expect(sheet, isNot(contains('Lead time')));
+      // One list, cabling and all.
+      expect(sheet, contains('Items'));
+      expect(sheet, isNot(contains('>Cabling<')));
+    });
+
+    test('leaves out the items edited out of it', () {
+      final estimate = job();
+      final package = estimate.packageFor('v1')!;
+      final gone = package.lines.firstWhere(
+        (l) => l.partNumber == '60-1439-13',
+      );
+      final sheet = sheetText(
+        ZipDecoder().decodeBytes(buildVendorRfqBytes(
+          estimate: estimate,
+          package: package,
+          leaveOut: {gone.key},
+        )),
+        1,
+      );
+      expect(sheet, isNot(contains('60-1439-13')));
     });
 
     test('is headed with the project name, not the buildings', () {
@@ -623,7 +644,7 @@ void main() {
       // file is one vendor's copy of it. Everything else is the same document.
       for (final needle in const [
         '60-1439-13',
-        'Your unit price',
+        'Manufacturer',
       ]) {
         expect(sheetNamed(book, 'Extron Direct'), contains(needle));
         expect(sheetText(rfq, 1), contains(needle));
