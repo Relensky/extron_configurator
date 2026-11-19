@@ -1,7 +1,7 @@
 name: extron_configurator
 description: "A new Flutter project."
 publish_to: 'none'
-version: 0.5.238+248
+version: 0.5.239+249
 
 environment:
   sdk: ^3.11.5

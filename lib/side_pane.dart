@@ -160,6 +160,11 @@ class SidePane extends StatefulWidget {
   /// something stable per pane ('floor_plan_side').
   final String storageKey;
 
+  /// A window narrower than this shows the pane at [minWidth], whatever width
+  /// it was given; the given width comes back when the window widens. Null:
+  /// the width is the width.
+  final double? narrowBelow;
+
   const SidePane({
     super.key,
     required this.side,
@@ -170,6 +175,7 @@ class SidePane extends StatefulWidget {
     this.minWidth = 180,
     this.maxWidth = 620,
     this.initiallyOpen = true,
+    this.narrowBelow,
   });
 
   @override
@@ -238,9 +244,14 @@ class _SidePaneState extends State<SidePane> {
     final phone = widget.side == PaneSide.right &&
         (Platform.isIOS || Platform.isAndroid) &&
         MediaQuery.sizeOf(context).shortestSide < 600;
+    final below = widget.narrowBelow;
+    final narrow =
+        below != null && MediaQuery.sizeOf(context).width < below;
     final pane = SizedBox(
       width: phone
           ? (MediaQuery.sizeOf(context).width - 24).clamp(200.0, 2000.0)
+          : narrow
+          ? widget.minWidth
           : _width,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

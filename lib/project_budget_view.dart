@@ -7,6 +7,8 @@ import 'cost_estimate.dart'
 import 'live_text_field.dart';
 import 'project_budget.dart';
 import 'project_estimate.dart' show ProjectRoomCost;
+import 'project_funding_view.dart'
+    show FundingBudgetFigures, projectHasFunding, toggleBudgetLock;
 
 /// ============================================================================
 ///  THE BUDGET CARD ON THE PROJECT TAB
@@ -163,10 +165,10 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                 Text('Budget', style: theme.textTheme.titleMedium),
                 const Spacer(),
                 const SizedBox(width: 8),
-                // The fixed maximum - unlocked on Priorities and funding.
+                // The fixed maximum: locked, a figure; the lock beside it.
                 if (project.budgetLocked)
                   Tooltip(
-                    message: 'Locked. Unlock it on Priorities and funding',
+                    message: 'Locked. The lock beside it unlocks it',
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -198,6 +200,16 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                 ),
                 ),
                 IconButton(
+                  key: const ValueKey('funding_lock'),
+                  tooltip: project.budgetLocked
+                      ? 'Locked. Unlock to change the budget'
+                      : 'Lock the budget',
+                  icon: Icon(
+                    project.budgetLocked ? Icons.lock : Icons.lock_open,
+                  ),
+                  onPressed: () => toggleBudgetLock(context, provider),
+                ),
+                IconButton(
                   tooltip: _expanded ? 'Hide the lines' : 'Show the lines',
                   icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
                   onPressed: () => setState(() => _expanded = !_expanded),
@@ -205,6 +217,12 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
               ],
             ),
             const SizedBox(height: 10),
+            // What the priorities set aside out of it - see
+            // project_funding_view.dart.
+            if (projectHasFunding(provider)) ...[
+              const FundingBudgetFigures(),
+              const SizedBox(height: 6),
+            ],
             Wrap(
               children: [
                 figure('Budget', summary.budget),

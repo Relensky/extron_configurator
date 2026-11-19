@@ -44,14 +44,52 @@ typedef _FundedRoom = ({
 });
 
 /// How the rooms under each priority are ordered.
-enum _RoomSort {
+enum FundingRoomSort {
   added('As added'),
   name('Name'),
   budget('Budget'),
   total('Room total');
 
   final String label;
-  const _RoomSort(this.label);
+  const FundingRoomSort(this.label);
+}
+
+/// How the priority list orders its rooms, for this session. Set from the
+/// row of controls over the list - see [FundingSortDropdown].
+final ValueNotifier<FundingRoomSort> fundingRoomSort =
+    ValueNotifier(FundingRoomSort.added);
+
+/// The priority list's sort, for the row of controls over it.
+class FundingSortDropdown extends StatelessWidget {
+  const FundingSortDropdown({super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<FundingRoomSort>(
+        valueListenable: fundingRoomSort,
+        builder: (context, sort, _) => SizedBox(
+          width: 190,
+          child: DropdownButton<FundingRoomSort>(
+            key: const ValueKey('funding_sort'),
+            value: sort,
+            isExpanded: true,
+            underline: const SizedBox.shrink(),
+            items: [
+              for (final s in FundingRoomSort.values)
+                DropdownMenuItem(
+                  value: s,
+                  child: Text(
+                    'Sort: ${s.label}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (v) {
+              if (v != null) fundingRoomSort.value = v;
+            },
+          ),
+        ),
+      );
 }
 
 /// Whether the card has anything to say - see [ProjectFundingCard].
@@ -161,6 +199,133 @@ class _Breakdowns extends StatelessWidget {
   }
 }
 
+/// Locks the job's maximum, or asks before unlocking it.
+Future<void> toggleBudgetLock(
+BuildContext context,
+AppStateProvider provider,
+) async {
+  if (!provider.project.budgetLocked) {
+    provider.setProjectBudgetLocked(true);
+    return;
+  }
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Unlock the maximum?'),
+      content: const Text(
+        'The budget is the most this job can spend. Unlock it only to '
+        'change that figure, then lock it again.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('funding_unlock_confirm'),
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Unlock'),
+        ),
+      ],
+    ),
+  );
+  if (go == true) provider.setProjectBudgetLocked(false);
+}
+
+/// THE FUNDING FIGURES, in the Budget card: what is set aside for the rooms
+/// out of the maximum, what is free (or over), and the breakdowns by who pays
+/// and which department. Folds to the one figure that matters most.
+class FundingBudgetFigures extends StatefulWidget {
+  const FundingBudgetFigures({super.key});
+
+  @override
+  State<FundingBudgetFigures> createState() => _FundingBudgetFiguresState();
+}
+
+class _FundingBudgetFiguresState extends State<FundingBudgetFigures> {
+  bool _open = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final project = provider.project;
+    final theme = Theme.of(context);
+    String money(double v) => formatMoney(v, project.currency);
+    final allocated = project.targetTotal;
+    final free = project.budget - allocated;
+    final over = project.budget > 0 && free < -0.005;
+    // The buildings the project page is showing.
+    final hidden = provider.hiddenProjectBuildings;
+    final shown = [
+      for (final e in projectBudgetEntries(project, provider.priceProject()))
+        if (!hidden.contains(e.building)) e,
+    ];
+
+    Widget figure(String label, String value, {Color? color, String? key}) =>
+        Padding(
+          padding: const EdgeInsets.only(right: 24, bottom: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: theme.textTheme.labelSmall),
+              Text(
+                value,
+                key: key == null ? null : ValueKey(key),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            TextButton.icon(
+              key: const ValueKey('funding_figures_toggle'),
+              onPressed: () => setState(() => _open = !_open),
+              icon: Icon(_open ? Icons.expand_less : Icons.expand_more, size: 18),
+              label: const Text('Funding'),
+            ),
+            // Folded, the figure that matters most stays in sight.
+            if (!_open)
+              Text(
+                '${over ? 'Over by' : 'Free'} ${money(free.abs())}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: over ? theme.colorScheme.error : null,
+                ),
+              ),
+          ],
+        ),
+        if (_open)
+          Wrap(
+            children: [
+              figure('Set aside for rooms', money(allocated)),
+              figure(
+                over ? 'Over by' : 'Free',
+                money(free.abs()),
+                key: 'funding_free',
+                color: over ? theme.colorScheme.error : null,
+              ),
+            ],
+          ),
+        if (_open && shown.isNotEmpty)
+          _Breakdowns(
+            entries: shown,
+            // Shares are of the maximum, or of what is set aside while there
+            // is no maximum.
+            base: project.budget > 0 ? project.budget : allocated,
+            money: money,
+          ),
+      ],
+    );
+  }
+}
+
 class ProjectFundingCard extends StatefulWidget {
   /// The priced job, for the categories each priority's rooms hold. Null
   /// offers only the ones already chosen.
@@ -173,10 +338,13 @@ class ProjectFundingCard extends StatefulWidget {
 }
 
 class _ProjectFundingCardState extends State<ProjectFundingCard> {
+  void _resort() {
+    if (mounted) setState(() {});
+  }
+
   bool _expanded = true;
 
   /// The Maximum / Set aside / Free figures.
-  bool _showFigures = true;
 
   /// Whether priority [p]'s rooms are folded away - see [ProjectFold].
   bool _folded(int p) => !ProjectFold.instance.isOpen(ProjectFold.priority(p));
@@ -187,15 +355,16 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
   void initState() {
     super.initState();
     ProjectFold.instance.addListener(_refold);
+    fundingRoomSort.addListener(_resort);
   }
 
   @override
   void dispose() {
     ProjectFold.instance.removeListener(_refold);
+    fundingRoomSort.removeListener(_resort);
     super.dispose();
   }
 
-  _RoomSort _sort = _RoomSort.added;
 
   /// Bumped when a target is refused, so its box goes back to the figure the
   /// job actually holds.
@@ -592,35 +761,6 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
     );
   }
 
-  Future<void> _toggleLock(AppStateProvider provider) async {
-    if (!provider.project.budgetLocked) {
-      provider.setProjectBudgetLocked(true);
-      return;
-    }
-    final go = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Unlock the maximum?'),
-        content: const Text(
-          'The budget is the most this job can spend. Unlock it only to '
-          'change that figure, then lock it again.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('funding_unlock_confirm'),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Unlock'),
-          ),
-        ],
-      ),
-    );
-    if (go == true) provider.setProjectBudgetLocked(false);
-  }
-
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
@@ -685,43 +825,20 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
       final keep = {for (final e in shown) '${e.manualId}|${e.roomId}'};
       rooms.removeWhere((r) => !keep.contains('${r.manualId}|${r.roomId}'));
     }
-    switch (_sort) {
-      case _RoomSort.added:
+    switch (fundingRoomSort.value) {
+      case FundingRoomSort.added:
         break;
-      case _RoomSort.name:
+      case FundingRoomSort.name:
         rooms.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       // Biggest first; rooms with no figure last.
-      case _RoomSort.budget:
+      case FundingRoomSort.budget:
         rooms.sort((a, b) => b.target.compareTo(a.target));
-      case _RoomSort.total:
+      case FundingRoomSort.total:
         rooms.sort((a, b) => (b.total ?? -1).compareTo(a.total ?? -1));
     }
     final priorities = {for (final r in rooms) r.priority}.toList()
       ..sort((a, b) => a == 0 ? 1 : (b == 0 ? -1 : a.compareTo(b)));
     final highest = priorities.fold(0, (a, b) => a > b ? a : b);
-
-    final allocated = project.targetTotal;
-    final free = project.budget - allocated;
-    final over = project.budget > 0 && free < -0.005;
-
-    Widget figure(String label, String value, {Color? color, String? key}) =>
-        Padding(
-          padding: const EdgeInsets.only(right: 24, bottom: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: theme.textTheme.labelSmall),
-              Text(
-                value,
-                key: key == null ? null : ValueKey(key),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-        );
 
     Widget row(_FundedRoom room) => Padding(
       key: ValueKey('funding_row_${room.manualId}${room.roomId}'),
@@ -899,169 +1016,24 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            LayoutBuilder(builder: (context, box) {
-              final title = Text(
-                'Priorities and funding',
-                style: theme.textTheme.titleMedium,
-              );
-              final expand = TextButton.icon(
-                key: const ValueKey('funding_expand_all'),
-                onPressed: () => ProjectFold.instance.setAllPriorities(true),
-                icon: const Icon(Icons.unfold_more, size: 18),
-                label: const Text('Expand all'),
-              );
-              final collapse = TextButton.icon(
-                key: const ValueKey('funding_collapse_all'),
-                onPressed: () => ProjectFold.instance.setAllPriorities(false),
-                icon: const Icon(Icons.unfold_less, size: 18),
-                label: const Text('Collapse all'),
-              );
-              // Locked, it is a figure, not a box.
-              final max = project.budgetLocked
-                  ? Text(
-                      money(project.budget),
-                      key: const ValueKey('funding_max'),
-                      style: theme.textTheme.titleMedium,
-                    )
-                  : SizedBox(
-                      width: 180,
-                      child: LiveTextField(
-                        key: const ValueKey('funding_max'),
-                        fieldId: 'funding_max',
-                        initial: project.budget == 0
-                            ? ''
-                            : project.budget.toStringAsFixed(2),
-                        label: 'Maximum ($cur)',
-                        numeric: true,
-                        onChanged: (v) =>
-                            provider.setProjectBudget(_parse(v)),
-                      ),
-                    );
-              final lock = IconButton(
-                key: const ValueKey('funding_lock'),
-                tooltip: project.budgetLocked
-                    ? 'Locked. Unlock to change the maximum'
-                    : 'Lock the maximum',
-                icon: Icon(
-                  project.budgetLocked ? Icons.lock : Icons.lock_open,
-                ),
-                onPressed: () => _toggleLock(provider),
-              );
-              final fold = IconButton(
-                tooltip: _expanded ? 'Hide the rooms' : 'Show the rooms',
-                icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
-                onPressed: () => setState(() => _expanded = !_expanded),
-              );
-              // NARROW - a phone: the title keeps its line, and the buttons
-              // and the maximum go under it, instead of one row that squeezed
-              // the title to a letter a line.
-              if (box.maxWidth < 640) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.format_list_numbered),
-                        const SizedBox(width: 8),
-                        Expanded(child: title),
-                        fold,
-                      ],
-                    ),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: [
-                        expand,
-                        collapse,
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [max, lock],
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                children: [
-                  const Icon(Icons.format_list_numbered),
-                  const SizedBox(width: 8),
-                  Expanded(child: title),
-                  // The priority groups, all at once.
-                  expand,
-                  collapse,
-                  const SizedBox(width: 8),
-                  max,
-                  lock,
-                  fold,
-                ],
-              );
-            }),
-            const SizedBox(height: 8),
             Row(
               children: [
-                TextButton.icon(
-                  key: const ValueKey('funding_figures_toggle'),
-                  onPressed: () => setState(() => _showFigures = !_showFigures),
-                  icon: Icon(
-                    _showFigures ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
+                const Icon(Icons.format_list_numbered),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Priorities and funding',
+                    style: theme.textTheme.titleMedium,
                   ),
-                  label: const Text('Budget'),
                 ),
-                // Folded, the figure that matters most stays in sight.
-                if (!_showFigures)
-                  Text(
-                    '${over ? 'Over by' : 'Free'} ${money(free.abs())}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: over ? theme.colorScheme.error : null,
-                    ),
-                  ),
-                const Spacer(),
-                if (_expanded) ...[
-                  Text('Sort rooms', style: theme.textTheme.labelMedium),
-                  const SizedBox(width: 8),
-                  DropdownButton<_RoomSort>(
-                    key: const ValueKey('funding_sort'),
-                    value: _sort,
-                    isDense: true,
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      for (final s in _RoomSort.values)
-                        DropdownMenuItem(value: s, child: Text(s.label)),
-                    ],
-                    onChanged: (v) => setState(() => _sort = v ?? _sort),
-                  ),
-                ],
+
+                IconButton(
+                  tooltip: _expanded ? 'Hide the rooms' : 'Show the rooms',
+                  icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
+                  onPressed: () => setState(() => _expanded = !_expanded),
+                ),
               ],
             ),
-            if (_showFigures)
-              Wrap(
-                children: [
-                  figure('Maximum', money(project.budget)),
-                  figure('Set aside for rooms', money(allocated)),
-                  figure(
-                    over ? 'Over by' : 'Free',
-                    money(free.abs()),
-                    key: 'funding_free',
-                    color: over ? theme.colorScheme.error : null,
-                  ),
-                  figure(
-                    'Rooms come to',
-                    money(rooms.fold(0.0, (a, r) => a + (r.total ?? 0))),
-                    key: 'funding_rooms_total',
-                  ),
-                ],
-              ),
-            if (_showFigures && shown.isNotEmpty)
-              _Breakdowns(
-                entries: shown,
-                // Shares are of the maximum, or of what is set aside while
-                // there is no maximum.
-                base: project.budget > 0 ? project.budget : allocated,
-                money: money,
-              ),
             if (_expanded)
               for (final p in priorities) ...[
                 const Divider(height: 20),

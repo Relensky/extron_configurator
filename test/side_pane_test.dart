@@ -57,6 +57,42 @@ void main() {
     expect(paneWidth(tester), lessThan(340));
   });
 
+  testWidgets('a narrow window shows it at its smallest, then gives it back',
+      (tester) async {
+    Future<void> at(double width) async {
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1.0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Row(
+              children: [
+                SidePane(
+                  side: PaneSide.left,
+                  title: 'Tabs',
+                  storageKey: 'narrow_pane',
+                  initialWidth: 108,
+                  minWidth: 72,
+                  maxWidth: 220,
+                  narrowBelow: 1400,
+                  child: const SizedBox.shrink(),
+                ),
+                const Expanded(child: SizedBox.shrink()),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    addTearDown(tester.view.reset);
+    await at(1200);
+    expect(tester.getSize(find.byType(SidePane)).width, lessThan(90));
+    await at(1800);
+    expect(tester.getSize(find.byType(SidePane)).width, greaterThan(108));
+  });
+
   testWidgets('folds to a strip and comes back', (tester) async {
     await pump(tester);
     await tester.tap(find.byKey(const ValueKey('pane_fold_test_pane')));

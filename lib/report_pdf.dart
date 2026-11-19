@@ -142,7 +142,20 @@ Future<Uint8List> buildReportSectionsPdf({
         textAlign: right.contains(c) ? pw.TextAlign.right : pw.TextAlign.left,
       ),
     );
+    // WIDTHS THAT HOLD. Left to their natural widths, one long column (the
+    // rooms) squeezed the rest until their headings broke apart. Figures get
+    // a fixed width their heading fits in; text columns share what is left,
+    // the rooms the most, and anything long wraps onto more lines.
+    final widths = <int, pw.TableColumnWidth>{
+      for (var c = 0; c < cols; c++)
+        c: right.contains(c)
+            ? pw.FixedColumnWidth(
+                (s.header[c].length * 5.6 + 14).clamp(40.0, 110.0),
+              )
+            : pw.FlexColumnWidth(s.header[c] == 'Rooms' ? 4 : 2),
+    };
     return pw.Table(
+      columnWidths: widths,
       border: const pw.TableBorder(
         horizontalInside: pw.BorderSide(color: rule, width: 0.5),
         bottom: pw.BorderSide(color: rule, width: 0.5),

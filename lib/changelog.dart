@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.238+248';
+const String kAppVersion = '0.5.239+249';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,17 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.239',
+    date: 'November 19, 2026',
+    title: 'A narrower tab rail on a small window; PDF columns that hold; the budget in one place',
+    changes: [
+      'The Tabs rail drops to its narrowest, icons only, when the window is made smaller, and goes back to the width it was given when the window widens again.',
+      'Quote request PDF: with the Rooms column on, the headings and figures keep their size and width - Qty and the prices get a fixed width, the text columns share the rest, and the rooms wrap onto more lines instead of squeezing everything else.',
+      'Project > Rooms, Priority list: Expand all, Collapse all and the room sort sit under the Priority list | All rooms switch, as the All rooms controls do.',
+      'Project > Rooms: the budget lives in the Budget card. The maximum is set and locked there, and what the priorities set aside, what is free or over, and the breakdowns by who pays and which department show under it as Funding. Priorities and funding keeps the priority groups.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.238',
     date: 'November 19, 2026',

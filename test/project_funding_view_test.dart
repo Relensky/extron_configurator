@@ -4,12 +4,16 @@ import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/project_fold.dart';
+import 'package:extron_configurator/project_budget_view.dart';
 import 'package:extron_configurator/project_funding_view.dart';
 
 /// The Priorities and funding card: folding, sorting and room totals.
 void main() {
-  // These read the rooms under each priority.
-  setUp(() => ProjectFold.instance.setAll(true));
+  // These read the rooms under each priority, in the order added.
+  setUp(() {
+    ProjectFold.instance.setAll(true);
+    fundingRoomSort.value = FundingRoomSort.added;
+  });
   Future<AppStateProvider> pump(WidgetTester tester) async {
     final provider = AppStateProvider(autoLoadSettings: false);
     provider.newProject(name: 'Refresh');
@@ -26,7 +30,16 @@ void main() {
         value: provider,
         child: const MaterialApp(
           home: Scaffold(
-            body: SingleChildScrollView(child: ProjectFundingCard()),
+            body: SingleChildScrollView(
+              child: Column(
+                children: [
+                  // The sort sits over the card, beside Expand all.
+                  FundingSortDropdown(),
+                  ProjectBudgetCard(estimateTotal: 0, currency: r'$'),
+                  ProjectFundingCard(),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -74,7 +87,7 @@ void main() {
     expect(top(tester, 'BSS 103'), lessThan(top(tester, 'ARTS 105')));
     await tester.tap(find.byKey(const ValueKey('funding_sort')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Name').last);
+    await tester.tap(find.text('Sort: Name').last);
     await tester.pumpAndSettle();
     expect(top(tester, 'ARTS 105'), lessThan(top(tester, 'BSS 103')));
   });

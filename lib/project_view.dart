@@ -2010,6 +2010,35 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
           ),
         ),
       ),
+    // The priority list's own controls, under the switch as the room list's
+    // are: every priority group open or shut.
+    if (showPriorities)
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+        sliver: SliverToBoxAdapter(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              TextButton.icon(
+                key: const ValueKey('funding_expand_all'),
+                onPressed: () => ProjectFold.instance.setAllPriorities(true),
+                icon: const Icon(Icons.unfold_more, size: 18),
+                label: const Text('Expand all'),
+              ),
+              TextButton.icon(
+                key: const ValueKey('funding_collapse_all'),
+                onPressed: () => ProjectFold.instance.setAllPriorities(false),
+                icon: const Icon(Icons.unfold_less, size: 18),
+                label: const Text('Collapse all'),
+              ),
+              // How the priority list orders its rooms.
+              const FundingSortDropdown(),
+            ],
+          ),
+        ),
+      ),
     // Which rooms go first and what each is allowed. See
     // project_funding_view.dart.
     if (showPriorities)

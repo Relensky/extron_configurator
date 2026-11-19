@@ -1473,6 +1473,8 @@ class _MainDashboardState extends State<MainDashboard> {
             initialWidth: Platform.isIOS || Platform.isAndroid ? 72 : 108,
             minWidth: 72,
             maxWidth: 220,
+            // A smaller window: down to icons, so the page keeps the room.
+            narrowBelow: 1400,
             // Its own layer, so the rail's animations repaint only the rail.
             child: RepaintBoundary(
               child: AppNavRail(
