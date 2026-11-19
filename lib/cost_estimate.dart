@@ -2156,6 +2156,15 @@ CostEstimate computeRoomCost({
   // yet at the top of a quote sorted by who makes them.
   if (settings.equipmentSort == CostEquipmentSort.manufacturer) {
     equipment.sort(compareByManufacturer);
+  } else {
+    // By device name, the lines added here among the drawn ones rather than
+    // left at the bottom.
+    equipment.sort((a, b) {
+      final byName = a.description.toLowerCase().compareTo(
+        b.description.toLowerCase(),
+      );
+      return byName != 0 ? byName : a.key.compareTo(b.key);
+    });
   }
 
   // --- cabling: one line per lead the room buys, plus spares ---------------

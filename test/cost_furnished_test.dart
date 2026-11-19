@@ -287,6 +287,14 @@ void main() {
       // The row says it rather than showing a bare zero.
       expect(find.text('furnished'), findsOneWidget);
       expect(find.text('Furnished by stock'), findsOneWidget);
+      // In a card of its own, not among the parts being bought.
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('cost_not_bought_card')),
+          matching: find.text('Furnished by stock'),
+        ),
+        findsOneWidget,
+      );
     });
   });
 

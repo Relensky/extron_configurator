@@ -261,7 +261,25 @@ const double _kMinFlexWidth = 60;
 /// is left off (it is in the PDF and on the desktop) and the figures get the
 /// narrower widths the equipment table already uses. Without it every table
 /// ran a third of its width off the right-hand edge.
-final bool _compactCost = Platform.isIOS || Platform.isAndroid;
+bool _compactCost = _mobileCost;
+
+/// Always compact on a tablet or phone. On the desktop the page goes compact
+/// when the window is narrower than the full tables - see
+/// [_CostEstimateViewState.build] - so it shrinks like the iPad before it
+/// scrolls sideways.
+final bool _mobileCost = Platform.isIOS || Platform.isAndroid;
+
+/// The narrowest the full (desktop) tables lay out, before compact takes
+/// over.
+double _fullCostMinWidth(bool shipping) {
+  final was = _compactCost;
+  _compactCost = false;
+  try {
+    return _costPageMinWidth(shipping);
+  } finally {
+    _compactCost = was;
+  }
+}
 
 /// The least a flex column gets in the compact layout.
 const double _kCompactFlexWidth = 36;
@@ -918,6 +936,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       const SizedBox(height: 12),
       _cablingCard(context, provider, estimate, model),
       const SizedBox(height: 12),
+      if (_notBought(estimate).isNotEmpty) ...[
+        _notBoughtCard(context, provider, estimate),
+        const SizedBox(height: 12),
+      ],
       _laborCard(context, provider, estimate),
       const SizedBox(height: 12),
       if (estimate.laborCharges.isNotEmpty) ...[
@@ -1029,6 +1051,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       );
     }
 
+    return LayoutBuilder(builder: (context, box) {
+    // Narrower than the full tables: the iPad's compact layout - each row's
+    // buttons behind one more button, tighter figures - and only narrower
+    // than that does the page scroll sideways.
+    _compactCost = _mobileCost ||
+        (box.maxWidth.isFinite &&
+            box.maxWidth < _fullCostMinWidth(settings.showShipping));
     return RepaintBoundary(
       key: _sheetKey,
       // The tables are fixed-width columns; a window narrower than them gets
@@ -1051,6 +1080,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         ),
       ),
     );
+    });
   }
 
   // --- header: currency, tax, and the copy button --------------------------
@@ -1458,15 +1488,147 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// puts it: ahead of the row that follows it in the estimate.
   List<String>? _equipmentOrder;
 
-  List<CostLine> _steadyEquipment(List<CostLine> lines) {
+  /// The room [_equipmentOrder] was taken for.
+  String _equipmentOrderRoom = '';
+
+  List<CostLine> _steadyEquipment(List<CostLine> lines, String room) {
     final known = _equipmentOrder;
-    if (known == null) {
-      _equipmentOrder = [for (final l in lines) l.key];
+    final keys = [for (final l in lines) l.key];
+    // RE-SORTED whenever a line comes or goes, and for each room opened:
+    // only a rename holds the rows where they are, so a name being typed
+    // does not jump away mid-word.
+    if (known == null ||
+        room != _equipmentOrderRoom ||
+        known.length != keys.length ||
+        !keys.toSet().containsAll(known)) {
+      _equipmentOrder = keys;
+      _equipmentOrderRoom = room;
       return lines;
     }
-    _equipmentOrder = steadyOrder(known, [for (final l in lines) l.key]);
+    _equipmentOrder = steadyOrder(known, keys);
     final byKey = {for (final l in lines) l.key: l};
     return [for (final k in _equipmentOrder!) byKey[k]!];
+  }
+
+  /// Every part nobody is buying on this job: in kind, furnished by others
+  /// or already in the room. Listed apart from what is bought.
+  List<(String, CostLine)> _notBought(CostEstimate estimate) => [
+    for (final (section, lines) in [
+      ('Equipment', estimate.equipment),
+      ('Rack hardware', estimate.hardware),
+      ('Other items', estimate.extras),
+    ])
+      for (final l in lines)
+        if (l.furnished) (section, l),
+  ];
+
+  /// The parts not bought on this job, in a card of their own rather than
+  /// among the ones that are - each with who supplies it, what it is worth,
+  /// and its button to put it back on the quote.
+  Widget _notBoughtCard(
+    BuildContext context,
+    AppStateProvider provider,
+    CostEstimate estimate,
+  ) {
+    final theme = Theme.of(context);
+    final muted = mutedInk(context, theme);
+    final rows = _notBought(estimate);
+    final small = theme.textTheme.bodySmall?.copyWith(color: muted);
+    Widget head(String t, {bool right = false}) => Text(
+      t,
+      textAlign: right ? TextAlign.right : TextAlign.left,
+      style: theme.textTheme.labelMedium?.copyWith(color: muted),
+    );
+    return Card(
+      key: const ValueKey('cost_not_bought_card'),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CardHeading(
+              title: 'Not bought on this job (${rows.length})',
+              subtitle: 'in kind, furnished by others or already in the '
+                  'room - listed, not in the total',
+              actions: const [],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(flex: 3, child: head('Item')),
+                Expanded(flex: 3, child: head('Model')),
+                SizedBox(width: 56, child: head('Qty', right: true)),
+                const SizedBox(width: 12),
+                Expanded(flex: 2, child: head('Supplied by')),
+                SizedBox(width: 96, child: head('Value', right: true)),
+                const SizedBox(width: kRowIconWidth),
+              ],
+            ),
+            const Divider(height: 12),
+            for (final (i, (section, line)) in rows.indexed)
+              _stripe(
+                context,
+                i,
+                Padding(
+                  key: ValueKey('not_bought_${line.key}'),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              line.description,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(section, style: small),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          partIdentity(
+                            manufacturer: line.manufacturer,
+                            model: line.model,
+                            partNumber: line.partNumber,
+                            description: line.description,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: muted),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 56,
+                        child: Text(
+                          trimNumber(line.furnishedCount),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          priceFromLabel(line),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 96,
+                        child: _extendedCell(context, line, estimate.currency),
+                      ),
+                      // Back on the quote, or supplied by somebody else.
+                      _furnishedButton(context, provider, line),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _equipmentCard(
@@ -1477,7 +1639,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   ) {
     final theme = Theme.of(context);
     final currency = estimate.currency;
-    final equipment = _steadyEquipment(estimate.equipment);
+    // Lines nobody is buying are listed in their own card - see
+    // [_notBoughtCard].
+    final equipment = _steadyEquipment(
+      [for (final l in estimate.equipment) if (!l.furnished) l],
+      provider.currentConfigPath,
+    );
     final byMaker =
         provider.avCost.equipmentSort == CostEquipmentSort.manufacturer;
     final shipping = provider.avCost.showShipping;
@@ -1493,8 +1660,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             // two buttons on it; the sort picker was the third, and on a
             // laptop the row went over the edge of the card.
             _CardHeading(
-              title: 'Equipment (${estimate.equipment.length} line'
-                  '${estimate.equipment.length == 1 ? '' : 's'})',
+              title: 'Equipment (${equipment.length} line'
+                  '${equipment.length == 1 ? '' : 's'})',
               subtitle: 'counted off the signal flow diagram, plus anything '
                   'added here that is quoted without being drawn',
               actions: [
@@ -1600,6 +1767,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         line: line,
                         typed: extra,
                         onEdit: provider.updateAvCostExtraEquipment,
+                        onSwap: () => _swapUnit(
+                          context,
+                          provider,
+                          line,
+                          model,
+                          extra: extra,
+                        ),
                         note: extra == null
                             ? ''
                             : extra.spare
@@ -1998,7 +2172,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 _withShipping(_kHardwareCols, provider.avCost.showShipping),
               ),
               const Divider(height: 12),
-              for (final (i, line) in estimate.hardware.indexed)
+              for (final (i, line) in estimate.hardware
+                  .where((l) => !l.furnished)
+                  .indexed)
                 Builder(
                   builder: (context) {
                     // Lines added here (rather than placed in a frame) keep an
@@ -2057,6 +2233,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         line: line,
                         typed: extra,
                         onEdit: provider.updateAvCostExtraHardware,
+                        onSwap: () => _swapHardware(
+                          context,
+                          provider,
+                          line,
+                          extra: extra,
+                        ),
                       ),
                       // Kind
                       Text(
@@ -2627,6 +2809,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             line: line,
                             typed: item,
                             onEdit: provider.updateAvCostExtraCable,
+                            onSwap: () => _swapExtraLine(
+                              context,
+                              provider,
+                              item,
+                              kind: _ExtraPart.cable,
+                            ),
                           ),
                           // Drawn - none of it is, which is the point.
                           Text(
@@ -5202,6 +5390,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (swapped != null) {
       provider.moveAvCostTies(line.key, deviceGroupKey(swapped));
     }
+    // THE NAME DID NOT COME WITH IT. An 8" touch panel swapped for an MLC
+    // kept "Touch panel" - asked rather than renamed, since a name somebody
+    // chose may still be right.
+    if (context.mounted) {
+      await _offerRename(
+        context,
+        provider,
+        [for (final n in group.nodes) n.id],
+        picked,
+      );
+    }
 
     final said = [
       qty > 1
@@ -5240,6 +5439,76 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// Nothing but the line changes — there is no box on the diagram and no item
   /// in a frame behind it — so this is the whole edit for a hand-added line,
   /// whichever card it sits on.
+  /// After a swap: rename the devices for the new model? Each box gets the
+  /// name, numbered when there are several.
+  Future<void> _offerRename(
+    BuildContext context,
+    AppStateProvider provider,
+    List<String> ids,
+    AvDeviceTemplate picked,
+  ) async {
+    final nodes = [
+      for (final id in ids) ?provider.avNodeById(id),
+    ];
+    if (nodes.isEmpty) return;
+    final was = nodes.first.label.trim();
+    final suggest = picked.category.trim().isNotEmpty
+        ? picked.category.trim()
+        : picked.model.trim();
+    final controller = TextEditingController(text: suggest);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('swap_rename_dialog'),
+        title: const Text('Rename the device?'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                nodes.length == 1
+                    ? '"$was" is now a ${picked.model}.'
+                    : '${nodes.length} devices named like "$was" are now '
+                          '${picked.model}s. Each gets the name, numbered.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('swap_rename_field'),
+                controller: controller,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'New name'),
+                onSubmitted: (v) => Navigator.of(ctx).pop(v),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('swap_rename_keep'),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Keep "$was"'),
+          ),
+          FilledButton(
+            key: const ValueKey('swap_rename_ok'),
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+    // Not disposed: the dialog is still animating out with it.
+    final base = name?.trim() ?? '';
+    if (base.isEmpty) return;
+    for (final (i, n) in nodes.indexed) {
+      provider.renameAvDevice(
+        n.id,
+        nodes.length == 1 ? base : '$base ${i + 1}',
+      );
+    }
+  }
+
   Future<void> _swapExtraLine(
     BuildContext context,
     AppStateProvider provider,
@@ -6551,11 +6820,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // A config device says what kind it is - Switcher device 1.
     final type =
         units.length == 1 ? configDeviceTypeLabel(units.single.id) : '';
+    // NAMED BY NOBODY: no name typed here and no device in the room config
+    // behind it, so the name is the one the app made up. Outlined and in
+    // italics, so it is not mistaken for one somebody chose.
+    final tied = units.any((u) => configDeviceTypeLabel(u.id).isNotEmpty);
+    final typedName = (provider.avCost.lineNames[line.key] ?? '').trim();
+    final auto = typedName.isEmpty && !tied;
+    final theme = Theme.of(context);
     final field = hoverWhenClipped(
       // The box holds the text a field's inset in from each edge.
       text: '${line.description}    ',
       message: [
         if (type.isNotEmpty) type,
+        if (auto) 'Named automatically - not a device in the room config',
         _rowIdentity(line),
       ].join('\n'),
       style: const TextStyle(fontSize: 13),
@@ -6566,6 +6843,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         initial: provider.avCost.lineNames[line.key] ?? '',
         hint: line.defaultName,
         hintIsValue: true,
+        outlineColor: auto ? theme.colorScheme.tertiary : null,
+        hintStyle: auto
+            ? TextStyle(
+                fontStyle: FontStyle.italic,
+                color: theme.colorScheme.tertiary,
+              )
+            : null,
         onChanged: (v) {
           if (units.length == 1 && v.trim().isNotEmpty) {
             provider.renameAvDevice(units.single.id, v);
@@ -6705,6 +6989,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     CostLineItem? typed,
     ValueChanged<CostLineItem>? onEdit,
     String note = '',
+    VoidCallback? onSwap,
   }) => Padding(
     // Clear of the name box beside it, out of the column's own width. The
     // caption over it is inset by the same amount - see [kModelCellInset].
@@ -6715,6 +7000,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       typed: typed,
       onEdit: onEdit,
       note: note,
+      onSwap: onSwap,
     ),
   );
 
@@ -6724,6 +7010,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     CostLineItem? typed,
     ValueChanged<CostLineItem>? onEdit,
     String note = '',
+    VoidCallback? onSwap,
   }) {
     final theme = Theme.of(context);
     final muted = mutedInk(context, theme);
@@ -6796,7 +7083,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (line == null || _capturing) return cell;
     return InkWell(
       key: ValueKey('partedit_${line.key}'),
-      onTap: () => _showLineDetails(context, line),
+      onTap: () => _showLineDetails(context, line, onSwap: onSwap),
       child: Row(
         children: [
           Expanded(child: cell),
@@ -6878,7 +7165,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// catalog; a line already off it can be put back.
   /// Everything on [line], selectable, with a button that copies it all and
   /// one that edits the maker and part number.
-  Future<void> _showLineDetails(BuildContext context, CostLine line) async {
+  Future<void> _showLineDetails(
+    BuildContext context,
+    CostLine line, {
+    VoidCallback? onSwap,
+  }) async {
     final currency = context.read<AppStateProvider>().roomCost.currency;
     final rows = <(String, String)>[
       ('Item', line.description.trim()),
@@ -6898,7 +7189,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       ('Price from', priceFromLabel(line)),
     ].where((r) => r.$2.isNotEmpty).toList();
     final text = [for (final (k, v) in rows) '$k: $v'].join('\n');
-    final edit = await showDialog<bool>(
+    final action = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Line item'),
@@ -6930,11 +7221,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           ),
         ),
         actions: [
+          // Another catalog item on this line - the same as the row's
+          // Replace button.
+          if (onSwap != null)
+            TextButton.icon(
+              key: const ValueKey('line_details_swap'),
+              icon: const Icon(Icons.find_replace, size: 18),
+              label: const Text('Swap for another item'),
+              onPressed: () => Navigator.of(ctx).pop('swap'),
+            ),
           TextButton.icon(
             key: const ValueKey('line_details_edit'),
             icon: const Icon(Icons.edit_outlined, size: 18),
             label: const Text('Edit maker and part #'),
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () => Navigator.of(ctx).pop('edit'),
           ),
           TextButton.icon(
             key: const ValueKey('line_details_copy'),
@@ -6950,13 +7250,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             },
           ),
           FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Close'),
           ),
         ],
       ),
     );
-    if (edit == true && context.mounted) await _editLinePart(context, line);
+    if (!context.mounted) return;
+    if (action == 'edit') await _editLinePart(context, line);
+    if (action == 'swap') onSwap?.call();
   }
 
   Future<void> _editLinePart(BuildContext context, CostLine line) async {
@@ -7977,7 +8279,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           i.id: i,
     };
     final items = [
-      for (final l in estimate.extras) ?own[l.key],
+      for (final l in estimate.extras)
+        if (!l.furnished) ?own[l.key],
     ];
     return Card(
       child: Padding(
@@ -8037,6 +8340,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           .firstOrNull,
                       typed: item,
                       onEdit: provider.updateAvCostItem,
+                      onSwap: () => _swapExtraLine(
+                        context,
+                        provider,
+                        item,
+                        kind: _ExtraPart.misc,
+                      ),
                     ),
                     // Category
                     LiveTextField(

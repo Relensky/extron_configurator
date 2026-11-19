@@ -87,6 +87,17 @@ void main() {
       );
     });
 
+    test('a line added here sorts in with the drawn ones', () {
+      final p = room();
+      p.setAvCostEquipmentSort(CostEquipmentSort.standard);
+      p.addAvCostExtraEquipment(description: 'Camera', qty: 1);
+      expect(
+        priced(p).equipment.map((l) => l.description),
+        ['Amp', 'Camera', 'Display', 'Switcher'],
+        reason: 'not left at the bottom',
+      );
+    });
+
     test('the maker rides on the line, off the catalog entry', () {
       final p = room();
       final switcher = priced(

@@ -90,14 +90,21 @@ void main() {
     jsonDecode(File(projectFile).readAsStringSync()) as Map<String, dynamic>,
   );
 
-  test('opening a job records what each room priced at, in the file',
+  test('opening a job never writes it; the check goes with the next save',
       () async {
     await makeProject();
+    final stamp = File(projectFile).lastModifiedSync();
+    final bytes = File(projectFile).readAsStringSync();
     final p = provider();
     expect(await p.openProject(projectFile), isEmpty);
 
     expect(p.roomsChangedOnOpen, isEmpty, reason: 'nothing to compare yet');
     expect(p.projectDirty, isFalse);
+    expect(File(projectFile).lastModifiedSync(), stamp);
+    expect(File(projectFile).readAsStringSync(), bytes);
+    expect(onDisk().roomSnapshots, isEmpty);
+
+    expect(await p.saveProject(), isEmpty);
     final saved = onDisk();
     expect(saved.roomSnapshots, hasLength(2));
     expect(
@@ -107,10 +114,12 @@ void main() {
     expect(saved.roomsCheckedAt, isNotNull);
   });
 
-  test('a room saved elsewhere since is reported and written on open',
+  test('a room saved elsewhere since is reported on open, not written',
       () async {
     await makeProject();
-    expect(await provider().openProject(projectFile), isEmpty);
+    final first = provider();
+    expect(await first.openProject(projectFile), isEmpty);
+    expect(await first.saveProject(), isEmpty);
 
     writeCost('B', {'model:camera y': 2500});
     touch(costFile('B'), 2);
@@ -121,13 +130,15 @@ void main() {
     expect(p.roomsChangedOnOpen.single.room, 'B');
     expect(p.roomsChangedOnOpen.single.before, 2000);
     expect(p.roomsChangedOnOpen.single.after, 2500);
-    expect(p.projectDirty, isFalse, reason: 'written, not left unsaved');
+    expect(p.projectDirty, isFalse, reason: 'nothing the user changed');
     expect(
       onDisk().roomSnapshots.values.map((s) => s.total).toSet(),
-      {1000.0, 2500.0},
+      {1000.0, 2000.0},
+      reason: 'the file is left as it was',
     );
 
-    // Opened again with nothing new, it says nothing.
+    // Once somebody saves, it says nothing more.
+    expect(await p.saveProject(), isEmpty);
     final again = provider();
     await again.openProject(projectFile);
     expect(again.roomsChangedOnOpen, isEmpty);
@@ -136,7 +147,9 @@ void main() {
   test('a catalog price moving, with no room touched, is not written',
       () async {
     await makeProject();
-    expect(await provider().openProject(projectFile), isEmpty);
+    final first = provider();
+    expect(await first.openProject(projectFile), isEmpty);
+    expect(await first.saveProject(), isEmpty);
     final stamp = File(projectFile).lastModifiedSync();
     final checked = onDisk().roomsCheckedAt;
 

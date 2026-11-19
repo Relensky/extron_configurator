@@ -9885,14 +9885,13 @@ class _PaneStripState extends State<_PaneStrip> {
               key: _keys.putIfAbsent(pane, GlobalKey.new),
               onTap: () => widget.onSelect(pane),
               borderRadius: BorderRadius.circular(10),
-              // The highlight hugs the name, centered in its share of the
-              // strip, so a wide window spreads the sections out rather than
-              // stretching them into long bars.
-              child: Center(
+              // The open section lit across its whole tile, so the strip
+              // reads as a row of equal buttons with one pressed.
+              child: SizedBox.expand(
                 child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                constraints: const BoxConstraints(minWidth: 72),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: on
                       ? theme.colorScheme.secondaryContainer

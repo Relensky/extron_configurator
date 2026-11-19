@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.230+240';
+const String kAppVersion = '0.5.231+241';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,23 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.231',
+    date: 'November 19, 2026',
+    title: 'Opening a job never saves it; Cost page sections, swaps and sorting',
+    changes: [
+      'Opening a project no longer writes it. It used to save the job on open whenever a room\'s files looked newer - on every PC and the iPad - and one of those saves was cut off on the share, leaving a job that would not open (Format Exception). The room check is kept in memory and goes with the next save you make.',
+      'Every save checks the file on disk is as long as what was written. If not it is written once more, and if it is still short the save says it failed rather than leaving a cut-off file.',
+      'Cost page: parts not bought on this job - in kind, furnished by others or already in the room - move out of Equipment, Rack hardware and Other items into their own card, Not bought on this job, with who supplies each, what it is worth and the button to put it back.',
+      'Cost page: a device name nobody chose - no name typed and no device in the room config behind it - is outlined and in italics, so it reads as named automatically.',
+      'Cost page: clicking a line\'s model opens its details with a Swap for another item button, the same as the row\'s Replace.',
+      'Swapping a drawn device for another model asks whether to rename it - an 8" touch panel swapped for an MLC no longer keeps "Touch panel" unasked.',
+      'Cost page: with Sort by Device name, a line added here sorts in among the drawn ones instead of landing at the bottom. Adding or removing a line, or opening another room, re-sorts the table; only a rename holds the rows still while you type.',
+      'Cost page on the desktop: a window narrower than the full tables switches to the iPad layout - each row\'s buttons behind one ... button, tighter columns - and only scrolls sideways below that.',
+      'Alternative designs: saving the room reprices every design option at today\'s tax rate and catalog and records the totals, so the figures beside each option are current. An option priced on its own also uses the room\'s base tax rate.',
+      'Project: the open section\'s highlight fills its whole tile.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.230',
     date: 'November 19, 2026',

@@ -122,7 +122,8 @@ void main() {
 
     final deviceWidth = tester.getTopLeft(find.text('Model').first).dx -
         tester.getTopLeft(find.text('Device').first).dx;
-    expect(deviceWidth, greaterThanOrEqualTo(150));
+    // Compact here, as on the iPad: tighter, still readable.
+    expect(deviceWidth, greaterThanOrEqualTo(120));
     expect(
       find.byWidgetPredicate(
         (w) => w is Scrollable && w.axisDirection == AxisDirection.right,

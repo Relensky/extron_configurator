@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -15,6 +16,34 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 /// other's temp file, and a swap refused because someone else has the file
 /// open for that moment is retried before falling back to a plain write.
 Future<void> writeFileSafely(String filePath, String contents) async {
+  await _writeOnce(filePath, contents);
+  // CHECKED AFTER. A save on the share has come back whole on this end and
+  // left the file cut off at its old length - a job nobody could open. The
+  // size on disk has to be the size written; one more plain write if not,
+  // and a failed save, not a quiet broken file, if it still is not.
+  final want = utf8.encode(contents).length;
+  if (await _sizeOf(filePath) == want) return;
+  await _retry(() => File(filePath).writeAsString(contents, flush: true));
+  final got = await _sizeOf(filePath);
+  if (got != want) {
+    throw FileSystemException(
+      'The saved file is $got bytes on disk, not the $want written - it may '
+      'be cut off. Save again, or restore it from its backup.',
+      filePath,
+    );
+  }
+}
+
+Future<int> _sizeOf(String filePath) async {
+  try {
+    return await File(filePath).length();
+  } catch (_) {
+    return -1;
+  }
+}
+
+/// [writeFileSafely] without the check after.
+Future<void> _writeOnce(String filePath, String contents) async {
   final temp = File(_tempName(filePath));
   await _retry(() => temp.writeAsString(contents, flush: true));
   try {
@@ -34,6 +63,30 @@ Future<void> writeFileSafely(String filePath, String contents) async {
 
 /// [writeFileSafely] for the callers that cannot await.
 void writeFileSafelySync(String filePath, String contents) {
+  _writeOnceSync(filePath, contents);
+  // Checked after, as [writeFileSafely] is.
+  final want = utf8.encode(contents).length;
+  if (_sizeOfSync(filePath) == want) return;
+  _retrySync(() => File(filePath).writeAsStringSync(contents, flush: true));
+  final got = _sizeOfSync(filePath);
+  if (got != want) {
+    throw FileSystemException(
+      'The saved file is $got bytes on disk, not the $want written - it may '
+      'be cut off. Save again, or restore it from its backup.',
+      filePath,
+    );
+  }
+}
+
+int _sizeOfSync(String filePath) {
+  try {
+    return File(filePath).lengthSync();
+  } catch (_) {
+    return -1;
+  }
+}
+
+void _writeOnceSync(String filePath, String contents) {
   final temp = File(_tempName(filePath));
   _retrySync(() => temp.writeAsStringSync(contents, flush: true));
   try {

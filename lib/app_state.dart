@@ -9859,6 +9859,7 @@ class AppStateProvider extends ChangeNotifier {
       }
 
       _avFlowSyncedPath = currentConfigPath;
+      unawaited(_refreshDesignOptionTotals(currentConfigPath));
       return sidecar;
     } catch (e, stack) {
       AppLogger.logError('Failed to save AV flow to $sidecar', e, stack);
@@ -17150,23 +17151,16 @@ class AppStateProvider extends ChangeNotifier {
       final adoptedTax = _adoptDefaultTaxIntoProject();
       final check = _updateRoomSnapshots(read, stamps);
       roomsChangedOnOpen = check.changed;
-      // WRITTEN TO ITSELF, so the file says what the rooms say now. Only on a
-      // job with nothing else unsaved: a save here must not take somebody's
-      // other edits with it unasked. Those go with their next save.
-      var saved = false;
-      final record = check.recorded || adoptedTax;
-      if (record && !projectDirty) {
-        try {
-          await backUpProjectFileAsync(file);
-          await project.save(file);
-          saved = true;
-          AppLogger.logInfo('Room check recorded in $file.');
-        } catch (e) {
-          AppLogger.logError('Could not record the room check in $file', e);
-          projectDirty = true;
-        }
-      } else if (record) {
-        projectDirty = true;
+      // NEVER WRITTEN ON OPEN. Opening a shared job is reading it: a save
+      // nobody asked for rewrote the file under everyone else, and one cut
+      // off on the share left a job nobody could open. The room check and
+      // any tax rate adopted stay in memory and go with the next save.
+      const saved = false;
+      if (check.recorded || adoptedTax) {
+        AppLogger.logInfo(
+          'Room check kept in memory for $file; it is written with the next '
+          'save.',
+        );
       }
       // Anything a crash left behind for THIS project, offered back the same
       // way a room's is.
@@ -22936,16 +22930,9 @@ class AppStateProvider extends ChangeNotifier {
     if (!_designOptionTotalsPricing.add(key)) return null;
     Future<void> price() async {
       try {
-        final room = await readRoomFromDiskAsync(optionConfig);
-        if (!room.ok) return;
-        _designOptionTotals[key] = computeRoomCost(
-          model: room.model,
-          library: avDeviceLibrary,
-          settings: room.settings,
-          rates: laborRates,
-          baseCosts: baseCosts,
-          tier: pricingTier,
-        ).grandTotal;
+        final total = await _priceDesignOption(optionConfig);
+        if (total == null) return;
+        _designOptionTotals[key] = total;
         notifyListeners();
       } catch (e, stack) {
         AppLogger.logError(
@@ -22957,6 +22944,54 @@ class AppStateProvider extends ChangeNotifier {
 
     unawaited(price());
     return null;
+  }
+
+  /// What a filed-away option costs today: this PC's catalog and labor
+  /// rates, and the room's base tax rate unless the option set its own.
+  Future<double?> _priceDesignOption(String optionConfig) async {
+    final room = await readRoomFromDiskAsync(optionConfig);
+    if (!room.ok) return null;
+    room.settings.followBaseTax(baseTaxPercent);
+    return computeRoomCost(
+      model: room.model,
+      library: avDeviceLibrary,
+      settings: room.settings,
+      rates: laborRates,
+      baseCosts: baseCosts,
+      tier: pricingTier,
+    ).grandTotal;
+  }
+
+  /// After a room save: every design option repriced at today's tax rate and
+  /// catalog, and the totals written into its options, so the figures beside
+  /// them are not the ones from when each was filed away.
+  Future<void> _refreshDesignOptionTotals(String configPath) async {
+    final options = designOptionsFor(configPath);
+    if (options.options.length < 2) return;
+    final totals = <String, double>{};
+    for (final o in options.options) {
+      if (o.id == options.active) {
+        totals[o.id] = roomCost.grandTotal;
+        continue;
+      }
+      final config = designOptionConfigPath(configPath, o.id);
+      try {
+        final total = await _priceDesignOption(config);
+        if (total == null) continue;
+        totals[o.id] = total;
+        _designOptionTotals[_pathKey(config)] = total;
+      } catch (e, stack) {
+        AppLogger.logError('Could not reprice design option $config', e, stack);
+      }
+    }
+    try {
+      _designOptions[_pathKey(configPath)] =
+          recordDesignOptionTotals(configPath, totals);
+    } catch (e, stack) {
+      AppLogger.logError(
+          'Could not write the design option totals for $configPath', e, stack);
+    }
+    notifyListeners();
   }
 
   void _designOptionsChanged(String configPath, RoomDesignOptions options) {

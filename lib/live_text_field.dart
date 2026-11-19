@@ -52,6 +52,12 @@ class LiveTextField extends StatefulWidget {
   /// prints as what it is - blank, because nobody typed anything.
   final bool hintIsValue;
 
+  /// A colored outline round the box, e.g. a name nobody typed.
+  final Color? outlineColor;
+
+  /// Laid over the theme's hint style.
+  final TextStyle? hintStyle;
+
   final String? helper;
   final String? prefix;
   final String? suffix;
@@ -98,6 +104,8 @@ class LiveTextField extends StatefulWidget {
     this.label,
     this.hint,
     this.hintIsValue = false,
+    this.outlineColor,
+    this.hintStyle,
     this.helper,
     this.prefix,
     this.suffix,
@@ -251,7 +259,13 @@ class _LiveTextFieldState extends State<LiveTextField> {
     decoration: InputDecoration(
       isDense: true,
       border: const OutlineInputBorder(),
-      enabledBorder: widget.warn ? _warnBorder : null,
+      enabledBorder: widget.warn
+          ? _warnBorder
+          : widget.outlineColor == null
+          ? null
+          : OutlineInputBorder(
+              borderSide: BorderSide(color: widget.outlineColor!, width: 1.5),
+            ),
       focusedBorder: widget.warn ? _warnBorder : null,
       labelText: widget.label,
       // A box whose hint is the value it resolves to keeps its label up, so
@@ -260,6 +274,11 @@ class _LiveTextFieldState extends State<LiveTextField> {
           ? FloatingLabelBehavior.always
           : null,
       hintText: widget.hint,
+      hintStyle: widget.hintStyle == null
+          ? null
+          : (Theme.of(context).inputDecorationTheme.hintStyle ??
+                    const TextStyle())
+                .merge(widget.hintStyle),
       helperText: widget.helper,
       helperMaxLines: 4,
       prefixText: widget.prefix,

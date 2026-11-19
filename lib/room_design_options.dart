@@ -248,6 +248,23 @@ RoomDesignOptions createDesignOption(
   return options;
 }
 
+/// Writes [totals] (option id -> room total) into the room's options, for
+/// the ones that moved. Returns the options as they now are.
+RoomDesignOptions recordDesignOptionTotals(
+  String configPath,
+  Map<String, double> totals,
+) {
+  final before = readDesignOptions(configPath);
+  var options = before;
+  for (final MapEntry(:key, :value) in totals.entries) {
+    final was = options.byId(key);
+    if (was == null || (was.total - value).abs() < 0.005) continue;
+    options = _withTotal(options, key, value);
+  }
+  if (!identical(options, before)) _writeIndex(configPath, options);
+  return options;
+}
+
 RoomDesignOptions _withTotal(RoomDesignOptions o, String id, double total) =>
     o.copyWith(options: [
       for (final x in o.options) x.id == id ? x.copyWith(total: total) : x,

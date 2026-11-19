@@ -200,6 +200,14 @@ void main() {
 
   /// Opens the picker on one equipment row and takes [model]. Stops there —
   /// whatever the page does next is what each test is about.
+  /// Answers the rename prompt a swap ends on, keeping the name.
+  Future<void> keepName(WidgetTester tester) async {
+    final keep = find.byKey(const ValueKey('swap_rename_keep'));
+    if (keep.evaluate().isEmpty) return;
+    await tester.tap(keep);
+    await tester.pumpAndSettle();
+  }
+
   Future<void> pick(
     WidgetTester tester,
     String lineKey,
@@ -214,7 +222,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('catalog_swap_apply')));
     await tester.pumpAndSettle();
+    await keepName(tester);
   }
+
 
   /// How many runs the cabling sheet draws for this room.
   double schematicRuns(AppStateProvider p) {
@@ -403,6 +413,7 @@ void main() {
       await pick(tester, 'model:display 65', 'Display 86');
       await tester.tap(find.byKey(const ValueKey('swap_apply')));
       await tester.pumpAndSettle();
+      await keepName(tester);
 
       // The box and the config block both move — a part often arrives before
       // its driver does, and the quote and the drawing should not wait.
@@ -420,6 +431,51 @@ void main() {
       final fault = p.deviceModelModuleFault('PROJECTORDEVICE_1');
       expect(fault?.fault, ModelModuleFault.noModule);
       expect(fault?.model, 'Display 86');
+    });
+  });
+
+  group('the name after a swap', () {
+    testWidgets('is asked about, and renamed when asked to', (tester) async {
+      final p = room();
+      await pump(tester, p);
+      await tester.tap(
+        find.byKey(const ValueKey('eqp_swap_model:display 65')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('catalog_swap_Display 86')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('catalog_swap_apply')));
+      await tester.pumpAndSettle();
+      final apply = find.byKey(const ValueKey('swap_apply'));
+      if (apply.evaluate().isNotEmpty) {
+        await tester.tap(apply);
+        await tester.pumpAndSettle();
+      }
+
+      expect(find.byKey(const ValueKey('swap_rename_dialog')), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('swap_rename_field')),
+        'Big display',
+      );
+      await tester.tap(find.byKey(const ValueKey('swap_rename_ok')));
+      await tester.pumpAndSettle();
+      expect(p.avNodeById('PROJECTORDEVICE_1')!.label, startsWith('Big display'));
+    });
+
+    testWidgets('the line popup offers the swap too', (tester) async {
+      final p = room();
+      await pump(tester, p);
+      await tester.tap(
+        find.byKey(const ValueKey('partedit_model:display 65')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('line_details_swap')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('line_details_swap')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('catalog_swap_Display 86')),
+          findsOneWidget);
     });
   });
 

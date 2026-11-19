@@ -47,4 +47,14 @@ void main() {
       isEmpty,
     );
   });
+
+  test('a file of non-ASCII text passes the size check after', () async {
+    // The check counts bytes, not characters: an em dash is three.
+    final file = path.join(dir.path, 'dash.json');
+    const text = '{"note": "Rack — café ×2"}';
+    await writeFileSafely(file, text);
+    expect(File(file).readAsStringSync(), text);
+    writeFileSafelySync(file, '$text ');
+    expect(File(file).readAsStringSync(), '$text ');
+  });
 }
