@@ -163,6 +163,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_parts')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
 
@@ -1064,30 +1066,44 @@ void main() {
   });
 
   group('the section strip', () {
-    testWidgets('tiles stay near square on a wide window, never stretched',
+    testWidgets('a wide window spreads the sections across it',
         (tester) async {
       final p = withProject();
-      await pump(tester, p, width: 2400);
-      Size tileOf(String pane) => tester.getSize(
-        find
-            .ancestor(
-              of: find.byKey(ValueKey('project_pane_$pane')),
-              matching: find.byType(Tooltip),
-            )
-            .first,
-      );
-      final rooms = tileOf('rooms');
-      expect(rooms.width, lessThan(rooms.height * 2.2));
-      expect(tileOf('labor').width, rooms.width,
-          reason: 'short names get the same tile');
-      // Names at their own size: nothing scales them down.
+      // Wide: the test font draws every letter a full square.
+      await pump(tester, p, width: 3400);
+      Finder tileOf(String pane) => find
+          .ancestor(
+            of: find.byKey(ValueKey('project_pane_$pane')),
+            matching: find.byType(Tooltip),
+          )
+          .first;
+      // The strip is filled: no scrolling, and the last section ends at the
+      // right edge.
       expect(
         find.ancestor(
           of: find.byKey(const ValueKey('project_pane_rooms')),
-          matching: find.byType(FittedBox),
+          matching: find.byType(SingleChildScrollView),
         ),
         findsNothing,
       );
+      final first = tester.getRect(tileOf('rooms'));
+      expect(first.left, lessThan(40));
+      // Every section the same width, together the whole strip.
+      expect(tester.getSize(tileOf('labor')).width, first.width);
+      expect(first.width * 12, greaterThan(3400 * 0.8));
+      // Names at full size: nothing scaled them down.
+      final text = tester.getSize(find.byKey(const ValueKey('project_pane_rooms')));
+      final painter = TextPainter(
+        text: TextSpan(
+          text: 'Rooms',
+          style: tester
+              .widget<Text>(find.byKey(const ValueKey('project_pane_rooms')))
+              .style,
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      expect(text.width, closeTo(painter.width, 1));
+      painter.dispose();
     });
 
     testWidgets('a narrow window scrolls the strip', (tester) async {
@@ -1199,6 +1215,8 @@ void main() {
       final open = p.project.todos.last.id;
       p.setProjectTodoState(done, ProjectTodoState.done);
       await pump(tester, p);
+      await tester.ensureVisible(find.byKey(const ValueKey('project_pane_todo')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('project_pane_todo')));
       await tester.pumpAndSettle();
 
@@ -1221,6 +1239,8 @@ void main() {
       final p = withProject();
       final wasFirst = p.project.rfqs.first.id;
       await pump(tester, p);
+      await tester.ensureVisible(find.byIcon(Icons.inventory).first);
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.inventory).first);
       await tester.pumpAndSettle();
 
@@ -1238,6 +1258,8 @@ void main() {
         (tester) async {
       final p = withProject();
       await pump(tester, p);
+      await tester.ensureVisible(find.byIcon(Icons.inventory).first);
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.inventory).first);
       await tester.pumpAndSettle();
       // The cards are closed by default now; the rules are behind the toggle.
@@ -1325,6 +1347,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const ValueKey('project_pane_vendors')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
     await tester.pumpAndSettle();
 
@@ -1541,6 +1565,8 @@ void main() {
       testWidgets('on $pane', (tester) async {
         final p = withProject();
         await pump(tester, p, width: 1200);
+        await tester.ensureVisible(find.byKey(ValueKey('project_pane_$pane')));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(ValueKey('project_pane_$pane')));
         await tester.pumpAndSettle();
 

@@ -89,6 +89,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(ValueKey('project_pane_$pane')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(ValueKey('project_pane_$pane')));
     await tester.pumpAndSettle();
   }

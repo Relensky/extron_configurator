@@ -46,6 +46,22 @@ List<ProjectVendor?> _bidders(AppStateProvider provider, VendorPackage p) {
   return found.isEmpty ? [null] : found;
 }
 
+/// [p] with only the lines the job buys at least one of.
+VendorPackage _paidOnly(VendorPackage p) {
+  final lines = [
+    for (final l in p.lines)
+      if (l.boughtQty > 0) l,
+  ];
+  if (lines.length == p.lines.length) return p;
+  return VendorPackage(
+    rfq: p.rfq,
+    awardedVendor: p.awardedVendor,
+    lines: lines,
+    total: lines.fold(0.0, (sum, l) => sum + l.total),
+    qty: lines.fold(0.0, (sum, l) => sum + l.boughtQty),
+  );
+}
+
 /// The PDF's header and footer: the typed text, and the logo, accent and
 /// preparer from App Config, as the estimate PDF has them.
 ReportPdfDress _dress(
@@ -71,10 +87,29 @@ Future<void> exportQuoteRequests(
   BuildContext context,
   AppStateProvider provider,
   ProjectEstimate estimate,
-  List<VendorPackage> packages,
+  List<VendorPackage> all,
 ) async {
   final messenger = ScaffoldMessenger.of(context);
   final theme = Theme.of(context);
+  // Only what the job pays for: nothing already in the room, in kind or
+  // furnished by others.
+  final packages = [
+    for (final p in all)
+      if (_paidOnly(p) case final paid when paid.lines.isNotEmpty) paid,
+  ];
+  if (packages.isEmpty) {
+    showTimedSnackBar(
+      messenger,
+      const SnackBar(
+        duration: Duration(seconds: 5),
+        content: Text(
+          'Nothing to quote - every part here is already in the room, in '
+          'kind or furnished by others.',
+        ),
+      ),
+    );
+    return;
+  }
   final choice = await showRfqEditDialog(
     context,
     provider: provider,
@@ -287,9 +322,13 @@ class _RfqEditDialogState extends State<_RfqEditDialog> {
     super.dispose();
   }
 
-  /// The rooms with parts in [p], in job order.
+  /// The rooms the job buys parts of [p] for, in job order.
   List<String> _roomIds(VendorPackage p) {
-    final ids = {for (final l in p.lines) ...l.qtyByRoom.keys};
+    final ids = {
+      for (final l in p.lines)
+        for (final id in l.qtyByRoom.keys)
+          if (l.boughtInRoom(id) > 0) id,
+    };
     return [
       for (final r in widget.estimate.rooms)
         if (ids.contains(r.ref.id)) r.ref.id,

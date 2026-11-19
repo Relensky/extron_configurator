@@ -2788,16 +2788,18 @@ class RfqEdits {
   });
 }
 
-/// A line's quantity once [RfqEdits.leaveOutRooms] are off: the rooms still
-/// on. Every room on keeps the line's own quantity, building spares and all.
+/// What a quote request asks a vendor for on [line]: only the units the job
+/// pays for - nothing already in the room, given in kind or furnished by
+/// others - and none from [leaveOutRooms]. Every room on keeps building
+/// spares too.
 double rfqLineQty(MasterPartLine line, Set<String> leaveOutRooms) {
   if (leaveOutRooms.isEmpty ||
       !line.qtyByRoom.keys.any(leaveOutRooms.contains)) {
-    return line.qty;
+    return line.boughtQty;
   }
-  return line.qtyByRoom.entries
-      .where((e) => !leaveOutRooms.contains(e.key))
-      .fold(0.0, (sum, e) => sum + e.value);
+  return line.qtyByRoom.keys
+      .where((id) => !leaveOutRooms.contains(id))
+      .fold(0.0, (sum, id) => sum + line.boughtInRoom(id));
 }
 
 /// One package's quote request, addressed to one vendor: what they are being
@@ -2842,8 +2844,8 @@ List<ReportSection> vendorPackageSections(
   final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
   String rooms(MasterPartLine line) => [
     for (final id in line.roomIdsByQty())
-      if (!offRooms.contains(id))
-        '${roomNames[id] ?? id} x${trimNumber(line.qtyByRoom[id] ?? 0)}',
+      if (!offRooms.contains(id) && line.boughtInRoom(id) > 0)
+        '${roomNames[id] ?? id} x${trimNumber(line.boughtInRoom(id))}',
   ].join(', ');
 
   final sections = <ReportSection>[
@@ -2905,9 +2907,9 @@ List<ReportSection> vendorPackageSections(
               l.unpriced
                   ? ''
                   : cash(
-                      qty(l) == l.qty || l.qty == 0
+                      qty(l) == l.boughtQty || l.boughtQty <= 0
                           ? l.total
-                          : l.total * qty(l) / l.qty,
+                          : l.total * qty(l) / l.boughtQty,
                     ),
             if (edits.showRooms) rooms(l),
           ],

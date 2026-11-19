@@ -9798,6 +9798,7 @@ class _PaneStrip extends StatefulWidget {
   /// The narrowest a section is: near square against the strip's height.
   static const double _minTile = 84;
 
+
   /// Tall enough for the icon and its name at the size they are read at,
   /// so neither is ever scaled down.
   static double heightFor(BuildContext context) {
@@ -9861,7 +9862,15 @@ class _PaneStripState extends State<_PaneStrip> {
           tp.dispose();
           return math.max(_PaneStrip._minTile, w);
         }
-        final widths = {for (final p in panes) p: natural(p)};
+        // EVERY SECTION THE SAME WIDTH, filling the strip. Never narrower
+        // than the widest name, so no name is shrunk; when they cannot all
+        // fit at that, the strip scrolls sideways instead.
+        final widest =
+            panes.map(natural).fold<double>(0, (a, b) => math.max(a, b));
+        final avail = box.maxWidth;
+        final scrolls = !avail.isFinite || widest * panes.length > avail;
+        final each = scrolls ? widest : avail / panes.length;
+        final widths = {for (final p in panes) p: each};
         Widget tile(_ProjectPane pane) {
           final on = pane == widget.selected;
           final ink = on
@@ -9875,18 +9884,25 @@ class _PaneStripState extends State<_PaneStrip> {
             child: InkWell(
               key: _keys.putIfAbsent(pane, GlobalKey.new),
               onTap: () => widget.onSelect(pane),
-              child: Container(
+              borderRadius: BorderRadius.circular(10),
+              // The highlight hugs the name, centered in its share of the
+              // strip, so a wide window spreads the sections out rather than
+              // stretching them into long bars.
+              child: Center(
+                child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                constraints: const BoxConstraints(minWidth: 72),
                 decoration: BoxDecoration(
                   color: on
                       ? theme.colorScheme.secondaryContainer
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                // Never scaled down: the strip is as tall as the text needs
-                // and scrolls when the tiles do not fit across.
-                child: Center(
+                // Never scaled down in practice: every tile is as wide as
+                // the widest name, and the strip as tall as the text.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
                   child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -9909,17 +9925,24 @@ class _PaneStripState extends State<_PaneStrip> {
                   ],
                 ),
                 ),
+                ),
               ),
             ),
           );
         }
 
-        // Fixed, near-square tiles, never stretched across a wide window:
-        // centered when they all fit, scrolled sideways when they do not,
-        // as on the iPad. Every tile built, not lazily: twelve are cheap,
-        // and the open one can then always be scrolled to. Its scrolling is
-        // its own - kept from the page, which sizes its panes off its own
-        // scroll metrics.
+        if (!scrolls) {
+          return Row(
+            children: [
+              for (final pane in panes)
+                SizedBox(width: widths[pane], child: tile(pane)),
+            ],
+          );
+        }
+        // Scrolled sideways, as on the iPad. Every tile built, not lazily:
+        // twelve are cheap, and the open one can then always be scrolled
+        // to. Its scrolling is its own - kept from the page, which sizes its
+        // panes off its own scroll metrics.
         return NotificationListener<Notification>(
           onNotification: (n) =>
               n is ScrollNotification || n is ScrollMetricsNotification,

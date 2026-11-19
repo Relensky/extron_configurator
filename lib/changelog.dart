@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.228+238';
+const String kAppVersion = '0.5.230+240';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,23 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.230',
+    date: 'November 19, 2026',
+    title: 'Equal section tiles; quote requests ask only for what is bought',
+    changes: [
+      'Project: the sections along the top are all the same width and fill the strip. None is narrower than the longest name, so no name shrinks; when they cannot all fit at that width, the strip scrolls sideways.',
+      'Quote requests leave out what the job is not paying for: parts already in the room, given in kind or furnished by others. A part partly furnished asks only for the units being bought, in the quantities and the Rooms column alike.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.229',
+    date: 'November 19, 2026',
+    title: 'Project sections across the full width',
+    changes: [
+      'Project: the sections along the top fill the width with even spacing, the highlight sized to the name rather than stretched into a long bar. Short of room the names shrink a little at most, then the strip scrolls sideways.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.228',
     date: 'November 19, 2026',

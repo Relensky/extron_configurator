@@ -587,6 +587,34 @@ void main() {
       );
     });
 
+    test('asks only for what the job pays for', () {
+      // Four in room A, one of them already there; two in room B given in
+      // kind. The vendor is asked for three.
+      const line = MasterPartLine(
+        key: 'k',
+        kind: MasterPartKind.equipment,
+        description: 'Display',
+        model: 'D65',
+        partNumber: '',
+        manufacturer: 'Acme',
+        category: '',
+        qty: 6,
+        total: 3000,
+        unitPrice: 1000,
+        maxUnitPrice: 1000,
+        qtyByRoom: {'a': 4, 'b': 2},
+        furnishedByRoom: {'a': 1, 'b': 2},
+        rfq: null,
+        tagSource: RfqTagSource.pinned,
+        vendor: null,
+        unpriced: false,
+      );
+      expect(line.boughtQty, 3);
+      expect(rfqLineQty(line, const {}), 3);
+      expect(rfqLineQty(line, {'a'}), 0, reason: 'B buys none');
+      expect(rfqLineQty(line, {'b'}), 3);
+    });
+
     test('the rooms column is there only when asked for', () {
       final estimate = job();
       final package = estimate.packageFor('v1')!;

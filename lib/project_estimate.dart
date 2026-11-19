@@ -622,6 +622,18 @@ class MasterPartLine {
   final double maxUnitPrice;
   bool get priceVaries => maxUnitPrice > unitPrice;
 
+  /// Room id -> units in that room the job does NOT buy: furnished by
+  /// somebody else, given in kind or already installed. Part of [qtyByRoom].
+  final Map<String, double> furnishedByRoom;
+
+  /// Units the job buys: [qty] less [furnishedByRoom].
+  double get boughtQty =>
+      qty - furnishedByRoom.values.fold(0.0, (a, b) => a + b);
+
+  /// Units the job buys in [roomId].
+  double boughtInRoom(String roomId) =>
+      (qtyByRoom[roomId] ?? 0) - (furnishedByRoom[roomId] ?? 0);
+
   /// Room id -> units for that room. The breakdown a vendor gets asked for
   /// ("which rooms are the eighteen switchers for?") and the one a project
   /// manager checks a delivery against.
@@ -750,6 +762,7 @@ class MasterPartLine {
     required this.unitPrice,
     required this.maxUnitPrice,
     required this.qtyByRoom,
+    this.furnishedByRoom = const {},
     required this.rfq,
     required this.tagSource,
     required this.vendor,
@@ -2000,6 +2013,7 @@ ProjectEstimate computeProjectEstimate({
       unitPrice: a.lowUnitPrice,
       maxUnitPrice: a.maxUnitPrice,
       qtyByRoom: a.qtyByRoom,
+      furnishedByRoom: a.furnishedByRoom,
       rfq: tag.rfq,
       tagSource: tag.source,
       // Only once the package has been awarded. Before that nobody is
@@ -2244,6 +2258,7 @@ class _PartAccumulator {
   double maxUnitPrice = 0;
   final Map<String, double> qtyByRoom = {};
   final Map<String, double> spareByRoom = {};
+  final Map<String, double> furnishedByRoom = {};
 
   /// Takes one of the JOB's own spares onto this part - see [ProjectSpare].
   ///
@@ -2333,6 +2348,11 @@ class _PartAccumulator {
     qty += line.qty;
     total += line.total;
     qtyByRoom[roomId] = (qtyByRoom[roomId] ?? 0) + line.qty;
+    // Units somebody else supplies, or already installed: not bought.
+    if (line.furnishedCount > 0) {
+      furnishedByRoom[roomId] =
+          (furnishedByRoom[roomId] ?? 0) + line.furnishedCount;
+    }
 
     // A room says "spare" two ways and the job cannot tell them apart: a whole
     // line typed in as a shelf spare is entirely spare, and a device group
