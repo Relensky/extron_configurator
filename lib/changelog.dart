@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.221+231';
+const String kAppVersion = '0.5.222+232';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,15 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.222',
+    date: 'November 19, 2026',
+    title: 'Measure on a touch screen',
+    changes: [
+      'Walls: with an item selected, a long press on another item measures to it - Shift+click for a touch screen. The distances are under Measure to, in the panel under the wall on a phone. A long press with nothing selected selects what it is on.',
+      'Walls: a tap selects on the finger lifting rather than landing, so a long press does not first select what it is held on.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.221',
     date: 'November 19, 2026',

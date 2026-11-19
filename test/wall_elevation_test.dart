@@ -383,6 +383,53 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('a long press measures to another item, as Shift+click does',
+        (tester) async {
+      final p = room();
+      p.addWallView(name: 'Front wall', widthIn: 240, heightIn: 108);
+      p.updateWallView(
+        withDisplayOnMount(p.avWallViews.single, kNewlineQPro86, kNewlineTiltMount),
+        'Add the Q Pro',
+      );
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(home: Scaffold(body: WallElevationView())),
+        ),
+      );
+      await tester.pump();
+      final wall = p.avWallViews.single;
+      final d = wall.items.firstWhere((i) => i.kind == WallItemKind.display);
+      final m = wall.items.firstWhere((i) => i.kind == WallItemKind.mount);
+
+      // The mount picked from the list, then the display held on the wall.
+      await tester.tap(find.byKey(ValueKey('wall_item_row_${m.id}')));
+      await tester.pump();
+      final canvas = find.byType(CustomPaint).first;
+      final box = tester.getRect(canvas);
+      // Somewhere on the wall the display covers; the sweep finds it
+      // whatever the fitted scale.
+      var measured = false;
+      for (var fx = 0.3; fx <= 0.7 && !measured; fx += 0.1) {
+        for (var fy = 0.3; fy <= 0.7 && !measured; fy += 0.1) {
+          await tester.longPressAt(
+              Offset(box.left + box.width * fx, box.top + box.height * fy));
+          await tester.pump();
+          measured = find
+              .byKey(ValueKey('wall_measure_to_${d.id}'))
+              .evaluate()
+              .isNotEmpty;
+        }
+      }
+      expect(measured, isTrue, reason: 'a long press on the display measures');
+      // ...and the mount is still the one selected.
+      expect(find.byKey(ValueKey('wall_measure_to_${d.id}')), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
+    });
+
     testWidgets('the tab draws the wall and lists the check', (tester) async {
       final p = room();
       p.addWallView(name: 'Front wall', widthIn: 240, heightIn: 108);

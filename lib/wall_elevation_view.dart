@@ -596,7 +596,9 @@ class _WallElevationViewState extends State<WallElevationView> {
             },
             child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTapDown: (d) {
+            // On the finger lifting, not landing: a long press - which
+            // measures, below - must not first select what it lands on.
+            onTapUp: (d) {
               _canvasFocus.requestFocus();
               final hit = layout.hit(shown, d.localPosition);
               // Shift+click measures from the selected item to another.
@@ -608,6 +610,28 @@ class _WallElevationViewState extends State<WallElevationView> {
                 return;
               }
               setState(() => _itemId = hit?.id ?? '');
+            },
+            // LONG PRESS: Shift+click for a touch screen. With an item
+            // selected, holding another measures to it; with nothing
+            // selected, it selects what it is held on.
+            onLongPressStart: (d) {
+              _canvasFocus.requestFocus();
+              final hit = layout.hit(shown, d.localPosition);
+              if (hit == null) return;
+              HapticFeedback.selectionClick();
+              if (_itemId.isNotEmpty && hit.id != _itemId) {
+                setState(() => _measureId = hit.id);
+                // On a phone the result is in the panel under the wall.
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(
+                    duration: const Duration(seconds: 3),
+                    content: Text('Measuring to ${hit.name} - the distances '
+                        'are under Measure to.'),
+                  ));
+                return;
+              }
+              setState(() => _itemId = hit.id);
             },
             // SCALE, NOT PAN: the one gesture covers both. One finger (or
             // the mouse) drags an item or the view as before; two fingers
@@ -1715,7 +1739,8 @@ class _ItemEditor extends StatelessWidget {
         initialValue: target?.id ?? '',
         decoration: const InputDecoration(
           labelText: 'Measure to',
-          helperText: 'Or Shift+click it on the drawing',
+          helperText:
+              'Or long-press it, or Shift+click it, on the drawing',
         ),
         items: [
           const DropdownMenuItem(value: '', child: Text('Nothing')),
