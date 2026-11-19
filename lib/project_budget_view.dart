@@ -162,6 +162,7 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                 const SizedBox(width: 8),
                 Text('Budget', style: theme.textTheme.titleMedium),
                 const Spacer(),
+                const SizedBox(width: 8),
                 // The fixed maximum - unlocked on Priorities and funding.
                 if (project.budgetLocked)
                   Tooltip(
@@ -180,8 +181,10 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                     ),
                   )
                 else
-                SizedBox(
-                  width: 200,
+                // Up to 200 wide, less on a phone so the row still fits.
+                Flexible(
+                  child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
                   child: LiveTextField(
                     key: const ValueKey('project_budget_amount'),
                     fieldId: 'project_budget_amount',
@@ -192,6 +195,7 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                     hint: 'e.g. 250000',
                     onChanged: (v) => provider.setProjectBudget(_parse(v)),
                   ),
+                ),
                 ),
                 IconButton(
                   tooltip: _expanded ? 'Hide the lines' : 'Show the lines',

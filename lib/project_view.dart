@@ -873,7 +873,7 @@ class _ProjectViewState extends State<ProjectView> {
             ],
           ),
           const SizedBox(height: 10),
-          _identity(provider, compact: compact),
+          _identity(provider, compact: compact, width: box.maxWidth),
           const SizedBox(height: 10),
           // Rooms saved since the job last read them, found on the way in -
           // said once, so a total that differs from last time is explained.
@@ -1243,7 +1243,12 @@ class _ProjectViewState extends State<ProjectView> {
   /// the wide one and the other two are short codes, so a narrow window keeps
   /// a usable name field by giving the codes a line of their own rather than
   /// by shaving every field down to a few characters each.
-  Widget _identity(AppStateProvider provider, {required bool compact}) {
+  Widget _identity(
+    AppStateProvider provider, {
+    required bool compact,
+    double width = double.infinity,
+  }) {
+    final compactWidth = width;
     final name = LiveTextField(
       fieldId: 'project_name_${provider.currentProjectPath}',
       initial: provider.project.name,
@@ -1339,22 +1344,20 @@ class _ProjectViewState extends State<ProjectView> {
         const SizedBox(height: 8),
         // iPhone: two to a row - four fields across a phone left each a
         // letter or two wide.
-        if (isPhone(context)) ...[
-          Row(
-            children: [
-              Expanded(child: building),
-              const SizedBox(width: 8),
-              Expanded(child: job),
-            ],
-          ),
+        // Narrow - a phone: the buildings (with their picker) on a line of
+        // their own, then the number and the tax rate, then the date.
+        if (isPhone(context) || compactWidth < 520) ...[
+          building,
           const SizedBox(height: 8),
           Row(
             children: [
-              SizedBox(width: 100, child: tax),
+              Expanded(child: job),
               const SizedBox(width: 8),
-              Expanded(child: buildDate),
+              SizedBox(width: 100, child: tax),
             ],
           ),
+          const SizedBox(height: 8),
+          buildDate,
         ] else
         Row(
           children: [
@@ -2647,6 +2650,54 @@ class _RoomRowState extends State<_RoomRow> {
         // becomes two: what the room IS, then what it COSTS.
         child: LayoutBuilder(
           builder: (context, box) {
+            // NARROW - a phone: the name and the total on the first line, the
+            // buttons on their own line under them. Side by side, the five
+            // buttons and the total left the name a letter wide.
+            final narrow = box.maxWidth < 560;
+            final buttonLine = Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: actions,
+              ),
+            );
+            if (!_expanded && narrow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      expander,
+                      include,
+                      Expanded(child: name),
+                    ],
+                  ),
+                  // The total on the left of the button line, so the name
+                  // keeps the whole of the first.
+                  Row(
+                    children: [
+                      if (e != null)
+                        SizedBox(
+                          width: 130,
+                          child: Row(
+                            children: [
+                              _cell(
+                                context,
+                                'Room total',
+                                formatMoney(e.grandTotal, currency),
+                                ink: ink,
+                                quiet: quiet,
+                                bold: true,
+                              ),
+                            ],
+                          ),
+                        ),
+                      Expanded(child: buttonLine),
+                    ],
+                  ),
+                ],
+              );
+            }
             // COLLAPSED: the name, the room total and the buttons.
             if (!_expanded) {
               return Row(
@@ -2715,9 +2766,10 @@ class _RoomRowState extends State<_RoomRow> {
                     expander,
                     include,
                     Expanded(child: name),
-                    ...actions,
+                    if (!narrow) ...actions,
                   ],
                 ),
+                if (narrow) buttonLine,
                 if (figures != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 6, left: 4),
