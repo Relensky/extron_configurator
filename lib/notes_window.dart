@@ -132,7 +132,9 @@ class _NotesPanelHost extends StatelessWidget {
           liveResize: true,
           onClose: NotesPanel.close,
           titleBarActions: [
-            if (target != null)
+            // iPad / iPhone: no second copy of the app to pop out into - the
+            // panel is the notes window there.
+            if (target != null && !(Platform.isIOS || Platform.isAndroid))
               IconButton(
                 key: const ValueKey('notes_pop_out'),
                 tooltip: 'Pop out into its own window',
