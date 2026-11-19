@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.237+247';
+const String kAppVersion = '0.5.238+248';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,18 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.238',
+    date: 'November 19, 2026',
+    title: 'Catalog on a phone, larger type, the chat button stays',
+    changes: [
+      'iPhone: the Catalog is the model list OR the entry, each the full width; pick a model to open it and the bar over it goes back. Model, Manufacturer and Part number are one to a line.',
+      'iPad and iPhone: the Catalog\'s nine buttons are New device, New cost item and a More menu (Education prices, Merge, Tidy categories, Priced on, Export, Reload); duplicate part numbers still show in red.',
+      'iPad and iPhone: the text is a size larger by default - a touch more on a phone.',
+      'iPhone: dialogs reach nearly edge to edge, and the avatar menu is wide enough for a whole campus address; your name and address read in full ink and open your profile.',
+      'The team chat button no longer hides on a page that is only a little taller than the screen, like the start page on a phone - it steps aside only after real scrolling down.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.237',
     date: 'November 19, 2026',

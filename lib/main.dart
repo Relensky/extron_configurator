@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'notes_window.dart';
 import 'team/team_claims_widgets.dart';
 import 'team/team_app_launch.dart';
@@ -508,8 +509,23 @@ class RoomConfigApp extends StatelessWidget {
                 listenable: AppActivity.instance,
                 builder: (context, child) =>
                     TickerMode(enabled: !AppActivity.away, child: child!),
+                // iPhone: dialogs reach nearly edge to edge - the default
+                // 40-point margin each side left a phone's dialogs a narrow
+                // column of wrapped words.
                 // ignore: deprecated_member_use
-                child: MaterialUiCompatibilityBridge(child: child!),
+                child: MaterialUiCompatibilityBridge(
+                  child: isPhone(context)
+                      ? Theme(
+                          data: Theme.of(context).copyWith(
+                            dialogTheme: Theme.of(context).dialogTheme.copyWith(
+                                  insetPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 24),
+                                ),
+                          ),
+                          child: child!,
+                        )
+                      : child!,
+                ),
               ),
             ),
           ),
@@ -3298,6 +3314,12 @@ class ProfileButton extends StatelessWidget {
       // would stack a second one on it.
       tooltip: '',
       offset: const Offset(0, 44),
+      // Wide enough for a whole campus address - the menu's own width cut
+      // dstanley@csuchico.edu off on a phone.
+      constraints: BoxConstraints(
+        minWidth: math.min(340, MediaQuery.sizeOf(context).width - 24),
+        maxWidth: math.max(340, MediaQuery.sizeOf(context).width - 24),
+      ),
       onSelected: (v) {
         if (v == 'profile') showProfileDialog(context);
         if (v == 'settings' && !provider.settingsOpen) {
@@ -3307,8 +3329,10 @@ class ProfileButton extends StatelessWidget {
         if (v == 'help') showHelpBook(context);
       },
       itemBuilder: (context) => [
+        // Who you are, in full ink - a disabled item greyed the name and
+        // address out - and a tap on it opens your profile.
         PopupMenuItem<String>(
-          enabled: false,
+          value: 'profile',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             leading: CollabAvatarCircle(
@@ -3317,7 +3341,10 @@ class ProfileButton extends StatelessWidget {
               radius: 32,
             ),
             title: Text(provider.profileName),
-            subtitle: Text(email.isEmpty ? 'No email set' : email),
+            subtitle: Text(
+              email.isEmpty ? 'No email set' : email,
+              softWrap: true,
+            ),
           ),
         ),
         const PopupMenuDivider(),
@@ -3452,8 +3479,8 @@ class _ProfileDialogState extends State<_ProfileDialog> {
     final screen = MediaQuery.of(context).size;
     return AlertDialog(
       key: const ValueKey('profile_dialog'),
-      insetPadding: _max
-          ? const EdgeInsets.all(16)
+      insetPadding: _max || isPhone(context)
+          ? const EdgeInsets.all(12)
           : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
       title: Row(
         children: [

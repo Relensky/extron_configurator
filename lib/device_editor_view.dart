@@ -14,6 +14,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'catalog_category_prompt.dart';
 import 'collapsible_bar.dart';
+import 'form_factor.dart' show isMobileDevice, isPhone;
 import 'contrast.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
@@ -842,6 +843,10 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 
   // --- editing helpers ------------------------------------------------------
 
+  /// Expanded in a row; as it is in the phone's column.
+  Widget _flexOrNot({required Widget child}) =>
+      isPhone(context) ? child : Expanded(child: child);
+
   AvDeviceTemplate? _selected(AvDeviceLibrary library) {
     for (final t in library.all) {
       if (AvDeviceLibrary.normalizeModel(t.model) == _selectedKey) return t;
@@ -1128,6 +1133,52 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
       body: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // iPhone: the list OR the entry, each the full width - side by side
+        // the entry had a sliver and the list a column of half-words. Pick a
+        // model to open it; the bar over it goes back to the list.
+        if (isPhone(context))
+          Expanded(
+            child: _selected(library) == null
+                ? _buildList(entries, library)
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Material(
+                        color: Theme.of(context).colorScheme.surfaceContainerLow,
+                        child: InkWell(
+                          key: const ValueKey('catalog_back_to_list'),
+                          onTap: () => setState(() => _selectedKey = ''),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 10),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.arrow_back, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _selected(library)!.model,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style:
+                                        Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                ),
+                                Text('Models',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      Expanded(child: _buildDetail(provider, library)),
+                    ],
+                  ),
+          )
+        else
         Expanded(
           child: Row(
             children: [
@@ -1287,7 +1338,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
       ),
       backgroundColor: theme.colorScheme.errorContainer,
     );
-    final Widget buttons = Wrap(
+    Widget buttons = Wrap(
       spacing: 8,
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -1405,6 +1456,90 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         ),
       ],
     );
+    // iPAD AND iPHONE: two buttons and a More menu, not nine buttons in
+    // three rows - on a tablet they were half the screen and read as one
+    // clump. The duplicates warning stays in sight, in its own color.
+    final compactBar = isMobileDevice;
+    if (compactBar) {
+      MenuItemButton item(
+        IconData icon,
+        String label,
+        VoidCallback onPressed, {
+        Key? key,
+        Color? color,
+      }) =>
+          MenuItemButton(
+            key: key,
+            leadingIcon: Icon(icon, size: 20, color: color),
+            onPressed: onPressed,
+            child: Text(label, style: TextStyle(color: color)),
+          );
+      buttons = Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          FilledButton.tonalIcon(
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('New device'),
+            onPressed: () => _showNewDeviceDialog(library),
+          ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.receipt_long, size: 18),
+            label: const Text('New cost item'),
+            onPressed: () => _showNewDeviceDialog(library, costItem: true),
+          ),
+          if (duplicates.isNotEmpty)
+            ActionChip(
+              key: const ValueKey('catalog_duplicates'),
+              avatar: Icon(Icons.copy_all,
+                  size: 18, color: theme.colorScheme.error),
+              label: Text(
+                duplicates.length == 1
+                    ? '1 duplicate'
+                    : '${duplicates.length} duplicates',
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+              side: BorderSide(color: theme.colorScheme.error),
+              onPressed: () => _showDuplicates(provider),
+            ),
+          MenuAnchor(
+            menuChildren: [
+              item(Icons.percent, 'Education prices...',
+                  () => _showEducationPricingDialog(provider, library)),
+              item(Icons.merge, 'Merge from file...',
+                  () => _startMerge(provider)),
+              item(
+                Icons.label_outline,
+                untracked == 0
+                    ? 'Tidy categories...'
+                    : 'Tidy categories ($untracked)...',
+                () => _tidyCategories(provider),
+                key: const ValueKey('catalog_tidy_categories'),
+              ),
+              item(
+                Icons.price_change_outlined,
+                wantsStandards == 0
+                    ? 'Priced on...'
+                    : 'Priced on ($wantsStandards)...',
+                () => showCatalogStandards(context),
+                key: const ValueKey('catalog_standards'),
+              ),
+              item(Icons.ios_share, 'Export a copy...',
+                  () => _exportCopy(provider)),
+              item(Icons.refresh, 'Reload', () => _reload(provider)),
+            ],
+            builder: (context, controller, _) => OutlinedButton.icon(
+              key: const ValueKey('catalog_more'),
+              icon: const Icon(Icons.more_horiz, size: 18),
+              label: const Text('More'),
+              onPressed: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+            ),
+          ),
+        ],
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
@@ -1417,7 +1552,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             builder: (context, box) {
               final scale = MediaQuery.textScalerOf(context).scale(1);
               final folded = BarFolds.isFolded('catalog_buttons');
-              final inline = box.maxWidth >= 1100 * scale;
+              final inline = !compactBar && box.maxWidth >= 1100 * scale;
               final top = Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1823,9 +1958,15 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               ),
             ),
           ),
-        Row(
+        // iPhone: one to a line - three across a phone cut every label to
+        // a few letters.
+        Flex(
+          direction: isPhone(context) ? Axis.vertical : Axis.horizontal,
+          crossAxisAlignment: isPhone(context)
+              ? CrossAxisAlignment.stretch
+              : CrossAxisAlignment.center,
           children: [
-            Expanded(
+            _flexOrNot(
               child: LiveTextField(
                 // The model name is the entry's identity, so it commits on
                 // Enter or focus loss rather than per keystroke — renaming
@@ -1838,8 +1979,8 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 onSubmitted: (v) => _rename(library, entry, v),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
+            const SizedBox(width: 12, height: 10),
+            _flexOrNot(
               child: LiveTextField(
                 fieldId: 'maker_$key',
                 initial: entry.manufacturer,
@@ -1848,8 +1989,8 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                     setState(() => _apply(entry.copyWith(manufacturer: v))),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
+            const SizedBox(width: 12, height: 10),
+            _flexOrNot(
               child: LiveTextField(
                 fieldId: 'part_$key',
                 initial: entry.partNumber,

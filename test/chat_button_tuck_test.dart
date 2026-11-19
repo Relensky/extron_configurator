@@ -50,6 +50,16 @@ void main() {
     expect(chatButtonTucked.value, isTrue);
   });
 
+  testWidgets('a page only a little taller than the screen keeps it',
+      (tester) async {
+    // 600 high; 16 + 16 rows of 40 = 656 - just past the bottom, the way
+    // the start page sits on a phone.
+    await pumpList(tester, rows: 16);
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(chatButtonTucked.value, isFalse);
+  });
+
   testWidgets('a page too short to scroll never tucks it', (tester) async {
     await pumpList(tester, rows: 3);
     await tester.drag(find.byType(ListView), const Offset(0, -300));

@@ -190,7 +190,15 @@ class _ChatButtonScrollWatchState extends State<ChatButtonScrollWatch> {
   bool _onScroll(ScrollNotification n) {
     final m = n.metrics;
     if (m.axis != Axis.vertical) return false;
-    if (m.maxScrollExtent <= 0) return false;
+    // A page barely taller than the screen - the start page on a phone - is
+    // "at its end" before anyone scrolls, and hid the button the moment it
+    // opened. Only a page with real scrolling to do tucks it.
+    if (m.maxScrollExtent <= kChatButtonClearance) return false;
+    // At the top it always shows.
+    if (m.pixels <= 0) {
+      chatButtonTucked.value = false;
+      return false;
+    }
     final atEnd = m.extentAfter < kChatButtonClearance;
     if (n is ScrollUpdateNotification) {
       final d = n.scrollDelta ?? 0;

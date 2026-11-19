@@ -22,7 +22,10 @@ import 'app_logger.dart';
 
 /// How much smaller than the device's own points the app draws on a phone or
 /// tablet - see [AppScale.followDevice].
-const double kMobileDensity = 0.85;
+const double kMobileDensity = 0.9;
+
+/// [kMobileDensity] for a phone.
+const double kPhoneDensity = 0.95;
 
 class AppScale extends StatefulWidget {
   const AppScale({
@@ -130,7 +133,12 @@ class _AppScaleState extends State<AppScale> {
       // buttons are laid out for a desktop window, and at full iPad size they
       // took a third of the screen. Text stays easily read; Interface Size
       // still zooms from here.
-      target = widget.scale * mq.devicePixelRatio * kMobileDensity;
+      // A phone a touch larger again - its screen is held closer, but its
+      // words are read at arm's length in a room.
+      final phone = mq.size.shortestSide < 600;
+      target = widget.scale *
+          mq.devicePixelRatio *
+          (phone ? kPhoneDensity : kMobileDensity);
     } else if (widget.fitToMonitor) {
       Size screen = Size.zero;
       try {
