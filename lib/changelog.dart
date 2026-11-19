@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.217+227';
+const String kAppVersion = '0.5.218+228';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,16 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.218',
+    date: 'November 18, 2026',
+    title: 'Quote requests as PDF',
+    changes: [
+      'Quote requests: Excel, PDF or both. The PDF is the same request, laid out landscape with a table per kind of part.',
+      'Quote requests list each part by model first, with no item description and no rooms under each line.',
+      'Quote requests are titled with the project name only, not the buildings.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.217',
     date: 'November 18, 2026',

@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
+import 'estimate_pdf.dart' show loadEstimatePdfTheme;
 import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
@@ -612,11 +613,45 @@ class _ProjectViewState extends State<ProjectView> {
       return;
     }
 
+    // Excel, PDF or both.
+    final format = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        key: const ValueKey('rfq_format_dialog'),
+        title: const Text('Quote requests as'),
+        children: [
+          for (final (id, label, icon) in const [
+            ('xlsx', 'Excel', Icons.grid_on_outlined),
+            ('pdf', 'PDF', Icons.picture_as_pdf_outlined),
+            ('both', 'Both', Icons.library_books_outlined),
+          ])
+            SimpleDialogOption(
+              key: ValueKey('rfq_format_$id'),
+              onPressed: () => Navigator.of(ctx).pop(id),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(icon, size: 20),
+                    const SizedBox(width: 12),
+                    Text(label),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (format == null || !mounted) return;
+    final wantXlsx = format != 'pdf';
+    final wantPdf = format != 'xlsx';
+
     final folder = await getDirectoryPathCompat(
       dialogTitle: 'Where should the quote requests go?',
     );
     if (folder == null) return;
 
+    final pdfTheme = wantPdf ? loadEstimatePdfTheme() : null;
     final written = <String>[];
     final failed = <String>[];
     for (final package in packages) {
@@ -626,20 +661,41 @@ class _ProjectViewState extends State<ProjectView> {
           provider.project.vendorById(b.vendorId),
       ]..removeWhere((v) => v == null);
       for (final vendor in bidders.isEmpty ? [null] : bidders) {
-        final name =
-            '${vendorRfqFileStem(provider.project, package, vendor: vendor)}'
-            '.xlsx';
-        try {
-          await File(path.join(folder, name)).writeAsBytes(
-            buildVendorRfqBytes(
-              estimate: estimate,
-              package: package,
-              vendor: vendor,
-            ),
-          );
-          written.add(name);
-        } catch (e) {
-          failed.add('$name - $e');
+        final stem = vendorRfqFileStem(
+          provider.project,
+          package,
+          vendor: vendor,
+        );
+        if (wantXlsx) {
+          final name = '$stem.xlsx';
+          try {
+            await File(path.join(folder, name)).writeAsBytes(
+              buildVendorRfqBytes(
+                estimate: estimate,
+                package: package,
+                vendor: vendor,
+              ),
+            );
+            written.add(name);
+          } catch (e) {
+            failed.add('$name - $e');
+          }
+        }
+        if (wantPdf) {
+          final name = '$stem.pdf';
+          try {
+            await File(path.join(folder, name)).writeAsBytes(
+              await buildVendorRfqPdf(
+                estimate: estimate,
+                package: package,
+                vendor: vendor,
+                theme: pdfTheme,
+              ),
+            );
+            written.add(name);
+          } catch (e) {
+            failed.add('$name - $e');
+          }
         }
       }
     }
@@ -657,7 +713,7 @@ class _ProjectViewState extends State<ProjectView> {
       theme: Theme.of(context),
       provider: provider,
       message: failed.isEmpty
-          ? '${written.length} quote request'
+          ? '${written.length} quote request file'
                 '${written.length == 1 ? '' : 's'} written'
           : '${written.length} written, ${failed.length} failed '
                 '(${failed.first})',

@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:pdf/widgets.dart' as pw;
+
 import 'av_device_library.dart';
 import 'base_costs.dart';
 import 'building_project.dart';
@@ -12,6 +14,7 @@ import 'project_breakdown.dart';
 import 'project_estimate.dart';
 import 'project_labor.dart';
 import 'project_schedule.dart';
+import 'report_pdf.dart';
 import 'report_tools.dart';
 import 'procurement_log.dart';
 import 'procurement_sync.dart';
@@ -2794,14 +2797,6 @@ List<ReportSection> vendorPackageSections(
   final project = estimate.project;
   final rfq = package.rfq;
   final showEstimate = rfq?.sendsEstimate ?? true;
-  // The code here too: it is what will be on the label when this arrives, and
-  // what the person unpacking it is standing in front of.
-  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
-
-  String rooms(MasterPartLine line) => [
-    for (final id in line.roomIdsByQty())
-      '${roomNames[id] ?? id} ×${trimNumber(line.qtyByRoom[id] ?? 0)}',
-  ].join(', ');
 
   final sections = <ReportSection>[
     (
@@ -2830,10 +2825,11 @@ List<ReportSection> vendorPackageSections(
     if (lines.isEmpty) continue;
     sections.add((
       title: kMasterPartKindLabels[kind]!,
+      // Model first, no item description and no rooms: the vendor prices
+      // the part, not where it goes.
       header: [
-        'Item',
-        'Manufacturer',
         'Model',
+        'Manufacturer',
         'Part number',
         'Qty',
         // The prices we HOLD, so a returned quote can be compared against them
@@ -2845,14 +2841,12 @@ List<ReportSection> vendorPackageSections(
         'Your unit price',
         'Your extended',
         'Lead time',
-        'Rooms',
       ],
       rows: [
         for (final l in lines)
           [
-            l.description,
-            l.manufacturer,
             l.model,
+            l.manufacturer,
             l.partNumber,
             l.qty,
             if (showEstimate) l.unpriced ? '' : cash(l.unitPrice),
@@ -2860,7 +2854,6 @@ List<ReportSection> vendorPackageSections(
             '',
             '',
             '',
-            rooms(l),
           ],
       ],
     ));
@@ -3293,11 +3286,34 @@ Uint8List buildVendorRfqBytes({
     sheetName: xlsxSheetName(
       package.isUntagged ? 'Untagged' : package.packageName,
     ),
-    title: '${_projectTitle(estimate.project)} - quote request',
+    title: vendorRfqTitle(estimate.project),
     sections: vendorPackageSections(estimate, package, vendor: vendor),
     generated: generated ?? DateTime.now(),
   ),
 ]);
+
+/// The same quote request as a PDF.
+Future<Uint8List> buildVendorRfqPdf({
+  required ProjectEstimate estimate,
+  required VendorPackage package,
+  ProjectVendor? vendor,
+  DateTime? generated,
+  pw.ThemeData? theme,
+  bool compress = true,
+}) => buildReportSectionsPdf(
+  title: vendorRfqTitle(estimate.project),
+  sections: vendorPackageSections(estimate, package, vendor: vendor),
+  generated: generated ?? DateTime.now(),
+  theme: theme,
+  compress: compress,
+);
+
+/// A quote request's heading: the project's name only. The buildings are
+/// on the sheet, not in the title.
+String vendorRfqTitle(BuildingProject project) {
+  final name = project.name.trim();
+  return name.isEmpty ? 'Quote request' : '$name - quote request';
+}
 
 /// What the documents are headed with: the project name, the building, or
 /// failing both something that is at least not blank.

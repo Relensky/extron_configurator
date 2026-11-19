@@ -530,10 +530,32 @@ void main() {
       // The addressee is the ONE thing that differs between copies.
       expect(sheet, contains('Alpha AV'));
       expect(sheet, contains('orders@extron.example'));
-      expect(sheet, contains('Bessey 101 ×1, Bessey 103 ×1'));
+      // No rooms and no item column: the vendor prices the part.
+      expect(sheet, isNot(contains('Bessey 101 ×1')));
+      expect(sheet, isNot(contains('>Rooms<')));
+      expect(sheet, isNot(contains('>Item<')));
       // Somewhere for the supplier to write, which is the point of the sheet.
       expect(sheet, contains('Your unit price'));
       expect(sheet, contains('Lead time'));
+    });
+
+    test('is headed with the project name, not the buildings', () {
+      final project = BuildingProject(name: 'Bessey refresh', building: 'BSS');
+      expect(vendorRfqTitle(project), 'Bessey refresh - quote request');
+      expect(vendorRfqTitle(BuildingProject()), 'Quote request');
+    });
+
+    test('also comes as a PDF', () async {
+      final estimate = job();
+      final bytes = await buildVendorRfqPdf(
+        estimate: estimate,
+        package: estimate.packageFor('v1')!,
+        vendor: estimate.project.vendorById('bidder1'),
+        compress: false,
+      );
+      final text = String.fromCharCodes(bytes);
+      expect(text, startsWith('%PDF'));
+      expect(text, contains('quote request'));
     });
 
     test('carries nothing belonging to another vendor', () {
