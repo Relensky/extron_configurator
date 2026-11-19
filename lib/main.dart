@@ -1,3 +1,4 @@
+import 'notes_window.dart';
 import 'team/team_claims_widgets.dart';
 import 'team/team_app_launch.dart';
 import 'team/team_host.dart' show TeamHost;
@@ -120,6 +121,13 @@ Future<void> main(List<String> args) async {
   // double-clicked .exe does not have, and the log this app asks people to send
   // in never hears about it.
   installGlobalErrorHandlers();
+  // THE NOTES WINDOW is this app started again with its own flag - see
+  // notes_window.dart. It runs nothing else: no log session, no team
+  // requests, no second copy of the app's state.
+  if (args.length >= 2 && args.first == kNotesPopoutFlag) {
+    await runNotesPopout(args[1]);
+    return;
+  }
   // iOS: the shipped data files go into the app's Documents folder before
   // anything reads them - see ios_seed.dart. Does nothing on the desktop.
   seedIosDocuments();
@@ -1541,6 +1549,12 @@ class _MainDashboardState extends State<MainDashboard> {
         // SAVE ALL - every open document that is behind its file, the room
         // and the job together.
         ...bind(Shortcut.saveAll, () => saveEverything(context, provider)),
+        // The floating notes - see notes_window.dart.
+        ...bind(Shortcut.notes, () {
+          NotesHost.instance.dockContext =
+              () => RoomConfigApp.navigatorKey.currentContext;
+          NotesPanel.toggle(context);
+        }),
         ...bind(Shortcut.saveAs, () {
           if (saveScopeSupportsSaveAs(saveScope)) {
             runSave(context, provider, saveScope, saveAs: true);

@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.233+243';
+const String kAppVersion = '0.5.234+244';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,15 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.234',
+    date: 'November 19, 2026',
+    title: 'A notes window - Ctrl+N',
+    changes: [
+      'Ctrl+N opens a notes panel that floats over the app and can be dragged and resized anywhere in it. It writes straight into the open room\u2019s cost notes, or the project notes on the Project tab, and follows you as you move between them. Ctrl+N again closes it. The key can be changed under App Config > Keyboard shortcuts (Notes window).',
+      'Pop out (the arrow in its title bar) moves the notes into a window of their own, like the CTS Dashboard\u2019s terminal and network windows. What is typed in either one shows in the other, and Back into the app docks it again. The window closes with the app.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.233',
     date: 'November 19, 2026',

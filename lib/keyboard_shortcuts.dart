@@ -164,6 +164,7 @@ abstract final class Shortcut {
   static const redo = 'app.redo';
   static const help = 'app.help';
   static const find = 'app.find';
+  static const notes = 'app.notes';
 
   static const nextBox = 'text.nextBox';
   static const previousBox = 'text.previousBox';
@@ -257,6 +258,16 @@ const List<ShortcutAction> kShortcutActions = [
         'goes to the next, Shift+Enter or Shift+F3 the one before, Esc '
         'closes it.',
     defaults: [KeyBinding(_K.keyF, control: true)],
+  ),
+  ShortcutAction(
+    id: Shortcut.notes,
+    label: 'Notes window',
+    area: ShortcutArea.app,
+    help: 'Opens or closes the floating notes: the cost notes of the open '
+        'room, or the notes of the project on the Project tab. Drag it '
+        'anywhere, or '
+        'pop it out into its own window.',
+    defaults: [KeyBinding(_K.keyN, control: true)],
   ),
   ShortcutAction(
     id: Shortcut.nextBox,
