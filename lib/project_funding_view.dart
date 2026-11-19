@@ -899,70 +899,105 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.format_list_numbered),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Priorities and funding',
-                    style: theme.textTheme.titleMedium,
-                  ),
-                ),
-                // The priority groups, all at once.
-                TextButton.icon(
-                  key: const ValueKey('funding_expand_all'),
-                  onPressed: () =>
-                      ProjectFold.instance.setAllPriorities(true),
-                  icon: const Icon(Icons.unfold_more, size: 18),
-                  label: const Text('Expand all'),
-                ),
-                TextButton.icon(
-                  key: const ValueKey('funding_collapse_all'),
-                  onPressed: () =>
-                      ProjectFold.instance.setAllPriorities(false),
-                  icon: const Icon(Icons.unfold_less, size: 18),
-                  label: const Text('Collapse all'),
-                ),
-                const SizedBox(width: 8),
-                // Locked, it is a figure, not a box.
-                if (project.budgetLocked)
-                  Text(
-                    money(project.budget),
-                    key: const ValueKey('funding_max'),
-                    style: theme.textTheme.titleMedium,
-                  )
-                else
-                  SizedBox(
-                    width: 180,
-                    child: LiveTextField(
+            LayoutBuilder(builder: (context, box) {
+              final title = Text(
+                'Priorities and funding',
+                style: theme.textTheme.titleMedium,
+              );
+              final expand = TextButton.icon(
+                key: const ValueKey('funding_expand_all'),
+                onPressed: () => ProjectFold.instance.setAllPriorities(true),
+                icon: const Icon(Icons.unfold_more, size: 18),
+                label: const Text('Expand all'),
+              );
+              final collapse = TextButton.icon(
+                key: const ValueKey('funding_collapse_all'),
+                onPressed: () => ProjectFold.instance.setAllPriorities(false),
+                icon: const Icon(Icons.unfold_less, size: 18),
+                label: const Text('Collapse all'),
+              );
+              // Locked, it is a figure, not a box.
+              final max = project.budgetLocked
+                  ? Text(
+                      money(project.budget),
                       key: const ValueKey('funding_max'),
-                      fieldId: 'funding_max',
-                      initial: project.budget == 0
-                          ? ''
-                          : project.budget.toStringAsFixed(2),
-                      label: 'Maximum ($cur)',
-                      numeric: true,
-                      onChanged: (v) => provider.setProjectBudget(_parse(v)),
+                      style: theme.textTheme.titleMedium,
+                    )
+                  : SizedBox(
+                      width: 180,
+                      child: LiveTextField(
+                        key: const ValueKey('funding_max'),
+                        fieldId: 'funding_max',
+                        initial: project.budget == 0
+                            ? ''
+                            : project.budget.toStringAsFixed(2),
+                        label: 'Maximum ($cur)',
+                        numeric: true,
+                        onChanged: (v) =>
+                            provider.setProjectBudget(_parse(v)),
+                      ),
+                    );
+              final lock = IconButton(
+                key: const ValueKey('funding_lock'),
+                tooltip: project.budgetLocked
+                    ? 'Locked. Unlock to change the maximum'
+                    : 'Lock the maximum',
+                icon: Icon(
+                  project.budgetLocked ? Icons.lock : Icons.lock_open,
+                ),
+                onPressed: () => _toggleLock(provider),
+              );
+              final fold = IconButton(
+                tooltip: _expanded ? 'Hide the rooms' : 'Show the rooms',
+                icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
+                onPressed: () => setState(() => _expanded = !_expanded),
+              );
+              // NARROW - a phone: the title keeps its line, and the buttons
+              // and the maximum go under it, instead of one row that squeezed
+              // the title to a letter a line.
+              if (box.maxWidth < 640) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.format_list_numbered),
+                        const SizedBox(width: 8),
+                        Expanded(child: title),
+                        fold,
+                      ],
                     ),
-                  ),
-                IconButton(
-                  key: const ValueKey('funding_lock'),
-                  tooltip: project.budgetLocked
-                      ? 'Locked. Unlock to change the maximum'
-                      : 'Lock the maximum',
-                  icon: Icon(
-                    project.budgetLocked ? Icons.lock : Icons.lock_open,
-                  ),
-                  onPressed: () => _toggleLock(provider),
-                ),
-                IconButton(
-                  tooltip: _expanded ? 'Hide the rooms' : 'Show the rooms',
-                  icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
-                  onPressed: () => setState(() => _expanded = !_expanded),
-                ),
-              ],
-            ),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: [
+                        expand,
+                        collapse,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [max, lock],
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  const Icon(Icons.format_list_numbered),
+                  const SizedBox(width: 8),
+                  Expanded(child: title),
+                  // The priority groups, all at once.
+                  expand,
+                  collapse,
+                  const SizedBox(width: 8),
+                  max,
+                  lock,
+                  fold,
+                ],
+              );
+            }),
             const SizedBox(height: 8),
             Row(
               children: [
