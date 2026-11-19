@@ -102,8 +102,9 @@ void main() {
     /// The Projects folder relative to the share's top, as the sync names
     /// files.
     const rel = 'CTS/StaffFiles/Classroom Technology/Projects';
-    String share(String rel) => p.join(projects, rel);
-    String copy(String rel) => p.join(mirrorProjects, rel);
+    // In the host's separators, whatever [rel] is written with.
+    String share(String rel) => p.joinAll([projects, ...rel.split('/')]);
+    String copy(String rel) => p.joinAll([mirrorProjects, ...rel.split('/')]);
 
     test('the configurator files come down; a file gone from the share goes',
         () async {

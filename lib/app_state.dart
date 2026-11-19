@@ -22966,14 +22966,17 @@ class AppStateProvider extends ChangeNotifier {
   /// catalog, and the totals written into its options, so the figures beside
   /// them are not the ones from when each was filed away.
   Future<void> _refreshDesignOptionTotals(String configPath) async {
+    // Not during a switch: the save that starts one would otherwise price
+    // the room after it had already become the other design, and file that
+    // figure under the design it was - the totals swapped on every click.
+    if (_switchingDesign) return;
     final options = designOptionsFor(configPath);
     if (options.options.length < 2) return;
-    final totals = <String, double>{};
+    // The open design's figure, taken now, before anything can change it.
+    final activeId = options.active;
+    final totals = <String, double>{activeId: roomCost.grandTotal};
     for (final o in options.options) {
-      if (o.id == options.active) {
-        totals[o.id] = roomCost.grandTotal;
-        continue;
-      }
+      if (o.id == activeId) continue;
       final config = designOptionConfigPath(configPath, o.id);
       try {
         final total = await _priceDesignOption(config);
@@ -22983,6 +22986,13 @@ class AppStateProvider extends ChangeNotifier {
       } catch (e, stack) {
         AppLogger.logError('Could not reprice design option $config', e, stack);
       }
+    }
+    // Switched, or another room opened, while these were priced: written
+    // only if the room is still the design it was.
+    if (_switchingDesign ||
+        _pathKey(currentConfigPath) != _pathKey(configPath) ||
+        readDesignOptions(configPath).active != activeId) {
+      return;
     }
     try {
       _designOptions[_pathKey(configPath)] =
@@ -23019,6 +23029,19 @@ class AppStateProvider extends ChangeNotifier {
     String name, {
     String firstName = 'Base design',
   }) async {
+    // Guarded like a switch - see [_refreshDesignOptionTotals].
+    _switchingDesign = true;
+    try {
+      return await _createRoomDesignOption(name, firstName: firstName);
+    } finally {
+      _switchingDesign = false;
+    }
+  }
+
+  Future<String> _createRoomDesignOption(
+    String name, {
+    required String firstName,
+  }) async {
     final saved = await _saveBeforeDesignOption();
     if (saved.isNotEmpty) return saved;
     try {
@@ -23042,7 +23065,20 @@ class AppStateProvider extends ChangeNotifier {
   /// Makes option [id] the open room's design: the room is saved, filed
   /// away under the option it was, and [id] is opened in its place. ''
   /// when it worked.
+  /// True while [chooseRoomDesignOption] runs - see
+  /// [_refreshDesignOptionTotals].
+  bool _switchingDesign = false;
+
   Future<String> chooseRoomDesignOption(String id) async {
+    _switchingDesign = true;
+    try {
+      return await _chooseRoomDesignOption(id);
+    } finally {
+      _switchingDesign = false;
+    }
+  }
+
+  Future<String> _chooseRoomDesignOption(String id) async {
     final saved = await _saveBeforeDesignOption();
     if (saved.isNotEmpty) return saved;
     final configPath = currentConfigPath;

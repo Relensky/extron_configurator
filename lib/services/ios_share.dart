@@ -299,9 +299,24 @@ class IosShare {
     final String? local = localRoot, unc = uncRoot;
     if (local == null || unc == null) return null;
     final int below = unc.substring(2).split('\\').length - 2;
-    final List<String> parts = local.split('/');
+    // The host's own separator: / on the iPad, \ in a test on Windows.
+    final List<String> parts = p.split(local);
     if (below < 0 || below >= parts.length) return null;
-    return parts.sublist(0, parts.length - below).join('/');
+    return p.joinAll(parts.sublist(0, parts.length - below));
+  }
+
+  /// True when [path] is [base] or inside it.
+  static bool _under(String base, String path) =>
+      path == base || p.isWithin(base, path);
+
+  /// [base] with a share-relative '/a/b' [rest] under it, in the host's
+  /// separators.
+  static String _joinRest(String base, String rest) {
+    final List<String> segs = [
+      for (final String s in rest.split(RegExp(r'[\\/]')))
+        if (s.isNotEmpty) s,
+    ];
+    return segs.isEmpty ? base : p.joinAll([base, ...segs]);
   }
 
   /// True when the picked folder holds the team folder (Dashboard\team) as
@@ -327,11 +342,11 @@ class IosShare {
     final String? top = shareLocalRoot;
     if (top == null) return online;
     final String mirror = mirrorRoot;
-    if (offline && (online == top || online.startsWith('$top/'))) {
-      return '$mirror${online.substring(top.length)}';
+    if (offline && _under(top, online)) {
+      return _joinRest(mirror, p.relative(online, from: top));
     }
-    if (!offline && (online == mirror || online.startsWith('$mirror/'))) {
-      return '$top${online.substring(mirror.length)}';
+    if (!offline && _under(mirror, online)) {
+      return _joinRest(top, p.relative(online, from: mirror));
     }
     return online;
   }
@@ -341,18 +356,14 @@ class IosShare {
     final String? top = shareLocalRoot;
     if (local == null || top == null) return path;
     final String? old = _previousRoot;
-    if (old != null && (path == old || path.startsWith('$old/'))) {
-      return '$local${path.substring(old.length)}';
+    if (old != null && _under(old, path)) {
+      return _joinRest(local, p.relative(path, from: old));
     }
     if (!path.startsWith(r'\\') && !path.startsWith('//')) return path;
     final String norm = _normalizeUnc(path);
     final String share = _normalizeUnc(shareUnc);
     if (norm != share && !norm.startsWith('$share\\')) return path;
-    final String rest = path
-        .substring(_prefixLength(path, shareUnc))
-        .replaceAll('\\', '/')
-        .replaceFirst(RegExp(r'^/+'), '');
-    return rest.isEmpty ? top : '$top/$rest';
+    return _joinRest(top, path.substring(_prefixLength(path, shareUnc)));
   }
 
   /// [path] under the picked folder or the offline copy as its \\doit-files
@@ -361,8 +372,9 @@ class IosShare {
     if (!active || path.isEmpty) return path;
     for (final String? base in [shareLocalRoot, mirrorRoot]) {
       if (base == null) continue;
-      if (path == base || path.startsWith('$base/')) {
-        final String rest = path.substring(base.length).replaceAll('/', '\\');
+      if (_under(base, path)) {
+        final String rest =
+            path.substring(base.length).replaceAll('/', '\\');
         return '$shareUnc$rest';
       }
     }
@@ -373,7 +385,7 @@ class IosShare {
   /// copy) is kept in the offline copy; null for anything else.
   static String? mirrorPathFor(String path) {
     final String? rest = _restOf(path);
-    return rest == null ? null : '$mirrorRoot$rest';
+    return rest == null ? null : _joinRest(mirrorRoot, rest);
   }
 
   /// Where [path] (a share path, or a path under the picked folder or in the
@@ -381,7 +393,7 @@ class IosShare {
   static String? livePathFor(String path) {
     final String? top = shareLocalRoot;
     final String? rest = _restOf(path);
-    return top == null || rest == null ? null : '$top$rest';
+    return top == null || rest == null ? null : _joinRest(top, rest);
   }
 
   /// [path] below \\doit-files\ATEC as '/a/b', '' for the share's top; null

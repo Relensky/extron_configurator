@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.231+241';
+const String kAppVersion = '0.5.232+242';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,16 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.232',
+    date: 'November 19, 2026',
+    title: 'Design options switch at a click, and keep their own totals',
+    changes: [
+      'Design options: clicking another design switches to it straight away - no question first. The room is still saved before it changes, and the design it was is kept as it is.',
+      'Design options: the totals no longer swap when you click between designs. The repricing that runs after a save waits until a switch is finished, and is not written if the room has changed design in the meantime.',
+      'iPad: the share and offline-copy paths are built with the device\'s own separators throughout.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.231',
     date: 'November 19, 2026',

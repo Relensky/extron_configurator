@@ -279,6 +279,20 @@ void main() {
       expect(await p.chooseRoomDesignOption(camera), '');
       expect(p.avCost.extraEquipment.map((i) => i.description),
           ['Projector', 'Camera']);
+
+      // Back and forth: each design keeps its own figure, never the other's.
+      for (var round = 0; round < 3; round++) {
+        expect(await p.chooseRoomDesignOption(base), '');
+        await pumpEventQueue();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(await p.chooseRoomDesignOption(camera), '');
+        await pumpEventQueue();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      final onDisk = readDesignOptions(p.currentConfigPath);
+      expect(onDisk.active, camera);
+      expect(onDisk.byId(base)!.total, 1000);
+      expect(p.roomCost.grandTotal, 1500);
     });
   });
 }

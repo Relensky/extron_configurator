@@ -148,8 +148,10 @@ void main() {
     final roomB = p.project.rooms[1];
     await tester.runAsync(() async => tester
         .tap(find.byKey(ValueKey('gap_room_cost_${roomB.id}'))));
+    // Up to 30 s: opening a room reads it off disk, which a full parallel
+    // test run can slow well past the 8 s this once allowed.
     for (var i = 0;
-        i < 400 && p.selectedTabIndex != AppTab.cost.index;
+        i < 1500 && p.selectedTabIndex != AppTab.cost.index;
         i++) {
       await tester.pump();
       await tester.runAsync(

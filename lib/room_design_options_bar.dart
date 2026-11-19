@@ -136,39 +136,9 @@ class RoomDesignOptionsBar extends StatelessWidget {
     RoomDesignOption option,
     RoomDesignOptions options,
   ) async {
+    // Straight to it: no question. The room is saved first and the design
+    // it was is kept as it is - see [AppStateProvider.chooseRoomDesignOption].
     final messenger = ScaffoldMessenger.of(context);
-    final current = options.activeOption?.name ?? 'the current design';
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        key: const ValueKey('design_option_choose_confirm'),
-        title: Text('Switch this room to ${option.name}?'),
-        content: SizedBox(
-          width: 460,
-          child: Text(
-            [
-              if (provider.roomHasUnsavedChanges)
-                'The room is saved first.',
-              '$current is kept as it is now.',
-              'Every tab, the next save and the project total use '
-                  '${option.name}.',
-            ].join(' '),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('design_option_choose_go'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Switch'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
     final result = await provider.chooseRoomDesignOption(option.id);
     showTimedSnackBar(
       messenger,
