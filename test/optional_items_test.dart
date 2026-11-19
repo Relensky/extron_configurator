@@ -134,6 +134,14 @@ void main() {
             of: find.byKey(const ValueKey('cost_optional_without')),
             matching: find.text(r'$1,000.00')),
         findsOneWidget);
+    // What the options add with taxes, and the labels say so.
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('cost_optional_total_taxed')),
+            matching: find.text(r'$500.00')),
+        findsOneWidget);
+    expect(find.text('Room with options (with taxes)'), findsOneWidget);
+    expect(find.text('Room without options (with taxes)'), findsOneWidget);
 
     expect(find.byKey(const ValueKey('cost_optional_section')), findsNothing,
         reason: 'one switch only');

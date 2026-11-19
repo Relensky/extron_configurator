@@ -762,6 +762,24 @@ void main() {
       expect(find.byKey(ValueKey('rfq_award_$rfqId')), findsOneWidget);
     });
 
+    testWidgets('one quote can be edited and saved on its own', (
+      tester,
+    ) async {
+      final (:p, :rfqId, alpha: _, beta: _) = job();
+      await openPane(tester, p, 'vendors');
+      await tester.tap(find.byKey(ValueKey('rfq_toggle_$rfqId')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(ValueKey('rfq_export_$rfqId')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('rfq_edit_dialog')), findsOneWidget);
+      // Only this package, with its preview.
+      expect(find.byKey(ValueKey('rfq_edit_package_$rfqId')), findsOneWidget);
+      expect(find.byKey(ValueKey('rfq_preview_$rfqId')), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('a vendor still owed an answer is on the table too', (
       tester,
     ) async {

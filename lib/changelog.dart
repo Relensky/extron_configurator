@@ -49,6 +49,9 @@ const List<ChangelogEntry> kChangelog = [
       'Quote requests open an edit screen first: pick Excel, PDF or both, and untick any item that should not be on the request. A package with every item unticked is skipped. The choices are kept until the app closes.',
       'Quote requests list every item in one table - cabling no longer has its own section.',
       'Quote requests no longer have Your unit price, Your extended or Lead time columns. The vendor sends back their own quote.',
+      'One quote on its own: each package\'s quote block has a Quote request button that opens the edit screen for just that package.',
+      'Preview on the quote request edit screen shows the request as the PDF that will go out, with any unticked items already left off.',
+      'Optional upgrades card: the options total, then Options (with taxes) - what they add to the room - then Room without options (with taxes) and Room with options (with taxes).',
     ],
   ),
   ChangelogEntry(

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui show lerpDouble;
 
@@ -9,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
-import 'estimate_pdf.dart' show loadEstimatePdfTheme;
 import 'file_dialogs.dart';
 import 'rfq_edit_dialog.dart';
 import 'app_snack.dart';
@@ -342,9 +340,6 @@ class ProjectView extends StatefulWidget {
 }
 
 class _ProjectViewState extends State<ProjectView> {
-  // The quote request edit screen's last choices.
-  RfqFormat _rfqFormat = RfqFormat.xlsx;
-  final Map<String, Set<String>> _rfqLeaveOut = {};
   _ProjectPane _pane = _ProjectPane.rooms;
 
   /// Whether the Lifecycle pane is showing what the building would be bought
@@ -618,101 +613,7 @@ class _ProjectViewState extends State<ProjectView> {
       return;
     }
 
-    // The edit screen: format, and any items left out. Remembered until the
-    // app closes, so a second export starts where the first left off.
-    final choice = await showRfqEditDialog(
-      context,
-      packages: packages,
-      format: _rfqFormat,
-      leaveOut: _rfqLeaveOut,
-    );
-    if (choice == null || !mounted) return;
-    _rfqFormat = choice.format;
-    _rfqLeaveOut
-      ..clear()
-      ..addAll(choice.leaveOut);
-    final wantXlsx = choice.format != RfqFormat.pdf;
-    final wantPdf = choice.format != RfqFormat.xlsx;
-
-    final folder = await getDirectoryPathCompat(
-      dialogTitle: 'Where should the quote requests go?',
-    );
-    if (folder == null) return;
-
-    final pdfTheme = wantPdf ? loadEstimatePdfTheme() : null;
-    final written = <String>[];
-    final failed = <String>[];
-    for (final package in packages) {
-      final leaveOut = choice.leaveOut[package.id] ?? const <String>{};
-      // Every item edited out: no request for this package.
-      if (leaveOut.length >= package.lines.length) continue;
-      // Null for a package with no bidders: one unaddressed draft.
-      final bidders = <ProjectVendor?>[
-        for (final b in package.rfq?.bids ?? const <RfqBid>[])
-          provider.project.vendorById(b.vendorId),
-      ]..removeWhere((v) => v == null);
-      for (final vendor in bidders.isEmpty ? [null] : bidders) {
-        final stem = vendorRfqFileStem(
-          provider.project,
-          package,
-          vendor: vendor,
-        );
-        if (wantXlsx) {
-          final name = '$stem.xlsx';
-          try {
-            await File(path.join(folder, name)).writeAsBytes(
-              buildVendorRfqBytes(
-                estimate: estimate,
-                package: package,
-                vendor: vendor,
-                leaveOut: leaveOut,
-              ),
-            );
-            written.add(name);
-          } catch (e) {
-            failed.add('$name - $e');
-          }
-        }
-        if (wantPdf) {
-          final name = '$stem.pdf';
-          try {
-            await File(path.join(folder, name)).writeAsBytes(
-              await buildVendorRfqPdf(
-                estimate: estimate,
-                package: package,
-                vendor: vendor,
-                leaveOut: leaveOut,
-                theme: pdfTheme,
-              ),
-            );
-            written.add(name);
-          } catch (e) {
-            failed.add('$name - $e');
-          }
-        }
-      }
-    }
-
-    if (!mounted) return;
-    if (written.isEmpty) {
-      _snack(
-        'No quote requests were written: ${failed.join('; ')}',
-        error: true,
-      );
-      return;
-    }
-    showSavedSnackBar(
-      messenger: ScaffoldMessenger.of(context),
-      theme: Theme.of(context),
-      provider: provider,
-      message: failed.isEmpty
-          ? '${written.length} quote request file'
-                '${written.length == 1 ? '' : 's'} written'
-          : '${written.length} written, ${failed.length} failed '
-                '(${failed.first})',
-      savedPath: folder,
-      isFolder: true,
-    );
+    await exportQuoteRequests(context, provider, estimate, packages);
   }
 
   // -------------------------------------------------------------------------
@@ -7293,6 +7194,14 @@ class VendorRfqStrip extends StatelessWidget {
                       ? null
                       : () => _invite(context, provider, uninvited),
                 ),
+              // This package's request alone: edit, preview, save.
+              if (package != null && package!.lines.isNotEmpty)
+                OutlinedButton.icon(
+                  key: ValueKey('rfq_export_${rfq.id}'),
+                  icon: const Icon(Icons.description_outlined, size: 18),
+                  label: const Text('Quote request...'),
+                  onPressed: () => _exportOne(context, provider),
+                ),
               // SENDING IS ONE ACTION FOR THE WHOLE PACKAGE, because that is
               // how it happens: the file is written once and emailed to four
               // companies in one sitting. Marking each of them separately is
@@ -7398,6 +7307,17 @@ class VendorRfqStrip extends StatelessWidget {
     );
     if (picked == null || picked.isEmpty) return;
     provider.inviteVendorToRfq(rfq.id, picked);
+  }
+
+  // Priced over the whole job, as the Quote requests button is, whatever
+  // buildings the page is showing.
+  Future<void> _exportOne(
+    BuildContext context,
+    AppStateProvider provider,
+  ) async {
+    final whole = provider.priceProject();
+    final mine = whole.packageFor(rfq.id) ?? package!;
+    await exportQuoteRequests(context, provider, whole, [mine]);
   }
 
   Future<void> _markSent(
