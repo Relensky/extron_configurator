@@ -103,7 +103,9 @@ void main() {
             jsonDecode(File('buildings.json').readAsStringSync())
                 as Map<String, dynamic>
         ..settingsLoaded = true
-        ..firstRunSetupNeeded = false;
+        ..firstRunSetupNeeded = false
+        // A room open: Convert is on a room's pages only.
+        ..roomConfig = {'SYSTEM_SETUP': <String, dynamic>{}};
 
       // A legacy file that came in needing three changes.
       provider.lastLoadHadChanges = true;
@@ -229,7 +231,8 @@ void main() {
                 as Map<String, dynamic>
         ..settingsLoaded = true
         ..firstRunSetupNeeded = false
-        ..lastLoadHadNotes = true;
+        ..lastLoadHadNotes = true
+        ..roomConfig = {'SYSTEM_SETUP': <String, dynamic>{}};
       provider.systemLogs.addAll(convertedRoomLog);
 
       await tester.pumpWidget(

@@ -43,6 +43,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../app_logger.dart';
+import '../device_manuals.dart' show kDashboardManualsFolder;
 import '../shared_json.dart' show withFileLock;
 import 'ios_share.dart';
 
@@ -202,6 +203,23 @@ class ShareSync {
     if (on) unawaited(syncNow());
   }
 
+  /// Whether the Dashboard's device manuals are kept on this device, so a
+  /// manual opens in a room with no network. On unless turned off: without
+  /// them the Manuals buttons find nothing offline, though the room's own
+  /// files open.
+  static bool get keepManuals => _settings()['manuals'] != false;
+
+  static set keepManuals(bool on) {
+    final s = _settings()..['manuals'] = on;
+    _saveSettings(s);
+    if (on) unawaited(syncNow());
+  }
+
+  /// Folders brought down and never sent back: reference material nobody
+  /// edits on the iPad. A file there changed here is not pushed.
+  static List<String> get _readOnly =>
+      keepManuals ? const [kDashboardManualsFolder] : const [];
+
   /// The job folders kept because they were opened here, as share paths.
   static List<String> get keptFolders =>
       ((_settings()['folders'] as List?) ?? const [])
@@ -245,8 +263,14 @@ class ShareSync {
 
   /// The share folders kept, as share paths, none inside another.
   static List<String> get scope {
-    if (keepEveryJob) return [IosShare.projectsUnc];
-    return [configuratorUnc, ...keptFolders];
+    if (keepEveryJob) return [IosShare.projectsUnc, ..._readOnly];
+    return [configuratorUnc, ...keptFolders, ..._readOnly];
+  }
+
+  /// [scope] less the folders that are only ever brought down.
+  static List<String> get _sendScope {
+    final ro = {for (final r in _readOnly) r.toLowerCase()};
+    return [for (final u in scope) if (!ro.contains(u.toLowerCase())) u];
   }
 
   // ---------------------------------------------------------------------
@@ -385,7 +409,7 @@ class ShareSync {
   /// (or made here), relative to the share's top with '/'.
   static Stream<String> _changedHere(Map<String, _Seen> manifest) async* {
     final mirror = IosShare.mirrorRoot;
-    for (final unc in scope) {
+    for (final unc in _sendScope) {
       final dir = IosShare.mirrorPathFor(unc);
       if (dir == null || !await Directory(dir).exists()) continue;
       await for (final f in _walk(Directory(dir))) {

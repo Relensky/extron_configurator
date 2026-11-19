@@ -36,7 +36,7 @@ import 'lifecycle_view.dart'
 import 'pinned_grid.dart';
 import 'undo_history.dart';
 import 'save_actions.dart'
-    show confirmLeavingProject, openProjectAtPath;
+    show closeProjectFile, closeRoomFile, confirmLeavingProject, openProjectAtPath;
 
 /// ============================================================================
 ///  THE CAMPUS VIEW
@@ -132,7 +132,7 @@ Future<void> showCampusLifecycleFile(
   // Opening a campus does not change the open job. It learns which campus
   // it is on only when a campus with it on is saved.
   rememberCampusAsRecent(context, campus);
-  await showDialog<void>(
+  final closed = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (_) => Dialog.fullscreen(
@@ -143,6 +143,18 @@ Future<void> showCampusLifecycleFile(
       ),
     ),
   );
+  // CLOSE, NOT BACK: the X puts away what is open under the campus too - the
+  // job, then its room - each with its own save prompt. The Campus button
+  // beside it still just steps back to the job.
+  if (closed == true && context.mounted) {
+    final provider = context.read<AppStateProvider>();
+    if (provider.hasOpenProject) {
+      await closeProjectFile(context, provider);
+    } else if (provider.currentConfigPath.isNotEmpty ||
+        provider.roomConfig.isNotEmpty) {
+      await closeRoomFile(context, provider);
+    }
+  }
 }
 
 /// Puts a campus that has just been opened or written on the recent list.
@@ -361,6 +373,8 @@ class _CampusViewState extends State<_CampusView> {
   Future<void> _addFiles() async {
     final picked = await pickFilesCompat(
       dialogTitle: 'Which rooms and projects belong to this campus?',
+      initialDirectory:
+          context.read<AppStateProvider>().openDialogStartFolder,
       allowMultiple: true,
       type: FileType.custom,
       allowedExtensions: const ['json'],
@@ -537,6 +551,8 @@ class _CampusViewState extends State<_CampusView> {
     final messenger = ScaffoldMessenger.of(context);
     final picked = await pickFilesCompat(
       dialogTitle: 'Open a campus',
+      initialDirectory:
+          context.read<AppStateProvider>().openDialogStartFolder,
       type: FileType.custom,
       allowedExtensions: const ['json'],
     );
@@ -915,8 +931,9 @@ class _CampusViewState extends State<_CampusView> {
               icon: const Icon(Icons.close, size: 18),
               iconSize: 18,
               visualDensity: VisualDensity.compact,
-              tooltip: 'Close the campus and go back to the project',
-              onPressed: () => Navigator.of(context).pop(),
+              tooltip: 'Close the campus, and the project and room open '
+                  'under it',
+              onPressed: () => Navigator.of(context).pop(true),
             ),
           ],
         ),

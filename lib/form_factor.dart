@@ -1,5 +1,7 @@
 import 'dart:io' show Platform;
 
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:material_ui/material_ui.dart';
 
 import 'app_state.dart';
@@ -40,3 +42,22 @@ const Set<AppTab> kPhoneTabs = {
   AppTab.racks,
   AppTab.photos,
 };
+
+/// Which kind of screen this is, for settings kept apart per kind - the
+/// Interface Size and Text Size: '' on the desktop, '_ipad' or '_iphone'.
+/// Read off the device's own screen, so it is known before anything is
+/// drawn.
+String get deviceSettingSuffix {
+  if (!isMobileDevice) return '';
+  try {
+    final view = PlatformDispatcher.instance.views.first;
+    final size = view.physicalSize / view.devicePixelRatio;
+    if (size.isEmpty) return '_ipad';
+    return size.shortestSide < 600 ? '_iphone' : '_ipad';
+  } catch (_) {
+    return '_ipad';
+  }
+}
+
+/// The three kinds of screen the size settings are kept for.
+const List<String> kDeviceSettingSuffixes = ['', '_ipad', '_iphone'];

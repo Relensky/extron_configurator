@@ -1107,12 +1107,16 @@ class _MainDashboardState extends State<MainDashboard> {
     // THE DOCUMENT ROW: Convert, and Save in its right-hand corner. The file
     // transfers went into the File menu and the exports onto the Export
     // button in the lower right.
+    // Convert is about the ROOM's file, so it shows only on a room's own
+    // pages - not on the Project tab, the catalog or Settings.
+    final onRoomPage = hasConfig && !currentTab.worksWithoutConfig;
     final documentActions = <Widget>[
       // CONVERT: the migration a legacy file needs, on demand. The load
       // already ran the conversion in memory — this is where it gets
       // reviewed, accepted or thrown away. Grayed out when the loaded
       // file had nothing to migrate, so its state is also the answer to
       // "does this room need converting?".
+      if (onRoomPage)
       IconButton(
         key: const ValueKey('convert_button'),
         icon: Badge(
@@ -1232,7 +1236,9 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               SizedBox(width: 16),
             ],
-            const Flexible(child: ProjectRoomPicker()),
+            // iPhone: the room picker has a row of its own under the bars on
+            // the Project page - squeezed in here it read "No...".
+            if (!phone) const Flexible(child: ProjectRoomPicker()),
             // [TEAM KIT - WORKING ON]: who is working on the open room - the
             // same tag the CTS Dashboard's Room Hub shows for it.
             if (provider.teamRoomId.isNotEmpty) ...[
@@ -1313,6 +1319,17 @@ class _MainDashboardState extends State<MainDashboard> {
             onChat: () => TeamChatPanel.instance.toggle(context),
             showChat: provider.teamChatInTopBar,
           ),
+          // FIND ON THIS PAGE, for a touch screen: Ctrl+F needs a keyboard,
+          // and an iPad or iPhone usually has none. The same bar the key
+          // opens - see find_in_page.dart.
+          if (isMobileDevice)
+            IconButton(
+              key: const ValueKey('find_in_page_button'),
+              tooltip: 'Find on this page',
+              icon: const Icon(Icons.find_in_page_outlined),
+              onPressed: () =>
+                  RoomConfigApp.findKey.currentState?.open(),
+            ),
           // iOS: the CTS share, the offline copy and its sync - see
           // ios_share_button.dart. Nothing on the desktop.
           const IosShareButton(),
@@ -1342,6 +1359,20 @@ class _MainDashboardState extends State<MainDashboard> {
                     actions: documentActions,
                   ),
           ),
+          // iPhone, on the Project page: which room, full width.
+          if (phone &&
+              provider.hasOpenProject &&
+              currentTab == AppTab.project)
+            Material(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ProjectRoomPicker(key: ValueKey('phone_room_picker')),
+                ),
+              ),
+            ),
           Expanded(
             child: Row(
         children: [
@@ -1396,6 +1427,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 minWidth: phone ? 0 : 640,
                 // Lists scroll clear of the hovering chat button.
                 child: ChatButtonClearance(
+                  child: ChatButtonScrollWatch(
                   child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
                       ? _buildLandingScreen(context, provider)
                       : _buildMainContent(
@@ -1403,6 +1435,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           provider.configRevision,
                           provider.isEstimateRoom,
                         ),
+                  ),
                 ),
               ),
                     ),
@@ -1766,7 +1799,7 @@ class _MainDashboardState extends State<MainDashboard> {
     // refusing to do the obvious thing.
     final picked = await pickFilesCompat(
       dialogTitle: title,
-      // The projects folder on the file server until a first file is opened.
+      // The Projects folder on the file server, every time.
       initialDirectory: provider.openDialogStartFolder,
       type: FileType.custom,
       allowedExtensions: const ['json'],

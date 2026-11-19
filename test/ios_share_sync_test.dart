@@ -263,6 +263,41 @@ void main() {
       expect(ShareSync.keptFolders, ['$ctUnc\\Projects\\BMU']);
     });
 
+    test('the device manuals come down, and are never sent back', () async {
+      final manuals = p.join(classroomTech, 'Dashboard', 'manuals');
+      final copyManuals = p.join(IosShare.mirrorRoot, 'CTS', 'StaffFiles',
+          'Classroom Technology', 'Dashboard', 'manuals');
+      write(p.join(manuals, 'catalog', 'manuals.json'), '{"models":{}}');
+      write(p.join(manuals, 'files', 'epson', 'guide.pdf'), 'pdf');
+      expect(ShareSync.keepManuals, isTrue);
+      final r = await ShareSync.syncNow();
+      expect(r.received, 2);
+      expect(File(p.join(copyManuals, 'files', 'epson', 'guide.pdf'))
+          .readAsStringSync(), 'pdf');
+
+      // Offline, a manual opens from the copy.
+      IosShare.offline = true;
+      expect(
+          sharePath('$ctUnc\\Dashboard\\manuals\\files\\epson\\guide.pdf'),
+          p.join(copyManuals, 'files', 'epson', 'guide.pdf'));
+      IosShare.offline = false;
+
+      // Changed on the iPad: not sent, and the share keeps its own.
+      write(p.join(copyManuals, 'files', 'epson', 'guide.pdf'), 'scribbled',
+          minutesAgo: 1);
+      final r2 = await ShareSync.syncNow();
+      expect(r2.sent, 0);
+      expect(File(p.join(manuals, 'files', 'epson', 'guide.pdf'))
+          .readAsStringSync(), 'pdf');
+
+      // Turned off: not brought down any more.
+      ShareSync.keepManuals = false;
+      write(p.join(manuals, 'files', 'epson', 'new.pdf'), 'new');
+      await ShareSync.syncNow();
+      expect(File(p.join(copyManuals, 'files', 'epson', 'new.pdf')).existsSync(),
+          isFalse);
+    });
+
     test('a room\'s backups and lock files stay on the share', () async {
       write(share('Configurator_Files/labor_rates.json'), '{}');
       write(share('Configurator_Files/labor_rates.json.lock'), 'x');

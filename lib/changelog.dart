@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.218+228';
+const String kAppVersion = '0.5.219+229';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,23 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.219',
+    date: 'November 19, 2026',
+    title: 'Manuals on the iPad, Find without a keyboard, close means close, sizes per device',
+    changes: [
+      'iPad and iPhone: device manuals open. A manual\'s PDF was looked for at a Windows-style path and never found; and the Dashboard\'s manuals folder is now kept on the device with the rest of the offline copy (brought down only, never sent back), so a manual opens with no network. A switch in the share panel turns that off.',
+      'iPad and iPhone: a Manuals Folder set on a Windows PC to its own drive (C:\\...) roams with the settings but cannot be reached here, so the share\'s manuals are used instead.',
+      'iPad and iPhone: "Open externally" and the other open buttons show the file in Quick Look - PDFs, photos and Office files - with Share and Open In from there.',
+      'iPad and iPhone: a Find button in the top bar opens the same find-on-page bar as Ctrl+F, for when there is no keyboard.',
+      'Closing a project closes the room that is open too, after the project, asking to save the room if it has changes (Stay here keeps it open). The X on a campus closes the campus, the project and the room the same way. On the desktop as well.',
+      'The team chat button in the lower right steps out of the way while a page is scrolled down and at the end of it, so nothing in that corner is stuck under it; scrolling back up brings it back.',
+      'iPhone: a cost line\'s Extended price stays at the right of its card; the procurement log\'s room bands shrink to fit instead of cutting the room number off; a job\'s room rows show their whole total, with their buttons behind a ... button; and the room picker has its own row on the Project page.',
+      'Convert shows only on a room\'s own pages, not on the Project page.',
+      'Open - a room, a project or a campus - starts in the Projects folder on the file server every time, on the desktop and the iPad.',
+      'Interface Size and Text Size are kept apart for the desktop, the iPad and the iPhone. They still follow your account, but each kind of device keeps its own - an iPad with none yet starts at normal size instead of the desktop\'s.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.218',
     date: 'November 18, 2026',

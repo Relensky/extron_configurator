@@ -191,6 +191,18 @@ class IosShare {
     }
   }
 
+  /// Shows [file] in iOS Quick Look - the iPad's and iPhone's stand-in for
+  /// "open with the default program". Null when it opened, else a message
+  /// for the person.
+  static Future<String?> preview(String file) async {
+    if (!Platform.isIOS) return 'Not on iOS';
+    try {
+      return await _channel.invokeMethod<String>('preview', {'path': file});
+    } catch (e) {
+      return 'Could not open ${p.basename(file)}';
+    }
+  }
+
   /// Whether the share answers right now, within [timeout]. Answering ends
   /// offline use: paths point at the share again.
   static Future<bool> checkReachable({Duration timeout = answerWithin}) async {

@@ -128,6 +128,53 @@ void main() {
       await letTheSnackBarGo(tester);
     });
 
+    testWidgets('the open room closes after the job, asking about its edits',
+        (tester) async {
+      final p = withProject();
+      p.projectDirty = false;
+      p.roomConfig = {
+        'SYSTEM_SETUP': <String, dynamic>{'dev_projectors': '1'},
+        'PROJECTORDEVICE_1': <String, dynamic>{'name': 'Projector'},
+      };
+      p.currentConfigPath = '${dir.path}/bss101_config.json';
+      p.markRoomSaved();
+      p.updateDeviceValue('PROJECTORDEVICE_1', 'name', 'Main projector');
+      expect(p.roomHasUnsavedChanges, isTrue);
+      await pump(tester, p);
+
+      await tester.tap(closeButton);
+      await tester.pumpAndSettle();
+
+      // The job is gone; the room asks first.
+      expect(p.project.rooms, isEmpty);
+      expect(find.text('Save this room first?'), findsOneWidget);
+      expect(find.text('Save and close'), findsOneWidget);
+
+      // Stay here: the room and its edit are kept.
+      await tester.tap(find.text('Stay here'));
+      await tester.pumpAndSettle();
+      expect(p.roomConfig, isNotEmpty);
+      expect(p.roomHasUnsavedChanges, isTrue);
+      await letTheSnackBarGo(tester);
+    });
+
+    testWidgets('a saved room closes with the job, no question', (tester) async {
+      final p = withProject();
+      p.projectDirty = false;
+      p.roomConfig = {'SYSTEM_SETUP': <String, dynamic>{}};
+      p.currentConfigPath = '${dir.path}/bss101_config.json';
+      p.markRoomSaved();
+      await pump(tester, p);
+
+      await tester.tap(closeButton);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(p.roomConfig, isEmpty);
+      expect(p.currentConfigPath, isEmpty);
+      await letTheSnackBarGo(tester);
+    });
+
     // The closed job's own page must not stay on screen, wherever the close
     // was pressed from. Cost is the start screen when no room is open.
     for (final from in [AppTab.project, AppTab.appConfig, AppTab.cabling]) {

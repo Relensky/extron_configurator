@@ -16,7 +16,10 @@ Future<void> openManualDocument(BuildContext context, AppStateProvider provider,
   final uri = doc.uri(catalog.root);
   if (uri == null) return;
   if (uri.scheme == 'file') {
-    final file = uri.toFilePath(windows: true);
+    // The platform's own form: a Windows path on Windows, and on the iPad the
+    // path under the picked share - read the Windows way it began with a
+    // backslash and was never found.
+    final file = uri.toFilePath(windows: Platform.isWindows);
     if (!await File(file).exists()) {
       messenger.showSnackBar(SnackBar(content: Text('Not there: $file')));
       return;

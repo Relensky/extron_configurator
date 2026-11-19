@@ -909,6 +909,22 @@ class _LogGridState extends State<_LogGrid> {
     context.read<AppStateProvider>().removeProcurementEntries(lines);
   }
 
+  /// A section band's name. On iPad and iPhone it shrinks to fit rather than
+  /// cutting the room number off ("ARTS 1..."): the number is the part that
+  /// tells one band from the next.
+  Widget _bandLabel(String text, TextStyle? style) => isMobileDevice
+      ? FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(text, maxLines: 1, style: style),
+        )
+      : Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        );
+
   Future<void> _edit(ProcurementEntry entry) async {
     final provider = context.read<AppStateProvider>();
     final edited = await showProcurementEditor(
@@ -955,15 +971,13 @@ class _LogGridState extends State<_LogGrid> {
                   onPressed: () => _toggleFold(row.room),
                 ),
                 Expanded(
-                  child: Text(
+                  child: _bandLabel(
                     // iPad / iPhone: the count as a bare number, so the room
                     // name keeps the narrower column.
                     isMobileDevice
                         ? '$name (${row.count})'
                         : '$name  ·  ${row.count} line${row.count == 1 ? '' : 's'}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: zoomed.titleSmall?.copyWith(
+                    zoomed.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: _bandInk(theme, row),
                     ),

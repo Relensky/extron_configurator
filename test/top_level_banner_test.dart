@@ -75,6 +75,25 @@ void main() {
     expect(find.text('Create a New File'), findsOneWidget);
   });
 
+  testWidgets('Convert is on a room\'s pages, not the job\'s', (tester) async {
+    final p = fresh();
+    p.roomConfig = {'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '101'}};
+    p.currentConfigPath = path.join(dir.path, 'BSS_101_config.json');
+    p.newProject(name: 'Bessey Hall');
+    final convert = find.descendant(
+      of: find.byType(TopLevelBar),
+      matching: find.byKey(const ValueKey('convert_button')),
+    );
+
+    p.selectTab(AppTab.cost.index);
+    await pump(tester, p);
+    expect(convert, findsOneWidget, reason: 'on the room');
+
+    p.selectTab(AppTab.project.index);
+    await pump(tester, p);
+    expect(convert, findsNothing, reason: 'not on the job');
+  });
+
   testWidgets('the two rows carry the two kinds of thing', (tester) async {
     // With a job open: the banner's own button is only offered once there is
     // a job to go to — see the group at the end of this file.
@@ -85,8 +104,9 @@ void main() {
     // The banner: the job, and the buttons that act on the open document.
     expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
 
-    // THE SECOND ROW: Convert, and Save in its right-hand corner.
-    for (final key in ['convert_button', 'save_context', 'save_menu']) {
+    // THE SECOND ROW: Save in its right-hand corner. Convert is a room's -
+    // see the test below - and there is no room open here.
+    for (final key in ['save_context', 'save_menu']) {
       expect(
         find.descendant(
           of: find.byType(TopLevelBar),
@@ -457,7 +477,7 @@ void main() {
     expect(find.byKey(const ValueKey('banner_project')), findsNothing);
   });
 
-  testWidgets('closing the job from the banner goes back to the room',
+  testWidgets('closing the job from the banner closes its room too',
       (tester) async {
     final p = fresh();
     p.roomConfig = {
@@ -475,11 +495,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(p.hasOpenProject, isFalse);
-    // ON THE ROOM'S COST, whichever tab the room work was last on - see
-    // closeProjectFile. (It used to go back to that tab, here Cabling.)
+    // The room went with it - nothing unsaved, so no prompt - and the tab is
+    // Cost, which with nothing open is the start screen. See
+    // closeProjectFile.
+    expect(p.roomConfig, isEmpty);
+    expect(p.currentConfigPath, isEmpty);
     expect(p.selectedTabIndex, AppTab.cost.index);
     expect(find.byKey(const ValueKey('banner_project')), findsNothing);
-    expect(find.byKey(const ValueKey('banner_room')), findsOneWidget);
+    expect(find.byKey(const ValueKey('banner_room')), findsNothing);
 
     await tester.pumpAndSettle(const Duration(seconds: 8));
   });

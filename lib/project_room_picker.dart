@@ -794,8 +794,11 @@ Future<String> _recentRoomFileFor(
 /// an extra step.
 Future<bool> confirmLeavingRoom(
   BuildContext context,
-  AppStateProvider provider,
-) async {
+  AppStateProvider provider, {
+  /// Closing it rather than switching to another room - only the wording
+  /// changes.
+  bool closing = false,
+}) async {
   if (!provider.roomHasUnsavedChanges) return true;
   final name = provider.openProjectRoom?.fallbackName ?? 'This room';
 
@@ -806,8 +809,8 @@ Future<bool> confirmLeavingRoom(
       content: Text(
         '$name has changes that are not in its file - a field, a box on a '
         'drawing, a price, or all three.\n\n'
-        'Switching rooms reads the next room off disk, so anything not saved '
-        'here goes.',
+        '${closing ? 'Closing it puts it away' : 'Switching rooms reads the next room off disk'}'
+        ', so anything not saved here goes.',
       ),
       actions: [
         TextButton(
@@ -821,7 +824,7 @@ Future<bool> confirmLeavingRoom(
         FilledButton(
           key: const ValueKey('leave_room_save'),
           onPressed: () => Navigator.pop(ctx, 'save'),
-          child: const Text('Save and switch'),
+          child: Text(closing ? 'Save and close' : 'Save and switch'),
         ),
       ],
     ),

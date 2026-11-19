@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'file_dialogs.dart';
 import 'app_snack.dart';
+import 'form_factor.dart' show isPhone;
 import 'app_state.dart';
 import 'av_device_library.dart' show PricingTier;
 import 'building_project.dart' show ManualRoom, parseRoomRows;
@@ -224,7 +225,72 @@ class ManualRoomLineActions extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) =>
+      isPhone(context) ? _phoneMenu(context) : _buttons(context);
+
+  /// iPhone: the same actions behind one "more" button - five icons across a
+  /// phone left the line's own facts (and its cost) a word wide.
+  Widget _phoneMenu(BuildContext context) => PopupMenuButton<String>(
+    key: ValueKey('line_item_more_${room.id}'),
+    tooltip: 'More for ${room.name}',
+    icon: Icon(Icons.more_horiz, size: iconSize + 4),
+    onSelected: (v) => switch (v) {
+      'equipment' => showManualRoomEquipment(
+          context,
+          room,
+          currency: context.read<AppStateProvider>().project.currency,
+        ),
+      'edit' => editManualRoomLine(context, room),
+      'build' => buildRoomFromLine(context, room),
+      'swap' => swapManualRoomLine(context, room),
+      _ => removeManualRoomLine(context, room),
+    },
+    itemBuilder: (_) => [
+      if (room.equipment.isNotEmpty)
+        PopupMenuItem(
+          value: 'equipment',
+          child: ListTile(
+            dense: true,
+            leading: const Icon(Icons.inventory_2_outlined),
+            title: Text('What is in it (${room.installedCount})'),
+          ),
+        ),
+      const PopupMenuItem(
+        value: 'edit',
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.edit_outlined),
+          title: Text('Change date, years or cost'),
+        ),
+      ),
+      const PopupMenuItem(
+        value: 'build',
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.construction_outlined),
+          title: Text('Build a room file'),
+        ),
+      ),
+      const PopupMenuItem(
+        value: 'swap',
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.swap_horiz),
+          title: Text('Swap in an existing room'),
+        ),
+      ),
+      const PopupMenuItem(
+        value: 'remove',
+        child: ListTile(
+          dense: true,
+          leading: Icon(Icons.close),
+          title: Text('Take it off the plan'),
+        ),
+      ),
+    ],
+  );
+
+  Widget _buttons(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
       // WHAT IS IN THERE. First, and only on the rows that have been

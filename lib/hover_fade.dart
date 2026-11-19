@@ -112,10 +112,15 @@ class _TeamChatHoverButtonState extends State<TeamChatHoverButton> {
         TeamChatPanel.dragCover,
         chat,
         TeamChatPanel.instance.showing,
+        chatButtonTucked,
       ]),
       builder: (context, _) {
         final dragging = TeamChatPanel.dragCover.value;
         final cover = dragging ?? TeamChatPanel.rightCover.value;
+        // Out of the way while the page scrolls down or sits at its end -
+        // see [chatButtonTucked]. Never while the chat is open.
+        final tucked =
+            chatButtonTucked.value && !TeamChatPanel.instance.isOpen;
         return AnimatedPositioned(
           duration: dragging != null
               ? Duration.zero
@@ -123,7 +128,16 @@ class _TeamChatHoverButtonState extends State<TeamChatHoverButton> {
           curve: Curves.easeInOut,
           right: 20.0 + (cover > 0 ? cover : 0),
           bottom: 20,
-          child: HoverFade(
+          child: IgnorePointer(
+            ignoring: tucked,
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              offset: tucked ? const Offset(1.6, 0) : Offset.zero,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 220),
+                opacity: tucked ? 0 : 1,
+                child: HoverFade(
             anchor: Alignment.bottomRight,
             keepFull: chat.mentionCount > 0 ||
                 chat.unreadCount > 0 ||
@@ -135,10 +149,70 @@ class _TeamChatHoverButtonState extends State<TeamChatHoverButton> {
               foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
           ),
+              ),
+            ),
+          ),
         );
       },
     );
   }
+}
+
+/// True while the page under the chat button is being scrolled down or is at
+/// its end - the button steps out of the way then, so whatever is in the
+/// bottom-right corner can be read and pressed. Set by
+/// [ChatButtonScrollWatch]; scrolling back up brings the button back.
+final ValueNotifier<bool> chatButtonTucked = ValueNotifier(false);
+
+/// Watches the page's vertical scrolling for [chatButtonTucked].
+///
+/// The padding in [ChatButtonClearance] only reaches a list that has no
+/// padding of its own, and most pages set theirs - so on those the last row
+/// could sit under the button with no way past it. Stepping the button aside
+/// at the end works for every page, whatever it is built from.
+class ChatButtonScrollWatch extends StatefulWidget {
+  final Widget child;
+
+  const ChatButtonScrollWatch({super.key, required this.child});
+
+  @override
+  State<ChatButtonScrollWatch> createState() => _ChatButtonScrollWatchState();
+}
+
+class _ChatButtonScrollWatchState extends State<ChatButtonScrollWatch> {
+  @override
+  void initState() {
+    super.initState();
+    // A new page starts with the button showing.
+    chatButtonTucked.value = false;
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    final m = n.metrics;
+    if (m.axis != Axis.vertical) return false;
+    if (m.maxScrollExtent <= 0) return false;
+    final atEnd = m.extentAfter < kChatButtonClearance;
+    if (n is ScrollUpdateNotification) {
+      final d = n.scrollDelta ?? 0;
+      if (d > 0) {
+        chatButtonTucked.value = true;
+      } else if (d < 0 && !atEnd) {
+        chatButtonTucked.value = false;
+      }
+    } else if (n is ScrollEndNotification && atEnd) {
+      // Hidden after scrolling down until scrolling back up - the usual
+      // touch-screen habit - and always at the end of the page.
+      chatButtonTucked.value = true;
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: widget.child,
+      );
 }
 
 /// Room under the last row of a list for [TeamChatHoverButton]: its 56 px,

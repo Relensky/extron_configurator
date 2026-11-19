@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import UniformTypeIdentifiers
+import QuickLook
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -32,10 +33,12 @@ import UniformTypeIdentifiers
 ///   pick    -> the picked folder's path, or nil when cancelled
 ///   restore -> the remembered folder's path, or nil (none, or it is gone)
 ///   clear   -> forgets the folder
-class SharedFolderPlugin: NSObject, FlutterPlugin, UIDocumentPickerDelegate {
+class SharedFolderPlugin: NSObject, FlutterPlugin, UIDocumentPickerDelegate,
+  QLPreviewControllerDataSource {
   private static let bookmarkKey = "rcbSharedFolderBookmark"
   private var pendingResult: FlutterResult?
   private var activeURL: URL?
+  private var previewURL: URL?
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
@@ -60,6 +63,18 @@ class SharedFolderPlugin: NSObject, FlutterPlugin, UIDocumentPickerDelegate {
       // model and the start of this app's per-device id, stable across runs.
       let id = UIDevice.current.identifierForVendor?.uuidString ?? "0000"
       result("\(UIDevice.current.model)-\(id.prefix(4))")
+    case "preview":
+      // iOS has no "open with the default program": a PDF, a photo or an
+      // Office file goes to Quick Look, which shows it and offers Share / Open
+      // In from its own toolbar. Files under the picked share stay readable
+      // while it is shown - the folder's access is held for the whole run.
+      guard let args = call.arguments as? [String: Any],
+        let path = args["path"] as? String
+      else {
+        result(FlutterError(code: "args", message: "No file given", details: nil))
+        return
+      }
+      preview(path, result)
     case "clear":
       stopAccess()
       UserDefaults.standard.removeObject(forKey: SharedFolderPlugin.bookmarkKey)
@@ -129,6 +144,37 @@ class SharedFolderPlugin: NSObject, FlutterPlugin, UIDocumentPickerDelegate {
       UserDefaults.standard.set(fresh, forKey: SharedFolderPlugin.bookmarkKey)
     }
     return url.path
+  }
+
+  private func preview(_ path: String, _ result: @escaping FlutterResult) {
+    let url = URL(fileURLWithPath: path)
+    guard FileManager.default.fileExists(atPath: path) else {
+      result("No longer there: \(path)")
+      return
+    }
+    guard QLPreviewController.canPreview(url as QLPreviewItem) else {
+      result("iOS cannot show this kind of file: \(url.lastPathComponent)")
+      return
+    }
+    guard let presenter = SharedFolderPlugin.topViewController() else {
+      result("Nothing to show the file from")
+      return
+    }
+    previewURL = url
+    let controller = QLPreviewController()
+    controller.dataSource = self
+    presenter.present(controller, animated: true)
+    result(nil)
+  }
+
+  func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
+    previewURL == nil ? 0 : 1
+  }
+
+  func previewController(_ controller: QLPreviewController, previewItemAt index: Int)
+    -> QLPreviewItem
+  {
+    (previewURL ?? URL(fileURLWithPath: "/")) as QLPreviewItem
   }
 
   private func stopAccess() {

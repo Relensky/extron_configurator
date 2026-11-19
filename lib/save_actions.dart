@@ -957,8 +957,12 @@ Future<int> offerSurveyOntoRoom(
 ///
 /// Asks about unsaved work first, through the same prompt New and Open use, so
 /// "close" cannot be the one route that loses a room list somebody spent ten
-/// minutes tagging. The OPEN ROOM is left exactly where it is — a room is its
-/// own document, and closing the job it belongs to is not a reason to shut it.
+/// minutes tagging.
+///
+/// AND THE OPEN ROOM WITH IT, after the job, with its own save prompt. Closing
+/// a job and finding one of its rooms still on screen read as a close that
+/// only half worked; the room is asked about separately so its unsaved work
+/// is never lost, and Cancel on that prompt keeps the room open.
 Future<bool> closeProjectFile(
   BuildContext context,
   AppStateProvider provider,
@@ -967,8 +971,20 @@ Future<bool> closeProjectFile(
   if (!context.mounted) return false;
 
   final was = provider.projectDisplayName;
-  final hadRoom = provider.currentConfigPath.isNotEmpty;
+  final roomOpen =
+      provider.currentConfigPath.isNotEmpty || provider.roomConfig.isNotEmpty;
   provider.closeProject();
+
+  // The room after the job - see above.
+  var hadRoom = false;
+  if (roomOpen) {
+    if (await confirmLeavingRoom(context, provider, closing: true)) {
+      provider.closeRoom();
+    } else {
+      hadRoom = true;
+    }
+    if (!context.mounted) return true;
+  }
 
   // AND OUT OF PROJECT MODE. Closing a job while standing on the Project tab
   // used to leave the user looking at the empty room list of the job they had
@@ -986,10 +1002,11 @@ Future<bool> closeProjectFile(
     SnackBar(
       content: Text(
         hadRoom
-            // Said out loud, because the room staying open is the part that
-            // would otherwise look like the close only half worked.
-            ? 'Closed $was. Back to the room, which is still open.'
-            : 'Closed $was.',
+            // Only when the room's save prompt was cancelled.
+            ? 'Closed $was. The room is still open.'
+            : roomOpen
+                ? 'Closed $was and its room.'
+                : 'Closed $was.',
       ),
     ),
   );
@@ -1011,7 +1028,9 @@ Future<bool> closeRoomFile(
   BuildContext context,
   AppStateProvider provider,
 ) async {
-  if (!await confirmLeavingRoom(context, provider)) return false;
+  if (!await confirmLeavingRoom(context, provider, closing: true)) {
+    return false;
+  }
   if (!context.mounted) return false;
 
   final was = provider.currentConfigPath.isEmpty
@@ -1133,6 +1152,7 @@ Future<bool> openProjectFromFile(
   if (!await confirmLeavingProject(context, provider)) return false;
   final picked = await pickFilesCompat(
     dialogTitle: 'Open a project',
+    initialDirectory: provider.openDialogStartFolder,
     type: FileType.custom,
     allowedExtensions: const ['json'],
   );

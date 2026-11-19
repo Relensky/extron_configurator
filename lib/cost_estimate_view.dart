@@ -8619,6 +8619,9 @@ Widget _phoneCard(
   final top = <Widget>[];
   final figures = <Widget>[];
   Widget? buttons;
+  // The line's money, held to the right-hand edge the way the desktop table
+  // has it, however the other figures wrap.
+  Widget? extended;
   for (int i = 0; i < columns.length; i++) {
     final c = columns[i];
     if (c.text == 'Price from') continue;
@@ -8630,7 +8633,7 @@ Widget _phoneCard(
       top.add(Expanded(flex: c.flex, child: cells[i]));
       continue;
     }
-    figures.add(
+    final figure =
       SizedBox(
         width: c.compact().width,
         child: Builder(
@@ -8652,8 +8655,12 @@ Widget _phoneCard(
             ],
           ),
         ),
-      ),
-    );
+      );
+    if (c.text == 'Extended') {
+      extended = figure;
+    } else {
+      figures.add(figure);
+    }
   }
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -8663,14 +8670,25 @@ Widget _phoneCard(
       children: [
         if (top.isNotEmpty || buttons != null)
           Row(children: [...top, ?buttons]),
-        if (figures.isNotEmpty)
+        if (figures.isNotEmpty || extended != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.end,
-              children: figures,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.end,
+                    children: figures,
+                  ),
+                ),
+                if (extended != null) ...[
+                  const SizedBox(width: 8),
+                  extended,
+                ],
+              ],
             ),
           ),
       ],

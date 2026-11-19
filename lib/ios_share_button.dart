@@ -354,6 +354,18 @@ class _SharePanelState extends State<_SharePanel> {
                       onChanged: (on) =>
                           setState(() => ShareSync.keepEveryJob = on),
                     ),
+                    SwitchListTile(
+                      key: const ValueKey('ios_keep_manuals'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Keep device manuals offline'),
+                      subtitle: const Text(
+                        'The Dashboard\'s manuals folder, so a manual opens '
+                        'with no network. Brought down only - never sent back.',
+                      ),
+                      value: ShareSync.keepManuals,
+                      onChanged: (on) =>
+                          setState(() => ShareSync.keepManuals = on),
+                    ),
                   ],
                   if (_message.isNotEmpty)
                     Padding(

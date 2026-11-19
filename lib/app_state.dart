@@ -10,7 +10,8 @@ import 'package:path/path.dart' as path;
 import 'file_dialogs.dart';
 import 'app_logger.dart';
 import 'app_paths.dart';
-import 'services/ios_share.dart' show IosShare, sharePath;
+import 'form_factor.dart' show deviceSettingSuffix, kDeviceSettingSuffixes;
+import 'services/ios_share.dart' show IosShare, sharePath, uncPath;
 import 'services/share_sync.dart' show ShareSync;
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
@@ -1687,10 +1688,11 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  /// Where the Open dialog starts: the projects folder on the file server
-  /// until anything has been opened, then wherever Windows last left it.
+  /// Where every Open dialog for a room, a project or a campus starts: the
+  /// Projects folder on the file server (on an iPad, the picked share or its
+  /// offline copy), every time. Null - the system's own choice - only when
+  /// that folder cannot be reached.
   String? get openDialogStartFolder {
-    if (recentFiles.isNotEmpty) return null;
     if (runningUnderTest) return null;
     try {
       final projects = sharePath(kSharedProjectsFolder);
@@ -1729,15 +1731,33 @@ class AppStateProvider extends ChangeNotifier {
   /// copy, else - a fresh install off the network - `<root>\manuals`. Never a
   /// clone of the Manuals repo unless somebody picks one: the build reads
   /// what everybody reads.
-  String get effectiveManualsFolder => sharePath(manualsFolder.trim().isNotEmpty
-      ? manualsFolder.trim()
+  String get effectiveManualsFolder => sharePath(_manualsFolderHere.isNotEmpty
+      ? _manualsFolderHere
       : _sharedManualsAvailable
       ? kDashboardManualsFolder
       : path.join(effectiveRootFolder, 'manuals'));
 
+  /// [manualsFolder] as this device can use it. Settings roam from the
+  /// Windows PCs, and a manuals folder picked there is often a clone on that
+  /// PC's own drive (C:\...) - a folder an iPad can never reach. On iOS that
+  /// counts as unset, so the share's manuals are used instead.
+  String get _manualsFolderHere {
+    final m = manualsFolder.trim();
+    if (Platform.isIOS && RegExp(r'^[A-Za-z]:[\\/]').hasMatch(m)) return '';
+    return m;
+  }
+
   /// Looked up once a run, like [_sharedRootAvailable]. Never under test.
   static bool? _sharedManualsReachable;
-  static bool get _sharedManualsAvailable => _sharedManualsReachable ??= () {
+  static bool get _sharedManualsAvailable {
+    // iPad / iPhone: the share's manuals whenever a share folder is picked -
+    // looked up once, a start with the share not answering pointed the app
+    // at an empty <root>/manuals for the whole run.
+    if (Platform.isIOS && !runningUnderTest && IosShare.active) return true;
+    return _sharedManualsReachableOnce;
+  }
+
+  static bool get _sharedManualsReachableOnce => _sharedManualsReachable ??= () {
         if (runningUnderTest) return false;
         try {
           return Directory(sharePath(kDashboardManualsFolder)).existsSync();
@@ -1921,8 +1941,16 @@ class AppStateProvider extends ChangeNotifier {
       'classicColor': classicColor,
       'aurisColor': aurisColor,
       'classicSecondary': classicSecondary,
-      'textScale': textScale,
-      'uiScale': uiScale,
+      // PER KIND OF SCREEN: 'uiScale' is the desktop's, 'uiScale_ipad' and
+      // 'uiScale_iphone' the others' - all kept, so each roams with the
+      // account to that kind of device and none overwrites another. See
+      // [_scalesByDevice].
+      for (final e in {
+        ..._scalesByDevice,
+        'textScale$deviceSettingSuffix': textScale,
+        'uiScale$deviceSettingSuffix': uiScale,
+      }.entries)
+        e.key: e.value,
       if (projectionUnits.isNotEmpty) 'projectionUnits': projectionUnits,
       'currencySymbol': currencySymbol,
       'defaultTaxPercent': defaultTaxPercent,
@@ -2376,6 +2404,13 @@ class AppStateProvider extends ChangeNotifier {
   /// is: 1.0 is the app fitted to the monitor (see app_scale.dart). 0 follows
   /// Windows.
   double uiScale = 1.0;
+
+  /// Every kind of screen's Interface Size and Text Size as last read -
+  /// 'uiScale', 'uiScale_ipad', 'textScale_iphone' and so on. This device
+  /// uses only its own pair ([deviceSettingSuffix]); the rest are written
+  /// back untouched, so a desktop and an iPad on one account each keep
+  /// their own size.
+  final Map<String, double> _scalesByDevice = {};
 
   /// What goes in front of every figure the app prints. One app-wide answer
   /// rather than one per room: a shop bills in one currency, and re-typing the
@@ -11030,8 +11065,17 @@ class AppStateProvider extends ChangeNotifier {
       classicColor = str('classicColor', '2196F3');
       aurisColor = str('aurisColor', 'F0A500');
       classicSecondary = str('classicSecondary', '');
-      textScale = double.tryParse(str('textScale', '')) ?? 1.0;
-      uiScale = double.tryParse(str('uiScale', '')) ?? 1.0;
+      _scalesByDevice.clear();
+      for (final suffix in kDeviceSettingSuffixes) {
+        for (final base in const ['textScale', 'uiScale']) {
+          final v = double.tryParse(str('$base$suffix', ''));
+          if (v != null) _scalesByDevice['$base$suffix'] = v;
+        }
+      }
+      // This device's own pair. An iPad or iPhone with none yet starts at
+      // normal size rather than taking the desktop's.
+      textScale = _scalesByDevice['textScale$deviceSettingSuffix'] ?? 1.0;
+      uiScale = _scalesByDevice['uiScale$deviceSettingSuffix'] ?? 1.0;
       projectionUnits = str('projectionUnits', '');
       currencySymbol = str('currencySymbol', r'$');
       defaultTaxPercent = math.max(
@@ -12311,9 +12355,11 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'uiScale':
         uiScale = double.tryParse(value) ?? 1.0;
+        _scalesByDevice['uiScale$deviceSettingSuffix'] = uiScale;
         break;
       case 'textScale':
         textScale = double.tryParse(value) ?? 1.0;
+        _scalesByDevice['textScale$deviceSettingSuffix'] = textScale;
         break;
       case 'currencySymbol':
         // Blank is not a currency; an estimate with no symbol in front of the
@@ -14308,6 +14354,13 @@ class AppStateProvider extends ChangeNotifier {
     if (target.isEmpty) return 'Nothing to open.';
     if (!File(target).existsSync() && !Directory(target).existsSync()) {
       return 'No longer there: $target';
+    }
+    // iPad / iPhone: no programs to start. A file goes to Quick Look; a folder
+    // is named the way the Files app shows it, since iOS will not open
+    // another app's view of it from here.
+    if (Platform.isIOS) {
+      if (File(target).existsSync()) return IosShare.preview(target);
+      return 'Open it in the Files app: ${uncPath(target)}';
     }
     try {
       await Process.start(
