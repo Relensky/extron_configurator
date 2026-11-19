@@ -59,6 +59,23 @@ class _WallElevationViewState extends State<WallElevationView> {
   /// What a drag is moving: an item, the view, the schedule or the key.
   String _dragWhat = '';
 
+  /// The pinch's scale at the last update, so each update zooms by only what
+  /// changed since.
+  double _pinchScale = 1;
+
+  /// A second finger on the wall: from here the gesture zooms and pans the
+  /// view, and anything a first finger was dragging is put back.
+  void _startPinch(double scale) {
+    _dragWhat = 'pinch';
+    _pinchScale = scale;
+    if (_dragId.isNotEmpty) {
+      setState(() {
+        _dragId = '';
+        _drag = Offset.zero;
+      });
+    }
+  }
+
   /// Zooms by [factor] keeping the point [at] (pixels) still.
   void _zoomAt(Offset at, double factor) {
     final z = (_zoom * factor).clamp(0.5, 12.0);
@@ -422,14 +439,73 @@ class _WallElevationViewState extends State<WallElevationView> {
     final shown = _preview(wall);
     final issues = checkWall(shown);
     final selected = shown.item(_itemId);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(child: _canvas(p, wall, shown, issues)),
-        const VerticalDivider(width: 1),
-        SizedBox(
-          width: 360,
-          child: ListView(
+    return LayoutBuilder(builder: (context, box) {
+      // NARROW - an iPad held upright, a phone: the wall across the whole
+      // width and the list and editor under it, instead of a 360-wide column
+      // beside it that left the drawing a strip. The panel's share can be
+      // dragged by its handle.
+      final narrow = box.maxWidth < 900;
+      final panel = _sidePanel(p, wall, shown, issues, selected);
+      if (!narrow) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _canvas(p, wall, shown, issues)),
+            const VerticalDivider(width: 1),
+            SizedBox(width: 360, child: panel),
+          ],
+        );
+      }
+      final total = box.maxHeight;
+      final panelH = (total * _panelShare).clamp(80.0, total - 160);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: _canvas(p, wall, shown, issues)),
+          GestureDetector(
+            key: const ValueKey('wall_panel_handle'),
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (d) => setState(() {
+              _panelShare =
+                  ((panelH - d.delta.dy) / total).clamp(0.12, 0.75);
+            }),
+            onDoubleTap: () => setState(
+                () => _panelShare = _panelShare > 0.2 ? 0.12 : 0.4),
+            child: Container(
+              height: 18,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Theme.of(context).dividerColor),
+                ),
+              ),
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: panelH, child: panel),
+        ],
+      );
+    });
+  }
+
+  /// How much of a narrow screen's height the list and editor take.
+  double _panelShare = 0.38;
+
+  Widget _sidePanel(
+    AppStateProvider p,
+    WallView wall,
+    WallView shown,
+    List<WallIssue> issues,
+    WallItem? selected,
+  ) {
+    return ListView(
             // Its own padding drops the chat button's clearance; add it back.
             padding: EdgeInsets.fromLTRB(
               12,
@@ -470,10 +546,7 @@ class _WallElevationViewState extends State<WallElevationView> {
               ],
               _issueList(p, wall, issues),
             ],
-          ),
-        ),
-      ],
-    );
+          );
   }
 
   /// [wall] with the drag in progress applied, so the check runs live.
@@ -536,9 +609,17 @@ class _WallElevationViewState extends State<WallElevationView> {
               }
               setState(() => _itemId = hit?.id ?? '');
             },
-            onPanStart: (d) {
+            // SCALE, NOT PAN: the one gesture covers both. One finger (or
+            // the mouse) drags an item or the view as before; two fingers
+            // pinch to zoom and move together to pan, on the iPad, the
+            // iPhone and a trackpad alike.
+            onScaleStart: (d) {
               _canvasFocus.requestFocus();
-              final at = d.localPosition;
+              if (d.pointerCount >= 2) {
+                _startPinch(1);
+                return;
+              }
+              final at = d.localFocalPoint;
               // The key and the schedule sit on top: they move first.
               if (_keyOnDrawing && _boxes.key.contains(at)) {
                 _dragWhat = 'key';
@@ -569,27 +650,43 @@ class _WallElevationViewState extends State<WallElevationView> {
                 _drag = Offset.zero;
               });
             },
-            onPanUpdate: (d) {
+            onScaleUpdate: (d) {
+              if (d.pointerCount >= 2 && _dragWhat != 'pinch') {
+                _startPinch(d.scale);
+              }
+              final delta = d.focalPointDelta;
               switch (_dragWhat) {
+                case 'pinch':
+                  final ratio = _pinchScale == 0 ? 1.0 : d.scale / _pinchScale;
+                  _pinchScale = d.scale;
+                  if ((ratio - 1).abs() > 1e-4) {
+                    _zoomAt(d.localFocalPoint, ratio);
+                  }
+                  setState(() => _pan += delta);
+                  return;
                 case 'view':
-                  setState(() => _pan += d.delta);
+                  setState(() => _pan += delta);
                   return;
                 case 'schedule':
-                  setState(() => _scheduleShift += d.delta);
+                  setState(() => _scheduleShift += delta);
                   return;
                 case 'key':
-                  setState(() => _keyShift += d.delta);
+                  setState(() => _keyShift += delta);
                   return;
               }
               if (_dragId.isEmpty) return;
               setState(() {
                 _drag += Offset(
-                  d.delta.dx / layout.scale,
-                  -d.delta.dy / layout.scale,
+                  delta.dx / layout.scale,
+                  -delta.dy / layout.scale,
                 );
               });
             },
-            onPanEnd: (_) {
+            onScaleEnd: (_) {
+              if (_dragWhat == 'pinch') {
+                _dragWhat = '';
+                return;
+              }
               _dragWhat = '';
               final i = wall.item(_dragId);
               if (i != null && _drag != Offset.zero) {

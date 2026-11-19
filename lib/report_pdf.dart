@@ -24,7 +24,7 @@ Future<Uint8List> buildReportSectionsPdf({
       ? (s) => s
       : (s) => String.fromCharCodes(
           s
-              .replaceAll(RegExp('[–—]'), '-')
+              .replaceAll(RegExp('[\u2013\u2014]'), '-')
               .replaceAll(RegExp('[‘’]'), "'")
               .replaceAll(RegExp('[“”]'), '"')
               .replaceAll('×', 'x')

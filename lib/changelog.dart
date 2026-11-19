@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.219+229';
+const String kAppVersion = '0.5.220+230';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,16 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.220',
+    date: 'November 19, 2026',
+    title: 'Walls on a touch screen',
+    changes: [
+      'Walls: pinch to zoom and move two fingers to pan, on the iPad, the iPhone and a trackpad. One finger still moves an item or the view; a second finger landing mid-drag puts the item back and zooms instead.',
+      'Walls on a narrow screen (an iPad held upright, a phone): the wall across the full width with the item list and editor in a panel under it, instead of a column beside it. Drag the handle between them to give either more room; double-tap it to shrink the panel.',
+      'The Schematic, AV Flow, Floor Plan, Cabling and Racks drawings already pinch and pan with two fingers - checked on the iPad, starting on a device box as well as on empty space.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.219',
     date: 'November 19, 2026',
