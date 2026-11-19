@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'collapsible_bar.dart';
+import 'form_factor.dart' show isPhone;
 import 'side_pane.dart';
 import 'ui_schema.dart';
 import 'responsive.dart';
@@ -392,10 +393,34 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
       body: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // iPhone: the sections as a row of chips across the top and the page
+        // the full width under them - the list beside it left the page a
+        // letter wide.
+        if (isPhone(context))
+          _PhoneSections(
+            children: [
+              for (final s in _SchemaSection.values)
+                ChoiceChip(
+                  key: ValueKey('schema_section_${s.name}'),
+                  avatar: Icon(s.icon, size: 16),
+                  label: Text(s.label),
+                  selected: s == _section,
+                  onSelected: (_) {
+                    if (s == _SchemaSection.raw) {
+                      _raw.text = const JsonEncoder.withIndent('  ')
+                          .convert(schema.rawDoc);
+                      _rawError = '';
+                    }
+                    setState(() => _section = s);
+                  },
+                ),
+            ],
+          ),
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (!isPhone(context))
               SidePane(
                 side: PaneSide.left,
                 title: 'Schema',
@@ -1863,4 +1888,25 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
       ),
     );
   }
+}
+
+
+/// A page's sections as one scrolling row of chips, for an iPhone - see
+/// [isPhone].
+class _PhoneSections extends StatelessWidget {
+  final List<Widget> children;
+  const _PhoneSections({required this.children});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 48,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          children: [
+            for (final c in children)
+              Padding(padding: const EdgeInsets.only(right: 6), child: c),
+          ],
+        ),
+      );
 }

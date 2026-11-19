@@ -134,11 +134,26 @@ Future<void> main(List<String> args) async {
     IosFileBrowser.contextOf = () => RoomConfigApp.navigatorKey.currentContext;
     // Files changed here and on the share are held, not combined: say so,
     // with the way to review them.
-    ShareSync.onSynced = (result) {
-      if (result.held.isEmpty) return;
+    // A FILE WAITING FOR ITS COMBINE IS SAID ONCE. The sync runs every
+    // minute and held the file again each time, so the same message came back
+    // over and over. Now it shows when a file is first held, when that file is
+    // opened, and when it is changed here again (saved) - and otherwise the
+    // red count on the cloud button is the reminder.
+    final heldTold = <String, DateTime?>{};
+    DateTime? copyTime(String rel) {
+      try {
+        return File(path.join(IosShare.mirrorRoot, rel)).statSync().modified;
+      } catch (_) {
+        return null;
+      }
+    }
+    void tellHeld(List<String> rels) {
       final context = RoomConfigApp.navigatorKey.currentContext;
-      if (context == null || !context.mounted) return;
-      final n = result.held.length;
+      if (context == null || !context.mounted || rels.isEmpty) return;
+      for (final r in rels) {
+        heldTold[r] = copyTime(r);
+      }
+      final n = rels.length;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
         duration: const Duration(seconds: 12),
         content: Text('$n file${n == 1 ? ' was' : 's were'} changed on this '
@@ -149,7 +164,16 @@ Future<void> main(List<String> args) async {
           onPressed: () => showIosSharePanel(context),
         ),
       ));
+    }
+    ShareSync.onSynced = (result) {
+      // Reviewed or gone: forget it, so a new clash is told again.
+      heldTold.removeWhere((r, _) => !ShareSync.status.value.held.contains(r));
+      tellHeld([
+        for (final r in result.held)
+          if (!heldTold.containsKey(r) || heldTold[r] != copyTime(r)) r,
+      ]);
     };
+    ShareSync.onHeldOpened = tellHeld;
     ShareSync.start();
     // The page toolbars start folded to their names on a tablet: open, they
     // filled the top half of the screen and the floor plan under them could
@@ -1276,7 +1300,22 @@ class _MainDashboardState extends State<MainDashboard> {
                 Tooltip(
                   key: const ValueKey('team_tag_local_note'),
                   message: provider.teamTagTarget.note,
-                  child: Icon(
+                  // A touch screen has no hover: a tap says it.
+                  child: InkWell(
+                    onTap: () => showDialog<void>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Team tag'),
+                        content: Text(provider.teamTagTarget.note),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    child: Icon(
                     provider.teamTagTarget.file.isEmpty
                         ? Icons.warning_amber
                         : Icons.info_outline,
@@ -1284,6 +1323,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     color: provider.teamTagTarget.file.isEmpty
                         ? Colors.orange
                         : null,
+                  ),
                   ),
                 ),
               // [TEAM KIT - APPS]: this room in the CTS Dashboard's Room
@@ -2540,20 +2580,26 @@ class _TopBarFolded extends StatelessWidget {
           key: const ValueKey('top_bar_show'),
           onTap: () => BarFolds.setFolded(topBarFoldId(context), false),
           // Named, so the strip says what it brings back.
+          // iPad: tall enough to hit with a finger (a phone on its side
+          // keeps it thin - its screen has no height to spare).
           child: SizedBox(
             width: double.infinity,
+            height: _isMobile && !phoneLandscape(context) ? 34 : null,
             child: Row(
               children: [
                 const SizedBox(width: 12),
                 Icon(
                   Icons.keyboard_arrow_down,
-                  size: 16,
+                  size: _isMobile ? 22 : 16,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   'Project bar',
-                  style: theme.textTheme.labelSmall?.copyWith(
+                  style: (_isMobile
+                          ? theme.textTheme.labelLarge
+                          : theme.textTheme.labelSmall)
+                      ?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),

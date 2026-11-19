@@ -625,8 +625,8 @@ Map<String, String> procurementValues(ProcurementEntry e) {
     'released': e.released ? 'Yes' : '',
     'releasedOn': date(e.releasedOn),
     'delivery': date(e.estimatedDelivery),
-    'ordered': e.ordered,
-    'delivered': e.delivered,
+    'ordered': e.orderedShown,
+    'delivered': e.deliveredShown,
     'notes': e.notes,
     ...e.custom,
   };
@@ -849,4 +849,31 @@ XlsxSheet procurementLogSheet(
     overflowRows: const {0, 1},
     freezeColumns: 1,
   );
+}
+
+
+/// What a line was marked by hand in the Ordered and Delivered columns, for a
+/// line with no order or delivery on record - stored in [ProcurementEntry.custom]
+/// under these keys, which no column uses.
+const String kProcurementOrderedMark = '_ordered';
+const String kProcurementDeliveredMark = '_delivered';
+
+/// The choices those two columns offer.
+const List<String> kProcurementOrderedChoices = ['Not ordered', 'Ordered'];
+const List<String> kProcurementDeliveredChoices = [
+  'Not delivered',
+  'Partly delivered',
+  'Delivered',
+];
+
+extension ProcurementShown on ProcurementEntry {
+  /// The job's order record when there is one, else what was marked by hand.
+  String get orderedShown => ordered.isNotEmpty
+      ? ordered
+      : (custom[kProcurementOrderedMark] ?? '');
+
+  /// The delivery log when it says anything, else what was marked by hand.
+  String get deliveredShown => delivered.isNotEmpty
+      ? delivered
+      : (custom[kProcurementDeliveredMark] ?? '');
 }

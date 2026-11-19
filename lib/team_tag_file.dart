@@ -75,14 +75,14 @@ TeamTagTarget teamTagTargetOf({
     return (
       file: sharedCopy,
       project: '',
-      note: 'This $what is open from a copy on this PC. A tag links to the '
+      note: 'This $what is open from a copy on this $_here. A tag links to the '
           'shared $roomId instead:\n$sharedCopy',
     );
   }
   return (
     file: '',
     project: '',
-    note: 'This $what is open from a copy on this PC and $roomId has no '
+    note: 'This $what is open from a copy on this $_here and $roomId has no '
         'shared copy in the Projects folder, so a tag will not link to it '
         'for anyone else. It still marks $roomId as being worked on for '
         'everyone, and they cannot save it until you are taken off.',
@@ -132,3 +132,6 @@ Future<String> findSharedRoomConfig(
   } catch (_) {}
   return '';
 }
+
+/// What this machine is called in the notes above.
+String get _here => Platform.isIOS || Platform.isAndroid ? 'device' : 'PC';

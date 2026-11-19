@@ -231,6 +231,7 @@ class ShareSync {
   /// on the share is ignored.
   static void keepFolderOf(String file) {
     if (!_on || !IosShare.active || file.isEmpty) return;
+    noteOpened(file);
     final String unc = uncPath(p.dirname(file));
     if (!unc.startsWith(r'\\')) return;
     // The Projects folder itself, or above it, is "every job" - not this.
@@ -248,6 +249,29 @@ class ShareSync {
     _saveSettings(s);
     AppLogger.logInfo('Offline copy: now keeping $unc.');
     if (!IosShare.offline) unawaited(syncNow());
+  }
+
+  /// [file] - on the share, or its offline copy - as the share-relative path
+  /// [ShareSyncStatus.held] names files by. Null for a file off the share.
+  static String? relOf(String file) {
+    final String unc = uncPath(file);
+    if (!unc.startsWith(r'\\')) return null;
+    final String? mirror = IosShare.mirrorPathFor(unc);
+    if (mirror == null) return null;
+    return p.relative(mirror, from: IosShare.mirrorRoot).replaceAll('\\', '/');
+  }
+
+  /// Told when a file waiting for its combine is opened here, so the host can
+  /// say so then - and only then, rather than after every sync.
+  static void Function(List<String> rels)? onHeldOpened;
+
+  /// [file] was just opened: a word to the host if it is one being held.
+  static void noteOpened(String file) {
+    if (!_on || !IosShare.active) return;
+    final rel = relOf(file);
+    if (rel != null && status.value.held.contains(rel)) {
+      onHeldOpened?.call([rel]);
+    }
   }
 
   /// Keeps every folder a job's files are in - the job's own, each room's and

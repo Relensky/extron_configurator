@@ -792,12 +792,15 @@ class AppStateProvider extends ChangeNotifier {
   TeamTagTarget get teamTagTarget {
     final room = teamRoomId;
     final key = '$room|$currentProjectPath|$currentConfigPath';
+    // iPad / iPhone: a file under the picked share (or its offline copy) is
+    // ON the share - named as the \\doit-files path it stands for, or every
+    // room opened there read as "a copy on this PC".
     TeamTagTarget now(String sharedCopy) => teamTagTargetOf(
       roomId: room,
-      projectPath: currentProjectPath,
+      projectPath: uncPath(currentProjectPath),
       projectName: projectDisplayName,
-      configPath: currentConfigPath,
-      sharedCopy: sharedCopy,
+      configPath: uncPath(currentConfigPath),
+      sharedCopy: sharedCopy.isEmpty ? '' : uncPath(sharedCopy),
     );
     final quick = now('');
     // On the share already, or nothing to look for.

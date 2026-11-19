@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.224+234';
+const String kAppVersion = '0.5.226+236';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,27 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.226',
+    date: 'November 19, 2026',
+    title: 'Procurement dropdowns, sections that scroll, bigger touch targets',
+    changes: [
+      'AV procurement: Install before drywall or after paint, Ordered and Delivered are dropdowns right in the cell. Ordered and Delivered still follow the job\'s orders and delivery log; the dropdown marks a line by hand only when there is nothing on record.',
+      'AV procurement: pressing a line opens its editor with the box you pressed outlined, tinted and scrolled to, and a text box ready to type in. Desktop and iPad alike.',
+      'Project: each section across the top is as wide as its name and never shrunk; when they do not all fit, the strip scrolls sideways.',
+      'iPad and iPhone: the icons in the tab rail are a size larger, and the folded Project bar strip is taller and easier to tap.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.225',
+    date: 'November 19, 2026',
+    title: 'Fewer reminders, readable Schema and Flow Rules on a phone',
+    changes: [
+      'iPad and iPhone: "changed on this device and on the share" is said once - when the file is first held, when you open it, and when you change it here again - instead of after every sync. The red count on the cloud button stays until it is reviewed.',
+      'iPad and iPhone: a room or job opened from the share no longer shows the orange "open from a copy on this PC" triangle - the share is recognised as the share. Where the note does apply, a tap on it shows what it says.',
+      'iPhone: Schema and Flow Rules put their sections in a row of chips across the top, with the page the full width under them, instead of a list beside it that left the page a letter wide.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.224',
     date: 'November 19, 2026',

@@ -105,6 +105,8 @@ String _cellText(ProcurementEntry e, String id) => switch (id) {
   'review' => e.reviewTime,
   'lead' => e.leadTime,
   'notes' => e.notes,
+  'ordered' => e.custom[kProcurementOrderedMark] ?? '',
+  'delivered' => e.custom[kProcurementDeliveredMark] ?? '',
   _ => e.custom[id] ?? '',
 };
 
@@ -118,6 +120,9 @@ ProcurementEntry _withCellText(ProcurementEntry e, String id, String v) =>
       'review' => e.copyWith(reviewTime: v),
       'lead' => e.copyWith(leadTime: v),
       'notes' => e.copyWith(notes: v),
+      'ordered' => e.copyWith(custom: {...e.custom, kProcurementOrderedMark: v}),
+      'delivered' =>
+        e.copyWith(custom: {...e.custom, kProcurementDeliveredMark: v}),
       _ => e.copyWith(custom: {...e.custom, id: v}),
     };
 
@@ -925,12 +930,13 @@ class _LogGridState extends State<_LogGrid> {
           style: style,
         );
 
-  Future<void> _edit(ProcurementEntry entry) async {
+  Future<void> _edit(ProcurementEntry entry, {String? focus}) async {
     final provider = context.read<AppStateProvider>();
     final edited = await showProcurementEditor(
       context,
       entry,
       recipient: _usualRecipient(provider.project.procurement),
+      focus: focus,
     );
     if (edited != null) provider.updateProcurementEntry(edited);
   }
@@ -1304,6 +1310,21 @@ class _LogGridState extends State<_LogGrid> {
     }
 
     Widget cellFor(String id) {
+      // DROPDOWNS IN THE CELL for the three columns that only ever take one
+      // of a few answers. Ordered and Delivered follow the job's orders and
+      // delivery log when there is one; marked by hand only when there is
+      // not - see [ProcurementShown].
+      if (id == 'phase') {
+        final c = provider.project.procurementColumnChoices['phase'];
+        return choice('phase',
+            c == null || c.isEmpty ? kProcurementInstallPhases : c);
+      }
+      if (id == 'ordered' && entry.ordered.isEmpty) {
+        return choice('ordered', kProcurementOrderedChoices);
+      }
+      if (id == 'delivered' && entry.delivered.isEmpty) {
+        return choice('delivered', kProcurementDeliveredChoices);
+      }
       final choices = provider.project.procurementColumnChoices[id];
       if (choices != null &&
           choices.isNotEmpty &&
@@ -1313,10 +1334,21 @@ class _LogGridState extends State<_LogGrid> {
       return byId[id] ?? custom(id);
     }
 
+    // Which column a tap landed in, so the editor opens on that box.
+    String? columnAt(double dx) {
+      var x = 0.0;
+      for (final col in _cols) {
+        x += w(col.width);
+        if (dx < x) return col.id;
+      }
+      return null;
+    }
+
     return Material(
       color: _rowFill(theme, row) ?? Colors.transparent,
       child: InkWell(
-        onTap: () => _edit(entry),
+        onTapUp: (d) => _edit(entry, focus: columnAt(d.localPosition.dx)),
+        onTap: () {},
         child: Container(
           decoration: BoxDecoration(border: _rule(theme)),
           child: Row(
@@ -1653,8 +1685,13 @@ Future<ProcurementEntry?> showProcurementEditor(
   BuildContext context,
   ProcurementEntry entry, {
   String recipient = '',
+  /// The column the line was pressed in: its box is outlined, filled and
+  /// scrolled to, and a text box takes the cursor.
+  String? focus,
 }) {
   final company = TextEditingController(text: entry.company);
+  final focusKey = GlobalKey();
+  var scrolled = false;
   final room = TextEditingController(text: entry.room);
   final device = TextEditingController(text: entry.device);
   final manufacturer = TextEditingController(text: entry.manufacturer);
@@ -1699,17 +1736,45 @@ Future<ProcurementEntry?> showProcurementEditor(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) {
+        final theme = Theme.of(ctx);
+        if (focus != null && !scrolled) {
+          scrolled = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final c = focusKey.currentContext;
+            if (c != null) {
+              Scrollable.ensureVisible(c,
+                  alignment: 0.3, duration: const Duration(milliseconds: 200));
+            }
+          });
+        }
+        // The box for column [id], outlined and tinted when it is the one
+        // that was pressed.
+        Widget mark(String? id, Widget child) {
+          if (id == null || id != focus) return child;
+          return Container(
+            key: focusKey,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+              border: Border.all(color: theme.colorScheme.primary, width: 2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: child,
+          );
+        }
         Widget field(
           TextEditingController c,
           String label, {
           List<String> presets = const [],
           double width = 260,
           int maxLines = 1,
-        }) => SizedBox(
+          String? id,
+        }) => mark(id, SizedBox(
           width: width,
           child: TextField(
             controller: c,
             maxLines: maxLines,
+            autofocus: id != null && id == focus,
             decoration: InputDecoration(
               labelText: label,
               isDense: true,
@@ -1725,20 +1790,21 @@ Future<ProcurementEntry?> showProcurementEditor(
                     ),
             ),
           ),
-        );
+        ));
 
         Widget date(
           String label,
           DateTime? value,
-          ValueChanged<DateTime?> set,
-        ) => SizedBox(
+          ValueChanged<DateTime?> set, {
+          String? id,
+        }) => mark(id, SizedBox(
           width: 260,
           child: ProcurementDateField(
             label: label,
             value: value,
             onChanged: (d) => setLocal(() => set(d)),
           ),
-        );
+        ));
 
         final onSite = p6Start == null
             ? null
@@ -1754,7 +1820,7 @@ Future<ProcurementEntry?> showProcurementEditor(
                 runSpacing: 12,
                 children: [
                   if (shows('company'))
-                    field(company, 'Company', presets: kProcurementCompanies),
+                    field(company, 'Company', presets: kProcurementCompanies, id: 'company'),
                   if (entry.linked)
                     SizedBox(
                       width: 536,
@@ -1770,13 +1836,13 @@ Future<ProcurementEntry?> showProcurementEditor(
                       ),
                     )
                   else ...[
-                    field(room, 'Room #'),
+                    field(room, 'Room #', id: 'room'),
                     field(device, 'Device', width: 536),
                     if (shows('manufacturer'))
-                      field(manufacturer, 'Manufacturer'),
-                    if (shows('model')) field(model, 'Model'),
+                      field(manufacturer, 'Manufacturer', id: 'manufacturer'),
+                    if (shows('model')) field(model, 'Model', id: 'model'),
                     if (shows('partNumber'))
-                      field(partNumber, 'Part number'),
+                      field(partNumber, 'Part number', id: 'partNumber'),
                   ],
                   if (shows('description'))
                     field(
@@ -1784,9 +1850,10 @@ Future<ProcurementEntry?> showProcurementEditor(
                       'Equipment description',
                       width: 536,
                       presets: picks('description'),
+                      id: 'description',
                     ),
                   if (shows('status') || shows('released'))
-                  SizedBox(
+                  mark(focus == 'released' ? 'released' : 'status', SizedBox(
                     width: 260,
                     child: DropdownButtonFormField<ProcurementStatus>(
                       initialValue: status,
@@ -1810,30 +1877,32 @@ Future<ProcurementEntry?> showProcurementEditor(
                         }
                       }),
                     ),
-                  ),
+                  )),
                   if (shows('status'))
-                    field(statusTo, 'Who it goes to (e.g. DPR)'),
+                    field(statusTo, 'Who it goes to (e.g. DPR)', id: 'statusTo'),
                   if (shows('phase'))
                     field(
                       phase,
                       'Install before drywall or after paint?',
                       presets: picks('phase', kProcurementInstallPhases),
+                      id: 'phase',
                     ),
                   if (shows('lead'))
-                    field(lead, 'Lead time (weeks)', presets: picks('lead')),
+                    field(lead, 'Lead time (weeks)', presets: picks('lead'), id: 'lead'),
                   if (shows('p6Id'))
-                    field(p6Id, 'P6 activity ID', presets: picks('p6Id')),
+                    field(p6Id, 'P6 activity ID', presets: picks('p6Id'), id: 'p6Id'),
                   if (shows('review'))
-                    field(review, 'Review time', presets: picks('review')),
+                    field(review, 'Review time', presets: picks('review'), id: 'review'),
                   if (shows('p6Description'))
                     field(
                       p6Desc,
                       'P6 activity description',
                       width: 536,
                       presets: picks('p6Description'),
+                      id: 'p6Description',
                     ),
                   if (shows('p6Start') || shows('onSite'))
-                    date('P6 start date', p6Start, (v) => p6Start = v),
+                    date('P6 start date', p6Start, (v) => p6Start = v, id: 'p6Start'),
                   if (shows('onSite'))
                   SizedBox(
                     width: 260,
@@ -1850,12 +1919,12 @@ Future<ProcurementEntry?> showProcurementEditor(
                   ),
                   if (shows('submitBy'))
                     date('Date to be submitted', submitBy,
-                        (v) => submitBy = v),
+                        (v) => submitBy = v, id: 'submitBy'),
                   if (shows('releasedOn'))
                     date('Actual release date', releasedOn,
-                        (v) => releasedOn = v),
+                        (v) => releasedOn = v, id: 'releasedOn'),
                   if (shows('delivery'))
-                    date('Estimated delivery', delivery, (v) => delivery = v),
+                    date('Estimated delivery', delivery, (v) => delivery = v, id: 'delivery'),
                   if (shows('notes'))
                     field(
                       notes,
@@ -1863,6 +1932,7 @@ Future<ProcurementEntry?> showProcurementEditor(
                       width: 536,
                       maxLines: 3,
                       presets: picks('notes'),
+                      id: 'notes',
                     ),
                   for (final c in custom.entries)
                     KeyedSubtree(
@@ -1871,6 +1941,7 @@ Future<ProcurementEntry?> showProcurementEditor(
                         c.value.text,
                         c.value.label,
                         presets: picks(c.key),
+                        id: c.key,
                       ),
                     ),
                 ],

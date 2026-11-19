@@ -9831,8 +9831,33 @@ class _PaneStripState extends State<_PaneStrip> {
       color: theme.colorScheme.surfaceContainerLow,
       child: LayoutBuilder(builder: (context, box) {
         final panes = _ProjectPane.values;
-        final share = box.maxWidth / panes.length;
-        final scrolls = share < _PaneStrip._minTile;
+        final labelStyle = theme.textTheme.labelMedium;
+        final scaler = MediaQuery.textScalerOf(context);
+        String labelOf(_ProjectPane pane) =>
+            pane == _ProjectPane.todo && widget.openTodos > 0
+                ? '${pane.label} (${widget.openTodos})'
+                : pane.label;
+        // EACH SECTION AS WIDE AS ITS OWN NAME, never shrunk: the names stay
+        // the size they are meant to be read at, and when they do not all fit
+        // the strip scrolls sideways instead.
+        double natural(_ProjectPane pane) {
+          if (flat) return 48;
+          final tp = TextPainter(
+            text: TextSpan(
+              text: labelOf(pane),
+              style: labelStyle?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            textDirection: TextDirection.ltr,
+            textScaler: scaler,
+            maxLines: 1,
+          )..layout();
+          final w = tp.width + 28;
+          tp.dispose();
+          return math.max(_PaneStrip._minTile, w);
+        }
+        final widths = {for (final p in panes) p: natural(p)};
+        final total = widths.values.fold<double>(0, (a, b) => a + b);
+        final scrolls = total > box.maxWidth;
         Widget tile(_ProjectPane pane) {
           final on = pane == widget.selected;
           final ink = on
@@ -9855,8 +9880,8 @@ class _PaneStripState extends State<_PaneStrip> {
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                // Scaled down as a whole when a large Interface or Text Size
-                // makes icon and name taller than the strip.
+                // Only ever scaled down for HEIGHT - a very large Interface
+                // Size - never to squeeze a name into a narrow tile.
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Column(
@@ -9889,16 +9914,19 @@ class _PaneStripState extends State<_PaneStrip> {
         if (!scrolls) {
           return Row(
             children: [
-              for (final pane in panes) Expanded(child: tile(pane)),
+              for (final pane in panes)
+                Expanded(flex: widths[pane]!.round(), child: tile(pane)),
             ],
           );
         }
-        return ListView(
-          scrollDirection: Axis.horizontal,
-          children: [
-            for (final pane in panes)
-              SizedBox(width: _PaneStrip._minTile, child: tile(pane)),
-          ],
+        return Scrollbar(
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final pane in panes)
+                SizedBox(width: widths[pane], child: tile(pane)),
+            ],
+          ),
         );
       }),
     );

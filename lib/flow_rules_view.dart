@@ -5,6 +5,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'collapsible_bar.dart';
+import 'form_factor.dart' show isPhone;
 import 'flow_rules.dart';
 import 'side_pane.dart';
 import 'responsive.dart' show kFloatingButtonClearance;
@@ -160,10 +161,34 @@ class _FlowRulesViewState extends State<FlowRulesView> {
       body: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // iPhone: the sections as a row of chips across the top - see the
+        // Schema page.
+        if (isPhone(context))
+          SizedBox(
+            height: 48,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              children: [
+                for (final s in _RuleSection.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      key: ValueKey('flow_rules_section_${s.name}'),
+                      avatar: Icon(s.icon, size: 16),
+                      label: Text('${s.label} (${_countFor(rules, s)})'),
+                      selected: s == _section,
+                      onSelected: (_) => setState(() => _section = s),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (!isPhone(context))
               SidePane(
                 side: PaneSide.left,
                 title: 'Rules',
