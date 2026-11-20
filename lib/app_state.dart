@@ -2508,7 +2508,9 @@ class AppStateProvider extends ChangeNotifier {
   /// file it was picked from has moved or the share is down.
   String get estimateLogoForExport {
     final candidates = [
-      estimateLogoPath,
+      // Set on a desktop as a \\doit-files path: the share as this device
+      // reaches it (or its offline copy on an iPad).
+      sharePath(estimateLogoPath),
       for (final ext in _kAvatarTypes) ...[
         path.join(logoFolder, '${_avatarStem(collab.me.user)}$ext'),
         path.join(localLogoFolder, '${_avatarStem(collab.me.user)}$ext'),
@@ -2518,6 +2520,50 @@ class AppStateProvider extends ChangeNotifier {
       if (c.trim().isNotEmpty && File(c).existsSync()) return c;
     }
     return estimateLogoPath;
+  }
+
+  /// A logo picked from this PC's own drive (C:\\...) stays on this PC -
+  /// paths on a local drive don't roam - so an iPad, an iPhone or another PC
+  /// signed in as the same person printed without it. It is put on the share
+  /// under this login, where [estimateLogoForExport] looks on every device,
+  /// unless the share already has that same picture. Nothing on iOS, where
+  /// the logo comes from the share rather than going to it.
+  Future<void> _shareMyLogo() async {
+    if (runningUnderTest || !_persistenceEnabled || Platform.isIOS) return;
+    final picked = estimateLogoPath.trim();
+    if (picked.isEmpty || picked.startsWith(r'\\')) return;
+    final stem = _avatarStem(collab.me.user);
+    final ext = path.extension(picked).toLowerCase();
+    if (stem.isEmpty || !_kAvatarTypes.contains(ext)) return;
+    try {
+      final source = File(picked);
+      if (!await source.exists()) return;
+      final folder = logoFolder;
+      if (path.isWithin(folder, picked)) return;
+      if (!await Directory(path.dirname(folder))
+          .exists()
+          .timeout(const Duration(seconds: 5))) {
+        return;
+      }
+      final target = File(path.join(folder, '$stem$ext'));
+      final bytes = await source.readAsBytes();
+      if (await target.exists() &&
+          await target.length() == bytes.length) {
+        return;
+      }
+      await Directory(folder).create(recursive: true);
+      for (final e in _kAvatarTypes) {
+        final old = File(path.join(folder, '$stem$e'));
+        if (e != ext && await old.exists()) await old.delete();
+      }
+      await target.writeAsBytes(bytes, flush: true);
+      AppLogger.logInfo(
+        'Estimate logo $picked put on the share as ${target.path}, for the '
+        'iPad, iPhone and other PCs.',
+      );
+    } catch (e) {
+      AppLogger.logError('Could not put the estimate logo on the share', e);
+    }
   }
 
   /// Sets the estimate logo from [picture]: copied to the share beside the
@@ -11141,6 +11187,8 @@ class AppStateProvider extends ChangeNotifier {
       estimateLogoPath = str('estimateLogoPath', '');
       estimateLogoSide =
           str('estimateLogoSide', 'right') == 'left' ? 'left' : 'right';
+      // Off this PC's thread of loading: the share may be slow to answer.
+      unawaited(Future(_shareMyLogo));
       estimateAccent = str('estimateAccent', '');
       XlsxTheme.accentHex = estimateAccent;
       estimatePreparedBy = str('estimatePreparedBy', '');

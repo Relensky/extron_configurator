@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.241+251';
+const String kAppVersion = '0.5.242+252';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,23 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.242',
+    date: 'November 20, 2026',
+    title: 'Your logo on every device; take all from the share',
+    changes: [
+      'The estimate and quote request PDFs on an iPad or iPhone carry the '
+          'logo set on the desktop. A logo picked from a PC\'s own drive is '
+          'now put on the share under your login when the app starts, where '
+          'every device looks for it, and a logo already on the share is '
+          'found from the iPad as well.',
+      'Combining: where several places were changed on both sides, Take all '
+          'from the share (or Keep all of yours) chooses every one at once. '
+          'Nothing is combined until you press Combine.',
+      'Combining on a phone: Approve all and Approve none go under the count '
+          'when they do not fit beside it, instead of running off the screen.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.241',
     date: 'November 20, 2026',

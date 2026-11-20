@@ -1043,25 +1043,33 @@ Future<Set<String>?> showMergeReviewDialog(
                   ),
                 ],
                 if (changes.length > 1)
-                  Row(
+                  // A Wrap, not a Row: on a phone the count and both
+                  // buttons are wider than the dialog, and Approve none ran
+                  // off its edge. The buttons go under the count instead.
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         '${approved.length} of ${changes.length} approved',
                         style:
                             theme.textTheme.bodySmall?.copyWith(color: muted),
                       ),
-                      const Spacer(),
-                      TextButton(
-                        key: const ValueKey('collab_review_all'),
-                        onPressed: () => setState(() => approved
-                          ..clear()
-                          ..addAll(changes.map((c) => c.key))),
-                        child: const Text('Approve all'),
-                      ),
-                      TextButton(
-                        key: const ValueKey('collab_review_none'),
-                        onPressed: () => setState(approved.clear),
-                        child: const Text('Approve none'),
+                      Wrap(
+                        children: [
+                          TextButton(
+                            key: const ValueKey('collab_review_all'),
+                            onPressed: () => setState(() => approved
+                              ..clear()
+                              ..addAll(changes.map((c) => c.key))),
+                            child: const Text('Approve all'),
+                          ),
+                          TextButton(
+                            key: const ValueKey('collab_review_none'),
+                            onPressed: () => setState(approved.clear),
+                            child: const Text('Approve none'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1230,6 +1238,43 @@ Future<Map<String, MergeSide>?> showMergeConflictDialog(
                   '${beforeSave ? ' Your save goes ahead once you combine.' : ''}',
                   style: theme.textTheme.bodyMedium,
                 ),
+                // ONE SIDE FOR THE LOT: a sync from the share can bring a
+                // dozen of these at once, and choosing them one by one when
+                // the answer is "the share's, all of it" is busywork. It only
+                // ticks the choices - Combine is still pressed by a person.
+                if (conflicts.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        OutlinedButton.icon(
+                          key: const ValueKey('collab_conflict_all_theirs'),
+                          icon: const Icon(Icons.cloud_download_outlined,
+                              size: 18),
+                          label: Text(who.toLowerCase().startsWith('the ')
+                              ? 'Take all from ${who.toLowerCase()}'
+                              : 'Take all of $who\'s'),
+                          onPressed: () => setState(() {
+                            for (final c in conflicts) {
+                              choices[c.path] = MergeSide.theirs;
+                            }
+                          }),
+                        ),
+                        OutlinedButton.icon(
+                          key: const ValueKey('collab_conflict_all_mine'),
+                          icon: const Icon(Icons.person_outline, size: 18),
+                          label: const Text('Keep all of yours'),
+                          onPressed: () => setState(() {
+                            for (final c in conflicts) {
+                              choices[c.path] = MergeSide.mine;
+                            }
+                          }),
+                        ),
+                      ],
+                    ),
+                  ),
                 const SizedBox(height: 10),
                 Flexible(
                   child: ListView(
