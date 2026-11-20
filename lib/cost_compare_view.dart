@@ -514,8 +514,8 @@ class CostCompareDialog extends StatefulWidget {
 }
 
 class _CostCompareDialogState extends State<CostCompareDialog> {
-  // Both sides as they stand now: a copy changes one, and the window stays
-  // open to copy more either way.
+  // Both sides as they stand now. A copy that goes through closes the
+  // window - see [_closeWith].
   late CostEstimate _hereEstimate = widget.hereEstimate;
   late CostEstimate _thereEstimate = widget.thereEstimate;
   late RoomCostSettings _thereSettings = widget.thereSettings;
@@ -653,12 +653,17 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
       });
       return;
     }
-    await _refresh();
     if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _done = '$n quantit${n == 1 ? 'y' : 'ies'} copied into $_targetName.';
-    });
+    _closeWith('$n quantit${n == 1 ? 'y' : 'ies'} copied into $_targetName.');
+  }
+
+  /// A copy went through: the window closes and the app says what was done.
+  void _closeWith(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    Navigator.of(context).pop();
+    messenger?.showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 5)),
+    );
   }
 
   /// The source room has it, and the target does not - or does, differently,
@@ -667,26 +672,6 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
     if (!_inSource(r)) return false;
     if (!_inTarget(r) || _copyAnyway) return true;
     return _replace && r.kind != CostDiffKind.same && _replaceIds(r) != null;
-  }
-
-  /// Both sides priced again after a copy.
-  Future<void> _refresh() async {
-    if (_intoHere) {
-      _hereEstimate = widget.provider.roomCost;
-    } else {
-      final priced =
-          await priceOtherRoom(widget.provider, widget.thereConfigPath);
-      if (priced.estimate != null) {
-        _thereEstimate = priced.estimate!;
-        _thereSettings = priced.room.settings;
-      }
-    }
-    if (!mounted) return;
-    setState(() {
-      _c = compareRoomCosts(_hereEstimate, _thereEstimate);
-      _picked.clear();
-      _swaps.clear();
-    });
   }
 
   List<CostDiffRow> get _pickedRows => [
@@ -797,11 +782,8 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
       });
       return;
     }
-    await _refresh();
     if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _done = [
+    _closeWith([
         if (n > 0 || boxes == 0)
           '$n item${n == 1 ? '' : 's'} '
               '${replacing.isEmpty ? 'added to' : 'copied into'} $_targetName'
@@ -809,8 +791,7 @@ class _CostCompareDialogState extends State<CostCompareDialog> {
         if (boxes > 0)
           '$boxes box${boxes == 1 ? '' : 'es'} on $_targetName\'s AV Flow '
               'swapped to the new model, cables kept.',
-      ].join(' ');
-    });
+      ].join(' '));
   }
 
   @override

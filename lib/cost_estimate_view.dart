@@ -3064,7 +3064,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   MediaQuery.sizeOf(ctx).height - 200,
                 ),
               ),
+              // SCROLLS AS A WHOLE, the list a height of its own. A fixed
+              // column gave the list whatever the notes and boxes left, and at
+              // a large interface size that was nothing: no items showed.
+              child: SingleChildScrollView(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -3135,7 +3140,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     value: showAll,
                     onChanged: (v) => setLocal(() => showAll = v),
                   ),
-                  Expanded(
+                  SizedBox(
+                    key: const ValueKey('add_part_list'),
+                    height: math.max(
+                      240.0,
+                      (MediaQuery.sizeOf(ctx).height - 200) * 0.45,
+                    ),
                     child: matches.isEmpty
                         ? Center(
                             child: Text(
@@ -3303,7 +3313,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           onChanged: (v) =>
                               setLocal(() => fromStock = v ?? false),
                         ),
-                        const Text('In kind - from our stock'),
+                        // Wraps at a large size rather than running off.
+                        const Flexible(
+                          child: Text('In kind - from our stock'),
+                        ),
                         const Spacer(),
                         if (fromStock && selectedModel == null)
                           SizedBox(
@@ -3336,6 +3349,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       onChanged: (v) => setLocal(() => placement = v),
                     ),
                 ],
+              ),
               ),
             ),
             actions: [

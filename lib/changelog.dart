@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.239+249';
+const String kAppVersion = '0.5.240+250';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,17 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.240',
+    date: 'November 19, 2026',
+    title: 'Add to room from the catalog; the add list at any size',
+    changes: [
+      'Add equipment, cable, hardware and other items: the catalog list always has room to show its matches. At a large interface size it had none - the notes and boxes around it took the whole dialog and no items showed. The dialog now scrolls, the list keeps a height of its own, and the In kind box wraps rather than running off.',
+      'Catalog: Add to room, beside Duplicate, puts the item on a room estimate - the open room, or any room on the open job - with how many. The open room takes it with Undo; another room has its cost file written.',
+      'Compare rooms: copying items or quantities across closes the window, and the app says what was copied.',
+      'Quote requests open on PDF, listed first, rather than Excel.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.239',
     date: 'November 19, 2026',

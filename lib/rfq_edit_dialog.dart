@@ -32,7 +32,7 @@ typedef RfqEditChoice = ({
 
 // The edit screen's last choices, kept until the app closes so the next
 // export starts where the last one left off.
-RfqFormat _lastFormat = RfqFormat.xlsx;
+RfqFormat _lastFormat = RfqFormat.pdf;
 RfqHeaderText _lastHeader = (title: '', subtitle: '', footer: '');
 final Map<String, RfqEdits> _lastEdits = {};
 
@@ -399,14 +399,14 @@ class _RfqEditDialogState extends State<_RfqEditDialog> {
                         key: const ValueKey('rfq_format'),
                         segments: const [
                           ButtonSegment(
-                            value: RfqFormat.xlsx,
-                            label: Text('Excel'),
-                            icon: Icon(Icons.grid_on_outlined),
-                          ),
-                          ButtonSegment(
                             value: RfqFormat.pdf,
                             label: Text('PDF'),
                             icon: Icon(Icons.picture_as_pdf_outlined),
+                          ),
+                          ButtonSegment(
+                            value: RfqFormat.xlsx,
+                            label: Text('Excel'),
+                            icon: Icon(Icons.grid_on_outlined),
                           ),
                           ButtonSegment(
                             value: RfqFormat.both,

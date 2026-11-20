@@ -376,20 +376,32 @@ void main() {
           part('EQP_3', 'Ceiling speaker', pn: '42-1', qty: 4, price: 150),
           part('EQP_4', 'Mic', pn: '42-2', price: 90),
         ]);
+      // Opened as the app opens it - a dialog over a page - so closing it
+      // after a copy leaves the page and its message.
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: CostCompareDialog(
-            provider: p,
-            hereName: 'Arts 111',
-            thereName: 'Arts 112',
-            hereEstimate: priced(p.avCost),
-            thereEstimate: priced(there),
-            hereSettings: p.avCost,
-            thereSettings: there,
-            currency: r'$',
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => CostCompareDialog(
+                  provider: p,
+                  hereName: 'Arts 111',
+                  thereName: 'Arts 112',
+                  hereEstimate: priced(p.avCost),
+                  thereEstimate: priced(there),
+                  hereSettings: p.avCost,
+                  thereSettings: there,
+                  currency: r'$',
+                ),
+              ),
+              child: const Text('open compare'),
+            ),
           ),
         ),
       ));
+      await tester.tap(find.text('open compare'));
+      await tester.pumpAndSettle();
       return p;
     }
 
@@ -442,7 +454,7 @@ void main() {
       expect(button.segments.last.enabled, isFalse);
     });
 
-    testWidgets('stays open after a copy, with the copied part now in both',
+    testWidgets('closes after a copy, and the app says what was copied',
         (tester) async {
       await open(tester);
       const speaker =
@@ -453,10 +465,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('copy_items_go')));
       await tester.pumpAndSettle();
-      expect(find.text('Arts 111 vs Arts 112'), findsOneWidget);
+      expect(find.text('Arts 111 vs Arts 112'), findsNothing,
+          reason: 'the window closes once the copy is done');
       expect(find.text('1 item added to Arts 111.'), findsOneWidget);
-      expect(find.byKey(speaker), findsNothing);
-      expect(find.text('Done'), findsOneWidget);
     });
 
     testWidgets('Replace lets a part both rooms have be copied over',
@@ -480,7 +491,8 @@ void main() {
           .toList();
       expect(dtps, hasLength(1));
       expect(dtps.single.unitPrice, 700);
-      expect(find.text('Arts 111 vs Arts 112'), findsOneWidget);
+      expect(find.text('Arts 111 vs Arts 112'), findsNothing,
+          reason: 'the window closes once the copy is done');
     });
 
     testWidgets('Copy anyway adds a part both rooms have alongside',
@@ -564,24 +576,35 @@ void main() {
           part('EQP_7', 'Ceiling speaker', pn: '42-1', qty: 4, price: 150));
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: CostCompareDialog(
-          provider: p,
-          hereName: 'Arts 111',
-          thereName: 'Arts 112',
-          hereEstimate: priced(p.avCost),
-          thereEstimate: priced(there),
-          hereSettings: p.avCost,
-          thereSettings: there,
-          currency: r'$',
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => CostCompareDialog(
+                provider: p,
+                hereName: 'Arts 111',
+                thereName: 'Arts 112',
+                hereEstimate: priced(p.avCost),
+                thereEstimate: priced(there),
+                hereSettings: p.avCost,
+                thereSettings: there,
+                currency: r'$',
+              ),
+            ),
+            child: const Text('open compare'),
+          ),
         ),
       ),
     ));
+    await tester.tap(find.text('open compare'));
+    await tester.pumpAndSettle();
     expect(find.text('Copy all 1 quantities'), findsOneWidget);
     await tester.tap(find.text('Copy quantity 4 into Arts 111'));
     await tester.pumpAndSettle();
     expect(p.avCost.extraEquipment.single.qty, 4);
     expect(find.text('1 quantity copied into Arts 111.'), findsOneWidget);
-    expect(find.text('Copy all 0 quantities'), findsOneWidget);
+    expect(find.text('Copy all 0 quantities'), findsNothing,
+        reason: 'the window closes once the copy is done');
   });
 
   testWidgets('a camera drawn in both rooms is swapped on the AV Flow',
@@ -623,18 +646,28 @@ void main() {
     );
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: CostCompareDialog(
-          provider: p,
-          hereName: 'BSS 106',
-          thereName: 'BSS 103',
-          hereEstimate: p.roomCost,
-          thereEstimate: thereEstimate,
-          hereSettings: p.avCost,
-          thereSettings: there,
-          currency: r'$',
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => CostCompareDialog(
+                provider: p,
+                hereName: 'BSS 106',
+                thereName: 'BSS 103',
+                hereEstimate: p.roomCost,
+                thereEstimate: thereEstimate,
+                hereSettings: p.avCost,
+                thereSettings: there,
+                currency: r'$',
+              ),
+            ),
+            child: const Text('open compare'),
+          ),
         ),
       ),
     ));
+    await tester.tap(find.text('open compare'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('compare_replace')));
     await tester.pump();
     final swap = find.byWidgetPredicate((w) =>

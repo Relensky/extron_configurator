@@ -97,8 +97,12 @@ void main() {
       await tester.enterText(
           find.widgetWithText(TextField, 'Name on the estimate'),
           'Old projector lift');
+      // Below the list: the dialog scrolls to it.
+      await tester.ensureVisible(find.byKey(const ValueKey('add_from_stock')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('add_from_stock')));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('add_stock_value')));
       await tester.enterText(
           find.byKey(const ValueKey('add_stock_value')), '400');
       await tester.tap(find.widgetWithText(ElevatedButton, 'Add'));

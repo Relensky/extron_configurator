@@ -297,6 +297,9 @@ void main() {
       await tester.tap(find.text('DMP 64 Plus C').first);
       await tester.pumpAndSettle();
       if (pick != null) {
+        // Below the list: the dialog scrolls to it.
+        await tester.ensureVisible(find.byKey(ValueKey('placement_$pick')));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(ValueKey('placement_$pick')));
         await tester.pumpAndSettle();
       }

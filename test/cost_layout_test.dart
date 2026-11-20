@@ -257,4 +257,47 @@ void main() {
     expect(tester.getTopLeft(find.textContaining('Equipment (')).dx,
         lessThan(cardRight / 2));
   });
+
+  testWidgets('Add equipment lists the catalog at a large size on a short '
+      'window', (tester) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: fullEstimate(),
+        child: MaterialApp(
+          // A large interface size, as one user had.
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(1.6)),
+            child: child!,
+          ),
+          home: const Scaffold(body: CostEstimateView()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('cost_add_equipment')),
+      200,
+      scrollable: find
+          .byWidgetPredicate(
+            (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+          )
+          .first,
+    );
+    await tester.tap(find.byKey(const ValueKey('cost_add_equipment')));
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('add_part_list'));
+    expect(list, findsOneWidget);
+    expect(tester.getSize(list).height, greaterThanOrEqualTo(240));
+    expect(
+      find.descendant(of: list, matching: find.textContaining('Display X')),
+      findsWidgets,
+      reason: 'the catalog shows in the list',
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

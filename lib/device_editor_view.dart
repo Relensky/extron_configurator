@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'catalog_add_to_room.dart';
 import 'catalog_category_prompt.dart';
 import 'collapsible_bar.dart';
 import 'form_factor.dart' show isMobileDevice, isPhone;
@@ -2694,6 +2695,17 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         const SizedBox(height: 24),
         Row(
           children: [
+            // Straight onto a room's estimate, with a room or a job open.
+            if (roomChoicesFor(provider).isNotEmpty) ...[
+              FilledButton.tonalIcon(
+                key: const ValueKey('catalog_add_to_room'),
+                icon: const Icon(Icons.add_shopping_cart, size: 18),
+                label: const Text('Add to room...'),
+                onPressed: () =>
+                    addCatalogEntryToRoom(context, provider, entry),
+              ),
+              const SizedBox(width: 12),
+            ],
             OutlinedButton.icon(
               icon: const Icon(Icons.copy, size: 18),
               label: const Text('Duplicate'),
