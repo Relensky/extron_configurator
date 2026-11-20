@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.250+260';
+const String kAppVersion = '0.5.251+261';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.251',
+    date: 'November 20, 2026',
+    title: 'Fold the job details on iPad and iPhone',
+    changes: [
+      'iPad and iPhone, Project tab: Hide job details folds the name, stakeholder, buildings, build date and totals to one line with the job and its total. It stays folded as you move between Rooms, Plans, Timeline and the rest; tap the line to open it again.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.250',
     date: 'November 20, 2026',

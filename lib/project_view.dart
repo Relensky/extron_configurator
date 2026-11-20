@@ -41,7 +41,8 @@ import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
 import 'project_plans_view.dart';
 import 'project_pricing.dart';
-import 'form_factor.dart' show isPhone, phoneLandscape;
+import 'collapsible_bar.dart' show BarFolds;
+import 'form_factor.dart' show isMobileDevice, isPhone, phoneLandscape;
 import 'procurement_log.dart' show kProcurementCompanies;
 import 'procurement_sync.dart' show liveProcurement;
 import 'project_procurement_view.dart'
@@ -85,6 +86,9 @@ import 'vendor_rfq_view.dart';
 /// ============================================================================
 
 /// Which pane is showing.
+/// The fold that holds the job's details away on an iPad or iPhone.
+const String _kDetailsFold = 'project_details';
+
 enum _ProjectPane {
   rooms('Rooms', Icons.meeting_room),
   // Each room's labor, the rates it is costed from, and who provides it.
@@ -341,7 +345,6 @@ class ProjectView extends StatefulWidget {
 
 class _ProjectViewState extends State<ProjectView> {
   _ProjectPane _pane = _ProjectPane.rooms;
-
   /// Whether the Lifecycle pane is showing what the building would be bought
   /// on today rather than the year grid.
   ///
@@ -662,7 +665,31 @@ class _ProjectViewState extends State<ProjectView> {
                 ),
               ),
             ),
-          SliverToBoxAdapter(child: _header(context, provider, estimate)),
+          // ON AN iPAD OR iPHONE THE JOB'S DETAILS FOLD to one line - the
+          // job and its total - and stay folded from pane to pane until
+          // they are opened again, so moving between panes shows each pane
+          // rather than the same name, stakeholder and totals every time.
+          if (isMobileDevice && BarFolds.isFolded(_kDetailsFold))
+            SliverToBoxAdapter(
+              child: _foldedHeader(context, provider, estimate),
+            )
+          else ...[
+            if (isMobileDevice)
+              SliverToBoxAdapter(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    key: const ValueKey('project_details_hide'),
+                    icon: const Icon(Icons.expand_less, size: 18),
+                    label: const Text('Hide job details'),
+                    onPressed: () => setState(
+                      () => BarFolds.setFolded(_kDetailsFold, true),
+                    ),
+                  ),
+                ),
+              ),
+            SliverToBoxAdapter(child: _header(context, provider, estimate)),
+          ],
           const SliverToBoxAdapter(child: Divider(height: 1)),
           ...switch (_pane) {
             _ProjectPane.rooms => roomsSlivers(context, estimate),
@@ -729,6 +756,51 @@ class _ProjectViewState extends State<ProjectView> {
       ),
       ),
       ),
+      ),
+    );
+  }
+
+  /// The job's details as one line, once folded on an iPad or iPhone.
+  Widget _foldedHeader(
+    BuildContext context,
+    AppStateProvider provider,
+    ProjectEstimate estimate,
+  ) {
+    final theme = Theme.of(context);
+    final name = provider.project.name.trim().isEmpty
+        ? 'This job'
+        : provider.project.name.trim();
+    return InkWell(
+      key: const ValueKey('project_details_show'),
+      onTap: () => setState(() => BarFolds.setFolded(_kDetailsFold, false)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              formatMoney(estimate.grandTotal, estimate.currency),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Tooltip(
+              message: 'Show the job details',
+              child: Icon(
+                Icons.expand_more,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
