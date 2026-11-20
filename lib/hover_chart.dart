@@ -155,13 +155,6 @@ class HoverLineChart extends StatelessWidget {
     // nowhere to put the one that matters most.
     final maxY = peak <= 0 ? 1.0 : peak * 1.25;
 
-    // A LABEL ON EVERY POINT IS UNREADABLE past about a dozen of them, so they
-    // thin out rather than print over each other.
-    final step = (sorted.length / 12).ceil().clamp(1, 500);
-    final labelAt = <double, String>{
-      for (var i = 0; i < sorted.length; i += step)
-        sorted[i].x: sorted[i].axisLabel,
-    };
 
     final line = LineChartBarData(
       spots: [for (final p in sorted) FlSpot(p.x, p.y)],
@@ -184,7 +177,29 @@ class HoverLineChart extends StatelessWidget {
       ),
     );
 
-    return SizedBox(
+    {
+        // A LABEL ON EVERY POINT IS UNREADABLE past about a dozen of them,
+        // and on a phone past five or six: they thin out to what the width
+        // holds rather than print over each other.
+        final labelWidth = gridMetric(context, 44) *
+            MediaQuery.textScalerOf(context).scale(1);
+        // Measured off the screen, not the chart's own box: the chart is
+        // also drawn in a dialog that sizes itself to its content, where
+        // asking for the box's width is not allowed.
+        final screen = MediaQuery.sizeOf(context).width;
+        final room = ((screen - gridMetric(context, 62) - 32) / labelWidth)
+            .floor()
+            .clamp(2, 12);
+        final step = (sorted.length / room).ceil().clamp(1, 500);
+        final labelAt = <double, String>{
+          for (var i = 0; i < sorted.length; i += step)
+            sorted[i].x: sorted[i].axisLabel,
+        };
+        // The last year's label is centred on the right edge; this keeps
+        // its second half on the screen.
+        return Padding(
+          padding: EdgeInsets.only(right: screen < 600 ? labelWidth / 2 : 0),
+          child: SizedBox(
       height: gridMetric(context, height),
       child: LineChart(
         LineChartData(
@@ -328,7 +343,9 @@ class HoverLineChart extends StatelessWidget {
           ),
         ),
       ),
-    );
+          ),
+        );
+    }
   }
 
   /// The point, as the readout prints it: a heading and the caller's rows,

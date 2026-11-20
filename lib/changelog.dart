@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.247+257';
+const String kAppVersion = '0.5.248+258';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,22 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.248',
+    date: 'November 20, 2026',
+    title: 'iPhone: every page readable with a job open',
+    changes: [
+      'The tab bar along the bottom gives each tab its own label width, so Lifecycle, Floor Plan, Raw JSON and Schematic no longer run into each other.',
+      'Devices: the device\'s name sits over its buttons instead of running down the page a letter a line; the model and module pickers take the full width with their buttons under them; and the device tabs across the top have the whole width, with By type and Manuals on a line above.',
+      'System: the title and Check Defaults share the line properly, and each setting\'s label has the row\'s width, the info and delete buttons closed up beside it.',
+      'Lifecycle: the replacement-year grid opens at full size on a phone and scrolls sideways, rather than shrunk to fit; the cost chart labels only as many years as fit, and the last is no longer cut off.',
+      'Wizard: Building and Room number each have a line of their own on a phone, and a long building name wraps onto a second line.',
+      'Cabling: the runs left off the sheet note folds to one line with the arrow beside it, and stays folded.',
+      'Cost: the Rack hardware note sits under its heading, full width.',
+      'Project > Rooms, Budget: Add the rooms estimate as planned is now Add rooms estimate, with the figure on its tooltip.',
+      'The job briefing\'s timeline labels only the months that fit, so they no longer print over each other; Open Recent stays on the screen.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.247',
     date: 'November 20, 2026',

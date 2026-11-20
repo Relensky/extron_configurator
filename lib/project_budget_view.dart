@@ -397,6 +397,7 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                 ),
               Wrap(
                 spacing: 8,
+                runSpacing: 8,
                 children: [
                   OutlinedButton.icon(
                     key: const ValueKey('budget_add_line'),
@@ -405,10 +406,15 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                     onPressed: () => provider.addBudgetLine(),
                   ),
                   if (widget.estimateTotal > 0)
-                    OutlinedButton.icon(
+                    // Short, so it sits on one line on a phone; the
+                    // tooltip says the rest.
+                    Tooltip(
+                      message: 'Adds a planned line for the rooms estimate, '
+                          '${formatMoney(widget.estimateTotal, cur)}',
+                      child: OutlinedButton.icon(
                       key: const ValueKey('budget_add_estimate'),
                       icon: const Icon(Icons.playlist_add, size: 18),
-                      label: const Text('Add the rooms estimate as planned'),
+                      label: const Text('Add rooms estimate'),
                       onPressed: () => provider.addBudgetLine(
                         BudgetLine.create(
                           item: 'Rooms estimate',
@@ -417,6 +423,7 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                           date: DateTime.now(),
                         ),
                       ),
+                    ),
                     ),
                 ],
               ),

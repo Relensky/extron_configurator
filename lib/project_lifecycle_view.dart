@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import 'form_factor.dart' show isPhone;
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart' show ManualRoom;
@@ -1142,7 +1143,9 @@ class _LifecycleYearGridState extends State<LifecycleYearGrid> {
   /// neither: the far end of the plan was off the right edge, and nothing on
   /// screen said there was more of it. It still scrolls, and the steps are one
   /// press away for reading a figure.
-  bool _fit = true;
+  // A phone opens it at full size, scrolled sideways: fitted to a phone's
+  // width the years and figures were shrunk past reading.
+  late bool _fit = !isPhone(context);
 
   /// How many years either side of today the grid opens on.
   static const int _naturalWindow = 12;

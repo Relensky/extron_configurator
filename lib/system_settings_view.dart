@@ -58,7 +58,12 @@ class SystemSettingsView extends StatelessWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(32, 32, 32, kFloatingButtonClearance),
+      padding: EdgeInsets.fromLTRB(
+        MediaQuery.sizeOf(context).width < 600 ? 16 : 32,
+        MediaQuery.sizeOf(context).width < 600 ? 16 : 32,
+        MediaQuery.sizeOf(context).width < 600 ? 16 : 32,
+        kFloatingButtonClearance,
+      ),
       itemCount: rows.length,
       itemBuilder: (context, index) {
         final row = rows[index];
@@ -67,17 +72,20 @@ class SystemSettingsView extends StatelessWidget {
           return Padding(
             key: ValueKey('sys_settings_title_${row.sectionKey}_$brightness'),
             padding: EdgeInsets.only(bottom: 20.0, top: index == 0 ? 0 : 20.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Wraps: on a phone the button drops under the title rather
+            // than squeezing it.
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
               children: [
-                Expanded(
-                  child: Text(
-                    row.title!,
-                    // Explicitly derive the color from the ACTIVE theme so the
-                    // header stays readable in both light and dark mode.
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      color: theme.colorScheme.onSurface,
-                    ),
+                Text(
+                  row.title!,
+                  // Explicitly derive the color from the ACTIVE theme so the
+                  // header stays readable in both light and dark mode.
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
                 // Diff this block against the template + schema defaults and

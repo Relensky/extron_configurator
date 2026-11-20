@@ -95,8 +95,11 @@ class _PhoneTabBarState extends State<PhoneTabBar> {
               // Every tab on screen at once when they fit; otherwise the row
               // scrolls, with the edge of the next tab showing so it is
               // plain there is more.
+              // When they scroll anyway, each takes its label's width and a
+              // gap either side: squeezed to one fixed width, "Lifecycle"
+              // and "Floor Plan" shrank and ran into each other.
               final fit = box.maxWidth / tabs.length;
-              final each = fit >= 64 ? fit.clamp(64.0, 120.0) : 66.0;
+              final double? each = fit >= 64 ? fit.clamp(64.0, 120.0) : null;
               return ListView(
                 controller: _scroll,
                 scrollDirection: Axis.horizontal,
@@ -121,7 +124,10 @@ class _PhoneTabBarState extends State<PhoneTabBar> {
 
 class _PhoneTab extends StatelessWidget {
   final NavTab tab;
-  final double width;
+
+  /// A fixed width when every tab fits on screen; null sizes the tab to its
+  /// label, for a bar that scrolls.
+  final double? width;
   final bool selected;
   final VoidCallback onTap;
 
@@ -139,7 +145,15 @@ class _PhoneTab extends StatelessWidget {
     final ink = selected
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
-    return SizedBox(
+    final label = Text(
+      tab.label,
+      maxLines: 1,
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: ink,
+        fontWeight: selected ? FontWeight.w600 : null,
+      ),
+    );
+    final body = SizedBox(
       width: width,
       child: Tooltip(
         message: tab.label,
@@ -164,21 +178,21 @@ class _PhoneTab extends StatelessWidget {
             ),
             if (!phoneLandscape(context)) ...[
             const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                tab.label,
-                maxLines: 1,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: ink,
-                  fontWeight: selected ? FontWeight.w600 : null,
-                ),
-              ),
-            ),
+            width == null
+                ? label
+                : FittedBox(fit: BoxFit.scaleDown, child: label),
             ],
           ],
         ),
       ),
+      ),
+    );
+    if (width != null) return body;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 64),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: body,
       ),
     );
   }

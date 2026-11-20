@@ -748,9 +748,18 @@ class BriefingCalendar extends StatelessWidget {
                       color: theme.colorScheme.outlineVariant,
                     ),
                   ),
-                for (final month in _months(start, end))
+                // Only the labels that fit: a label that would land on the
+                // one before it is left off, its tick still drawn. On a phone
+                // "Jan 2027" ran into "Feb", and the last two were pushed
+                // onto each other at the right edge.
+                for (final month in _labelledMonths(
+                  _months(start, end),
+                  xOf,
+                  width,
+                  MediaQuery.textScalerOf(context).scale(10) / 10,
+                ))
                   Positioned(
-                    left: (xOf(month) + 3).clamp(0.0, width - 46),
+                    left: xOf(month) + 3,
                     top: _axisY + 10,
                     child: Text(
                       _monthLabel(month),
@@ -888,6 +897,26 @@ class BriefingCalendar extends StatelessWidget {
     return [
       for (var i = 0; i < out.length; i += step) out[i],
     ];
+  }
+
+  /// [months] whose labels fit along [width] without touching, keeping the
+  /// earliest of any that would.
+  static List<DateTime> _labelledMonths(
+    List<DateTime> months,
+    double Function(DateTime) xOf,
+    double width,
+    double textScale,
+  ) {
+    final out = <DateTime>[];
+    var free = 0.0;
+    for (final m in months) {
+      final left = xOf(m) + 3;
+      final wide = (_monthLabel(m).length * 6.2 + 6) * textScale;
+      if (left < free || left + wide > width) continue;
+      out.add(m);
+      free = left + wide + 4;
+    }
+    return out;
   }
 
   static String _monthLabel(DateTime month) {

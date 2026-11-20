@@ -6246,17 +6246,39 @@ class _FileMenu extends StatelessWidget {
           onPressed: () => openRecentFile(context, kind, entry, onOpenPath),
           // The name, and under it the whole folder - two rooms called
           // "Conference Room" on two jobs are told apart by where they live.
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _MenuLabel(entry.label),
-              _MenuLabel(
-                path.dirname(entry.file),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
+          // Held to the screen: on a phone the full folder ran the menu
+          // off the right edge. The end of a long path is cut, not the menu.
+          child: MediaQuery.sizeOf(context).width < 600
+              ? ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width - 120,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(entry.label,
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(
+                        path.dirname(entry.file),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _MenuLabel(entry.label),
+                    _MenuLabel(
+                      path.dirname(entry.file),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
         ));
       }
     }

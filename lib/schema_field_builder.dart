@@ -83,6 +83,11 @@ class SchemaFieldBuilder {
         break;
       case 'bool':
         field = SwitchListTile(
+          // Tighter on a phone, where the label shares the row with the
+          // switch and two buttons and was wrapping a few letters a line.
+          contentPadding: MediaQuery.sizeOf(context).width < 600
+              ? const EdgeInsets.only(left: 12, right: 0)
+              : null,
           title: Text(label,
               style: TextStyle(
                   color: _originColor(context, provider, sectionKey, fieldKey))),
@@ -765,9 +770,25 @@ class SchemaFieldBuilder {
     }
 
     if (trailing.isEmpty) return field;
+    // On a phone the buttons close up, leaving the label the width.
+    final narrow = MediaQuery.sizeOf(context).width < 600;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
-      children: [Expanded(child: field), ...trailing],
+      children: [
+        Expanded(child: field),
+        for (final t in trailing)
+          narrow && t is IconButton
+              ? IconButton(
+                  icon: t.icon,
+                  tooltip: t.tooltip,
+                  onPressed: t.onPressed,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 36, minHeight: 40),
+                )
+              : t,
+      ],
     );
   }
 }

@@ -2142,20 +2142,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           children: [
             Row(
               children: [
-                Text('Rack hardware', style: theme.textTheme.titleSmall),
-                const SizedBox(width: 8),
-                // Where these come from, for whoever is filling the estimate
-                // in - see [_CardHeading], which drops its own subtitle for
-                // the same reason. This card builds its heading by hand.
                 Expanded(
-                  child: PrintHide(
-                    child: Text(
-                      'placed on the Racks tab, plus anything added here that '
-                      'is bought but not racked',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: mutedInk(context, theme),
-                      ),
-                    ),
+                  child: Text(
+                    'Rack hardware',
+                    style: theme.textTheme.titleSmall,
                   ),
                 ),
                 PrintHide(child: TextButton.icon(
@@ -2165,6 +2155,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       kind: _ExtraPart.hardware),
                 )),
               ],
+            ),
+            // Where these come from, for whoever is filling the estimate
+            // in - see [_CardHeading], which drops its own subtitle for
+            // the same reason. This card builds its heading by hand. On a
+            // line of its own: squeezed between the title and the button it
+            // wrapped a word a line on a phone.
+            PrintHide(
+              child: Text(
+                'Placed on the Racks tab, plus anything added here that is '
+                'bought but not racked.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: mutedInk(context, theme),
+                ),
+              ),
             ),
             if (estimate.hardware.isEmpty)
               // An empty section prints as an empty section. What to do about

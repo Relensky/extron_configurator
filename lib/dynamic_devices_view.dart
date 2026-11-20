@@ -330,27 +330,49 @@ class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
                     }
                   }
                 },
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TabBar(
-                        isScrollable: true,
-                        tabAlignment: TabAlignment.start,
-                        tabs: activeKeys.map((key) => Tab(text: config[key]['name'] ?? key)).toList(),
-                      ),
-                    ),
-                    byTypeButton,
-                    const SizedBox(width: 4),
-                    // Every device's manuals, and what is missing.
-                    TextButton.icon(
-                      key: const ValueKey('room_manuals_button'),
-                      icon: const Icon(Icons.menu_book, size: 18),
-                      label: const Text('Manuals'),
-                      onPressed: () => showManualsDialog(context, provider),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                ),
+                child: LayoutBuilder(builder: (context, box) {
+                  final tabBar = TabBar(
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    tabs: activeKeys.map((key) => Tab(text: config[key]['name'] ?? key)).toList(),
+                  );
+                  // Every device's manuals, and what is missing.
+                  final manuals = TextButton.icon(
+                    key: const ValueKey('room_manuals_button'),
+                    icon: const Icon(Icons.menu_book, size: 18),
+                    label: const Text('Manuals'),
+                    onPressed: () => showManualsDialog(context, provider),
+                  );
+                  // A PHONE puts the two buttons on a line of their own, so
+                  // the device tabs have the width: beside them only one
+                  // device showed, and nothing said there were more.
+                  if (box.maxWidth < 600) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            byTypeButton,
+                            const SizedBox(width: 4),
+                            manuals,
+                            const SizedBox(width: 8),
+                          ],
+                        ),
+                        tabBar,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: tabBar),
+                      byTypeButton,
+                      const SizedBox(width: 4),
+                      manuals,
+                      const SizedBox(width: 8),
+                    ],
+                  );
+                }),
               ),
               ?typeChips,
               Expanded(
@@ -689,6 +711,41 @@ class DeviceConfigurationForm extends StatelessWidget {
   // The fields with a slot of their own — model, module, keep alive, input —
   // were the ones it was missing from, which made a handful of perfectly
   // ordinary keys look permanent.
+  /// A picker and the buttons that go with it: side by side when there is
+  /// room, and on a phone the picker on its own line with the buttons
+  /// wrapping under it - side by side, the picker was squeezed to a sliver
+  /// and the buttons ran off the right edge.
+  Widget _fieldWithButtons(Widget field, List<Widget> buttons) =>
+      LayoutBuilder(
+        builder: (context, box) {
+          if (box.maxWidth < 700) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                field,
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    for (final b in buttons)
+                      if (b is! SizedBox) b,
+                  ],
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: field),
+              const SizedBox(width: 16),
+              ...buttons,
+            ],
+          );
+        },
+      );
+
   Widget _wrapWithInfo(BuildContext context, String key, Widget field,
       {VoidCallback? onDelete}) {
     final desc = context.read<AppStateProvider>().uiSchema.descriptionFor(key)
@@ -954,13 +1011,13 @@ class DeviceConfigurationForm extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, kFloatingButtonClearance),
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(deviceData['name'] ?? deviceKey,
-                  style: Theme.of(context).textTheme.headlineMedium),
-            ),
+        // A PHONE puts the name over the buttons: beside them, it was
+        // squeezed to a letter a line down the left of the page.
+        LayoutBuilder(
+          builder: (context, box) {
+            final title = Text(deviceData['name'] ?? deviceKey,
+                style: Theme.of(context).textTheme.headlineMedium);
+            final buttons = <Widget>[
             // Diff this device block against the template + schema defaults
             // and offer to add anything missing (e.g. a deleted property).
             OutlinedButton.icon(
@@ -1003,7 +1060,32 @@ class DeviceConfigurationForm extends StatelessWidget {
                 onlySection: deviceKey,
               ),
             ),
-          ],
+            ];
+            if (box.maxWidth < 700) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title,
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      for (final b in buttons)
+                        if (b is! SizedBox) b,
+                    ],
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: title),
+                ...buttons,
+              ],
+            );
+          },
         ),
         const SizedBox(height: 20),
 
@@ -1018,10 +1100,8 @@ class DeviceConfigurationForm extends StatelessWidget {
           onDelete: deviceData.containsKey('model')
               ? () => confirmRemoveConfigKey(context, provider, deviceKey, 'model')
               : null,
-          Row(
-          children: [
-            Expanded(
-              child: Autocomplete<String>(
+          _fieldWithButtons(
+            Autocomplete<String>(
                 initialValue: TextEditingValue(text: deviceData['model']?.toString() ?? ''),
                 optionsBuilder: (TextEditingValue textEditingValue) {
                   // Only models whose DEVICE_INFO "device_type" matches this
@@ -1088,8 +1168,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                   ));
                 },
               ),
-            ),
-            const SizedBox(width: 16),
+            [
             ElevatedButton.icon(
               icon: const Icon(Icons.picture_as_pdf),
               label: const Text('Module manual'),
@@ -1131,8 +1210,8 @@ class DeviceConfigurationForm extends StatelessWidget {
                 ),
               );
             }),
-          ],
-        )),
+            ],
+          )),
         const SizedBox(height: 20),
 
         // --- PYTHON MODULE SELECTOR (fill-in or pick from modules path) ---
@@ -1140,10 +1219,8 @@ class DeviceConfigurationForm extends StatelessWidget {
           onDelete: deviceData.containsKey('module')
               ? () => confirmRemoveConfigKey(context, provider, deviceKey, 'module')
               : null,
-          Row(
-          children: [
-            Expanded(
-              child: Autocomplete<String>(
+          _fieldWithButtons(
+            Autocomplete<String>(
                 initialValue: TextEditingValue(text: deviceData['module']?.toString() ?? ''),
                 optionsBuilder: (TextEditingValue textEditingValue) {
                   // Offered (and therefore stored) as the 'modules.device.<x>'
@@ -1217,8 +1294,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                   ));
                 },
               ),
-            ),
-            const SizedBox(width: 16),
+            [
             ElevatedButton.icon(
               icon: const Icon(Icons.file_open),
               label: const Text('Pick .py File'),
@@ -1263,8 +1339,8 @@ class DeviceConfigurationForm extends StatelessWidget {
                 module: moduleName.isEmpty ? null : moduleName,
               ),
             ),
-          ],
-        )),
+            ],
+          )),
         const SizedBox(height: 20),
 
         // --- DYNAMIC KEEP ALIVE DROPDOWN ---

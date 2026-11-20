@@ -312,21 +312,38 @@ class _CablingViewState extends State<CablingView> {
   Widget _leftOffBanner(CablingSchematic drawing) {
     final theme = Theme.of(context);
     final n = drawing.runsLeftOff;
+    // Folds to its first line: on a phone the list of devices took a fifth
+    // of the screen over the drawing. Remembered like the bars are.
+    final folded = BarFolds.isFolded('cabling_left_off');
     return Container(
       key: const ValueKey('cabling_left_off'),
       width: double.infinity,
       color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.only(left: 16, right: 4),
       child: Row(
         children: [
           Icon(Icons.info_outline, size: 18, color: theme.hintColor),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              '$n run${n == 1 ? '' : 's'} left off this sheet. Set a location '
-              'on ${drawing.needLocation.join(', ')} to show '
-              '${n == 1 ? 'it' : 'them'}.',
-              style: theme.textTheme.bodySmall,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                folded
+                    ? '$n run${n == 1 ? '' : 's'} left off this sheet'
+                    : '$n run${n == 1 ? '' : 's'} left off this sheet. Set a '
+                          'location on ${drawing.needLocation.join(', ')} to '
+                          'show ${n == 1 ? 'it' : 'them'}.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('cabling_left_off_fold'),
+            tooltip: folded ? 'Show which devices' : 'Hide the details',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(folded ? Icons.expand_more : Icons.expand_less),
+            onPressed: () => setState(
+              () => BarFolds.setFolded('cabling_left_off', !folded),
             ),
           ),
         ],

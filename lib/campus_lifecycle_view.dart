@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
+import 'form_factor.dart' show isPhone;
 import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
@@ -1415,7 +1416,9 @@ class _CampusYearGridState extends State<CampusYearGrid> {
   /// Whether the size is taken from the window rather than from the steps -
   /// see [_LifecycleYearGridState], which does the same for one building and
   /// carries the reasoning for opening fitted.
-  bool _fit = true;
+  // A phone opens it at full size, scrolled sideways: fitted to a phone's
+  // width the years and figures were shrunk past reading.
+  late bool _fit = !isPhone(context);
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(

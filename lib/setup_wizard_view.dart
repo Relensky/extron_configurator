@@ -44,11 +44,12 @@ class SetupWizardView extends StatelessWidget {
         Text('Room Identification', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 20),
 
-        Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Builder(
+        // A PHONE stacks them: side by side, the building's name was cut
+        // off a few letters in and both labels ran out of room.
+        LayoutBuilder(
+          builder: (context, box) {
+            final narrow = box.maxWidth < 520;
+            final Widget building = Builder(
                 builder: (context) {
                   // 1. Deduplicate the buildings
                   final Map<String, String> uniqueBuildings = {};
@@ -106,8 +107,13 @@ class SetupWizardView extends StatelessWidget {
                       return TextFormField(
                         controller: controller,
                         focusNode: focusNode,
+                        // Two lines on a phone, so a long building name
+                        // reads whole rather than cut off mid-word.
+                        minLines: 1,
+                        maxLines: narrow ? 2 : 1,
+                        textInputAction: TextInputAction.done,
                         decoration: InputDecoration(
-                          labelText: 'Search Building (gve_bldg)',
+                          labelText: narrow ? 'Building' : 'Search Building (gve_bldg)',
                           border: const OutlineInputBorder(),
                           prefixIcon: const Icon(Icons.search),
                           suffixIcon: ClearFieldButton(
@@ -127,21 +133,29 @@ class SetupWizardView extends StatelessWidget {
                     },
                   );
                 }
-              ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              flex: 1,
-              child: TextFormField(
+              );
+            final Widget room = TextFormField(
                 initialValue: systemSetup['gve_room'] ?? '',
-                decoration: const InputDecoration(labelText: 'Room Number', border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: 'Room number', border: OutlineInputBorder()),
                 onChanged: (val) {
                   systemSetup['gve_room'] = val;
                   provider.updateFullRoomName(); 
                 },
-              ),
-            ),
-          ],
+              );
+            if (narrow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [building, const SizedBox(height: 16), room],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(flex: 2, child: building),
+                const SizedBox(width: 20),
+                Expanded(flex: 1, child: room),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 20),
         
@@ -155,10 +169,11 @@ class SetupWizardView extends StatelessWidget {
               initialValue: systemSetup['gui_full_room_name'] ?? '',
               decoration: InputDecoration(
                 labelText: isKnown
-                    ? 'Generated Full Room Name (from buildings.json)'
+                    ? 'Full Room Name (from buildings.json)'
                     : 'Full Room Name (type manually)',
                 border: const OutlineInputBorder(),
                 filled: isKnown,
+                helperMaxLines: 3,
                 helperText: isKnown
                     ? 'Auto-generated: Title Case building name + room number'
                     : 'Building not found in buildings.json - enter the full room name yourself',

@@ -1680,7 +1680,7 @@ const List<HelpTopic> kHelpTopics = [
         '"Remaining after planned" takes the planned lines off too.\n\n'
         'The rooms\' estimate is shown beside it, so "are we inside the '
         'budget" can be asked on day one, before anything is ordered. "Add '
-        'the rooms estimate as planned" drops that figure in as a line.',
+        'the rooms estimate" drops that figure in as a line.',
   ),
   HelpTopic(
     title: 'Maintenance windows',
