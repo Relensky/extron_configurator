@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.243+253';
+const String kAppVersion = '0.5.244+254';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -33,6 +33,16 @@ class ChangelogEntry {
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
+    version: '0.5.244',
+    date: 'November 20, 2026',
+    title: 'Settings sync keeps each device\'s own folders',
+    changes: [
+      'Settings sync no longer carries folders and files between an iPad, iPhone or Mac and your PCs, either way. An iPad\'s Root Folder synced to a PC had it price jobs off the catalog built into the app instead of the shared one, so its totals came out more than \$100,000 low. A PC that already took one clears it at start-up.',
+      'A Root Folder with no catalog in it (one folder too high on the iPad, say) now reads the shared Configurator_Files catalog instead of the one built into the app.',
+      'A device still pricing off the built-in catalog records no room totals on the job and publishes no online copy. When the same unchanged room prices lower on one device than the job recorded, the higher figure is kept.',
+    ],
+  ),
+  ChangelogEntry(
     version: '0.5.243',
     date: 'November 20, 2026',
     title: 'Pulls from the online copy listed by room',
@@ -41,9 +51,6 @@ const List<ChangelogEntry> kChangelog = [
       'The history file kept beside the project lists each pull the same way, a heading per room or section with what was added.',
       'Project > Equipment on an iPhone: each part\'s name, rooms and notes take the full width of the row, and the quantity, prices, vendor and order dates wrap underneath, instead of the name being squeezed into a narrow strip. The headings above still sort.',
       'iPad and iPhone: Discard changes and resync, in the CTS share panel, throws away every change on the device the share hasn\'t got, files waiting for review too, and takes the share\'s versions. Offline, a job file goes back to how it was last synced and the newest versions come down when the share answers. The open job is read again, and the device\'s versions are kept on it first.',
-      'Settings sync no longer carries folders and files between an iPad, iPhone or Mac and your PCs, either way. An iPad\'s Root Folder synced to a PC had it price jobs off the catalog built into the app instead of the shared one, so its totals came out more than \$100,000 low. A PC that already took one clears it at start-up.',
-      'A Root Folder with no catalog in it (one folder too high on the iPad, say) now reads the shared Configurator_Files catalog instead of the one built into the app.',
-      'A device still pricing off the built-in catalog records no room totals on the job and publishes no online copy. When the same unchanged room prices lower on one device than the job recorded, the higher figure is kept.',
     ],
   ),
   ChangelogEntry(
