@@ -480,7 +480,7 @@ class RoomConfigApp extends StatelessWidget {
         scale: theme.uiScale,
         fitToMonitor: Platform.isWindows &&
             !Platform.environment.containsKey('FLUTTER_TEST'),
-        followDevice: Platform.isIOS || Platform.isAndroid,
+        followDevice: isMobileDevice,
         child: Builder(builder: (scaled) => MediaQuery(
         // iPad / iPhone: read from INSIDE the scaler and the safe area, so the
         // pages see the scaled size and no status-bar inset - the outer
@@ -488,7 +488,7 @@ class RoomConfigApp extends StatelessWidget {
         // band over its buttons. The desktop keeps reading the outer one, as
         // it always has.
         data: MediaQuery.of(
-                Platform.isIOS || Platform.isAndroid ? scaled : context)
+                isMobileDevice ? scaled : context)
             .copyWith(
           textScaler: TextScaler.linear(theme.textScale),
         ),
@@ -1470,7 +1470,7 @@ class _MainDashboardState extends State<MainDashboard> {
             // iPad / iPhone: icons only to start with - the screen is too
             // narrow to give a column of labels the room. Widened by hand,
             // the width is kept.
-            initialWidth: Platform.isIOS || Platform.isAndroid ? 72 : 108,
+            initialWidth: isMobileDevice ? 72 : 108,
             minWidth: 72,
             maxWidth: 220,
             // A smaller window: down to icons, so the page keeps the room.
@@ -2575,7 +2575,7 @@ class TopLevelBar extends StatelessWidget {
 }
 
 /// iPad or iPhone.
-bool get _isMobile => Platform.isIOS || Platform.isAndroid;
+bool get _isMobile => isMobileDevice;
 
 /// The [BarFolds] id of the project bar.
 const String kTopBarFoldId = 'top_bar';
@@ -6069,12 +6069,11 @@ class _FileServerBoxState extends State<_FileServerBox> {
         color: scheme.secondaryContainer,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
-        children: [
-          Icon(Icons.dns_outlined, color: scheme.onSecondaryContainer),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+      // A PHONE puts the button under the words: beside them, the path
+      // wrapped a few letters a line in a strip down the left.
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final info = Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -6107,10 +6106,8 @@ class _FileServerBoxState extends State<_FileServerBox> {
                   ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          onServer
+            );
+          final action = onServer
               ? Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -6128,8 +6125,38 @@ class _FileServerBoxState extends State<_FileServerBox> {
                       : () => _use(provider),
                   icon: const Icon(Icons.folder_shared, size: 18),
                   label: const Text('Set to file server'),
+                );
+          final icon = Icon(
+            Icons.dns_outlined,
+            color: scheme.onSecondaryContainer,
+          );
+          if (box.maxWidth < 480) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    icon,
+                    const SizedBox(width: 12),
+                    Expanded(child: info),
+                  ],
                 ),
-        ],
+                const SizedBox(height: 8),
+                Align(alignment: Alignment.centerRight, child: action),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              icon,
+              const SizedBox(width: 12),
+              Expanded(child: info),
+              const SizedBox(width: 12),
+              action,
+            ],
+          );
+        },
       ),
     );
   }

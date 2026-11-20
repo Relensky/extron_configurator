@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.246+256';
+const String kAppVersion = '0.5.247+257';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,18 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.247',
+    date: 'November 20, 2026',
+    title: 'Nothing cut off on a small iPhone; offline switches ask first',
+    changes: [
+      'iPad and iPhone: sliding Keep every job offline or Keep device manuals offline, on or off, now asks first, saying what it will bring down or stop keeping.',
+      'Catalog on an iPhone: the Device Editor title has a line of its own instead of being cut to "De...", with the fold buttons and Save catalog under it.',
+      'Page titles wrap onto a second line rather than being cut short on a narrow screen.',
+      'On a small iPhone, nothing runs off the edge any more: the Cost page\'s Build the control side button puts its note underneath, the Floor Plan title gives way to its buttons, the Schema Editor\'s buttons go under its heading, Config JSON\'s status wraps, and AV Flow Rules scrolls its heading away on a short screen.',
+      'First-time setup on a phone: the File server path has the box\'s width, with Set to file server under it.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.246',
     date: 'November 20, 2026',

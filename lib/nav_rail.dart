@@ -1,5 +1,5 @@
-import 'dart:io' show Platform;
 import 'dart:async';
+import 'form_factor.dart' show isMobileDevice;
 import 'dart:math' as math;
 
 import 'third_party/auris/auris.dart';
@@ -346,7 +346,7 @@ class _AppNavRailState extends State<AppNavRail> {
 
     /// [t] runs 1 (comfortable) down to 0 (the floor).
     // iPad / iPhone: a finger, not a pointer - the icons a size up.
-    final iconMax = (Platform.isIOS || Platform.isAndroid) ? 28.0 : _kIconMax;
+    final iconMax = isMobileDevice ? 28.0 : _kIconMax;
     RailFit candidate(double t) {
       final icon = _kIconMin + (iconMax - _kIconMin) * t;
       final pad = _kPadMin + (_kPadMax - _kPadMin) * t;

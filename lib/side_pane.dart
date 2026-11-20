@@ -1,6 +1,5 @@
-import 'dart:io' show Platform;
-
 import 'package:material_ui/material_ui.dart';
+import 'form_factor.dart' show isMobileDevice;
 
 /// ============================================================================
 ///  THE PANES DOWN EITHER SIDE
@@ -189,7 +188,7 @@ class _SidePaneState extends State<SidePane> {
   // on the strip opens it, and that is kept.
   late bool _open = widget.initiallyOpen &&
       !(widget.side == PaneSide.right &&
-          (Platform.isIOS || Platform.isAndroid));
+          isMobileDevice);
 
   /// Restored on the first build, once there is a [PageStorage] to read.
   bool _restored = false;
@@ -242,7 +241,7 @@ class _SidePaneState extends State<SidePane> {
     // screen - at its desktop width it left the drawing a sliver and itself
     // a column of words. Its chevron (or the drawing's edge) puts it away.
     final phone = widget.side == PaneSide.right &&
-        (Platform.isIOS || Platform.isAndroid) &&
+        isMobileDevice &&
         MediaQuery.sizeOf(context).shortestSide < 600;
     final below = widget.narrowBelow;
     final narrow =
@@ -340,7 +339,7 @@ class _SidePaneState extends State<SidePane> {
     // iPad / iPhone: a strip that reads as a button - tinted, a little wider
     // and its name in full ink - rather than a hairline at the screen's edge
     // nobody finds.
-    final touch = Platform.isIOS || Platform.isAndroid;
+    final touch = isMobileDevice;
     final strip = SizedBox(
         width: touch ? kFoldedPaneWidth + 6 : kFoldedPaneWidth,
         child: Column(

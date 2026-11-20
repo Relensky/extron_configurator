@@ -1,5 +1,5 @@
 import 'file_dialogs.dart';
-import 'form_factor.dart' show isPhone;
+import 'form_factor.dart' show isPhone, isMobileDevice;
 import 'cost_estimate_actions.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -267,7 +267,7 @@ bool _compactCost = _mobileCost;
 /// when the window is narrower than the full tables - see
 /// [_CostEstimateViewState.build] - so it shrinks like the iPad before it
 /// scrolls sideways.
-final bool _mobileCost = Platform.isIOS || Platform.isAndroid;
+final bool _mobileCost = isMobileDevice;
 
 /// The narrowest the full (desktop) tables lay out, before compact takes
 /// over.
@@ -1215,22 +1215,38 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             // switched off in exactly the room that needs this.
             if (!_capturing && _needsControlSide(provider)) ...[
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  const BuildControlSideButton(),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '${provider.avDevicesWithoutControl.length} device'
-                      '${provider.avDevicesWithoutControl.length == 1 ? '' : 's'} '
-                      'on this estimate have no control block yet. This '
-                      'creates one each, prefilled from the application '
-                      'defaults and named in order, and flags any the module '
-                      'library does not claim.',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                ],
+              // Side by side when there is room; on a phone the note goes
+              // under the button, which alone is wider than the screen's
+              // half and pushed the note off the right edge.
+              LayoutBuilder(
+                builder: (context, box) {
+                  final note = Text(
+                    '${provider.avDevicesWithoutControl.length} device'
+                    '${provider.avDevicesWithoutControl.length == 1 ? '' : 's'} '
+                    'on this estimate have no control block yet. This '
+                    'creates one each, prefilled from the application '
+                    'defaults and named in order, and flags any the module '
+                    'library does not claim.',
+                    style: theme.textTheme.bodySmall,
+                  );
+                  if (box.maxWidth < 640) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const BuildControlSideButton(),
+                        const SizedBox(height: 6),
+                        note,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      const BuildControlSideButton(),
+                      const SizedBox(width: 10),
+                      Expanded(child: note),
+                    ],
+                  );
+                },
               ),
             ],
             // Room above the row for the note over the tax rate - see below.

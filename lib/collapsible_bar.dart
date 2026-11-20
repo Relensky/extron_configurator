@@ -56,9 +56,12 @@ class PageTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
+    // Two lines before an ellipsis: squeezed onto one, a phone cut "Device
+    // Editor" to "De...".
     return Text(
       text,
       style: folded ? theme.titleSmall : theme.titleLarge,
+      maxLines: 2,
       overflow: TextOverflow.ellipsis,
     );
   }

@@ -475,22 +475,37 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
         title: _section.label,
         child: Padding(
         padding: const EdgeInsets.fromLTRB(8, 12, 16, 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
+        // On a phone the buttons go under the words, which beside them were
+        // squeezed and pushed the last button off the edge.
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final words = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_section.label, style: theme.textTheme.titleMedium),
+                const SizedBox(height: 2),
+                Text(_section.blurb, style: theme.textTheme.bodySmall),
+              ],
+            );
+            if (box.maxWidth < 560 && actions.isNotEmpty) {
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_section.label, style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 2),
-                  Text(_section.blurb, style: theme.textTheme.bodySmall),
+                  words,
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 8, children: actions),
                 ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            ...actions,
-          ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: words),
+                const SizedBox(width: 12),
+                ...actions,
+              ],
+            );
+          },
         ),
         ),
       );

@@ -272,7 +272,11 @@ class BuildControlSideButton extends StatelessWidget {
     if (provider.avNodes.where((n) => !n.isJackField).isEmpty) {
       return const SizedBox.shrink();
     }
-    final label = const Text('Build the control side from the diagram');
+    // Wraps rather than running off a phone's edge.
+    final label = const Text(
+      'Build the control side from the diagram',
+      softWrap: true,
+    );
     final icon = const Icon(Icons.auto_fix_high, size: 18);
     void go() => showControlPrefillDialog(context, provider);
 

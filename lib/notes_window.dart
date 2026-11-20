@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'form_factor.dart' show isMobileDevice;
 import 'dart:convert';
 import 'dart:io';
 
@@ -134,7 +135,7 @@ class _NotesPanelHost extends StatelessWidget {
           titleBarActions: [
             // iPad / iPhone: no second copy of the app to pop out into - the
             // panel is the notes window there.
-            if (target != null && !(Platform.isIOS || Platform.isAndroid))
+            if (target != null && !isMobileDevice)
               IconButton(
                 key: const ValueKey('notes_pop_out'),
                 tooltip: 'Pop out into its own window',

@@ -271,9 +271,13 @@ class _JsonEditorViewState extends State<JsonEditorView> {
                   children: [
                     Icon(icon, size: 18, color: tint),
                     const SizedBox(width: 6),
-                    Text(
-                      label,
-                      style: theme.textTheme.bodySmall?.copyWith(color: tint),
+                    // Wraps on a phone rather than running off the edge.
+                    Flexible(
+                      child: Text(
+                        label,
+                        style:
+                            theme.textTheme.bodySmall?.copyWith(color: tint),
+                      ),
                     ),
                   ],
                 );

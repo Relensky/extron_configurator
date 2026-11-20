@@ -147,6 +147,37 @@ class _SharePanelState extends State<_SharePanel> {
     });
   }
 
+  /// Asks before a Keep ... offline switch is slid, either way: a tap that
+  /// brushed one either starts a long download or stops keeping files that
+  /// were wanted with no network.
+  Future<bool> _confirmKeep({
+    required bool on,
+    required String what,
+    required String onText,
+    required String offText,
+  }) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(on ? 'Keep $what offline?' : 'Stop keeping $what offline?'),
+        content: Text(on ? onText : offText),
+        actions: [
+          TextButton(
+            key: const ValueKey('ios_keep_cancel'),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('ios_keep_confirm'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(on ? 'Keep offline' : 'Stop keeping'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   /// Throws away this device's unsent changes and takes the share's
   /// versions, after asking. The open job is read again, so nothing unsaved
   /// in it is saved back over them.
@@ -467,9 +498,26 @@ class _SharePanelState extends State<_SharePanel> {
                         'The whole Projects folder, not just the jobs '
                         'opened here. The first sync can take a while.',
                       ),
+                      key: const ValueKey('ios_keep_every_job'),
                       value: ShareSync.keepEveryJob,
-                      onChanged: (on) =>
-                          setState(() => ShareSync.keepEveryJob = on),
+                      onChanged: (on) async {
+                        if (!await _confirmKeep(
+                          on: on,
+                          what: 'every job',
+                          onText: 'The whole Projects folder comes down to '
+                              'this device and is kept in step with the '
+                              'share. The first sync can take a while and '
+                              'use a lot of space.',
+                          offText: 'Only the jobs opened here stay on this '
+                              'device. The others are no longer brought down '
+                              'or kept up to date for use offline.',
+                        )) {
+                          return;
+                        }
+                        if (mounted) {
+                          setState(() => ShareSync.keepEveryJob = on);
+                        }
+                      },
                     ),
                     SwitchListTile(
                       key: const ValueKey('ios_keep_manuals'),
@@ -480,8 +528,22 @@ class _SharePanelState extends State<_SharePanel> {
                         'with no network. Brought down only - never sent back.',
                       ),
                       value: ShareSync.keepManuals,
-                      onChanged: (on) =>
-                          setState(() => ShareSync.keepManuals = on),
+                      onChanged: (on) async {
+                        if (!await _confirmKeep(
+                          on: on,
+                          what: 'device manuals',
+                          onText: 'The Dashboard\'s manuals folder comes '
+                              'down to this device, so a manual opens with no '
+                              'network. It can take a while and use space.',
+                          offText: 'Manuals are no longer brought down, so '
+                              'one opens only while the share answers.',
+                        )) {
+                          return;
+                        }
+                        if (mounted) {
+                          setState(() => ShareSync.keepManuals = on);
+                        }
+                      },
                     ),
                   ],
                   if (_message.isNotEmpty)

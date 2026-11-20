@@ -1554,6 +1554,48 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               final scale = MediaQuery.textScalerOf(context).scale(1);
               final folded = BarFolds.isFolded('catalog_buttons');
               final inline = !compactBar && box.maxWidth >= 1100 * scale;
+              // A PHONE: the title gets a line of its own with Save, and the
+              // fold buttons go under it. Sharing one line with them and
+              // Save, "Device Editor" was cut to "De...".
+              if (box.maxWidth < 560 * scale) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    PageTitle('Device Editor', folded: folded),
+                    // Save drops under the fold buttons rather than off the
+                    // edge at a large text size.
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                        FoldButton(
+                          id: 'catalog_buttons',
+                          name: 'the catalog buttons',
+                          onChanged: () => setState(() {}),
+                        ),
+                        FoldAllButtons(
+                          page: 'catalog',
+                          ids: const ['catalog_buttons', 'catalog_filters'],
+                          onChanged: (_) => setState(() {}),
+                        ),
+                          ],
+                        ),
+                        ElevatedButton.icon(
+                          key: const ValueKey('catalog_save'),
+                          icon: const Icon(Icons.save, size: 18),
+                          label: const Text('Save catalog'),
+                          onPressed: _save,
+                        ),
+                      ],
+                    ),
+                    if (_dirty && library.differsFromBaseline) unsaved,
+                    if (!folded) ...[const SizedBox(height: 4), buttons],
+                  ],
+                );
+              }
               final top = Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

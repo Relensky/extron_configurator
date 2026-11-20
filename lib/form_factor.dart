@@ -17,7 +17,13 @@ import 'app_state.dart';
 /// ============================================================================
 
 /// iPad, iPhone or an Android device.
-bool get isMobileDevice => Platform.isIOS || Platform.isAndroid;
+bool get isMobileDevice =>
+    debugMobileDevice ?? (Platform.isIOS || Platform.isAndroid);
+
+/// Tests only: lays the app out as on a phone or tablet ([true]) on a desktop
+/// test runner, so a sweep at phone size checks the phone's own layout.
+@visibleForTesting
+bool? debugMobileDevice;
 
 /// True on a phone: a mobile device whose screen is under 600 points on its
 /// short side, measured off the device itself rather than the app's scaled

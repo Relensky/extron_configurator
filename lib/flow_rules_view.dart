@@ -332,10 +332,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
       _RuleSection.screens => _screenTiles(rules, theme),
     };
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CollapsibleBar(
+    final header = CollapsibleBar(
           id: 'flow_rules_section',
           title: _section.label,
           child: Padding(
@@ -364,23 +361,57 @@ class _FlowRulesViewState extends State<FlowRulesView> {
             ],
           ),
         ),
-        ),
-        const Divider(height: 16),
-        Expanded(
-          child: rows.isEmpty
-              ? Center(
-                  child: Text(
-                    'Nothing here yet, so the drawing does nothing for this '
-                    'family. Press Add to write the first rule.',
-                    style: theme.textTheme.bodySmall,
-                  ),
+        );
+    const emptyNote =
+        'Nothing here yet, so the drawing does nothing for this '
+        'family. Press Add to write the first rule.';
+    return LayoutBuilder(
+      builder: (context, box) {
+        // A SHORT SCREEN - a small phone, or large text - scrolls the
+        // heading away with the rules. Held at the top, the heading took the
+        // whole page and ran off the bottom.
+        if (box.maxHeight < 520) {
+          return ListView(
+            padding: const EdgeInsets.only(bottom: kFloatingButtonClearance),
+            children: [
+              header,
+              const Divider(height: 16),
+              if (rows.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(emptyNote, style: theme.textTheme.bodySmall),
                 )
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, kFloatingButtonClearance),
-                  children: rows,
-                ),
-        ),
-      ],
+              else
+                for (final r in rows)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: r,
+                  ),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            header,
+            const Divider(height: 16),
+            Expanded(
+              child: rows.isEmpty
+                  ? Center(
+                      child: Text(
+                        emptyNote,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(
+                          12, 0, 12, kFloatingButtonClearance),
+                      children: rows,
+                    ),
+            ),
+          ],
+        );
+      },
     );
   }
 

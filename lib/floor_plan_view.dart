@@ -2444,9 +2444,15 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: EdgeInsets.only(top: _toolbarCollapsed ? 8 : 4),
-                child: PageTitle('Floor Plan', folded: _toolbarCollapsed),
+              // On a phone the title gives way to the fold buttons rather
+              // than pushing them off the right edge at a larger text size.
+              Flexible(
+                flex: phone ? 1 : 0,
+                fit: FlexFit.loose,
+                child: Padding(
+                  padding: EdgeInsets.only(top: _toolbarCollapsed ? 8 : 4),
+                  child: PageTitle('Floor Plan', folded: _toolbarCollapsed),
+                ),
               ),
               IconButton(
                 key: const ValueKey('plan_toolbar_toggle'),
