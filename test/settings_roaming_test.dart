@@ -125,6 +125,31 @@ void main() {
     expect(b.secret('TightVNC_Password'), 'hunter2');
   });
 
+  test('an iPad or Mac folder path is not pushed or pulled', () async {
+    const ipad = '/private/var/mobile/Library/LiveFiles/'
+        'com.apple.filesystems.smbclientd/x/CTS';
+    expect(SettingsRoaming.isLocalDrivePath(ipad), isTrue);
+    expect(SettingsRoaming.isLocalDrivePath('~/Documents'), isTrue);
+    expect(SettingsRoaming.isLocalDrivePath(r'\\server\share'), isFalse);
+    expect(SettingsRoaming.isLocalDrivePath('//server/share'), isFalse);
+
+    a.write({'Root': ipad, 'isDarkMode': true});
+    await a.roaming.sync(startup: true);
+    final cfg = shareDoc()['files']['config'] as Map;
+    expect(cfg.containsKey('Root'), isFalse);
+
+    // One already on the share (written before this rule) is not taken.
+    final doc = shareDoc();
+    (doc['files']['config'] as Map)['Root'] = {
+      ...(cfg['isDarkMode'] as Map),
+      'v': ipad,
+    };
+    File(a.roaming.shareFile).writeAsStringSync(jsonEncode(doc));
+    b.write({'Root': r'\\server\share'});
+    await b.roaming.sync(startup: true, choice: RoamingChoice.useShared);
+    expect(b.read()['Root'], r'\\server\share');
+  });
+
   test('keep this PC puts its settings over the share', () async {
     a.write({'isDarkMode': true});
     await a.roaming.sync(startup: true);

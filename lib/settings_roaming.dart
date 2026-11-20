@@ -751,10 +751,13 @@ class SettingsRoaming {
 
   /// True for a path on one of this PC's own drives (C:\...), which means
   /// nothing on another PC. Mapped network drives and \\server paths are not
-  /// local.
+  /// local. So is any /... or ~/... path: an iPad or Mac folder (even its SMB
+  /// mount of the share) that a PC cannot open.
   static bool isLocalDrivePath(Object? value) {
     if (value is! String) return false;
     final v = value.trim();
+    if (v.startsWith('~/')) return true;
+    if (v.startsWith('/') && !v.startsWith('//')) return true;
     if (!RegExp(r'^[A-Za-z]:([\\/]|$)').hasMatch(v)) return false;
     if (!Platform.isWindows) return true;
     try {

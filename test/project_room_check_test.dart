@@ -169,6 +169,31 @@ void main() {
     expect(onDisk().roomsCheckedAt, checked);
   });
 
+  test('a device pricing an unchanged room lower never lowers the job',
+      () async {
+    await makeProject();
+    final first = provider();
+    expect(await first.openProject(projectFile), isEmpty);
+    expect(await first.saveProject(), isEmpty);
+
+    // A device with a cheaper (wrong) catalog opens the job and saves it.
+    final p = provider();
+    p.avDeviceLibrary.upsert(const AvDeviceTemplate(
+      model: 'Camera Y',
+      manufacturer: 'Generic',
+      category: 'Camera',
+      price: 500,
+      ports: [],
+    ));
+    expect(await p.openProject(projectFile), isEmpty);
+    p.project.notes = 'edited';
+    expect(await p.saveProject(), isEmpty);
+    expect(
+      onDisk().roomSnapshots.values.map((s) => s.total).toSet(),
+      {1000.0, 2000.0},
+    );
+  });
+
   test('opening a room re-reads a room whose files changed', () async {
     await makeProject();
     final p = provider();

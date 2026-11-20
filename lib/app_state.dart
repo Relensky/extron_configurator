@@ -1393,10 +1393,65 @@ class AppStateProvider extends ChangeNotifier {
       }();
 
   /// Root Folder setting, else the file server's Configurator_Files when it
-  /// can be reached, else the app's own folder.
-  String get effectiveRootFolder => sharePath(rootFolderPath.isNotEmpty
-      ? rootFolderPath
-      : (_sharedRootAvailable ? kSharedRootFolder : _appBaseDir()));
+  /// can be reached, else the app's own folder. A Root Folder with no
+  /// catalog in it gives way to Configurator_Files - see [rootFolderMisses].
+  String get effectiveRootFolder {
+    if (rootFolderMisses) return sharePath(kSharedRootFolder);
+    return sharePath(rootFolderPath.isNotEmpty
+        ? rootFolderPath
+        : (_sharedRootAvailable ? kSharedRootFolder : _appBaseDir()));
+  }
+
+  String? _rootCheckKey;
+  bool _rootMisses = false;
+
+  /// True when the catalog in use is not the Root Folder's while the shared
+  /// Configurator_Files has one: prices from the copy built into the app.
+  /// Such a device records no room totals and publishes no online copy.
+  bool get pricingOffBuiltInCatalog {
+    if (runningUnderTest || avDevicesFilePath.isNotEmpty) return false;
+    final loaded = avDeviceLibrary.filePath;
+    if (loaded.isNotEmpty &&
+        _samePath(loaded, path.join(effectiveRootFolder, 'av_devices.json'))) {
+      return false;
+    }
+    try {
+      return File(path.join(sharePath(kSharedRootFolder), 'av_devices.json'))
+          .existsSync();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// True when the Root Folder holds no av_devices.json on this device (a
+  /// folder above Configurator_Files, or another device's path that came
+  /// over with settings sync) while Configurator_Files has one. Jobs priced
+  /// off the built-in catalog instead came out tens of thousands low.
+  bool get rootFolderMisses {
+    final root = rootFolderPath.trim();
+    if (root.isEmpty || avDevicesFilePath.isNotEmpty || runningUnderTest) {
+      return false;
+    }
+    final shared = sharePath(kSharedRootFolder);
+    // The shared path changes on iOS once the share folder is picked.
+    final key = '$root|$shared';
+    if (_rootCheckKey == key) return _rootMisses;
+    _rootCheckKey = key;
+    bool hasCatalog(String dir) {
+      try {
+        return File(path.join(dir, 'av_devices.json')).existsSync();
+      } catch (_) {
+        return false;
+      }
+    }
+
+    _rootMisses = !hasCatalog(sharePath(root)) && hasCatalog(shared);
+    if (_rootMisses) {
+      AppLogger.logError('The Root Folder "$root" has no catalog on this '
+          'device; using $kSharedRootFolder instead.');
+    }
+    return _rootMisses;
+  }
 
   // --- avatars ---------------------------------------------------------------
   //
@@ -2076,7 +2131,16 @@ class AppStateProvider extends ChangeNotifier {
 
   static bool settingKeyRoams(String key, Object? value) =>
       !kMachineOnlySettingKeys.contains(key) &&
-      !SettingsRoaming.isLocalDrivePath(value);
+      !SettingsRoaming.isLocalDrivePath(value) &&
+      !(_pathsStayOnDevice && _isPathSettingKey(key));
+
+  /// An iPad, iPhone or Mac neither sends its folders and files to the share
+  /// nor takes the PCs': the Root Folder an iPad wrote there once moved every
+  /// PC off the shared catalog.
+  static bool get _pathsStayOnDevice => !Platform.isWindows;
+
+  static bool _isPathSettingKey(String key) =>
+      key.endsWith('Path') || key.endsWith('Folder') || key.endsWith('Dir');
 
   late final SettingsRoaming settingsRoaming = SettingsRoaming(
     app: 'room_config_builder',
@@ -11101,6 +11165,15 @@ class AppStateProvider extends ChangeNotifier {
 
       String str(String key, String fallback) {
         final v = saved[key]?.toString() ?? '';
+        // An iPad or Mac folder that settings sync once brought to this PC.
+        if (Platform.isWindows &&
+            _isPathSettingKey(key) &&
+            v.startsWith('/') &&
+            !v.startsWith('//')) {
+          AppLogger.logError('Setting $key held another device\'s folder '
+              '"$v"; cleared on this PC.');
+          return fallback;
+        }
         return v.isEmpty ? fallback : v;
       }
 
@@ -18979,6 +19052,20 @@ class AppStateProvider extends ChangeNotifier {
         target.isNotEmpty && (folder != null || !project.onlineFolderOff);
     final toSheet = project.publishesToSheet && sheetBlocked.isEmpty;
     final stamp = at ?? DateTime.now();
+    // Wrong prices go nowhere.
+    if (pricingOffBuiltInCatalog) {
+      AppLogger.logError('Online copy not published: this device is pricing '
+          'off the catalog built into the app, not the shared one.');
+      return (
+        folder: '',
+        written: const <String>[],
+        failed: const [
+          'this device is pricing off the catalog built into the app, not '
+              'the shared one - check the Root Folder in Settings'
+        ],
+        at: stamp,
+      );
+    }
     if (!toFolder && !toSheet && sheetBlocked.isNotEmpty) {
       return (
         folder: '',
@@ -23577,10 +23664,22 @@ class AppStateProvider extends ChangeNotifier {
           changed.add((room: room.name, before: was.total, after: now.total));
         }
       } else if (moved) {
-        repriced = true;
+        // The higher figure wins: a device pricing low (a missing catalog,
+        // stale prices) never pulls the job's figure down.
+        if (now.total > was.total) {
+          repriced = true;
+        } else {
+          next[room.ref.id] = was;
+        }
       }
     }
     if (next.length != project.roomSnapshots.length) different = true;
+    // Priced off the wrong catalog: what the job holds stays as it is.
+    if (pricingOffBuiltInCatalog) {
+      AppLogger.logError('Room totals not recorded: this device is pricing '
+          'off the catalog built into the app, not the shared one.');
+      return (recorded: false, changed: const []);
+    }
     if (!different) {
       if (repriced) {
         project.roomSnapshots
