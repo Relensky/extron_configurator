@@ -2608,6 +2608,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         const SizedBox(height: 12),
         LiveTextField(
           fieldId: 'notes_$key',
+          expandable: true,
           initial: entry.notes,
           label: 'Notes',
           onChanged: (v) => setState(() => _apply(entry.copyWith(notes: v))),

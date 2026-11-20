@@ -365,6 +365,7 @@ class _PlanRow extends StatelessWidget {
                   3,
                   LiveTextField(
                     fieldId: 'plan_notes_${plan.id}',
+                    expandable: true,
                     initial: plan.notes,
                     label: 'Notes',
                     hint: 'issued 3 Feb, supersedes the December set',

@@ -723,6 +723,7 @@ class _TodoRow extends StatelessWidget {
                       child: LiveTextField(
                         key: ValueKey('todo_resolution_${todo.id}'),
                         fieldId: 'todo_resolution_${todo.id}',
+                        expandable: true,
                         initial: todo.resolution,
                         label: 'Resolved',
                         hint: 'Optional - how it was settled',
@@ -735,6 +736,7 @@ class _TodoRow extends StatelessWidget {
                   ] else
                     LiveTextField(
                       fieldId: 'todo_text_${todo.id}',
+                      expandable: true,
                       initial: todo.text,
                       onChanged: (_) {},
                       onSubmitted: (v) =>

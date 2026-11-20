@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import 'cost_estimate.dart' show formatMoney;
+import 'form_factor.dart' show isMobileDevice;
 import 'print_mode.dart';
 import 'responsive.dart';
 
@@ -80,6 +81,11 @@ class LiveTextField extends StatefulWidget {
   /// them.
   final bool thousands;
 
+  /// Opens in a large editor to read and write in: a tap on the box does it
+  /// on an iPad or iPhone, and a button on the box does it on a desktop. For
+  /// notes, which outgrow a box a few lines tall.
+  final bool expandable;
+
   final bool autofocus;
   final int maxLines;
 
@@ -124,6 +130,7 @@ class LiveTextField extends StatefulWidget {
     this.numeric = false,
     this.money = false,
     this.thousands = false,
+    this.expandable = false,
     this.autofocus = false,
     this.maxLines = 1,
     this.minLines,
@@ -257,6 +264,26 @@ class _LiveTextFieldState extends State<LiveTextField> {
     return _field();
   }
 
+  /// The note in a large editor. Done writes it back as if it had been
+  /// typed here; Cancel leaves the box as it was.
+  Future<void> _openEditor() async {
+    final text = await showDialog<String>(
+      context: context,
+      builder: (_) => _LargeTextEditor(
+        title: widget.label ?? 'Note',
+        initial: _controller.text,
+        hint: widget.hint,
+      ),
+    );
+    if (text == null || !mounted || text == _controller.text) return;
+    _controller.text = text;
+    _held = null;
+    _pause?.cancel();
+    widget.onChanged(text);
+    widget.onSubmitted?.call(text);
+    widget.onDone?.call();
+  }
+
   OutlineInputBorder get _warnBorder => OutlineInputBorder(
     borderSide: BorderSide(color: Theme.of(context).colorScheme.error, width: 2),
   );
@@ -272,6 +299,10 @@ class _LiveTextFieldState extends State<LiveTextField> {
   Widget _textField({required bool outlined}) => TextField(
     controller: _controller,
     focusNode: _focus,
+    // A note on an iPad or iPhone opens in the large editor rather than
+    // being typed into a few lines of box under the keyboard.
+    readOnly: widget.expandable && isMobileDevice,
+    onTap: widget.expandable && isMobileDevice ? _openEditor : null,
     autofocus: widget.autofocus,
     maxLines: widget.maxLines,
     minLines: widget.minLines,
@@ -312,7 +343,14 @@ class _LiveTextFieldState extends State<LiveTextField> {
       helperMaxLines: 4,
       prefixText: widget.prefix,
       suffixText: widget.suffix,
-      suffixIcon: widget.clearable
+      suffixIcon: widget.expandable && !isMobileDevice
+          ? IconButton(
+              key: const ValueKey('live_text_expand'),
+              tooltip: 'Open in a larger box',
+              icon: const Icon(Icons.open_in_full, size: 16),
+              onPressed: _openEditor,
+            )
+          : widget.clearable
           ? ClearFieldButton(
               controller: _controller,
               onCleared: () {
@@ -385,6 +423,75 @@ class ThousandsInputFormatter extends TextInputFormatter {
     return TextEditingValue(
       text: formatted,
       selection: TextSelection.collapsed(offset: at),
+    );
+  }
+}
+
+
+/// A note in a box most of the screen tall, to read and write in. Returns the
+/// text on Done, null on Cancel.
+class _LargeTextEditor extends StatefulWidget {
+  final String title;
+  final String initial;
+  final String? hint;
+
+  const _LargeTextEditor({
+    required this.title,
+    required this.initial,
+    this.hint,
+  });
+
+  @override
+  State<_LargeTextEditor> createState() => _LargeTextEditorState();
+}
+
+class _LargeTextEditorState extends State<_LargeTextEditor> {
+  late final TextEditingController _edit =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _edit.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return AlertDialog(
+      key: const ValueKey('live_text_editor'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+      title: Text(widget.title),
+      content: SizedBox(
+        width: size.width < 640 ? size.width : 600,
+        height: size.height * 0.6,
+        child: TextField(
+          key: const ValueKey('live_text_editor_box'),
+          controller: _edit,
+          autofocus: true,
+          expands: true,
+          maxLines: null,
+          minLines: null,
+          keyboardType: TextInputType.multiline,
+          textAlignVertical: TextAlignVertical.top,
+          style: const TextStyle(fontSize: 16, height: 1.4),
+          decoration: InputDecoration(
+            hintText: widget.hint,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('live_text_editor_done'),
+          onPressed: () => Navigator.pop(context, _edit.text),
+          child: const Text('Done'),
+        ),
+      ],
     );
   }
 }

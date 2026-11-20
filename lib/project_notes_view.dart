@@ -71,6 +71,7 @@ List<Widget> notesSlivers(BuildContext context, ProjectEstimate estimate) {
                   // replaces what is in the box rather than leaving the last
                   // job's notes on screen.
                   fieldId: 'project_notes_${provider.currentProjectPath}',
+                  expandable: true,
                   initial: project.notes,
                   hint: 'e.g. Switched 55" for 65" by request.',
                   maxLines: 6,
@@ -221,6 +222,7 @@ class _RoomNote extends StatelessWidget {
             LiveTextField(
               key: ValueKey('room_notes_box_$roomId'),
               fieldId: 'room_notes_$roomId',
+              expandable: true,
               initial: notes,
               hint: 'e.g. Ceiling is asbestos above the grid, contact '
                   'facilities before any work above it.',

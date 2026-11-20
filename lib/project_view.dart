@@ -2627,6 +2627,7 @@ class _RoomRowState extends State<_RoomRow> {
           child: LiveTextField(
             key: ValueKey('room_row_notes_${room.ref.id}'),
             fieldId: 'room_row_notes_${room.ref.id}',
+            expandable: true,
             initial: room.ref.notes,
             hint: 'e.g. asbestos above the grid, contact facilities',
             onChanged: (v) =>
@@ -9460,6 +9461,7 @@ class _VendorCard extends StatelessWidget {
     );
     final notesField = LiveTextField(
       fieldId: 'vendor_notes_${vendor.id}',
+      expandable: true,
       initial: vendor.notes,
       label: 'Notes',
       hint: 'account number, how they are to deal with',

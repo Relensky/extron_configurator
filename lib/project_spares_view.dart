@@ -620,6 +620,7 @@ class _SpareControls extends StatelessWidget {
           Expanded(
             child: LiveTextField(
               fieldId: 'spare_note_${spare.id}',
+              expandable: true,
               initial: spare.note,
               label: 'Why',
               hint: 'to cover a repair',
