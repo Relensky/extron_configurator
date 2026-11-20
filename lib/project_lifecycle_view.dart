@@ -1912,6 +1912,73 @@ class _RoomRow extends StatelessWidget {
       if (room.undated > 0) '${room.undated} without a date',
     ].join('  ·  ');
 
+    // A PHONE: the money and the buttons go under the room's facts instead
+    // of beside them, where they left the facts and the budget a sliver.
+    if (MediaQuery.sizeOf(context).width < 600) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(16, gap, 16, gap),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Tooltip(
+                  message: kEquipmentTimingLabels[timing]!,
+                  child: Icon(
+                    equipmentTimingIcon(timing),
+                    size: gridMetric(context, 24),
+                    color: color,
+                  ),
+                ),
+                SizedBox(width: gap),
+                Expanded(
+                  child: Text(
+                    room.roomName,
+                    key: ValueKey('lifecycle_room_${room.roomName}'),
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                if (line != null)
+                  ManualRoomLineActions(room: line, iconSize: 18),
+              ],
+            ),
+            Text(facts, style: theme.textTheme.bodyMedium),
+            if (room.overdueCost > 0)
+              Text(
+                '${formatLifecycleMoney(room.overdueCost, currency)} overdue',
+                style: theme.textTheme.bodyMedium?.copyWith(color: color),
+              ),
+            if (room.refreshCost > 0)
+              Text(
+                '${formatLifecycleMoney(room.refreshCost, currency)} '
+                'to refresh',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            if (groups.isNotEmpty) ...[
+              SizedBox(height: gap * 0.75),
+              Text(
+                'BUDGET FOR THIS ROOM',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              SizedBox(height: gap * 0.4),
+              Wrap(
+                spacing: gap,
+                runSpacing: gap * 0.6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  for (final g in groups)
+                    _DueYearChip(room: room, group: g, currency: currency),
+                ],
+              ),
+            ],
+          ],
+        ),
+      );
+    }
     return Padding(
       padding: EdgeInsets.fromLTRB(16, gap, 16, gap),
       child: Row(
@@ -2397,7 +2464,11 @@ class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
 
     // A label on every year is unreadable past about sixteen of them, so they
     // thin out rather than overlap.
-    final step = (span / 16).ceil().clamp(1, 100);
+    // As many year labels as the line has room for, a year being about 40
+    // wide: a fixed sixteen ran every year of a phone's line into one
+    // unreadable string.
+    final fits = (plotWidth / 40).floor().clamp(2, 16);
+    final step = (span / fits).ceil().clamp(1, 100);
 
     return Stack(
       clipBehavior: Clip.none,

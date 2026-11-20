@@ -273,13 +273,19 @@ class _AddTodoBarState extends State<_AddTodoBar> {
   @override
   Widget build(BuildContext context) {
     final rooms = widget.rooms;
+    // A PHONE puts the note on a line of its own, with About and Add under
+    // it: in one row the note's box was left a few letters wide.
+    final narrow = MediaQuery.sizeOf(context).width < 600;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Flex(
+        direction: narrow ? Axis.vertical : Axis.horizontal,
+        crossAxisAlignment:
+            narrow ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: TextField(
+          _expandUnless(
+            narrow,
+            TextField(
               key: const ValueKey('todo_new_text'),
               controller: _text,
               focusNode: _focus,
@@ -294,6 +300,7 @@ class _AddTodoBarState extends State<_AddTodoBar> {
               onSubmitted: (_) => _add(),
             ),
           ),
+          if (narrow) const SizedBox(height: 8),
           // What the note is ABOUT: the job, one room, or something typed.
           // The third exists because a job does not divide cleanly into the
           // first two — "Extron", "the punch list", "phase 2" are each a
@@ -735,7 +742,12 @@ class _TodoRow extends StatelessWidget {
                     ),
                   Padding(
                     padding: const EdgeInsets.only(left: 12, bottom: 4),
-                    child: Row(
+                    // Wraps: on a phone the room, age and due date ran off
+                    // the right edge in a single row.
+                    child: Wrap(
+                      spacing: 0,
+                      runSpacing: 2,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         // Editable in place, and on a done note too — filing
                         // something correctly after the fact is exactly what
@@ -776,7 +788,8 @@ class _TodoRow extends StatelessWidget {
                         if (blocked) ...[
                           const SizedBox(width: 10),
                           // What it is waiting on, pressed to change it.
-                          Flexible(
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 260),
                             child: InkWell(
                               key: ValueKey('todo_waiting_${todo.id}'),
                               borderRadius: BorderRadius.circular(4),
@@ -1351,3 +1364,7 @@ class _ImageViewerDialog extends StatelessWidget {
     );
   }
 }
+
+/// [child] taking the rest of a row, or as it is in a column.
+Widget _expandUnless(bool column, Widget child) =>
+    column ? child : Expanded(child: child);

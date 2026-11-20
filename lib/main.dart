@@ -1439,10 +1439,10 @@ class _MainDashboardState extends State<MainDashboard> {
                     actions: documentActions,
                   ),
           ),
-          // iPhone, on the Project page: which room, full width.
-          if (phone &&
-              provider.hasOpenProject &&
-              currentTab == AppTab.project)
+          // iPhone, with a job open: which room, full width, on every tab -
+          // on the room's own tabs it is the only way to switch to another
+          // room without going back to the Project page.
+          if (phone && provider.hasOpenProject)
             Material(
               color: Theme.of(context).colorScheme.surfaceContainerLow,
               child: const Padding(

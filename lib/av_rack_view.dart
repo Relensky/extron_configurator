@@ -309,7 +309,10 @@ class _AvRackViewState extends State<AvRackView> {
   }
 
   Widget _buildEmptyState(AppStateProvider provider, ThemeData theme) {
+    // Scrolls on a short phone screen rather than running off the bottom.
     return Center(
+      child: SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -329,6 +332,7 @@ class _AvRackViewState extends State<AvRackView> {
             onPressed: () => _showRackDialog(provider),
           ),
         ],
+      ),
       ),
     );
   }

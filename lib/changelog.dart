@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.248+258';
+const String kAppVersion = '0.5.249+259';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,22 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.249',
+    date: 'November 20, 2026',
+    title: 'iPhone: the job\'s pages fit',
+    changes: [
+      'The room picker stays across the top on every tab while a job is open, so another room is one tap away from the Cost or Lifecycle page.',
+      'Project > Plans: a plan added on a PC shows its file name rather than the whole C:\\ path, and on a phone its buttons go under the name and the two boxes stack.',
+      'Project > Timeline: Take me there no longer leaves a scroll bar across the middle of the rail - the bar sits under the dates - and the job list puts each note on its own line with its date, status and invite under it.',
+      'Project > Quotes: on a phone each package\'s quote status and its line count and total go on a line under its name instead of off the right edge.',
+      'Project > To do: the note to add has the full width, and each item\'s room, age and due date wrap instead of running off the screen.',
+      'Project > Lifecycle: on a phone each room\'s figures and its budget for each year go under its name, so all of it shows.',
+      'A room\'s Lifecycle, when it falls due: only as many years are labelled as the line has room for.',
+      'Cost on a phone: Qty and Spares sit side by side in equal halves, with Total and Unit price under them and the line\'s money on the right.',
+      'Racks with nothing in them scroll on a short screen.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.248',
     date: 'November 20, 2026',

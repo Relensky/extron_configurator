@@ -442,6 +442,57 @@ class TimelineJobList extends StatelessWidget {
                         ? (roomNames[t.roomId] ?? '')
                         : t.scopeLabel.trim();
                     final status = todoTimelineStatus(t, asOf);
+                    // A PHONE: the note on a line of its own and the date,
+                    // status and invite under it. In one row the note was
+                    // squeezed to a few letters a line.
+                    if (MediaQuery.sizeOf(context).width < 600) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              about.isEmpty
+                                  ? t.text.trim()
+                                  : '${t.text.trim()}  ·  $about',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                decoration: t.isDone
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
+                            Wrap(
+                              spacing: 12,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  t.due == null
+                                      ? 'No date'
+                                      : formatScheduleDate(t.due!),
+                                  style: theme.textTheme.bodySmall
+                                      ?.copyWith(color: muted),
+                                ),
+                                Text(
+                                  status,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: status == 'Past its date'
+                                        ? theme.colorScheme.error
+                                        : muted,
+                                  ),
+                                ),
+                                if (!t.isDone)
+                                  TodoReminderButton(
+                                    key: ValueKey('timeline_remind_${t.id}'),
+                                    todo: t,
+                                    provider: provider,
+                                    scope: about,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 3),
                       child: Row(

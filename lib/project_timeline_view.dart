@@ -2838,15 +2838,24 @@ class _ProjectDateGraphState extends State<ProjectDateGraph>
                     span: span,
                   );
                   if (_zoom == kGridZoomNormal) return plot;
-                  return Scrollbar(
-                    controller: _scroll,
-                    thumbVisibility: true,
-                    child: SingleChildScrollView(
-                      controller: _scroll,
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: SizedBox(width: plotWidth, child: plot),
-                    ),
+                  // The bar is drawn here, UNDER the dates, off the scroll
+                  // itself - not a Scrollbar over the rail. On an iPhone that
+                  // one was left painted where the rail's bottom had been
+                  // before Take me there zoomed it, halfway up the cards.
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SingleChildScrollView(
+                        controller: _scroll,
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(width: plotWidth, child: plot),
+                      ),
+                      const SizedBox(height: 4),
+                      _RailThumb(
+                        key: const ValueKey('timeline_rail_thumb'),
+                        controller: _scroll,
+                      ),
+                    ],
                   );
                 },
               ),
@@ -4738,6 +4747,70 @@ class _DragLabel extends StatelessWidget {
           avatar: const Icon(Icons.alt_route, size: 16),
           label: Text(name),
           backgroundColor: theme.colorScheme.secondaryContainer,
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Where a zoomed rail is scrolled to, as a thin bar under it that can be
+/// dragged.
+class _RailThumb extends StatelessWidget {
+  final ScrollController controller;
+
+  const _RailThumb({super.key, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+    return SizedBox(
+      height: 8,
+      child: LayoutBuilder(
+        builder: (context, box) => AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) {
+            if (!controller.hasClients ||
+                !controller.position.hasContentDimensions) {
+              return const SizedBox.shrink();
+            }
+            final p = controller.position;
+            final whole = p.viewportDimension + p.maxScrollExtent;
+            if (whole <= 0 || p.maxScrollExtent <= 0) {
+              return const SizedBox.shrink();
+            }
+            final track = box.maxWidth;
+            final thumb =
+                (track * p.viewportDimension / whole).clamp(24.0, track);
+            final at = (p.pixels / p.maxScrollExtent).clamp(0.0, 1.0) *
+                (track - thumb);
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: (d) {
+                final room = track - thumb;
+                if (room <= 0) return;
+                controller.jumpTo((p.pixels +
+                        d.delta.dx / room * p.maxScrollExtent)
+                    .clamp(0.0, p.maxScrollExtent));
+              },
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: at,
+                    width: thumb,
+                    top: 2,
+                    height: 4,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );

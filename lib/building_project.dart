@@ -703,7 +703,7 @@ class ProjectPo {
   /// Lower-case extension with no dot - 'pdf'. What decides which viewer
   /// opens it, the same way a plan's does.
   String get extension {
-    final ext = path.extension(filePath);
+    final ext = path.windows.extension(filePath);
     return ext.isEmpty ? '' : ext.substring(1).toLowerCase();
   }
 
@@ -2100,14 +2100,17 @@ class ProjectPlan {
   /// name, which on a drawing set is nearly always the sheet number.
   String get displayName {
     if (label.trim().isNotEmpty) return label.trim();
-    final base = path.basename(filePath);
+    // path.windows splits on / and \ both: a plan added on a PC is stored
+    // as C:\...\sheet.pdf, and on an iPad or iPhone the plain basename took
+    // that whole path for the file's name.
+    final base = path.windows.basename(filePath);
     return base.isEmpty ? filePath : base;
   }
 
   /// Lower-case extension with no dot - 'pdf', 'png'. What decides which
   /// viewer opens it.
   String get extension {
-    final ext = path.extension(filePath);
+    final ext = path.windows.extension(filePath);
     return ext.isEmpty ? '' : ext.substring(1).toLowerCase();
   }
 

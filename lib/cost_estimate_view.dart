@@ -9065,14 +9065,18 @@ Widget _phoneCard(
       top.add(Expanded(flex: c.flex, child: cells[i]));
       continue;
     }
+    // CENTRED IN EQUAL SLOTS, caption over figure: each figure was its own
+    // width with its caption to whichever side the desktop column had it, and
+    // side by side they read as a ragged row.
+    final isExtended = c.text == 'Extended';
     final figure =
       SizedBox(
-        width: c.compact().width,
+        width: isExtended ? null : double.infinity,
         child: Builder(
           builder: (context) => Column(
-            crossAxisAlignment: c.align == TextAlign.right
+            crossAxisAlignment: isExtended
                 ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
+                : CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
@@ -9088,7 +9092,7 @@ Widget _phoneCard(
           ),
         ),
       );
-    if (c.text == 'Extended') {
+    if (isExtended) {
       extended = figure;
     } else {
       figures.add(figure);
@@ -9102,26 +9106,28 @@ Widget _phoneCard(
       children: [
         if (top.isNotEmpty || buttons != null)
           Row(children: [...top, ?buttons]),
-        if (figures.isNotEmpty || extended != null)
+        // Two to a line in equal halves, so Qty sits over Total and Spares
+        // over Unit price, and the line's money under them on the right.
+        for (var i = 0; i < figures.length; i += 2)
           Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.only(top: 6),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                Expanded(child: figures[i]),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Wrap(
-                    spacing: 10,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.end,
-                    children: figures,
-                  ),
+                  child: i + 1 < figures.length
+                      ? figures[i + 1]
+                      : const SizedBox.shrink(),
                 ),
-                if (extended != null) ...[
-                  const SizedBox(width: 8),
-                  extended,
-                ],
               ],
             ),
+          ),
+        if (extended != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Align(alignment: Alignment.centerRight, child: extended),
           ),
       ],
     ),

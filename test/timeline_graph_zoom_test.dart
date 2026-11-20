@@ -227,7 +227,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('timeline_date_graph')),
-          matching: find.byType(Scrollbar),
+          matching: find.byKey(const ValueKey('timeline_rail_thumb')),
         ),
         findsWidgets,
       );

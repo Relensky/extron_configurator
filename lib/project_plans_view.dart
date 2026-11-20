@@ -217,63 +217,10 @@ class _PlanRow extends StatelessWidget {
     final resolved = provider.resolveProjectPlanPath(plan);
     final exists = provider.projectPlanExists(plan);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                // WHAT KIND OF SHEET THIS IS, at a glance. A drawing set is
-                // read by picking the one you want out of a list of twenty,
-                // and the file type is half of how somebody does that.
-                Tooltip(
-                  message: exists
-                      ? resolved
-                      : 'Missing: $resolved',
-                  child: Icon(
-                    !exists
-                        ? Icons.error_outline
-                        : plan.isPdf
-                            ? Icons.picture_as_pdf
-                            : plan.isViewable
-                                ? Icons.image_outlined
-                                : Icons.description_outlined,
-                    color: exists
-                        ? theme.colorScheme.onSurfaceVariant
-                        : errorTextOn(theme.colorScheme, theme.cardColor),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        plan.displayName,
-                        style: theme.textTheme.titleSmall,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      // The file, under the name it is called on the job. Both
-                      // are worth having: the label is what the drawing IS and
-                      // the path is what to go looking for when it has moved.
-                      Text(
-                        exists
-                            ? path.basename(resolved)
-                            : 'Missing: $resolved',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: exists
-                              ? theme.colorScheme.onSurfaceVariant
-                              : errorTextOn(
-                                  theme.colorScheme, theme.cardColor),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
+    // A PHONE puts the buttons under the name, and the two boxes one over
+    // the other: in one row the name was left a few letters.
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final buttons = <Widget>[
                 // VIEW is the button this pane exists for, so it is the filled
                 // one. Dead when the file is gone rather than opening onto an
                 // error somebody has to read to find out the same thing the
@@ -325,26 +272,98 @@ class _PlanRow extends StatelessWidget {
                   icon: const Icon(Icons.delete_outline, size: 18),
                   onPressed: () => provider.removePlanFromProject(plan.id),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
+    ];
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
               children: [
+                // WHAT KIND OF SHEET THIS IS, at a glance. A drawing set is
+                // read by picking the one you want out of a list of twenty,
+                // and the file type is half of how somebody does that.
+                Tooltip(
+                  message: exists
+                      ? resolved
+                      : 'Missing: $resolved',
+                  child: Icon(
+                    !exists
+                        ? Icons.error_outline
+                        : plan.isPdf
+                            ? Icons.picture_as_pdf
+                            : plan.isViewable
+                                ? Icons.image_outlined
+                                : Icons.description_outlined,
+                    color: exists
+                        ? theme.colorScheme.onSurfaceVariant
+                        : errorTextOn(theme.colorScheme, theme.cardColor),
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
-                  flex: 2,
-                  child: LiveTextField(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        plan.displayName,
+                        style: theme.textTheme.titleSmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      // The file, under the name it is called on the job. Both
+                      // are worth having: the label is what the drawing IS and
+                      // the path is what to go looking for when it has moved.
+                      Text(
+                        exists
+                            ? path.windows.basename(resolved)
+                            : 'Missing: $resolved',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: exists
+                              ? theme.colorScheme.onSurfaceVariant
+                              : errorTextOn(
+                                  theme.colorScheme, theme.cardColor),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                if (!narrow) ...buttons,
+              ],
+            ),
+            if (narrow)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: buttons,
+              ),
+            const SizedBox(height: 8),
+            Flex(
+              direction: narrow ? Axis.vertical : Axis.horizontal,
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: narrow
+                  ? CrossAxisAlignment.stretch
+                  : CrossAxisAlignment.center,
+              children: [
+                _flexOrNot(
+                  narrow,
+                  2,
+                  LiveTextField(
                     fieldId: 'plan_label_${plan.id}',
                     initial: plan.label,
                     label: 'What this sheet is',
-                    hint: path.basename(resolved),
+                    hint: path.windows.basename(resolved),
                     onChanged: (v) =>
                         provider.updateProjectPlan(plan.id, label: v),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 3,
-                  child: LiveTextField(
+                const SizedBox(width: 8, height: 8),
+                _flexOrNot(
+                  narrow,
+                  3,
+                  LiveTextField(
                     fieldId: 'plan_notes_${plan.id}',
                     initial: plan.notes,
                     label: 'Notes',
@@ -361,3 +380,7 @@ class _PlanRow extends StatelessWidget {
     );
   }
 }
+
+/// [child] as a share of a row, or as it is in a column.
+Widget _flexOrNot(bool column, int flex, Widget child) =>
+    column ? child : Expanded(flex: flex, child: child);

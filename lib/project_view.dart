@@ -8866,6 +8866,177 @@ class _RfqCardState extends State<_RfqCard> {
           children: [
             // THE ROW THAT IS ALWAYS THERE. Everything below it is behind the
             // toggle.
+            // A PHONE splits the row: the name with its controls, and what
+            // the quotes have got to on a line under it. In one row the
+            // count and total ran off the right edge.
+            if (MediaQuery.sizeOf(context).width < 600) ...[
+              Row(
+                children: [
+                ReorderableDragStartListener(
+                  key: ValueKey('rfq_drag_${rfq.id}'),
+                  index: widget.index,
+                  child: Tooltip(
+                    message: 'Drag to change which package claims a part first',
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        Icons.drag_indicator,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+                // The position, because it IS the rule. A list whose order
+                // decides the answer should say what the order is rather than
+                // leave it to be counted.
+                SizedBox(
+                  width: 26,
+                  child: Text(
+                    '${widget.index + 1}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Tooltip(
+                  message: rfq.color == null
+                      ? 'Color: from the name. Press to choose one.'
+                      : 'Color: chosen. Press to change it.',
+                  child: InkWell(
+                    key: ValueKey('rfq_color_${rfq.id}'),
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => showRfqColorDialog(context, rfq),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: tint,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: theme.dividerColor,
+                            width: 0.5,
+                          ),
+                        ),
+                        // An assigned color says so. Without it there is no
+                        // way to tell the color somebody chose from the one
+                        // the name happened to give — and the difference
+                        // matters the moment a package is renamed.
+                        child: rfq.color == null
+                            ? null
+                            : Icon(
+                                Icons.edit,
+                                size: 10,
+                                color:
+                                    ThemeData.estimateBrightnessForColor(
+                                          tint,
+                                        ) ==
+                                        Brightness.dark
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: InkWell(
+                    key: ValueKey('rfq_toggle_${rfq.id}'),
+                    onTap: () => setState(() => _open = !_open),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _open ? Icons.expand_less : Icons.expand_more,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              // AWARDED READS AS THE VENDOR. Once a package is
+                              // won, "who is supplying this" is the question
+                              // being asked of the row, and the package name
+                              // is the subtitle to it.
+                              winner == null
+                                  ? rfq.name
+                                  : '${winner.name} - ${rfq.name}',
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Kept beside the handle rather than replaced by it: a drag is
+                // the fast way and not the only way, and these are the two
+                // that work from a keyboard.
+                IconButton(
+                  tooltip: 'Higher priority',
+                  icon: const Icon(Icons.arrow_upward, size: 18),
+                  onPressed: isFirst
+                      ? null
+                      : () => provider.moveProjectRfq(rfq.id, -1),
+                ),
+                IconButton(
+                  tooltip: 'Lower priority',
+                  icon: const Icon(Icons.arrow_downward, size: 18),
+                  onPressed: isLast
+                      ? null
+                      : () => provider.moveProjectRfq(rfq.id, 1),
+                ),
+                IconButton(
+                  tooltip: 'Remove this package and every tag pointing at it',
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  onPressed: () => provider.removeProjectRfq(rfq.id),
+                ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 30),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                // WHERE THE QUOTES HAVE GOT TO, on the row that is always
+                // there. A collapsed list of six packages has to answer "which
+                // of these are we waiting on" without any of them being
+                // opened - see [VendorRfqChip].
+                VendorRfqChip(rfq: rfq, awardedVendorName: winner?.name ?? ''),
+                // THE COUNT IS THE WAY TO THE ROWS IT COUNTS. This said
+                // "19 lines - $18,400" and did nothing, which left the obvious
+                // next question - WHICH nineteen - to be answered by going to
+                // the Parts pane and finding this package's chip by hand.
+                // Pressing it now opens the master list already narrowed to
+                // exactly the parts this figure was added up from. See
+                // [AppStateProvider.requestedPartsVendorFilter].
+                if (package != null)
+                  ActionChip(
+                    key: ValueKey('rfq_package_parts_${rfq.id}'),
+                    avatar: const Icon(Icons.list_alt, size: 16),
+                    tooltip:
+                        'Show these '
+                        '${package.lines.length} part'
+                        '${package.lines.length == 1 ? '' : 's'} on the '
+                        'Equipment list',
+                    label: Text(
+                      '${package.lines.length} lines  ·  '
+                      '${formatMoney(package.total, currency)}',
+                    ),
+                    onPressed: () => provider.requestProjectPane(
+                      'parts',
+                      partsVendorFilter: rfq.id,
+                    ),
+                  ),
+                  ],
+                ),
+              ),
+            ] else
             Row(
               children: [
                 ReorderableDragStartListener(

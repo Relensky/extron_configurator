@@ -199,7 +199,10 @@ void main() {
       ).data;
       expect(closer, isNot(fitted));
       // And the rail is scrollable now, which fitted it never is.
-      expect(find.byType(Scrollbar), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('timeline_rail_thumb')),
+        findsWidgets,
+      );
     });
 
     testWidgets('fitting the whole job again puts the light out', (
