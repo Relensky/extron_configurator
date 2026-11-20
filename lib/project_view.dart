@@ -42,7 +42,7 @@ import 'project_notes_view.dart';
 import 'project_plans_view.dart';
 import 'project_pricing.dart';
 import 'collapsible_bar.dart' show BarFolds;
-import 'form_factor.dart' show isMobileDevice, isPhone, phoneLandscape;
+import 'form_factor.dart' show isPhone, phoneLandscape;
 import 'procurement_log.dart' show kProcurementCompanies;
 import 'procurement_sync.dart' show liveProcurement;
 import 'project_procurement_view.dart'
@@ -86,7 +86,7 @@ import 'vendor_rfq_view.dart';
 /// ============================================================================
 
 /// Which pane is showing.
-/// The fold that holds the job's details away on an iPad or iPhone.
+/// The fold that holds the job's details away.
 const String _kDetailsFold = 'project_details';
 
 enum _ProjectPane {
@@ -665,31 +665,16 @@ class _ProjectViewState extends State<ProjectView> {
                 ),
               ),
             ),
-          // ON AN iPAD OR iPHONE THE JOB'S DETAILS FOLD to one line - the
-          // job and its total - and stay folded from pane to pane until
-          // they are opened again, so moving between panes shows each pane
-          // rather than the same name, stakeholder and totals every time.
-          if (isMobileDevice && BarFolds.isFolded(_kDetailsFold))
+          // THE JOB'S DETAILS FOLD to one line - the job and its total -
+          // and stay folded from pane to pane until they are opened again,
+          // so moving between panes shows each pane rather than the same
+          // name, stakeholder and totals every time. Every device.
+          if (BarFolds.isFolded(_kDetailsFold))
             SliverToBoxAdapter(
               child: _foldedHeader(context, provider, estimate),
             )
-          else ...[
-            if (isMobileDevice)
-              SliverToBoxAdapter(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    key: const ValueKey('project_details_hide'),
-                    icon: const Icon(Icons.expand_less, size: 18),
-                    label: const Text('Hide job details'),
-                    onPressed: () => setState(
-                      () => BarFolds.setFolded(_kDetailsFold, true),
-                    ),
-                  ),
-                ),
-              ),
+          else
             SliverToBoxAdapter(child: _header(context, provider, estimate)),
-          ],
           const SliverToBoxAdapter(child: Divider(height: 1)),
           ...switch (_pane) {
             _ProjectPane.rooms => roomsSlivers(context, estimate),
@@ -760,7 +745,7 @@ class _ProjectViewState extends State<ProjectView> {
     );
   }
 
-  /// The job's details as one line, once folded on an iPad or iPhone.
+  /// The job's details as one line, once folded.
   Widget _foldedHeader(
     BuildContext context,
     AppStateProvider provider,
@@ -908,6 +893,16 @@ class _ProjectViewState extends State<ProjectView> {
                     label: 'Where it stands',
                     onPressed: () =>
                         showProjectBriefing(context, provider, force: true),
+                  ),
+                  // Folds all of this to one line - see [_foldedHeader].
+                  _action(
+                    compact: compact,
+                    buttonKey: const ValueKey('project_details_hide'),
+                    icon: Icons.unfold_less,
+                    label: 'Hide job details',
+                    onPressed: () => setState(
+                      () => BarFolds.setFolded(_kDetailsFold, true),
+                    ),
                   ),
                 ],
               ),

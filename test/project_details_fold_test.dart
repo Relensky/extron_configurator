@@ -6,12 +6,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
-/// iPad and iPhone: the job's details fold to one line, and stay folded as
+/// The job's details fold to one line, and stay folded as
 /// the panes are switched until they are opened again.
 void main() {
-  testWidgets('folded job details stay folded from pane to pane',
-      (tester) async {
-    debugMobileDevice = true;
+  for (final phone in [true, false]) {
+  testWidgets('folded job details stay folded from pane to pane '
+      '(${phone ? 'iPhone' : 'desktop'})', (tester) async {
+    debugMobileDevice = phone;
     addTearDown(() {
       debugMobileDevice = null;
       BarFolds.setFolded('project_details', false);
@@ -20,7 +21,8 @@ void main() {
       ..settingsLoaded = true
       ..firstRunSetupNeeded = false;
     p.newProject(name: 'Arts');
-    tester.view.physicalSize = const Size(390, 1600);
+    tester.view.physicalSize =
+        phone ? const Size(390, 1600) : const Size(1600, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(ChangeNotifierProvider<AppStateProvider>.value(
@@ -48,4 +50,5 @@ void main() {
     expect(stakeholder, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  }
 }
