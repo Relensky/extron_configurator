@@ -215,6 +215,17 @@ class IosShare {
     }
   }
 
+  /// Opens the Files app at [folder]. False when iOS would not.
+  static Future<bool> openFolder(String folder) async {
+    if (!Platform.isIOS) return false;
+    try {
+      return await _channel.invokeMethod<bool>('openFolder', {'path': folder}) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Whether the share answers right now, within [timeout]. Answering ends
   /// offline use: paths point at the share again.
   static Future<bool> checkReachable({Duration timeout = answerWithin}) async {
@@ -393,6 +404,17 @@ class IosShare {
     final String share = p.posix.basename(shareUnc.replaceAll('\\', '/'));
     if (!was[2]!.endsWith(share) || !now[2]!.endsWith(share)) return null;
     return '${now[1]}${now[2]}${was[3] ?? ''}';
+  }
+
+  /// [path] as the Files app lists it: the server, then the folders, with
+  /// slashes - "doit-files > ATEC > CTS > ...". A path the app keeps on the
+  /// device is "On My iPhone > Room Config Builder".
+  static String filesAppPath(String path) {
+    final String unc = toUnc(path);
+    if (unc.startsWith(r'\\')) {
+      return unc.substring(2).split(r'\').where((s) => s.isNotEmpty).join(' > ');
+    }
+    return 'On My iPhone > Room Config Builder';
   }
 
   /// [path] under the picked folder or the offline copy as its \\doit-files

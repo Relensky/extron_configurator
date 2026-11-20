@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.249+259';
+const String kAppVersion = '0.5.250+260';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.250',
+    date: 'November 20, 2026',
+    title: 'Open folder on iPad and iPhone opens the Files app',
+    changes: [
+      'iPad and iPhone: Open folder - on the bar after a save, and anywhere else the app offers one - opens the Files app at that folder, instead of a red note giving the folder\'s Windows path. If iOS will not open it, the note says where it is in the Files app.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.249',
     date: 'November 20, 2026',

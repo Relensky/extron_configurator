@@ -104,6 +104,16 @@ void main() {
       expect(uncPath('/somewhere/else'), '/somewhere/else');
     });
 
+    test('a folder is named the way the Files app lists it', () {
+      expect(
+        IosShare.filesAppPath(p.join(projects, 'Job')),
+        'doit-files > ATEC > CTS > StaffFiles > Classroom Technology > '
+        'Projects > Job',
+      );
+      expect(IosShare.filesAppPath('/somewhere/else'),
+          'On My iPhone > Room Config Builder');
+    });
+
     test('a room saved on Windows resolves on the iPad', () {
       final job = p.join(projects, 'BMU', 'BMU_project.json');
       expect(BuildingProject.resolvePath(r'Rooms\BMU 101\room_config.json', job),

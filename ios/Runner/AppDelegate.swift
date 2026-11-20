@@ -75,6 +75,19 @@ class SharedFolderPlugin: NSObject, FlutterPlugin, UIDocumentPickerDelegate,
         return
       }
       preview(path, result)
+    case "openFolder":
+      // NO "SHOW IN FOLDER" ON iOS, but the Files app can be sent to one: its
+      // shareddocuments:// scheme opens Files at a path, the share's folders
+      // included. False when iOS will not, so the app can say where it is.
+      guard let args = call.arguments as? [String: Any],
+        let path = args["path"] as? String,
+        let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+        let url = URL(string: "shareddocuments://" + encoded)
+      else {
+        result(false)
+        return
+      }
+      UIApplication.shared.open(url, options: [:]) { ok in result(ok) }
     case "clear":
       stopAccess()
       UserDefaults.standard.removeObject(forKey: SharedFolderPlugin.bookmarkKey)

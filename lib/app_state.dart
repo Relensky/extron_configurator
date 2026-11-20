@@ -14536,7 +14536,12 @@ class AppStateProvider extends ChangeNotifier {
     // another app's view of it from here.
     if (Platform.isIOS) {
       if (File(target).existsSync()) return IosShare.preview(target);
-      return 'Open it in the Files app: ${uncPath(target)}';
+      // A folder: the Files app, opened at it. Only when iOS refuses is there
+      // anything to say, and then it is where to find it in Files - not the
+      // \\server\ path a PC would use, which is no help on an iPhone.
+      if (await IosShare.openFolder(target)) return null;
+      return 'iOS could not open the folder. In the Files app it is '
+          '${IosShare.filesAppPath(target)}';
     }
     try {
       await Process.start(
