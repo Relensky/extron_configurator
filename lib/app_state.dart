@@ -1021,6 +1021,7 @@ class AppStateProvider extends ChangeNotifier {
   /// iOS: the share went offline or came back - join or leave the team
   /// folder to match.
   void _shareChanged() {
+    _rehomeOpenFiles();
     unawaited(startTeam());
     // Settings roam again once the share answers.
     if (_roamingTeamFolder != null) {
@@ -1029,6 +1030,40 @@ class AppStateProvider extends ChangeNotifier {
         settingsRoaming.folder = folder;
         if (folder.isNotEmpty) unawaited(settingsRoaming.sync());
       }
+    }
+  }
+
+  /// iOS: the share stopped answering (or answered again) with a job or room
+  /// open. Its paths pointed at the share, so a save went to a server that
+  /// was not there; now they point at the copy kept on this device (or back
+  /// at the share), and the sync sends what was saved here once it answers.
+  /// What the open room has loaded is kept: each marker that names the old
+  /// path moves with it, or the next tab visit would reload from the file
+  /// and drop unsaved edits.
+  void _rehomeOpenFiles() {
+    if (!IosShare.active) return;
+    String move(String was) => was.isEmpty ? was : sharePath(was);
+    final room = currentConfigPath;
+    final movedRoom = move(room);
+    if (movedRoom != room) {
+      String follow(String marker) => marker == room ? movedRoom : marker;
+      currentConfigPath = movedRoom;
+      _schematicSyncedPath = follow(_schematicSyncedPath);
+      _avFlowSyncedPath = follow(_avFlowSyncedPath);
+      _agreedNamesPath = follow(_agreedNamesPath);
+      _sidecarsAheadFor = follow(_sidecarsAheadFor);
+      _configHistoryPath = follow(_configHistoryPath);
+    }
+    final job = currentProjectPath;
+    final movedJob = move(job);
+    if (movedJob != job) currentProjectPath = movedJob;
+    if (movedRoom != room || movedJob != job) {
+      AppLogger.logInfo(
+        IosShare.offline
+            ? 'Share offline: the open files are now the copy on this device.'
+            : 'Share back: the open files are on the share again.',
+      );
+      notifyListeners();
     }
   }
 

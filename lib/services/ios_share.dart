@@ -124,8 +124,20 @@ class IosShare {
         if (_goOffline()) problem = _offlineProblem();
         return;
       }
-      if (await _use(path) == _Match.unreachable) {
-        problem = _goOffline() ? _offlineProblem() : _unreachableProblem;
+      // OFFLINE AT STARTUP. With no network iOS still hands back the
+      // folder, but the server behind it is gone: the folder reads as empty
+      // or missing rather than slow, which is "not the share" to _use. Either
+      // way the copy kept here is what there is to work from - before, only
+      // a slow answer went to it, and a job pulled down for a room with no
+      // network would not open.
+      final match = await _use(path);
+      if (match != _Match.found) {
+        problem = _goOffline()
+            ? _offlineProblem()
+            : match == _Match.unreachable
+                ? _unreachableProblem
+                : 'The CTS share folder could not be found. Choose Connect '
+                    'to the CTS Share to pick it again.';
       }
     } catch (_) {
       problem = _goOffline()
@@ -359,11 +371,28 @@ class IosShare {
     if (old != null && _under(old, path)) {
       return _joinRest(local, p.relative(path, from: old));
     }
+    final String? remounted = _onThisMount(path, local);
+    if (remounted != null) return remounted;
     if (!path.startsWith(r'\\') && !path.startsWith('//')) return path;
     final String norm = _normalizeUnc(path);
     final String share = _normalizeUnc(shareUnc);
     if (norm != share && !norm.startsWith('$share\\')) return path;
     return _joinRest(top, path.substring(_prefixLength(path, shareUnc)));
+  }
+
+  /// iOS puts an SMB server under LiveFiles/com.apple.filesystems.smbclientd/
+  /// with a name that changes when it reconnects (fhRfWQATEC, then something
+  /// else). A path remembered under an older one of those, for the same
+  /// share, is moved under [local]'s; null for anything else.
+  static String? _onThisMount(String path, String local) {
+    final RegExp mount = RegExp(r'^(.*/com\.apple\.filesystems\.smbclientd/)([^/]+)(/.*)?$');
+    final RegExpMatch? was = mount.firstMatch(path);
+    final RegExpMatch? now = mount.firstMatch(local);
+    if (was == null || now == null) return null;
+    if (was[1] != now[1] || was[2] == now[2]) return null;
+    final String share = p.posix.basename(shareUnc.replaceAll('\\', '/'));
+    if (!was[2]!.endsWith(share) || !now[2]!.endsWith(share)) return null;
+    return '${now[1]}${now[2]}${was[3] ?? ''}';
   }
 
   /// [path] under the picked folder or the offline copy as its \\doit-files

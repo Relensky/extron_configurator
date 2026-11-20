@@ -63,7 +63,7 @@ Future<void> openRecentFile(
     );
     return;
   }
-  await onOpen(entry.file);
+  await onOpen(entry.here);
 }
 
 /// The date on a line: today and yesterday by name, everything else by date.

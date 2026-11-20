@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:extron_configurator/building_project.dart';
+import 'package:extron_configurator/recent_files.dart';
 import 'package:extron_configurator/services/ios_share.dart';
 import 'package:extron_configurator/services/share_sync.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -66,6 +67,34 @@ void main() {
       IosShare.offline = false;
       expect(sharePath(offline), p.join(projects, 'Job', 'job.json'));
     });
+
+    test('offline, a recent job opens from the copy, not "gone"', () {
+      final live = p.join(projects, 'Job', 'job.json');
+      write(p.join(mirrorProjects, 'Job', 'job.json'), '{}');
+      final entry = RecentFile(
+        file: live,
+        name: 'Job',
+        touchedAt: DateTime(2026, 11, 19),
+      );
+      IosShare.offline = true;
+      expect(entry.stillThere, isTrue);
+      expect(entry.here, p.join(mirrorProjects, 'Job', 'job.json'));
+    });
+
+    test('a path under an older SMB mount name moves to the current one', () {
+      const lf = '/private/var/mobile/Library/LiveFiles/'
+          'com.apple.filesystems.smbclientd';
+      IosShare.useForTest('$lf/NEWxyzATEC/CTS/StaffFiles/Classroom Technology',
+          unc: ctUnc);
+      expect(
+        sharePath('$lf/fhRfWQATEC/CTS/StaffFiles/Classroom Technology/'
+            'Projects/Job/job.json'),
+        '$lf/NEWxyzATEC/CTS/StaffFiles/Classroom Technology/Projects/Job/'
+            'job.json',
+      );
+      // Another share on the same server is not this one.
+      expect(sharePath('$lf/fhRfWQOTHER/x.json'), '$lf/fhRfWQOTHER/x.json');
+    }, skip: Platform.isWindows);
 
     test('a local share path is written back as the share path', () {
       expect(uncPath(p.join(projects, 'Job', 'job.json')),

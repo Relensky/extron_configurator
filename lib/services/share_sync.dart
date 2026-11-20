@@ -778,7 +778,23 @@ class ShareSync {
   static Future<void> _copy(File from, File to) async {
     await to.parent.create(recursive: true);
     final tmp = File('${to.path}.part');
-    await from.copy(tmp.path).timeout(const Duration(minutes: 3));
+    try {
+      await from.copy(tmp.path).timeout(const Duration(minutes: 3));
+    } on FileSystemException {
+      // iOS refuses a copy that brings the file's SMB permissions with it
+      // ("Operation not permitted" on a room's photos): the bytes alone.
+      try {
+        if (await tmp.exists()) await tmp.delete();
+      } catch (_) {}
+      final sink = tmp.openWrite();
+      try {
+        await sink
+            .addStream(from.openRead())
+            .timeout(const Duration(minutes: 3));
+      } finally {
+        await sink.close();
+      }
+    }
     final modified = (await from.stat()).modified;
     await tmp.rename(to.path);
     try {

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import 'app_paths.dart' show rehomeIosContainerPath;
+import 'services/ios_share.dart' show sharePath;
 import 'room_sidecar.dart' show roomStem;
 
 /// ============================================================================
@@ -99,12 +100,18 @@ class RecentFile {
   /// on two jobs apart.
   String get folder => path.dirname(file);
 
+  /// [file] as this device reaches it now. On an iPad or iPhone a job on
+  /// the CTS share is remembered by its place on the share, and with the
+  /// share out of reach that is the copy kept on the device - a recent job
+  /// has to open from there, not say it is gone. Anything else as it was.
+  String get here => sharePath(file);
+
   /// False once the file has been moved, renamed or deleted out from under the
   /// list. Checked when the list is drawn rather than when it is written: a
   /// share that is offline for an afternoon must not empty somebody's history.
   bool get stillThere {
     try {
-      return File(file).existsSync();
+      return File(here).existsSync();
     } catch (_) {
       return false;
     }

@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.240+250';
+const String kAppVersion = '0.5.241+251';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,26 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.241',
+    date: 'November 20, 2026',
+    title: 'iPad and iPhone: jobs kept on the device open offline',
+    changes: [
+      'Opened with no network, the app now works from the copy kept on the '
+          'device. Before, it only did so when the share was slow to answer; '
+          'with the share simply gone it started with no share at all and '
+          'nothing kept could be opened.',
+      'Recent jobs and rooms open from the device copy while offline, instead '
+          'of saying the file is not there any more.',
+      'A job or room open when the network drops is saved to the device copy '
+          'from then on, and sent to the share when it answers again; edits '
+          'not yet saved are kept.',
+      'Paths remembered from an earlier connection to the share still find '
+          'their files after iOS reconnects it under a new name.',
+      'Room photos that iOS refused to copy from the share ("Operation not '
+          'permitted") now come down too.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.240',
     date: 'November 19, 2026',
