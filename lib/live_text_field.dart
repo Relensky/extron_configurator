@@ -74,6 +74,12 @@ class LiveTextField extends StatefulWidget {
   /// separated, two decimals - so "11948" prints as "$11,948.00".
   final bool money;
 
+  /// A figure grouped in thousands as it is typed - "250000" shows as
+  /// "250,000" - so a budget reads at a glance. Implies [numeric]. The
+  /// commas are in the text handed to [onChanged]; the money parsers strip
+  /// them.
+  final bool thousands;
+
   final bool autofocus;
   final int maxLines;
 
@@ -117,6 +123,7 @@ class LiveTextField extends StatefulWidget {
     this.suffix,
     this.numeric = false,
     this.money = false,
+    this.thousands = false,
     this.autofocus = false,
     this.maxLines = 1,
     this.minLines,
@@ -131,8 +138,14 @@ class LiveTextField extends StatefulWidget {
 
 class _LiveTextFieldState extends State<LiveTextField> {
   late final TextEditingController _controller = TextEditingController(
-    text: widget.initial,
+    text: _shown(widget.initial),
   );
+
+  /// [text] as this box shows it: grouped in thousands for a [thousands] box.
+  String _shown(String text) =>
+      widget.thousands ? groupThousands(text) : text;
+
+  bool get _numeric => widget.numeric || widget.thousands;
 
   /// Owned here so the box can tell "somebody is typing in me" from "somebody
   /// changed this value from outside" — see [didUpdateWidget].
@@ -177,7 +190,7 @@ class _LiveTextFieldState extends State<LiveTextField> {
   void didUpdateWidget(covariant LiveTextField old) {
     super.didUpdateWidget(old);
     if (old.fieldId != widget.fieldId) {
-      _controller.text = widget.initial;
+      _controller.text = _shown(widget.initial);
       return;
     }
     // THE VALUE CHANGED UNDER AN IDLE BOX. A quantity nudged by the + and −
@@ -189,8 +202,8 @@ class _LiveTextFieldState extends State<LiveTextField> {
     // keystroke.
     if (!_focus.hasFocus &&
         widget.initial != old.initial &&
-        widget.initial != _controller.text) {
-      _controller.text = widget.initial;
+        _shown(widget.initial) != _controller.text) {
+      _controller.text = _shown(widget.initial);
     }
   }
 
@@ -263,13 +276,15 @@ class _LiveTextFieldState extends State<LiveTextField> {
     maxLines: widget.maxLines,
     minLines: widget.minLines,
     style: const TextStyle(fontSize: 13),
-    keyboardType: widget.numeric
+    keyboardType: _numeric
         ? const TextInputType.numberWithOptions(decimal: true)
         : null,
-    inputFormatters: widget.numeric
+    inputFormatters: widget.thousands
+        ? [ThousandsInputFormatter()]
+        : widget.numeric
         ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))]
         : null,
-    textAlign: widget.numeric ? TextAlign.right : TextAlign.left,
+    textAlign: _numeric ? TextAlign.right : TextAlign.left,
     decoration: InputDecoration(
       isDense: true,
       border: const OutlineInputBorder(),
@@ -322,4 +337,54 @@ class _LiveTextFieldState extends State<LiveTextField> {
       FocusManager.instance.primaryFocus?.unfocus();
     },
   );
+}
+
+
+/// [text] with its whole part grouped in thousands: "250000.5" is
+/// "250,000.5". Anything but digits, one point and a leading minus is
+/// dropped, so a figure pasted as "$250,000" comes out "250,000".
+String groupThousands(String text) {
+  final negative = text.trimLeft().startsWith('-');
+  var clean = text.replaceAll(RegExp(r'[^0-9.]'), '');
+  final point = clean.indexOf('.');
+  String whole = point < 0 ? clean : clean.substring(0, point);
+  final fraction = point < 0
+      ? null
+      : clean.substring(point + 1).replaceAll('.', '');
+  final grouped = StringBuffer();
+  for (var i = 0; i < whole.length; i++) {
+    if (i > 0 && (whole.length - i) % 3 == 0) grouped.write(',');
+    grouped.write(whole[i]);
+  }
+  return '${negative ? '-' : ''}$grouped${fraction == null ? '' : '.$fraction'}';
+}
+
+/// Puts the commas in a figure as it is typed, keeping the cursor after the
+/// same digit it was after - so typing in the middle of "1,250,000" or
+/// deleting a digit next to a comma lands where the fingers expect.
+class ThousandsInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text;
+    final formatted = groupThousands(text);
+    if (formatted == text) return newValue;
+    // How many characters that survive formatting sit before the cursor.
+    final cursor = newValue.selection.baseOffset.clamp(0, text.length);
+    var kept = 0;
+    for (var i = 0; i < cursor; i++) {
+      if (RegExp(r'[0-9.\-]').hasMatch(text[i])) kept++;
+    }
+    var at = 0;
+    while (at < formatted.length && kept > 0) {
+      if (formatted[at] != ',') kept--;
+      at++;
+    }
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: at),
+    );
+  }
 }

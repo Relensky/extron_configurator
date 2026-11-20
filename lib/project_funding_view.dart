@@ -951,7 +951,7 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                   'funding_target_${room.manualId}${room.roomId}_$_revision',
               initial: room.target > 0 ? room.target.toStringAsFixed(2) : '',
               prefix: cur,
-              numeric: true,
+              thousands: true,
               onChanged: (_) {},
               onSubmitted: (v) => _set(provider, room, target: _parse(v)),
             ),

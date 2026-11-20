@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.244+254';
+const String kAppVersion = '0.5.245+255';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.245',
+    date: 'November 20, 2026',
+    title: 'Budget figures keep their commas',
+    changes: [
+      'The project\'s total budget, each budget line\'s amount and each room\'s funding target show their thousands commas all the time, while you type as well as after, so 250000 reads as 250,000. A figure pasted with a currency sign or commas is taken as it is.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.244',
     date: 'November 20, 2026',

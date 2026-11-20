@@ -194,7 +194,8 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
                         ? ''
                         : project.budget.toStringAsFixed(2),
                     label: 'Total budget ($cur)',
-                    hint: 'e.g. 250000',
+                    hint: 'e.g. 250,000',
+                    thousands: true,
                     onChanged: (v) => provider.setProjectBudget(_parse(v)),
                   ),
                 ),
@@ -487,6 +488,7 @@ class _BudgetLineRow extends StatelessWidget {
               fieldId: 'budget_amount_${line.id}',
               initial: line.amount == 0 ? '' : line.amount.toStringAsFixed(2),
               label: 'Amount ($currency)',
+              thousands: true,
               onChanged: (v) => put(line.copyWith(
                 amount:
                     double.tryParse(v.replaceAll(RegExp(r'[^0-9.\-]'), '')) ??
