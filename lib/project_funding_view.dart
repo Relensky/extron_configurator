@@ -377,7 +377,10 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
   /// [_columnHeads]) and room for a room's name. Narrower than this - an
   /// iPad beside the tab rail - the name column was squeezed to a letter a
   /// line ("A / R / T / S") and the prices ran off the right.
-  static const double _tableMinWidth = 736 + 200;
+  static const double _tableMinWidth = 736 + (_optionsWidth - 44) + 200;
+
+  /// The Options column: wide enough for its heading at a large type size.
+  static const double _optionsWidth = 72;
 
   /// [rows] at full width when the page has it, else at [_tableMinWidth],
   /// scrolled sideways.
@@ -399,10 +402,15 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
   Widget _columnHeads(ThemeData theme) {
     Widget head(String text, double width, {bool right = false}) => SizedBox(
       width: width,
+      // One line: in a narrow column at the iPad's larger type, "Options"
+      // broke into "Optio / ns".
       child: Text(
         text,
         textAlign: right ? TextAlign.right : TextAlign.left,
         style: theme.textTheme.labelSmall,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.visible,
       ),
     );
     return Row(
@@ -419,7 +427,7 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
         const SizedBox(width: 8),
         head('Room total', 110, right: true),
         const SizedBox(width: 8),
-        head('Options', 44),
+        head('Options', _optionsWidth),
         const SizedBox(width: 48),
       ],
     );
@@ -980,7 +988,7 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
           // Its optional upgrades, in the project total or out - the same
           // icon as on its row in the room list.
           SizedBox(
-            width: 44,
+            width: _optionsWidth,
             child: switch (costed[room.roomId]) {
               final r? when room.ref != null &&
                   ProjectRoomOptionsButton.shows(r) =>

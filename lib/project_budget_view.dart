@@ -95,14 +95,16 @@ class _ProjectBudgetCardState extends State<ProjectBudgetCard> {
           for (final l in lines)
             Padding(
               padding: const EdgeInsets.only(left: 24),
+              // The price UNDER the name, not beside it: beside it, the
+              // name was left a sliver between the price and the switch and
+              // wrapped a word to a line on a phone.
               child: SwitchListTile(
                 key: ValueKey('project_budget_option_${ref.id}_${l.key}'),
                 dense: true,
                 visualDensity: VisualDensity.compact,
                 contentPadding: EdgeInsets.zero,
                 title: Text(l.name, style: theme.textTheme.bodyMedium),
-                secondary: Text(money(l.amount), style: small),
-                controlAffinity: ListTileControlAffinity.trailing,
+                subtitle: Text(money(l.amount), style: small),
                 value: counted && !ref.optionalLinesOff.contains(l.key),
                 onChanged: (v) => provider.setProjectRoomOptionLine(
                   ref.id,

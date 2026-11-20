@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.245+255';
+const String kAppVersion = '0.5.246+256';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,15 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.246',
+    date: 'November 20, 2026',
+    title: 'Options read clearly on the rooms budget',
+    changes: [
+      'Project > Rooms, Priority and funding: the Options column is wider and its heading stays on one line, instead of breaking into pieces at the iPad\'s larger type.',
+      'The Budget card\'s Options by room list puts each option\'s price under its name, so the name has the width of the row instead of a narrow strip beside the price.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.245',
     date: 'November 20, 2026',
