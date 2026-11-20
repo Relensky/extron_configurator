@@ -13,6 +13,7 @@ import 'contrast.dart';
 import 'cost_estimate.dart' show formatMoney;
 import 'google_sheets_live.dart';
 import 'online_copy.dart';
+import 'online_change_groups.dart';
 import 'online_pull_history.dart';
 import 'online_roundtrip.dart';
 import 'online_sheet_merge.dart';
@@ -863,6 +864,16 @@ class _ImportReviewDialog extends StatefulWidget {
 class _ImportReviewDialogState extends State<_ImportReviewDialog> {
   bool _busy = false;
 
+  /// Each room's tab, for grouping the list by room.
+  late final Map<String, ({String id, String name})> _roomTabs = () {
+    try {
+      return widget.provider.onlineRoomTabs();
+    } catch (_) {
+      // Grouped by tab name alone, then.
+      return const <String, ({String id, String name})>{};
+    }
+  }();
+
   Future<void> _apply() async {
     setState(() => _busy = true);
     final provider = widget.provider;
@@ -887,6 +898,7 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
                 '${liveSheetUrl(provider.project.onlineSheetId.trim())}'
             : widget.source,
         changes: widget.changes,
+        roomTabs: _roomTabs,
       );
     }
     if (!mounted) return;
@@ -931,6 +943,9 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
     final applicable = appliedChanges(changes).length;
     final listed = changes.length - applicable;
     String count(int n, String word) => '$n $word${n == 1 ? '' : 's'}';
+    final groups = groupOnlineChanges(changes, roomTabs: _roomTabs);
+    final roomCount = groups.where((g) => g.room).length;
+    final otherCount = groups.length - roomCount;
 
     return AlertDialog(
       key: const ValueKey('online_import_dialog'),
@@ -951,7 +966,12 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'From ${path.basename(widget.source)}.',
+              'From ${path.basename(widget.source)}.'
+              '${groups.isEmpty ? '' : ' ${[
+                      if (roomCount > 0) count(roomCount, 'room'),
+                      if (otherCount > 0)
+                        '${count(otherCount, 'other part')} of the job',
+                    ].join(' and ')} changed.'}',
               style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
             const SizedBox(height: 12),
@@ -975,41 +995,25 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
                     key: const ValueKey('online_import_changes'),
                     shrinkWrap: true,
                     children: [
-                      _ReviewHeading(
-                        key: const ValueKey('online_import_merged_heading'),
-                        icon: Icons.merge_type,
-                        color: successOn(surface),
-                        text: applicable == 0
-                            ? 'Nothing will be merged into the job'
-                            : 'Merged into the job - '
-                                '${count(applicable, 'change')}',
-                      ),
-                      for (final c in appliedChanges(changes))
-                        _ReviewLine(
-                          icon: c.id.isEmpty
-                              ? Icons.add_circle_outline
-                              : Icons.edit,
-                          title: c.name,
-                          detail: '${c.kind} - ${c.what}',
+                      // BY ROOM AND PART OF THE JOB, each with what was
+                      // added and how much changed; the lines inside.
+                      for (final g in groups)
+                        _ReviewGroup(
+                          key: ValueKey('online_import_group_${g.key}'),
+                          group: g,
+                          surface: surface,
+                          initiallyExpanded:
+                              groups.length == 1 || changes.length <= 12,
                         ),
-                      if (listed > 0 || problems.isNotEmpty) ...[
+                      if (problems.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         _ReviewHeading(
                           key: const ValueKey('online_import_dropped_heading'),
                           icon: Icons.warning_amber,
                           color: warningOn(surface),
-                          text: 'Dropped - '
-                              '${count(listed + problems.length, 'edit')} not '
-                              'brought in',
+                          text: 'Could not be read - '
+                              '${count(problems.length, 'row')}',
                         ),
-                        for (final c in listedOnlyChanges(changes))
-                          _ReviewLine(
-                            icon: Icons.back_hand_outlined,
-                            color: warningOn(surface),
-                            title: c.name,
-                            detail: '${c.what} - make it in the app; the '
-                                'next publish writes over it',
-                          ),
                         for (final problem in problems)
                           _ReviewLine(
                             key: const ValueKey('online_import_problems'),
@@ -1071,6 +1075,80 @@ class _ImportReviewDialogState extends State<_ImportReviewDialog> {
     );
   }
 }
+/// One room or part of the job in the pull review: its name, what was added,
+/// how much changed, and the changes themselves underneath.
+class _ReviewGroup extends StatelessWidget {
+  final OnlineChangeGroup group;
+  final Color surface;
+  final bool initiallyExpanded;
+
+  const _ReviewGroup({
+    super.key,
+    required this.group,
+    required this.surface,
+    required this.initiallyExpanded,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final g = group;
+    final added = g.added;
+    const shown = 6;
+    final addedText = added.isEmpty
+        ? ''
+        : 'Added: ${added.take(shown).join(', ')}'
+            '${added.length > shown ? ' and ${added.length - shown} more' : ''}';
+    final split = [
+      if (g.applied > 0) '${g.applied} brought in',
+      if (g.byHand > 0) '${g.byHand} to make by hand',
+    ].join(', ');
+    return ExpansionTile(
+      initiallyExpanded: initiallyExpanded,
+      tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+      childrenPadding: const EdgeInsets.only(bottom: 4),
+      leading: Icon(
+        g.room ? Icons.meeting_room_outlined : Icons.table_chart_outlined,
+        size: 20,
+        color: g.applied > 0 ? successOn(surface) : warningOn(surface),
+      ),
+      title: Text(
+        g.title,
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: Text(
+        [
+          '${g.summary} ($split)',
+          if (addedText.isNotEmpty) addedText,
+        ].join('\n'),
+        style: theme.textTheme.bodySmall?.copyWith(color: muted),
+      ),
+      children: [
+        for (final c in g.changes)
+          c.kind == kSheetEditKind
+              ? _ReviewLine(
+                  icon: Icons.back_hand_outlined,
+                  color: warningOn(surface),
+                  title: onlineChangeLabel(c, g),
+                  detail: '${c.what} - make it in the app; the next publish '
+                      'writes over it',
+                )
+              : _ReviewLine(
+                  icon: onlineChangeIsAdd(c)
+                      ? Icons.add_circle_outline
+                      : Icons.edit,
+                  color: successOn(surface),
+                  title: onlineChangeLabel(c, g),
+                  detail: '${c.kind} - ${c.what}',
+                ),
+      ],
+    );
+  }
+}
+
 /// A section heading in the pull review: what is merged, what is dropped.
 class _ReviewHeading extends StatelessWidget {
   final IconData icon;

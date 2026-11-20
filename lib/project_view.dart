@@ -4403,6 +4403,8 @@ class _PartsHeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final stacked = _partsStacked(context);
+
     /// One heading, carrying the arrow when the list is ordered by it.
     Widget label(String text, TextAlign align, PartSortKey key) {
       final active = sort == key;
@@ -4442,6 +4444,8 @@ class _PartsHeaderRow extends StatelessWidget {
       final aligned = Align(
         alignment:
             align == TextAlign.right ? Alignment.centerRight : Alignment.centerLeft,
+        // Stacked, the headings sit in a Wrap and must size to their text.
+        widthFactor: stacked ? 1 : null,
         child: content,
       );
       if (onSort == null) return aligned;
@@ -4474,34 +4478,63 @@ class _PartsHeaderRow extends StatelessWidget {
     Widget fixed(String text, double width, PartSortKey key) =>
         SizedBox(width: width, child: label(text, TextAlign.right, key));
 
+    final tick = selectable
+        ? SizedBox(
+            width: kPartTickWidth,
+            child: Tooltip(
+              message: allShownSelected
+                  ? 'Clear the selection'
+                  : 'Select every part on this list - whatever the filters '
+                        'above have narrowed it to',
+              child: Checkbox(
+                key: const ValueKey('parts_select_shown'),
+                // Three states: none of the shown rows ticked, all, or some.
+                value: allShownSelected
+                    ? true
+                    : someShownSelected
+                    ? null
+                    : false,
+                tristate: true,
+                visualDensity: VisualDensity.compact,
+                onChanged:
+                    onSelectShown == null ? null : (_) => onSelectShown!(),
+              ),
+            ),
+          )
+        : null;
+
+    // Narrow: the rows stack, so the headings are sort buttons, not columns.
+    if (stacked) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+        child: Row(
+          children: [
+            ?tick,
+            Expanded(
+              child: Wrap(
+                spacing: 14,
+                runSpacing: 4,
+                children: [
+                  label('Part', TextAlign.left, PartSortKey.part),
+                  label('Qty', TextAlign.left, PartSortKey.qty),
+                  label('Unit', TextAlign.left, PartSortKey.unit),
+                  label('Extended', TextAlign.left, PartSortKey.extended),
+                  label('Vendor', TextAlign.left, PartSortKey.vendor),
+                  label('Lead time', TextAlign.left, PartSortKey.leadTime),
+                  label('Order by', TextAlign.left, PartSortKey.orderBy),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       child: Row(
         children: [
-          if (selectable)
-            SizedBox(
-              width: kPartTickWidth,
-              child: Tooltip(
-                message: allShownSelected
-                    ? 'Clear the selection'
-                    : 'Select every part on this list - whatever the filters '
-                          'above have narrowed it to',
-                child: Checkbox(
-                  key: const ValueKey('parts_select_shown'),
-                  // Three states, and the box says which: none of the rows on
-                  // screen are ticked, all of them are, or some are.
-                  value: allShownSelected
-                      ? true
-                      : someShownSelected
-                      ? null
-                      : false,
-                  tristate: true,
-                  visualDensity: VisualDensity.compact,
-                  onChanged:
-                      onSelectShown == null ? null : (_) => onSelectShown!(),
-                ),
-              ),
-            ),
+          ?tick,
           h('Part', 5, PartSortKey.part),
           h('Qty', 1, PartSortKey.qty, align: TextAlign.right),
           h('Unit', 2, PartSortKey.unit, align: TextAlign.right),
@@ -4550,6 +4583,14 @@ const double kPartCompanyColumnMinWidth = 1000;
 
 bool _companyColumn(BuildContext context) =>
     MediaQuery.sizeOf(context).width >= kPartCompanyColumnMinWidth;
+
+/// Below this window width (an iPhone) a part row stacks: the name gets the
+/// full width and the figures wrap underneath it, instead of squeezing the
+/// name into a sliver beside fixed-width columns.
+const double kPartStackWidth = 700;
+
+bool _partsStacked(BuildContext context) =>
+    MediaQuery.sizeOf(context).width < kPartStackWidth;
 
 /// The room a part-level flag is really about: the FIRST of [ids] that is
 /// still on the job.
@@ -4829,6 +4870,40 @@ class _PartRow extends StatelessWidget {
     final tint = projectRfqColor(line.rfq);
     final tagged = line.rfq != null;
 
+    // On a phone the name takes the full width and the rest wraps under it.
+    final stacked = _partsStacked(context);
+    Widget cell(int flex, double width, Widget child) => stacked
+        ? SizedBox(width: width, child: child)
+        : Expanded(flex: flex, child: child);
+    Widget layout(List<Widget> cells) {
+      if (!stacked) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: cells,
+        );
+      }
+      // The tick (when there is one) and the name, then everything else.
+      final lead = onSelect != null ? 2 : 1;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: cells.take(lead).toList(),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: cells.skip(lead).toList(),
+          ),
+        ],
+      );
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 4),
       // Blended rather than laid over: a Card's fill is what its text was
@@ -4868,9 +4943,8 @@ class _PartRow extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: layout(
+          [
             // THE TICK, ON EVERY ROW RATHER THAN BEHIND A MODE.
             //
             // A "select" mode that has to be turned on first is a feature
@@ -5185,9 +5259,10 @@ class _PartRow extends StatelessWidget {
                 ],
               ),
             ),
-            Expanded(
-              flex: 1,
-              child: Column(
+            cell(
+              1,
+              56,
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -5228,9 +5303,10 @@ class _PartRow extends StatelessWidget {
                 ],
               ),
             ),
-            Expanded(
-              flex: 2,
-              child: Tooltip(
+            cell(
+              2,
+              110,
+              Tooltip(
                 message: [
                   if (line.unpriced)
                     'Nothing on this job has a price for this part. Click '
@@ -5299,18 +5375,20 @@ class _PartRow extends StatelessWidget {
                 ),
               ),
             ),
-            Expanded(
-              flex: 2,
-              child: Text(
+            cell(
+              2,
+              110,
+              Text(
                 formatMoney(line.total, currency),
                 textAlign: TextAlign.right,
                 style: theme.textTheme.bodyMedium,
               ),
             ),
             const SizedBox(width: 8),
-            Expanded(
-              flex: 3,
-              child: _VendorPicker(line: line, estimate: estimate),
+            cell(
+              3,
+              180,
+              _VendorPicker(line: line, estimate: estimate),
             ),
             if (_companyColumn(context)) const SizedBox(width: 8),
             // WHO BUYS IT, the procurement log's Company column, set here for

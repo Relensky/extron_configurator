@@ -139,6 +139,37 @@ void main() {
     expect(rowOrder(tester, keys), grouped);
   });
 
+  testWidgets('on a phone-width window the part name gets the full row',
+      (tester) async {
+    final p = job();
+    await openParts(tester, p);
+    tester.view.physicalSize = const Size(390, 1500);
+    await tester.pumpAndSettle();
+
+    // The name column used to share the row with fixed-width columns that
+    // alone were wider than a phone, leaving it a sliver.
+    final key = p.priceProject().master.first.key;
+    final names = find.byKey(ValueKey('part_rooms_$key'));
+    await tester.scrollUntilVisible(
+      names,
+      200,
+      scrollable: find
+          .byWidgetPredicate(
+            (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final row = tester.getRect(
+      find.ancestor(of: names, matching: find.byType(Card)).first,
+    );
+    final column = tester.getRect(
+      find.ancestor(of: names, matching: find.byType(Expanded)).first,
+    );
+    expect(column.width, greaterThan(row.width * 0.8));
+  });
+
   testWidgets('every column on the list is one of the headings', (tester) async {
     await openParts(tester, job());
     // A list where three of the seven headings sort is a list where somebody

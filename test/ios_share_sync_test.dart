@@ -367,5 +367,96 @@ void main() {
       expect(File(share('Configurator_Files/.editing/av_devices.json/me@iPad.json'))
           .existsSync(), isFalse);
     });
+
+    group('discard', () {
+      /// The discarded versions kept on the device.
+      List<File> backups() {
+        final d = Directory(
+            p.join(IosShare.mirrorRoot, '.sync', 'discarded'));
+        if (!d.existsSync()) return [];
+        return d.listSync(recursive: true).whereType<File>().toList();
+      }
+
+      test('online: each change takes the share\'s version, held ones too',
+          () async {
+        write(share('Configurator_Files/costs.json'), jsonEncode({'a': 1}));
+        write(share('Configurator_Files/vendors.json'), jsonEncode({'v': 1}));
+        await ShareSync.syncNow();
+
+        // Changed here only.
+        write(copy('Configurator_Files/costs.json'), jsonEncode({'a': 2}),
+            minutesAgo: 2);
+        // Changed on both sides: held.
+        write(copy('Configurator_Files/vendors.json'), jsonEncode({'v': 2}),
+            minutesAgo: 3);
+        write(share('Configurator_Files/vendors.json'), jsonEncode({'v': 3}),
+            minutesAgo: 1);
+        // Made here only.
+        write(copy('Configurator_Files/new.json'), '{}', minutesAgo: 2);
+        expect((await ShareSync.syncNow(pull: false)).held, hasLength(1));
+        // That send took costs.json and new.json up: change them again.
+        write(copy('Configurator_Files/costs.json'), jsonEncode({'a': 5}),
+            minutesAgo: 0);
+
+        final n = await ShareSync.discardChanges();
+        expect(n, 2);
+        expect(jsonDecode(File(copy('Configurator_Files/costs.json'))
+            .readAsStringSync()), {'a': 2});
+        expect(jsonDecode(File(copy('Configurator_Files/vendors.json'))
+            .readAsStringSync()), {'v': 3});
+        // The share is untouched.
+        expect(jsonDecode(File(share('Configurator_Files/costs.json'))
+            .readAsStringSync()), {'a': 2});
+        expect(jsonDecode(File(share('Configurator_Files/vendors.json'))
+            .readAsStringSync()), {'v': 3});
+        expect(ShareSync.status.value.held, isEmpty);
+        expect(ShareSync.status.value.pending, 0);
+        expect(backups(), hasLength(2));
+
+        final after = await ShareSync.syncNow();
+        expect(after.sent + after.received, 0);
+        expect(after.held, isEmpty);
+      });
+
+      test('online: a file made only here goes', () async {
+        await ShareSync.syncNow();
+        write(copy('Configurator_Files/mine.pdf'), 'x', minutesAgo: 1);
+        expect(await ShareSync.discardChanges(), 1);
+        expect(File(copy('Configurator_Files/mine.pdf')).existsSync(), isFalse);
+        expect(File(share('Configurator_Files/mine.pdf')).existsSync(), isFalse);
+        expect(backups().single.readAsStringSync(), 'x');
+      });
+
+      test('offline: JSON goes back to the last sync, the rest comes down later',
+          () async {
+        write(share('Configurator_Files/costs.json'), jsonEncode({'a': 1}));
+        write(share('Configurator_Files/plan.pdf'), 'one');
+        await ShareSync.syncNow();
+
+        // The share stops answering.
+        final away = '$classroomTech-away';
+        Directory(classroomTech).renameSync(away);
+        expect(await IosShare.checkReachable(), isFalse);
+        write(copy('Configurator_Files/costs.json'), jsonEncode({'a': 9}),
+            minutesAgo: 1);
+        write(copy('Configurator_Files/plan.pdf'), 'mine', minutesAgo: 1);
+
+        expect(await ShareSync.discardChanges(), 2);
+        expect(jsonDecode(File(copy('Configurator_Files/costs.json'))
+            .readAsStringSync()), {'a': 1});
+        expect(File(copy('Configurator_Files/plan.pdf')).existsSync(), isFalse);
+        expect(ShareSync.status.value.pending, 0);
+
+        // It answers again: nothing goes up, the PDF comes back down.
+        Directory(away).renameSync(classroomTech);
+        final r = await ShareSync.syncNow();
+        expect(r.sent, 0);
+        expect(r.held, isEmpty);
+        expect(File(copy('Configurator_Files/plan.pdf')).readAsStringSync(),
+            'one');
+        expect(jsonDecode(File(share('Configurator_Files/costs.json'))
+            .readAsStringSync()), {'a': 1});
+      });
+    });
   });
 }

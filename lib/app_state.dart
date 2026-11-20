@@ -35,7 +35,7 @@ import 'av_flow_view.dart' show buildAvFlowModel, seedAvFlowFromConfig;
 import 'export_tools.dart' show roomFileStem;
 import 'google_sheets_export.dart';
 import 'google_sheets_live.dart';
-import 'project_workbook.dart' show buildProjectWorkbookSheets;
+import 'project_workbook.dart' show buildProjectWorkbookSheets, projectRoomTabNames;
 import 'online_copy.dart';
 import 'online_index.dart';
 import 'online_room_edits.dart';
@@ -19220,6 +19220,17 @@ class AppStateProvider extends ChangeNotifier {
     if (id.isEmpty || baseline == null) return const [];
     final now = await live.read(id, baseline.keys.toList(), entered: true);
     return _roomAndSheetEdits(baseline, now);
+  }
+
+  /// Each room's tab in the published copy: tab -> the room's id and name,
+  /// for grouping a pull's review by room.
+  Map<String, ({String id, String name})> onlineRoomTabs() {
+    final estimate = priceProject();
+    final names = {for (final r in estimate.rooms) r.ref.id: r.name};
+    return {
+      for (final e in projectRoomTabNames(estimate).entries)
+        e.value: (id: e.key, name: names[e.key] ?? e.value),
+    };
   }
 
   /// Counts changed on rooms' tabs, found by the last review and brought in

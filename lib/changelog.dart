@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.242+252';
+const String kAppVersion = '0.5.243+253';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,17 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.243',
+    date: 'November 20, 2026',
+    title: 'Pulls from the online copy listed by room',
+    changes: [
+      'Bring back from the online copy (the Google Sheet or the synced workbook) now lists what it found by room and by part of the job - each room, Parts, Deliveries, Purchase orders, and any other tab - rather than one long list. Each says how many lines were added, removed and changed, names what was added, and opens to show the changes themselves. A long pull starts with every group closed.',
+      'The history file kept beside the project lists each pull the same way, a heading per room or section with what was added.',
+      'Project > Equipment on an iPhone: each part\'s name, rooms and notes take the full width of the row, and the quantity, prices, vendor and order dates wrap underneath, instead of the name being squeezed into a narrow strip. The headings above still sort.',
+      'iPad and iPhone: Discard changes and resync, in the CTS share panel, throws away every change on the device the share hasn\'t got, files waiting for review too, and takes the share\'s versions. Offline, a job file goes back to how it was last synced and the newest versions come down when the share answers. The open job is read again, and the device\'s versions are kept on it first.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.242',
     date: 'November 20, 2026',

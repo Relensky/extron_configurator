@@ -30,6 +30,9 @@
 //
 // Deleting a file on the iPad never deletes it from the share.
 //
+// Discard (see [ShareSync.discardChanges]) throws away this device's unsent
+// changes and takes the share's versions, keeping a backup on the device.
+//
 // What the copy last saw of each file is kept in <copy>/.sync/manifest.json,
 // and the content of each JSON file as it was last synced in .sync/base/ -
 // the "started from" of the merge.
@@ -645,6 +648,97 @@ class ShareSync {
       held: [...status.value.held]..remove(r.rel),
     );
     await _countPending();
+  }
+
+  // ---------------------------------------------------------------------
+  //  Discard: this device's changes thrown away
+  // ---------------------------------------------------------------------
+
+  /// Throws away every change made on this device the share hasn't got, the
+  /// held files too, then syncs. With the share answering each takes the
+  /// share's version, and a file made only here goes. Offline, a JSON file
+  /// goes back to how it was last synced and anything else leaves the copy
+  /// until the next sync brings it down. This device's versions are kept
+  /// first in `<copy>/.sync/discarded/<when>/`. Returns how many were
+  /// discarded.
+  static Future<int> discardChanges() async {
+    if (!_on || !IosShare.active) return 0;
+    // No sync may run meanwhile: it would send the edits up.
+    while (_running != null) {
+      try {
+        await _running;
+      } catch (_) {}
+    }
+    final done = Completer<ShareSyncResult>();
+    _running = done.future;
+    var n = 0;
+    try {
+      n = await _discard();
+    } finally {
+      _running = null;
+      done.complete(ShareSyncResult());
+    }
+    status.value = status.value.copyWith(held: const []);
+    if (n > 0) AppLogger.logInfo('Offline copy: discarded $n change(s).');
+    if (IosShare.offline) {
+      await _countPending();
+    } else {
+      await syncNow();
+    }
+    return n;
+  }
+
+  static Future<int> _discard() async {
+    final top = await IosShare.checkReachable()
+        ? IosShare.shareLocalRoot
+        : null;
+    final mirror = IosShare.mirrorRoot;
+    final manifest = _readManifest();
+    final changed = await _changedHere(manifest).toList();
+    if (changed.isEmpty) return 0;
+    final stamp = DateTime.now()
+        .toIso8601String()
+        .replaceAll(RegExp(r'[:.]'), '-');
+    final keep = p.join(_syncDir, 'discarded', stamp);
+    var n = 0;
+    for (final rel in changed) {
+      final local = File(p.join(mirror, rel));
+      final base = File(_basePath(rel));
+      try {
+        await _copy(local, File(p.join(keep, rel)));
+        final remote = top == null ? null : File(p.join(top, rel));
+        final remoteThere =
+            remote != null &&
+            (await remote.stat().timeout(IosShare.answerWithin)).type ==
+                FileSystemEntityType.file;
+        final seen = manifest[rel];
+        if (remoteThere) {
+          await _copy(remote, local);
+          await _record(manifest, rel, local, remote);
+        } else if (remote == null && seen != null && await base.exists()) {
+          // Offline: as it was last synced.
+          await _copy(base, local);
+          manifest[rel] = _Seen(
+            size: seen.size,
+            shareTime: seen.shareTime,
+            mirrorTime: (await local.stat()).modified,
+          );
+        } else {
+          await local.delete();
+          // Online, the share hasn't got it: made here only, forgotten.
+          // Offline, the next sync brings it down.
+          if (remote != null) {
+            manifest.remove(rel);
+            if (await base.exists()) await base.delete();
+          }
+        }
+        n++;
+      } catch (e) {
+        AppLogger.logError('Offline copy: could not discard $rel', e);
+      }
+    }
+    await _writeManifest(manifest);
+    return n;
   }
 
   // ---------------------------------------------------------------------

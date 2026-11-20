@@ -147,6 +147,66 @@ class _SharePanelState extends State<_SharePanel> {
     });
   }
 
+  /// Throws away this device's unsent changes and takes the share's
+  /// versions, after asking. The open job is read again, so nothing unsaved
+  /// in it is saved back over them.
+  Future<void> _discard() async {
+    final provider = context.read<AppStateProvider>();
+    final offline = IosShare.offline;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard changes and resync?'),
+        content: Text(
+          'Every change made on this device that the share hasn\'t got is '
+          'thrown away${provider.hasOpenProject ? ', unsaved edits to the open job too' : ''}. '
+          '${offline ? 'The share does not answer, so each file goes back to how it was last synced, and the newest versions come down when it answers.' : 'Each file is replaced with the share\'s version.'}'
+          '\n\nA copy of this device\'s versions is kept on it, in case.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('ios_discard_confirm'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() {
+      _busy = true;
+      _message = 'Discarding...';
+    });
+    try {
+      final n = await ShareSync.discardChanges();
+      if (provider.hasOpenProject && provider.currentProjectPath.isNotEmpty) {
+        await provider.openProject(provider.currentProjectPath);
+      }
+      if (!mounted) return;
+      setState(
+        () => _message = n == 0
+            ? (IosShare.offline
+                  ? 'No changes here to discard. The share does not answer, '
+                        'so nothing was synced.'
+                  : 'No changes here to discard. Synced with the share.')
+            : 'Discarded $n change${n == 1 ? '' : 's'}. '
+                  '${IosShare.offline ? 'The newest versions come down when the share answers.' : 'This device matches the share.'}',
+      );
+    } catch (e) {
+      if (mounted) setState(() => _message = 'Could not discard: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   /// A file changed here and on the share, decided by the person: a JSON
   /// file through the same Combine dialogs as two people's saves (every
   /// change coming in ticked or not, every place both changed chosen by
@@ -362,6 +422,18 @@ class _SharePanelState extends State<_SharePanel> {
                           ),
                         ),
                     ],
+                    Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('ios_discard_changes'),
+                          icon: const Icon(Icons.restore, size: 18),
+                          label: const Text('Discard changes and resync'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: scheme.error,
+                          ),
+                          onPressed: _busy || status.running ? null : _discard,
+                        ),
+                      ),
                     const SizedBox(height: 4),
                     Text(
                       'Kept: Configurator_Files and every job opened here'

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'app_logger.dart';
 import 'changelog.dart';
+import 'online_change_groups.dart';
 import 'online_roundtrip.dart';
 import 'online_sheet_merge.dart';
 
@@ -20,7 +21,9 @@ import 'online_sheet_merge.dart';
 ///    === 2026-10-02 14:31:07 | Bessey Hall | jsmith on PC-9 | v0.5.50 ===
 ///    Source: Google Sheet https://docs.google.com/spreadsheets/d/...
 ///    2 changes brought in
+///    Deliveries - 1 changed
 ///      delivery "Projector": Qty 6 -> 8
+///    Purchase orders - 1 added: PO-1182
 ///      purchase order "PO-1182": added
 /// ============================================================================
 
@@ -35,6 +38,7 @@ String formatOnlinePull({
   required String who,
   required String source,
   required List<OnlineChange> changes,
+  Map<String, ({String id, String name})> roomTabs = const {},
 }) {
   String two(int n) => n.toString().padLeft(2, '0');
   final when = '${at.year}-${two(at.month)}-${two(at.day)} '
@@ -52,9 +56,15 @@ String formatOnlinePull({
             'listed only - NOT brought in, make '
             '${listed.length == 1 ? 'it' : 'them'} in the app',
     ].join('; '));
-  for (final c in [...applied, ...listed]) {
-    final name = c.name.trim().isEmpty ? '' : ' "${c.name.trim()}"';
-    buffer.writeln('  ${c.kind}$name: ${c.what}');
+  // By room and part of the job, so the file says what changed where.
+  for (final g in groupOnlineChanges(changes, roomTabs: roomTabs)) {
+    final added = g.added;
+    buffer.writeln('${g.title} - ${g.summary}'
+        '${added.isEmpty ? '' : ': ${added.join(', ')}'}');
+    for (final c in g.changes) {
+      final name = c.name.trim().isEmpty ? '' : ' "${c.name.trim()}"';
+      buffer.writeln('  ${c.kind}$name: ${c.what}');
+    }
   }
   buffer.writeln();
   return buffer.toString().replaceAll('\n', '\r\n');
@@ -67,6 +77,7 @@ Future<void> recordOnlinePull({
   required String project,
   required String source,
   required List<OnlineChange> changes,
+  Map<String, ({String id, String name})> roomTabs = const {},
   DateTime? at,
 }) async {
   if (changes.isEmpty) return;
@@ -90,6 +101,7 @@ Future<void> recordOnlinePull({
         who: machine.isEmpty ? user : '$user on $machine',
         source: source,
         changes: changes,
+        roomTabs: roomTabs,
       ),
       mode: FileMode.append,
       flush: true,
