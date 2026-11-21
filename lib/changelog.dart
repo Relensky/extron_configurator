@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.253+263';
+const String kAppVersion = '0.5.254+264';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.254',
+    date: 'November 20, 2026',
+    title: 'XPA U 1004 SB priced to Extron\'s quote',
+    changes: [
+      'Catalog: the Extron XPA U 1004 SB amplifier (60-1301-01) now lists at \$1,600 with an education price of \$935.01, matching Extron\'s quote; it was priced at \$1,450.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.253',
     date: 'November 20, 2026',
