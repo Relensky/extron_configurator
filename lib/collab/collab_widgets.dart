@@ -187,7 +187,16 @@ class CollabPresenceStrip extends StatelessWidget {
   /// would crowd the name, editors show only their icon. Null: always full.
   final double? shareWidth;
 
-  const CollabPresenceStrip({super.key, required this.tab, this.shareWidth});
+  /// False: the "saved - Combine" chips are left off, for a phone that
+  /// shows them on their own line - see [CollabIncomingRow].
+  final bool showIncoming;
+
+  const CollabPresenceStrip({
+    super.key,
+    required this.tab,
+    this.shareWidth,
+    this.showIncoming = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -211,20 +220,7 @@ class CollabPresenceStrip extends StatelessWidget {
         // A save to the open room or project is flagged on every tab, not
         // only the tab that edits it.
         final tabKinds = collabKindsForTab(tab);
-        for (final kind in {
-          ...tabKinds,
-          CollabDocKind.room,
-          CollabDocKind.project,
-        }) {
-          final incoming = collab.incomingOn(kind);
-          if (incoming != null) {
-            chips.add(_IncomingChip(
-              key: ValueKey('collab_incoming_chip_${kind.name}'),
-              kind: kind,
-              incoming: incoming,
-            ));
-          }
-        }
+        if (showIncoming) chips.addAll(_incomingChips(collab, tab));
         // Everybody with the room, the job or this page's document open:
         // at full strength once they have changed something, dimmed while
         // they are only looking - see [CollabEditorAvatar].
@@ -298,6 +294,49 @@ class CollabPresenceStrip extends StatelessWidget {
                 ),
             ],
           ),
+        );
+      },
+    );
+  }
+}
+
+/// The "saved - Combine" chips for [tab]: a save to the open room or
+/// project is flagged on every tab, not only the tab that edits it.
+List<Widget> _incomingChips(CollabController collab, AppTab tab) => [
+      for (final kind in {
+        ...collabKindsForTab(tab),
+        CollabDocKind.room,
+        CollabDocKind.project,
+      })
+        if (collab.incomingOn(kind) case final incoming?)
+          _IncomingChip(
+            key: ValueKey('collab_incoming_chip_${kind.name}'),
+            kind: kind,
+            incoming: incoming,
+          ),
+    ];
+
+/// A phone's line for the "saved - Combine" chips, under the project bar,
+/// so they do not cover the bar's Save and share buttons. Nothing when no
+/// save is waiting.
+class CollabIncomingRow extends StatelessWidget {
+  final AppTab tab;
+
+  const CollabIncomingRow({super.key, required this.tab});
+
+  @override
+  Widget build(BuildContext context) {
+    final collab = context.read<AppStateProvider>().collab;
+    return ListenableBuilder(
+      listenable: collab,
+      builder: (context, _) {
+        if (!collab.enabled) return const SizedBox.shrink();
+        final chips = _incomingChips(collab, tab);
+        if (chips.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          key: const ValueKey('collab_incoming_row'),
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+          child: Wrap(spacing: 6, runSpacing: 4, children: chips),
         );
       },
     );
@@ -513,6 +552,8 @@ class _IncomingChip extends StatelessWidget {
           backgroundColor: theme.colorScheme.tertiary,
           label: Text(
             '${incoming.who} saved ${name.isEmpty ? 'the ${collabDocNoun(kind)}' : name} - Combine',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: theme.textTheme.labelMedium
                 ?.copyWith(color: theme.colorScheme.onTertiary),
           ),

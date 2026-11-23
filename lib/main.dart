@@ -2341,7 +2341,13 @@ class TopLevelBar extends StatelessWidget {
               : _isMobile
               ? theme.copyWith(visualDensity: VisualDensity.compact)
               : theme,
-          child: Row(
+          // A phone puts the "saved - Combine" chips on a line of their
+          // own under the bar, so they do not cover its buttons.
+          child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+          Row(
           children: [
             // Hides this bar for more room; Save keeps the right corner.
             IconButton(
@@ -2523,6 +2529,7 @@ class TopLevelBar extends StatelessWidget {
                       CollabPresenceStrip(
                         tab: AppTab.values[selectedIndex],
                         shareWidth: slot.maxWidth,
+                        showIncoming: !isPhone(context),
                       ),
                   ],
                 ),
@@ -2566,6 +2573,12 @@ class TopLevelBar extends StatelessWidget {
                 child: Row(mainAxisSize: MainAxisSize.min, children: actions),
               ),
             ),
+          ],
+        ),
+          if (isPhone(context) &&
+              selectedIndex >= 0 &&
+              selectedIndex < AppTab.values.length)
+            CollabIncomingRow(tab: AppTab.values[selectedIndex]),
           ],
         ),
         ),

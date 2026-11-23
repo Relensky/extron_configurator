@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.257+267';
+const String kAppVersion = '0.5.258+268';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.258',
+    date: 'November 23, 2026',
+    title: 'iPhone: Combine gets its own line',
+    changes: [
+      'iPhone: the "saved - Combine" button for somebody else\'s save sits on its own line under the project bar, so it no longer covers the bar\'s Save and share buttons.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.257',
     date: 'November 23, 2026',

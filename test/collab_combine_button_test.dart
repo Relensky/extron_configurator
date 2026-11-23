@@ -125,6 +125,43 @@ void main() {
     p.dispose();
   });
 
+  testWidgets('a phone shows Combine on its own line, not on the bar',
+      (tester) async {
+    final p = await jobSavedByAColleague(tester);
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Column(children: [
+              const CollabPresenceStrip(
+                  tab: AppTab.project, showIncoming: false),
+              SizedBox(
+                width: 390,
+                child: const CollabIncomingRow(tab: AppTab.project),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final row = find.byKey(const ValueKey('collab_incoming_row'));
+    expect(row, findsOneWidget);
+    expect(
+      find.descendant(
+          of: row, matching: find.byKey(const ValueKey('collab_incoming_project'))),
+      findsOneWidget,
+    );
+    // Once only: the bar's strip left it off.
+    expect(find.byKey(const ValueKey('collab_incoming_project')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    p.dispose();
+  });
+
   test('a room picked on the Project tab opens on Cost; other tabs stay', () {
     final p = AppStateProvider(autoLoadSettings: false);
     p.selectTab(AppTab.project.index);
