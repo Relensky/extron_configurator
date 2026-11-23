@@ -248,7 +248,34 @@ class FolderUpdater extends ChangeNotifier {
 
   /// Whether the folder can be seen from this computer right now. False off
   /// the VPN, or when the path is wrong.
-  bool get releaseFolderReachable => platform.folderExists(_releaseFolder);
+  ///
+  /// [NO SHARE FREEZE]: a check on a network folder runs in the background
+  /// (this answers from the last check, false before the first), so a share
+  /// that is down no longer freezes the settings dialog that shows it.
+  bool get releaseFolderReachable {
+    final String folder = _releaseFolder;
+    if (!folder.startsWith(r'\\')) return platform.folderExists(folder);
+    if (_reachableChecking != folder &&
+        (_reachableFor != folder ||
+            DateTime.now().difference(_reachableAt) >
+                const Duration(seconds: 30))) {
+      _reachableChecking = folder;
+      platform.folderExistsAsync(folder).then((bool ok) {
+        final bool changed = _reachableFor != folder || _reachable != ok;
+        _reachable = ok;
+        _reachableFor = folder;
+        _reachableAt = DateTime.now();
+        _reachableChecking = null;
+        if (changed && !_disposed) notifyListeners();
+      });
+    }
+    return _reachableFor == folder && _reachable;
+  }
+
+  bool _reachable = false;
+  String? _reachableFor;
+  String? _reachableChecking;
+  DateTime _reachableAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Forgets the folder chosen in Settings and goes back to the built-in one.
   void resetReleaseFolder() {

@@ -83,6 +83,18 @@ bool folderExists(String path) {
   }
 }
 
+/// [NO SHARE FREEZE]: [folderExists] without blocking the UI thread -
+/// false when the folder is missing. A share that does not answer just
+/// leaves the future waiting; the caller keeps its last answer meanwhile.
+Future<bool> folderExistsAsync(String path) async {
+  try {
+    return path.trim().isNotEmpty &&
+        await Directory(path.trim()).exists();
+  } catch (_) {
+    return false;
+  }
+}
+
 /// The running exe's version resource.
 Future<AppBuildVersion?> readRunningVersion() async {
   final bytes = await File(Platform.resolvedExecutable).readAsBytes();

@@ -14,6 +14,7 @@ String? readSavedReleaseFolder() => null;
 void writeSavedReleaseFolder(String? folder) {}
 
 bool folderExists(String path) => false;
+Future<bool> folderExistsAsync(String path) async => false;
 
 Future<AppBuildVersion?> readRunningVersion() async => null;
 

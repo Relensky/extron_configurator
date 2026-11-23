@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.256+266';
+const String kAppVersion = '0.5.257+267';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.257',
+    date: 'November 23, 2026',
+    title: 'Settings no longer freezes when the file share is down',
+    changes: [
+      'Settings: the update folder line no longer freezes the window while the file share is unavailable - the folder is checked in the background and the line updates when it answers.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.256',
     date: 'November 23, 2026',
