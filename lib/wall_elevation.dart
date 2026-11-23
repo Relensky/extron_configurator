@@ -861,6 +861,24 @@ WallMark? markById(WallView wall, String id) {
   centersUpDown: (a.centerY - b.centerY).abs(),
 );
 
+/// "Measure to" the floor or the ceiling instead of another item.
+const String kMeasureFloor = '@floor';
+const String kMeasureCeiling = '@ceiling';
+
+/// From [i] to the floor (heights above it) or up to the ceiling at
+/// [ceilingIn] (the space left above): its bottom, center and top.
+({double bottom, double center, double top}) heightsFrom(
+  WallItem i, {
+  double? ceilingIn,
+}) =>
+    ceilingIn == null
+        ? (bottom: i.y, center: i.centerY, top: i.top)
+        : (
+            bottom: ceilingIn - i.y,
+            center: ceilingIn - i.centerY,
+            top: ceilingIn - i.top,
+          );
+
 /// Every mount on [wall], left to right, tagged M1, M2...
 List<MountPlacement> mountPlacements(WallView wall) {
   final mounts = [

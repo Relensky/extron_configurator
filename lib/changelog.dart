@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.258+268';
+const String kAppVersion = '0.5.259+269';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,15 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.259',
+    date: 'November 23, 2026',
+    title: 'Walls: measure to the floor or the ceiling',
+    changes: [
+      'Walls: Measure to lists the floor and the ceiling. Pick one with an item selected to read its bottom, center and top above the floor, or the space from each up to the ceiling, and the drawing draws the height.',
+      'Walls: the ceiling height (CLG) is also labeled at the wall\'s left end, by the height ruler, so it shows with the wall zoomed in.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.258',
     date: 'November 23, 2026',

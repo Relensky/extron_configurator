@@ -1804,15 +1804,24 @@ class _ItemEditor extends StatelessWidget {
       for (final o in wall.items)
         if (o.id != item.id) o,
     ];
-    if (others.isEmpty) return const [];
+    final hasCeiling = wall.heightIn > 0;
     final target = others.where((o) => o.id == measureId).firstOrNull;
     final g = target == null ? null : gapBetween(item, target);
+    final toFloor = measureId == kMeasureFloor;
+    final toCeiling = hasCeiling && measureId == kMeasureCeiling;
+    final picked = target?.id ??
+        (toFloor ? kMeasureFloor : toCeiling ? kMeasureCeiling : '');
+    final h = toFloor
+        ? heightsFrom(item)
+        : toCeiling
+            ? heightsFrom(item, ceilingIn: wall.heightIn)
+            : null;
     return [
       DropdownButtonFormField<String>(
         // Rebuilt when Shift+click picks another target.
-        key: ValueKey('wall_measure_to_${target?.id ?? ''}'),
+        key: ValueKey('wall_measure_to_$picked'),
         isExpanded: true,
-        initialValue: target?.id ?? '',
+        initialValue: picked,
         decoration: const InputDecoration(
           labelText: 'Measure to',
           helperText:
@@ -1820,6 +1829,13 @@ class _ItemEditor extends StatelessWidget {
         ),
         items: [
           const DropdownMenuItem(value: '', child: Text('Nothing')),
+          const DropdownMenuItem(
+              value: kMeasureFloor, child: Text('The floor')),
+          if (hasCeiling)
+            DropdownMenuItem(
+              value: kMeasureCeiling,
+              child: Text('The ceiling (${inchesLabel(wall.heightIn)})'),
+            ),
           for (final o in others)
             DropdownMenuItem(value: o.id, child: Text(o.name)),
         ],
@@ -1839,6 +1855,26 @@ class _ItemEditor extends StatelessWidget {
               'Centers: ${inchesLabel(g.centersAcross)} across, '
                   '${inchesLabel(g.centersUpDown)} up and down',
             ].join('\n'),
+            key: const ValueKey('wall_measure_result'),
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+      if (h != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            (toFloor
+                    ? [
+                        'Floor to bottom: ${inchesLabel(h.bottom)}',
+                        'Floor to center: ${inchesLabel(h.center)}',
+                        'Floor to top: ${inchesLabel(h.top)}',
+                      ]
+                    : [
+                        'Top to ceiling: ${inchesLabel(h.top)}',
+                        'Center to ceiling: ${inchesLabel(h.center)}',
+                        'Bottom to ceiling: ${inchesLabel(h.bottom)}',
+                      ])
+                .join('\n'),
             key: const ValueKey('wall_measure_result'),
             style: theme.textTheme.bodySmall,
           ),
@@ -2954,6 +2990,16 @@ class _WallElevationPainter extends CustomPainter {
           edge,
         );
       }
+      // At the wall's left end too, by the height ruler, so it is on
+      // screen with the wall zoomed in.
+      _text(
+        canvas,
+        'CLG ${inchesLabel(wall.heightIn)}',
+        layout.at(0, wall.heightIn) + const Offset(4, -8),
+        align: TextAlign.left,
+        size: 10,
+        bold: true,
+      );
       _text(
         canvas,
         'CLG ${inchesLabel(wall.heightIn)}',
@@ -3718,7 +3764,27 @@ class _WallElevationPainter extends CustomPainter {
   /// The clear space from the selected item to [measureId]: across where
   /// they are apart side to side, up and down where they are apart that way.
   void _paintMeasure(Canvas canvas) {
-    final a = wall.item(selectedId), b = wall.item(measureId);
+    final sel = wall.item(selectedId);
+    // To the floor or the ceiling: a height line through the item's middle.
+    final toFloor = measureId == kMeasureFloor;
+    if (sel != null &&
+        (toFloor || (measureId == kMeasureCeiling && wall.heightIn > 0))) {
+      canvas.drawRect(
+        layout.rectOf(sel.face).inflate(3),
+        Paint()
+          ..color = _callout
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+      final (y0, y1) = toFloor ? (0.0, sel.y) : (sel.top, wall.heightIn);
+      if (y1 - y0 > 0.01) {
+        _dimV(canvas, y0, y1, sel.centerX,
+            '${inchesLabel(y1 - y0)} ${toFloor ? 'AFF' : 'to CLG'}',
+            color: _callout, bold: true);
+      }
+      return;
+    }
+    final a = sel, b = wall.item(measureId);
     if (a == null || b == null || a.id == b.id) return;
     final g = gapBetween(a, b);
     for (final i in [a, b]) {

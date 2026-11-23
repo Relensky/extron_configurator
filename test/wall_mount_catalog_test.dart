@@ -588,6 +588,45 @@ void main() {
       expect(result.data, contains('Clear across: 1\' 6"'));
     });
 
+    for (final (pickLabel, expected) in [
+      ('The floor', 'Floor to bottom: 3\'\nFloor to center: 5\''),
+      ('The ceiling (9\')', 'Top to ceiling: 2\'\n'),
+    ]) {
+      testWidgets('Measure to reads a door to $pickLabel', (tester) async {
+        final p = room();
+        p.addWallView(name: 'Front wall');
+        var w = p.avWallViews.single;
+        w = w.withItem(const WallItem(
+          id: 'D', kind: WallItemKind.door, label: 'Box', x: 6, y: 36,
+          width: 36, height: 48));
+        p.updateWallView(w.copyWith(heightIn: 108), 'Add');
+        tester.view.physicalSize = const Size(1600, 1200);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          ChangeNotifierProvider<AppStateProvider>.value(
+            value: p,
+            child:
+                const MaterialApp(home: Scaffold(body: WallElevationView())),
+          ),
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('wall_item_row_D')));
+        await tester.pump();
+        final pick = find.byKey(const ValueKey('wall_measure_to_'));
+        await tester.ensureVisible(pick);
+        await tester.tap(pick);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(pickLabel).last);
+        await tester.pumpAndSettle();
+        final result = tester.widget<Text>(
+          find.byKey(const ValueKey('wall_measure_result')),
+        );
+        expect(result.data, contains(expected));
+        expect(tester.takeException(), isNull);
+      });
+    }
+
     testWidgets('a wall is sized in mm, and the box keeps its length on a '
         'change of unit', (tester) async {
       addTearDown(() => wallLengthUnit = LengthUnit.feet);
