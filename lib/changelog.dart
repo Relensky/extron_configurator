@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.254+264';
+const String kAppVersion = '0.5.255+265';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.255',
+    date: 'November 23, 2026',
+    title: 'Center on wall centers the mount plate',
+    changes: [
+      'Walls: Center on wall puts a mounted display\'s wall plate dead center (the same distance from each end), even when its VESA holes sit a hair off the screen\'s middle, as on the Newline Q Pro 86.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.254',
     date: 'November 20, 2026',

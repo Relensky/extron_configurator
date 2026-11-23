@@ -91,6 +91,22 @@ void main() {
       expect(m.centerY, closeTo(d.y + 20, 1e-9));
     });
 
+    test('centering a display on a mount centers the plate', () {
+      final w = qpro();
+      final c = w.withItem(w.centered(display(w))).resolved();
+      final p = MountPlacement(
+        tag: 'M1',
+        mount: mount(c),
+        display: display(c),
+        wallWidth: c.widthIn,
+      );
+      expect(p.fromLeft, closeTo(p.fromRight, 1e-9));
+      // Off its mount, the display's own box centers.
+      final bare = wall.withItem(display(w).copyWith(mountId: ''));
+      final b = bare.centered(display(bare));
+      expect(b.x, closeTo((wall.widthIn - b.width) / 2, 1e-9));
+    });
+
     test('holes off the back of the display are a problem', () {
       var w = qpro();
       w = w.withItem(display(w).copyWith(vesaLeft: 5));

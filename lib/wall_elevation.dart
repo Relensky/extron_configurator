@@ -590,6 +590,18 @@ class WallView {
     return item(r.mountId);
   }
 
+  /// [i] moved to the wall's middle. A display on a mount centers its VESA
+  /// holes, so the plate lands dead center even when the holes sit off the
+  /// display's middle.
+  WallItem centered(WallItem i) {
+    final m = i.mountId.isEmpty ? null : item(i.mountId);
+    final onMount = i.kind == WallItemKind.display &&
+        m != null &&
+        m.kind == WallItemKind.mount;
+    final mid = onMount ? i.vesaCenterX - i.x : i.width / 2;
+    return i.copyWith(x: widthIn / 2 - mid);
+  }
+
   /// The display hanging on [mountId], if any.
   WallItem? displayOn(String mountId) => items
       .where((i) => i.kind == WallItemKind.display && i.mountId == mountId)

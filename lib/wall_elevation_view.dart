@@ -1974,7 +1974,7 @@ class _ItemEditor extends StatelessWidget {
               onPressed: follows || i.locked
                   ? null
                   : () => onChanged(
-                        i.copyWith(x: (wall.widthIn - i.width) / 2),
+                        wall.centered(i),
                         'Center ${i.name}',
                         '',
                       ),
