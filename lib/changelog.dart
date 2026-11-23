@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.255+265';
+const String kAppVersion = '0.5.256+266';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,16 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.256',
+    date: 'November 23, 2026',
+    title: 'Walls on iPhone: Mounting draws, and walls open zoomed in',
+    changes: [
+      'Walls on an iPhone: Mounting no longer draws as "This part of the page could not be drawn". With its buttons taller than the page, the page scrolls - the buttons go up and away and the wall and its list fill the screen under them.',
+      'iPad and iPhone: a wall opens zoomed to the wall itself, readable without pinching, once per wall and per view. Fit still shows the whole sheet.',
+      'Mounting: the schedule is drawn over the drawing, so a selected item running past the wall\'s end - surface mount conduit - no longer draws its outline across the table.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.255',
     date: 'November 23, 2026',

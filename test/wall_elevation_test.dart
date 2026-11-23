@@ -1,3 +1,4 @@
+import 'package:extron_configurator/form_factor.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
@@ -397,6 +398,54 @@ void main() {
       await tester.tap(find.text('Elevation'));
       await tester.pump();
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a phone with the Mounting toolbar open still draws', (
+      tester,
+    ) async {
+      final p = room();
+      p.addWallView(name: 'South wall', widthIn: 240, heightIn: 108);
+      p.updateWallView(
+        withDisplayOnMount(p.avWallViews.single, kNewlineQPro86, kNewlineTiltMount),
+        'Add the Q Pro',
+      );
+      // An iPhone: the toolbar wraps to six rows and leaves little under it.
+      tester.view.physicalSize = const Size(390, 620);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(home: Scaffold(body: WallElevationView())),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Mounting'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a phone opens the wall zoomed to it', (tester) async {
+      debugMobileDevice = true;
+      addTearDown(() => debugMobileDevice = null);
+      final p = room();
+      p.addWallView(name: 'South wall', widthIn: 240, heightIn: 108);
+      tester.view.physicalSize = const Size(390, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(home: Scaffold(body: WallElevationView())),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('100%'), findsNothing);
+      // Fit still puts the whole sheet back.
+      await tester.tap(find.byKey(const ValueKey('wall_zoom_fit')));
+      await tester.pump();
+      expect(find.text('100%'), findsOneWidget);
     });
 
     testWidgets('a long press measures to another item, as Shift+click does',

@@ -11,6 +11,7 @@ import 'collapsible_bar.dart';
 import 'diagram_capture.dart';
 import 'av_device_library.dart';
 import 'export_tools.dart';
+import 'form_factor.dart' show isMobileDevice;
 import 'mount_spec.dart';
 import 'room_locations.dart';
 import 'screenshot_tools.dart';
@@ -90,6 +91,42 @@ class _WallElevationViewState extends State<WallElevationView> {
     _pan = Offset.zero;
   });
 
+  /// The wall and view last opened zoomed in on an iPad or iPhone - see
+  /// [_zoomToWall].
+  String _openedZoomedFor = '';
+
+  /// AN iPAD OR iPHONE OPENS A WALL ZOOMED TO IT. Fitted, the wall shares a
+  /// phone's width with the side area - the section, or the mounting
+  /// schedule - and its labels are too small to read until it is pinched.
+  /// So on first showing a wall (and on switching between Elevation and
+  /// Mounting) the wall itself is zoomed to the width of the drawing, its
+  /// left end at the left edge and its height centered. Once per wall and
+  /// view, so a zoom the reader chose is never undone; Fit shows the whole
+  /// sheet again.
+  void _zoomToWall(WallView shown, _WallLayout fit, Size box) {
+    final key = '${shown.id}|$_mounting';
+    if (key == _openedZoomedFor || !isMobileDevice || box.width >= 900) {
+      return;
+    }
+    _openedZoomedFor = key;
+    final h = shown.heightIn > 0 ? shown.heightIn : fit.tallest - 6;
+    final left = fit.at(0, 0);
+    final right = fit.at(shown.widthIn, 0);
+    final top = fit.at(0, h);
+    final span = (right.dx - left.dx).abs();
+    if (span <= 0) return;
+    final z = ((box.width - 32) / span).clamp(1.0, 8.0);
+    if (z <= 1.05) return;
+    final midY = (top.dy + left.dy) / 2;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _zoom = z;
+        _pan = Offset(16 - left.dx * z, box.height / 2 - midY * z);
+      });
+    });
+  }
+
   /// What was just added, highlighted until something else is picked.
   Set<String> _addedIds = const {};
 
@@ -155,10 +192,7 @@ class _WallElevationViewState extends State<WallElevationView> {
     }
     final wall = _wall(provider);
     final folded = BarFolds.isFolded('walls_header');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
+    final header = Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Wrap(
             spacing: 8,
@@ -174,15 +208,34 @@ class _WallElevationViewState extends State<WallElevationView> {
               if (!folded) ..._toolbar(provider, wall),
             ],
           ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: wall == null
-              ? _empty(provider)
-              : _body(provider, wall),
-        ),
-      ],
-    );
+        );
+    final body = wall == null ? _empty(provider) : _body(provider, wall);
+    return LayoutBuilder(builder: (context, box) {
+      // A PHONE: the buttons can be taller than the page - Mounting adds a
+      // row - and the wall had nothing left. The page scrolls instead: the
+      // buttons go up and away, and the wall and its list then fill the
+      // screen under them.
+      if (box.maxWidth < 900 && box.maxHeight < 900) {
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              const Divider(height: 1),
+              SizedBox(height: box.maxHeight, child: body),
+            ],
+          ),
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          const Divider(height: 1),
+          Expanded(child: body),
+        ],
+      );
+    });
   }
 
   List<Widget> _toolbar(AppStateProvider p, WallView? wall) => [
@@ -457,7 +510,29 @@ class _WallElevationViewState extends State<WallElevationView> {
         );
       }
       final total = box.maxHeight;
-      final panelH = (total * _panelShare).clamp(80.0, total - 160);
+      // TOO SHORT TO SHARE - a phone with the Mounting toolbar open: the
+      // drawing and the panel each get a usable height, one under the other,
+      // and this part of the page scrolls.
+      if (total < 420) {
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: 320, child: _canvas(p, wall, shown, issues)),
+              const Divider(height: 1),
+              SizedBox(height: 380, child: panel),
+            ],
+          ),
+        );
+      }
+      // The drawing keeps 160 and the handle 18 where it can; on a short
+      // page - a phone, with the Mounting toolbar open - both give way
+      // rather than asking for more than there is. clamp() with its top
+      // under its bottom throws, which is what drew this part of the page
+      // as an error.
+      final most = (total - 160 - 18).clamp(0.0, double.infinity);
+      final panelH =
+          (total * _panelShare).clamp(80.0 < most ? 80.0 : most, most);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -582,8 +657,9 @@ class _WallElevationViewState extends State<WallElevationView> {
     return LayoutBuilder(
       builder: (context, box) {
         _canvasSize = box.biggest;
-        final layout = _WallLayout.fit(shown, box.biggest, mounting: _mounting)
-            .zoomed(_zoom, _pan);
+        final fit = _WallLayout.fit(shown, box.biggest, mounting: _mounting);
+        _zoomToWall(shown, fit, box.biggest);
+        final layout = fit.zoomed(_zoom, _pan);
         return Focus(
           focusNode: _canvasFocus,
           onKeyEvent: (_, e) => _onKey(p, wall, e),
@@ -2714,6 +2790,9 @@ class _WallElevationPainter extends CustomPainter {
       _paintAdded(canvas);
       _paintMeasure(canvas);
       _paintMarks(canvas);
+      // The schedule over the drawing, not under it: a selected conduit
+      // running past the wall's end drew its outline across the table.
+      _paintSchedule(canvas, mountPlacements(wall));
       _paintKey(canvas, size);
       if (flags) _paintFlags(canvas, size);
       return;
@@ -3097,7 +3176,6 @@ class _WallElevationPainter extends CustomPainter {
     for (final m in placements) {
       _paintPlacement(canvas, m);
     }
-    _paintSchedule(canvas, placements);
     _text(
       canvas,
       '${wall.name.toUpperCase()} - MOUNTING LAYOUT',
