@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.260+270';
+const String kAppVersion = '0.5.261+271';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.261',
+    date: 'November 23, 2026',
+    title: 'iPhone: the screenshot button is back',
+    changes: [
+      'iPhone: the camera (Screenshot & annotate) is on the top bar again - it had been left off to save room, which left no way to annotate the screen.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.260',
     date: 'November 23, 2026',

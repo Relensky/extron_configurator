@@ -1375,7 +1375,8 @@ class _MainDashboardState extends State<MainDashboard> {
         // window's title bar.
         toolbarHeight: flat ? 34 : (_isMobile ? 44 : null),
         actions: [
-          if (!provider.settingsOpen && !phone)
+          // On a phone too: it is the only way to Annotate the screen.
+          if (!provider.settingsOpen)
             _ScreenshotButton(
               onCost: onCost,
               onScreen: () => _takeScreenshot(context, selectedIndex),

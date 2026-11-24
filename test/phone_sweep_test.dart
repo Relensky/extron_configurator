@@ -159,6 +159,16 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
+      // The camera is on the top bar, whole, with the bar's other buttons.
+      final width = tester.view.physicalSize.width;
+      for (final k in ['screenshot_menu', 'find_in_page_button']) {
+        final f = find.byKey(ValueKey(k));
+        expect(f, findsOneWidget, reason: '$k on the top bar');
+        final r = tester.getRect(f);
+        expect(r.left >= 0 && r.right <= width, isTrue,
+            reason: '$k on screen at ${c.name}: $r');
+      }
+
       for (final tab in AppTab.values) {
         where = tab.name;
         p.selectTab(tab.index);
