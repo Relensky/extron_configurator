@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.263+273';
+const String kAppVersion = '0.5.264+274';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.264',
+    date: 'November 24, 2026',
+    title: 'Cost: automatic device names copy and edit',
+    changes: [
+      'Cost: a device named automatically can have its name copied or edited - clicking into the name box puts the default name in it, all selected, and left unchanged it stays the automatic name.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.263',
     date: 'November 24, 2026',

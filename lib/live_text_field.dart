@@ -111,6 +111,11 @@ class LiveTextField extends StatefulWidget {
   /// How long a [lazy] box waits after the last key.
   static const Duration lazyPause = Duration(milliseconds: 400);
 
+  /// An empty box clicked into fills with [hint] as real text, all selected,
+  /// so a default can be copied or edited. Text equal to the hint still means
+  /// "nothing typed", and the box empties again on leaving it unchanged.
+  final bool hintEditable;
+
   const LiveTextField({
     super.key,
     required this.fieldId,
@@ -137,6 +142,7 @@ class LiveTextField extends StatefulWidget {
     this.clearable = false,
     this.warn = false,
     this.lazy = false,
+    this.hintEditable = false,
   });
 
   @override
@@ -167,13 +173,47 @@ class _LiveTextFieldState extends State<LiveTextField> {
     super.initState();
     // Clicking or tabbing away commits what was typed.
     _focus.addListener(() {
-      if (_focus.hasFocus) return;
+      if (_focus.hasFocus) {
+        _fillFromHint();
+        return;
+      }
       _flush();
+      // Left as the default: empty again, so it shows as the hint.
+      if (_filledFromHint && _controller.text == widget.hint) {
+        _controller.text = '';
+      }
+      _filledFromHint = false;
       widget.onDone?.call();
     });
   }
 
-  void _changed(String text) {
+  /// True while the box holds its hint as text - see [LiveTextField.hintEditable].
+  bool _filledFromHint = false;
+
+  void _fillFromHint() {
+    final hint = widget.hint ?? '';
+    if (!widget.hintEditable || hint.isEmpty || _controller.text.isNotEmpty) {
+      return;
+    }
+    _filledFromHint = true;
+    final all = TextSelection(baseOffset: 0, extentOffset: hint.length);
+    _controller.value = TextEditingValue(text: hint, selection: all);
+    // The click that focused the box places a cursor after this; select the
+    // whole default again unless it was a drag or double-click selection.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_focus.hasFocus || _controller.text != hint) return;
+      if (_controller.selection.isCollapsed) {
+        _controller.selection = all;
+      }
+    });
+  }
+
+  /// [text] as handed on: the untouched default is still "nothing typed".
+  String _value(String text) =>
+      _filledFromHint && text == widget.hint ? '' : text;
+
+  void _changed(String raw) {
+    final text = _value(raw);
     if (!widget.lazy) {
       widget.onChanged(text);
       return;
@@ -364,14 +404,16 @@ class _LiveTextFieldState extends State<LiveTextField> {
     onChanged: _changed,
     onSubmitted: (text) {
       _flush();
-      widget.onSubmitted?.call(text);
+      widget.onSubmitted?.call(_value(text));
       widget.onDone?.call();
     },
     onTapOutside: (_) {
       _flush();
       // Committing on focus loss as well as on Enter: a rename typed and then
       // clicked away from is still a rename the user made.
-      if (widget.onSubmitted != null) widget.onSubmitted!(_controller.text);
+      if (widget.onSubmitted != null) {
+        widget.onSubmitted!(_value(_controller.text));
+      }
       FocusManager.instance.primaryFocus?.unfocus();
     },
   );
