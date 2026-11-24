@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.262+272';
+const String kAppVersion = '0.5.263+273';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,14 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.263',
+    date: 'November 24, 2026',
+    title: 'Annotate: larger zoom buttons on the desktop too',
+    changes: [
+      'Annotate: the zoom out, zoom in, fit and actual-size buttons over the picture are the larger, finger-sized ones on the desktop as well as on iPad and iPhone, with a larger zoom percentage - the same as the CTS Dashboard.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.262',
     date: 'November 23, 2026',
