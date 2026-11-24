@@ -273,6 +273,9 @@ void main() {
       // One group, so it opens itself rather than making somebody click.
       expect(find.textContaining('Merge into'), findsOneWidget);
 
+      await tester
+          .ensureVisible(find.byKey(const ValueKey('dup_merge_60-1238-81')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('dup_merge_60-1238-81')));
       await tester.pumpAndSettle();
 
@@ -308,6 +311,24 @@ void main() {
       expect(find.textContaining('Merge into'), findsOneWidget);
     });
 
+    testWidgets('on a phone the note reads across, over the Merge button',
+        (tester) async {
+      // Opened wide (a phone folds the button away), then made phone-sized.
+      await pumpEditor(tester, twoHalves());
+      await tester.tap(find.byKey(const ValueKey('catalog_duplicates')));
+      await tester.pumpAndSettle();
+      tester.view.physicalSize = const Size(390, 844);
+      await tester.pumpAndSettle();
+      tester.takeException(); // the page behind may not fit a phone
+      final note = find.byKey(const ValueKey('dup_removes_60-1238-81'));
+      await tester.ensureVisible(note);
+      expect(tester.getSize(note).width, greaterThan(200));
+      final merge = find.byKey(const ValueKey('dup_merge_60-1238-81'));
+      expect(tester.getTopLeft(merge).dy,
+          greaterThan(tester.getBottomLeft(note).dy - 1));
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('the keeper can be the other one', (tester) async {
       final library = twoHalves();
       await pumpEditor(tester, library);
@@ -317,6 +338,9 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey('dup_keep_60-1238-81_IN1608 xi')),
       );
+      await tester.pumpAndSettle();
+      await tester
+          .ensureVisible(find.byKey(const ValueKey('dup_merge_60-1238-81')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('dup_merge_60-1238-81')));
       await tester.pumpAndSettle();

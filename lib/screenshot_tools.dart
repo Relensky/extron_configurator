@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import 'file_dialogs.dart';
+import 'form_factor.dart';
 import 'contrast.dart';
 import 'app_logger.dart';
 import 'app_snack.dart';
@@ -2074,13 +2075,16 @@ class _ZoomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // iPad and iPhone: finger-sized, the size of the toolbar's buttons.
+    final touch = isMobileDevice;
+    final hit = touch ? 44.0 : 32.0;
     Widget button(String suffix, IconData icon, String tip, VoidCallback tap) =>
         IconButton(
           key: ValueKey('${keyPrefix}_zoom_$suffix'),
-          icon: Icon(icon, size: 18),
+          icon: Icon(icon, size: touch ? 26 : 18),
           tooltip: tip,
           visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          constraints: BoxConstraints(minWidth: hit, minHeight: hit),
           padding: EdgeInsets.zero,
           onPressed: tap,
         );
@@ -2098,12 +2102,14 @@ class _ZoomBar extends StatelessWidget {
           children: [
             button('out', Icons.zoom_out, 'Zoom out', onOut),
             SizedBox(
-              width: 46,
+              width: touch ? 58 : 46,
               child: Text(
                 '${(scale * 100).round()}%',
                 key: ValueKey('${keyPrefix}_zoom_level'),
                 textAlign: TextAlign.center,
-                style: theme.textTheme.labelSmall,
+                style: touch
+                    ? theme.textTheme.labelLarge
+                    : theme.textTheme.labelSmall,
               ),
             ),
             button('in', Icons.zoom_in, 'Zoom in', onIn),

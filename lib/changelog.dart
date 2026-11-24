@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.259+269';
+const String kAppVersion = '0.5.260+270';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,16 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.260',
+    date: 'November 23, 2026',
+    title: 'iPhone: the team list, duplicate parts and annotate zoom',
+    changes: [
+      'Team on an iPhone: each person is a row of their own with every app they have open listed under them at full width, instead of a table squeezed to a few letters a column.',
+      'Catalog: in Duplicate part numbers the "Removes ..." note sits over the Merge button rather than beside it, so on a phone it reads across instead of a letter a line.',
+      'Annotate on iPad and iPhone: the zoom buttons and percentage are finger-sized.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.259',
     date: 'November 23, 2026',

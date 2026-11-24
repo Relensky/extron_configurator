@@ -309,4 +309,36 @@ void main() {
     expect(tester.takeException(), isNull);
     a.dispose();
   });
+
+  testWidgets('on a phone the team is a list: each person, then their apps',
+      (tester) async {
+    final now = DateTime.now();
+    final people = [
+      [
+        TeamPresence(user: 'alice', machine: 'pc1', since: now,
+            heartbeat: now, app: 'dashboard', tab: 'Schedule', room: 'BSS 103'),
+        TeamPresence(user: 'alice', machine: 'ipad', since: now,
+            heartbeat: now, app: 'configurator', tab: 'Walls'),
+      ],
+      [
+        TeamPresence(user: 'dan', machine: 'pc4', since: now,
+            heartbeat: now, app: 'configurator', tab: 'Rooms'),
+      ],
+    ];
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: SingleChildScrollView(
+                child: TeamPresenceChart(
+                    meUser: 'alice', people: people, onMessage: (_) {})))));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('team_presence_list')), findsOneWidget);
+    // The page names read in full, wider than a table column left them.
+    expect(find.text('Schedule'), findsOneWidget);
+    expect(tester.getSize(find.text('Schedule')).width, greaterThan(50));
+    expect(tester.getSize(find.byKey(const ValueKey('team_person_dan'))).width,
+        greaterThan(300));
+    expect(tester.takeException(), isNull);
+  });
 }

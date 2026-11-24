@@ -5499,6 +5499,97 @@ class TeamPresenceChart extends StatelessWidget {
       );
     }
 
+    // A phone: no room for a column per app, so each person is a block -
+    // who, then a full-width card for each app they have open.
+    Widget personBlock(List<TeamPresence> sessions) {
+      final first = sessions.first;
+      final me = first.user.toLowerCase() == meUser.toLowerCase();
+      final working = Team.claims?.forPerson(first.user).length ?? 0;
+      final activity = sessions
+          .map((p) => p.activity)
+          .firstWhere((a) => a.isNotEmpty, orElse: () => '');
+      return Container(
+        key: ValueKey('team_person_${first.user.toLowerCase()}'),
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+            border: Border(
+                bottom: BorderSide(
+                    color: scheme.outlineVariant.withValues(alpha: 0.5)))),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              TeamAvatar(first.user, size: 30),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(me ? '${first.label} (you)' : first.label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    Text(
+                        '${sessions.length} '
+                        '${sessions.length == 1 ? 'app' : 'apps'} open'
+                        '${working == 0 ? '' : ' · working on $working'}',
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: scheme.onSurfaceVariant)),
+                    if (activity.isNotEmpty)
+                      TeamActivityLine(activity,
+                          key: ValueKey(
+                              'team_person_activity_${first.user.toLowerCase()}'),
+                          size: 12),
+                  ],
+                ),
+              ),
+              if (!me && onMessage != null)
+                IconButton(
+                  tooltip: 'Message ${first.label} directly',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                  onPressed: () => onMessage!(first.user),
+                ),
+            ]),
+            for (final p in sessions)
+              Padding(
+                padding: const EdgeInsets.only(left: 30),
+                child: Row(children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, right: 2),
+                    child: Icon(TeamAppStyle.icon(TeamAppStyle.key(p.app)),
+                        size: 14,
+                        color: TeamAppStyle.color(
+                            TeamAppStyle.key(p.app), theme.brightness)),
+                  ),
+                  Expanded(child: cell(TeamAppStyle.key(p.app), p)),
+                ]),
+              ),
+          ],
+        ),
+      );
+    }
+
+    return LayoutBuilder(builder: (context, box) {
+      if (box.maxWidth < 520) {
+        return Column(
+          key: const ValueKey('team_presence_list'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [for (final sessions in people) personBlock(sessions)],
+        );
+      }
+      return _table(apps, header, personRow, scheme, theme);
+    });
+  }
+
+  Widget _table(
+    List<String> apps,
+    Widget Function(String) header,
+    TableRow Function(List<TeamPresence>) personRow,
+    ColorScheme scheme,
+    ThemeData theme,
+  ) {
     return Table(
       columnWidths: {
         0: const FlexColumnWidth(1.25),

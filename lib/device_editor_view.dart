@@ -4158,29 +4158,34 @@ class _DuplicatePartsDialogState extends State<_DuplicatePartsDialog> {
                   const SizedBox(height: 8),
                   ..._decisionTiles(theme, group),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          going.isEmpty
-                              ? ''
-                              : 'Removes ${going.join(', ')} from the '
-                                  'catalog. A room that names one of those '
-                                  'loses its connectors and its price, so '
-                                  'keep the name your rooms use.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
-                          ),
+                  // The note over the button, not beside it: on a phone
+                  // the button took the width and the note ran down the
+                  // dialog a letter a line.
+                  if (going.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Removes ${going.join(', ')} from the '
+                        'catalog. A room that names one of those '
+                        'loses its connectors and its price, so '
+                        'keep the name your rooms use.',
+                        key: ValueKey('dup_removes_$key'),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.hintColor,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        key: ValueKey('dup_merge_$key'),
-                        icon: const Icon(Icons.merge_type, size: 18),
-                        label: Text('Merge into ${keeper.model}'),
-                        onPressed: () => _merge(group),
+                    ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      key: ValueKey('dup_merge_$key'),
+                      icon: const Icon(Icons.merge_type, size: 18),
+                      label: Text(
+                        'Merge into ${keeper.model}',
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
+                      onPressed: () => _merge(group),
+                    ),
                   ),
                 ],
               ),
