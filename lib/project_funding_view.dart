@@ -1105,8 +1105,9 @@ class _ProjectFundingCardState extends State<ProjectFundingCard> {
                               ? 'Replaces everything'
                               : 'Replaces only '
                                     '${project.buysOnlyFor(p).join(', ')}',
-                          overflow: TextOverflow.ellipsis,
-
+                          // Whole, onto a second line when it must - cut
+                          // to "Replaces everythi..." it said nothing.
+                          softWrap: true,
                         ),
                       ),
                         ],

@@ -69,6 +69,21 @@ const List<double> kTimelineZoomSteps = <double>[
 /// thing in this app has the same range: a grid of cells is unreadable past
 /// twice size, and a timeline that has to get from six years down to one week
 /// needs a ladder an order of magnitude longer. See [kTimelineZoomSteps].
+/// EVERY ZOOM BUTTON IN THE APP, one size: finger-sized on iPad and iPhone,
+/// and on the desktop too, where the small ones were hard to hit with a mouse
+/// as well - the CTS Dashboard's size. Annotate, the campus and project
+/// calendars, the drawings, the walls and the document viewer all use it.
+const double kZoomButtonSize = 44;
+
+/// The icon in a zoom button - see [kZoomButtonSize].
+const double kZoomIconSize = 26;
+
+/// A zoom button's hit box - see [kZoomButtonSize].
+const BoxConstraints kZoomButtonConstraints = BoxConstraints(
+  minWidth: kZoomButtonSize,
+  minHeight: kZoomButtonSize,
+);
+
 double gridZoomIn(double zoom, [List<double> steps = kGridZoomSteps]) =>
     steps.firstWhere((s) => s > zoom + 0.001, orElse: () => zoom);
 
@@ -172,8 +187,10 @@ class GridZoomControls extends StatelessWidget {
           key: ValueKey('${keyPrefix}_zoom_out'),
           onPressed: out == zoom ? null : () => onChanged(out),
           icon: const Icon(Icons.zoom_out),
-          iconSize: 20,
-          visualDensity: VisualDensity.compact,
+          // Finger-sized, as every zoom button in the app - see
+          // [kZoomButtonSize].
+          iconSize: kZoomIconSize,
+          constraints: kZoomButtonConstraints,
           tooltip: zoomOutTooltip ?? 'Smaller cells, and more years in the frame',
         ),
         SizedBox(
@@ -200,7 +217,7 @@ class GridZoomControls extends StatelessWidget {
             child: Text(
               levelLabel ?? '${(zoom * 100).round()}%',
               textAlign: TextAlign.center,
-              style: theme.textTheme.labelMedium?.copyWith(
+              style: theme.textTheme.labelLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
@@ -210,8 +227,8 @@ class GridZoomControls extends StatelessWidget {
           key: ValueKey('${keyPrefix}_zoom_in'),
           onPressed: into == zoom ? null : () => onChanged(into),
           icon: const Icon(Icons.zoom_in),
-          iconSize: 20,
-          visualDensity: VisualDensity.compact,
+          iconSize: kZoomIconSize,
+          constraints: kZoomButtonConstraints,
           tooltip: zoomInTooltip ?? 'Bigger cells',
         ),
         // THE ONE PRESS THAT ANSWERS "how much of this is there". The steps
@@ -225,8 +242,8 @@ class GridZoomControls extends StatelessWidget {
             isSelected: fitted,
             icon: const Icon(Icons.fit_screen_outlined),
             selectedIcon: const Icon(Icons.fit_screen),
-            iconSize: 20,
-            visualDensity: VisualDensity.compact,
+            iconSize: kZoomIconSize,
+            constraints: kZoomButtonConstraints,
             tooltip: fitted
                 ? 'Fitted to the window - press to leave it at this size'
                 : 'Fit the whole sheet in the window',
@@ -245,6 +262,10 @@ class PinnedGrid extends StatefulWidget {
   /// The frozen column's width, and the header row's height. The [corner]
   /// occupies the overlap of the two.
   final double frozenWidth;
+
+  /// The most of the width the frozen column may take - see the cap in
+  /// build. A third by default; an iPhone's campus gives its names more.
+  final double maxFrozenShare;
   final double headerHeight;
 
   /// The full size of the scrolling half, at its natural size — what the
@@ -360,6 +381,7 @@ class PinnedGrid extends StatefulWidget {
   const PinnedGrid({
     super.key,
     required this.frozenWidth,
+    this.maxFrozenShare = 0.34,
     required this.headerHeight,
     required this.bodyWidth,
     required this.bodyHeight,
@@ -507,7 +529,7 @@ class _PinnedGridState extends State<PinnedGrid> {
         // there is and ellipsizes instead.
         final frozenWidth = math.min(
           widget.frozenWidth,
-          math.max(72.0, box.maxWidth * 0.34),
+          math.max(72.0, box.maxWidth * widget.maxFrozenShare),
         );
         final viewWidth = math.max(0.0, box.maxWidth - frozenWidth);
 

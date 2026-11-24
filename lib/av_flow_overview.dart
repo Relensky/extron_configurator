@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:material_ui/material_ui.dart';
+import 'pinned_grid.dart' show kZoomIconSize, kZoomButtonConstraints;
 
 /// ============================================================================
 ///  ZOOM, AND A MAGNIFIER FOR A DRAWING ZOOMED OUT TO FIT
@@ -148,11 +149,12 @@ class AvZoomBar extends StatelessWidget {
             {bool on = false}) =>
         IconButton(
           key: ValueKey('av_zoom_$key'),
-          icon: Icon(icon, size: 18),
+          // Finger-sized, as every zoom button in the app - see
+          // [kZoomButtonSize].
+          icon: Icon(icon, size: kZoomIconSize),
           tooltip: tip,
           isSelected: on,
-          visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          constraints: kZoomButtonConstraints,
           padding: EdgeInsets.zero,
           onPressed: tap,
         );
@@ -167,7 +169,7 @@ class AvZoomBar extends StatelessWidget {
           children: [
             button('out', Icons.zoom_out, 'Zoom out', onOut),
             SizedBox(
-              width: 48,
+              width: 58,
               child: ListenableBuilder(
                 listenable: controller,
                 builder: (context, _) {
@@ -178,7 +180,7 @@ class AvZoomBar extends StatelessWidget {
                         : '${pct.round()}%',
                     key: const ValueKey('av_zoom_level'),
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.labelSmall,
+                    style: theme.textTheme.labelLarge,
                   );
                 },
               ),

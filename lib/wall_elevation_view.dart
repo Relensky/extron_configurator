@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'pinned_grid.dart' show kZoomIconSize, kZoomButtonConstraints;
 import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
@@ -370,7 +371,8 @@ class _WallElevationViewState extends State<WallElevationView> {
           IconButton(
             key: const ValueKey('wall_zoom_out'),
             tooltip: 'Zoom out (or the mouse wheel)',
-            icon: const Icon(Icons.zoom_out, size: 18),
+            icon: const Icon(Icons.zoom_out, size: kZoomIconSize),
+            constraints: kZoomButtonConstraints,
             onPressed: () => _zoomAt(_canvasSize.center(Offset.zero), 1 / 1.25),
           ),
           Text('${(_zoom * 100).round()}%'),
@@ -378,7 +380,8 @@ class _WallElevationViewState extends State<WallElevationView> {
             key: const ValueKey('wall_zoom_in'),
             tooltip: 'Zoom in (or the mouse wheel); drag empty wall to move '
                 'around',
-            icon: const Icon(Icons.zoom_in, size: 18),
+            icon: const Icon(Icons.zoom_in, size: kZoomIconSize),
+            constraints: kZoomButtonConstraints,
             onPressed: () => _zoomAt(_canvasSize.center(Offset.zero), 1.25),
           ),
           TextButton(

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
+import 'pinned_grid.dart' show kZoomIconSize, kZoomButtonConstraints;
 import 'package:pdfrx/pdfrx.dart';
 
 import 'app_state.dart';
@@ -224,12 +225,16 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
                 IconButton(
                   key: const ValueKey('document_viewer_zoom_out'),
                   icon: const Icon(Icons.zoom_out),
+                  iconSize: kZoomIconSize,
+                  constraints: kZoomButtonConstraints,
                   tooltip: 'Zoom out',
                   onPressed: () => _zoom(inwards: false),
                 ),
                 IconButton(
                   key: const ValueKey('document_viewer_zoom_in'),
                   icon: const Icon(Icons.zoom_in),
+                  iconSize: kZoomIconSize,
+                  constraints: kZoomButtonConstraints,
                   tooltip: 'Zoom in',
                   onPressed: () => _zoom(inwards: true),
                 ),

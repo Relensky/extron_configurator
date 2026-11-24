@@ -1264,7 +1264,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     // [toolbarUndoTarget].
                     ToolbarUndoButtons(tab: currentTab),
                     // WHO CHANGED WHAT, from wherever you are standing.
-                    // (iPad and iPhone: in the More menu - see [_MoreMenu].)
+                    // (iPad and iPhone: in your avatar's menu - see [_MobileProfileButton].)
                     if (!isMobileDevice)
                     IconButton(
                       key: const ValueKey('show_history'),
@@ -1408,19 +1408,24 @@ class _MainDashboardState extends State<MainDashboard> {
           // The chat's button hovers in the page's corner
           // (TeamChatHoverButton), or sits here with "Team chat in the top
           // bar" on in App Config.
-          // iPad and iPhone have the Team button in the More menu - see
-          // [_MoreMenu].
+          // iPad and iPhone have the Team button in your avatar's menu -
+          // see [_MobileProfileButton].
           TeamToolbarButtons(
             onTeam: () => showTeamPage(context),
             onChat: () => TeamChatPanel.instance.toggle(context),
             showChat: provider.teamChatInTopBar,
             showTeam: !isMobileDevice,
           ),
-          // iPad and iPhone: Team, Search, Find, Notes, History and Revert
-          // in one menu, so the bar keeps Undo and Redo whole and has room
-          // for finger-sized buttons.
+          // iOS: the CTS share, the offline copy and its sync - see
+          // ios_share_button.dart. Nothing on the desktop.
+          const IosShareButton(),
+          // YOU, in the corner - and the way into Settings, Help and the
+          // light/dark switch. See [ProfileButton]. iPad and iPhone: Team,
+          // Search, Find, Notes, History and Revert are in its menu too, so
+          // the bar keeps Undo and Redo whole and has room for finger-sized
+          // buttons.
           if (isMobileDevice)
-            _MoreMenu(
+            _MobileProfileButton(
               onTeam: () => showTeamPage(context),
               onSearch: () => showProjectSearch(context),
               onFind: () => RoomConfigApp.findKey.currentState?.open(),
@@ -1433,13 +1438,9 @@ class _MainDashboardState extends State<MainDashboard> {
               onRevert: provider.canUndoLastSave
                   ? () => _undoLastSave(context, provider)
                   : null,
-            ),
-          // iOS: the CTS share, the offline copy and its sync - see
-          // ios_share_button.dart. Nothing on the desktop.
-          const IosShareButton(),
-          // YOU, in the corner - and the way into Settings, Help and the
-          // light/dark switch. See [ProfileButton].
-          const ProfileButton(),
+            )
+          else
+            const ProfileButton(),
           const SizedBox(width: 4),
         ],
       ),
@@ -2381,7 +2382,9 @@ class TopLevelBar extends StatelessWidget {
       // IconButton already carries its own margin, so twelve more pixels only
       // left it floating short of the edge.
       child: Padding(
-        padding: EdgeInsets.fromLTRB(0, _isMobile ? 0 : 4, 0, _isMobile ? 0 : 4),
+        // iPad: a small gap under the top row's buttons.
+        padding: EdgeInsets.fromLTRB(
+            0, tablet ? 6 : (_isMobile ? 0 : 4), 0, tablet ? 2 : (_isMobile ? 0 : 4)),
         child: Theme(
           // Tablet: the strip shrinks to its buttons' compact size.
           data: phoneLandscape(context)
@@ -2431,18 +2434,16 @@ class TopLevelBar extends StatelessWidget {
               // mis-sized button rather than a more important one.
               (onProject ? FilledButton.icon : FilledButton.tonalIcon)(
                 key: const ValueKey('banner_project'),
-                icon: Icon(Icons.apartment, size: tablet ? 26 : 22),
+                icon: Icon(Icons.apartment, size: tablet ? 24 : 22),
                 // iPhone: the icon says it; the word took a third of the bar.
                 label: Text(isPhone(context) ? '' : 'Project'),
                 // iPad: the desktop's size and more - it is a finger's
                 // target, and the one that changes mode.
                 style: FilledButton.styleFrom(
                   padding: EdgeInsets.symmetric(
-                      horizontal: tablet ? 28 : (_isMobile ? 14 : 24)),
-                  minimumSize: Size(0, tablet ? 48 : (_isMobile ? 34 : 44)),
-                  textStyle: tablet
-                      ? theme.textTheme.titleLarge
-                      : theme.textTheme.titleMedium,
+                      horizontal: tablet ? 20 : (_isMobile ? 14 : 24)),
+                  minimumSize: Size(0, tablet ? 40 : (_isMobile ? 34 : 44)),
+                  textStyle: theme.textTheme.titleMedium,
                 ),
                 onPressed: () => onSelect(AppTab.project.index),
               ),
@@ -3368,7 +3369,15 @@ Widget _settingsAction(BuildContext context, Widget button) => SizedBox(
 /// opens your profile, and is the way into Application Configuration - the
 /// same menu the debugger app has.
 class ProfileButton extends StatelessWidget {
-  const ProfileButton({super.key});
+  /// More entries, at the top of the menu under who you are - the top bar's
+  /// lesser buttons on iPad and iPhone. See [_MobileProfileButton].
+  final List<ProfileMenuExtra> extras;
+
+  /// A green count on the avatar - the team online, when [extras] holds
+  /// Team. Nothing at 0.
+  final int badge;
+
+  const ProfileButton({super.key, this.extras = const [], this.badge = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -3397,6 +3406,9 @@ class ProfileButton extends StatelessWidget {
         }
         if (v == 'theme') provider.toggleTheme();
         if (v == 'help') showHelpBook(context);
+        if (v.startsWith('extra_')) {
+          extras[int.parse(v.substring(6))].onTap?.call();
+        }
       },
       itemBuilder: (context) => [
         // Who you are, in full ink - a disabled item greyed the name and
@@ -3418,6 +3430,21 @@ class ProfileButton extends StatelessWidget {
           ),
         ),
         const PopupMenuDivider(),
+        for (var i = 0; i < extras.length; i++) ...[
+          if (extras[i].dividerBefore) const PopupMenuDivider(),
+          PopupMenuItem<String>(
+            value: 'extra_$i',
+            enabled: extras[i].onTap != null,
+            child: ListTile(
+              key: ValueKey(extras[i].key),
+              contentPadding: EdgeInsets.zero,
+              enabled: extras[i].onTap != null,
+              leading: Icon(extras[i].icon),
+              title: Text(extras[i].label),
+            ),
+          ),
+          if (i == extras.length - 1) const PopupMenuDivider(),
+        ],
         const PopupMenuItem<String>(
           value: 'profile',
           child: ListTile(
@@ -3510,11 +3537,33 @@ class ProfileButton extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: CollabAvatarCircle(user: user, picture: picture, radius: 15),
+          child: Badge(
+            isLabelVisible: badge > 0,
+            backgroundColor: Colors.green,
+            label: Text('$badge'),
+            child:
+                CollabAvatarCircle(user: user, picture: picture, radius: 15),
+          ),
         ),
       ),
     );
   }
+}
+
+/// One more entry in [ProfileButton]'s menu.
+class ProfileMenuExtra {
+  final String key;
+  final IconData icon;
+  final String label;
+
+  /// Null: shown greyed out.
+  final VoidCallback? onTap;
+
+  /// A line above this one.
+  final bool dividerBefore;
+
+  const ProfileMenuExtra(this.key, this.icon, this.label, this.onTap,
+      {this.dividerBefore = false});
 }
 
 /// Your profile: name, email and avatar, how the app looks to you, and what
@@ -6981,12 +7030,13 @@ class _GoogleSignInRowState extends State<_GoogleSignInRow> {
 
 
 
-/// iPad and iPhone: the top bar's lesser buttons in one menu - Team (its
-/// online count on the menu's own badge), Search every chat and project,
-/// Find on this page (Ctrl+F on the desktop), Notes (Ctrl+N), History and
-/// Revert to the saved backup - so the bar fits Undo and Redo whole and its
-/// buttons can be finger-sized. The desktop keeps a button each.
-class _MoreMenu extends StatelessWidget {
+/// iPad and iPhone: [ProfileButton] with the top bar's lesser buttons in
+/// its menu - Team (its online count on the avatar), Search every chat and
+/// project, Find on this page (Ctrl+F on the desktop), Notes (Ctrl+N),
+/// History and Revert to the saved backup - so the bar fits Undo and Redo
+/// whole and its buttons can be finger-sized. The desktop keeps a button
+/// each.
+class _MobileProfileButton extends StatelessWidget {
   final VoidCallback onTeam;
   final VoidCallback onSearch;
   final VoidCallback onFind;
@@ -6995,7 +7045,7 @@ class _MoreMenu extends StatelessWidget {
 
   /// Null when nothing has been saved over a file yet.
   final VoidCallback? onRevert;
-  const _MoreMenu({
+  const _MobileProfileButton({
     required this.onTeam,
     required this.onSearch,
     required this.onFind,
@@ -7004,23 +7054,6 @@ class _MoreMenu extends StatelessWidget {
     required this.onRevert,
   });
 
-  PopupMenuItem<VoidCallback> _item(
-    String key,
-    IconData icon,
-    String label,
-    VoidCallback? action,
-  ) =>
-      PopupMenuItem(
-        key: ValueKey(key),
-        value: action,
-        enabled: action != null,
-        child: ListTile(
-          leading: Icon(icon),
-          title: Text(label),
-          enabled: action != null,
-        ),
-      );
-
   @override
   Widget build(BuildContext context) {
     final presence = Team.presence;
@@ -7028,21 +7061,12 @@ class _MoreMenu extends StatelessWidget {
     return ListenableBuilder(
       listenable: presence ?? const _NoChanges(),
       builder: (context, _) {
-        final online =
-            teamOn ? teamPeople(presence.others).length : 0;
-        return PopupMenuButton<VoidCallback>(
-          key: const ValueKey('phone_more_menu'),
-          tooltip: 'More',
-          icon: Badge(
-            isLabelVisible: online > 0,
-            backgroundColor: Colors.green,
-            label: Text('$online'),
-            child: const Icon(Icons.more_vert),
-          ),
-          onSelected: (action) => action(),
-          itemBuilder: (context) => [
+        final online = teamOn ? teamPeople(presence.others).length : 0;
+        return ProfileButton(
+          badge: online,
+          extras: [
             if (teamOn)
-              _item(
+              ProfileMenuExtra(
                 'team_button',
                 Icons.groups_outlined,
                 online == 0
@@ -7050,15 +7074,15 @@ class _MoreMenu extends StatelessWidget {
                     : 'Team - $online online',
                 onTeam,
               ),
-            _item('global_search', Icons.manage_search,
+            ProfileMenuExtra('global_search', Icons.manage_search,
                 'Search every chat and project', onSearch),
-            _item('find_in_page_button', Icons.find_in_page_outlined,
-                'Find on this page', onFind),
-            _item('notes_button', Icons.sticky_note_2_outlined, 'Notes',
-                onNotes),
-            const PopupMenuDivider(),
-            _item('show_history', Icons.history, 'History', onHistory),
-            _item('revert_to_backup', Icons.settings_backup_restore,
+            ProfileMenuExtra('find_in_page_button',
+                Icons.find_in_page_outlined, 'Find on this page', onFind),
+            ProfileMenuExtra('notes_button', Icons.sticky_note_2_outlined,
+                'Notes', onNotes),
+            ProfileMenuExtra('show_history', Icons.history, 'History',
+                onHistory, dividerBefore: true),
+            ProfileMenuExtra('revert_to_backup', Icons.settings_backup_restore,
                 'Revert to the saved backup', onRevert),
           ],
         );
@@ -7067,7 +7091,7 @@ class _MoreMenu extends StatelessWidget {
   }
 }
 
-/// A [Listenable] that never fires - for [_MoreMenu] with no team.
+/// A [Listenable] that never fires - for [_MobileProfileButton] with no team.
 class _NoChanges implements Listenable {
   const _NoChanges();
   @override

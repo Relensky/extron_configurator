@@ -42,6 +42,7 @@ import 'project_notes_view.dart';
 import 'project_plans_view.dart';
 import 'project_pricing.dart';
 import 'collapsible_bar.dart' show BarFolds;
+import 'choice_chips_row.dart';
 import 'form_factor.dart' show isPhone, phoneLandscape;
 import 'procurement_log.dart' show kProcurementCompanies;
 import 'procurement_sync.dart' show liveProcurement;
@@ -3895,7 +3896,55 @@ List<Widget> partsSlivers(
   }
   final byRoom = context.watch<AppStateProvider>().projectPartsByRoom;
 
+  final phone = isPhone(context);
+  final searchField = LiveTextField(
+    fieldId: 'project_part_search',
+    initial: search,
+    label: 'Search parts',
+    hint: 'model, part number, maker',
+    onChanged: onSearch,
+  );
+  void setByRoom(bool v) =>
+      context.read<AppStateProvider>().setProjectPartsByRoom(v);
+
   return [
+    // iPhone: the search across the width, and under it All parts / By room
+    // as chips and the sort, each whole and readable - beside the search
+    // they were squeezed until "All parts" broke in two.
+    if (phone)
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              searchField,
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  ChoiceChipsRow<bool>(
+                    key: const ValueKey('project_parts_by_room'),
+                    keyPrefix: 'project_parts_by_room',
+                    choices: const {false: 'All parts', true: 'By room'},
+                    selected: byRoom,
+                    onChanged: setByRoom,
+                  ),
+                  if (onSortExact != null)
+                    _PartSortMenu(
+                      sort: sort,
+                      ascending: sortAscending,
+                      onChanged: onSortExact,
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      )
+    else
     SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
@@ -5453,9 +5502,11 @@ class _PartRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
+            // Stacked (a phone): wide enough for a package's whole name -
+            // at 180 "Room hardware" read "Room hardw...".
             cell(
               3,
-              180,
+              stacked ? 280 : 180,
               _VendorPicker(line: line, estimate: estimate),
             ),
             if (_companyColumn(context)) const SizedBox(width: 8),

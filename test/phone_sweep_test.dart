@@ -163,7 +163,7 @@ void main() {
       // The camera is on the top bar, whole, with the bar's other buttons.
       final width = tester.view.physicalSize.width;
       for (final k in [
-        'screenshot_menu', 'phone_more_menu', 'banner_name_line',
+        'screenshot_menu', 'profile_button', 'banner_name_line',
       ]) {
         final f = find.byKey(ValueKey(k));
         expect(f, findsOneWidget, reason: '$k on the top bar');
@@ -171,12 +171,12 @@ void main() {
         expect(r.left >= 0 && r.right <= width, isTrue,
             reason: '$k on screen at ${c.name}: $r');
       }
-      // Find, Notes and History are in the More menu.
-      await tester.tap(find.byKey(const ValueKey('phone_more_menu')));
+      // Find, Notes and History are in your avatar's menu.
+      await tester.tap(find.byKey(const ValueKey('profile_button')));
       await tester.pumpAndSettle();
       for (final k in ['find_in_page_button', 'notes_button', 'show_history']) {
         expect(find.byKey(ValueKey(k)), findsOneWidget,
-            reason: '$k in the More menu');
+            reason: '$k in the avatar menu');
       }
       await tester.tapAt(const Offset(5, 400));
       await tester.pumpAndSettle();
@@ -184,7 +184,7 @@ void main() {
       final undo = find.byType(ToolbarUndoButtons);
       if (undo.evaluate().isNotEmpty) {
         final firstAction = [
-          for (final k in ['screenshot_menu', 'phone_more_menu'])
+          for (final k in ['screenshot_menu', 'profile_button'])
             if (find.byKey(ValueKey(k)).evaluate().isNotEmpty)
               tester.getRect(find.byKey(ValueKey(k))).left,
         ].reduce((a, b) => a < b ? a : b);
@@ -213,14 +213,29 @@ void main() {
       p.selectTab(AppTab.project.index);
       await tester.pumpAndSettle();
       for (final pane in [
-        'rooms', 'parts', 'plans', 'timeline', 'deliveries', 'lifecycle',
-        'responsibility', 'procurement', 'vendors', 'todo', 'notes',
+        'rooms', 'labor', 'parts', 'plans', 'timeline', 'deliveries',
+        'lifecycle', 'responsibility', 'procurement', 'vendors', 'todo',
+        'notes',
       ]) {
         where = 'project $pane';
         final key = find.byKey(ValueKey('project_pane_$pane'));
         if (key.evaluate().isEmpty) continue;
         await tester.tap(key.first, warnIfMissed: false);
         await tester.pumpAndSettle();
+        // The pick-one rows read whole: each label on one line.
+        for (final label in [
+          'All parts', 'By room', 'Project order', 'Room name',
+          'Labor amount',
+        ]) {
+          for (final e in find.text(label).evaluate()) {
+            final box = e.renderObject as RenderBox;
+            if (!box.attached || !box.hasSize) continue;
+            final style = DefaultTextStyle.of(e).style;
+            final line = (style.fontSize ?? 14) * (style.height ?? 1.5) * 2;
+            expect(box.size.height, lessThan(line),
+                reason: '"$label" broke onto two lines at ${c.name}');
+          }
+        }
       }
       FlutterError.onError = saved;
       for (final f in failures.toSet()) {

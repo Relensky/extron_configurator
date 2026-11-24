@@ -1,4 +1,6 @@
 import 'package:material_ui/material_ui.dart';
+import 'choice_chips_row.dart';
+import 'form_factor.dart' show isPhone;
 
 import 'cost_estimate.dart';
 import 'project_estimate.dart';
@@ -139,6 +141,19 @@ List<Widget> laborSlivers(
                   hint: 'Each room\'s crews and the rates they are costed '
                       'from. Open a room to see its lines.',
                 ),
+                // iPhone: chips that wrap, each label whole - four
+                // segments across a phone broke every word in two.
+                if (isPhone(context))
+                  ChoiceChipsRow<LaborRoomSort>(
+                    key: const ValueKey('project_labor_sort'),
+                    keyPrefix: 'project_labor_sort_chip',
+                    choices: {
+                      for (final s in LaborRoomSort.values) s: s.label,
+                    },
+                    selected: sort,
+                    onChanged: onSort,
+                  )
+                else
                 SegmentedButton<LaborRoomSort>(
                   key: const ValueKey('project_labor_sort'),
                   style: const ButtonStyle(

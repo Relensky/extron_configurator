@@ -6,7 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
-import 'form_factor.dart' show isPhone;
+import 'form_factor.dart' show isMobileDevice, isPhone;
 import 'file_dialogs.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
@@ -899,6 +899,7 @@ class _CampusViewState extends State<_CampusView> {
     // labels on ran off the right-hand edge - which is a button that cannot
     // be pressed on a screen that had room for it.
     final compact = MediaQuery.sizeOf(context).width < 1300;
+    final tools = _tools(campus, compact);
 
     return Scaffold(
       appBar: AppBar(
@@ -938,7 +939,33 @@ class _CampusViewState extends State<_CampusView> {
             ),
           ],
         ),
-        actions: [
+        // iPad and iPhone: the controls on a line of their own under the
+        // Campus button - beside it they ran under it.
+        actions: isMobileDevice ? null : tools,
+        bottom: isMobileDevice
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(48),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SingleChildScrollView(
+                    key: const ValueKey('campus_tools_line'),
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.only(left: 4),
+                    child: IconTheme.merge(
+                      data: const IconThemeData(size: 24),
+                      child: Row(children: tools),
+                    ),
+                  ),
+                ),
+              )
+            : null,
+      ),
+      body: _body(campus),
+    );
+  }
+
+  /// The app bar's controls - see [build].
+  List<Widget> _tools(CampusLifecycle? campus, bool compact) => [
           // FOUR CONTROLS, NOT SIX. The bar carries the mode strip as well
           // now, and six full-width buttons beside it ran off the edge of a
           // laptop - so the two ways of adding jobs share a menu, and so do
@@ -1075,9 +1102,11 @@ class _CampusViewState extends State<_CampusView> {
             ),
           ),
           const SizedBox(width: 12),
-        ],
-      ),
-      body: _reading && campus == null
+        ];
+
+  Widget _body(CampusLifecycle? campus) {
+    final theme = Theme.of(context);
+    return _reading && campus == null
           ? const Center(child: CircularProgressIndicator())
           : campus == null || campus.jobs.isEmpty
               ? _EmptyCampus(onAddFiles: _addFiles, onAddFolder: _addFolder)
@@ -1210,8 +1239,7 @@ class _CampusViewState extends State<_CampusView> {
                         ),
                     ],
                   ],
-                ),
-    );
+                );
   }
 }
 
@@ -1459,7 +1487,11 @@ class _CampusYearGridState extends State<CampusYearGrid> {
     // The reader's display scale, and then the reader's own zoom on top of it
     // - see [LifecycleYearGrid] for why those are two different questions.
     final yearColumn = gridMetric(context, 92) * zoom;
-    final rowHeight = gridMetric(context, 30) * zoom;
+    // iPhone: a building's name on two lines, the rows tall enough for
+    // them - in the third of the width the name column gets, one line cut
+    // every name to its first word.
+    final phone = isPhone(context);
+    final rowHeight = gridMetric(context, phone ? 50 : 30) * zoom;
     final nameColumn = naturalName * zoom;
     final headHeight = gridMetric(context, 26) * zoom;
     final barRow = gridMetric(context, 46) * zoom;
@@ -1488,13 +1520,14 @@ class _CampusYearGridState extends State<CampusYearGrid> {
               'REPLACEMENT YEAR, ACROSS THE CAMPUS',
               style: headStyle?.copyWith(fontWeight: FontWeight.bold),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            // Wrapped too, so on an iPhone the zoom buttons drop under the
+            // Cycle picker rather than off the edge.
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: gridMetric(context, 12),
+              runSpacing: gridMetric(context, 4),
               children: [
-                if (widget.headerAction != null) ...[
-                  widget.headerAction!,
-                  SizedBox(width: gridMetric(context, 12)),
-                ],
+                ?widget.headerAction,
                 GridZoomControls(
                   keyPrefix: 'campus',
                   zoom: zoom,
@@ -1524,6 +1557,8 @@ class _CampusYearGridState extends State<CampusYearGrid> {
         SizedBox(height: gridMetric(context, 8)),
         PinnedGrid(
           frozenWidth: nameColumn,
+          // iPhone: nearly half the width for the names, on two lines.
+          maxFrozenShare: phone ? 0.46 : 0.34,
           headerHeight: headHeight,
           bodyWidth: yearColumn * years.length,
           bodyHeight: rowHeight * (jobs.length + 1) + barRow,
@@ -1571,6 +1606,7 @@ class _CampusYearGridState extends State<CampusYearGrid> {
                         message: j.name,
                         child: Text(
                           j.name,
+                          maxLines: phone ? 2 : 1,
                           overflow: TextOverflow.ellipsis,
                           style: zoomed.bodyMedium,
                         ),
