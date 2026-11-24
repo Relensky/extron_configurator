@@ -17526,10 +17526,14 @@ class AppStateProvider extends ChangeNotifier {
         lastOnlinePublishFailed = [
           for (final f in published.failed) f.split(' - ').first,
         ];
+        // "Open or locked" only fits a file; the Sheet says its own reason.
+        final fileFailed = published.failed
+            .any((f) => !f.startsWith(kOnlineSheetLabel));
+        final why = fileFailed ? ' - a file may be open or locked' : '';
         if (published.written.isNotEmpty && published.failed.isNotEmpty) {
           AppLogger.logError(
-            'The online copy was only partly updated on save - a file may be '
-            'open or locked: ${published.failed.join('; ')}',
+            'The online copy was only partly updated on save$why: '
+            '${published.failed.join('; ')}',
           );
         }
         if (published.written.isEmpty) {
@@ -17538,8 +17542,7 @@ class AppStateProvider extends ChangeNotifier {
           // The stamp is left alone by publishOnlineCopy, so the box on the
           // Project tab still says how old the copy people are reading is.
           AppLogger.logError(
-            'The online copy could not be updated on save - a file may be '
-            'open or locked: '
+            'The online copy could not be updated on save$why: '
             '${published.failed.join('; ')}',
           );
         }

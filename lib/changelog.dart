@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.264+274';
+const String kAppVersion = '0.5.265+275';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,15 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.265',
+    date: 'November 24, 2026',
+    title: 'Asks to save before a Windows sign-out; clearer Google Sheet errors',
+    changes: [
+      'Signing out of Windows or shutting down with unsaved work no longer closes the app without asking: Windows lists it as preventing sign-out, a recovery copy is written at once, and the app asks whether to save, the same as its close button.',
+      'Online copy: a Google client set up with no client secret now says so, instead of saying you are not signed in to Google, and a Google Sheet that was not updated is no longer described as a file that is open or locked.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.264',
     date: 'November 24, 2026',

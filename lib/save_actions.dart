@@ -32,6 +32,20 @@ import 'project_setup_dialog.dart';
 import 'room_review.dart' show confirmRoomUnlocked;
 import 'room_sidecar.dart' show roomConfigDisplayName, roomConfigPathIn;
 
+/// The brief note after a save that left part of the online copy behind.
+/// Only files are called "open or locked"; the Sheet has its own reasons.
+String onlineCopyFailedMessage(List<String> failed) {
+  final sheet = failed.contains(kOnlineSheetLabel);
+  final files = failed.where((f) => f != kOnlineSheetLabel).toList();
+  if (files.isEmpty) return 'The Google Sheet was not updated. See the log.';
+  final locked = '${files.join(', ')} ${files.length == 1 ? 'is' : 'are'} '
+      'open or locked';
+  return sheet
+      ? 'Online copy not updated - the Google Sheet failed and $locked. '
+          'See the log.'
+      : 'Online copy not updated - $locked. See the log.';
+}
+
 /// ============================================================================
 ///  ONE SAVE BUTTON THAT KNOWS WHAT YOU ARE LOOKING AT
 /// ============================================================================
@@ -318,12 +332,7 @@ Future<bool> _runSave(
           SnackBar(
             key: const ValueKey('online_copy_locked'),
             duration: const Duration(seconds: 2),
-            content: Text(
-              locked.every((f) => f == kOnlineSheetLabel)
-                  ? 'The Google Sheet was not updated. See the log.'
-                  : 'Online copy not updated - ${locked.join(', ')} is open '
-                      'or locked. See the log.',
-            ),
+            content: Text(onlineCopyFailedMessage(locked)),
             backgroundColor: snackErrorFillOn(messenger),
           ),
         ).closed.then((_) {
