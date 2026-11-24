@@ -13,6 +13,7 @@ import 'package:extron_configurator/collapsible_bar.dart';
 import 'package:extron_configurator/form_factor.dart';
 import 'package:flutter/rendering.dart';
 import 'package:extron_configurator/main.dart';
+import 'package:extron_configurator/undo_bar.dart';
 
 /// ============================================================================
 ///  A SMALL IPHONE, WITH A ROOM OPEN
@@ -161,12 +162,26 @@ void main() {
 
       // The camera is on the top bar, whole, with the bar's other buttons.
       final width = tester.view.physicalSize.width;
-      for (final k in ['screenshot_menu', 'find_in_page_button']) {
+      for (final k in [
+        'screenshot_menu', 'find_in_page_button', 'notes_button',
+        'banner_name_line',
+      ]) {
         final f = find.byKey(ValueKey(k));
         expect(f, findsOneWidget, reason: '$k on the top bar');
         final r = tester.getRect(f);
         expect(r.left >= 0 && r.right <= width, isTrue,
             reason: '$k on screen at ${c.name}: $r');
+      }
+      // Undo and Redo, at the left, still whole beside the buttons.
+      final undo = find.byType(ToolbarUndoButtons);
+      if (undo.evaluate().isNotEmpty) {
+        final firstAction = [
+          for (final k in ['screenshot_menu', 'team_button', 'notes_button'])
+            if (find.byKey(ValueKey(k)).evaluate().isNotEmpty)
+              tester.getRect(find.byKey(ValueKey(k))).left,
+        ].reduce((a, b) => a < b ? a : b);
+        expect(tester.getRect(undo.first).right, lessThanOrEqualTo(firstAction),
+            reason: 'Undo and Redo squeezed at ${c.name}');
       }
 
       for (final tab in AppTab.values) {

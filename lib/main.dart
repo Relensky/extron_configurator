@@ -1411,6 +1411,19 @@ class _MainDashboardState extends State<MainDashboard> {
               onPressed: () =>
                   RoomConfigApp.findKey.currentState?.open(),
             ),
+          // NOTES, for a touch screen: Ctrl+N needs a keyboard. The same
+          // floating notes the key opens - see notes_window.dart.
+          if (isMobileDevice)
+            IconButton(
+              key: const ValueKey('notes_button'),
+              tooltip: 'Notes',
+              icon: const Icon(Icons.sticky_note_2_outlined),
+              onPressed: () {
+                NotesHost.instance.dockContext =
+                    () => RoomConfigApp.navigatorKey.currentContext;
+                NotesPanel.toggle(context);
+              },
+            ),
           // iOS: the CTS share, the offline copy and its sync - see
           // ios_share_button.dart. Nothing on the desktop.
           const IosShareButton(),
@@ -2318,6 +2331,32 @@ class TopLevelBar extends StatelessWidget {
       minRatio: kContrastLarge,
     );
 
+    final phone = isPhone(context);
+    final Widget nameText = Text(
+      // The name of whatever this strip is about - see
+      // [_bannerDocumentName].
+      state.documentName,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.titleSmall?.copyWith(
+        color: hasProject && state.projectDirty
+            // The banner is a fill, so the container answer
+            // — but held to the small-text bar, because
+            // "— unsaved" is the smallest and most
+            // important red on the page.
+            ? legibleTone(
+                errorOn(theme.colorScheme, bannerFill),
+                bannerFill)
+            : readableOn(
+                bannerFill,
+                prefer: [
+                  theme.textTheme.bodySmall?.color ??
+                      theme.colorScheme.onSurfaceVariant,
+                  theme.colorScheme.onSurface,
+                ],
+              ),
+      ),
+    );
+
     return Material(
       color: bannerFill,
       // Tight on purpose. Every pixel this takes is a pixel off the drawing
@@ -2500,37 +2539,16 @@ class TopLevelBar extends StatelessWidget {
                 builder: (context, slot) => Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        // The name of whatever this strip is about - see
-                        // [_bannerDocumentName].
-                        state.documentName,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: hasProject && state.projectDirty
-                              // The banner is a fill, so the container answer
-                              // — but held to the small-text bar, because
-                              // "— unsaved" is the smallest and most
-                              // important red on the page.
-                              ? legibleTone(
-                                  errorOn(theme.colorScheme, bannerFill),
-                                  bannerFill)
-                              : readableOn(
-                                  bannerFill,
-                                  prefer: [
-                                    theme.textTheme.bodySmall?.color ??
-                                        theme.colorScheme.onSurfaceVariant,
-                                    theme.colorScheme.onSurface,
-                                  ],
-                                ),
-                        ),
-                      ),
+                      // A phone gives the name a line of its own, under
+                      // this row - beside the buttons it had no room.
+                      child: phone ? const SizedBox.shrink() : nameText,
                     ),
                     if (selectedIndex >= 0 &&
                         selectedIndex < AppTab.values.length)
                       CollabPresenceStrip(
                         tab: AppTab.values[selectedIndex],
                         shareWidth: slot.maxWidth,
-                        showIncoming: !isPhone(context),
+                        showIncoming: !phone,
                       ),
                   ],
                 ),
@@ -2576,7 +2594,16 @@ class TopLevelBar extends StatelessWidget {
             ),
           ],
         ),
-          if (isPhone(context) &&
+          if (phone && state.documentName.isNotEmpty)
+            Padding(
+              key: const ValueKey('banner_name_line'),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: DefaultTextStyle.merge(
+                maxLines: 2,
+                child: nameText,
+              ),
+            ),
+          if (phone &&
               selectedIndex >= 0 &&
               selectedIndex < AppTab.values.length)
             CollabIncomingRow(tab: AppTab.values[selectedIndex]),
