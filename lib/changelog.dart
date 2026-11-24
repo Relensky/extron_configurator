@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.263+273';
+const String kAppVersion = '0.5.265+275';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -33,7 +33,7 @@ class ChangelogEntry {
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
-    version: '0.5.263',
+    version: '0.5.265',
     date: 'November 24, 2026',
     title: 'iPad and iPhone: a More menu and bigger buttons; sync job by job; Walls: double-tap to measure',
     changes: [
@@ -43,6 +43,22 @@ const List<ChangelogEntry> kChangelog = [
       'iPad and iPhone: the CTS share panel lists each job kept on the device. Turn one off to stop syncing it (its files stay, and its changes wait), or press its sync button to sync that job alone.',
       'Screenshot & annotate takes the whole screen - the bars, the tabs and the page. "Just the page" under the camera takes the page alone, as before.',
       'Walls: with an item selected, double-tap (or double-click) another to measure to it - easier than the long press, which still works, as does Shift+click.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.264',
+    date: 'November 24, 2026',
+    title: 'Cost: automatic device names copy and edit',
+    changes: [
+      'Cost: a device named automatically can have its name copied or edited - clicking into the name box puts the default name in it, all selected, and left unchanged it stays the automatic name.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.263',
+    date: 'November 24, 2026',
+    title: 'Annotate: larger zoom buttons on the desktop too',
+    changes: [
+      'Annotate: the zoom out, zoom in, fit and actual-size buttons over the picture are the larger, finger-sized ones on the desktop as well as on iPad and iPhone, with a larger zoom percentage - the same as the CTS Dashboard.',
     ],
   ),
   ChangelogEntry(

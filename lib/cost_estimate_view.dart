@@ -6878,6 +6878,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         initial: provider.avCost.lineNames[line.key] ?? '',
         hint: line.defaultName,
         hintIsValue: true,
+        // The default name copies and edits like a typed one.
+        hintEditable: true,
         outlineColor: auto ? theme.colorScheme.tertiary : null,
         outlineOnlyWhenEmpty: true,
         hintStyle: auto
