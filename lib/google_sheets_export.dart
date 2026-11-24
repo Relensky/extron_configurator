@@ -72,6 +72,12 @@ const kBuiltInGoogleClientSecret =
   }
 }
 
+/// Said when the Google client has an ID but no secret.
+const kGoogleNoSecretMessage =
+    'the Google client in App Config > Working together > Advanced has no '
+    'client secret - add it there, then press Publish in the Online copy box '
+    'once';
+
 const kXlsxMime =
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const kGoogleSheetMime = 'application/vnd.google-apps.spreadsheet';
@@ -131,6 +137,11 @@ class GoogleSheetsUploader {
         'Google sign-in is not available in this copy - set up a client '
         'under App Config > Working together > Advanced.',
       );
+    }
+    // Desktop and web clients both need their secret; without it Google
+    // refuses every sign-in.
+    if (clientSecret.trim().isEmpty) {
+      throw const GoogleSheetsException(kGoogleNoSecretMessage);
     }
     final token = await _accessTokenFromRefresh();
     if (token != null) return token;
@@ -310,6 +321,9 @@ class GoogleSheetsUploader {
       final res = await req.close();
       final text = await res.transform(utf8.decoder).join();
       if (res.statusCode < 200 || res.statusCode >= 300) {
+        if (text.contains('client_secret is missing')) {
+          throw const GoogleSheetsException(kGoogleNoSecretMessage);
+        }
         throw GoogleSheetsException(
           'Google sign-in failed (${res.statusCode}): ${_errorText(text)}',
         );

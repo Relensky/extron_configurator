@@ -18,6 +18,44 @@
 static std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
     g_window_chrome;
 
+// Windows sign-out and shutdown. Dart says when there is unsaved work; while
+// there is, WM_QUERYENDSESSION is refused (Windows shows the reason on its
+// "apps are preventing sign-out" screen) and Dart is asked to save.
+static std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+    g_session_end;
+static bool g_unsaved = false;
+
+static void SetupSessionEnd(flutter::FlutterEngine* engine,
+                            flutter::FlutterView* view) {
+  g_session_end =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          engine->messenger(), "rcb/session_end",
+          &flutter::StandardMethodCodec::GetInstance());
+  g_session_end->SetMethodCallHandler(
+      [view](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() != "setUnsaved") {
+          result->NotImplemented();
+          return;
+        }
+        const auto* on = std::get_if<bool>(call.arguments());
+        g_unsaved = on && *on;
+        HWND hwnd =
+            view ? GetAncestor(view->GetNativeWindow(), GA_ROOT) : nullptr;
+        if (hwnd) {
+          if (g_unsaved) {
+            ShutdownBlockReasonCreate(
+                hwnd, L"Unsaved changes - switch to Room Config Builder to "
+                      L"save them.");
+          } else {
+            ShutdownBlockReasonDestroy(hwnd);
+          }
+        }
+        result->Success();
+      });
+}
+
 static int ReadInt(const flutter::EncodableValue& v) {
   if (const auto* i = std::get_if<int32_t>(&v)) return *i;
   if (const auto* l = std::get_if<int64_t>(&v)) return static_cast<int>(*l);
@@ -117,6 +155,8 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetupWindowChrome(flutter_controller_->engine(),
                     flutter_controller_->view());
+  SetupSessionEnd(flutter_controller_->engine(),
+                  flutter_controller_->view());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -143,6 +183,13 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // Sign-out or shutdown with unsaved work: refuse, and ask Dart to save.
+  // Answered at once - Windows only waits a few seconds for it.
+  if (message == WM_QUERYENDSESSION && g_unsaved) {
+    if (g_session_end) g_session_end->InvokeMethod("sessionEnding", nullptr);
+    return FALSE;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

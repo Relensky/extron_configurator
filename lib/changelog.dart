@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.265+275';
+const String kAppVersion = '0.5.266+276';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -33,7 +33,7 @@ class ChangelogEntry {
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
-    version: '0.5.265',
+    version: '0.5.266',
     date: 'November 24, 2026',
     title: 'iPad and iPhone: the avatar menu and bigger buttons; sync job by job; Walls: double-tap to measure',
     changes: [
@@ -48,6 +48,15 @@ const List<ChangelogEntry> kChangelog = [
       'Every zoom in / zoom out button is the large, finger-sized one, on iPad, iPhone and the desktop: the campus and project calendars (Lifecycle, Timeline, Procurement, Responsibility), the AV flow and floor plan drawings, Walls and the document viewer - as Annotate\'s already were.',
       'Campus on iPad and iPhone: the campus\'s buttons (Add jobs, Undo, Redo, Open, Save, Hand over) have a line of their own under the Campus button, which they ran under. On iPhone the zoom buttons drop under the Cycle picker, and each building\'s name has nearly half the width and two lines, so it reads rather than "Acker Gymn...".',
       'Walls: with an item selected, double-tap (or double-click) another to measure to it - easier than the long press, which still works, as does Shift+click.',
+    ],
+  ),
+  ChangelogEntry(
+    version: '0.5.265',
+    date: 'November 24, 2026',
+    title: 'Asks to save before a Windows sign-out; clearer Google Sheet errors',
+    changes: [
+      'Signing out of Windows or shutting down with unsaved work no longer closes the app without asking: Windows lists it as preventing sign-out, a recovery copy is written at once, and the app asks whether to save, the same as its close button.',
+      'Online copy: a Google client set up with no client secret now says so, instead of saying you are not signed in to Google, and a Google Sheet that was not updated is no longer described as a file that is open or locked.',
     ],
   ),
   ChangelogEntry(

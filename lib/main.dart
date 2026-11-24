@@ -41,6 +41,7 @@ import 'campus_lifecycle_view.dart'
     show showCampusLifecycle, showCampusLifecycleFile, showNewCampus;
 import 'app_activity.dart';
 import 'app_scale.dart';
+import 'session_end_guard.dart';
 import 'responsive.dart';
 import 'room_review.dart' show RoomReviewMenu;
 import 'app_state.dart';
@@ -728,6 +729,19 @@ class _MainDashboardState extends State<MainDashboard> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
+    // Sign-out and shutdown skip the X button; the runner holds them up while
+    // anything is unsaved. Cheap checks only - this runs on every change.
+    if (SessionEndGuard.supported) {
+      final provider = context.read<AppStateProvider>();
+      _sessionEnd = SessionEndGuard(
+        listenable: provider,
+        unsaved: () =>
+            provider.roomNeverSaved ||
+            provider.roomShowsUnsaved ||
+            provider.projectDirty,
+        onSessionEnding: _onSessionEnding,
+      )..start();
+    }
     // A project picked in the chat search opens the way the File menu opens
     // one, unsaved-work question and all.
     projectSearchOpenProject = (file) async {
@@ -740,7 +754,34 @@ class _MainDashboardState extends State<MainDashboard> {
   @override
   void dispose() {
     _lifecycle?.dispose();
+    _sessionEnd?.dispose();
     super.dispose();
+  }
+
+  SessionEndGuard? _sessionEnd;
+
+  /// Windows is signing out or shutting down and the runner has held it up:
+  /// copy the work to recovery now, in case it is forced anyway, then ask the
+  /// same question as the X button.
+  Future<void> _onSessionEnding() async {
+    if (!mounted || _exitPromptOpen) return;
+    final provider = context.read<AppStateProvider>();
+    AppLogger.logInfo(
+      'Windows asked to sign out or shut down with unsaved work - held up '
+      'to ask about saving.',
+    );
+    await provider.writeAutosaveSnapshot(force: true);
+    unawaited(
+      const MethodChannel('rcb/window_chrome')
+          .invokeMethod<void>('focus')
+          .catchError((_) {}),
+    );
+    if (!mounted) return;
+    final response = await _exitResponse();
+    if (response != ui.AppExitResponse.exit) return;
+    await AppLogger.logInfo('Closed for a Windows sign-out or shutdown.');
+    AppLogger.endSession();
+    await ServicesBinding.instance.exitApplication(ui.AppExitType.required);
   }
 
   Future<ui.AppExitResponse> _onExitRequested() async {
