@@ -163,8 +163,7 @@ void main() {
       // The camera is on the top bar, whole, with the bar's other buttons.
       final width = tester.view.physicalSize.width;
       for (final k in [
-        'screenshot_menu', 'find_in_page_button', 'notes_button',
-        'banner_name_line',
+        'screenshot_menu', 'phone_more_menu', 'banner_name_line',
       ]) {
         final f = find.byKey(ValueKey(k));
         expect(f, findsOneWidget, reason: '$k on the top bar');
@@ -172,11 +171,20 @@ void main() {
         expect(r.left >= 0 && r.right <= width, isTrue,
             reason: '$k on screen at ${c.name}: $r');
       }
+      // Find, Notes and History are in the More menu.
+      await tester.tap(find.byKey(const ValueKey('phone_more_menu')));
+      await tester.pumpAndSettle();
+      for (final k in ['find_in_page_button', 'notes_button', 'show_history']) {
+        expect(find.byKey(ValueKey(k)), findsOneWidget,
+            reason: '$k in the More menu');
+      }
+      await tester.tapAt(const Offset(5, 400));
+      await tester.pumpAndSettle();
       // Undo and Redo, at the left, still whole beside the buttons.
       final undo = find.byType(ToolbarUndoButtons);
       if (undo.evaluate().isNotEmpty) {
         final firstAction = [
-          for (final k in ['screenshot_menu', 'team_button', 'notes_button'])
+          for (final k in ['screenshot_menu', 'phone_more_menu'])
             if (find.byKey(ValueKey(k)).evaluate().isNotEmpty)
               tester.getRect(find.byKey(ValueKey(k))).left,
         ].reduce((a, b) => a < b ? a : b);

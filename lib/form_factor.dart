@@ -36,6 +36,10 @@ bool isPhone(BuildContext context) {
   return size.shortestSide < 600;
 }
 
+/// True on a tablet: a mobile device that is not a phone - see [isPhone].
+bool isTablet(BuildContext context) =>
+    isMobileDevice && !isPhone(context);
+
 /// The tabs a phone shows, besides Project in the bar across the top. The
 /// rest - the catalog, the schema, the drawings that need a pointer and a big
 /// screen - stay on the desktop and the iPad.

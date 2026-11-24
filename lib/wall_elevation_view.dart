@@ -140,6 +140,14 @@ class _WallElevationViewState extends State<WallElevationView> {
   /// The item measured to from the selected one; '' for none.
   String _measureId = '';
 
+  /// The last tap on the drawing - when, where, and what was selected before
+  /// it - so a second tap on the same spot reads as a double-tap: the
+  /// selection before the pair stays, and what was double-tapped becomes the
+  /// Measure to target. See the canvas's onTapUp.
+  DateTime? _lastTapAt;
+  Offset _lastTapPos = Offset.zero;
+  String _selectedBeforeTap = '';
+
   /// Point to point: a mark on the selected item, and one anywhere.
   String _markFrom = '';
   String _markTo = '';
@@ -624,6 +632,17 @@ class _WallElevationViewState extends State<WallElevationView> {
           );
   }
 
+  /// On a phone the result is in the panel under the wall: say so.
+  void _measuringTo(String name) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        duration: const Duration(seconds: 3),
+        content: Text('Measuring to $name - the distances are under '
+            'Measure to.'),
+      ));
+  }
+
   /// [wall] with the drag in progress applied, so the check runs live.
   WallView _preview(WallView wall) {
     if (_dragId.isEmpty) return wall;
@@ -685,9 +704,36 @@ class _WallElevationViewState extends State<WallElevationView> {
                 setState(() => _measureId = hit.id);
                 return;
               }
+              // DOUBLE-TAP: Shift+click for a touch screen (or a mouse).
+              // The first tap selected what it landed on; the second puts
+              // back what was selected before and measures to this one.
+              // Timed by hand, not onDoubleTap, so one tap still selects at
+              // once rather than after the double-tap wait.
+              final now = DateTime.now();
+              final twice = _lastTapAt != null &&
+                  now.difference(_lastTapAt!) <
+                      const Duration(milliseconds: 400) &&
+                  (d.localPosition - _lastTapPos).distance < 40;
+              if (twice &&
+                  hit != null &&
+                  _selectedBeforeTap.isNotEmpty &&
+                  hit.id != _selectedBeforeTap &&
+                  shown.item(_selectedBeforeTap) != null) {
+                _lastTapAt = null;
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _itemId = _selectedBeforeTap;
+                  _measureId = hit.id;
+                });
+                _measuringTo(hit.name);
+                return;
+              }
+              _lastTapAt = now;
+              _lastTapPos = d.localPosition;
+              _selectedBeforeTap = _itemId;
               setState(() => _itemId = hit?.id ?? '');
             },
-            // LONG PRESS: Shift+click for a touch screen. With an item
+            // LONG PRESS: as the double-tap above. With an item
             // selected, holding another measures to it; with nothing
             // selected, it selects what it is held on.
             onLongPressStart: (d) {
@@ -697,14 +743,7 @@ class _WallElevationViewState extends State<WallElevationView> {
               HapticFeedback.selectionClick();
               if (_itemId.isNotEmpty && hit.id != _itemId) {
                 setState(() => _measureId = hit.id);
-                // On a phone the result is in the panel under the wall.
-                ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(SnackBar(
-                    duration: const Duration(seconds: 3),
-                    content: Text('Measuring to ${hit.name} - the distances '
-                        'are under Measure to.'),
-                  ));
+                _measuringTo(hit.name);
                 return;
               }
               setState(() => _itemId = hit.id);
@@ -1825,7 +1864,7 @@ class _ItemEditor extends StatelessWidget {
         decoration: const InputDecoration(
           labelText: 'Measure to',
           helperText:
-              'Or long-press it, or Shift+click it, on the drawing',
+              'Or double-tap it, or Shift+click it, on the drawing',
         ),
         items: [
           const DropdownMenuItem(value: '', child: Text('Nothing')),

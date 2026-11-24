@@ -9,7 +9,7 @@
 /// installed. Each entry's date range is the real record of when it happened.
 library;
 
-const String kAppVersion = '0.5.262+272';
+const String kAppVersion = '0.5.263+273';
 
 /// [kAppVersion] without the build number, for display.
 String get kAppVersionShort => kAppVersion.split('+').first;
@@ -32,6 +32,19 @@ class ChangelogEntry {
 
 /// Newest first.
 const List<ChangelogEntry> kChangelog = [
+  ChangelogEntry(
+    version: '0.5.263',
+    date: 'November 24, 2026',
+    title: 'iPad and iPhone: a More menu and bigger buttons; sync job by job; Walls: double-tap to measure',
+    changes: [
+      'iPad and iPhone: Team, Search, Find on this page, Notes, History and Revert are in a More menu (the three dots) on the top bar, so Undo and Redo are no longer cut off. The dots show how many of the team are online.',
+      'iPad: the top bar and the project bar have bigger, finger-sized buttons, and the Project button is larger.',
+      'iPad: the "saved - Combine" message has a line of its own under the project bar, so it no longer covers Save and the bar\'s other buttons.',
+      'iPad and iPhone: the CTS share panel lists each job kept on the device. Turn one off to stop syncing it (its files stay, and its changes wait), or press its sync button to sync that job alone.',
+      'Screenshot & annotate takes the whole screen - the bars, the tabs and the page. "Just the page" under the camera takes the page alone, as before.',
+      'Walls: with an item selected, double-tap (or double-click) another to measure to it - easier than the long press, which still works, as does Shift+click.',
+    ],
+  ),
   ChangelogEntry(
     version: '0.5.262',
     date: 'November 23, 2026',

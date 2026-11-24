@@ -303,6 +303,38 @@ void main() {
       expect(ShareSync.keptFolders, ['$ctUnc\\Projects\\BMU']);
     });
 
+    test('a paused job waits; it syncs alone when asked', () async {
+      write(share('A/A_project.json'), '{"a":1}');
+      write(share('B/B_project.json'), '{"b":1}');
+      ShareSync.keepFolderOf(share('A/A_project.json'));
+      ShareSync.keepFolderOf(share('B/B_project.json'));
+      await ShareSync.syncNow();
+      final aUnc = '$ctUnc\\Projects\\A';
+      final bUnc = '$ctUnc\\Projects\\B';
+
+      ShareSync.setPaused(bUnc, true);
+      expect(ShareSync.isPaused(bUnc), isTrue);
+      write(copy('A/A_project.json'), '{"a":2}', minutesAgo: 1);
+      write(copy('B/B_project.json'), '{"b":2}', minutesAgo: 1);
+      write(share('B/new.json'), '{}');
+      await ShareSync.syncNow();
+      // A went up; B waited, both ways, and still counts as waiting.
+      expect(File(share('A/A_project.json')).readAsStringSync(), '{"a":2}');
+      expect(File(share('B/B_project.json')).readAsStringSync(), '{"b":1}');
+      expect(File(copy('B/new.json')).existsSync(), isFalse);
+      expect(ShareSync.status.value.pending, 1);
+
+      // B on its own, though paused.
+      write(copy('A/A_project.json'), '{"a":3}', minutesAgo: 0);
+      await ShareSync.syncFolder(bUnc);
+      expect(File(share('B/B_project.json')).readAsStringSync(), '{"b":2}');
+      expect(File(copy('B/new.json')).existsSync(), isTrue);
+      // ...and A was left alone.
+      expect(File(share('A/A_project.json')).readAsStringSync(), '{"a":2}');
+      expect(ShareSync.isPaused(bUnc), isTrue);
+      expect(ShareSync.isPaused(aUnc), isFalse);
+    });
+
     test('a whole job comes down, rooms in other folders too', () async {
       write(share('BMU/BMU_project.json'), '{"rooms":[]}');
       write(share('BMU/plans/level1.pdf'), 'pdf');

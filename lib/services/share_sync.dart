@@ -324,16 +324,104 @@ class ShareSync {
     _saveSettings(s);
   }
 
-  /// The share folders kept, as share paths, none inside another.
+  /// The kept job folders whose sync is paused, as share paths: their files
+  /// stay on this device, and their changes wait here, until the sync is
+  /// turned back on or the folder is synced on its own ([syncFolder]).
+  static List<String> get pausedFolders =>
+      ((_settings()['paused'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList();
+
+  /// Whether [unc]'s sync is paused - see [pausedFolders].
+  static bool isPaused(String unc) {
+    final key = unc.toLowerCase();
+    return pausedFolders.any((f) => f.toLowerCase() == key);
+  }
+
+  /// Pauses [unc]'s sync, or turns it back on (and syncs it now).
+  static void setPaused(String unc, bool paused) {
+    final s = _settings();
+    final key = unc.toLowerCase();
+    final list = ((s['paused'] as List?) ?? [])
+        .map((e) => '$e')
+        .where((f) => f.toLowerCase() != key)
+        .toList();
+    if (paused) list.add(unc);
+    s['paused'] = list;
+    _saveSettings(s);
+    AppLogger.logInfo(
+      'Offline copy: ${paused ? 'paused' : 'resumed'} the sync of $unc.',
+    );
+    if (!paused && !IosShare.offline) unawaited(syncFolder(unc));
+  }
+
+  /// While [syncFolder] runs: the one folder it syncs.
+  static List<String>? _only;
+
+  /// The share folders kept, as share paths, none inside another - less the
+  /// paused ones, or just the one folder [syncFolder] is syncing.
   static List<String> get scope {
+    final only = _only;
+    if (only != null) return only;
+    return [
+      for (final u in _keptScope)
+        if (!isPaused(u)) u,
+    ];
+  }
+
+  /// Every folder kept on this device, paused or not.
+  static List<String> get _keptScope {
     if (keepEveryJob) return [IosShare.projectsUnc, ..._readOnly];
     return [configuratorUnc, ...keptFolders, ..._readOnly];
   }
 
   /// [scope] less the folders that are only ever brought down.
-  static List<String> get _sendScope {
+  static List<String> get _sendScope => _sendable(scope);
+
+  /// [folders] less the folders that are only ever brought down.
+  static List<String> _sendable(List<String> folders) {
     final ro = {for (final r in _readOnly) r.toLowerCase()};
-    return [for (final u in scope) if (!ro.contains(u.toLowerCase())) u];
+    return [for (final u in folders) if (!ro.contains(u.toLowerCase())) u];
+  }
+
+  /// The files held for review outside [only] - kept through a sync of
+  /// [only] alone, which looked at nothing else. Nothing when [only] is null.
+  static List<String> _heldOutside(List<String>? only) {
+    if (only == null) return const [];
+    final prefixes = [
+      for (final unc in only)
+        if (IosShare.mirrorPathFor(unc) case final String dir)
+          p
+              .relative(dir, from: IosShare.mirrorRoot)
+              .replaceAll('\\', '/')
+              .toLowerCase(),
+    ];
+    return [
+      for (final rel in status.value.held)
+        if (!prefixes.any((x) {
+          final r = rel.toLowerCase();
+          return r == x || r.startsWith('$x/');
+        }))
+          rel,
+    ];
+  }
+
+  /// Syncs [unc] alone - sends its changes and brings down the share's -
+  /// whether or not its sync is paused, and leaves every other folder as it
+  /// is. Waits for a sync already running.
+  static Future<ShareSyncResult> syncFolder(String unc) async {
+    if (!_on || !IosShare.active) return ShareSyncResult();
+    while (_running != null) {
+      try {
+        await _running;
+      } catch (_) {}
+    }
+    _only = [unc];
+    try {
+      return await syncNow();
+    } finally {
+      _only = null;
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -440,7 +528,7 @@ class ShareSync {
         running: false,
         lastSync: pull ? DateTime.now() : status.value.lastSync,
         message: words,
-        held: [...result.held],
+        held: [..._heldOutside(_only), ...result.held],
       );
     } catch (e, stack) {
       AppLogger.logError('Offline copy: sync stopped', e, stack);
@@ -457,7 +545,7 @@ class ShareSync {
   static Future<void> _countPending() async {
     if (!IosShare.active) return;
     try {
-      final n = await _changedHere(_readManifest()).length;
+      final n = await _changedHere(_readManifest(), all: true).length;
       if (n != status.value.pending) {
         status.value = status.value.copyWith(pending: n);
       }
@@ -470,9 +558,14 @@ class ShareSync {
 
   /// The files in the copy, inside [scope], changed since they were synced
   /// (or made here), relative to the share's top with '/'.
-  static Stream<String> _changedHere(Map<String, _Seen> manifest) async* {
+  /// [all]: every kept folder, paused ones too - for the count waiting and
+  /// for a discard, which covers everything changed here.
+  static Stream<String> _changedHere(
+    Map<String, _Seen> manifest, {
+    bool all = false,
+  }) async* {
     final mirror = IosShare.mirrorRoot;
-    for (final unc in _sendScope) {
+    for (final unc in all ? _sendable(_keptScope) : _sendScope) {
       final dir = IosShare.mirrorPathFor(unc);
       if (dir == null || !await Directory(dir).exists()) continue;
       await for (final f in _walk(Directory(dir))) {
@@ -694,7 +787,7 @@ class ShareSync {
         : null;
     final mirror = IosShare.mirrorRoot;
     final manifest = _readManifest();
-    final changed = await _changedHere(manifest).toList();
+    final changed = await _changedHere(manifest, all: true).toList();
     if (changed.isEmpty) return 0;
     final stamp = DateTime.now()
         .toIso8601String()

@@ -682,6 +682,10 @@ class _MainDashboardState extends State<MainDashboard> {
   /// screenshot annotator.
   final GlobalKey _captureKey = GlobalKey();
 
+  /// The whole window - the bars, the rail, the page and a docked chat -
+  /// for the screenshot button. [_captureKey] is the page alone.
+  final GlobalKey _screenKey = GlobalKey();
+
   /// THE WINDOW'S X BUTTON, INTERCEPTED.
   ///
   /// Flutter's desktop embedders ask the app before the window closes, and
@@ -769,15 +773,17 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
-  /// Captures the current content area and opens the annotation editor. The
-  /// default file name embeds the active tab + date.
-  void _takeScreenshot(BuildContext context, int selectedIndex) {
+  /// Captures the whole window (or, with [pageOnly], the page under the
+  /// bars) and opens the annotation editor. The default file name embeds the
+  /// active tab + date.
+  void _takeScreenshot(BuildContext context, int selectedIndex,
+      {bool pageOnly = false}) {
     final tabToken =
         (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
             ? AppTab.values[selectedIndex].token
             : 'view';
     final dateToken = DateTime.now().toLocal().toIso8601String().split('T').first;
-    captureAndAnnotate(context, _captureKey,
+    captureAndAnnotate(context, pageOnly ? _captureKey : _screenKey,
         defaultFileName: '${tabToken}_screenshot_$dateToken.png');
   }
 
@@ -1201,6 +1207,8 @@ class _MainDashboardState extends State<MainDashboard> {
     ];
 
     final phone = isPhone(context);
+    // An iPad: the bars' buttons finger-sized - see [isTablet].
+    final tablet = isTablet(context);
     // A phone on its side: the screen is about 400 high, so the bars give
     // their height back to the page - see [phoneLandscape].
     final flat = phoneLandscape(context);
@@ -1256,8 +1264,8 @@ class _MainDashboardState extends State<MainDashboard> {
                     // [toolbarUndoTarget].
                     ToolbarUndoButtons(tab: currentTab),
                     // WHO CHANGED WHAT, from wherever you are standing.
-                    // (Not on a phone: the bar has room for the essentials.)
-                    if (!phone)
+                    // (iPad and iPhone: in the More menu - see [_MoreMenu].)
+                    if (!isMobileDevice)
                     IconButton(
                       key: const ValueKey('show_history'),
                       icon: const Icon(Icons.history),
@@ -1269,7 +1277,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     // '<name>_previous.json' copy the save took of the file
                     // beforehand. Not Undo - it reads a FILE off disk and
                     // replaces the room with it.
-                    if (!phone)
+                    if (!isMobileDevice)
                     IconButton(
                       key: const ValueKey('revert_to_backup'),
                       icon: const Icon(Icons.settings_backup_restore),
@@ -1373,15 +1381,20 @@ class _MainDashboardState extends State<MainDashboard> {
         titleSpacing: 4,
         // A tablet's bar is the height of its buttons, not a desktop
         // window's title bar.
-        toolbarHeight: flat ? 34 : (_isMobile ? 44 : null),
+        // An iPad's are finger-sized: taller, with bigger icons.
+        toolbarHeight: flat ? 34 : (tablet ? 56 : (_isMobile ? 44 : null)),
+        iconTheme: tablet ? const IconThemeData(size: 28) : null,
+        actionsIconTheme: tablet ? const IconThemeData(size: 28) : null,
         actions: [
           // On a phone too: it is the only way to Annotate the screen.
           if (!provider.settingsOpen)
             _ScreenshotButton(
               onCost: onCost,
               onScreen: () => _takeScreenshot(context, selectedIndex),
+              onPage: () =>
+                  _takeScreenshot(context, selectedIndex, pageOnly: true),
             ),
-          if (!phone)
+          if (!isMobileDevice)
           IconButton(
             key: const ValueKey('global_search'),
             tooltip: 'Search every chat and project',
@@ -1395,34 +1408,31 @@ class _MainDashboardState extends State<MainDashboard> {
           // The chat's button hovers in the page's corner
           // (TeamChatHoverButton), or sits here with "Team chat in the top
           // bar" on in App Config.
+          // iPad and iPhone have the Team button in the More menu - see
+          // [_MoreMenu].
           TeamToolbarButtons(
             onTeam: () => showTeamPage(context),
             onChat: () => TeamChatPanel.instance.toggle(context),
             showChat: provider.teamChatInTopBar,
+            showTeam: !isMobileDevice,
           ),
-          // FIND ON THIS PAGE, for a touch screen: Ctrl+F needs a keyboard,
-          // and an iPad or iPhone usually has none. The same bar the key
-          // opens - see find_in_page.dart.
+          // iPad and iPhone: Team, Search, Find, Notes, History and Revert
+          // in one menu, so the bar keeps Undo and Redo whole and has room
+          // for finger-sized buttons.
           if (isMobileDevice)
-            IconButton(
-              key: const ValueKey('find_in_page_button'),
-              tooltip: 'Find on this page',
-              icon: const Icon(Icons.find_in_page_outlined),
-              onPressed: () =>
-                  RoomConfigApp.findKey.currentState?.open(),
-            ),
-          // NOTES, for a touch screen: Ctrl+N needs a keyboard. The same
-          // floating notes the key opens - see notes_window.dart.
-          if (isMobileDevice)
-            IconButton(
-              key: const ValueKey('notes_button'),
-              tooltip: 'Notes',
-              icon: const Icon(Icons.sticky_note_2_outlined),
-              onPressed: () {
+            _MoreMenu(
+              onTeam: () => showTeamPage(context),
+              onSearch: () => showProjectSearch(context),
+              onFind: () => RoomConfigApp.findKey.currentState?.open(),
+              onNotes: () {
                 NotesHost.instance.dockContext =
                     () => RoomConfigApp.navigatorKey.currentContext;
                 NotesPanel.toggle(context);
               },
+              onHistory: () => showHistoryDialog(context),
+              onRevert: provider.canUndoLastSave
+                  ? () => _undoLastSave(context, provider)
+                  : null,
             ),
           // iOS: the CTS share, the offline copy and its sync - see
           // ios_share_button.dart. Nothing on the desktop.
@@ -1608,7 +1618,10 @@ class _MainDashboardState extends State<MainDashboard> {
           () => _undoOnCurrentTab(context, provider, redo: true),
         ),
       },
-      child: CollabNoticeListener(
+      // The screenshot button's picture: everything in the window.
+      child: RepaintBoundary(
+        key: _screenKey,
+        child: CollabNoticeListener(
           // [TEAM KIT]: the team chat (shared with the other CTS apps) keeps
           // its own room when docked, and its notices. The project chat is
           // a thread in it.
@@ -1616,6 +1629,7 @@ class _MainDashboardState extends State<MainDashboard> {
               child: TeamNoticeListener(
                   hereRoom: () => provider.teamRoomId,
                   child: InAppBrowserInset(child: page)))),
+      ),
     );
   }
 
@@ -2332,6 +2346,7 @@ class TopLevelBar extends StatelessWidget {
     );
 
     final phone = isPhone(context);
+    final tablet = isTablet(context);
     final Widget nameText = Text(
       // The name of whatever this strip is about - see
       // [_bannerDocumentName].
@@ -2378,6 +2393,10 @@ class TopLevelBar extends StatelessWidget {
                     titleMedium: theme.textTheme.titleSmall,
                   ),
                 )
+              // An iPad: finger-sized, so the standard density and a bigger
+              // icon. A phone: compact, for the room.
+              : tablet
+              ? theme.copyWith(iconTheme: theme.iconTheme.copyWith(size: 26))
               : _isMobile
               ? theme.copyWith(visualDensity: VisualDensity.compact)
               : theme,
@@ -2412,13 +2431,18 @@ class TopLevelBar extends StatelessWidget {
               // mis-sized button rather than a more important one.
               (onProject ? FilledButton.icon : FilledButton.tonalIcon)(
                 key: const ValueKey('banner_project'),
-                icon: const Icon(Icons.apartment, size: 22),
+                icon: Icon(Icons.apartment, size: tablet ? 26 : 22),
                 // iPhone: the icon says it; the word took a third of the bar.
                 label: Text(isPhone(context) ? '' : 'Project'),
+                // iPad: the desktop's size and more - it is a finger's
+                // target, and the one that changes mode.
                 style: FilledButton.styleFrom(
-                  padding: EdgeInsets.symmetric(horizontal: _isMobile ? 14 : 24),
-                  minimumSize: Size(0, _isMobile ? 34 : 44),
-                  textStyle: theme.textTheme.titleMedium,
+                  padding: EdgeInsets.symmetric(
+                      horizontal: tablet ? 28 : (_isMobile ? 14 : 24)),
+                  minimumSize: Size(0, tablet ? 48 : (_isMobile ? 34 : 44)),
+                  textStyle: tablet
+                      ? theme.textTheme.titleLarge
+                      : theme.textTheme.titleMedium,
                 ),
                 onPressed: () => onSelect(AppTab.project.index),
               ),
@@ -2428,8 +2452,8 @@ class TopLevelBar extends StatelessWidget {
               // mode you were trying to leave.
               IconButton(
                 key: const ValueKey('banner_project_close'),
-                icon: const Icon(Icons.close, size: 18),
-                iconSize: 18,
+                icon: Icon(Icons.close, size: tablet ? 26 : 18),
+                iconSize: tablet ? 26 : 18,
                 visualDensity: VisualDensity.compact,
                 tooltip: 'Close the project and go back to the room',
                 color: readableOn(
@@ -2548,7 +2572,8 @@ class TopLevelBar extends StatelessWidget {
                       CollabPresenceStrip(
                         tab: AppTab.values[selectedIndex],
                         shareWidth: slot.maxWidth,
-                        showIncoming: !phone,
+                        // iPad and iPhone: on a line of its own, below.
+                        showIncoming: !_isMobile,
                       ),
                   ],
                 ),
@@ -2603,7 +2628,9 @@ class TopLevelBar extends StatelessWidget {
                 child: nameText,
               ),
             ),
-          if (phone &&
+          // iPad and iPhone: "saved - Combine" on a line of its own, so it
+          // never covers the bar's buttons.
+          if (_isMobile &&
               selectedIndex >= 0 &&
               selectedIndex < AppTab.values.length)
             CollabIncomingRow(tab: AppTab.values[selectedIndex]),
@@ -2710,8 +2737,8 @@ class _BannerClose extends StatelessWidget {
     final theme = Theme.of(context);
     return IconButton(
       key: ValueKey(keyValue),
-      icon: Icon(icon, size: 18),
-      iconSize: 18,
+      icon: Icon(icon, size: isTablet(context) ? 26 : 18),
+      iconSize: isTablet(context) ? 26 : 18,
       visualDensity: VisualDensity.compact,
       tooltip: tooltip,
       // The strip is a container color, and in the Classic theme container
@@ -6623,9 +6650,18 @@ class _SettingsWindow extends StatelessWidget {
 /// estimate rendered as a dated quote.
 class _ScreenshotButton extends StatelessWidget {
   final bool onCost;
+
+  /// The whole window: the bars, the rail and the page.
   final VoidCallback onScreen;
 
-  const _ScreenshotButton({required this.onCost, required this.onScreen});
+  /// The page alone, under the bars.
+  final VoidCallback onPage;
+
+  const _ScreenshotButton({
+    required this.onCost,
+    required this.onScreen,
+    required this.onPage,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -6640,6 +6676,8 @@ class _ScreenshotButton extends StatelessWidget {
         switch (v) {
           case 'screen':
             onScreen();
+          case 'page':
+            onPage();
           case 'estimate_light':
             CostEstimateActions.current?.screenshot(Brightness.light);
           case 'estimate_dark':
@@ -6654,7 +6692,17 @@ class _ScreenshotButton extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.photo_camera),
             title: Text('Screenshot & annotate'),
-            subtitle: Text('What is on screen now'),
+            subtitle: Text('The whole screen, bars and all'),
+          ),
+        ),
+        const PopupMenuItem(
+          key: ValueKey('screenshot_page'),
+          value: 'page',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.crop),
+            title: Text('Just the page'),
+            subtitle: Text('Without the bars and the tabs'),
           ),
         ),
         if (onCost && CostEstimateActions.current != null) ...const [
@@ -6931,3 +6979,99 @@ class _GoogleSignInRowState extends State<_GoogleSignInRow> {
   }
 }
 
+
+
+/// iPad and iPhone: the top bar's lesser buttons in one menu - Team (its
+/// online count on the menu's own badge), Search every chat and project,
+/// Find on this page (Ctrl+F on the desktop), Notes (Ctrl+N), History and
+/// Revert to the saved backup - so the bar fits Undo and Redo whole and its
+/// buttons can be finger-sized. The desktop keeps a button each.
+class _MoreMenu extends StatelessWidget {
+  final VoidCallback onTeam;
+  final VoidCallback onSearch;
+  final VoidCallback onFind;
+  final VoidCallback onNotes;
+  final VoidCallback onHistory;
+
+  /// Null when nothing has been saved over a file yet.
+  final VoidCallback? onRevert;
+  const _MoreMenu({
+    required this.onTeam,
+    required this.onSearch,
+    required this.onFind,
+    required this.onNotes,
+    required this.onHistory,
+    required this.onRevert,
+  });
+
+  PopupMenuItem<VoidCallback> _item(
+    String key,
+    IconData icon,
+    String label,
+    VoidCallback? action,
+  ) =>
+      PopupMenuItem(
+        key: ValueKey(key),
+        value: action,
+        enabled: action != null,
+        child: ListTile(
+          leading: Icon(icon),
+          title: Text(label),
+          enabled: action != null,
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final presence = Team.presence;
+    final teamOn = presence != null && presence.active;
+    return ListenableBuilder(
+      listenable: presence ?? const _NoChanges(),
+      builder: (context, _) {
+        final online =
+            teamOn ? teamPeople(presence.others).length : 0;
+        return PopupMenuButton<VoidCallback>(
+          key: const ValueKey('phone_more_menu'),
+          tooltip: 'More',
+          icon: Badge(
+            isLabelVisible: online > 0,
+            backgroundColor: Colors.green,
+            label: Text('$online'),
+            child: const Icon(Icons.more_vert),
+          ),
+          onSelected: (action) => action(),
+          itemBuilder: (context) => [
+            if (teamOn)
+              _item(
+                'team_button',
+                Icons.groups_outlined,
+                online == 0
+                    ? 'Team - nobody else online'
+                    : 'Team - $online online',
+                onTeam,
+              ),
+            _item('global_search', Icons.manage_search,
+                'Search every chat and project', onSearch),
+            _item('find_in_page_button', Icons.find_in_page_outlined,
+                'Find on this page', onFind),
+            _item('notes_button', Icons.sticky_note_2_outlined, 'Notes',
+                onNotes),
+            const PopupMenuDivider(),
+            _item('show_history', Icons.history, 'History', onHistory),
+            _item('revert_to_backup', Icons.settings_backup_restore,
+                'Revert to the saved backup', onRevert),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// A [Listenable] that never fires - for [_MoreMenu] with no team.
+class _NoChanges implements Listenable {
+  const _NoChanges();
+  @override
+  void addListener(VoidCallback listener) {}
+  @override
+  void removeListener(VoidCallback listener) {}
+}

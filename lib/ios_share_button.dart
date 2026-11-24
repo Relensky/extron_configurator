@@ -147,6 +147,24 @@ class _SharePanelState extends State<_SharePanel> {
     });
   }
 
+  /// Syncs one kept job's folder alone - see [ShareSync.syncFolder].
+  Future<void> _syncFolder(String unc) async {
+    final name = _jobName(unc);
+    setState(() {
+      _busy = true;
+      _message = 'Syncing $name...';
+    });
+    final ok = await IosShare.checkReachable();
+    final result = ok ? await ShareSync.syncFolder(unc) : null;
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _message = result == null
+          ? 'The share did not answer, so $name was not synced.'
+          : '$name: ${result.describe()}.';
+    });
+  }
+
   /// Asks before a Keep ... offline switch is slid, either way: a tap that
   /// brushed one either starts a long download or stops keeping files that
   /// were wanted with no network.
@@ -474,6 +492,44 @@ class _SharePanelState extends State<_SharePanel> {
                         fontSize: 13,
                       ),
                     ),
+                    // ONE JOB AT A TIME: each kept job's folder, with its
+                    // own sync switch and a button that syncs it alone.
+                    if (!ShareSync.keepEveryJob &&
+                        ShareSync.keptFolders.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('Jobs on this device',
+                          style: theme.textTheme.titleSmall),
+                      Text(
+                        'Turn a job off to stop syncing it - its files stay '
+                        'here and its changes wait. The sync button syncs '
+                        'that job alone.',
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
+                      for (final unc in ShareSync.keptFolders)
+                        _KeptJobRow(
+                          unc: unc,
+                          busy: _busy || status.running,
+                          onSync: () => _syncFolder(unc),
+                          onPaused: (paused) => setState(
+                            () => ShareSync.setPaused(unc, paused),
+                          ),
+                        ),
+                    ],
+                    if (ShareSync.keepEveryJob)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Every job is kept and synced together. Turn off '
+                          'Keep every job offline to choose job by job.',
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
                     // THE OPEN JOB, ALL OF IT: its rooms and plans may be
                     // in other folders than the job's own, and only the
                     // job's folder is kept by opening it.
@@ -596,6 +652,59 @@ class _SharePanelState extends State<_SharePanel> {
           ],
         );
       },
+    );
+  }
+}
+
+
+/// A kept folder's name for a person: its path under Projects, or its last
+/// part when it is elsewhere on the share.
+String _jobName(String unc) {
+  final projects = IosShare.projectsUnc;
+  if (unc.toLowerCase().startsWith('${projects.toLowerCase()}\\')) {
+    return unc.substring(projects.length + 1).replaceAll('\\', ' / ');
+  }
+  return unc.split('\\').where((s) => s.isNotEmpty).last;
+}
+
+/// One kept job in the share panel: its name, a switch that pauses its sync,
+/// and a button that syncs it alone.
+class _KeptJobRow extends StatelessWidget {
+  final String unc;
+  final bool busy;
+  final VoidCallback onSync;
+  final ValueChanged<bool> onPaused;
+  const _KeptJobRow({
+    required this.unc,
+    required this.busy,
+    required this.onSync,
+    required this.onPaused,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final paused = ShareSync.isPaused(unc);
+    return ListTile(
+      key: ValueKey('ios_kept_job_$unc'),
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(paused ? Icons.sync_disabled : Icons.sync),
+      title: Text(_jobName(unc), overflow: TextOverflow.ellipsis),
+      subtitle: Text(paused ? 'Not syncing' : 'Syncing'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: 'Sync this job now',
+            icon: const Icon(Icons.sync),
+            onPressed: busy ? null : onSync,
+          ),
+          Switch(
+            value: !paused,
+            onChanged: busy ? null : (on) => onPaused(!on),
+          ),
+        ],
+      ),
     );
   }
 }

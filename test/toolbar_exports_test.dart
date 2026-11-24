@@ -187,6 +187,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('screenshot_menu')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('screenshot_screen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot_page')), findsOneWidget);
     expect(
         find.byKey(const ValueKey('screenshot_estimate_light')), findsOneWidget);
     expect(
